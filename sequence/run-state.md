@@ -7,7 +7,7 @@
 ## Current stage & phase
 
 - **Stage:** tone-initiation
-- **Phase:** 0 → 1 transition. Commission substantially settled by the competition brief + Atin's answers; research fan-out beginning.
+- **Phase:** 1 — research fan-out in flight (4 agents). Commission (Phase 0) settled by the competition brief + Atin's answers.
 
 ## Commission facts (from Atin, 2026-08-08)
 
@@ -27,16 +27,27 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - 2026-08-08: Anchor competitive research on Sessionboard as the reference product. (Atin)
 - 2026-08-08: Timeline compresses the Tone arc to ~4 days end-to-end; depth stays proportional to stakes but phases run fast and overlapping. (logged, Mabel)
 
-## Active agents
+## Active agents (all pane:40, all Opus)
 
-- **Brief Research** (pane:40, launched 2026-08-08): deep-read of competition brief + walkthrough video + Sessionboard + Discord pastes from Atin → `sequence/research/competition-requirements.md`. Prompt: `sequence/research/sources/AGENT-BRIEF-competition-research.md`.
+- **Brief Research** (surface:130): competition-requirements authority → `sequence/research/competition-requirements.md`. **First pass complete 2026-08-08** (R1–R50). Stays alive for Discord pastes + Sat/Sun videos. Prompt: `sequence/research/sources/AGENT-BRIEF-competition-research.md`.
+- **Landscape Features** (surface:132): Sessionize/Sessionboard/pretalx deep + survey → `sequence/research/landscape-features.md`. Prompt: `sequence/research/briefs/AGENT-BRIEF-landscape-features.md`.
+- **Stakeholder Stories** (surface:133): stakeholder map + 40–70 draft stories → `sequence/research/stakeholders.md`, `user-stories-draft.md`. Prompt: `sequence/research/briefs/AGENT-BRIEF-stakeholders-stories.md`.
+- **Seams Feasibility** (surface:134): Airtable/Cloudflare/email/ICS/auth semantics + deadline traps → `sequence/research/seams-feasibility.md`. Prompt: `sequence/research/briefs/AGENT-BRIEF-seams-feasibility.md`.
+
+## Key findings so far (from Brief Research first pass)
+
+- Speed is a graded feature (swyx complains 3x unprompted); AI review is explicitly de-prioritized ("I don't care about the AI workflow thing", 09:23) — a trap for other entrants.
+- Real deployment target: **AIE NYC 2026** (Oct 12–14, ~150 speakers, 1k–3k submissions, 5–15% acceptance). AIE runs on **Sessionize** today, not Sessionboard. Competitive frame: "Sessionize's scope, self-hosted, owned, faster, plus post-acceptance workflow."
+- Judge is likely AIE's program/ops person. Evaluation = driving the deployed site through the walkthrough loop; seeded demo data essential; 647 entrants registered.
+- Core data model: Abstracts (apply to speak) vs Sessions (guaranteed, e.g. sponsors) — video-only, easy to get wrong.
 
 ## Touchpoints
 
-- Pending: stories review (Phase 4) — not yet reached.
+- **OPEN (urgent, relayed to Atin 2026-08-08):** Discord relay needed — both clarification videos (Sat + Sun) are unlisted, announced only in Discord; requirements freeze after Sunday's. Also Q1 (Airtable primary vs mirror) and Q2 (embed gallery: struck in brief vs described in video) need rulings.
+- Pending: stories review (Phase 4) — after fan-out consolidation.
 - Pending decision with Atin: public GitHub repo (competition requirement) vs Forgejo-private default.
 
 ## Stats
 
 - Human touchpoints: 2 (commission Q&A; brief handoff)
-- Agents spawned: 1
+- Agents spawned: 4
