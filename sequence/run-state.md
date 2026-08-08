@@ -30,9 +30,9 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 ## Active agents (all pane:40, all Opus)
 
 - **Brief Research** (surface:130): competition-requirements authority → `sequence/research/competition-requirements.md`. **First pass complete 2026-08-08** (R1–R50). Stays alive for Discord pastes + Sat/Sun videos. Prompt: `sequence/research/sources/AGENT-BRIEF-competition-research.md`.
-- **Landscape Features** (surface:132): Sessionize/Sessionboard/pretalx deep + survey → `sequence/research/landscape-features.md`. Prompt: `sequence/research/briefs/AGENT-BRIEF-landscape-features.md`.
-- **Stakeholder Stories** (surface:133): stakeholder map + 40–70 draft stories → `sequence/research/stakeholders.md`, `user-stories-draft.md`. Prompt: `sequence/research/briefs/AGENT-BRIEF-stakeholders-stories.md`.
-- **Seams Feasibility** (surface:134): Airtable/Cloudflare/email/ICS/auth semantics + deadline traps → `sequence/research/seams-feasibility.md`. Prompt: `sequence/research/briefs/AGENT-BRIEF-seams-feasibility.md`.
+- **Landscape Features** (surface:132): Sessionize/Sessionboard/pretalx deep + survey → `sequence/research/landscape-features.md`. Prompt: `sequence/research/briefs/AGENT-BRIEF-landscape-features.md`. **Still in flight.**
+- **Stakeholder Stories** (surface:133): **First pass complete** — 15 seats + 65 stories, 27-story walkthrough-loop Tier A, 43-story MVP. Follow-up sent: add Sessionize mid-CFP migration story + admin quick-search story.
+- **Seams Feasibility** (surface:134): **First pass complete** — Airtable/Cloudflare/email/ICS/auth with hard numbers, 16 deadline traps, 33–54h seams estimate. Q1 bet: D1 source of truth + genuine two-way Airtable mirror (never read Airtable on a request path). Q9 confirmed: ICS METHOD:REQUEST; OAuth infeasible by deadline.
 
 ## Key findings so far (from Brief Research first pass)
 
@@ -40,6 +40,14 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - Real deployment target: **AIE NYC 2026** (Oct 12–14, ~150 speakers, 1k–3k submissions, 5–15% acceptance). AIE runs on **Sessionize** today, not Sessionboard. Competitive frame: "Sessionize's scope, self-hosted, owned, faster, plus post-acceptance workflow."
 - Judge is likely AIE's program/ops person. Evaluation = driving the deployed site through the walkthrough loop; seeded demo data essential; 647 entrants registered.
 - Core data model: Abstracts (apply to speak) vs Sessions (guaranteed, e.g. sponsors) — video-only, easy to get wrong.
+
+## Human action items (from Seams first pass, 2026-08-08)
+
+1. Verify/enable **Workers Paid** ($5/mo) on the Cloudflare account (Free's 10ms CPU cap breaks SSR; fails at deploy, not in dev).
+2. **Create an R2 bucket and fetch a public object now** — Stage 11's R2 entitlement has silently lapsed account-wide before (403s every public URL; dashboard-only fix).
+3. Check **Resend plan tier** (30s in dashboard) — Free's 100/day cap decides how urgent the outbox/demo-safe mode is.
+4. If a bespoke sending domain (e.g. a marquee.* domain) is wanted: register + verify **Saturday or not at all**. Default: send as `marquee@stage11.systems` (verified since March).
+5. Airtable demo base needs **Team plan or above** (Free caps at 1,000 records/base; seed target is ~1,000).
 
 ## Touchpoints
 
