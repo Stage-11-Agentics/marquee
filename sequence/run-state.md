@@ -7,7 +7,7 @@
 ## Current stage & phase
 
 - **Stage:** tone-initiation
-- **Phase:** 1 — research fan-out in flight (4 agents). Commission (Phase 0) settled by the competition brief + Atin's answers.
+- **Phase:** 2 — Phase 1 saturated (all four dossiers landed 2026-08-08). `sequence/PRODUCT-DEFINITION.md` written and presented to Atin as the Phase-2 touchpoint: positioning, moat (M1–M5), scope tiers, architecture bets, 7 decisions. Awaiting his review → then Phase 3 (PHILOSOPHY.md + USER_STORIES.md with AC IDs).
 
 ## Commission facts (from Atin, 2026-08-08)
 
@@ -30,8 +30,8 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 ## Active agents (all pane:40, all Opus)
 
 - **Brief Research** (surface:130): competition-requirements authority → `sequence/research/competition-requirements.md`. **First pass complete 2026-08-08** (R1–R50). Stays alive for Discord pastes + Sat/Sun videos. Prompt: `sequence/research/sources/AGENT-BRIEF-competition-research.md`.
-- **Landscape Features** (surface:132): Sessionize/Sessionboard/pretalx deep + survey → `sequence/research/landscape-features.md`. Prompt: `sequence/research/briefs/AGENT-BRIEF-landscape-features.md`. **Still in flight.**
-- **Stakeholder Stories** (surface:133): **First pass complete** — 15 seats + 65 stories, 27-story walkthrough-loop Tier A, 43-story MVP. Follow-up sent: add Sessionize mid-CFP migration story + admin quick-search story.
+- **Landscape Features** (surface:132): **First pass complete** — feature matrix keyed to R-numbers, deep profiles (Sessionize corrected: $499/event, has collision detection + undocumented "calendar placeholders"), D1–D15 differentiator ranking, pretalx threat read (5 structural misses), vocabulary crib, L1–L4 new open questions.
+- **Stakeholder Stories** (surface:133): **First pass + follow-up complete** — 15 seats, 67 stories (US-66 Sessionize mid-CFP migration, US-67 quick-search added), 45-story MVP. Sessionize API is accepted-only by default → importer eats Export spreadsheets, idempotent.
 - **Seams Feasibility** (surface:134): **First pass complete** — Airtable/Cloudflare/email/ICS/auth with hard numbers, 16 deadline traps, 33–54h seams estimate. Q1 bet: D1 source of truth + genuine two-way Airtable mirror (never read Airtable on a request path). Q9 confirmed: ICS METHOD:REQUEST; OAuth infeasible by deadline.
 
 ## Key findings so far (from Brief Research first pass)

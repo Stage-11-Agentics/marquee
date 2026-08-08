@@ -68,6 +68,7 @@ Seats **5, 7, 12, 13, 14, 15** are extensions beyond the brief's expected list; 
 - **Bad defaults insult them.** A min-of-2-speakers default that doesn't match how they run events `[DOSSIER R15 / 06:46]`.
 - **Two tools, one job.** Sessionize handles the CFP, then stops; the post-acceptance half lives in spreadsheets and email `[SRC platform-overview; DOSSIER §6.3]`.
 - **Wave decisions are manual.** Nothing in the incumbents' docs describes bulk acceptance — Sessionboard's own acceptance doc covers only per-session status changes `[SRC learn.sessionboard.com/speakers/speaker-acceptance]`. At 1,000–3,000 submissions in three waves, that is the difference between an afternoon and a week.
+- **Switching costs are why they stay.** Their NYC call is open until Sep 12 with wave acceptances running through Sep 15 `[SRC sessionize.com/aienyc2026]`, so any move to a new tool happens mid-CFP with live submissions in flight. `[INFERRED]` This — not features — is the real reason a shopper who likes what they see still doesn't switch. See Seat 14 and US-66.
 
 **What they touch.** Event settings (R10), the program dashboard (R11), the form builder (R13), evaluation plans (R20), accept/reject (R43), the agenda (R5/R23), the published program (R24).
 
@@ -266,10 +267,20 @@ Seats **5, 7, 12, 13, 14, 15** are extensions beyond the brief's expected list; 
 **Who.** The person who takes an open-source program platform and stands it up. For every other product in this landscape, this seat does not exist. For Marquee it is the *point*: the origin tweet's grievance is being unable to customize `[DOSSIER §8]`, and the competition requires an open-source repo *"so that you walk away with something regardless"* `[DOSSIER §3]`.
 **Why Tier 2 despite being invisible in the walkthrough.** The judge's actual decision is "could we run NYC on this in nine weeks," and that decision includes standing it up. `[INFERRED]` but tightly constrained: the deliverables are literally a repo plus a deployed site, and the stack bonuses are justified as *"because those are what we use on our team"* `[DOSSIER §5]` — an adoptability signal, i.e. this seat is being scored.
 
-**Goals.** Deploy in an evening. Understand the data model well enough to add a field. Keep their ops team's Airtable view working `[DOSSIER Q1]`. Own their data.
-**Pains.** Open-source event software with a two-day setup; undocumented schemas; no seed data, so a fresh install looks broken.
-**What they touch.** README, deploy path, config, seed script, export.
-**Moments.** Evaluation (now), adoption (Monday), and every customization after.
+**Goals.** Deploy in an evening. Understand the data model well enough to add a field. Keep their ops team's Airtable view working `[DOSSIER Q1]`. Own their data. **Bring their live CFP across without restarting it.**
+**Pains.** Open-source event software with a two-day setup; undocumented schemas; no seed data, so a fresh install looks broken. And the big one below.
+
+**The migration pain is the adoption blocker, and it is specific and dated.** AIE's NYC 2026 call is open *right now* on Sessionize — Jul 17 to Sep 12, with wave acceptances Aug 15 / Sep 1 / Sep 15 `[SRC sessionize.com/aienyc2026]` — and the pilot this competition was quoted for lands ~9 weeks after the deadline `[DOSSIER §6.2]`. There is no window in which adopting Marquee for NYC is a clean-slate start. **Any real adoption is mid-CFP, by construction**, carrying live submissions, speaker profiles, and partial review state.
+
+The available import path is narrower than it looks:
+
+- **Sessionize's API cannot do it.** It is read-only JSON/XML/iCal, and *"By default, this option shows only accepted sessions whose speakers have been informed of being accepted"* `[SRC sessionize.com/playbook/api]`. Mid-CFP, the ~1,000 undecided submissions — the whole point of the migration — are exactly what it omits.
+- **The Export page can.** It carries *"session and speaker information, evaluation results, schedule, as well as team comments… organized in spreadsheets and prepared both for human and machine processing"*, plus downloadable speaker photos and speaker-uploaded files `[SRC sessionize.com/playbook/using-data]`.
+
+So the importer eats spreadsheets, and — because the CFP keeps taking submissions while the two systems run in parallel — it must be **idempotent and re-runnable**, not a one-shot. That is US-66.
+
+**What they touch.** README, deploy path, config, seed script, **import**, export.
+**Moments.** Evaluation (now), adoption (Monday), migration (the week after), and every customization thereafter.
 
 > **Demo consequence.** This seat and the judge's first ten seconds are the same moment. The dossier is explicit that *"shipping an empty database is the single most likely way to lose"* `[DOSSIER §3]` — the seeded demo isn't a nicety, it's this seat's first user story.
 
@@ -372,6 +383,7 @@ Ranked by cost of a wrong guess. Each carries the default I'd proceed on.
 3. **Does the reviewer seat get a mobile-first surface?** *Default:* yes — it's a responsive layout, not a second product, and "clear 40 reviews on your phone" is a demonstrable answer to R7/R46 that no incumbent offers.
 4. **Do we surface a non-speaking Session Submitter distinctly in the UI, or only in the model?** *Default:* model only. The confirmation email goes to the submitter; participation rows drive everything else.
 5. **How much of the Self-hoster seat is in scope as a deliverable?** *Default:* one-command deploy, a seed script, and a README that maps section-by-section to the walkthrough. That is the deliverable list from `[DOSSIER §3, Q7]` — it just also happens to be a persona.
+6. **Do we build the Sessionize importer (US-66), and at what scope?** *Why it matters:* it is the only story that answers "could we run NYC on this" rather than "is this a good product," and no competitor will build it — but it sits off the walkthrough loop, where a shallow first pass may never find it. *Default:* build it small (sessions + speakers spreadsheets, mapping, preview, idempotent re-run; evaluation scores as a stretch), and make it **loud** — a named entry point on the empty-event screen plus a README section. If time forces a cut, ship the README section and a documented CSV schema with no UI. Full reasoning in `user-stories-draft.md`, "Note on ranking US-66."
 
 ---
 
@@ -381,7 +393,7 @@ Ranked by cost of a wrong guess. Each carries the default I'd proceed on.
 
 **Sessionboard knowledge base** (`learn.sessionboard.com`): `concepts/participant-roles` · `event-team/invite-manage-event-team-members` · `faq/will-evaluators-have-the-same-access-to-my-event-that-i-do-as-an-admin` · `portals/portals-101` · `portals/assign-tasks` · `speakers/speaker-acceptance` · `evaluations/evaluation-plans` · `evaluations/setting-up-round-based-evaluations` · `communications/automated-emails` · `sessions/agenda` · `sessions/embeds` · `faq/how-to-allow-portal-users-to-add-speakers-to-their-accepted-session` · `faq/how-can-i-view-a-portal-as-an-admin`.
 
-**Sessionize:** `sessionize.com/aienyc2026/` (AIE's live CFP) · `sessionize.com/playbook/team-roles-explained` · `sessionize.com/playbook/en_US/overview/platform-overview`.
+**Sessionize:** `sessionize.com/aienyc2026/` (AIE's live CFP) · `sessionize.com/playbook/team-roles-explained` · `sessionize.com/playbook/en_US/overview/platform-overview` · `sessionize.com/playbook/using-data` (Export page contents) · `sessionize.com/playbook/api` and `sessionize.com/developers` (read-only JSON/XML/iCal; accepted-only by default).
 
 **pretalx:** `docs.pretalx.org/user/organisers/`.
 

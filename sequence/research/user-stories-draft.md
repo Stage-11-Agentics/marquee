@@ -1,11 +1,12 @@
 # Marquee — User Stories (DRAFT corpus)
 
 **Owner:** Stakeholder Stories agent (Marquee Initiation → Stakeholder Stories)
-**Status:** First pass, 2026-08-08. **65 stories across 13 lifecycle phases.** Companion to `stakeholders.md`; ground truth is `competition-requirements.md` (R1–R50).
+**Status:** First pass, 2026-08-08. **67 stories across 13 lifecycle phases.** Companion to `stakeholders.md`; ground truth is `competition-requirements.md` (R1–R50).
 
 ## Conventions
 
 - **Story IDs (`US-nn`) are draft handles for this document only.** They exist so the consolidation conversation has something to point at; renumber freely.
+- **IDs are handles, not ordering.** US-66 and US-67 were added after the first pass and sit in their lifecycle phase, not at the end. Existing IDs were left alone so the priority cut's references stay valid.
 - **Every acceptance criterion is marked `DRAFT`.** Stable AC IDs get minted at consolidation with the client — none are minted here, on purpose.
 - **Trace** cites the R-number(s) from the dossier register; **Source** cites a walkthrough timestamp or an external URL where the story rests on outside evidence rather than the register.
 - **Seats** are the ones defined in `stakeholders.md` §2–3.
@@ -31,6 +32,17 @@
 - `DRAFT` A fresh install with no data still renders every screen with an honest empty state that says what to do next.
 - `DRAFT` Extension points (registration-platform sync, Airtable mirror) are named in the README even where unimplemented.
 **Trace:** R25, dossier §2 item 7, §5 · **Source:** origin tweet — *"enterprise saas we have never used and will never be able to customize"*
+
+### US-66 · Switch without losing an open CFP
+**As a** program lead whose call for speakers is open *right now*, **I want** to import my existing submissions, speakers, and review state from Sessionize, **so that** adopting Marquee mid-CFP costs me an import instead of a restart.
+- `DRAFT` An import accepts Sessionize's exported spreadsheets for sessions and speakers, with a column-mapping step that shows a preview of the first rows before anything is written.
+- `DRAFT` Submissions arrive with their status preserved — critically including **undecided** ones, not only accepted — along with speaker profiles, bios, headshots, custom fields, and the session↔speaker relationships.
+- `DRAFT` Existing evaluation scores and reviewer comments import as historical review data, attributed where the reviewer can be matched by email and clearly marked unattributed where they cannot.
+- `DRAFT` The import is **idempotent and re-runnable**: importing an updated export again updates matched records and inserts new ones rather than duplicating, so the two systems can run in parallel while the CFP stays open.
+- `DRAFT` The import reports per-row outcomes (created / updated / skipped / failed with reason) and is fully undoable as a single batch.
+**Trace:** R43, R45, R46, R9 · **Source:** AIE's CFP is live on Sessionize until Sep 12 with wave acceptances Aug 15 / Sep 1 / Sep 15 `[SRC sessionize.com/aienyc2026]`, and the NYC pilot lands ~9 weeks after the deadline `[DOSSIER §6.2]` — so any real adoption is *mid-CFP*, by construction.
+
+> **Why the importer must eat spreadsheets, not the API.** Sessionize's API is read-only JSON/XML and *"By default, this option shows only accepted sessions whose speakers have been informed of being accepted"* `[SRC sessionize.com/playbook/api]`. Mid-CFP, the records that matter most — the ~1,000 undecided submissions — are precisely the ones the API omits. The Export page is the viable path: it carries *"session and speaker information, evaluation results, schedule, as well as team comments… organized in spreadsheets"*, plus speaker photos and speaker-uploaded files `[SRC sessionize.com/playbook/using-data]`. Build against the export; treat the API as a nice-to-have for accepted-only top-ups.
 
 ---
 
@@ -63,6 +75,14 @@
 - `DRAFT` Every dashboard number is clickable and lands on the filtered list behind it.
 - `DRAFT` The dashboard renders in under one second against the seeded ~1,000-submission dataset.
 **Trace:** R11, R6, R7 · **Source:** walkthrough [03:17]; the "I don't know where this form thing is" navigation failure at [03:58]
+
+### US-67 · Find anything from anywhere
+**As an** organizer, **I want** one search box, always present, that finds any submission, speaker, session, or form by name, **so that** I never have to remember which module something lives in.
+- `DRAFT` A search affordance is present on every admin screen and opens from the keyboard (`/` or ⌘K) without a page load.
+- `DRAFT` It searches across submissions, speakers, sessions, and forms in one result list, with each result labelled by type.
+- `DRAFT` Results return in under 200ms against the seeded ~1,000-submission dataset, updating as the query is typed.
+- `DRAFT` Selecting a result navigates straight to that record; partial and misspelled queries still match on name and title.
+**Trace:** R7, R11, R46 `[INFERRED]` · **Source:** walkthrough [03:58] *"I don't know where this form thing is"* and [04:01] *"which I can't really tell where it is"* — swyx got lost in the incumbent's admin **twice on camera**; discoverability is dossier §6.5 item 4
 
 ---
 
@@ -540,6 +560,7 @@ The dossier is unambiguous that evaluation is a judge driving the deployed site 
 |---|---|---|
 | 1 | Land, self-serve, get a login | US-01 |
 | 2 | Configure event details | US-03, US-04, US-05 |
+| — | *(navigate the admin at all — cross-cuts every step below)* | US-67 |
 | 3 | See the program dashboard | US-06 |
 | 4 | Build a CFP form (abstracts vs sessions) | US-07, US-08, US-09, US-10, US-13 |
 | 5 | Open it in incognito and submit | US-14, US-17, US-19 |
@@ -562,20 +583,36 @@ The dossier is unambiguous that evaluation is a judge driving the deployed site 
 |---|---|---|
 | 1 | **US-44** — chase from one screen | This is brief item 6, and it's the seat Sessionize doesn't serve at all. The single strongest "we understand your job" surface. |
 | 2 | **US-47** — real calendar invites | Brief item 3, verbatim, and Sessionboard's own docs show **no** calendar feature exists. Hours of work, beats the incumbent outright. |
-| 3 | **US-34** — templated rejection at scale | 85–95% of submitters experience this. Also proves bulk actions work at volume. |
-| 4 | **US-22** — admin manual entry | Makes R9's Abstracts-vs-Sessions distinction *visible* rather than theoretical. |
-| 5 | **US-36** — un-accept with cascade | The unglamorous story nobody builds. A judge who tries it and sees the cascade handled will remember it. |
-| 6 | **US-46** — automated trigger emails | Without this, R3 is only half-built and the portal feels inert. |
-| 7 | **US-45** — templated email to a filtered group | Ops's daily tool; makes the comms module real. |
-| 8 | **US-11 / US-12** — conditional logic + category routing | Brief item 1 names both explicitly. Routing is what makes it more than a form builder (dossier Q5). |
-| 9 | **US-41** — slide/document upload | Brief item 2 names slides. An empty portal reads as unfinished. |
-| 10 | **US-21** — co-speaker on submission | R30/R15 both point here; makes panels work. |
-| 11 | **US-37** — speaker confirms slot | Closes the acceptance loop; one screen. |
-| 12 | **US-27 + US-18** — mobile reviewer and mobile submit | Responsive, not a second product. "Clear 40 reviews on the train" is a concrete answer to R7/R46 no incumbent offers. |
-| 13 | **US-02** — README + deploy path | Judged deliverable, not a nicety `[DOSSIER §3]`. |
-| 14 | **US-32** — optional AI first pass, off by default | Satisfies brief item 4's AI clause in an afternoon. Explicitly do not lead with it (R27). |
+| 3 | **US-67** — global quick-search | Cheapest story in the corpus against the second-most-repeated craft complaint. He got lost **twice on camera**; a ⌘K palette is one component and answers it outright. |
+| 4 | **US-66** — import a live CFP from Sessionize | The only story that answers the judge's actual question — *"could we run NYC on this?"* — rather than *"is this a good product?"* See the note below on cost and visibility. |
+| 5 | **US-34** — templated rejection at scale | 85–95% of submitters experience this. Also proves bulk actions work at volume. |
+| 6 | **US-22** — admin manual entry | Makes R9's Abstracts-vs-Sessions distinction *visible* rather than theoretical. |
+| 7 | **US-36** — un-accept with cascade | The unglamorous story nobody builds. A judge who tries it and sees the cascade handled will remember it. |
+| 8 | **US-46** — automated trigger emails | Without this, R3 is only half-built and the portal feels inert. |
+| 9 | **US-45** — templated email to a filtered group | Ops's daily tool; makes the comms module real. |
+| 10 | **US-11 / US-12** — conditional logic + category routing | Brief item 1 names both explicitly. Routing is what makes it more than a form builder (dossier Q5). |
+| 11 | **US-41** — slide/document upload | Brief item 2 names slides. An empty portal reads as unfinished. |
+| 12 | **US-21** — co-speaker on submission | R30/R15 both point here; makes panels work. |
+| 13 | **US-37** — speaker confirms slot | Closes the acceptance loop; one screen. |
+| 14 | **US-27 + US-18** — mobile reviewer and mobile submit | Responsive, not a second product. "Clear 40 reviews on the train" is a concrete answer to R7/R46 no incumbent offers. |
+| 15 | **US-02** — README + deploy path | Judged deliverable, not a nicety `[DOSSIER §3]`. |
+| 16 | **US-32** — optional AI first pass, off by default | Satisfies brief item 4's AI clause in an afternoon. Explicitly do not lead with it (R27). |
 
-**MVP total: ~43 stories.**
+**MVP total: ~45 stories.**
+
+### Note on ranking US-66 (Sessionize import)
+
+It has the **highest ceiling and the least certain floor** of anything in Tier B, so it is worth being explicit rather than just assigning it a rank.
+
+**The case for building it.** Every other story argues *this is a good program tool*. This one argues *you can be on it by Monday without abandoning the CFP you already have open* — and that is the judge's real decision. The dossier's read is that the AIE team is *"shopping, not just judging"* `[DOSSIER §5]`, with a dated pilot ~9 weeks out. Switching cost is the standard reason a shopper doesn't switch, and this story deletes it. No competitor will build it, because building it requires having noticed that AIE runs on Sessionize — a fact that appears in none of the competition materials `[DOSSIER §6.3]`.
+
+**The case against.** It is off the walkthrough loop, so a shallow first pass may never click it — and the dossier warns the first pass is *"shallow and fast — minutes, not an hour"* `[DOSSIER §3]`. It is also the largest Tier B item: column mapping, matching, and idempotency are a real afternoon-plus, not an hour.
+
+**The resolution — scope it small and make it loud.** Two conditions turn it from a gamble into a good bet:
+1. **Scope:** import Sessionize's exported sessions + speakers spreadsheets with mapping, preview, and idempotent re-run. Evaluation-score import is a stretch goal, not v1. Explicitly *not* a live API sync — and per the note under US-66, the API couldn't serve this anyway.
+2. **Visibility:** it must be a named entry point on the empty-event screen ("Import from Sessionize") **and** a README section, or the work is invisible to a judge who never leaves the seeded demo. A capability nobody finds scores zero.
+
+If time forces a cut, the honest fallback is the README section plus a documented CSV schema and no UI — which still says *we know where your data lives* at roughly an hour's cost.
 
 ## Cross-cutting requirements that are not stories but gate all of them
 
