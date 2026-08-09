@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-09T06:24:54Z",
+  "created_by": "agent:delegator-mrq-55",
+  "custom_fields": {},
+  "id": "art_01KZJK473G7H8H6D2W4JTB4XK8",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZJK473G7H8H6D2W4JTB4XK8.md",
+    "size_bytes": 619
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Final diff reviewed with no findings",
+  "tags": [],
+  "title": "Fast-track self-review PASS",
+  "token_usage": null,
+  "type": "note"
+}
