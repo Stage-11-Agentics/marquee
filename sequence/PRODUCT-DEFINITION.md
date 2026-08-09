@@ -57,7 +57,7 @@ Seeded replica of **AIE NYC 2026** (their real event, Oct 12–14, Sheraton NYT 
 
 ## 6. Decisions needed from you (⬜ = blocking soon, ○ = soon-ish)
 
-1. ⬜ **Sign off the positioning + "respect" philosophy line** (§1) — it becomes PHILOSOPHY.md and every downstream taste call.
+1. ✅ **Philosophy signed** (Atin, 2026-08-08) with two additions: *"we enable fantastic conferences effortlessly"* (now the one-thing) and **agent-native by design** — a real API, a `marquee` CLI, and a shipped skill file so agents are first-class operators. → `PHILOSOPHY.md` minted at repo root. Scope note: for the competition this means a minimal clean REST API (the UI rides on it anyway), a thin CLI, and a SKILL.md — Tier B additions that must not eat the walkthrough loop; also a distinctive differentiator for *this* judge (the AI Engineer team).
 2. ⬜ **Scope sign-off** (§3) — especially the multi-round deferral and the Tier B order.
 3. ⬜ **Stack sign-off** (§4) — Cloudflare/D1/Airtable-mirror is my recommendation; it also happens to be the bonus stack.
 4. ⬜ **Public repo:** GitHub public repo (competition requires open source; Forgejo stays canonical dev home, GitHub as the public face — mirroring the Lattice/Etch exception). Name: `marquee`. **License call: Apache-2.0** (pretalx's choice; patent grant reads as mature) vs MIT. My rec: Apache-2.0.

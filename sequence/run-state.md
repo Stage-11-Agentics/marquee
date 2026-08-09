@@ -26,6 +26,8 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - 2026-08-08: Project named Marquee, homed at `deployments/Marquee`. (Atin)
 - 2026-08-08: Anchor competitive research on Sessionboard as the reference product. (Atin)
 - 2026-08-08: Timeline compresses the Tone arc to ~4 days end-to-end; depth stays proportional to stakes but phases run fast and overlapping. (logged, Mabel)
+- 2026-08-08: **Philosophy signed** (PRODUCT-DEFINITION decision 1): one-thing = "fantastic conferences, effortlessly"; respect-the-operator principles; plus **agent-native by design** — real API, `marquee` CLI, shipped skill file; agents are first-class operators. `PHILOSOPHY.md` minted. (Atin)
+- 2026-08-08: Clone target reconfirmed explicitly: **Sessionboard's Program module** per the brief; Sessionize is competitive context (judges' daily tool), not the target. (Atin + brief)
 
 ## Active agents (all pane:40, all Opus)
 
