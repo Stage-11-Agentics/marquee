@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  fast-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+      - run: npm ci
+      - run: npx tsc -p tsconfig.json --noEmit
+      - run: npx tsc -p tsconfig.client.json --noEmit
+      - run: npx tsc -p tsconfig.test.json --noEmit
+      - run: npx vite build
+      - run: npm run check:design
+      - run: npm test
+        timeout-minutes: 1
+      - run: npm run trace:ac -- --scope=merged

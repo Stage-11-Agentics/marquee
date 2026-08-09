@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "lib": ["ES2024"],
+    "types": [
+      "@cloudflare/workers-types",
+      "@cloudflare/vitest-pool-workers",
+      "vitest/globals"
+    ]
+  },
+  "include": ["tests/**/*.ts", "scripts/checks/**/*.mjs", "vitest.config.ts"],
+  "exclude": ["tests/e2e/**", "tests/node/**"]
+}

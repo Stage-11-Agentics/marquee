@@ -1,17 +1,16 @@
 {
   "compilerOptions": {
     "target": "ES2024",
-    "lib": ["ES2024"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
-    "types": ["@cloudflare/workers-types", "node"],
+    "types": ["vite/client"],
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*.ts", "src/routes/**/*.tsx", "vite.config.ts"],
-  "exclude": ["src/ui/**"]
+  "include": ["src/ui/**/*.ts", "src/ui/**/*.tsx"]
 }

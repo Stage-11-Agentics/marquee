@@ -8,3 +8,8 @@ node_modules/
 dist/
 .wrangler/
 *.log
+artifacts/checks/
+ac-coverage.json
+speed-report.json
+playwright-report/
+test-results/

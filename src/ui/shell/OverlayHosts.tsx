@@ -1,0 +1,48 @@
+import type { ComponentChildren, JSX } from "preact";
+import { useEffect, useRef } from "preact/hooks";
+
+export interface OverlayState {
+  kind: "modal" | "drawer";
+  title: string;
+  copy: string;
+}
+
+function useDialogLifecycle(open: boolean, onClose: () => void) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    ref.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      if (event.key !== "Tab" || !ref.current) return;
+      const controls = [...ref.current.querySelectorAll<HTMLElement>('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')];
+      if (controls.length === 0) { event.preventDefault(); return; }
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = oldOverflow;
+      previous?.focus();
+    };
+  }, [open, onClose]);
+  return ref;
+}
+
+export function OverlayHost({ state, onClose, children }: { state: OverlayState | null; onClose: () => void; children?: ComponentChildren }): JSX.Element | null {
+  const ref = useDialogLifecycle(Boolean(state), onClose);
+  if (!state) return null;
+  const body = <><header class={state.kind === "modal" ? "modal-head" : "drawer-head"}><div><div class="eyebrow">Not installed</div><h2>{state.title}</h2><p>{state.copy}</p></div></header><div class={state.kind === "modal" ? "modal-body" : "drawer-content"}>{children}<p class="subtle">This shell affordance is ready; its owning module has not landed yet.</p></div><footer class="modal-actions"><button class="button primary" onClick={onClose}>Close</button></footer></>;
+  if (state.kind === "drawer") return <><button class="drawer-backdrop" aria-label="Close drawer" onClick={onClose} /><aside ref={ref} class="drawer" role="dialog" aria-modal="true" aria-label={state.title} tabIndex={-1}>{body}</aside></>;
+  return <div class="modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section ref={ref} class="modal" role="dialog" aria-modal="true" aria-label={state.title} tabIndex={-1}>{body}</section></div>;
+}
+
+export function ToastHost({ message }: { message?: string }): JSX.Element {
+  return <div class={`toast ${message ? "show" : ""}`} role="status" aria-live="polite">{message}</div>;
+}

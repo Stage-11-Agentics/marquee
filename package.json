@@ -3,18 +3,41 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "test": "node scripts/checks/run-test.mjs",
+    "e2e": "node scripts/checks/run-e2e.mjs",
+    "check:speed": "node scripts/checks/check-speed.mjs",
+    "check:seed": "node scripts/checks/stub-command.mjs check:seed MRQ-14 \"seed and public API are not implemented\"",
+    "check:api": "node scripts/checks/stub-command.mjs check:api MRQ-9 \"route registry, OpenAPI, and full-loop trace are not implemented\"",
+    "check:repo": "node scripts/checks/check-repo.mjs",
+    "check:readme": "node scripts/checks/stub-command.mjs check:readme MRQ-57 \"self-host deploy sequence is not implemented\"",
+    "trace:ac": "node scripts/checks/trace-ac.mjs",
+    "check:mirror": "node scripts/checks/stub-command.mjs check:mirror MRQ-25/MRQ-26 \"Airtable mirror and dedicated test base are not implemented\"",
+    "reset:demo": "node scripts/checks/stub-command.mjs reset:demo MRQ-14 \"reset endpoint and authoritative seed fingerprint are not implemented\"",
+    "smoke:mail": "node scripts/checks/stub-command.mjs smoke:mail MRQ-24 \"mail delivery and inbox oracle are not implemented\"",
+    "smoke:ics": "node scripts/checks/stub-command.mjs smoke:ics MRQ-24 \"calendar delivery and client confirmations are not implemented\"",
+    "check:skill-agent": "node scripts/checks/stub-command.mjs check:skill-agent MRQ-44 \"SKILL, CLI, and isolated agent runner are not implemented\"",
+    "check:design": "node scripts/checks/verify-design-contract.mjs",
+    "pr-gate": "node scripts/checks/pr-gate.mjs"
+  },
   "engines": {
     "node": ">=20.19.0"
   },
   "dependencies": {
-    "hono": "^4.13.1"
+    "hono": "^4.13.1",
+    "preact": "^10.29.8",
+    "preact-render-to-string": "^6.7.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.51.1",
+    "@cloudflare/vitest-pool-workers": "^0.20.3",
     "@cloudflare/workers-types": "^5.20260809.1",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^26.2.0",
     "typescript": "^7.0.2",
+    "typescript-ast": "npm:typescript@^5.9.3",
     "vite": "^8.2.1",
+    "vitest": "^4.1.10",
     "wrangler": "^4.120.0"
   }
 }
