@@ -6,8 +6,8 @@
 
 ## Current stage & phase
 
-- **Stage:** tone-initiation
-- **Phase:** 2 — Phase 1 saturated (all four dossiers landed 2026-08-08). `sequence/PRODUCT-DEFINITION.md` written and presented to Atin as the Phase-2 touchpoint: positioning, moat (M1–M5), scope tiers, architecture bets, 7 decisions. Awaiting his review → then Phase 3 (PHILOSOPHY.md + USER_STORIES.md with AC IDs).
+- **Stage:** tone-prototype (initiation Phases 0–2 complete; Phase 3 philosophy minted, USER_STORIES.md consolidation running; Phase-4 stories review will fold into prototype review given timeline)
+- **Prototype fleet (dispatched 2026-08-08 evening, codex --effort high):** Chase Proto (surface:141), Pipeline Proto (surface:142), Marquee Proto (surface:143) — contract at `prototypes/PROTOTYPE-CONTRACT.md`, direction briefs in `prototypes/<d>/DIRECTION.md`. Target: complete clickable pass ~2h, review with Atin tonight, converge, then compressed tone-architect → overnight lattice-orchestrator build → QA Sunday.
 
 ## Commission facts (from Atin, 2026-08-08)
 
