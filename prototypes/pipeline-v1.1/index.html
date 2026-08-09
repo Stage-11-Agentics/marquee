@@ -567,6 +567,9 @@
         submissionSort: "newest",
         submissionRecordId: "AIE-0001",
         submissionPage: 1,
+        boardTrack: "All tracks",
+        boardFormat: "All formats",
+        boardWave: "All waves",
         selected: new Set(),
         selectAllMatching: false,
         agendaView: "day",
@@ -608,6 +611,7 @@
           { id: 5, title: "Upload final slides", kind: "File request", due: "Due Oct 5", done: false }
         ],
         portalEditing: false,
+        portalRecordId: "AIE-0027",
         portalSessionTitle: "Beyond the demo: reliable multi-agent systems",
         portalSessionDescription: "A field-tested account of evaluation ladders, recovery behavior, and the incidents that changed how the team operates agent systems.",
         scheduled: [],
@@ -684,22 +688,29 @@
         for (let i = 0; i < 1040; i++) {
           const accepted = i < 190;
           const entity = i < 40 ? "Session" : "Abstract";
-          const speaker = i === 13 || i === 47 || i === 88 ? "Casey O'Connell-Singh" : personName(i);
+          const speaker = i === 26 ? "Amara van der Meer" : (i === 13 || i === 47 || i === 88 ? "Casey O'Connell-Singh" : personName(i));
           const coSpeakers = i === 72 ? [speaker, personName(333), personName(477), personName(698)] : (i % 23 === 0 ? [speaker, personName(i + 101)] : [speaker]);
           const trackName = i >= 150 && i < 364
             ? "Agents"
             : i >= 364 && i < 590
               ? tracks.filter(t => t.name !== "Agents")[(i * 5 + 1) % 7].name
               : tracks[(i * 5 + 1) % tracks.length].name;
+          const primaryTrackIndex = tracks.findIndex(t=>t.name===trackName);
+          const carriedTracks = i % 20 < 3
+            ? [trackName, tracks[(primaryTrackIndex+3)%tracks.length].name, ...(i%40===0?[tracks[(primaryTrackIndex+5)%tracks.length].name]:[])]
+            : [trackName];
+          const boardStage = i < 26 ? "Published" : i < 32 ? "Scheduled" : i < 92 ? "Accepted" : i < 190 ? "Onboarding" : i < 280 ? "In Review" : i < 630 ? "Submitted" : "Waved";
           out.push({
             id: `AIE-${String(i + 1).padStart(4,"0")}`,
-            title: makeTitle(i), entity, speaker, speakers: coSpeakers,
-            company: companies[(i * 13 + 4) % companies.length],
+            title: i===26 ? "Beyond the demo: reliable multi-agent systems" : makeTitle(i), entity, speaker, speakers: coSpeakers,
+            company: i===26 ? "Capital One" : companies[(i * 13 + 4) % companies.length],
             status: statusFor(i), accepted,
             wave: accepted ? (i < 63 ? 1 : i < 126 ? 2 : 3) : null,
             waveDate: accepted ? waveDates[i < 63 ? 0 : i < 126 ? 1 : 2] : null,
             track: trackName,
-            tracks: i % 9 === 0 ? [trackName, tracks[(tracks.findIndex(t=>t.name===trackName)+3)%tracks.length].name] : [trackName],
+            tracks: carriedTracks,
+            boardStage,
+            timeInStageHours: ((i*37)%720)+2,
             format: formats[(i * 3 + 1) % formats.length],
             score: i >= 150 && i < 240 ? (2.8 + seededRandom(i) * 2.1).toFixed(1) : "—",
             submitted: `2026-0${6 + (i % 2)}-${String(2 + (i * 7) % 27).padStart(2,"0")}`,
@@ -779,7 +790,7 @@
       seedAgenda();
 
       const routeNames = {
-        landing: "Demo", settings: "Event settings", dashboard: "Program pipeline", forms: "Form builder",
+        landing: "Demo", settings: "Event settings", dashboard: "Program pipeline", board: "Program board", forms: "Form builder",
         cfp: "Public CFP form", portal: "Speaker portal", evaluation: "Evaluation plan", reviewer: "Reviewer queue",
         submissions: "Abstracts", submissionDetail:"Submission record", submissionNew:"Create submission",
         onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Event site", comms:"Communications",
@@ -796,6 +807,52 @@
         toastEl.classList.add("show");
         clearTimeout(toast.timer);
         toast.timer = setTimeout(() => toastEl.classList.remove("show"), 2400);
+      }
+
+      function trackChips(record, compact = false) {
+        if (!record || record.kind === "break") return "";
+        return `<div class="track-chip-row">${(record.tracks||[record.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)};${compact?"font-size:7px;padding:2px 5px":""}">${esc(name)}${i===0&&!compact?" · Primary":""}</span>`).join("")}</div>`;
+      }
+
+      function sessionSlot(recordOrId) {
+        const id = typeof recordOrId === "string" ? recordOrId : recordOrId?.id;
+        if (!id) return null;
+        if (typeof recordOrId === "object" && recordOrId.day && recordOrId.time && recordOrId.room) return recordOrId;
+        return state.scheduled.find(item=>item.id===id && item.kind!=="break") || null;
+      }
+
+      function scheduleMeta(recordOrId, compact = false, publish = true) {
+        const slot = sessionSlot(recordOrId);
+        if (!slot) return "";
+        const unpublished = slot.status !== "Published";
+        return `<div class="slot-meta ${compact?"compact":""}" data-slot-for="${esc(slot.id)}"><span class="slot-chip">${esc(slot.day)} · ${esc(slot.time)} · ${esc(slot.room)}</span>${unpublished?`<span class="not-public">Not yet public</span>${publish?`<button class="publish-link" data-publish-id="${esc(slot.id)}">Publish</button>`:""}`:""}</div>`;
+      }
+
+      function formatTimeInStage(hours) {
+        if (hours < 24) return `${hours}h in stage`;
+        const days = Math.floor(hours/24);
+        return `${days}d in stage`;
+      }
+
+      function boardStageFor(submission) {
+        const slot = sessionSlot(submission);
+        if (slot?.status === "Published") return "Published";
+        if (slot) return "Scheduled";
+        return submission.boardStage || (submission.accepted ? "Onboarding" : submission.status === "In Review" ? "In Review" : "Submitted");
+      }
+
+      function showPublishModal(id) {
+        const slot=sessionSlot(id), submission=state.submissions.find(item=>item.id===id);
+        if(!slot||slot.status==="Published")return;
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Publish Session</div><h2>Make ${esc(submission?.title||slot.title)} public?</h2><p>This places the Session on the live event site and exposes its public permalink.</p></div><div class="modal-body"><div class="message-preview"><strong>${esc(slot.day)} · ${esc(slot.time)} · ${esc(slot.room)}</strong><br><span class="subtle">Tracks, speakers, and the latest title and description will become public together.</span></div></div><div class="modal-actions"><button class="button" id="cancel-publish">Keep private</button><button class="button primary" id="confirm-publish">Publish Session</button></div></section></div>`;
+        document.getElementById("cancel-publish").onclick=()=>modalRoot.innerHTML="";
+        document.getElementById("confirm-publish").onclick=()=>{
+          slot.status="Published";
+          if(submission){submission.status="Published";submission.boardStage="Published";submission.timeInStageHours=1;}
+          modalRoot.innerHTML="";
+          toast("Session published · live on the public site");
+          render();
+        };
       }
 
       function navigate(route, options = {}) {
@@ -835,7 +892,7 @@
           <aside class="sidebar">
             <a class="brand" href="#dashboard"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
             <a class="event-switcher" href="#settings"><small>Event</small><strong>${esc(state.event.name)}</strong></a>
-            <nav class="nav" aria-label="Program home">${navItem("dashboard","⌂","Program home")}</nav>
+            <nav class="nav" aria-label="Program home">${navItem("dashboard","⌂","Program home")}${navItem("board","▥","Program board")}</nav>
             <div class="nav-label">Pipeline</div>
             <nav class="nav" aria-label="Program lifecycle">
               ${pipelineNavItem("Submitted","1","Submitted")}
@@ -931,8 +988,8 @@
               ${pipelineStage("Waved", acceptedByWave(1) + acceptedByWave(2), "2 of 3 waves", "Waved")}
               ${pipelineStage("Accepted", counts.AcceptedTotal, `${(counts.AcceptedTotal / state.submissions.length * 100).toFixed(1)}% of all`, "Accepted")}
               ${pipelineStage("Onboarding", onboardingCounts().incomplete, `owe tasks · ${onboardingCounts().risk} at risk`, "Onboarding", "onboarding")}
-              ${pipelineStage("Scheduled", counts.Scheduled, `${counts.AcceptedTotal - counts.Scheduled} still unplaced`, "Scheduled")}
-              ${pipelineStage("Published", counts.Published, `${getAgendaConflicts().length} live conflicts`, "Published")}
+              ${pipelineStage("Scheduled", counts.Scheduled, `${counts.AcceptedTotal - counts.Scheduled} still unplaced`, "Scheduled", "submissions", "placed on the working agenda")}
+              ${pipelineStage("Published", counts.Published, `${getAgendaConflicts().length} live conflicts`, "Published", "submissions", "live on the public site")}
             </div>
           </section>
           <div class="attention-strip">
@@ -967,15 +1024,77 @@
               <div class="card-head"><div><h2>Speaker task dashboard</h2><span class="subtle">${onboardingCounts().overdueTasks} overdue tasks across ${onboardingCounts().overdue} accepted speakers · changes update live</span></div><button class="button small" data-route="onboarding">Open onboarding</button></div>
               <div class="card-body" style="padding-top:4px;padding-bottom:4px">
                 ${[
-                  ["Amara van der Meer","Beyond the demo: reliable multi-agent systems","Speaker agreement","4 days overdue"],
+                  ["Amara van der Meer","Beyond the demo: reliable multi-agent systems","Speaker agreement","4 days overdue","AIE-0027"],
                   ["João García Márquez","Operating low-latency inference platforms","High-resolution headshot","2 days overdue"],
                   ["Oluwaseun O'Connell-Singh","AI governance without gridlock","Travel and accommodation","Due today"],
                   ["Mei-Ling de la Fontaine","Secure tool-using agents in regulated teams","Final slides","Due Oct 5"]
-                ].map((r,i)=>`<button class="wave-row" style="width:100%;border-left:0;border-right:0;border-top:0;background:white;text-align:left;grid-template-columns:180px 1fr 180px 100px" data-route="onboarding"><strong>${r[0]}</strong><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r[1]}</span><span class="subtle">${r[2]}</span><span class="chip ${i<2?"overdue":""}">${r[3]}</span></button>`).join("")}
+                ].map((r,i)=>`<button class="wave-row" style="width:100%;border-left:0;border-right:0;border-top:0;background:white;text-align:left;grid-template-columns:180px 1fr 180px 100px" data-route="onboarding"><strong>${r[0]}</strong><div style="overflow:hidden;text-overflow:ellipsis">${r[1]}${r[4]?scheduleMeta(r[4],true,false):""}</div><span class="subtle">${r[2]}</span><span class="chip ${i<2?"overdue":""}">${r[3]}</span></button>`).join("")}
               </div>
             </section>
           </div>
         </div>`);
+      }
+
+      const programBoardStages = [
+        {name:"Submitted",hint:"Received and waiting"},
+        {name:"In Review",hint:"Committee work underway"},
+        {name:"Waved",hint:"Decision wave prepared"},
+        {name:"Accepted",hint:"Decision confirmed"},
+        {name:"Onboarding",hint:"Complete tasks to enter",derived:true,entry:"Derived stage · complete speaker tasks to advance here."},
+        {name:"Scheduled",hint:"Place on the agenda to enter",derived:true,entry:"Derived stage · place an accepted Session on the working agenda."},
+        {name:"Published",hint:"Publish to enter",derived:true,entry:"Derived stage · use Publish on a scheduled Session to make it public."}
+      ];
+
+      function filteredBoardSubmissions() {
+        return state.submissions.filter(s=>
+          (state.boardTrack==="All tracks"||(s.tracks||[s.track]).includes(state.boardTrack)) &&
+          (state.boardFormat==="All formats"||s.format===state.boardFormat) &&
+          (state.boardWave==="All waves"||(state.boardWave==="Unwaved"?!s.wave:`Wave ${s.wave}`===state.boardWave))
+        );
+      }
+
+      function boardCard(submission) {
+        const actualStatus = submission.status!==boardStageFor(submission) ? `<span class="chip">${submission.status==="Waitlisted"?"Maybe":esc(submission.status)}</span>` : "";
+        return `<article class="board-card" draggable="true" data-board-card="${submission.id}" style="--track-color:${trackColor(submission.track)}"><div style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span class="chip ${submission.entity==="Session"?"session":""}">${submission.entity}</span>${actualStatus}</div><a href="#submissions/${submission.id}"><h3>${esc(submission.title)}</h3></a><p>${esc(submission.speakers.join(" · "))}</p>${trackChips(submission,true)}${scheduleMeta(submission,true)}<div class="board-card-foot"><span>${esc(submission.format)} · ${submission.wave?`Wave ${submission.wave}`:"Unwaved"}</span><strong>${formatTimeInStage(submission.timeInStageHours)}</strong></div></article>`;
+      }
+
+      function boardView() {
+        const matching=filteredBoardSubmissions();
+        return shell(`<div class="page">
+          ${pageHead("Program board", `${matching.length.toLocaleString()} submissions across the seven lifecycle stages · every card is present; off-screen cards use browser paint containment.`, `<button class="button" data-route="dashboard">Pipeline dashboard</button><button class="button primary" data-route="submissions">Open list</button>`)}
+          <section class="card"><div class="toolbar"><select id="board-track-filter"><option>All tracks</option>${tracks.map(t=>`<option ${state.boardTrack===t.name?"selected":""}>${esc(t.name)}</option>`).join("")}</select><select id="board-format-filter"><option>All formats</option>${formats.map(f=>`<option ${state.boardFormat===f?"selected":""}>${esc(f)}</option>`).join("")}</select><select id="board-wave-filter">${["All waves","Wave 1","Wave 2","Wave 3","Unwaved"].map(w=>`<option ${state.boardWave===w?"selected":""}>${w}</option>`).join("")}</select><span class="toolbar-spacer"></span><span class="subtle">Drag into Submitted, In Review, Waved, or Accepted · derived stages explain their entry action.</span></div><div class="card-body" style="padding:10px"><div class="program-board-shell"><div class="program-board">
+            ${programBoardStages.map(stage=>{const cards=matching.filter(s=>boardStageFor(s)===stage.name);return `<section class="board-column ${stage.derived?"derived":""}" data-board-column="${stage.name}" data-derived="${stage.derived?"true":"false"}"><header class="board-column-head"><div><strong>${stage.name}</strong><small>${stage.hint}</small></div><span class="board-count">${cards.length}</span></header>${stage.derived?`<div class="board-derived-note">${stage.entry}</div>`:""}<div class="board-card-list">${cards.map(boardCard).join("")||`<div class="subtle" style="padding:24px;text-align:center">No matching submissions</div>`}</div></section>`}).join("")}
+          </div></div></div></section>
+        </div>`);
+      }
+
+      function showBoardTransition(id,targetStage) {
+        const submission=state.submissions.find(s=>s.id===id); if(!submission)return;
+        const fromStage=boardStageFor(submission); if(fromStage===targetStage){toast(`${submission.id} is already in ${targetStage}`);return;}
+        const slot=sessionSlot(submission), accepting=targetStage==="Accepted";
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Lifecycle transition</div><h2>Move ${esc(submission.id)} to ${esc(targetStage)}?</h2><p>${esc(fromStage)} → ${esc(targetStage)} · the card moves only after confirmation.</p></div><div class="modal-body stack"><div class="message-preview"><strong>${esc(submission.title)}</strong><br><span class="subtle">${esc(submission.speakers.join(" · "))}</span></div>${accepting?`<div class="wave-row"><strong>Portal + acceptance email</strong><span></span><strong>Queue</strong></div><div class="wave-row"><strong>Speaker task set</strong><span></span><strong>Assign</strong></div>`:""}${slot?`<div class="wave-row"><strong>Agenda + public surfaces</strong><span></span><strong class="chip overdue">Remove</strong></div>`:""}<p class="subtle">The transition is stamped in history. Existing review evidence remains attached to the record.</p></div><div class="modal-actions"><button class="button" id="cancel-board-transition">Cancel</button><button class="button primary" id="confirm-board-transition">Move to ${esc(targetStage)}</button></div></section></div>`;
+        document.getElementById("cancel-board-transition").onclick=()=>modalRoot.innerHTML="";
+        document.getElementById("confirm-board-transition").onclick=()=>{
+          if(slot)state.scheduled=state.scheduled.filter(item=>item.id!==submission.id);
+          submission.boardStage=targetStage;
+          submission.timeInStageHours=1;
+          if(targetStage==="Submitted"){submission.status="Submitted";submission.accepted=false;submission.wave=null;}
+          if(targetStage==="In Review"){submission.status="In Review";submission.accepted=false;}
+          if(targetStage==="Waved"){submission.status="Waitlisted";submission.accepted=false;submission.wave=submission.wave||2;}
+          if(targetStage==="Accepted"){submission.status="Accepted";submission.accepted=true;submission.wave=submission.wave||2;submission.waveDate=submission.waveDate||waveDates[submission.wave-1];ensureOnboardingSpeaker(submission);}
+          modalRoot.innerHTML="";
+          toast(`${submission.id} moved to ${targetStage} · history stamped`);
+          render();
+        };
+      }
+
+      function bindBoard() {
+        document.getElementById("board-track-filter")?.addEventListener("change",e=>{state.boardTrack=e.target.value;render();});
+        document.getElementById("board-format-filter")?.addEventListener("change",e=>{state.boardFormat=e.target.value;render();});
+        document.getElementById("board-wave-filter")?.addEventListener("change",e=>{state.boardWave=e.target.value;render();});
+        let dragged=null;
+        document.querySelectorAll("[data-board-card]").forEach(card=>{card.addEventListener("dragstart",e=>{dragged=card.dataset.boardCard;e.dataTransfer?.setData("text/plain",dragged);card.classList.add("dragging");});card.addEventListener("dragend",()=>{card.classList.remove("dragging");document.querySelectorAll(".board-column").forEach(c=>c.classList.remove("drag-over"));});});
+        document.querySelectorAll("[data-board-column]").forEach(column=>{column.addEventListener("dragover",e=>{e.preventDefault();column.classList.add("drag-over");});column.addEventListener("dragleave",e=>{if(!column.contains(e.relatedTarget))column.classList.remove("drag-over");});column.addEventListener("drop",e=>{e.preventDefault();column.classList.remove("drag-over");const id=e.dataTransfer?.getData("text/plain")||dragged;if(!id)return;if(column.dataset.derived==="true"){const stage=programBoardStages.find(s=>s.name===column.dataset.boardColumn);toast(`${stage.name} accepts no drops · ${stage.entry.replace("Derived stage · ","")}`);return;}showBoardTransition(id,column.dataset.boardColumn);});});
       }
 
       function pipelineCounts() {
@@ -984,8 +1103,8 @@
         result.Scheduled += result.Published;
         return result;
       }
-      function pipelineStage(name, count, note, filter, route = "submissions") {
-        return `<button class="pipeline-stage" data-pipeline-filter="${esc(filter)}" data-pipeline-route="${route}"><span class="pipeline-name">${esc(name)}</span><strong class="pipeline-count">${count.toLocaleString()}</strong><span class="pipeline-delta">${esc(note)} →</span></button>`;
+      function pipelineStage(name, count, note, filter, route = "submissions", meaning = "") {
+        return `<button class="pipeline-stage" data-pipeline-filter="${esc(filter)}" data-pipeline-route="${route}"><span class="pipeline-name">${esc(name)}</span><strong class="pipeline-count">${count.toLocaleString()}</strong><span class="pipeline-delta">${esc(note)} →</span>${meaning?`<span class="pipeline-meaning">${esc(meaning)}</span>`:""}</button>`;
       }
       function onboardingCounts() {
         return {
@@ -1083,8 +1202,9 @@
         </main></div>`;
       }
       function portalSubmissionCard() {
-        if(state.portalEditing)return `<section class="status-hero"><div class="stack"><div class="eyebrow">Accepted · Wave 2 · Editing talk</div><div class="field"><label for="portal-talk-title">Talk title</label><input id="portal-talk-title" value="${esc(state.portalSessionTitle)}"></div><div class="field"><label for="portal-talk-description">Talk description</label><textarea id="portal-talk-description" style="min-height:110px">${esc(state.portalSessionDescription)}</textarea></div><span class="field-note">Editing closes when the CFP closes on Sep 12. The organizer can re-open editing for this submission afterward.</span><div style="display:flex;gap:7px"><button class="button primary small" id="save-talk-edit">Save talk</button><button class="button small" id="cancel-talk-edit">Cancel</button></div></div><div><span class="chip review">CFP open</span><p class="subtle">Changes update the organizer record immediately and are stamped in its history.</p></div></section>`;
-        return `<section class="status-hero"><div><div class="eyebrow">Accepted · Wave 2</div><h2>${esc(state.portalSessionTitle)}</h2><p>${esc(state.portalSessionDescription)}</p><p class="subtle">Stage Talk · Tue, Oct 13 · 10:00 AM · Empire East</p><div style="display:flex;gap:7px;margin-top:12px"><button class="button primary small" id="confirm-role">Confirm this role</button><button class="button small danger" id="decline-role">Decline</button><button class="button small" id="edit-talk">Edit title & description</button></div><span class="field-note" style="display:block;margin-top:9px">Editing closes when the CFP closes on Sep 12.</span></div><button class="button" id="download-invite">Add to calendar</button></section>`;
+        const portalRecord=state.submissions.find(s=>s.id===state.portalRecordId), slot=sessionSlot(state.portalRecordId);
+        if(state.portalEditing)return `<section class="status-hero"><div class="stack"><div class="eyebrow">${slot?"Scheduled":"Accepted"} · Wave 2 · Editing talk</div><div class="field"><label for="portal-talk-title">Talk title</label><input id="portal-talk-title" value="${esc(state.portalSessionTitle)}"></div><div class="field"><label for="portal-talk-description">Talk description</label><textarea id="portal-talk-description" style="min-height:110px">${esc(state.portalSessionDescription)}</textarea></div>${scheduleMeta(portalRecord)}<span class="field-note">Editing closes when the CFP closes on Sep 12. The organizer can re-open editing for this submission afterward.</span><div style="display:flex;gap:7px"><button class="button primary small" id="save-talk-edit">Save talk</button><button class="button small" id="cancel-talk-edit">Cancel</button></div></div><div><span class="chip review">CFP open</span><p class="subtle">Changes update the organizer record immediately and are stamped in its history.</p></div></section>`;
+        return `<section class="status-hero"><div><div class="eyebrow">${slot?"Scheduled":"Accepted"} · Wave 2</div><h2>${esc(state.portalSessionTitle)}</h2><p>${esc(state.portalSessionDescription)}</p><p class="subtle">Stage Talk</p>${scheduleMeta(portalRecord)}<div style="display:flex;gap:7px;margin-top:12px"><button class="button primary small" id="confirm-role">Confirm this role</button><button class="button small danger" id="decline-role">Decline</button><button class="button small" id="edit-talk">Edit title & description</button></div><span class="field-note" style="display:block;margin-top:9px">Editing closes when the CFP closes on Sep 12.</span></div><button class="button" id="download-invite">Add to calendar</button></section>`;
       }
       function taskRow(t) { return `<div class="task-row ${t.done ? "done" : ""}" data-task-row="${t.id}"><button class="task-toggle" data-task="${t.id}" aria-label="Toggle ${esc(t.title)}">${t.done ? "✓" : ""}</button><div><div class="task-title">${esc(t.title)}</div><div class="task-meta">${esc(t.kind)} · ${esc(t.due)}</div></div><span class="chip ${t.overdue && !t.done ? "overdue" : ""}">${t.done ? "Done" : t.overdue ? "Overdue" : "Open"}</span></div>`; }
 
@@ -1157,7 +1277,7 @@
             </div>
             ${selectedCount ? `<div class="selection-bar"><strong>${selectedCount.toLocaleString()} selected</strong>${!state.selectAllMatching && selectedCount < all.length ? `<button class="button small" id="select-matching">Select all ${all.length.toLocaleString()} matching</button>` : `<span>All matching records selected</span>`}<span class="toolbar-spacer"></span><button class="button small" id="bulk-reject">Reject…</button><button class="button primary small" id="bulk-accept">Accept ${selectedCount.toLocaleString()} ${selectedCount===1?"abstract":"abstracts"}</button></div>` : ""}
             <div class="table-wrap"><table><thead><tr><th class="check-col"><input type="checkbox" id="select-page" aria-label="Select visible rows"></th><th class="type-col">Type</th><th class="title-col">Title</th><th class="speaker-col">Speaker</th><th class="status-col">Status</th><th class="track-col">Track</th><th class="score-col">Score</th></tr></thead><tbody>
-              ${rows.length ? rows.map(s => `<tr class="submission-row" data-submission-id="${s.id}" title="Open ${esc(s.entity.toLowerCase())} ${s.id}"><td class="check-col"><input type="checkbox" class="row-check" data-id="${s.id}" aria-label="Select ${s.id}" ${state.selectAllMatching || state.selected.has(s.id) ? "checked" : ""}></td><td><span class="chip ${s.entity === "Session" ? "session" : ""}">${s.entity}</span></td><td><a href="#submissions/${s.id}" class="table-title" title="${esc(s.title)}">${esc(s.title)}</a><span class="wave-date">${s.id} · ${s.source}</span></td><td title="${esc(s.speakers.join(", "))}">${esc(s.speakers.length > 1 ? `${s.speaker} +${s.speakers.length-1}` : s.speaker)}</td><td><span class="chip ${s.status.toLowerCase().replace(" ","-")}">${s.status}</span></td><td><div style="display:flex;gap:3px;overflow:hidden">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" title="${i===0?"Primary track":"Additional track"}" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div></td><td class="score-col">${s.score}</td></tr>`).join("") : `<tr><td colspan="7" style="height:180px;text-align:center"><strong>No matching records</strong><div class="subtle" style="margin-top:7px">Clear a filter to bring abstracts back into view.</div></td></tr>`}
+              ${rows.length ? rows.map(s => `<tr class="submission-row" data-submission-id="${s.id}" title="Open ${esc(s.entity.toLowerCase())} ${s.id}"><td class="check-col"><input type="checkbox" class="row-check" data-id="${s.id}" aria-label="Select ${s.id}" ${state.selectAllMatching || state.selected.has(s.id) ? "checked" : ""}></td><td><span class="chip ${s.entity === "Session" ? "session" : ""}">${s.entity}</span></td><td><a href="#submissions/${s.id}" class="table-title" title="${esc(s.title)}">${esc(s.title)}</a><span class="wave-date">${s.id} · ${s.source}</span>${scheduleMeta(s)}</td><td title="${esc(s.speakers.join(", "))}">${esc(s.speakers.length > 1 ? `${s.speaker} +${s.speakers.length-1}` : s.speaker)}</td><td><span class="chip ${s.status.toLowerCase().replace(" ","-")}">${s.status}</span></td><td><div style="display:flex;gap:3px;overflow:hidden">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" title="${i===0?"Primary track":"Additional track"}" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div></td><td class="score-col">${s.score}</td></tr>`).join("") : `<tr><td colspan="7" style="height:180px;text-align:center"><strong>No matching records</strong><div class="subtle" style="margin-top:7px">Clear a filter to bring abstracts back into view.</div></td></tr>`}
             </tbody></table></div>
             <div class="pagination"><span>Showing ${all.length ? (state.submissionPage-1)*pageSize+1 : 0}–${Math.min(state.submissionPage*pageSize,all.length)} of ${all.length.toLocaleString()}</span><div class="page-buttons"><button class="button small" id="prev-page" ${state.submissionPage===1?"disabled":""}>Previous</button><span class="button small" style="cursor:default">${state.submissionPage} / ${maxPage}</span><button class="button small" id="next-page" ${state.submissionPage===maxPage?"disabled":""}>Next</button></div></div>
           </section>
@@ -1171,7 +1291,7 @@
           ${pageHead(`${s.entity} record`, `${s.id} · ${s.source} · Submitted ${s.submitted}`, `<button class="button" data-route="submissions">← All records</button>${s.accepted?`<button class="button danger" id="open-unaccept">Reverse acceptance…</button>`:""}<button class="button primary" id="edit-record">Edit record</button>`)}
           <div class="detail-grid">
             <div class="stack">
-              <section class="card"><div class="card-head"><div><span class="chip ${s.entity==="Session"?"session":""}">${s.entity}</span><h2 style="font-size:18px;margin-top:9px">${esc(s.title)}</h2></div><span class="chip ${s.status.toLowerCase().replace(" ","-")}">${s.status}</span></div><div class="card-body"><dl class="definition-list"><dt>Format</dt><dd>${esc(s.format)}</dd><dt>Tracks</dt><dd><div style="display:flex;gap:5px;flex-wrap:wrap">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div></dd><dt>Origin</dt><dd>${esc(s.source)}${s.entity==="Session"?" · Evaluation bypassed":""}</dd><dt>Applied routing rule</dt><dd>Any carried track matches ${esc((s.tracks||[s.track]).join(" / "))} → AIE 2026 program review · Initial screen</dd><dt>Abstract</dt><dd>Teams can make complex AI systems useful without hiding uncertainty. This session shares concrete production lessons, a decision framework, and the incidents that changed the approach.</dd><dt>Attendee outcome</dt><dd>A practical checklist for choosing evaluation evidence and escalation points.</dd></dl></div></section>
+              <section class="card"><div class="card-head"><div><span class="chip ${s.entity==="Session"?"session":""}">${s.entity}</span><h2 style="font-size:18px;margin-top:9px">${esc(s.title)}</h2>${scheduleMeta(s)}</div><span class="chip ${s.status.toLowerCase().replace(" ","-")}">${s.status}</span></div><div class="card-body"><dl class="definition-list"><dt>Format</dt><dd>${esc(s.format)}</dd><dt>Tracks</dt><dd><div style="display:flex;gap:5px;flex-wrap:wrap">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div></dd><dt>Origin</dt><dd>${esc(s.source)}${s.entity==="Session"?" · Evaluation bypassed":""}</dd><dt>Applied routing rule</dt><dd>Any carried track matches ${esc((s.tracks||[s.track]).join(" / "))} → AIE 2026 program review · Initial screen</dd><dt>Abstract</dt><dd>Teams can make complex AI systems useful without hiding uncertainty. This session shares concrete production lessons, a decision framework, and the incidents that changed the approach.</dd><dt>Attendee outcome</dt><dd>A practical checklist for choosing evaluation evidence and escalation points.</dd></dl></div></section>
               <section class="card"><div class="card-head"><h2>Participants</h2><span class="subtle">Roles are explicit per submission</span></div><div class="card-body" style="padding-top:2px;padding-bottom:2px">${participantRows}</div></section>
               <section class="card"><div class="card-head"><h2>Form answers</h2><span class="chip">Public CFP</span></div><div class="card-body"><dl class="definition-list"><dt>Audience</dt><dd>Platform and product engineers operating agent systems</dd><dt>Experience level</dt><dd>Intermediate</dd><dt>Vendor content</dt><dd>No</dd><dt>Recording consent</dt><dd>Yes</dd></dl></div></section>
             </div>
@@ -1318,7 +1438,7 @@
         modalRoot.innerHTML = `<div class="drawer-backdrop" data-close-drawer></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Speaker context"><header class="drawer-head"><div><h2>${esc(p.name)}</h2><span class="subtle">${esc(p.title)} · ${esc(p.company)}</span></div><button class="drawer-close" data-close-drawer aria-label="Close">×</button></header><div class="drawer-content">
           <section class="drawer-section"><h3>Chase summary</h3><div class="grid-3"><div class="metric-box"><span class="eyebrow">Tasks done</span><div class="metric">${p.statuses.filter(s=>s==="done").length}/5</div></div><div class="metric-box"><span class="eyebrow">Wave</span><div class="metric" style="font-size:16px">${esc(p.wave)}</div></div><div class="metric-box"><span class="eyebrow">Last contact</span><div class="metric" style="font-size:16px">${sent.length?"Now":"6d"}</div></div></div></section>
           <section class="drawer-section"><h3>Tasks</h3>${onboardingTaskDefs.map((t,i)=>`<div class="task-line">${onboardingTaskState(p.statuses[i])}<strong>${esc(t.label)}<small>${esc(t.kind)}</small></strong><span class="subtle">${p.statuses[i]==="done"?"DONE":esc(t.due).toUpperCase()}</span></div>`).join("")}</section>
-          <section class="drawer-section"><h3>Sessions</h3>${p.sessions.map(s=>`<div class="message-preview" style="margin-bottom:7px"><span class="chip ${s.entity==="Session"?"session":""}">${s.entity} → Session</span><strong style="display:block;margin:9px 0 5px">${esc(s.title)}</strong><span class="subtle">${esc(s.track)} · ${esc(s.format)}</span></div>`).join("")}<button class="button small" data-route="agenda">Open in agenda</button></section>
+          <section class="drawer-section"><h3>Sessions</h3>${p.sessions.map(s=>`<div class="message-preview" style="margin-bottom:7px"><span class="chip ${s.entity==="Session"?"session":""}">${s.entity} → Session</span><strong style="display:block;margin:9px 0 5px">${esc(s.title)}</strong><span class="subtle">${esc(s.format)}</span>${trackChips(s,true)}${scheduleMeta(s,true)}</div>`).join("")}<button class="button small" data-route="agenda">Open in agenda</button></section>
           <section class="drawer-section"><h3>Message history</h3><div class="timeline"><div class="timeline-item">Acceptance and portal invitation queued<time>${esc(p.wave)}, 10:04 AM</time></div>${sent.map(m=>`<div class="timeline-item">${esc(m.subject)}<time>Just now · delivered in demo outbox</time></div>`).join("")||'<div class="subtle">No reminders sent yet.</div>'}</div><button class="button primary" data-nudge-speaker="${p.id}">Send reminder</button></section>
           <section class="drawer-section"><h3>Biography</h3><p class="subtle" style="line-height:1.6">${esc(p.bio)}</p><span class="subtle">${esc(p.email)}</span></section>
         </div></aside>`;
@@ -1357,6 +1477,7 @@
         modalRoot.querySelectorAll("[data-close-drawer]").forEach(el=>el.onclick=closeOnboardingDrawer);
         modalRoot.querySelectorAll("[data-route]").forEach(el=>el.onclick=e=>{e.preventDefault();closeOnboardingDrawer();navigate(el.dataset.route);});
         modalRoot.querySelectorAll("[data-nudge-speaker]").forEach(el=>el.onclick=()=>showReminderDrawer([el.dataset.nudgeSpeaker]));
+        modalRoot.querySelectorAll("[data-publish-id]").forEach(el=>el.onclick=e=>{e.stopPropagation();showPublishModal(el.dataset.publishId);});
       }
 
       function agendaView() {
@@ -1368,7 +1489,7 @@
           ${pageHead("Agenda builder", "Drag accepted Sessions into track, day, time, and room. Format defaults set duration; live conflicts warn without blocking.", `<button class="button danger" id="open-conflicts">⚠ ${conflicts.length} conflicts</button><button class="button primary" data-route="publicAgenda">View public agenda ↗</button>`)}
           <div class="toolbar card" style="margin-bottom:14px"><div class="segment agenda-view-toggle" id="agenda-tabs">${["list","day","week","track","room"].map(v=>`<button data-agenda-view="${v}" class="${state.agendaView===v?"active":""}">${v[0].toUpperCase()+v.slice(1)}</button>`).join("")}</div><select id="agenda-builder-day"><option ${state.agendaBuilderDay==="All days"?"selected":""}>All days</option><option ${state.agendaBuilderDay==="Mon · Oct 12"?"selected":""}>Mon · Oct 12</option><option ${state.agendaBuilderDay==="Tue · Oct 13"?"selected":""}>Tue · Oct 13</option><option ${state.agendaBuilderDay==="Wed · Oct 14"?"selected":""}>Wed · Oct 14</option></select><select id="agenda-track"><option>All tracks</option>${tracks.map(t=>`<option ${state.agendaTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select><select id="agenda-snap"><option>15 minute snap</option><option>5 minute snap</option><option>30 minute snap</option><option>60 minute snap</option></select><span class="toolbar-spacer"></span><button class="button small" id="add-break">+ Add break</button></div>
           <div class="agenda-layout">
-            <aside class="card" id="agenda-pool-drop"><div class="card-head"><div><h2>Unscheduled</h2><span class="subtle">${pool.length} accepted Sessions ready to place</span></div><span class="chip">Drag back here to unplace</span></div><div class="toolbar" style="min-height:46px;padding:7px"><input id="agenda-pool-search" value="${esc(state.agendaPoolSearch)}" placeholder="Filter Sessions" style="min-width:0;width:100%"></div><div class="unscheduled">${pool.slice(0,40).map(s=>`<div class="unscheduled-item" draggable="true" data-drag-id="${s.id}" style="--track-color:${trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.format)} · ${formatDurations[s.format]}m · ${esc(s.speaker)}</span></div>`).join("") || `<div style="padding:30px;text-align:center" class="subtle">Everything matching is scheduled.</div>`}</div><div class="pagination" style="min-height:38px"><span>Showing ${Math.min(40,pool.length)} of ${pool.length}</span><span>Drag →</span></div></aside>
+            <aside class="card" id="agenda-pool-drop"><div class="card-head"><div><h2>Unscheduled</h2><span class="subtle">${pool.length} accepted Sessions ready to place</span></div><span class="chip">Drag back here to unplace</span></div><div class="toolbar" style="min-height:46px;padding:7px"><input id="agenda-pool-search" value="${esc(state.agendaPoolSearch)}" placeholder="Filter Sessions" style="min-width:0;width:100%"></div><div class="unscheduled">${pool.slice(0,40).map(s=>`<div class="unscheduled-item" draggable="true" data-drag-id="${s.id}" style="--track-color:${trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.format)} · ${formatDurations[s.format]}m · ${esc(s.speaker)}</span>${trackChips(s,true)}</div>`).join("") || `<div style="padding:30px;text-align:center" class="subtle">Everything matching is scheduled.</div>`}</div><div class="pagination" style="min-height:38px"><span>Showing ${Math.min(40,pool.length)} of ${pool.length}</span><span>Drag →</span></div></aside>
             <section class="card agenda-board" id="agenda-board">${agendaBoard()}</section>
           </div>
         </div>`);
@@ -1392,7 +1513,7 @@
 
       function renderWeekAgenda(items) {
         const times=["09:00","10:00","11:00","13:30","14:30","15:30","16:30"],days=["Mon · Oct 12","Tue · Oct 13","Wed · Oct 14"];
-        return `<div class="week-grid"><div class="week-cell head time"></div>${days.map(d=>`<div class="week-cell head">${d}</div>`).join("")}${times.map(time=>`<div class="week-cell time">${time}</div>${days.map(day=>`<div class="week-cell drop-target" data-drop-day="${day}" data-drop-time="${time}" data-drop-room="${rooms[(times.indexOf(time)+days.indexOf(day))%rooms.length]}">${items.filter(s=>s.day===day&&s.time===time).map(s=>`<div class="week-session ${s.kind==="break"?"break-tile":""}" style="border-left-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.room)} · ${s.kind==="break"?`${s.duration}m Break`:esc(s.speaker)}</span></div>`).join("")}</div>`).join("")}`).join("")}</div>`;
+        return `<div class="week-grid"><div class="week-cell head time"></div>${days.map(d=>`<div class="week-cell head">${d}</div>`).join("")}${times.map(time=>`<div class="week-cell time">${time}</div>${days.map(day=>`<div class="week-cell drop-target" data-drop-day="${day}" data-drop-time="${time}" data-drop-room="${rooms[(times.indexOf(time)+days.indexOf(day))%rooms.length]}">${items.filter(s=>s.day===day&&s.time===time).map(s=>`<div class="week-session ${s.kind==="break"?"break-tile":""}" style="border-left-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.room)} · ${s.kind==="break"?`${s.duration}m Break`:esc(s.speaker)}</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}</div>`).join("")}</div>`).join("")}`).join("")}</div>`;
       }
 
       function renderRoomAgenda(items) {
@@ -1408,7 +1529,7 @@
       }
       function agendaList(sessions) {
         const order={day:(a,b)=>(a.day+a.time).localeCompare(b.day+b.time),title:(a,b)=>a.title.localeCompare(b.title),speaker:(a,b)=>(a.speaker||"").localeCompare(b.speaker||""),track:(a,b)=>(a.track||"").localeCompare(b.track||""),room:(a,b)=>a.room.localeCompare(b.room),format:(a,b)=>(a.format||"Break").localeCompare(b.format||"Break")};sessions.sort(order[state.agendaSort]||order.day);
-        return `<div><div class="agenda-list-head"><button data-agenda-sort="day">Day</button><span>Time</span><button data-agenda-sort="title">Title</button><button data-agenda-sort="speaker">Speakers</button><button data-agenda-sort="track">Track</button><button data-agenda-sort="room">Room</button><button data-agenda-sort="format">Format</button></div>${sessions.map(s=>`<div class="agenda-list-row"><strong>${s.day}</strong><span class="tabular">${s.time}</span><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?"—":s.speakers.join(" · "))}</span><span class="chip" style="border-left:3px solid ${s.kind==="break"?"#81838b":trackColor(s.track)}">${esc(s.kind==="break"?"Break":s.track)}</span><span>${esc(s.room)}</span><span>${esc(s.kind==="break"?`Break · ${s.duration}m`:s.format)}</span></div>`).join("")}</div>`;
+        return `<div><div class="agenda-list-head"><button data-agenda-sort="day">Day</button><span>Time</span><button data-agenda-sort="title">Title</button><button data-agenda-sort="speaker">Speakers</button><button data-agenda-sort="track">Track</button><button data-agenda-sort="room">Room</button><button data-agenda-sort="format">Format</button></div>${sessions.map(s=>`<div class="agenda-list-row"><strong>${s.day}</strong><span class="tabular">${s.time}</span><div><strong>${esc(s.title)}</strong>${s.kind==="break"?"":scheduleMeta(s,true)}</div><span>${esc(s.kind==="break"?"—":s.speakers.join(" · "))}</span><div>${s.kind==="break"?`<span class="chip" style="border-left:3px solid #81838b">Break</span>`:trackChips(s,true)}</div><span>${esc(s.room)}</span><span>${esc(s.kind==="break"?`Break · ${s.duration}m`:s.format)}</span></div>`).join("")}</div>`;
       }
       function getAgendaConflicts() {
         const conflicts = [];
@@ -1424,9 +1545,9 @@
         return conflicts;
       }
       function agendaConflictIds() { return new Set(getAgendaConflicts().flatMap(c=>[c.a.id,c.b.id])); }
-      function swimlaneSession(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="swimlane-session ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" style="border-left:3px solid ${s.kind==="break"?"#81838b":trackColor(s.track)}"><time>${s.time} · ${esc(s.room)}</time><strong>${esc(s.title)}</strong><span class="subtle">${esc(s.kind==="break"?`${s.duration} minute reservation`:s.speaker)}</span>${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
-      function sessionTile(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="session-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?`${s.duration} minute Break`:s.speaker)}</span>${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}" aria-label="Shorten">−</button><button data-resize="5" data-resize-id="${s.id}" aria-label="Lengthen">+</button></span>`:""}${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
-      function trackAgendaTile(s,conflict) { return `<article class="track-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${s.time} · ${esc(s.room)} · ${esc(s.kind==="break"?"Break":s.speaker)} · ${s.duration}m</span>${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}">−</button><button data-resize="5" data-resize-id="${s.id}">+</button></span>`:""}${conflict?'<i class="track-conflict" title="Conflict">!</i>':""}</article>`; }
+      function swimlaneSession(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="swimlane-session ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" style="border-left:3px solid ${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span class="subtle">${esc(s.kind==="break"?`${s.duration} minute reservation`:s.speaker)}</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
+      function sessionTile(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="session-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?`${s.duration} minute Break`:s.speaker)}</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}" aria-label="Shorten">−</button><button data-resize="5" data-resize-id="${s.id}" aria-label="Lengthen">+</button></span>`:""}${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
+      function trackAgendaTile(s,conflict) { return `<article class="track-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?"Break":s.speaker)} · ${s.duration}m</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}">−</button><button data-resize="5" data-resize-id="${s.id}">+</button></span>`:""}${conflict?'<i class="track-conflict" title="Conflict">!</i>':""}</article>`; }
 
       function publicAgendaView() {
         const q = state.publicSearch.trim().toLowerCase();
@@ -1455,7 +1576,7 @@
         modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Accept ${eligible.length.toLocaleString()} abstracts into Wave 2?</h2><p>Status change is the notification. Review every downstream effect before the wave moves.</p></div><div class="modal-body"><div class="wave-row"><strong>Portal status updates</strong><span></span><strong class="tabular">${eligible.length}</strong></div><div class="wave-row"><strong>Acceptance emails queued</strong><span></span><strong class="tabular">${eligible.length}</strong></div><div class="wave-row"><strong>Speaker task sets assigned</strong><span></span><strong class="tabular">${Math.max(0,eligible.length-2)}</strong></div><div class="wave-row"><strong>Calendar invites offered</strong><span></span><strong class="tabular">After scheduling</strong></div><p class="subtle">The CFP remains open. Two records without valid speaker emails will remain unchanged and appear in the result summary.</p></div><div class="modal-actions"><button class="button" id="cancel-modal">Cancel</button><button class="button primary" id="confirm-accept">Accept ${eligible.length.toLocaleString()} abstracts</button></div></section></div>`;
         document.getElementById("cancel-modal").onclick = () => modalRoot.innerHTML = "";
         document.getElementById("confirm-accept").onclick = () => {
-          eligible.forEach(s => { s.status = "Accepted"; s.accepted = true; s.wave = 2; s.waveDate = waveDates[1]; ensureOnboardingSpeaker(s); });
+          eligible.forEach(s => { s.status = "Accepted"; s.accepted = true; s.wave = 2; s.waveDate = waveDates[1]; s.boardStage="Accepted"; s.timeInStageHours=1; ensureOnboardingSpeaker(s); });
           modalRoot.innerHTML = ""; state.selected.clear(); state.selectAllMatching = false;
           toast(`${eligible.length.toLocaleString()} accepted · emails queued · portals updated`); render();
         };
@@ -1467,7 +1588,7 @@
         const first=chosen[0];
         modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Reject ${chosen.length.toLocaleString()} ${chosen.length===1?"abstract":"abstracts"}?</h2><p>Review one real merged message before the batch is queued.</p></div><div class="modal-body"><div class="message-preview">Hi ${esc(first?.speaker.split(" ")[0]||"speaker")},<br><br>Thank you for sharing <strong>${esc(first?.title||"your abstract")}</strong>. We aren’t able to include it in this year’s program, but we appreciate the care behind it.</div><p class="subtle">Repeated confirmation is idempotent: already-notified submissions are skipped.</p></div><div class="modal-actions"><button class="button" id="cancel-modal">Cancel</button><button class="button danger" id="confirm-reject">Reject and queue ${chosen.length.toLocaleString()}</button></div></section></div>`;
         document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
-        document.getElementById("confirm-reject").onclick=()=>{chosen.forEach(s=>{s.status="Rejected";s.accepted=false;});state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:"filtered recipients",template:"Rejection",subject:`${chosen.length} rendered rejection messages`,outcome:"Queued",time:"Just now"});state.selected.clear();state.selectAllMatching=false;modalRoot.innerHTML="";toast(`${chosen.length} rejections queued with rendered per-recipient messages`);render();};
+        document.getElementById("confirm-reject").onclick=()=>{chosen.forEach(s=>{s.status="Rejected";s.accepted=false;s.boardStage="Waved";s.timeInStageHours=1;});state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:"filtered recipients",template:"Rejection",subject:`${chosen.length} rendered rejection messages`,outcome:"Queued",time:"Just now"});state.selected.clear();state.selectAllMatching=false;modalRoot.innerHTML="";toast(`${chosen.length} rejections queued with rendered per-recipient messages`);render();};
       }
 
       function showUnacceptModal() {
@@ -1475,7 +1596,7 @@
         const scheduled=state.scheduled.some(item=>item.id===s.id);
         modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow" style="color:var(--danger)">Acceptance reversal</div><h2>Withdraw ${esc(s.title)}?</h2><p>The agenda and public event site always update. Choose what happens to each dependent workflow before confirming.</p></div><div class="modal-body"><div class="toggle-line"><span><strong>Agenda placement + public surfaces</strong><small class="subtle" style="display:block">${scheduled?"Remove the scheduled Session and expose the vacated slot.":"Not currently scheduled."}</small></span><span class="chip overdue">Remove</span></div><div class="toggle-line"><span><strong>Portal tasks</strong><small class="subtle" style="display:block">5 assigned tasks · 2 complete</small></span><select id="cascade-tasks"><option value="cancel">Cancel open tasks</option><option value="retain">Retain for records</option></select></div><div class="toggle-line"><span><strong>Scheduled emails</strong><small class="subtle" style="display:block">2 reminders queued · none delivered</small></span><select id="cascade-emails"><option value="cancel">Cancel queued emails</option><option value="retain">Retain queued emails</option></select></div><div class="toggle-line"><span><strong>Calendar invites</strong><small class="subtle" style="display:block">1 invite already sent</small></span><select id="cascade-calendar"><option value="cancel">Send cancellation</option><option value="retain">Retain invite</option></select></div><div class="field"><label>New outcome</label><select id="cascade-status"><option>Withdrawn</option><option>Rejected</option></select></div></div><div class="modal-actions"><button class="button" id="cancel-modal">Keep accepted</button><button class="button danger" id="confirm-unaccept">Reverse acceptance</button></div></section></div>`;
         document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
-        document.getElementById("confirm-unaccept").onclick=()=>{const result={tasks:document.getElementById("cascade-tasks").value,emails:document.getElementById("cascade-emails").value,calendar:document.getElementById("cascade-calendar").value};s.status=document.getElementById("cascade-status").value;s.accepted=false;state.scheduled=state.scheduled.filter(item=>item.id!==s.id);if(result.calendar==="cancel")state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:`${s.speaker.toLowerCase().replace(/[^a-z]+/g,".")}@example.org`,template:"Calendar cancellation",subject:`Cancelled: ${s.title}`,outcome:"Queued",time:"Just now"});modalRoot.innerHTML="";toast(`Acceptance reversed · tasks ${result.tasks}ed · queued emails ${result.emails}ed · calendar ${result.calendar}led`);render();};
+        document.getElementById("confirm-unaccept").onclick=()=>{const result={tasks:document.getElementById("cascade-tasks").value,emails:document.getElementById("cascade-emails").value,calendar:document.getElementById("cascade-calendar").value};s.status=document.getElementById("cascade-status").value;s.accepted=false;s.boardStage="Waved";s.timeInStageHours=1;state.scheduled=state.scheduled.filter(item=>item.id!==s.id);if(result.calendar==="cancel")state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:`${s.speaker.toLowerCase().replace(/[^a-z]+/g,".")}@example.org`,template:"Calendar cancellation",subject:`Cancelled: ${s.title}`,outcome:"Queued",time:"Just now"});modalRoot.innerHTML="";toast(`Acceptance reversed · tasks ${result.tasks}ed · queued emails ${result.emails}ed · calendar ${result.calendar}led`);render();};
       }
 
       function showEmbedModal() {
@@ -1494,6 +1615,7 @@
         document.querySelectorAll("[data-route]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); if(el.hasAttribute("data-create-session"))state.formTarget="Session"; navigate(el.dataset.route); }));
         document.querySelectorAll("[data-nav-filter]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); const route=el.dataset.navRoute; navigate(route,route==="submissions"?{submissionFilter:el.dataset.navFilter,submissionTrack:"All",submissionPage:1}:{ }); }));
         document.querySelectorAll("[data-toast]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); toast(el.dataset.toast); }));
+        document.querySelectorAll("[data-publish-id]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); showPublishModal(el.dataset.publishId); }));
         const gs = document.getElementById("global-search");
         gs?.addEventListener("focus",openGlobalSearch);
         gs?.addEventListener("click",openGlobalSearch);
@@ -1590,7 +1712,7 @@
         document.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>{const t=state.tasks.find(x=>x.id===Number(b.dataset.task));t.done=!t.done;if(t.done)t.overdue=false;toast(t.done?"Task completed · organizer dashboard updated":"Task reopened");render();});
         document.getElementById("edit-talk")?.addEventListener("click",()=>{state.portalEditing=true;render();});
         document.getElementById("cancel-talk-edit")?.addEventListener("click",()=>{state.portalEditing=false;render();});
-        document.getElementById("save-talk-edit")?.addEventListener("click",()=>{state.portalSessionTitle=document.getElementById("portal-talk-title").value.trim()||state.portalSessionTitle;state.portalSessionDescription=document.getElementById("portal-talk-description").value.trim()||state.portalSessionDescription;state.portalEditing=false;toast("Talk updated · organizer record and history stamped just now");render();});
+        document.getElementById("save-talk-edit")?.addEventListener("click",()=>{state.portalSessionTitle=document.getElementById("portal-talk-title").value.trim()||state.portalSessionTitle;state.portalSessionDescription=document.getElementById("portal-talk-description").value.trim()||state.portalSessionDescription;const record=state.submissions.find(s=>s.id===state.portalRecordId),slot=sessionSlot(state.portalRecordId);if(record){record.title=state.portalSessionTitle;record.description=state.portalSessionDescription;}if(slot){slot.title=state.portalSessionTitle;slot.description=state.portalSessionDescription;}state.portalEditing=false;toast("Talk updated · organizer record and history stamped just now");render();});
         document.getElementById("download-invite")?.addEventListener("click",()=>downloadText("aie-nyc-session.ics",`BEGIN:VCALENDAR\nVERSION:2.0\nMETHOD:REQUEST\nBEGIN:VEVENT\nSUMMARY:${state.portalSessionTitle}\nDTSTART:20261013T140000Z\nDTEND:20261013T142000Z\nLOCATION:Empire East\nEND:VEVENT\nEND:VCALENDAR`,"text/calendar"));
         document.getElementById("confirm-role")?.addEventListener("click",e=>{e.currentTarget.textContent="Role confirmed ✓";e.currentTarget.disabled=true;toast("Participation confirmed for this speaker role");});
         document.getElementById("decline-role")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Decline this speaker role?</h2><p>The program team will be notified; other roles and submissions are unchanged.</p></div><div class="modal-body field"><label>Optional note</label><textarea placeholder="Tell the program team what changed"></textarea></div><div class="modal-actions"><button class="button" id="cancel-decline">Keep role</button><button class="button danger" id="confirm-decline">Decline role</button></div></section></div>`;document.getElementById("cancel-decline").onclick=()=>modalRoot.innerHTML="";document.getElementById("confirm-decline").onclick=()=>{modalRoot.innerHTML="";toast("Role declined · program team notified");};});
@@ -1640,7 +1762,7 @@
       function bindSubmissionNew() {
         document.querySelectorAll("[data-create-kind]").forEach(b=>b.onclick=()=>{state.formTarget=b.dataset.createKind;render();});
         document.querySelectorAll("[data-new-track]").forEach(b=>b.onclick=()=>{const name=b.dataset.newTrack,index=state.newSubmissionTracks.indexOf(name);if(index>=0)state.newSubmissionTracks.splice(index,1);else state.newSubmissionTracks.push(name);document.querySelectorAll("[data-new-track]").forEach(button=>{const i=state.newSubmissionTracks.indexOf(button.dataset.newTrack);button.classList.toggle("active",i>=0);button.querySelector("small")?.remove();if(i===0)button.insertAdjacentHTML("beforeend","<small>Primary</small>");});});
-        document.getElementById("create-submission")?.addEventListener("click",()=>{const title=document.getElementById("new-title").value.trim(),speaker=document.getElementById("new-speaker").value.trim(),email=document.getElementById("new-email").value.trim();if(title.length<8||!speaker||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||!state.newSubmissionTracks.length){document.getElementById("new-error").textContent="Add a clear title, speaker name, deliverable email address, and at least one track.";return;}const bypass=document.getElementById("new-bypass").checked,id=`AIE-${String(state.submissions.length+1).padStart(4,"0")}`;const s={id,title,entity:state.formTarget,speaker,speakers:[speaker],company:"Invited speaker",status:bypass?"Accepted":"Submitted",accepted:bypass,wave:bypass?2:null,waveDate:bypass?waveDates[1]:null,track:state.newSubmissionTracks[0],tracks:[...state.newSubmissionTracks],format:document.getElementById("new-format").value,score:"—",submitted:"2026-08-08",source:"Admin created"};state.submissions.unshift(s);if(bypass)ensureOnboardingSpeaker(s);toast(`${s.entity} created · ${bypass?"evaluation bypassed · ready for agenda":"entered evaluation pipeline"}`);navigate(`submissions/${id}`);});
+        document.getElementById("create-submission")?.addEventListener("click",()=>{const title=document.getElementById("new-title").value.trim(),speaker=document.getElementById("new-speaker").value.trim(),email=document.getElementById("new-email").value.trim();if(title.length<8||!speaker||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||!state.newSubmissionTracks.length){document.getElementById("new-error").textContent="Add a clear title, speaker name, deliverable email address, and at least one track.";return;}const bypass=document.getElementById("new-bypass").checked,id=`AIE-${String(state.submissions.length+1).padStart(4,"0")}`;const s={id,title,entity:state.formTarget,speaker,speakers:[speaker],company:"Invited speaker",status:bypass?"Accepted":"Submitted",accepted:bypass,wave:bypass?2:null,waveDate:bypass?waveDates[1]:null,track:state.newSubmissionTracks[0],tracks:[...state.newSubmissionTracks],format:document.getElementById("new-format").value,score:"—",submitted:"2026-08-08",source:"Admin created",boardStage:bypass?"Accepted":"Submitted",timeInStageHours:1};state.submissions.unshift(s);if(bypass)ensureOnboardingSpeaker(s);toast(`${s.entity} created · ${bypass?"evaluation bypassed · ready for agenda":"entered evaluation pipeline"}`);navigate(`submissions/${id}`);});
       }
 
       function bindComms() {
@@ -1716,8 +1838,8 @@
         document.querySelectorAll("[data-resize]").forEach(b=>b.onclick=e=>{e.stopPropagation();const s=state.scheduled.find(item=>item.id===b.dataset.resizeId);if(!s)return;s.duration=Math.max(5,s.duration+Number(b.dataset.resize));toast(`${s.title} resized to ${s.duration} minutes`);render();});
         document.getElementById("add-break")?.addEventListener("click",showBreakModal);
         let dragged=null;document.querySelectorAll("[draggable=true]").forEach(el=>{el.addEventListener("dragstart",e=>{dragged=el.dataset.dragId;e.dataTransfer?.setData("text/plain",dragged);el.style.opacity=".45";});el.addEventListener("dragend",()=>el.style.opacity="");});
-        document.querySelectorAll(".drop-target").forEach(cell=>{cell.addEventListener("dragover",e=>{e.preventDefault();cell.classList.add("drag-over")});cell.addEventListener("dragleave",()=>cell.classList.remove("drag-over"));cell.addEventListener("drop",e=>{e.preventDefault();cell.classList.remove("drag-over");const id=e.dataTransfer?.getData("text/plain")||dragged;const base=state.submissions.find(s=>s.id===id);if(!base)return;if(board)state.agendaScrolls[state.agendaView]={top:board.scrollTop,left:board.scrollLeft};let sched=state.scheduled.find(s=>s.id===id);if(!sched){sched={...base,day:state.agendaBuilderDay==="All days"?"Mon · Oct 12":state.agendaBuilderDay,duration:formatDurations[base.format]};state.scheduled.push(sched)}if(cell.dataset.dropTrack)sched.track=cell.dataset.dropTrack;if(cell.dataset.dropDay)sched.day=cell.dataset.dropDay;if(cell.dataset.dropTime)sched.time=cell.dataset.dropTime;if(cell.dataset.dropRoom)sched.room=cell.dataset.dropRoom;toast(`${base.format} placed at ${sched.time} · duration set to ${sched.duration} minutes`);render();});});
-        const poolDrop=document.getElementById("agenda-pool-drop");poolDrop?.addEventListener("dragover",e=>{e.preventDefault();poolDrop.style.boxShadow="inset 0 0 0 2px var(--accent)";});poolDrop?.addEventListener("dragleave",()=>poolDrop.style.boxShadow="");poolDrop?.addEventListener("drop",e=>{e.preventDefault();const id=e.dataTransfer?.getData("text/plain")||dragged;const before=state.scheduled.length;state.scheduled=state.scheduled.filter(s=>s.id!==id);if(state.scheduled.length<before){toast("Session returned to the unscheduled pool");render();}});
+        document.querySelectorAll(".drop-target").forEach(cell=>{cell.addEventListener("dragover",e=>{e.preventDefault();cell.classList.add("drag-over")});cell.addEventListener("dragleave",()=>cell.classList.remove("drag-over"));cell.addEventListener("drop",e=>{e.preventDefault();cell.classList.remove("drag-over");const id=e.dataTransfer?.getData("text/plain")||dragged;const base=state.submissions.find(s=>s.id===id);if(!base)return;if(board)state.agendaScrolls[state.agendaView]={top:board.scrollTop,left:board.scrollLeft};let sched=state.scheduled.find(s=>s.id===id);if(!sched){base.status="Scheduled";base.boardStage="Scheduled";base.timeInStageHours=1;sched={...base,status:"Scheduled",day:state.agendaBuilderDay==="All days"?"Mon · Oct 12":state.agendaBuilderDay,duration:formatDurations[base.format]};state.scheduled.push(sched)}if(cell.dataset.dropTrack)sched.track=cell.dataset.dropTrack;if(cell.dataset.dropDay)sched.day=cell.dataset.dropDay;if(cell.dataset.dropTime)sched.time=cell.dataset.dropTime;if(cell.dataset.dropRoom)sched.room=cell.dataset.dropRoom;toast(`${base.format} placed at ${sched.time} · duration set to ${sched.duration} minutes · not yet public`);render();});});
+        const poolDrop=document.getElementById("agenda-pool-drop");poolDrop?.addEventListener("dragover",e=>{e.preventDefault();poolDrop.style.boxShadow="inset 0 0 0 2px var(--accent)";});poolDrop?.addEventListener("dragleave",()=>poolDrop.style.boxShadow="");poolDrop?.addEventListener("drop",e=>{e.preventDefault();const id=e.dataTransfer?.getData("text/plain")||dragged;const before=state.scheduled.length;state.scheduled=state.scheduled.filter(s=>s.id!==id);if(state.scheduled.length<before){const base=state.submissions.find(s=>s.id===id);if(base){base.status="Accepted";base.boardStage="Onboarding";base.timeInStageHours=1;}toast("Session returned to the unscheduled pool · removed from public surfaces");render();}});
       }
 
       function showBreakModal() {
@@ -1738,6 +1860,7 @@
         const states={
           landing:["Create your first event","A fresh Marquee install has no events yet. Create one from scratch or import an active program from Sessionize.","Create event","settings"],
           dashboard:["Your program starts here","Create event details, then open a CFP or import an existing Sessionize program.","Set up the event","settings"],
+          board:["No submissions to board yet","Open a CFP or import an active program; each record will appear in its lifecycle column.","Import from Sessionize","import"],
           settings:["Name the conference","Add dates, venue, timezone, formats, tracks, and rooms before opening intake.","Create event details","settings"],
           forms:["No CFP forms yet","Build an Abstract form for competitive submissions or a Session form for guaranteed programming.","Create a form","forms"],
           cfp:["This call for speakers is not open","Publish a CFP form before sharing this page with submitters.","Open organizer demo","forms"],
@@ -1768,11 +1891,11 @@
 
       function render() {
         state.route = currentRoute();
-        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
+        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
         app.innerHTML = state.emptyInstall ? emptyStateView(state.route) : views[state.route]();
         modalRoot.innerHTML = "";
         bindCommon();
-        const binder={landing:bindLanding,dashboard:bindDashboard,settings:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
+        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
         if(!state.emptyInstall&&binder)binder();
         window.scrollTo(0,0);
       }

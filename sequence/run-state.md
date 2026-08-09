@@ -6,9 +6,9 @@
 
 ## Current stage & phase
 
-- **Stage:** tone-prototype v1.2 review gate / tone-architect contract ready (2026-08-08).
-- **State:** Pipeline v1.2 is complete in place: all §5 routes and completion screens are populated, every route has an honest empty-install state, stub-toast copy is absent, the five agenda views are full-fidelity, and Discord amendments AC-234 (multi-track submissions) and AC-237 (speaker talk-content editing) are folded in. Playwright observed 23 populated + 23 empty routes, the 11-step loop, 20 ordered agenda transitions, and the new stateful workflows with no JavaScript errors.
-- **THE GATE:** Atin drives v1.2 → love/iterate; confirms F-2 seed A′ and signs the seven proposed speed budgets (EVALUATION §1.3). Then: DESIGN.md minted → adversarial contract pass → lattice-orchestrator kickoff with a **codex build fleet** (Atin directive).
+- **Stage:** tone-prototype v1.3 review gate / tone-architect contract ready (2026-08-08).
+- **State:** Pipeline v1.3 is complete in place: v1.2 remains intact, scheduled/published records expose their exact slot and publication state, `/board` renders all 1,040 cards across seven lifecycle columns with confirmed drag transitions and derived-column refusal, and 15% of the seed is visibly multi-track. Playwright observed 23 populated + 23 empty routes plus the new board, native mouse drag/refusal/confirmation, publication, CFP multi-select, schedule metadata, and six scheduled multi-track cards with no JavaScript errors; measured board render 45.1 ms and track-filter render 33.5 ms.
+- **THE GATE:** Atin drives v1.3 → love/iterate; confirms F-2 seed A′ and signs the seven proposed speed budgets (EVALUATION §1.3). Then: DESIGN.md minted → adversarial contract pass → lattice-orchestrator kickoff with a **codex build fleet** (Atin directive).
 - **Externals still open:** Discord relay (Sat video, Sun freeze video, Q1/Q2 posts); account checks (Workers Paid, R2 entitlement, Resend tier, Airtable Team ×2 bases); gate materials (Gmail/Outlook/Apple inboxes, real Sessionize export, CF API token, model credential).
 
 ## Commission facts (from Atin, 2026-08-08)
@@ -25,6 +25,7 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 
 ## Decisions log
 
+- 2026-08-08: **Pipeline v1.3 completed** — program board, scheduled/public slot legibility, publish affordances, clarifying pipeline labels, and ≥15% multi-track seed coverage are implemented and Playwright-verified at full mock scale. (codex)
 - 2026-08-08: **Pipeline v1.2 completed** — all 24 specified screens/states represented, no stub-toast affordances, five finished agenda views, live Event Settings collections, Sessionize import, comms/outbox, reversal cascade, Airtable/API surfaces, multi-track AC-234, and portal talk editing AC-237. Playwright gate passed; client drive remains the love gate. (codex)
 - 2026-08-08: Project named Marquee, homed at `deployments/Marquee`. (Atin)
 - 2026-08-08: Anchor competitive research on Sessionboard as the reference product. (Atin)
