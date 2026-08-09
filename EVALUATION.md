@@ -2,8 +2,16 @@
 
 **Status:** DRAFT for orchestrator review · tone-architect Phase 1 · authored 2026-08-08.
 **Authority once signed:** this file defines what "done" means for the Marquee build and *how an agent proves each criterion without a human in the loop*. The build fleet writes against it; the terminal auditor — who did not write the spec — runs it.
-**Upstream:** `sequence/USER_STORIES.md` (AC-1–224) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
-**Build scope:** Tier A + Tier B = **AC-1 – AC-169**. AC-170 – AC-224 are out of build scope (§7).
+**Upstream:** `sequence/USER_STORIES.md` (AC-1–233) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
+
+**Build scope: 178 criteria — read the tier, not the number.** Since Amendment 1 (2026-08-08) an AC's numeric range no longer tells you its tier: `AC-225`–`AC-233` were appended in allocation order and belong to Tier A, Tier B, and the cut line respectively. **`sequence/USER_STORIES.md` §"Scope at a glance" is the authority on tier membership**; this file follows it and never re-derives it from ID arithmetic.
+
+| Tier | ACs | Count | Consequence here |
+|---|---|---|---|
+| **A — the walkthrough loop** | AC-1 – AC-90, **AC-231** | 91 | Binding, no waivers (§1.4, gate 18) |
+| **B — ordered differentiators** | AC-91 – AC-169, **AC-225 – AC-230**, **AC-232** | 86 | Cut from the bottom; a cut must be named (gate 19) |
+| **Cut-line criterion on a Tier A story** | **AC-233** | 1 | Speaker Handbook — hosted on US-39, outside Tier A's no-waiver set; cuttable if named |
+| **Post-competition** | AC-170 – AC-224 | 55 | Not built, not tested, not a defect (§7) |
 
 **The one sentence.** The judges' rubric is a deployed URL driven through the 11-step walkthrough loop by a practitioner who will spend minutes, not an hour. Everything below exists to make that pass provable before a judge ever opens it.
 
@@ -22,9 +30,9 @@ Every AC in scope carries exactly one **primary** tag — the strongest thing it
 
 **Strength order:** `felt` > `oracle` > `op-assist` > `auto`. An AC with a hard assertion *and* a residual judgement is tagged by the residual and appears in both places — the assertion still runs every build.
 
-**Counts across AC-1 – AC-169:** **159 `auto` · 1 `op-assist` · 5 `oracle` · 4 `felt`.**
+**Counts across all 178 in-scope criteria:** **168 `auto` · 1 `op-assist` · 5 `oracle` · 4 `felt`.** All nine ACs added at Amendment 1 are `auto`.
 
-Credentials, plan tiers, and third-party accounts gate *suites*, not individual criteria. They are enumerated once in §1.6 rather than smeared across 169 rows.
+Credentials, plan tiers, and third-party accounts gate *suites*, not individual criteria. They are enumerated once in §1.6 rather than smeared across 178 rows. The one `op-assist` tag (AC-109) is the exception on purpose: there the missing thing is *knowledge* — the column names and status vocabulary of a real Sessionize export, which cannot be synthesized. A missing credential against a fully-documented API (Airtable, AC-225–229) is a precondition, not a tag.
 
 ---
 
@@ -42,7 +50,8 @@ Credentials, plan tiers, and third-party accounts gate *suites*, not individual 
 | `npm run check:repo` | Secret scan (`gitleaks` + a Marquee-specific ruleset), PROTOTYPE-badge absence in `src/`, README lint (numbered deploy sequence present, extension points named), `Atin/` and Stage-11-internal path scan. | ≤30s. | Pre-push; the gate; mandatory immediately before the public push. |
 | `npm run check:readme` | Executes the README's numbered deploy sequence verbatim — commands extracted from its fenced blocks — from a clean checkout in a fresh container against a scratch Workers project, with **no human input at any step**. Asserts exit 0, a 200 on the deployed URL, and non-zero seeded counts. | ≤10 min. | Once per milestone; the gate. |
 | `npm run trace:ac` | Scans test names for `AC-nnn` prefixes and produces `ac-coverage.json` — every in-scope AC with the suites covering it, and a list of ACs with zero mechanical coverage. **Fails if any `auto`-tagged AC has zero tests.** | ≤10s. | Every PR; the gate. |
-| `npm run reset:demo` | Restores the seeded demo to a known state (also a button in the product). Idempotent; safe mid-judging. | ≤20s. | Between judges; the gate. |
+| `npm run check:mirror` | Airtable two-way mirror against a **dedicated test base**: outbound latency, inbound webhook apply, allowlist rejection, echo suppression under sustained two-way editing, keepalive cron advancing the webhook expiry. Covers AC-225 – AC-229 and gate 9. Requires a deployed preview (the webhook needs a public URL). | ≤3 min. | Every PR touching the mirror; the gate. |
+| `npm run reset:demo` | Restores the seeded demo to a known state (also a button in the product). Idempotent; safe mid-judging. Covers AC-230 and gate 13. | ≤20s. | Between judges; the gate. |
 
 **Naming convention that makes the §2 table auditable rather than aspirational:** every test name begins with the AC IDs it covers —
 `test('AC-25 · a crafted request bypassing the client cannot persist an invalid record', …)`.
@@ -78,7 +87,7 @@ The seven *proposed* budgets are new here; the client signs or amends them at re
 
 ### 1.4 Coverage rules
 
-- **Tier A (AC-1 – AC-90) admits no waivers.** Any Tier A AC red is a build failure regardless of Tier B completeness. A chain has no most-important link.
+- **Tier A admits no waivers.** The no-waiver set is `AC-1 – AC-90` **plus AC-231** — Turnstile is binding because US-14 puts an open write endpoint on the public internet for four days with a public repo pointing at it. It is *not* every ID up to AC-233: AC-232 is Tier B and AC-233 is explicitly cuttable. Any AC in the no-waiver set showing red is a build failure regardless of Tier B completeness. A chain has no most-important link.
 - **Tier B is cut from the bottom.** A cut Tier B story's ACs are recorded as *cut* in the gate report with the cut line named. Silently missing ≠ cut.
 - `trace:ac` failing (an `auto` AC with zero tests) blocks merge.
 
@@ -102,14 +111,17 @@ These gate suites, not individual ACs. Each is a human action item; unresolved o
 6. **One real Sessionize export** (any event, sessions + speakers + evaluation results) — the only thing that proves our column fixture matches reality (AC-109).
 7. **A Cloudflare API token in CI** for `check:readme`'s scratch deploy.
 8. **A model credential** for `check:skill-agent`.
+9. **A dedicated Airtable *test* base + PAT** for `check:mirror` — distinct from the demo base of item 4 and separate from it on purpose: the mirror suite writes destructively, and it must never be able to corrupt the base a judge will open. A handful of records suffices, so Free is fine here; the Team+ requirement belongs only to the 1,000-row demo base.
 
 ---
 
-## 2. Per-AC verifiability — AC-1 – AC-169
+## 2. Per-AC verifiability — all 178 in-scope criteria
+
+Grouped by story in build order, so the grouping — not the ID — carries tier membership. Rows appended at Amendment 1 sit with their host story and are marked *(appended 2026-08-08)*.
 
 Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:` · `api:` · `repo:` · `readme:` · `oracle:` · `C1`–`C7` = checkpoints in §3.
 
-### Tier A — the walkthrough loop (AC-1 – AC-90)
+### Tier A — the walkthrough loop (27 stories · AC-1 – AC-90 + AC-231; AC-233 rides on US-39 but is cut-line, not Tier A)
 
 **US-01 · A judge lands on a working, populated product**
 
@@ -201,6 +213,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-34 | `auto` | `e2e:` fresh context, no cookies or storage; load and submit successfully. |
 | AC-35 | `auto` | `e2e:mobile` completes the form end to end at 375px. |
 | AC-36 | `auto` | `speed:` cold load → interactive, p95 ≤ 1000ms. |
+| AC-231 | `auto` | `test:` three rejection cases — missing, replayed, invalid token — each 4xx with **zero rows written and no presign issued**; the siteverify client is stubbed here. `e2e:` one pass against real Turnstile on the deployed preview, covering both the public write and the upload-presign path. **Binding: Tier A no-waiver set** *(appended 2026-08-08)* |
 
 **US-17 · Submit an abstract in one sitting**
 
@@ -234,6 +247,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-47 | `auto` | `test:` task-type registry contains acknowledge, upload, complete-a-form; `e2e:` completes one of each. |
 | AC-48 | `auto` | `e2e:` speaker completes a task in one context; organizer dashboard reflects it with no admin action. |
 | AC-49 | `auto` | `e2e:` overdue rows carry a distinct textual marker and container class, not colour alone. |
+| AC-233 | `auto` | `e2e:` a per-event Handbook page authored as static markdown renders inside the speaker portal; assert headings and links survive the render. ⚠️ **Below the Tier B cut line, on a Tier A story** — outside Tier A's no-waiver guarantee. If cut, gate 19 must name it. *(appended 2026-08-08)* |
 
 **US-40 · Edit my own biography and headshot**
 
@@ -336,7 +350,9 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-89 | `auto` | `speed:` mutate via API, poll the embed from a clean context; assert ≤60s, record actual. |
 | AC-90 | `auto` | `e2e:` embed at 375px and 1440px with no horizontal overflow; configured colors present in the resolved styles. |
 
-### Tier B — ordered differentiators (AC-91 – AC-169)
+### Tier B — ordered differentiators (25 stories, ranked · AC-91 – AC-169 + AC-225 – AC-230 + AC-232)
+
+Ranks follow `USER_STORIES.md` after Amendment 1 opened two slots: US-73 took rank 3 and US-72 rank 7, shifting the former ranks 3–23 down to 4–25. **No AC ID moved.**
 
 **Rank 1 · US-44 · Chase the stragglers from one screen**
 
@@ -355,7 +371,13 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-96 | `auto` | `test:` parsed invite carries `VTIMEZONE` matching `TZID`, room/location, title, and a resolving session-page URL. |
 | AC-97 | `oracle` | `test:` reschedule emits same `UID` with `SEQUENCE+1`; un-accept emits `METHOD:CANCEL` + `STATUS:CANCELLED`. **"Replaces rather than duplicates" is client behaviour — verdict from `oracle: smoke:ics`.** |
 
-**Rank 3 · US-30 · Two-round funnel**
+**Rank 3 · US-73 · Reset the demo** *(new — amendment 2026-08-08)*
+
+| AC | Tag | How verified |
+|---|---|---|
+| AC-230 | `auto` | `e2e:` mutate the demo (bulk-accept a wave, un-accept a talk, reschedule a session), run `reset:demo` **and** the in-product button, then re-run `check:seed` — both paths restore the seeded state. Invoke twice consecutively for idempotence. A second context polls the public agenda and the dashboard throughout and must observe only coherent states — never a partial reset (e.g. zero sessions alongside non-zero speakers). |
+
+**Rank 4 · US-30 · Two-round funnel**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -363,7 +385,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-99 | `auto` | `e2e:` bulk promote from a filtered round-1 list; promoted set appears in round 2, unpromoted does not. |
 | AC-100 | `auto` | `e2e:` submission record shows both rounds' scores together. |
 
-**Rank 4 · US-67 · Find anything from anywhere**
+**Rank 5 · US-67 · Find anything from anywhere**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -372,7 +394,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-103 | `auto` | `speed:` keystroke → results painted, p95 ≤ 200ms over ≥10 queries; results update as typed. |
 | AC-104 | `auto` | `e2e:` selecting a result lands on the record; a fixture of partial and misspelled seeded names still matches on name and title. |
 
-**Rank 5 · US-68 · Every capability over a real API**
+**Rank 6 · US-68 · Every capability over a real API**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -381,7 +403,17 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-107 | `auto` | `test:` token issued from the UI authenticates with **no cookie present**; revoking it → 401 on the next call. |
 | AC-108 | `auto` | `test:` for ≥3 filter combinations, API result IDs equal the UI-rendered IDs; pagination total and page boundaries agree. |
 
-**Rank 6 · US-66 · Switch without losing an open CFP** *(fixture fidelity is the story-level risk — one real export settles it)*
+**Rank 7 · US-72 · Genuine two-way Airtable mirror** *(new — amendment 2026-08-08)* — all five run under `mirror:` against a **dedicated test base**, never the demo base; the base and its PAT are an operator-assisted precondition (§1.6 item 9), not a per-AC tag, because the Airtable API is fully known and only the credential is missing.
+
+| AC | Tag | How verified |
+|---|---|---|
+| AC-225 | `auto` | `mirror:` commit a local change, poll the Airtable Records API for the mirrored row; assert it lands ≤60s and record the actual. |
+| AC-226 | `auto` | `mirror:` write an allowlisted field in Airtable → assert applied locally within one webhook cycle. Write a non-allowlisted field → assert the local record is **byte-identical** afterwards and a log line records the ignore. Requires a publicly reachable webhook, so this runs against a deployed preview, never locally. |
+| AC-227 | `auto` | `mirror:` 20 alternating two-way edits on one record; assert the per-record write count is bounded (no growth), `last_write_source` flips as expected, and the outbox drains to depth 0. |
+| AC-228 | `auto` | `e2e:` Settings → Airtable renders a resolving `airtable.com/app…` link, row counts on both sides, last successful sync time, and current outbox depth. |
+| AC-229 | `auto` | `mirror:` invoke the keepalive cron against the real test base and assert the webhook's `expirationTime` **advances**; `test:` a clock-injected fixture proves refresh fires before expiry and that a near-expiry state surfaces on the Settings page. ⚠️ The 7-day duration itself is proven by *refresh-advances-expiry*, not by waiting seven days — the window does not contain a real 7-day observation. |
+
+**Rank 8 · US-66 · Switch without losing an open CFP** *(fixture fidelity is the story-level risk — one real export settles it)*
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -391,7 +423,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-112 | `auto` | `test:` import an updated export twice — matched records update, new rows insert, zero duplicates. |
 | AC-113 | `auto` | `test:` per-row outcomes (created/updated/skipped/failed+reason) reported; undo restores the pre-import state exactly. |
 
-**Rank 7 · US-34 · Reject with a template, kindly and at scale**
+**Rank 9 · US-34 · Reject with a template, kindly and at scale**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -400,7 +432,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-116 | `auto` | `e2e:` rejected submitter's portal shows the outcome; outbox carries the email. |
 | AC-117 | `auto` | `test:` invoke the bulk action twice — exactly one outbox row per (template, submission); `Idempotency-Key` present on each provider call. |
 
-**Rank 8 · US-22 · Manual admin entry**
+**Rank 10 · US-22 · Manual admin entry**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -408,7 +440,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-119 | `auto` | `test:` bypass-evaluation session reaches the agenda with no evaluation record. |
 | AC-120 | `auto` | `e2e:` admin-created rows carry a textual origin marker in lists. |
 
-**Rank 9 · US-36 · Un-accept a talk after a speaker drops**
+**Rank 11 · US-36 · Un-accept a talk after a speaker drops**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -417,7 +449,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-123 | `auto` | `e2e:` the reversal dialog enumerates portal tasks, scheduled emails, and calendar invites, each with cancel/retain, and honours the choice. |
 | AC-124 | `oracle` | `test:` a `METHOD:CANCEL` with the same `UID` and `SEQUENCE+1` is emitted for every previously-sent invite. **"Receives" and removal from the calendar — verdict from `oracle: smoke:ics`.** |
 
-**Rank 10 · US-46 · Automate the recurring messages**
+**Rank 12 · US-46 · Automate the recurring messages**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -425,7 +457,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-126 | `auto` | `test:` each trigger toggles off (no row emitted) and its template edit round-trips into the rendered body. |
 | AC-127 | `auto` | `test:` time-travel fixture + scheduled-handler invocation; the pre-close reminder fires at the configured offset and not before. |
 
-**Rank 11 · US-45 · Templated email to a filtered group**
+**Rank 13 · US-45 · Templated email to a filtered group**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -434,7 +466,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-130 | `auto` | `e2e:` preview renders one real recipient's version before sending. |
 | AC-131 | `auto` | `test:` every send logged per recipient and visible on the speaker record. |
 
-**Rank 12 · US-11 · Conditional logic**
+**Rank 14 · US-11 · Conditional logic**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -442,7 +474,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-133 | `auto` | `test:` hidden fields absent from the submitted payload and not required server-side; revealing applies the field's validation. |
 | AC-134 | `auto` | `e2e:` conditions visible in the builder list without opening a field. |
 
-**Rank 13 · US-12 · Route submissions by category**
+**Rank 15 · US-12 · Route submissions by category**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -450,7 +482,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-136 | `auto` | `test:` routing applies at submission time; `e2e:` the applied rule is named on the submission record. |
 | AC-137 | `auto` | `test:` vendor-flagged submission lands in workshop/expo review and not in the mainstage pool. |
 
-**Rank 14 · US-69 · Drive the core workflows from a terminal**
+**Rank 16 · US-69 · Drive the core workflows from a terminal**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -459,7 +491,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-140 | `auto` | `e2e:cli` authenticates with an API token and targets two distinct instance URLs. |
 | AC-141 | `auto` | `test:` `--help` output enumerates exactly the command registry with one-line descriptions; every subcommand's own help returns 0. |
 
-**Rank 15 · US-70 · Ship a skill file that teaches an agent to run a conference**
+**Rank 17 · US-70 · Ship a skill file that teaches an agent to run a conference**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -468,15 +500,16 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-144 | `auto` | `repo:` the seven product terms present; a banned-synonym list (proposal, talk submission, CFP entry, panel review) absent. |
 | AC-145 | `oracle` | `oracle: check:skill-agent` — a clean agent given only `SKILL.md`, a URL, and a token completes seed → triage → accept → schedule; asserted over the API. |
 
-**Rank 16 · US-41 · Upload slides and supporting documents**
+**Rank 18 · US-41 · Upload slides and supporting documents**
 
 | AC | Tag | How verified |
 |---|---|---|
 | AC-146 | `auto` | `e2e:` PDF/PPTX/KEY accepted; the size limit is stated before the picker opens and is enforced at sign time. |
 | AC-147 | `auto` | `e2e:` progress rendered; an aborted PUT is recoverable by retry without re-entering the form. |
 | AC-148 | `auto` | `e2e:` organizer's task view reflects the upload with no refresh. |
+| AC-232 | `auto` | Four assertions. `test:` presign refuses a disallowed extension **and** a disallowed MIME independently. `test:` upload bytes whose magic number contradicts the declared type → rejected on completion **and** the R2 object is gone (HEAD 404). `test:` exceed the per-IP and the per-submission cap → 429 each. `e2e:` a served upload returns `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` from a host that is **not** the app host. *(appended 2026-08-08)* |
 
-**Rank 17 · US-21 · Add a co-speaker**
+**Rank 19 · US-21 · Add a co-speaker**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -484,7 +517,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-150 | `auto` | `test:` outbox row names who added them, to what, and carries a working profile-completion link. Live delivery covered by `oracle: smoke:mail`. |
 | AC-151 | `auto` | `e2e:` co-speaker supplies bio and headshot via their link without the abstract becoming editable. |
 
-**Rank 18 · US-37 · Speaker confirms or declines**
+**Rank 20 · US-37 · Speaker confirms or declines**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -492,7 +525,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-153 | `auto` | `test:` a person holding two roles on one submission confirms each independently; one response does not settle the other. |
 | AC-154 | `auto` | `e2e:` decline notifies the program lead and flags the agenda slot. |
 
-**Rank 19 · US-18 · Submit from a phone**
+**Rank 21 · US-18 · Submit from a phone**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -500,14 +533,14 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-156 | `auto` | `e2e:mobile` `scrollWidth ≤ clientWidth` at every step; on-screen keyboard modelled as a 375×340 visual viewport, asserting the focused field's box stays inside it. Real-device confirmation at **C6**, which is the tiebreaker if the two disagree. |
 | AC-157 | `auto` | `e2e:` partial mobile fill → resume the draft link in the desktop project → values restored. |
 
-**Rank 20 · US-27 · Review on a phone**
+**Rank 22 · US-27 · Review on a phone**
 
 | AC | Tag | How verified |
 |---|---|---|
 | AC-158 | `auto` | `e2e:mobile` read, score, comment, advance — all at 375px. |
 | AC-159 | `auto` | `e2e:` the reviewer surface contains no admin navigation, no admin routes reachable from it. |
 
-**Rank 21 · US-02 · An operator stands up their own instance**
+**Rank 23 · US-02 · An operator stands up their own instance**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -515,7 +548,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-161 | `auto` | `e2e:empty` crawler over an empty install: every route renders an empty-state component containing a next-action link; no crash, no 500, no blank page. |
 | AC-162 | `auto` | `repo:` README names registration-platform sync, Airtable mirror, and calendar OAuth as extension points. |
 
-**Rank 22 · US-71 · Comparison-mode triage**
+**Rank 24 · US-71 · Comparison-mode triage**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -524,7 +557,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-165 | `auto` | `test:` aggregate order equals win count over recorded comparisons; visible to the review chair. |
 | AC-166 | `auto` | `test:` switch a round's mode both ways; scores recorded in the other mode survive intact. |
 
-**Rank 23 · US-32 · Optional AI first-pass scoring**
+**Rank 25 · US-32 · Optional AI first-pass scoring**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -565,17 +598,17 @@ Run in order by the final auditor, who did not write the spec. Every item is pas
 | 6 | **Full loop, zero dead ends, on the deployed site** | `npm run e2e` against production, desktop + mobile | All 11 steps green; crawler finds no stub, placeholder, or dead link |
 | 7 | Speed budgets met on deployed infra | `npm run check:speed` against production | Every p95 inside §1.3; `speed-report.json` attached with actuals |
 | 8 | API parity holds | `npm run check:api` | No UI-only write endpoint; OpenAPI valid; docs reachable |
-| 9 | **Airtable round-trip demonstrated** | Manual, ≤60s: change a submission's status in the Airtable base → refresh Marquee → the change is there. Then change it in Marquee → it appears in Airtable. | Both directions land; Settings→Airtable shows base link, row counts, last sync, outbox depth |
+| 9 | **Airtable round-trip demonstrated** — **AC-225 – AC-229** | `npm run check:mirror` against the test base, **then** the manual ≤60s demo against the *demo* base: change a submission's status in Airtable → refresh Marquee → it's there; change it in Marquee → it appears in Airtable. | Suite green (AC-225 outbound ≤60s, AC-226 allowlist applied / non-allowlisted ignored, AC-227 no sync loop, AC-229 keepalive advances expiry); both manual directions land; Settings→Airtable shows base link, row counts both sides, last sync, outbox depth (AC-228) |
 | 10 | **ICS invite accepted in a real Gmail** | `npm run smoke:ics -- --to <gmail>` | Gmail renders Accept/Decline (not an attachment); Accept lands the event at the right time and room; a reschedule **replaces** it; a cancel removes it. Outlook and Apple strongly wanted, Gmail mandatory |
 | 11 | Live mail reaches a real inbox | `npm run smoke:mail -- --to <address>` | Submit from the public form with a real address → confirmation arrives, from the right name, link resolves |
 | 12 | Agent-only operation | `npm run check:skill-agent` | A clean agent with only `SKILL.md` completes seed → triage → accept → schedule |
-| 13 | **Reset-demo works** | `npm run reset:demo`, then re-run gate 4 | Demo returns to the seeded state; safe to run mid-judging; second judge inherits nothing from the first |
+| 13 | **Reset-demo works** — **AC-230** | Mutate the demo, then `npm run reset:demo`, then the in-product button, then re-run gate 4. Run twice consecutively. | Both paths restore the seeded state; idempotent; a concurrent visitor polling throughout never observes a partial reset; second judge inherits nothing from the first |
 | 14 | Self-host path executes | `npm run check:readme` | Numbered sequence runs verbatim from a clean checkout with zero human input, ending in a live 200 |
 | 15 | **PROTOTYPE badge absent from the product** | `npm run check:repo` + visual sweep | The badge exists only under `prototypes/`; no product route renders it |
 | 16 | **No secret material in the public repo** | `npm run check:repo` + full history scan | Zero tokens, keys, or `.dev.vars`; no `Atin/` content; no Stage 11 internals; curated research docs only; Apache-2.0 present |
 | 17 | Felt checkpoints signed | C1, C2, C3, C5, C6, C7 verdicts | All recorded with dates; C7 run after the last functional change |
-| 18 | Tier A complete, no waivers | Coverage report | AC-1 – AC-90 all green |
-| 19 | Cut line stated | Gate report | Every cut Tier B story named with its ACs and the reason. Silently missing is a failure; deliberately cut is not |
+| 18 | Tier A complete, no waivers | Coverage report | **AC-1 – AC-90 plus AC-231** all green. Not AC-232 (Tier B) and not AC-233 (cuttable) — read §"Build scope", not the ID range |
+| 19 | Cut line stated | Gate report | Every cut Tier B story named with its ACs and the reason — **explicitly including AC-233 (Speaker Handbook) if it was cut**, since it is the one cuttable criterion sitting on a Tier A story and is the easiest to lose silently. Silently missing is a failure; deliberately cut is not |
 
 ---
 
@@ -588,7 +621,7 @@ The auditor must not raise any of the following as a defect. They are decisions,
 **Deliberately out of scope for this build:**
 
 - **OAuth calendar write.** Google's sensitive-scope verification is stated at up to 10 days, plus Search Console domain verification, a same-domain privacy policy, and an unlisted demo video; restricted scopes add a 4–12 week CASA assessment. ICS `METHOD:REQUEST` is the shipped path and OAuth is a documented extension point. Ratified 2026-08-08.
-- **Airtable as primary datastore.** D1 is the source of truth; Airtable is a genuine two-way mirror, never on a read path. 5 req/s per base and 30-hop serial pagination would lose R7 outright. Ratified 2026-08-08. *(Reopening requires a Discord ruling — see §6.)*
+- **Airtable as primary datastore.** D1 is the source of truth; Airtable is a genuine two-way mirror (US-72, AC-225 – AC-229), never on a read path. 5 req/s per base and 30-hop serial pagination would lose R7 outright — and it is precisely the mirror's asynchrony that lets AC-225's 60-second budget coexist with R7 rather than fight it. Ratified 2026-08-08. *(Reopening requires a Discord ruling — see §6.)*
 - **Malware scanning of uploads.** No AV lands in this window. Uploads are served from a separate origin with `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`; documented as an extension point.
 - **Multi-round beyond two.** Two ordered rounds and funnel promotion ship; parallel mode, per-round anonymity variation, and round-specific visibility layers are post-competition. The schema is round-aware from the first migration, so a third round is data, not a migration.
 - **Multi-event UI.** Modeled in the schema (a person exists at the org level), single-event UI ships.
@@ -605,7 +638,7 @@ Named, not guessed. Each changes something specific in this contract.
 
 | # | Dependency | What it changes | Status |
 |---|---|---|---|
-| 1 | **Sunday clarification video** — requirements freeze | May add or remove ACs. New criteria append from **AC-225**; nothing here is renumbered. Any new criterion needs a row in §2 before the gate. | Open. Video is unlisted, announced only in Discord. |
+| 1 | **Sunday clarification video** — requirements freeze | May add or remove ACs. New criteria append from **AC-234**; nothing here is renumbered. Any new criterion needs a row in §2, a tier assignment in `USER_STORIES.md`, and — if it lands in Tier A's no-waiver set — a line in §1.4, all before the gate. | Open. Video is unlisted, announced only in Discord. |
 | 2 | **Discord ruling Q2 — embeddable gallery** (struck in the brief, described in the video) | If struck: **AC-87 – AC-90 move to §5 non-goals** and gate 6's embed steps drop. Currently building them; the video overrides the strikethrough. | Open. |
 | 3 | **Discord ruling Q1 — Airtable as literal primary datastore** | If ruled primary, gate 9 changes shape and the §5 entry is void. The mirror is built under either answer. | Open; we build the mirror regardless. |
 | 4 | **Resend plan tier** | Free is 100 sends/day. Decides whether gates 10 and 11 must be rationed and whether Pro is bought for the judging window. | Open — a 30-second dashboard check. |
@@ -617,7 +650,7 @@ Named, not guessed. Each changes something specific in this contract.
 
 ## 7. Out of build scope — AC-170 – AC-224
 
-**AC-170 – AC-224 are post-competition and are not built by Wednesday.** They carry permanent IDs and are modeled where the data model makes it cheap (round-aware schema, the complete status enum including waitlisted, the `(person, session, role)` participation triple, org-level people). The auditor does not test them and does not fail the build for their absence.
+**AC-170 – AC-224 are post-competition and are not built by Wednesday.** This is the *only* contiguous ID range that maps cleanly to a tier — everything above AC-224 is in scope, so do not read "higher number = later" anywhere else. They carry permanent IDs and are modeled where the data model makes it cheap (round-aware schema, the complete status enum including waitlisted, the `(person, session, role)` participation triple, org-level people). The auditor does not test them and does not fail the build for their absence.
 
 Two carry enforcement obligations even though their UI is deferred, because retrofitting them is expensive or they leak data:
 
@@ -626,4 +659,10 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 
 ---
 
-*Draft. Amendments follow `USER_STORIES.md` rules: new criteria append from AC-225, deletions are struck and never recycled. Next inputs — orchestrator review with the client, the Sunday video, Discord rulings on Q1/Q2, and `pipeline-v1.1` becoming the visual contract.*
+## Amendment log
+
+**Amendment 1 — contract-review fold, 2026-08-08.** `USER_STORIES.md` appended AC-225 – AC-233, closing four `SPEC.md` flags that named contract items with no acceptance criterion. Folded here: nine `auto` rows added to §2 (in-scope count 169 → 178, `auto` 159 → 168); `check:mirror` added to the harness; a dedicated Airtable test base added as precondition 9; gate 9 now cites AC-225 – AC-229 and gate 13 cites AC-230; gate 18's no-waiver set widened to include AC-231; gate 19 now names AC-233 explicitly. Tier B ranks 3–23 renumbered 4–25 to seat US-73 at rank 3 and US-72 at rank 7 — **no AC ID moved**. Two flags this closes were previously invisible defects in this file: gates 9 and 13 asserted behaviour that no AC covered, so a build could have passed §2 whole and still failed the gate.
+
+---
+
+*Draft. Amendments follow `USER_STORIES.md` rules: **the next new criteria append from AC-234**, deletions are struck and never recycled. Next inputs — orchestrator review with the client, the Sunday video, Discord rulings on Q1/Q2, and `pipeline-v1.1` becoming the visual contract.*
