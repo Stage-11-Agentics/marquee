@@ -28,16 +28,19 @@
 
 | Ticket | Surface | Mode | Note |
 |---|---|---|---|
-| MRQ-1 (M-01) | surface:196 pane:56 | inline-full | deploy step gated on operator `wrangler login`; PR may open DEPLOY-PENDING |
-| MRQ-2 (M-02) | surface:197 pane:56 | planning-only press-ahead | sandbox cwd, halts at `planned`; RESUME IMPLEMENTATION when MRQ-1 lands |
+| MRQ-1 (M-01) | surface:196 pane:56 | inline-full | `in_progress`; deploy deferred to MRQ-57, local validation is the merge bar |
+| MRQ-2 (M-02) | surface:200 pane:56 | planning-only press-ahead | relaunched after cwd-guard halt; halts at `planned` |
+| MRQ-6 (M-05a+06) | surface:201 pane:57 | planning-only press-ahead | design system + admin shell + harness; halts at `planned` |
 | MRQ-55 (S-2) | surface:198 pane:57 | fast-track spike | ICS series → benevolent.futures@gmail.com; Outlook/Apple inboxes pending operator |
-| MRQ-56 (S-3) | surface:199 pane:57 | fast-track spike | local-D1 verdict; blocks MRQ-8 (M-07) |
+| ~~MRQ-56 (S-3)~~ | closed | done | **MERGED** PR #1 (4f429473). Verdict below. |
+
+**S-3 verdict (relay into MRQ-8/M-07's boot prompt):** one JSON ID array + `json_each(?)` — a single write query at both 150 and 1,000 rows, 6 ms median — beats ≤90-binding chunking (12 queries, 8.5 ms). Helper dedupes, no-ops on empty, stringifies once, runs once. Local D1 accepts 100 bindings, rejects 101.
 
 **Held despite zero deps:** MRQ-41/42 (craft/closure — late-band by design), MRQ-43/46 (audits — run near their checkpoints), MRQ-54 (S-1 — its band opens at CP-1 and it needs the operator's Airtable base).
 
 ## Operator gates (standing)
 
-1. **`wrangler login`** on this machine as `projects@stage11.ai` (+ confirm Workers Paid) — blocks MRQ-1's deploy step and every later deploy.
+1. ~~`wrangler login`~~ — **DEFERRED by operator 2026-08-09 02:25 ("put demo credentials in, I'll deal with that tomorrow"). Carved out as MRQ-57**; MRQ-1 ships locally-validated with placeholder resource IDs. Everything the operator must do is enumerated in MRQ-57's description. The deployed URL a judge opens comes from MRQ-57, so it cannot slip past Tuesday.
 2. S-2 inbox checklist: open `benevolent.futures@gmail.com` when the spike reports sent; provide Outlook + Apple addresses.
 3. Airtable Team + two bases (blocks S-1/MRQ-54, then M-25/M-26); Resend tier check; real Sessionize export (M-30); model credential (M-47).
 
@@ -47,6 +50,9 @@
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-09 02:30 [moderate] MRQ-56 (S-3) merged, PR #1 squash 4f429473 — first PR of the run; auto-merge criteria verified (head≠base, fresh self-review PASS naming HEAD, .merged==true re-GET, diff confined to spikes/).
+- 2026-08-09 02:27 [moderate] Press-ahead: MRQ-6 spawned planning-only into the freed slot (deps only on MRQ-1).
+- 2026-08-09 02:26 [operator] **Cloudflare deploy deferred to tomorrow** — placeholder credentials, local `wrangler dev` validation, deploy carved out as **MRQ-57** (depends MRQ-1, MRQ-2). MRQ-1's merge no longer gated on deploy.
 - 2026-08-09 02:15 [moderate] **Dispatch executed.** First wave: MRQ-1, MRQ-2 (planning-only), MRQ-55, MRQ-56 — 4 of 5 slots; 5th held for press-ahead when MRQ-1 advances. Codex `--yolo` high effort, all suppressed, reporting to surface:128.
 - 2026-08-09 [moderate] Mint ambiguities ratified: Amendment 10/11 fold (EVALUATION §2.3 rows added for AC-251–253), CP-1 chain 13h→15h (BUILDPLAN §2/§10 corrected), trace:ac single owners (AC-155–157→MRQ-37, AC-146–148→MRQ-24), M-51 numbering skip noted. Commit bed8486.
 - 2026-08-09 [operator] **Fleet launch authorized** — dispatch begins the moment the Mint agent's board passes verification. Orchestrator = surface:128; all build work on codex.
@@ -56,4 +62,6 @@
 
 ## Run-time footguns
 
-(rows added during dispatch)
+| Symptom | Cause | Mitigation |
+|---|---|---|
+| Codex delegator HALTs on the line-1 cwd guard with a correct-looking path | A scratchpad path under `/private/tmp` did not match what the spawned shell reported; the guard is exact-match so any resolution difference is fatal | Put sandbox/worktree paths under the project's own tree (`Marquee-worktrees/<slug>`), never `/tmp`. Every guard now prints `actual: $(pwd)` on failure so the next halt is self-diagnosing (2026-08-09, MRQ-2 planner, cost: one relaunch). |

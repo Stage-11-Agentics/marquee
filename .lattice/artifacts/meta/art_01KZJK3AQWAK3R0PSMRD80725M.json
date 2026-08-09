@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-09T06:24:25Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZJK3AQWAK3R0PSMRD80725M",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZJK3AQWAK3R0PSMRD80725M.md",
+    "size_bytes": 212
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged via auto-merge (PR #1, squash, 4f429473). Verdict: single JSON array + json_each(?) \u2014 1 write query at 150 and 1,000 rows, 6ms median; local D1 accepts 100 bindings, rejects 101. Relayed into M",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

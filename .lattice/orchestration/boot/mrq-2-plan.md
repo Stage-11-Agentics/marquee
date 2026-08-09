@@ -1,6 +1,6 @@
 FIRST ACTION, before anything else, run exactly:
-`test "$(pwd)" = "/private/tmp/claude-501/-Users-atin-Projects-Stage11-deployments-Marquee/e17abbab-2821-422a-9624-44da32fba710/scratchpad/mrq-2-plan-sandbox" || { echo "FATAL: wrong cwd"; exit 99; }`
-On failure HALT and report — do not cd, do not improvise.
+`test "$(pwd)" = "/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-2-plan-sandbox" || { echo "FATAL: wrong cwd — actual: $(pwd)"; exit 99; }`
+On failure HALT and report the actual pwd to the Orchestrator via c11 send — do not cd, do not improvise.
 
 Read `/Users/atin/Projects/Stage11/deployments/Marquee/.lattice/orchestration/boot/COMMON.md` and follow it. Your ticket: **MRQ-2** (BUILDPLAN **M-02**, the whole init migration — sub-agent-full at implementation, but **you are in the PLANNING-ONLY press-ahead variant**). Actor: `agent:delegator-mrq-2`. You have **no worktree and no branch on purpose** — this sandbox cwd is a scratch space; your dependency (MRQ-1) is being implemented in parallel and you plan while it lands.
 

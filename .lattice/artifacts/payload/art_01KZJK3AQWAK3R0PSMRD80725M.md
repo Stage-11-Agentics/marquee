@@ -1,0 +1,1 @@
+Merged via auto-merge (PR #1, squash, 4f429473). Verdict: single JSON array + json_each(?) — 1 write query at 150 and 1,000 rows, 6ms median; local D1 accepts 100 bindings, rejects 101. Relayed into MRQ-8/M-07.

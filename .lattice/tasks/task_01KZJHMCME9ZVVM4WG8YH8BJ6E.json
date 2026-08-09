@@ -1,27 +1,55 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-56",
   "branch_links": [],
-  "comment_count": 0,
+  "c11_surface": "surface:199",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 6,
   "complexity": null,
   "created_at": "2026-08-09T05:58:47Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: S-3 \u2014 spike (\u00a76). Time-boxed; **fails loudly rather than leaking into a feature build.**\n\nQuestion it settles (verbatim): Does a 150- and a 1,000-record bulk accept survive the **100-bound-parameter cap** and the per-invocation query limit, and which pattern wins \u2014 chunk at \u226490 or a single `json_each` parameter? It throws only under real data, only at scale (trap 11).\n\nBox: 1 h. Blocks: **M-07** (which builds the one chunking helper \u2014 trap 11) **and M-18**. When: D+0 \u2192 D+3, alongside M-01/M-02.\nDeliverable: a written verdict naming the winning pattern, recorded on this ticket. **M-07 must not pick a default pattern before this returns.**\n\nACs: \u2014 (de-risks AC-66 \u2013 AC-69; guardrail G11)\nHours: 1\nWorkflow: fast-track\nShared files: none \u2014 throwaway spike code.\nDeps: none\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-09T06:24:25Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZJJYRWJ7E1169GK25YVMJHC",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJJZ69SM4TQVMVDX1S0Q74J",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJK0CHGZW4M3Y0N3C1RD5QJ",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZJK3AQWAK3R0PSMRD80725N",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZJK3AQWAK3R0PSMRD80725M",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHMCME9ZVVM4WG8YH8BJ6E",
-  "last_event_id": "ev_01KZJHMCMFX17CXG6G0N0GMKQV",
-  "last_status_changed_at": "2026-08-09T05:58:47Z",
+  "last_event_id": "ev_01KZJK3AQWAK3R0PSMRD80725R",
+  "last_status_changed_at": "2026-08-09T06:24:25Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-56",
-  "status": "backlog",
+  "status": "done",
   "tags": null,
   "title": "Spike \u2014 D1 bulk-write chunking at wave scale",
   "type": "spike",
-  "updated_at": "2026-08-09T05:58:47Z",
+  "updated_at": "2026-08-09T06:24:25Z",
   "urgency": null
 }
