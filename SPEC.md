@@ -33,7 +33,7 @@ Everything a human can do, a program can do: the admin UI is a client of the sam
 |---|---|---|
 | Compute | **Cloudflare Workers, Paid plan**, one Worker, static assets bound | Free's 10 ms CPU will not render a 1,000-row table; fails at deploy, not in dev (seams trap 2) |
 | Data | **D1 is the source of truth** | Airtable-as-primary loses R7 outright: 5 req/s per base, 30-hop serial pagination, no aggregation, no transactions (seams §1.3) |
-| Mirror | **Airtable two-way mirror over the Records API**, `performUpsert`, webhook inbound, allowlisted fields, **never on a read path** | Claims the bonus and the speed win at once (seams §1.4) |
+| Mirror | **Airtable two-way mirror over the Records API**, `performUpsert`, webhook inbound, allowlisted fields, **never on a read path** | The honest positioning after swyx's Q1 ruling ("bonus points would be Airtable as source of truth"): we deliberately trade the full Airtable bonus for the speed win — *your team keeps its Airtable view without paying Airtable's latency* — and say so in the README. The explicit **API bonus (R53)** and Cloudflare bonus carry the bonus story instead. (Amendment 4; seams §1.4) |
 | Files | **R2, browser→bucket direct via presigned PUT** (never through the Worker), Cloudflare Images for headshot variants | 100 MB body cap, 128 MB isolate; direct is also faster (seams §6.2) |
 | Mail | **Resend**, from `Marquee <marquee@stage11.systems>` (verified since 2026-03-11) | Zero domain-warm-up risk; a fresh domain is trap 5 |
 | Calendar | **ICS `METHOD:REQUEST` + ATTENDEE**, `SEQUENCE` bump, `METHOD:CANCEL`, plus Google/Outlook deep links and a stable `/i/{uid}.ics` | OAuth calendar write is verified infeasible in the window (seams §4.3, trap 1) |
@@ -524,6 +524,8 @@ The seeded demo *is* the product a judge sees. Generator lives at `scripts/seed/
 
 **Deliberate ugliness** (`PROTOTYPE-CONTRACT.md`, asserted by `check:seed`): long names with diacritics and hyphenation (`Casey O'Connell-Singh`, `Mei-Ling de la Fontaine`) · titles long enough to truncate, and one absurdly long title · **a speaker on 3 submissions** · **a 4-person panel** · **an overdue task set** · **at least two live double-bookings visible in the agenda on load** · five parallel workshop rooms and expo sessions inside mainstage breaks (real conflict material from the 2025 grid) · one or two deliberately malformed records (a named speaker with no format) so validation has something honest to flag.
 
+**Seeded task templates** (Amendment 4 — swyx's must-show examples from the full brief's screenshots; generic form/upload task kinds, not the AC-179/180 structured intake, which stays post-competition): every accepted speaker carries **"Hotel and Travel Reservations"** (form task) and **"Presentation Upload"** (file-request task) — these two lead the chase board and the portal — plus the optional four seeded across a subset: *Finalize talk description* · *Finalize bio & photos* · *Announce your participation* · *Invite colleagues*. Judges should meet their own task names on first load.
+
 **Hard prohibitions — this repo is public** (`seed-source-2025.md` §9):
 - **No real email addresses.** Generate `firstname.lastname@example.com`. The source payload leaked 59 real addresses; they were stripped at capture and must never reach the repo, the seed, or a log.
 - **No real headshots.** No download, no hotlink, no re-host. **Placeholder imagery only:** deterministic initials-on-colour SVG avatars rendered locally, no external request.
@@ -571,7 +573,7 @@ Copied so nothing creeps back in. **The auditor must not raise any of these as a
 
 ## 9. Vocabulary
 
-The words on screen are the words a program team already uses (`PHILOSOPHY.md` 6): **Abstract · Session · Speaker · Submitter · Evaluation plan · Round · Scorecard · Committee · Portal · Task · Handbook page · Agenda · Break · Event site.** Banned synonyms, asserted absent from `SKILL.md` (AC-144) and to be avoided in product copy: *proposal, talk submission, CFP entry, panel review*. Buttons say what they do — `Accept 37 abstracts`, never `Submit`.
+The words on screen are the words a program team already uses (`PHILOSOPHY.md` 6): **Abstract · Session · Speaker · Submitter · Evaluation plan · Round · Scorecard · Committee · Portal · Task · Handbook page · Agenda · Break · Event site.** The `waitlisted` status displays as **"Maybe"** on chips and filters (Amendment 4 — swyx's ruled review floor is approve/**maybe**/deny; the judge should meet their own word), with "waitlist" acceptable in explanatory copy. Banned synonyms, asserted absent from `SKILL.md` (AC-144) and to be avoided in product copy: *proposal, talk submission, CFP entry, panel review*. Buttons say what they do — `Accept 37 abstracts`, never `Submit`.
 
 ---
 

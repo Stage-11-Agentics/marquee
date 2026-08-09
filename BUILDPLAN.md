@@ -271,6 +271,14 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 - **R54 — "very teeny bonus" for hosting on Forge (swyx's side project) instead of GitHub:** client call at push time; a mirror is ~20 min.
 - **Incumbent-fidelity notes held pending rulings** (kyzo's asked questions): rich-text bios/descriptions, accept/decline-queue literal statuses (our outbox + wave planner covers the job), central file-request pages. No contract change until answered; JTBD over fidelity (R26).
 
+## Amendment 4 — Q1 positioning + seed content (2026-08-08 late night, orchestrator)
+
+- **Forge mirror (R54): DEFERRED by Atin** — revisit at the Tuesday public push at most; no ticket.
+- **Saturday video confirmed absent** — the polished walkthrough consolidates into Sunday's freeze video; single video watch (Discord Intel owns it). Sunday absorption window in the schedule bands stands.
+- **M-45 README bonus story reframed** (SPEC Amendment 4): lead with Cloudflare + the explicit API bonus (R53); present the Airtable mirror as a deliberate engineering trade — *"your team keeps its Airtable view without paying its latency"* — never as a claim to the source-of-truth bonus.
+- **M-04 seed carries swyx's named task templates**: "Hotel and Travel Reservations" (form) + "Presentation Upload" (file request) leading every accepted speaker's list, plus the optional four across a subset (SPEC §6).
+- **Waitlisted displays as "Maybe"** on chips/filters (SPEC vocabulary note).
+
 ---
 
 *Draft, 2026-08-08 (Amendment 2 applied). The orchestrator finalizes this with the client after the v1.1 prototype review, then turns §3–§5 into Lattice tickets.*
