@@ -60,6 +60,10 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - Judge is likely AIE's program/ops person. Evaluation = driving the deployed site through the walkthrough loop; seeded demo data essential; 647 entrants registered.
 - Core data model: Abstracts (apply to speak) vs Sessions (guaranteed, e.g. sponsors) — video-only, easy to get wrong.
 
+## Retro notes (for run-retro, not action items)
+
+- Monitor false positive ×2 (2026-08-09): a completion-phrase monitor on a builder's screen matched the orchestrator's *own instruction text* echoed in the terminal; the `grep -v "print exactly"` exclusion then ALSO failed because terminal line-wrapping split the exclusion phrase onto a different line than the match. Real fix: **never watch a terminal for a phrase the orchestrator itself sent** — watch the artifact (file markers) or a side-channel (c11 send, metadata key) instead. Generalize into the c11 orchestration reference at retro.
+
 ## Human action items (updated from EVALUATION.md §1.6, 2026-08-08 night)
 
 New (for the oracle smokes and gate — not urgent tonight, needed before Tuesday):
