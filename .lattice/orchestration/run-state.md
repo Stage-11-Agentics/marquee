@@ -50,6 +50,12 @@ Orchestrator mitigations already applied (no operator input needed): resumed del
 
 **Decision needed from the operator** — see the summary in the session for options (throttle vs. Alpha login vs. wait for Kimi Monday evening vs. mixed).
 
+## Master health (assembled-tree validation, 03:33)
+
+`npm ci && npm run pr-gate -- --ticket MRQ-1` run against **merged master 89241a5**: **PASS in 6.8 s.** This is the check no individual PR performs — each ticket validated its own branch, not the merged result. The gate independently reports **197 live in-scope ACs**, matching the count arithmetic corrected in `EVALUATION.md` at intake. `.gitignore` correctly excludes every artifact the gate emits (`ac-coverage.json`, `speed-report.json`, `artifacts/checks/`, `playwright-report/`, `test-results/`), so no build output can leak into the public repo.
+
+Housekeeping done at the same time: all five merged worktrees removed, their local branches deleted, and their **remote branches deleted on Forgejo** (all HTTP 204) — the repo now has exactly one branch, `master`.
+
 ## Operator gates (standing)
 
 1. ~~`wrangler login`~~ — **DEFERRED by operator 2026-08-09 02:25 ("put demo credentials in, I'll deal with that tomorrow"). Carved out as MRQ-57**; MRQ-1 ships locally-validated with placeholder resource IDs. Everything the operator must do is enumerated in MRQ-57's description. The deployed URL a judge opens comes from MRQ-57, so it cannot slip past Tuesday.
@@ -62,6 +68,7 @@ Orchestrator mitigations already applied (no operator input needed): resumed del
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-09 03:33 [moderate] Parked-tick housekeeping (zero model spend): verified no stranded work in any worktree, confirmed every merged artifact is present in master, pruned five worktrees + five local + five remote branches, and ran the pr-gate against merged master — PASS. Codex 89% at this reading; **fleet remains parked, no ruling yet**. Decision NOT to spawn Claude delegators on Bravo: Bravo (78%) is the same pool this orchestrator session runs on, so spending it on delegators risks losing orchestration itself. Alpha (fresh 20x, operator login) or Kimi (resets Mon 18:20) remain the real options.
 - 2026-08-09 03:20 [moderate] **MRQ-2 and MRQ-6 both merged** (PR #5 616f55e6, PR #4 09aa26ad) — the quota triage worked: both high-value tickets landed before the floor. Master now carries the skeleton, the complete D1 schema, the design tokens/admin shell, and the full check harness. `npm run pr-gate -- --ticket MRQ-N` verified present and folded into COMMON as mandatory. **CP-1's deliverables are effectively met except M-07/M-08.**
 - 2026-08-09 03:14 [moderate] **Quota triage:** headless code-review suspended fleet-wide (own-reviewer + orchestrator diff scan instead); MRQ-6 given an explicit land-partial priority order (pr-gate + fast suite first). MRQ-8/MRQ-14 stay parked at `planned` — no new codex spend until the operator rules. Remaining Codex is being spent deliberately on the schema (critical chain) and the harness (every later ticket depends on it).
 - 2026-08-09 03:02 [moderate] **SPEC Amendment 12 written** (f80d383) ratifying MRQ-2's flagged delta: `attachments.sha256` NULLABLE, `r2_etag` added, `draft_file`/`submission_file` relations indexed. Living-artifacts norm — the implementation was right and the contract was stale, so the contract moved. No AC minted (serves AC-52/146-148/231/232); next mint remains AC-254. Delegator told to stop carrying it as a deviation.
