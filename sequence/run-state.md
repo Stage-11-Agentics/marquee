@@ -25,6 +25,7 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 
 ## Decisions log
 
+- 2026-08-09: **Skin picked: Flight Deck** (skin-c). Skins agent reskinning the prototype in place -> v1.5; holds exclusive file lock on prototypes/pipeline-v1.1/index.html until it reports done. DESIGN.md minted. (Atin via Skins agent)
 - 2026-08-09: **F-13 ruling: NO unattended reset cron.** Reset stays manual (button + `npm run reset:demo`, AC-230); during the judging window the team resets morning/evening by hand. A judge watching state vanish mid-read is a worse failure than inheriting a predecessor's edits. (Mabel, decide-and-log)
 - 2026-08-09: **F-10 ruling: acknowledged divergence** — SPEC §5.5's on-screen portal magic link is built per spec though absent from the v1.4 prototype; tagged so the fidelity audit passes it. (Mabel, decide-and-log)
 - 2026-08-09: **Adversarial cycle complete**: 8/8 BLOCKING + 21/22 FIX applied (e35b32a, 6aed313); arithmetic reconciled (194 in-scope live, next mint AC-251). (Editor)
