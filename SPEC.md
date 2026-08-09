@@ -269,7 +269,7 @@ Writer: Event settings → Tasks. Reader: acceptance cascade, chase-board column
 Writer: acceptance cascade (auto-assign), admin add, **speaker completion (AC-48)**. Reader: portal task list ordered by due date (AC-46), chase-board cell glyph, dashboard overdue counts, organizer task view (AC-148).
 `overdue` is derived (`status='open' AND due_at < now`), never stored — a stored flag goes stale between crons and AC-94 says the board is live.
 
-**`attachments`** — `event_id`, `owner_type` ∈ `person_headshot\|task_upload\|event_logo\|import_file`, `owner_id`, `r2_key`, `filename`, `content_type`, `size_bytes`, `status` ∈ `pending\|ready`, `sha256`, `created_at`.
+**`attachments`** — `event_id`, `owner_type` ∈ `person_headshot\|task_upload\|event_logo\|import_file`, `owner_id`, `r2_key`, `filename`, `content_type`, `size_bytes`, `status` ∈ `pending\|ready`, `sha256`, `created_at`. **`sha256` is NULLABLE and `r2_etag` joins it — see Amendment 12.**
 Writer: `POST /api/v1/uploads/sign` (pending) → `POST /api/v1/uploads/complete` (HEAD-verified, magic-byte sniffed, → ready). Reader: portal, gallery, task view. A `pending` row older than 24 h is swept by cron with its object.
 
 ### 3.8 Communications
@@ -682,6 +682,18 @@ Submission record → evaluation panel: current reviewers per round + coverage; 
 
 **`buildings`** (AC-252) — `event_id`, `name`, `address`, `position`. Writer: Event Settings → Buildings card; seed: the Sheraton-coherent trio in §6 (ruled 2026-08-09 under operator-delegated authority — a 2026 event at the Sheraton cannot coherently seed 2025's venue buildings, and §6's room list is already Sheraton-native). Reader: room grouping/labels, ICS `LOCATION` ("Room · Building"), public session pages.
 **`rooms`** gains `building_id` (required), `av_capabilities` (JSON tag array), `notes` (AC-253). Writers: Event Settings → Rooms card (building select, AV tag editor, notes). Readers: agenda room headers + tooltip panel, room view, day-of surfaces. Lands in M-02's single migration; Event Settings, seed, and agenda tickets absorb +2h. **[Settings card and room-header rendering: beyond v1.5 prototype unless the v1.6 micro-round lands first.]**
+
+---
+
+## Amendment 12 — upload lifecycle schema (2026-08-09, orchestration)
+
+Raised by MRQ-14's (M-13, uploads) plan review while MRQ-2 (M-02) was writing the single init migration, and folded into it rather than deferred to a second migration — M-02's contract is the whole schema at once. **No new AC; these serve AC-52, AC-146–148, AC-231, AC-232. Next mint remains AC-254.**
+
+- **`attachments.sha256` becomes NULLABLE.** The checksum is not knowable at row-creation time: the row is written when the presigned PUT is issued, and the digest only exists after `/complete` performs its HEAD verify and magic-byte sniff. A NOT NULL column here would have forced either a fabricated placeholder digest or a two-phase insert.
+- **`attachments.r2_etag` added.** R2 returns an etag on PUT; storing it is what lets `/complete` prove the object it is about to mark `ready` is the object the client actually uploaded, and it is the handle for the S3-vs-binding coherence check.
+- **`draft_file` and `submission_file` relations added, indexed.** A file can be attached to a *draft* before a submission row exists (the CFP explicitly supports resumable drafts with restored files, §5), so file ownership cannot be a single foreign key onto `submissions`.
+
+Writers: the upload routes in M-13. Readers: the CFP draft-resume path, submission detail, reviewer file reads (through the AC-246 authorization helper), and the nightly orphan sweep.
 
 ---
 
