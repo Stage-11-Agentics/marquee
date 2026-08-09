@@ -44,7 +44,13 @@ If your implementation must diverge from `SPEC.md` (or any contract doc), implem
 
 ## Before you open a PR: the local gate
 
-Private Forgejo has **no CI runner** — nothing runs your tests after you push, so a broken PR looks identical to a green one. MRQ-6 owns a single documented pre-PR gate script (see the README once MRQ-6 has merged); run it and paste its result into your completion comment. Until it exists, run the equivalent by hand: typecheck, the fast test suite, and a build.
+Private Forgejo has **no CI runner** — nothing runs your tests after you push, so a broken PR looks identical to a green one. The gate is therefore local and **mandatory**:
+
+```
+npm run pr-gate -- --ticket MRQ-N
+```
+
+Run it from your worktree before you open the PR, and paste its result into your completion comment. A red gate means you do not open the PR. (Merged in MRQ-6; also documented in the README. There is a GitHub Actions fast-gate in the repo, but it only activates on the public GitHub push — it does not run on Forgejo, so it will never catch anything for you during this run.)
 
 Keep the default test suite hermetic and under 30 seconds — it is the whole fleet's inner-loop clock. Slow integration or end-to-end work belongs in a separately-invoked suite, never the default.
 

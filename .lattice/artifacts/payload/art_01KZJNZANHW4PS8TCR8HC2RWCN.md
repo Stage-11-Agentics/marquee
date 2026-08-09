@@ -1,0 +1,1 @@
+Merged via auto-merge (PR #4, squash, 09aa26ad). Verified: head 2402156 != base, own-reviewer PASS under quota directive, secret scan clean, no conflicts against the just-merged schema. Delivers the pr-gate script, thirteen registered harness commands, gitleaks config, and a GitHub Actions fast-gate that will activate on Tuesday's public push.

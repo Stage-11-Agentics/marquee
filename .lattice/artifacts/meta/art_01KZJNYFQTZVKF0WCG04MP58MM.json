@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-09T07:14:12Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZJNYFQTZVKF0WCG04MP58MM",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZJNYFQTZVKF0WCG04MP58MM.md",
+    "size_bytes": 381
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged via auto-merge (PR #5, squash, 616f55e6). Verified: head d4ad790 != base, own-reviewer PASS under the quota directive, local D1 validation PASS, secret scan clean, files isolated to migrations/",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

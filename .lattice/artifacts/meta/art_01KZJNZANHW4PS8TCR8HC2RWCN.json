@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-09T07:14:39Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZJNZANHW4PS8TCR8HC2RWCN",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZJNZANHW4PS8TCR8HC2RWCN.md",
+    "size_bytes": 345
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged via auto-merge (PR #4, squash, 09aa26ad). Verified: head 2402156 != base, own-reviewer PASS under quota directive, secret scan clean, no conflicts against the just-merged schema. Delivers the p",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

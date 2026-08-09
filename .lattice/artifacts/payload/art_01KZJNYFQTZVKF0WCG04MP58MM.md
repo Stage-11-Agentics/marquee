@@ -1,0 +1,1 @@
+Merged via auto-merge (PR #5, squash, 616f55e6). Verified: head d4ad790 != base, own-reviewer PASS under the quota directive, local D1 validation PASS, secret scan clean, files isolated to migrations/0001_init.sql + src/db/schema.ts + scripts/schema-verify.mjs. Includes the MRQ-14 upload deltas (nullable sha256, r2_etag, draft_file/submission_file) ratified as SPEC Amendment 12.

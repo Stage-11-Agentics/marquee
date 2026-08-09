@@ -29,8 +29,8 @@
 | Ticket | Surface | Mode | Note |
 |---|---|---|---|
 | ~~MRQ-1 (M-01)~~ | closed | **done** | **MERGED** PR #3 (44a3fab). Skeleton is master. Own-reviewer fallback used (headless reviewer hit the 600s ceiling) and disclosed. |
-| MRQ-2 (M-02) | surface:200 pane:56 | **implementing** (inline-full) | worktree `Marquee-worktrees/mrq-2-schema`, branch stacked on `mrq-1-platform-skeleton`; PR body must name the anchor |
-| MRQ-6 (M-05a+06) | surface:201 pane:57 | **implementing** (inline-full) | worktree `Marquee-worktrees/mrq-6-shell`, clean off master 44a3fab. Owns the pr-gate npm script every later ticket will run. |
+| ~~MRQ-2 (M-02)~~ | closed | **done** | **MERGED** PR #5 (616f55e6). Whole schema incl. Amendment 12 deltas. |
+| ~~MRQ-6 (M-05a+06)~~ | closed | **done** | **MERGED** PR #4 (09aa26ad). Gate is `npm run pr-gate -- --ticket MRQ-N`, now mandatory in COMMON. |
 | MRQ-8 (M-07) | surface:202 pane:57 | **planned**, holding | re-estimated 7h; CAS primitive; awaiting worktree |
 | MRQ-14 (M-13) | surface:203 pane:56 | **planned**, holding | uploads/presign. Guardrail-adjacent (AC-231) → never auto-merge. Its review produced schema deltas for MRQ-2 and deploy items for MRQ-57, both relayed. |
 | ~~MRQ-55 (S-2)~~ | closed | **done** | **MERGED** PR #2 (3ef7c647). Code done; `needs_human` stands for the client-rendering oracle. |
@@ -62,6 +62,7 @@ Orchestrator mitigations already applied (no operator input needed): resumed del
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-09 03:20 [moderate] **MRQ-2 and MRQ-6 both merged** (PR #5 616f55e6, PR #4 09aa26ad) — the quota triage worked: both high-value tickets landed before the floor. Master now carries the skeleton, the complete D1 schema, the design tokens/admin shell, and the full check harness. `npm run pr-gate -- --ticket MRQ-N` verified present and folded into COMMON as mandatory. **CP-1's deliverables are effectively met except M-07/M-08.**
 - 2026-08-09 03:14 [moderate] **Quota triage:** headless code-review suspended fleet-wide (own-reviewer + orchestrator diff scan instead); MRQ-6 given an explicit land-partial priority order (pr-gate + fast suite first). MRQ-8/MRQ-14 stay parked at `planned` — no new codex spend until the operator rules. Remaining Codex is being spent deliberately on the schema (critical chain) and the harness (every later ticket depends on it).
 - 2026-08-09 03:02 [moderate] **SPEC Amendment 12 written** (f80d383) ratifying MRQ-2's flagged delta: `attachments.sha256` NULLABLE, `r2_etag` added, `draft_file`/`submission_file` relations indexed. Living-artifacts norm — the implementation was right and the contract was stale, so the contract moved. No AC minted (serves AC-52/146-148/231/232); next mint remains AC-254. Delegator told to stop carrying it as a deviation.
 - 2026-08-09 02:56 [moderate] **MRQ-1 merged** (PR #3, squash 44a3fab) — the skeleton is now master and MRQ-6 was resumed on a clean branch off it. MRQ-2 remains stacked on the pre-merge branch and must rebase with `--onto` before its PR.
