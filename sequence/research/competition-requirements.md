@@ -18,6 +18,7 @@
 | 2026-08-08 ~16:16 EDT | AIE's real workflow reconstructed: they run **4 events/yr on Sessionize today**; AIE NYC 2026 CFP is public and live. |
 | 2026-08-08 ~16:18 EDT | Sessionboard KB deep-read: forms, evaluations (round-based), agenda/conflicts, automated emails, portal tasks, roles. First full pass complete. |
 | 2026-08-08 evening | **Discord batch 1** (Atin paste; Discord Intel agent). swyx answers day-1 threads: **Q1 answered** (mirror permitted, bonus = Airtable as source of truth), **Q5 answered** (conditional fine; routing = tracks↔reviewers, *one or more* on both sides), review-workflow floor set (`unreviewed → approve/maybe/deny`), agenda floor narrowed (day/room + DnD + conflicts "enough"), onboarding task list enumerated, emails/ICS "should work on an MVP basis," Accelevents skip re-confirmed, **another follow-up video promised "today" covering email/calendar depth**. R4/R5 notes amended; **R51–R52 added**; §7 updated; rulings log added below §7. |
+| 2026-08-08 night | **Full brief PDF recovered** → `sources/competition-brief-full.pdf` (37 pp, ~40 annotated screenshots — the original text-only capture missed the entire SCREENSHOTS appendix and one rules page). Lead: a competitor's consolidated context doc (archived → `sources/competitor-context-doc-2026-08-08.md`) referenced content we didn't hold. **New explicit brief bonuses: speed/performance, API, Forge hosting (teeny)** → R7 re-sourced, **R53–R54 added**; submission deliverables confirmed (form + repo + deployed site — **no entrant walkthrough video**); swyx's in-screenshot annotations captured (§1.6); Q2 evidence updated; batch-2 rulings-log entry added. |
 
 **Requirements status: STILL MOVING.** Two more videos are promised (Saturday = *today*, Sunday = *tomorrow*), after which requirements FREEZE. Nothing below is frozen yet. See [Timeline](#timeline--logistics).
 
@@ -71,7 +72,7 @@ These are stated only in the walkthrough and are the highest-leverage differenti
 
 | # | Requirement | Class | Timestamp / quote |
 |---|---|---|---|
-| **R7** | **Performance is a judged feature.** The product must feel fast. | MUST | [03:50] *"part of this I also don't love is that it's kind of slow"*; [03:58] *"this slowness is part of why I think you guys can probably do a better job than Sessionboard"*; [07:16] *"oh my god, this is so slow"* |
+| **R7** | **Performance is a judged feature.** The product must feel fast. **Now confirmed as an explicit written bonus** — brief p.3: *"Bonus points for speed/performance — we do not want slow SaaS pls."* | MUST + BONUS | [BRIEF p.3] + [03:50] *"part of this I also don't love is that it's kind of slow"*; [03:58] *"this slowness is part of why I think you guys can probably do a better job than Sessionboard"*; [07:16] *"oh my god, this is so slow"* |
 | **R8** | **Program side only.** Do not build CRM, Marketing, or CMS. | SKIP (scope) | [02:06] *"we are probably only going to use the program side of these things and we're probably not really using the marketing side, not really using the CRM side… we're just going to pay attention to the program side."* |
 | **R9** | **Two distinct submission entities: Abstracts vs Sessions.** *Abstracts* (or videos) are applications to speak; *Sessions* are people effectively guaranteed to speak (e.g. sponsors) and bypass the competitive path. | MUST | [03:21] *"the main lifecycle is that you have submissions… which can either be abstracts or videos which are sort of applications to speak, and sessions which are people who are pretty much guaranteed to speak, let's say because they're a sponsor"* |
 | **R10** | **Event settings / event details** configuration screen. | MUST | [02:40] *"you should probably have some settings where you can set up the event details"* |
@@ -137,7 +138,28 @@ Stated by swyx in Discord answer threads (pasted by Atin; quotes verbatim from t
 | # | Requirement | Class | Source |
 |---|---|---|---|
 | **R51** | **Email the speaker from inside the review flow** — request changes, and/or attach feedback to the accept/deny decision email. | BONUS (named by swyx) | [DISCORD] *"bonus is being able to email speaker from inside the app to ask for changes/attach feedback when sending the approve/deny decision"* |
-| **R52** | **Submissions target one or more tracks; reviewers review one or more tracks.** Track is the routing key on both sides, and both sides are stated as *plural-capable*. | SHOULD | [DISCORD] *"yes talks are submitted to one or more tracks, and reviewes review one or more tracks"* — ⚠️ SPEC `submissions.track_id` is a single FK; see rulings log below |
+| **R52** | **Submissions target one or more tracks; reviewers review one or more tracks.** Track is the routing key on both sides, and both sides are stated as *plural-capable*. | SHOULD | [DISCORD] *"yes talks are submitted to one or more tracks, and reviewes review one or more tracks"* — ⚠️ SPEC `submissions.track_id` is a single FK. **Softening evidence:** the brief's own screenshots show Sessionboard's form Track field as a single-select dropdown and single track chips per abstract row — the incumbent is single-track. Reviewer-side plurality is the firmer half. |
+| **R53** | **API is an explicit written bonus.** Brief p.3: *"Bonus points for API"*, linking Sessionboard's own API docs (`sessionboard.mintlify.app`) as the reference. Directly validates the agent-native bet (US-68 REST API, CLI, skill). | BONUS (explicit) | [BRIEF p.3] |
+| **R54** | **Forge hosting, teeny bonus.** Brief p.3: *"Very teeny bonus points for hosting source code/site on Forge instead of GitHub (because this is my side project)"* — Forge is swyx's own product. | BONUS (very teeny) | [BRIEF p.3] |
+
+### 1.6 The brief's screenshot annotations — [BRIEF pp.3–37], recovered 2026-08-08 night
+
+swyx annotated the 40-screenshot Sessionboard appendix directly. These are requirements-grade signals from the primary source:
+
+| Screenshot | Annotation | Reads as |
+|---|---|---|
+| Payments & Fees form step | **"NOT NEEDED"** | Confirms R33 SKIP |
+| Form close date | **"kinda impt"** | Confirms R34, slightly softer than MUST |
+| Customize success-page message (post-submit confirmation, auto-redirect to portal after 10 s) | **"make sure this works"** | Post-submit confirmation page is load-bearing; per-form custom message expected |
+| Submitter confirmation email | **"must have"** | Confirms R38 MUST |
+| Admin notifications (new/updated submission) | **"nice to have"** | Confirms R40 SHOULD |
+| Speaker profile page | **"update your own bio data"** | Confirms R18 |
+| Dashboard module heading | **"optional but nice to have, best efforts"** | The analytics/widget dashboards are best-effort; brief item 6 (speaker-task tracking) remains MUST but widget-builder depth is explicitly not required |
+| CMS > Embeds heading | **"(OPTIONAL)"** | New Q2 evidence — see §7 Q2 |
+| Portal > Tasks heading | *"For speakers to complete after admission"* — examples: Hotel and Travel Reservations (contact-scoped), Presentation Upload (session-scoped) | Matches Discord task enumeration; tasks scope to contact vs session |
+| Abstracts list Options menu | Red arrow at **Import Sessions / Export .CSV / Export .XLSX / Download files bundle** | Import/export surface is pointed at deliberately |
+
+Unannotated but load-bearing screenshot facts: the incumbent's status tabs are `All · Accepted · Accept Queue · Pending · Decline Queue · Declined · Withdrawn · Drafts` (Accept/Decline Queue confirmed as real intermediate states); agenda views are `List · Day · Week · Month · Rooms · Conflicts` (a dedicated Conflicts tab; still no track view); the public CFP is a 5-step wizard (`Welcome → Account → Submission → Participant → Review` — account creation happens *mid-flow*, before submission); form fields Title (locked, 255) and Description (**wysiwyg**, 5,000) with Format/Tags/Track/Level dropdowns; participant roles carry per-role min/max; file requests are "stored, not attached" with central download/export; event details include slug, type, website URL, theme, logo + background image, and exhibitor/sponsor group toggles; the dashboard builder ships prebuilts (Submissions Pipeline funnel, Speaker Tracking, Review Progress, Evaluation Plans by Tracks, Schedule Health) plus an "AI prompt" builder.
 
 ---
 
@@ -317,7 +339,8 @@ Asked near-verbatim by a competitor (*"main database and Airtable as a synced te
 
 **Q2 — The embeddable speaker gallery / schedule itinerary is struck through in the brief but described in the video at [08:22]. Which governs?**
 *Why it matters:* It is a visible, demo-able surface, and the two primary sources disagree.
-*Default:* Build it. The video is later and more specific, it is cheap, and being wrong costs us a few hours; being wrong the other way costs a feature the judge expected to see.
+*New evidence (2026-08-08 night):* the brief's own screenshot appendix titles the embeds section **"CMS > Embeds (OPTIONAL)"**. Tally: struck in the feature list, OPTIONAL in the screenshots, described approvingly in the video. Reading: genuinely optional, but a real surface they use (formats: Agenda, Session List, Schedule Itinerary, Speaker List, Speaker Gallery — auto-updating).
+*Default (unchanged):* Build it in Tier B order; it is now safely cuttable under pressure without contradicting any source.
 
 **Q3 — What is the expected submission volume the deployed demo should hold, and will judges test at scale?**
 *Why it matters:* Governs whether we seed 20 submissions or 2,000, and whether list virtualization is required. Bears directly on the slowness complaint that is the emotional core of this competition.
@@ -371,7 +394,23 @@ Every material item from Atin's pastes, one row each, newest batch first. Severi
 | **Recruiting/maintainability** | swyx *"this is somewhat of a recruiting exercise also"*; agrees (*"yep"*) with a commenter that code must be maintainable by a non-technical team's dev, and the suggestion to *"shortlist winning submissions, have your team request an update/change and have them demo implement that change"* | Code legibility and a possible "implement a change" round may factor into judging. Favors clean repo, README quality, and our agent-native story (an agent that can drive changes). | NOTE |
 | **Field intel** | Competitors: one reports a live pilot w/ "367 automated tests and 30 browser journeys"; stacks skew CF Workers + D1/DO; names announced elsewhere: `opensession`, `Program Cue`, `SuperStage` | Color only. Field is moving fast; no course change. | NOTE |
 
-**Unanswered in this batch** (asked by competitors, no swyx reply in the paste): edit-after-submit, sponsor/exhibitor groups, rich text, Accept/Decline Queue semantics, blind-vs-open reviewer scores, drafts counting toward submission limit, file-request central page.
+**Unanswered in this batch** (asked by competitors, no swyx reply in the paste): edit-after-submit, sponsor/exhibitor groups, rich text, Accept/Decline Queue semantics, blind-vs-open reviewer scores, drafts counting toward submission limit, file-request central page. *(The recovered brief screenshots — §1.6 — answer three of these at the incumbent level: Accept/Decline Queue are real intermediate statuses, file requests are central "stored, not attached" pages, and descriptions/bios are wysiwyg rich text.)*
+
+### Batch 2 — competitor CONTEXT.md verification + full-brief recovery, 2026-08-08 night
+
+A competitor shared a consolidated context doc in Discord (archived → `sources/competitor-context-doc-2026-08-08.md`). Verification against primary sources, which its screenshot claims led us to recover:
+
+| Claim | Verdict | Impact |
+|---|---|---|
+| Submission requires "…and a walkthrough" | **REFUTED** — brief p.2 lists exactly: form + open-source repo + deployed site *"we can test out with the walkthrough shown."* No entrant video. | Our no-entrant-video decision confirmed. NOTE |
+| "Very small bonus points for hosting on Forge instead of GitHub" | **CONFIRMED** — brief p.3, "very teeny," Forge is swyx's side project (R54). | Repo decision 4 (GitHub public push) may want a Forge mirror. NOTE → client call |
+| Speed and API "earn bonus consideration" | **CONFIRMED** — both explicit on brief p.3 (R7 re-sourced, R53 minted). | API bonus strengthens the case for US-68's Tier B rank. PLAN-CHANGE candidate |
+| Airtable: "does not require sophisticated two-way sync… records land in Airtable so new-row automations run… periodic/on-load reads" | **UNSOURCED** — not in the brief, video, or any pasted swyx message; in tension with the doc's own open question. Plausibly from an unseen Discord reply. | If real, it *softens* US-72 (our mirror over-delivers) and hints AIE runs new-row automations (outbound direction matters most). Verify in Discord. NOTE |
+| Submitters can edit submissions after submit; edit-lock optional ("customer does not actively use it") | **UNSOURCED** but consistent with the incumbent (public wizard supports drafts; portal shows submissions). No AC lets a speaker edit talk title/description post-submit — AC-50 covers profile fields only; swyx's "finalize talk description" task example points the same direction. | Coverage gap regardless of provenance. PLAN-CHANGE candidate |
+| Review scoring/rounds demoted to "useful enhancements" | Consistent with the ruled floor (batch 1). Our superset stands. | NOTE |
+| Doc's 12-step evaluation path ends "trigger and resolve a scheduling conflict" | Consistent with our loop; the seed's two live double-bookings serve exactly this. | NOTE (confirms) |
+| Portal resource/wiki pages rated "Important or strongly desired" | Author's judgment, not a ruling. Our AC-233 sits below the cut line. | NOTE — revisit only at cut time |
+| Competitor names announced: `opensession`, `Program Cue`, `SuperStage` (+ author's `OpenSessionBoard`) | Field intel. No collision with Marquee. | NOTE |
 
 ---
 
@@ -381,7 +420,9 @@ Every material item from Atin's pastes, one row each, newest batch first. Severi
 
 | File | What it is |
 |---|---|
-| `competition-brief.md` | The official brief (Google Doc export), with base64 image |
+| `competition-brief.md` | The official brief (Google Doc export), with base64 image — **text-only capture; superseded by the PDF below for the appendix** |
+| `competition-brief-full.pdf` | **The complete brief** — 37 pages incl. the bonus-rules page (speed/API/Forge) and the ~40-screenshot annotated Sessionboard appendix (§1.6). Recovered 2026-08-08 night via Google Doc PDF export |
+| `competitor-context-doc-2026-08-08.md` | Competitor's consolidated context doc from Discord (third-party synthesis; verification in §7.5 Batch 2) |
 | `brief-image1.png` | Decoded from the brief — Sessionboard product mega-menu (Program / CRM / Marketing / CMS + AI Agents). Note: swyx's own email `swyx@ai.engineer` is visible in the subscribe field, confirming he captured it while logged in. |
 | `walkthrough-transcript.txt` | Timestamped, deduped transcript of the walkthrough (9:55) |
 | `walkthrough.en-orig.vtt`, `walkthrough.en.vtt` | Raw auto-caption files |
