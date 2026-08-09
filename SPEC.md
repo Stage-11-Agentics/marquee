@@ -610,9 +610,9 @@ Deviations and gaps, raised rather than silently forked (living-artifacts norm).
 
 ## Amendment 6 — board filtering + record-owned actions (2026-08-09; **AC IDs corrected by the orchestrator**)
 
-> Authored by the v1.3 prototype builder, which is why its original text misallocated AC-241/242 (already minted for webhooks and token scopes in `USER_STORIES.md` Amendment 6). Corrected IDs below. **The design change itself is PROPOSED, pending client ruling** — it contradicts AC-239's drag-transition semantics.
+> Authored by the v1.3 prototype builder, which is why its original text misallocated AC-241/242 (already minted for webhooks and token scopes in `USER_STORIES.md` Amendment 6). Corrected IDs below. **RATIFIED by the client 2026-08-09** — AC-239 struck; consequential actions belong on the detail screen, not behind a drag.
 
-**Program board `/board`** (extends AC-238; proposes **AC-243** replacing AC-239): filters compose across free-text search (title, speaker, record ID, company), type, any carried track, format, and wave, with filtered count + one-click reset. The board is a read-only overview: no card is draggable and no lifecycle action appears on a card. Mouse click, Enter, or Space opens the exact submission record. The record owns stage-appropriate actions (review, wave, accept, onboarding, agenda placement, publish, public view), with the existing confirmation/cascade preview for consequential transitions. Agenda drag-and-drop is unaffected.
+**Program board `/board`** (extends AC-238; **AC-243**, replacing struck AC-239): filters compose across free-text search (title, speaker, record ID, company), type, any carried track, format, and wave, with filtered count + one-click reset. The board is a read-only overview: no card is draggable and no lifecycle action appears on a card. Mouse click, Enter, or Space opens the exact submission record. The record owns stage-appropriate actions (review, wave, accept, onboarding, agenda placement, publish, public view), with the existing confirmation/cascade preview for consequential transitions. Agenda drag-and-drop is unaffected.
 
 ## Amendment 7 — API surface upgrades from the Sessionboard comparison (2026-08-09)
 

@@ -873,7 +873,7 @@ Source: Atin driving v1.2 (scheduled/published legibility; multi-track demo visi
 
 **As a** program lead, **I want** a board view of every submission as a card in its lifecycle column, **so that** I can see the whole program's flow — across all tracks — on one screen and move work with a drag.
 - **AC-238**: A board view renders every submission as a card in its lifecycle column (the pipeline's seven stages, derived states included), filterable by track, format, and wave; cards show title, speakers, track chips, and time-in-stage; it stays fast at the full seed.
-- **AC-239**: Dragging a card between columns performs the legal status transition with the same confirmation/cascade behavior as list actions; derived columns (Onboarding, Scheduled, Published) accept no drops and instead state their entry action ("complete tasks" / "place on the agenda" / "publish").
+- ~~**AC-239**: Dragging a card between columns performs the legal status transition…~~ **STRUCK 2026-08-09 by client ruling** — *"important items should be made from the detail screen, not easy drag-and-drop."* Replaced by AC-243; ID retired, never recycled.
 
 **AC-240** *(appended to US-50/US-57 area — scheduled/published legibility)*: Wherever a scheduled session is listed (submissions list, record, portal, board), its slot — **day · time · room** — is visible; a scheduled-but-unpublished item carries a "Not yet public" marker with a publish affordance; and the pipeline's Scheduled and Published stage cards carry clarifying sub-labels ("placed on the working agenda" / "live on the public site").
 
@@ -893,7 +893,7 @@ Semantic pins (SPEC Amendment 7, no new ACs): event discovery (`GET /events`), e
 
 ## Amendment 7 — board fork + reviewer detail (2026-08-09, orchestrator)
 
-**AC-243** *(proposed replacement for AC-239 — CLIENT RULING PENDING)*: The program board is a read-only overview: no card drags, no lifecycle action on cards; click/Enter/Space opens the submission record, which owns every stage-appropriate action with the standard confirmation/cascade previews; board filters compose (free-text, type, any track, format, wave) with a one-click reset. *Origin: the v1.3 builder implemented this in place of AC-239's drag-transitions and argued it — cleaner action ownership, cascade UX in one place. Exactly one of AC-239 / AC-243 survives the client ruling; the other is struck.*
+**AC-243** *(RATIFIED by client 2026-08-09, replacing struck AC-239)*: The program board is a read-only overview: no card drags, no lifecycle action on cards; click/Enter/Space opens the submission record, which owns every stage-appropriate action with the standard confirmation/cascade previews; board filters compose (free-text, type, any track, format, wave) with a one-click reset. *Client rationale: consequential actions belong on the detail screen, deliberately — not behind an easy drag.*
 
 **AC-244** *(appended to US-26, Tier A — the reviewer queue is loop step 8)*: From the review queue, a reviewer can open the full submission — every evaluator-visible field, the complete abstract, and attached files, honoring blind-mode redaction — without losing queue position; closing the detail returns to the same card. *(Client feedback while driving v1.3: "we need to be able to click and open the paper.")*
 

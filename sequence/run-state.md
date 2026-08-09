@@ -25,6 +25,9 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 
 ## Decisions log
 
+- 2026-08-09: **Board ruling (client): NO drag** — AC-239 struck, AC-243 ratified; consequential actions live on the detail screen. (Atin)
+- 2026-08-09: **F-2 CLOSED — seed A′ confirmed** (real Feb-2025 sessions + CODE-2025 roster → ~150 accepted, zero fabricated accepted people). (Atin)
+- 2026-08-09: **API comparison folded** (Amendments 6–7): four pre-kickoff API gaps + pinned semantics + webhooks behind Tier A (AC-241) + scoped tokens (AC-242); reviewer full-detail AC-244 minted from client feedback; v1.4 in flight. (Mabel)
 - 2026-08-08: **Board interaction refined (AC-241–242)** — no board drag or card actions; filters are expanded and composable, cards open exact records, and lifecycle buttons live on record pages. Agenda drag remains. (Atin + codex)
 - 2026-08-08: **Pipeline v1.3 completed** — program board, scheduled/public slot legibility, publish affordances, clarifying pipeline labels, and ≥15% multi-track seed coverage are implemented and Playwright-verified at full mock scale. (codex)
 - 2026-08-08: **Pipeline v1.2 completed** — all 24 specified screens/states represented, no stub-toast affordances, five finished agenda views, live Event Settings collections, Sessionize import, comms/outbox, reversal cascade, Airtable/API surfaces, multi-track AC-234, and portal talk editing AC-237. Playwright gate passed; client drive remains the love gate. (codex)

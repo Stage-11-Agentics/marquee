@@ -369,6 +369,26 @@
     .review-layout { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(310px,.6fr); gap: 18px; }
     .review-copy { font-size: 13px; line-height: 1.65; color: #43454c; }
     .review-copy h2 { color: var(--ink); font-size: 21px; letter-spacing: -.025em; }
+    .review-submission-card { cursor: pointer; transition: border-color 120ms, box-shadow 120ms, transform 120ms; }
+    .review-submission-card:hover { border-color: #aaa6ff; box-shadow: 0 8px 26px rgba(45,39,150,.10); transform: translateY(-1px); }
+    .review-submission-card:focus-visible { outline: 3px solid var(--accent-soft); border-color: var(--accent); }
+    .review-open-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .review-detail-modal { width: min(900px,100%); max-height: calc(100vh - 36px); display: flex; flex-direction: column; }
+    .review-detail-modal .modal-head { border-bottom: 1px solid var(--line); }
+    .review-detail-scroll { overflow-y: auto; padding-top: 18px; }
+    .review-detail-section + .review-detail-section { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
+    .review-detail-section h3 { margin: 0 0 10px; font-size: 13px; }
+    .review-detail-section p, .review-detail-section li { color: #43454c; font-size: 12px; line-height: 1.65; }
+    .review-detail-section p { margin: 0 0 10px; }
+    .review-field-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+    .review-field { margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: #fafafb; }
+    .review-field dt { color: var(--muted); font-size: 9px; font-weight: 720; letter-spacing: .06em; text-transform: uppercase; }
+    .review-field dd { margin: 5px 0 0; color: var(--ink); font-size: 11px; line-height: 1.5; }
+    .blind-redaction { display: inline-flex; align-items: center; gap: 6px; color: #6a6c74; font-style: italic; }
+    .blind-redaction::before { content: ""; width: 18px; height: 7px; border-radius: 2px; background: repeating-linear-gradient(135deg,#bbbcc3 0 3px,#e2e2e6 3px 6px); }
+    .review-file-list { display: grid; gap: 8px; }
+    .review-file-row { display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; }
+    .review-file-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 7px; background: var(--accent-soft); color: var(--accent-dark); font-size: 9px; font-weight: 750; }
     .review-score { position: sticky; top: 76px; }
     .score-buttons { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; margin: 15px 0; }
     .score-button { border: 1px solid var(--line-strong); background: white; border-radius: 8px; min-height: 46px; font-weight: 730; color: #50525a; }
@@ -498,7 +518,7 @@
       .page { padding: 23px 16px 88px; }
       .page-head { display: grid; }
       .head-actions { justify-content: flex-start; }
-      .grid-2, .grid-3, .dashboard-grid, .portal-grid, .review-layout, .detail-grid, .comms-layout { grid-template-columns: 1fr; }
+      .grid-2, .grid-3, .dashboard-grid, .portal-grid, .review-layout, .detail-grid, .comms-layout, .review-field-grid { grid-template-columns: 1fr; }
       .attention-strip { grid-template-columns: 1fr; }
       .onboarding-metrics { grid-template-columns: repeat(2,1fr); }
       .hero { grid-template-columns: 1fr; padding-top: 25px; }
@@ -1239,10 +1259,55 @@
         return shell(`<div class="page">
           ${pageHead("Reviewer queue", `${state.reviewIndex + 1} of ${queue.length} · ${queue.length - state.reviewIndex - 1} remaining · identity hidden`, `<span class="chip">Anonymous review</span><button class="button" data-route="evaluation">Exit queue</button>`)}
           <div class="review-layout">
-            <article class="card"><div class="card-body review-copy"><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip">${esc(item.format)}</span>${(item.tracks||[item.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}<span class="chip">${item.id}</span></div><h2>${esc(item.title)}</h2><div class="eyebrow">Abstract</div><p>Teams can make agent systems reliable without slowing delivery to a crawl. This session presents a field-tested approach to scenario design, trace review, and deployment gates, including the failures that changed our process.</p><p>Attendees leave with a lightweight evaluation ladder, concrete signals for escalating risk, and a framework for deciding when human review belongs inside the loop.</p><div class="divider"></div><div class="eyebrow">What attendees will learn</div><p>How to define useful failure taxonomies, choose representative test cases, and measure recovery behavior before the system reaches production traffic.</p></div></article>
+            <article class="card review-submission-card" role="button" tabindex="0" data-open-full-review aria-label="Open full submission ${item.id}"><div class="card-body review-copy"><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip">${esc(item.format)}</span>${(item.tracks||[item.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}<span class="chip">${item.id}</span></div><h2>${esc(item.title)}</h2><div class="eyebrow">Abstract</div><p>Teams can make agent systems reliable without slowing delivery to a crawl. This session presents a field-tested approach to scenario design, trace review, and deployment gates, including the failures that changed our process.</p><p>Attendees leave with a lightweight evaluation ladder, concrete signals for escalating risk, and a framework for deciding when human review belongs inside the loop.</p><div class="divider"></div><div class="eyebrow">What attendees will learn</div><p>How to define useful failure taxonomies, choose representative test cases, and measure recovery behavior before the system reaches production traffic.</p><div class="review-open-row"><span class="subtle">Includes full abstract, submission fields, and attachments</span><span class="button small" aria-hidden="true">Open full submission →</span></div></div></article>
             <aside class="card review-score"><div class="card-head"><div><h2>Your score</h2><span class="subtle">Keys 1–5 score instantly</span></div></div><div class="card-body"><div class="subtle">Overall recommendation</div><div class="score-buttons">${[1,2,3,4,5].map(n=>`<button class="score-button ${score === n ? "active" : ""}" data-score="${n}">${n}</button>`).join("")}</div><div class="field"><label for="review-comment">Committee note</label><textarea id="review-comment" placeholder="Optional context for the committee"></textarea></div><button class="button primary" style="width:100%;margin-top:12px" id="save-next" ${score ? "" : "disabled"}>Save & next →</button><button class="button ghost" style="width:100%;margin-top:6px" id="abstain-review">Abstain / conflict</button></div></aside>
           </div>
         </div>`);
+      }
+
+      function closeFullReviewSubmission() {
+        modalRoot.innerHTML = "";
+        document.querySelector("[data-open-full-review]")?.focus();
+      }
+
+      function showFullReviewSubmission() {
+        const queue = state.submissions.filter(s => s.status === "In Review");
+        const position = state.reviewIndex % queue.length;
+        const item = queue[position];
+        const attachments = [
+          { name: "evaluation-ladder.pdf", type: "PDF", size: "1.8 MB" },
+          { name: "failure-taxonomy.png", type: "PNG", size: "842 KB" },
+          { name: "sample-traces.zip", type: "ZIP", size: "4.2 MB" }
+        ].slice(0, 2 + (Number(item.id.slice(-1)) % 2));
+        modalRoot.innerHTML = `<div class="modal-backdrop" data-review-detail-backdrop><section class="modal review-detail-modal" role="dialog" aria-modal="true" aria-labelledby="review-detail-title" data-review-detail-modal data-full-review-id="${item.id}" data-queue-position="${position + 1}">
+          <div class="modal-head"><div class="eyebrow">Anonymous submission · Review item ${position + 1} of ${queue.length}</div><h2 id="review-detail-title">${esc(item.title)}</h2><p>Complete evaluator view. Speaker identity and contact fields remain redacted while blind review is active.</p></div>
+          <div class="modal-body review-detail-scroll">
+            <div style="display:flex;gap:7px;flex-wrap:wrap"><span class="chip">${esc(item.format)}</span>${(item.tracks||[item.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}<span class="chip">${item.id}</span></div>
+            <section class="review-detail-section"><h3>Full abstract</h3><p>Teams can make agent systems reliable without slowing delivery to a crawl. This session presents a field-tested approach to scenario design, trace review, and deployment gates, including the failures that changed our process.</p><p>We will walk through the evaluation ladder from a small set of deterministic checks to scenario suites, shadow traffic, and monitored release gates. Examples show how trace-level evidence helped the team distinguish model quality problems from orchestration, retrieval, and recovery failures.</p><p>The session closes with the operating decisions that mattered most: which risks warranted human review, how thresholds changed as evidence accumulated, and which early metrics were discarded because they created confidence without predicting production behavior.</p></section>
+            <section class="review-detail-section"><h3>Learning outcomes</h3><p>Attendees will learn how to define useful failure taxonomies, choose representative test cases, measure recovery behavior, and decide where human review belongs before the system reaches production traffic.</p></section>
+            <section class="review-detail-section"><h3>Evaluator-visible submission fields</h3><div class="review-field-grid">
+              <dl class="review-field"><dt>Format</dt><dd>${esc(item.format)}</dd></dl>
+              <dl class="review-field"><dt>Tracks</dt><dd>${esc((item.tracks||[item.track]).join(" · "))} · first listed is primary</dd></dl>
+              <dl class="review-field"><dt>Intended audience</dt><dd>Engineering leaders and practitioners shipping agent systems into production.</dd></dl>
+              <dl class="review-field"><dt>Audience experience level</dt><dd>Intermediate</dd></dl>
+              <dl class="review-field"><dt>Session outline</dt><dd>Context and failure taxonomy · evaluation ladder · trace walkthrough · deployment gates · audience Q&amp;A.</dd></dl>
+              <dl class="review-field"><dt>Prerequisites</dt><dd>Basic familiarity with LLM applications; no specific framework required.</dd></dl>
+              <dl class="review-field"><dt>Vendor content</dt><dd>No — methods and examples are tool-agnostic.</dd></dl>
+              <dl class="review-field"><dt>Recording consent</dt><dd>Yes</dd></dl>
+            </div></section>
+            <section class="review-detail-section"><h3>Speaker details · blind mode</h3><div class="review-field-grid">
+              <dl class="review-field"><dt>Speaker name</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></dl>
+              <dl class="review-field"><dt>Email</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></dl>
+              <dl class="review-field"><dt>Company / affiliation</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></dl>
+              <dl class="review-field"><dt>Biography</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></dl>
+            </div></section>
+            <section class="review-detail-section"><h3>Attached files (${attachments.length})</h3><div class="review-file-list">${attachments.map(file=>`<div class="review-file-row" data-review-file><span class="review-file-icon">${file.type}</span><div><strong style="font-size:11px">${esc(file.name)}</strong><div class="wave-date">${file.type} · ${file.size}</div></div><span class="chip">Available to reviewers</span></div>`).join("")}</div></section>
+          </div>
+          <div class="modal-actions"><span class="subtle" style="margin-right:auto">Review item ${position + 1} of ${queue.length} · queue position preserved</span><button class="button primary" id="close-full-review">Close &amp; return to queue</button></div>
+        </section></div>`;
+        document.getElementById("close-full-review").onclick = closeFullReviewSubmission;
+        document.querySelector("[data-review-detail-backdrop]").onclick = event => { if (event.target === event.currentTarget) closeFullReviewSubmission(); };
+        document.getElementById("close-full-review").focus();
       }
 
       function filteredSubmissions() {
@@ -1744,9 +1809,13 @@
       }
 
       function bindReviewer() {
-        document.querySelectorAll("[data-score]").forEach(b=>b.onclick=()=>{const item=state.submissions.filter(s=>s.status==="In Review")[state.reviewIndex%90];state.reviewScores[item.id]=Number(b.dataset.score);render();});
-        document.getElementById("save-next")?.addEventListener("click",()=>{state.reviewIndex=(state.reviewIndex+1)%90;toast("Score saved · next abstract ready");render();});
-        document.getElementById("abstain-review")?.addEventListener("click",()=>{state.reviewIndex=(state.reviewIndex+1)%90;toast("Conflict recorded · next abstract ready");render();});
+        const queueLength=state.submissions.filter(s=>s.status==="In Review").length;
+        document.querySelectorAll("[data-score]").forEach(b=>b.onclick=()=>{const item=state.submissions.filter(s=>s.status==="In Review")[state.reviewIndex%queueLength];state.reviewScores[item.id]=Number(b.dataset.score);render();});
+        const card=document.querySelector("[data-open-full-review]");
+        card?.addEventListener("click",showFullReviewSubmission);
+        card?.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showFullReviewSubmission();}});
+        document.getElementById("save-next")?.addEventListener("click",()=>{state.reviewIndex=(state.reviewIndex+1)%queueLength;toast("Score saved · next abstract ready");render();});
+        document.getElementById("abstain-review")?.addEventListener("click",()=>{state.reviewIndex=(state.reviewIndex+1)%queueLength;toast("Conflict recorded · next abstract ready");render();});
       }
 
       function bindSubmissions() {
@@ -1924,7 +1993,7 @@
       addEventListener("keydown",e=>{
         if ((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k") { e.preventDefault(); openGlobalSearch(); }
         if (e.key==="/" && !["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName)) { e.preventDefault(); openGlobalSearch(); }
-        if(e.key==="Escape"&&modalRoot.innerHTML)modalRoot.innerHTML="";
+        if(e.key==="Escape"&&modalRoot.innerHTML){document.querySelector("[data-review-detail-modal]")?closeFullReviewSubmission():modalRoot.innerHTML="";}
         if (state.route==="reviewer" && /^[1-5]$/.test(e.key) && !["INPUT","TEXTAREA"].includes(document.activeElement?.tagName)) { const b=document.querySelector(`[data-score="${e.key}"]`);b?.click(); }
       });
       render();
