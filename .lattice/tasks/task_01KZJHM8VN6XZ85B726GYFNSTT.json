@@ -1,7 +1,7 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
@@ -10,7 +10,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM8VN6XZ85B726GYFNSTT",
-  "last_event_id": "ev_01KZJHMEVESS36X6F05X00HEXZ",
+  "last_event_id": "ev_01KZJMR3NA91W5XSVDHT9P5MBW",
   "last_status_changed_at": "2026-08-09T05:58:43Z",
   "linked_files": [],
   "priority": "medium",
@@ -37,6 +37,6 @@
   "tags": null,
   "title": "Speaker portal",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:49Z",
+  "updated_at": "2026-08-09T06:53:14Z",
   "urgency": null
 }

@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:196",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 8,
+  "comment_count": 16,
   "complexity": null,
   "created_at": "2026-08-09T05:58:41Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-01 \u2014 Wave 0, walking skeleton (\u00a73)\n\nScope (verbatim): Repo, `wrangler.jsonc` with every binding (D1, R2, KV, Queue, cron, Turnstile secrets), Vite + TS, Hono entry, health route, custom domain `marquee.stage11.dev`, **deploy to the Paid plan before anything else lands**. `https://` only; session cookie helper with **no `Domain` attribute**.\n\nWhy it goes first (\u00a72): deploying to the real Workers Paid plan on day one is the only way to discover the 10 ms CPU ceiling (trap 2) and a lapsed R2 entitlement (trap 4) while there is still time \u2014 neither is visible in local dev. Trap 15 (`.dev` is HSTS-preloaded; parent-domain cookies leak) dies here too: the session cookie carries no `Domain` attribute and guardrail G6 asserts it.\n\nFile surface: `wrangler.jsonc`, `package.json`, `vite.config.ts`, `src/index.ts`, `src/lib/cookies.ts`\n\nACs: \u2014 (no AC directly claimed; underwrites AC-1/AC-2's deployed URL and guardrail G6)\nHours: 3\nWorkflow: inline-full\nShared files: `wrangler.jsonc` \u2014 M-01 OWNS it (\u00a77). All bindings are declared up front so no later ticket needs to touch it; any addition serializes through the orchestrator. `package.json` is created here but its **script table is M-06's** \u2014 do not register commands.\nDeps: none (root of the Wave 0 critical chain M-01 \u2192 M-02 \u2192 M-04a \u2192 M-08 = 13 h to CP-1)\nHuman precondition: Workers Paid enabled and verified; R2 entitlement probed (\u00a78 items 1\u20132)\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-09T06:55:04Z",
   "evidence_refs": [
     {
       "id": "art_01KZJJWV7MF9MYJ4T1DCQAV34F",
@@ -20,21 +20,51 @@
       "id": "art_01KZJKRGM8TDM6BMXYY118JA81",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJMKSJQY33JMDDJECAES04K",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJMMQ4GF3BR9JWRN6PQ5VZ2",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJMP8MM67564KRFPDRBF8TH",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJMRA6XWSDPBQBBR1XXHDV7",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZJMVEQ9GP3Y3V079SW9D9FG",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZJMVEQ9GP3Y3V079SW9D9FF",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM7DR1ZNHVKGXET5EKWYF",
-  "last_event_id": "ev_01KZJKZZ1GDYPHJPD91FGFS56Q",
-  "last_status_changed_at": "2026-08-09T06:40:03Z",
+  "last_event_id": "ev_01KZJMVEQ9GP3Y3V079SW9D9FK",
+  "last_status_changed_at": "2026-08-09T06:55:04Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 1,
+  "reopened_count": 2,
   "schema_version": 1,
   "short_id": "MRQ-1",
-  "status": "review",
+  "status": "done",
   "tags": null,
   "title": "Platform skeleton and first real deploy",
   "type": "task",
-  "updated_at": "2026-08-09T06:40:03Z",
+  "updated_at": "2026-08-09T06:55:04Z",
   "urgency": null
 }

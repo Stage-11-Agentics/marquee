@@ -1,0 +1,113 @@
+# MRQ-1 Local Runtime Validation
+HEAD: 88bf16a4d0e20ae3aec2b3c43dd6a6f5a28163d6
+Base: e9ce83ef61c16b616582c257c9205c4aad439c4d
+Deployment: deferred to MRQ-57 by operator ruling
+
+## Static gates
+PASS: npx tsc --noEmit
+PASS: npx vite build
+
+## Vite live development server
+HTTP/1.1 200 OK
+Vary: Origin
+cache-control: no-store
+content-length: 35
+content-type: application/json
+Date: Sun, 09 Aug 2026 06:52:12 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"service":"marquee","status":"ok"}
+PASS: Vite HTTP dev is reachable and emits no local HSTS
+
+## Wrangler local bindings
+Your Worker has access to the following bindings:
+Binding                                                       Resource                  Mode
+env.CACHE (REPLACE_ME-CACHE)                                  KV Namespace              local
+env.MAIL_QUEUE (replace-me-mail-queue)                        Queue                     local
+env.MIRROR_QUEUE (replace-me-mirror-queue)                    Queue                     local
+env.OPERATIONS_QUEUE (replace-me-operations-queue)            Queue                     local
+env.WEBHOOK_QUEUE (replace-me-webhook-queue)                  Queue                     local
+env.DB (replace-me-db)                                        D1 Database               local
+env.MEDIA (replace-me-media-preview)                          R2 Bucket                 local
+env.ASSETS                                                    Assets                    local
+env.TURNSTILE_SITE_KEY ("(hidden)")                           Environment Variable      local
+env.TURNSTILE_SECRET_KEY ("(hidden)")                         Environment Variable      local
+env.LOCAL_VALIDATION_TOKEN ("(hidden)")                       Environment Variable      local
+
+⎔ Starting local server...
+Your Worker has access to the following bindings:
+Binding                                                       Resource                  Mode
+env.CACHE (REPLACE_ME-CACHE)                                  KV Namespace              local
+env.MAIL_QUEUE (replace-me-mail-queue)                        Queue                     local
+env.MIRROR_QUEUE (replace-me-mirror-queue)                    Queue                     local
+env.OPERATIONS_QUEUE (replace-me-operations-queue)            Queue                     local
+env.WEBHOOK_QUEUE (replace-me-webhook-queue)                  Queue                     local
+env.DB (replace-me-db)                                        D1 Database               local
+env.MEDIA (replace-me-media-preview)                          R2 Bucket                 local
+env.ASSETS                                                    Assets                    local
+env.TURNSTILE_SITE_KEY ("(hidden)")                           Environment Variable      local
+env.TURNSTILE_SECRET_KEY ("(hidden)")                         Environment Variable      local
+env.LOCAL_VALIDATION_TOKEN ("(hidden)")                       Environment Variable      local
+
+[wrangler:info] Ready on https://127.0.0.1:55227
+[wrangler:info] GET /health 200 OK (117ms)
+
+## Health route
+HTTP/1.1 200 OK
+Content-Length: 35
+Content-Type: application/json
+Cache-Control: no-store
+
+{"service":"marquee","status":"ok"}
+PASS: health is 200 JSON and local HSTS is absent
+
+## Cookie route fails closed without local token
+HTTP 404
+PASS: unauthorized route is 404
+
+## Cookie helper contract
+HTTP/1.1 200 OK
+Content-Length: 38
+Content-Type: application/json
+Cache-Control: no-store
+Set-Cookie: mq_session=local-validation; Max-Age=60; Path=/; HttpOnly; Secure; SameSite=Lax
+
+{"cookie":"mq_session","status":"set"}
+Set-Cookie: mq_session=local-validation; Max-Age=60; Path=/; HttpOnly; Secure; SameSite=Lax
+PASS: mq_session has HttpOnly, Secure, SameSite=Lax, Path=/, and no Domain attribute
+
+## Static Vite asset
+HTTP/1.1 200 OK
+Transfer-Encoding: chunked
+Content-Type: text/html; charset=utf-8
+Cache-Control: public, max-age=0, must-revalidate
+ETag: "7b6976a5a8907e8fa438095707c54a23"
+CF-Cache-Status: HIT
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Marquee</title>
+  </head>
+  <body>
+    <main>
+      <h1>Marquee</h1>
+      <p>The platform skeleton is running.</p>
+    </main>
+  </body>
+</html>
+PASS: static skeleton is served
+
+## Unknown API contract
+HTTP/1.1 404 Not Found
+Content-Length: 62
+Content-Type: application/json
+
+{"error":{"code":"not_found","message":"API route not found"}}
+PASS: unknown API is JSON 404, not SPA HTML
+
+## Result
+PASS: exact reviewed HEAD observed working in local Vite and Wrangler runtimes

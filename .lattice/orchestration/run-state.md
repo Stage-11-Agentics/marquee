@@ -28,11 +28,11 @@
 
 | Ticket | Surface | Mode | Note |
 |---|---|---|---|
-| MRQ-1 (M-01) | surface:196 pane:56 | inline-full | **`review`**; deploy deferred to MRQ-57, local validation is the merge bar. Context at 75% — watch for compaction. |
+| ~~MRQ-1 (M-01)~~ | closed | **done** | **MERGED** PR #3 (44a3fab). Skeleton is master. Own-reviewer fallback used (headless reviewer hit the 600s ceiling) and disclosed. |
 | MRQ-2 (M-02) | surface:200 pane:56 | **implementing** (inline-full) | worktree `Marquee-worktrees/mrq-2-schema`, branch stacked on `mrq-1-platform-skeleton`; PR body must name the anchor |
-| MRQ-6 (M-05a+06) | surface:201 pane:57 | **planned**, holding | rulings sent; awaiting worktree |
+| MRQ-6 (M-05a+06) | surface:201 pane:57 | **implementing** (inline-full) | worktree `Marquee-worktrees/mrq-6-shell`, clean off master 44a3fab. Owns the pr-gate npm script every later ticket will run. |
 | MRQ-8 (M-07) | surface:202 pane:57 | **planned**, holding | re-estimated 7h; CAS primitive; awaiting worktree |
-| MRQ-14 (M-13) | surface:203 pane:56 | planning-only press-ahead | uploads/presign; unblocked by MRQ-1 reaching review. Guardrail-adjacent (AC-231) → held for orchestrator eyes at merge |
+| MRQ-14 (M-13) | surface:203 pane:56 | **planned**, holding | uploads/presign. Guardrail-adjacent (AC-231) → never auto-merge. Its review produced schema deltas for MRQ-2 and deploy items for MRQ-57, both relayed. |
 | ~~MRQ-55 (S-2)~~ | closed | **done** | **MERGED** PR #2 (3ef7c647). Code done; `needs_human` stands for the client-rendering oracle. |
 | ~~MRQ-56 (S-3)~~ | closed | **done** | **MERGED** PR #1 (4f429473). Verdict below. |
 
@@ -60,6 +60,8 @@ Orchestrator mitigations already applied (no operator input needed): resumed del
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-09 02:56 [moderate] **MRQ-1 merged** (PR #3, squash 44a3fab) — the skeleton is now master and MRQ-6 was resumed on a clean branch off it. MRQ-2 remains stacked on the pre-merge branch and must rebase with `--onto` before its PR.
+- 2026-08-09 02:55 [moderate] MRQ-14 plan-review consequences dispatched: **schema deltas relayed to MRQ-2 mid-implementation** (sha256 nullable, r2_etag, draft_file/submission_file) so they land in the single init migration rather than forcing a second one; six real-bucket-only assertions + the M-01 seams folded into MRQ-57's description. MRQ-14 adds the code-side seams (S3 env declarations, cron dispatch, media host, Worker-first routing) in its own PR — MRQ-1 was NOT reopened.
 - 2026-08-09 02:50 [moderate] **Quota escalation raised** (flag + operator summary). Codex 79% weekly with no pre-deadline reset. Mitigations applied unilaterally: resumed tickets run inline-full not sub-agent-full; no spawning above cap.
 - 2026-08-09 02:49 [moderate] MRQ-8 rulings: CAS-over-transactions ACCEPTED (D1 has no interactive transactions; CAS becomes a named API-core primitive); **M-07 re-estimated 4h -> 7h, scope NOT cut** (agent-native API is a moat feature and every later ticket inherits its contracts); CP-1 accordingly D+15 -> **D+18**.
 - 2026-08-09 02:48 [moderate] MRQ-6 rulings: AC-69 speed row SPLIT into 7 failing AC-sourced budgets + 7 warn-only client-signed objectives (no new AC minted — implementation detail of existing rows); local pr-gate command adopted because private Forgejo has no CI runner, to be folded into the delegator contract once MRQ-6's plan lands.
@@ -84,4 +86,5 @@ Orchestrator mitigations already applied (no operator input needed): resumed del
 | Codex delegator HALTs on the line-1 cwd guard with a correct-looking path | A scratchpad path under `/private/tmp` did not match what the spawned shell reported; the guard is exact-match so any resolution difference is fatal | Put sandbox/worktree paths under the project's own tree (`Marquee-worktrees/<slug>`), never `/tmp`. Every guard now prints `actual: $(pwd)` on failure so the next halt is self-diagnosing (2026-08-09, MRQ-2 planner, cost: one relaunch). |
 | A launched codex agent shows a full context read but never claims its ticket, sitting at what looks like an idle prompt | Codex's **directory-trust dialog** ("Do you trust the contents of this directory?") blocks the argv prompt entirely on any newly-created cwd; `--yolo` does not bypass it. Git worktrees of an already-trusted repo do not trigger it — fresh sandbox dirs always do | After EVERY `launch-agent` into a new directory, `read-screen` once and `send-key enter` if the trust dialog is up. Budget ~10s before the check (2026-08-09, MRQ-2/6/8 planners, all three parked). |
 | `git rebase` in the root checkout fails "cannot rebase: You have unstaged changes" during a tick | The root checkout's `.lattice/` **is the live board** — delegators write events continuously, so unstaged changes reappear microseconds after any `git add` | Always `git pull --rebase --autostash forgejo master`. Never `stash` by hand, never `reset --hard` this checkout (2026-08-09, twice in one tick). |
+| A `c11 send` message arrives mangled, and stray command output appears in the orchestrator's shell | Backticks inside a **double-quoted** bash string are command substitution — the message text runs as a command and its output replaces the span | Quote every `c11 send` payload with single quotes, or drop backticks entirely. Re-send a correction if it already went out (2026-08-09, MRQ-6 resume message). |
 | A codex pane looks idle but is working | The line under the transcript is codex's placeholder input hint ("› Write tests for @filename"), not a returned prompt | Judge liveness by the `• Working (Ns)` line and a moving context/cost counter, never by the hint line. |

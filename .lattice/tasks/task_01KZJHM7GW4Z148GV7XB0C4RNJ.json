@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:200",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:41Z",
   "created_by": "agent:orchestrator-intake",
@@ -15,10 +15,15 @@
       "id": "art_01KZJM08R35V9TYJTJ0Q3PHRVT",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJMFJDWGMKP4DHEJSM83953",
+      "role": "plan-review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM7GW4Z148GV7XB0C4RNJ",
-  "last_event_id": "ev_01KZJM83W5Z64ZQVS9BR403TN8",
+  "last_event_id": "ev_01KZJMR3J8T9RWT42B5K721A69",
   "last_status_changed_at": "2026-08-09T06:44:30Z",
   "linked_files": [],
   "priority": "medium",
@@ -38,6 +43,6 @@
   "tags": null,
   "title": "Database schema \u2014 the whole init migration",
   "type": "task",
-  "updated_at": "2026-08-09T06:44:30Z",
+  "updated_at": "2026-08-09T06:53:14Z",
   "urgency": null
 }

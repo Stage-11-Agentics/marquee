@@ -15,11 +15,16 @@
       "id": "art_01KZJM2VNW9DGJ9R76HB0ZVBN3",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJMFVAG5N0096XB6CEJHMFQ",
+      "role": "plan-review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM7X3TP6TG2TSWE4YY32Y",
-  "last_event_id": "ev_01KZJM66YQ0MV7R629F099190A",
-  "last_status_changed_at": "2026-08-09T06:43:28Z",
+  "last_event_id": "ev_01KZJMXCJZ7H6WZG9V1QQMQPS9",
+  "last_status_changed_at": "2026-08-09T06:56:07Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +39,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-6",
-  "status": "planned",
+  "status": "in_progress",
   "tags": null,
   "title": "Design system, admin shell, and the check harness",
   "type": "task",
-  "updated_at": "2026-08-09T06:43:28Z",
+  "updated_at": "2026-08-09T06:56:07Z",
   "urgency": null
 }

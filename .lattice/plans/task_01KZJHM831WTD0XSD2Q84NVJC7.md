@@ -10,7 +10,7 @@ Amendment 6 fold (+3 h, already inside the estimate): `GET /events` discovery, p
 File surface: `src/api/*`, `src/routes/_manifest.ts` (generated)
 
 ACs: AC-105, AC-106, AC-108
-Hours: 4
+Hours: 7 (Orchestrator ruling after plan review; full Amendment 7 fold included)
 Workflow: inline-full
 Shared files: none by ownership — but `src/routes/_manifest.ts` is **generated**, never hand-edited, and that rule is this ticket's to enforce for the whole fleet.
 Deps: M-02, S-3 (the chunking-pattern verdict — do not pick a pattern before the spike returns)
@@ -45,7 +45,7 @@ The exact split may follow the merged scaffold's naming conventions, but keep th
 - `src/api/router.ts`: creates the `OpenAPIHono` API app, installs request/error/not-found middleware, mounts every generated route, and exposes a stable mount for M-01's Worker entrypoint. Registration and document assembly consume the same route objects.
 - `src/api/errors.ts`: the single error schema, typed error constructors, request-ID middleware, validation hook, not-found handler, and unexpected-error handler.
 - `src/api/list.ts` and `src/api/pagination.ts`: list query/response schema factories, validated paging/sort parsing, offset/total-page calculation, and deterministic endpoint-owned sort maps.
-- `src/api/concurrency.ts`: strong ETag generation and shared `If-Match` precondition handling for mutable resources.
+- `src/api/concurrency.ts`: strong ETag generation and the named reusable `compareAndSwapResource` primitive for shared `If-Match` enforcement; mutating route handlers do not implement CAS ad hoc.
 - `src/api/rate-limit.ts`: route bucket vocabulary and shared standard-header/429 response helpers; enforcement adapters can use KV without changing route shapes.
 - `src/api/bulk.ts`: the exclusive selector union, durable result schema, and S-3 `runBulkByIds` helper.
 - `src/api/contracts/{events,people,files,tokens}.ts` (or an equivalently clear split): reusable Amendment 7 path/request/response definitions. They stay unregistered until a domain module supplies a handler.
@@ -175,9 +175,36 @@ SET ..., updated_at = CASE WHEN updated_at >= ? THEN updated_at + 1 ELSE ? END
 WHERE id = ? AND event_id = ? AND updated_at = ?
 ```
 
-The expected `updated_at` is decoded from the strong `If-Match` tag. `meta.changes === 1` is success. On `meta.changes === 0`, the handler re-reads through the same authorized/event-scoped query only to classify the response: concealed/missing becomes 404; present with a different version becomes 409 with the current strong ETag and safe resource summary. A read followed later by an unconditional write is a defect.
+The API core owns this as one named primitive in `src/api/concurrency.ts`, not a pattern copied into each route:
+
+```ts
+export async function compareAndSwapResource<TCurrent, TResult>(input: {
+  expected: { id: string; updatedAt: number };
+  now: number;
+  prepareWrite: (version: {
+    expectedUpdatedAt: number;
+    nextUpdatedAt: number;
+  }) => D1PreparedStatement;
+  readCurrent: () => Promise<TCurrent | null>;
+  versionOf: (current: TCurrent) => { id: string; updatedAt: number };
+}): Promise<
+  | { kind: "updated"; result: D1Result<TResult>; etag: string }
+  | { kind: "missing" }
+  | { kind: "stale"; current: TCurrent; etag: string }
+>;
+```
+
+`compareAndSwapResource` decodes the expected `updated_at` from the already-validated strong `If-Match` tag, computes `nextUpdatedAt = max(now, expectedUpdatedAt + 1)`, invokes the caller's conditional prepared write exactly once, and owns the `meta.changes` classification. `meta.changes === 1` is success and returns the new strong ETag. On `meta.changes === 0`, the primitive calls the supplied already-authorized/event-scoped `readCurrent` only to classify the response: concealed/missing becomes `missing`/404; present with a different version becomes `stale`/409 with the current strong ETag and safe resource summary. Any other change count is an internal invariant failure. A route-level read followed later by an unconditional write is a defect; routes use this primitive rather than reproducing the classification or version arithmetic.
 
 For multi-statement state changes, do **not** assume a `db.batch()` guard statement prevents later statements from running when it changes zero rows. Use a single atomic SQL statement where possible; otherwise every dependent statement in one `db.batch()` must be conditioned on the same expected resource version (or on a guard result materialized within SQL) so stale input produces zero side effects. The monotonic update expression makes two writes in the same wall-clock millisecond produce distinct versions without asking MRQ-2 for a new column.
+
+Endpoints contractually dependent on `compareAndSwapResource` are:
+
+- M-07 Amendment 7 contracts: `PATCH /api/v1/people/:personId`, `PATCH/DELETE /api/v1/events/:eventId/submissions/:submissionId/files/:fileId`, and `DELETE /api/v1/org/tokens/:id` once their real handlers land.
+- Every later `PATCH` or `DELETE` resource route in SPEC section 4.2, including `/me`, event details/taxonomy, forms/fields/admins, submissions, views, participants, evaluation/committee resources, agenda items, imports/mirror/webhook resources, and other mutable representations.
+- Agenda move/resize (`PATCH .../agenda/items/:id`) and every publish action, including form publish and `POST .../agenda/publish`, because Amendment 7 names agenda move and publish explicitly in addition to all PATCH/DELETE routes.
+
+The filter-wide/explicit-ID bulk endpoint does not pretend that one representation ETag covers many selected records; M-18 retains durable `operation_id`, per-record lifecycle-conflict, and result semantics for that path. Any bulk implementation that needs per-record CAS composes the same primitive/conditional SQL contract rather than inventing another version scheme.
 
 ### R2 — filename discriminator and pure manifest builder (MAJOR, accepted)
 
@@ -223,11 +250,11 @@ The three audience paths for uploads are aliases over one M-13 service, not thre
 
 M-03/M-13/M-29 add route modules and adapter implementations/composition files; they do not edit middleware order or append registrations in `router.ts`. Auth-required policies fail closed when no credential adapter is installed. R2 behavior is a handler service, not central middleware. If the merged composition root needs wiring, coordinate its owner as a serialized shared-file edit. The ticket's “no shared files” claim remains true for post-M-07 route fan-out because all extension seams are additive outside the core router.
 
-### R6 — estimate contradiction and coherent implementation order (MAJOR, flagged)
+### R6 — estimate contradiction and coherent implementation order (MAJOR, resolved by Orchestrator)
 
-The reviewer correctly found conflicting source arithmetic: BUILDPLAN's amendment says M-07 absorbs `+3 h`, while its row/CP-1 math and this ticket say 4 h with the fold already included. This plan does not silently rewrite board estimates or CP-1. The boot prompt/ticket's 4 h remains the scheduling value for this run, but the Orchestrator must decide whether the source plan should read 4 h/CP-1 15 h or 7 h/CP-1 18 h before implementation is resumed.
+The Orchestrator ruled that 4 h was wrong and **M-07 is 7 h**. The full API-core and Amendment 7 scope remains binding; no scope is cut. CP-1's critical chain is therefore **M-01 (3 h) + M-02 (4 h) + M-07 (7 h) + M-08 (4 h) = 18 h**, moving CP-1 from D+15 to **D+18**. This ruling supersedes the earlier 4 h ticket/scaffold text and closes the review's scheduling flag.
 
-Implementation order is coherent even if the estimate is corrected: (A) route definition + pure manifest/glob + error envelope; (B) list/pagination + bulk selector + exact S-3 helper; (C) OpenAPI assembly + both live meta routes; (D) concurrency/rate adapters + Amendment 7 contract exports; (E) full verification. All five segments are binding M-07 scope. A time box may stop and report after a segment, but may not merge or advertise a partial substrate as complete without an explicit Orchestrator scope ruling.
+Implementation order under the corrected estimate is: (A) route definition + pure manifest/glob + error envelope; (B) list/pagination + bulk selector + exact S-3 helper; (C) OpenAPI assembly + both live meta routes; (D) concurrency/rate adapters + Amendment 7 contract exports; (E) full verification. All five segments are binding M-07 scope. If implementation overruns, report the overrun at a segment boundary and continue the full scope; do not silently cut, merge, or advertise a partial substrate without a new explicit Orchestrator ruling.
 
 ### R7 — OpenAPI version follows validated library support (MINOR, accepted)
 
@@ -251,4 +278,11 @@ Withdraw the fifth `public_write` bucket. Route metadata exposes exactly Amendme
 
 ### Cycle 1 disposition
 
-All review findings are resolved above; none is deferred or ignored. R4 fixes a fleet-wide path ambiguity toward the literal SPEC and records the authorization consequence. R6 is the only outstanding architectural/scheduling flag: it does not block a complete plan or `planned`, but it must be resolved by the Orchestrator before `RESUME IMPLEMENTATION`. No code, worktree, branch, or status beyond `planned` is authorized in this run.
+All review findings are resolved above; none is deferred or ignored. R4 fixes a fleet-wide path ambiguity toward the literal SPEC and records the authorization consequence. R6 is now closed by the 7 h / CP-1 D+18 Orchestrator ruling. No code, worktree, branch, or status beyond `planned` is authorized before `RESUME IMPLEMENTATION` names the worktree.
+
+## Orchestrator Rulings after Cycle 1 (AUTHORITATIVE)
+
+1. **CAS accepted and centralized.** `compareAndSwapResource` is the API core's reusable primitive; the endpoint dependency inventory in R1 is binding. Interactive D1 transactions and per-call-site CAS variants are forbidden.
+2. **Estimate corrected without a cut.** M-07 is 7 h; the entire planned scope remains binding because the agent-native API core is a moat feature inherited by later API, CLI, and skill tickets. CP-1 is D+18.
+3. **Quota/execution mode.** On `RESUME IMPLEMENTATION`, execute inline-full in this same delegator session. Do not spawn sub-agent tabs, collaboration agents, or review/implementation worker panes. The normal implementation → review → validation → PR lifecycle still applies, performed in-session with the required durable artifacts.
+4. **Hold.** MRQ-8 remains `planned` with no worktree or branch until the Orchestrator supplies the resume worktree path.

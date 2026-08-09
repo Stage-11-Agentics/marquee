@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-09T06:55:04Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZJMVEQ9GP3Y3V079SW9D9FF",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZJMVEQ9GP3Y3V079SW9D9FF.md",
+    "size_bytes": 465
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged via auto-merge (PR #3, squash, 44a3fab0). Verified: head 88bf16a != base, PASS review + rebase-equivalence review (patch-id b5142d28 stable), own-reviewer fallback correctly invoked and disclos",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}
