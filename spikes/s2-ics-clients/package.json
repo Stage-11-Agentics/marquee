@@ -1,0 +1,11 @@
+{
+  "name": "marquee-s2-ics-clients",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test.mjs"
+  },
+  "dependencies": {
+    "nodemailer": "9.0.5"
+  }
+}
