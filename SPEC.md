@@ -600,4 +600,14 @@ Deviations and gaps, raised rather than silently forked (living-artifacts norm).
 
 ---
 
-*Draft, 2026-08-08; folded against `USER_STORIES.md` Amendment 1 the same night. Amendments follow that file's rules: **the next criteria append from AC-234**; deletions are struck, never recycled. Next inputs — orchestrator review with the client, the Sunday clarification video (requirements freeze), Discord rulings on Q1/Q2, and final `pipeline-v1.1` sign-off as the binding visual contract.*
+## Amendment 5 — program board + scheduled/published legibility (2026-08-09)
+
+**New screen — Program board `/board`** (US-75, AC-238–239): Kanban across the seven lifecycle stages, every submission a card (title, speakers, track chips, time-in-stage), filters for track/format/wave shared with the submissions list. Drag = the legal status transition with the standard confirmation/cascade; the three *derived* columns (Onboarding, Scheduled, Published) accept no drops and state their entry action ("complete tasks" / "place on the agenda" / "publish"). Virtualized columns; full-seed fast. Nav placement finalized by prototype v1.3.
+
+**Scheduled/published legibility** (AC-240): scheduled rows everywhere show `day · time · room`; scheduled-but-unpublished carries "Not yet public" + a publish affordance; pipeline stage cards sub-labeled — Scheduled *"placed on the working agenda"*, Published *"live on the public site"*. The §5.2 attention strip and §5.9 list chips inherit this.
+
+**Seed** (§6): ≥15% of submissions multi-track; ≥3 accepted-and-scheduled sessions carry two tracks; asserted by `check:seed`.
+
+---
+
+*Draft, 2026-08-08; folded against `USER_STORIES.md` Amendments 1–5. Amendments follow that file's rules: **the next criteria append from AC-241**; deletions are struck, never recycled. Next inputs — orchestrator review with the client, the Sunday clarification video (requirements freeze), remaining Discord rulings, and final prototype sign-off as the binding visual contract.*

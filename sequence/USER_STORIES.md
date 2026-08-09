@@ -865,6 +865,22 @@ Source: `sequence/research/sources/competition-brief-full.pdf` (the complete 37-
 
 *Next amendment appends from AC-238.*
 
+## Amendment 5 — client v1.2 review feedback (2026-08-09, orchestrator)
+
+Source: Atin driving v1.2 (scheduled/published legibility; multi-track demo visibility; program board).
+
+### US-75 · The program board *(new, Tier B — insert after US-74; Kanban overview)*
+
+**As a** program lead, **I want** a board view of every submission as a card in its lifecycle column, **so that** I can see the whole program's flow — across all tracks — on one screen and move work with a drag.
+- **AC-238**: A board view renders every submission as a card in its lifecycle column (the pipeline's seven stages, derived states included), filterable by track, format, and wave; cards show title, speakers, track chips, and time-in-stage; it stays fast at the full seed.
+- **AC-239**: Dragging a card between columns performs the legal status transition with the same confirmation/cascade behavior as list actions; derived columns (Onboarding, Scheduled, Published) accept no drops and instead state their entry action ("complete tasks" / "place on the agenda" / "publish").
+
+**AC-240** *(appended to US-50/US-57 area — scheduled/published legibility)*: Wherever a scheduled session is listed (submissions list, record, portal, board), its slot — **day · time · room** — is visible; a scheduled-but-unpublished item carries a "Not yet public" marker with a publish affordance; and the pipeline's Scheduled and Published stage cards carry clarifying sub-labels ("placed on the working agenda" / "live on the public site").
+
+*Seed addendum (SPEC §6): ≥15% of submissions carry two or more tracks, including at least three accepted-and-scheduled sessions, so multi-track chips are demonstrably visible on the form, lists, board, and agenda; `check:seed` asserts it.*
+
+*Next amendment appends from AC-241.*
+
 ---
 
 *Canonical as of 2026-08-08 (Amendment 2 applied). Changes to this file are amendments: new criteria append from AC-237; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*

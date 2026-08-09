@@ -279,6 +279,12 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 - **M-04 seed carries swyx's named task templates**: "Hotel and Travel Reservations" (form) + "Presentation Upload" (file request) leading every accepted speaker's list, plus the optional four across a subset (SPEC §6).
 - **Waitlisted displays as "Maybe"** on chips/filters (SPEC vocabulary note).
 
+## Amendment 5 — client v1.2 review feedback (2026-08-09, orchestrator)
+
+- **New ticket M-53 — Program board (US-75, AC-238–239), 4h, depends M-11** (list actions/cascades reused). Tier B, insert at rank 9 behind US-74.
+- **AC-240 folds into existing tickets**: slot chips + "Not yet public" into the submissions-list and record tickets; stage sub-labels into the dashboard ticket; publish affordance into the agenda/publish ticket. +1h total, spread.
+- **M-04 seed**: multi-track distribution (≥15%, ≥3 accepted+scheduled two-track sessions) asserted by `check:seed`.
+
 ---
 
 *Draft, 2026-08-08 (Amendment 2 applied). The orchestrator finalizes this with the client after the v1.1 prototype review, then turns §3–§5 into Lattice tickets.*
