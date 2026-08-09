@@ -8,9 +8,13 @@ Gaps only. 8 BLOCKING · 22 FIX · 8 NOTE.
 
 ---
 
+**Disposition, amendment editor, 2026-08-09.** **8/8 BLOCKING applied** (commit `e35b32a`) · **21/22 FIX applied** · **1 skipped** — F-13, which needs an operator ruling and carries its reasoning inline. Each finding is marked at its heading. Where the reviewer offered a choice, the choice taken is recorded under the finding. NOTEs were not worked as a batch; N-1's arithmetic was folded into B-1's reconciliation because B-1's own verification demanded cross-file agreement, and N-8's concern is mechanically covered by B-6's denylist.
+
+---
+
 ## BLOCKING — do not launch the fleet until these are closed
 
-### B-1 · Amendment 9 (AC-250) exists in two artifacts and in neither of the two that drive the build
+### B-1 · Amendment 9 (AC-250) exists in two artifacts and in neither of the two that drive the build  **→ APPLIED**
 
 **Where:** `USER_STORIES.md` Amendment 9 (line 924) mints **AC-250**, Tier B, appended to US-45/US-68. `SPEC.md` Amendment 9 (line 657) restates it. Then:
 
@@ -25,7 +29,7 @@ Gaps only. 8 BLOCKING · 22 FIX · 8 NOTE.
 
 ---
 
-### B-2 · `POST /api/v1/auth/demo` is not gated on `demo_mode` — every self-hosted instance ships a one-click owner login
+### B-2 · `POST /api/v1/auth/demo` is not gated on `demo_mode` — every self-hosted instance ships a one-click owner login  **→ APPLIED**
 
 **Where:** `SPEC.md` §4.1: "`POST /api/v1/auth/demo` `{role: "organizer"|"speaker"}` → session in one click, no form, no email round trip (AC-1, AC-2)." `events.demo_mode` (§3.1) lists its readers as "demo-safe mail allowlist (G5), demo banner" — **auth is not among them.** No AC, no guardrail, and no audit ticket constrains this route.
 
@@ -35,7 +39,7 @@ Gaps only. 8 BLOCKING · 22 FIX · 8 NOTE.
 
 ---
 
-### B-3 · Walkthrough step 8 (evaluate) has no reachable entry — the demo organizer's review queue is empty by construction
+### B-3 · Walkthrough step 8 (evaluate) has no reachable entry — the demo organizer's review queue is empty by construction  **→ APPLIED**
 
 **Where:** the landing (`SPEC.md` §5.1) offers exactly **[Enter as organizer] [Enter as speaker] [View public CFP]**; `POST /api/v1/auth/demo` accepts only `organizer|speaker`. The admin sidebar links **Review queue** (§5 global chrome). But AC-246 (Tier A, no-waiver) puts a track-intersection helper in front of *every* reviewer read: "A queue candidate qualifies when `submission_tracks.track_id` intersects this set" (`SPEC.md` §3.5), and §5.8 lists **"not assigned"** and **"no matching track scope"** as first-class queue states. Nothing in §6 (seed) or M-04 gives the demo *organizer* persona a reviewer membership, `reviewer_track_scopes` rows, or `round_assignments`. M-04 seeds "reviewer track scopes" for reviewer personas only.
 
@@ -45,7 +49,7 @@ Gaps only. 8 BLOCKING · 22 FIX · 8 NOTE.
 
 ---
 
-### B-4 · Gates 12 and 14 are unconditional pass/fail, but their tickets sit inside the cut-from-the-bottom band
+### B-4 · Gates 12 and 14 are unconditional pass/fail, but their tickets sit inside the cut-from-the-bottom band  **→ APPLIED**
 
 **Where:** `EVALUATION.md` §4 — "**A failure stops the gate; it is not noted and passed over.**" Gate **12** is `check:skill-agent` (needs M-39 `SKILL.md`, Tier B **rank 20**, and M-38 CLI, **rank 19**). Gate **14** is `check:readme` (needs M-45, Tier B **rank 26**). `BUILDPLAN.md` §5: "**Built in this order. The cut line moves up from the bottom.**" §9: "**What moves if we are behind.** The cut line, and nothing else."
 
@@ -55,7 +59,7 @@ Gaps only. 8 BLOCKING · 22 FIX · 8 NOTE.
 
 ---
 
-### B-5 · The schedule is anchored to a night that has already passed, and Wave 0's own arithmetic does not fit its own window
+### B-5 · The schedule is anchored to a night that has already passed, and Wave 0's own arithmetic does not fit its own window  **→ APPLIED**
 
 **Where:** `BUILDPLAN.md` §6: "Deadline: Wed 2026-08-12, 22:00 PT. **From this file's timestamp that is ~98 hours**" — 98 h before the deadline is **Saturday ~20:00**, but the file is stamped **2026-08-09** (Sunday) and was reconciled through Amendment 9 tonight. §9 row 1: "**Sat night → Sun 06:00** | Wave 0 … **CP-1 by ~03:00**." Today is Sunday 2026-08-09; the fleet has not been dispatched (the v1.4 sign-off gate is still open). Actual remaining: **~86 h**, not 98.
 
@@ -64,10 +68,11 @@ Second, independently: Wave 0's declared dependency chain is **M-01 (3 h) → M-
 **Why it bites:** the fleet reads §9 as its clock. Every checkpoint in it is now false, and the cut-line decision is *time-triggered* ("If Tuesday runs short") — a stale anchor means the cut is decided by whoever notices first rather than by the plan. Worse, the delegator pattern (plan → implement → review → fix per ticket) is not in the hour estimates at all, so 18 h is the optimistic reading of the chain.
 
 **Fix:** rebase §9 to the actual dispatch timestamp before the fleet reads it, restate §6's "~98 hours" as the real figure, and either (a) restate CP-1's time as *dispatch + 18 h* and CP-2 as *dispatch + 42 h*, or (b) shorten the Wave 0 chain — the obvious cut is to split M-04 into **M-04a** (event/formats/tracks/rooms/waves + 60 accepted core, 2 h, unblocks M-08) and **M-04b** (the 940-row pool + ugliness + evaluations, 5 h, runs in parallel with M-09/M-10), which takes the Wave 0 chain from 18 h to 13 h. Whichever is chosen, say which is binding: right now the hours and the clock cannot both be true and the fleet has no rule for resolving them.
+> **Editor: the orchestrator took both.** §9 is rebased to dispatch-relative `D+N` with CP-1 at D+13 and CP-2 at D+36, and M-04 is split into M-04a (2 h, on the chain) / M-04b (5 h, parallel). §6's header states the window is measured from dispatch and shrinks until the fleet starts. The binding rule is now written out: Wave 2's ~148 agent-hours against ~90 of capacity is named in §9, and the cut line moves by a capacity calculation at two named checkpoints rather than by "if Tuesday runs short".
 
 ---
 
-### B-6 · The public repo cannot be produced by curating the tip — the history carries third-party material and internal paths, and the check that would catch it runs 4 hours before the push
+### B-6 · The public repo cannot be produced by curating the tip — the history carries third-party material and internal paths, and the check that would catch it runs 4 hours before the push  **→ APPLIED**
 
 **Where:** `BUILDPLAN.md` §8 item 10 "**Curate** which strategy documents ship publicly", item 11 "Run `npm run check:repo` **over the full history**, not the tip", item 13 "Create the **public** GitHub repo … push" — all inside the Tue 18:00→22:00 block. Guardrail G1 / audit A-1.
 
@@ -85,7 +90,7 @@ Second, independently: Wave 0's declared dependency chain is **M-01 (3 h) → M-
 
 ---
 
-### B-7 · Conditional-logic support is ranked 17 in Tier B but is a hard dependency of a Tier A ticket and of rank 6
+### B-7 · Conditional-logic support is ranked 17 in Tier B but is a hard dependency of a Tier A ticket and of rank 6  **→ APPLIED**
 
 **Where:** M-36 (AC-132–134, conditional logic) is Tier B **rank 17**, 4 h, scheduled Mon 12:00–23:00. Meanwhile:
 
@@ -99,7 +104,7 @@ Second, independently: Wave 0's declared dependency chain is **M-01 (3 h) → M-
 
 ---
 
-### B-8 · Guardrail G3's single choke point cannot implement its own tested exception, and the login email has no path through it
+### B-8 · Guardrail G3's single choke point cannot implement its own tested exception, and the login email has no path through it  **→ APPLIED**
 
 **Where:** G3 (`SPEC.md` §7): "the allowlist check lives in the **queue consumer**, the single choke point through which every send passes — not in each call site… **One deliberate exception, tested: a live submitter's own address on the public form is never suppressed (AC-38, `smoke:mail`)**." A-3 additionally asserts "no module imports the Resend client except the consumer."
 
@@ -116,70 +121,78 @@ Two holes:
 
 ## FIX — first wave, does not block launch
 
-### F-1 · Gate 7 contradicts the speed-budget ruling it was written under
+### F-1 · Gate 7 contradicts the speed-budget ruling it was written under  **→ APPLIED**
 `EVALUATION.md` §1.3 records the client ruling: the seven *proposed* budgets "warn loudly but **never fail the run**"; §1.1's `check:speed` row says "Exits non-zero **only** on an AC-sourced budget breach." Gate 7 (§4) then says: "**Every p95 inside §1.3**." An auditor running the gate literally fails the build on an objective miss the client explicitly declassified. **Fix:** gate 7 pass condition → *"every **AC-sourced** p95 inside §1.3; objective misses reported with a ⚠ banner and do not fail the gate; `speed-report.json` attached with actuals."*
 
-### F-2 · `trace:ac` as specified blocks the first PR and every PR after it
+### F-2 · `trace:ac` as specified blocks the first PR and every PR after it  **→ APPLIED**
 `EVALUATION.md` §1.1: "**Fails if any `auto`-tagged AC has zero tests**", §1.4: "`trace:ac` failing … blocks merge", and it runs "Every PR" from Wave 0. Literally applied, no PR merges until all 184 `auto` ACs have tests — i.e. never. **Fix:** `trace:ac` takes a mode. `--scope=merged` (default on PRs) fails only on ACs claimed by tickets already merged plus the ACs the current PR names; `--scope=all` (the gate, CP-2 onward) fails on any uncovered `auto` AC. State it in §1.1 and in M-06's scope.
 
-### F-3 · M-06 registers the wrong script set and `check:mirror` is never registered by anyone
+### F-3 · M-06 registers the wrong script set and `check:mirror` is never registered by anyone  **→ APPLIED**
 M-06's scope names "All **eleven** `EVALUATION.md` §1.1 scripts" then lists **twelve**: `test, e2e, check:speed, check:seed, check:api, check:repo, check:readme, trace:ac, reset:demo, smoke:mail, smoke:ics, check:skill-agent`. `EVALUATION.md` §1.1 actually defines **ten** rows plus three §1.5 smokes = thirteen — and **`check:mirror` is in §1.1 and absent from M-06's list.** §7 makes `package.json` M-06-owned with edits "serialized through the orchestrator," so M-25/M-26 cannot self-register it. **Fix:** M-06's list becomes thirteen entries including `check:mirror` (stub), and the word "eleven" goes. Without this, gate 9 and AC-225–229 have a command that exists in the contract and in no `package.json`.
 
-### F-4 · Turnstile on "every public write" breaks draft autosave
+### F-4 · Turnstile on "every public write" breaks draft autosave  **→ APPLIED**
 `SPEC.md` §2.1 puts Turnstile on "form submit, **draft save**, upload sign"; AC-231 (Tier A no-waiver) says "before **any** public write commits." But `PATCH /api/v1/public/forms/:slug/drafts/:token` is autosave, and AC-41 requires a visible "last saved" indicator that advances after an edit. A Turnstile token is single-use with a short lifetime — literal compliance means either a challenge per keystroke-batch (unusable) or the fleet quietly drops Turnstile from a public write endpoint (an unmarked hole in the Tier A guardrail). **Fix:** state the rule precisely in §2.1 and §5.5 — *Turnstile gates draft **creation** (`POST /drafts`), the submit, and every presign; subsequent `PATCH /drafts/:token` are authorized by the single-use-issued draft resume token and rate-limited per token in KV.* Add it to AC-231's verification row so the auditor tests the intended shape rather than the literal sentence.
 
-### F-5 · Tier B ranks disagree between EVALUATION §2 and BUILDPLAN §5 — and the cut line is keyed to rank
+### F-5 · Tier B ranks disagree between EVALUATION §2 and BUILDPLAN §5 — and the cut line is keyed to rank  **→ APPLIED**
 `EVALUATION.md` §2 line 355 asserts "US-73 is rank 3, US-76 rank **6**, and US-72 rank **8**", then its own section headers read **Rank 6 · US-68**, **Rank 7 · US-72**, **Rank 8 · US-66**, …, **Rank 25 · US-32**. `BUILDPLAN.md` §5 reads rank 6 US-76, rank 7 US-68, rank 8 US-72, rank 9 US-74, rank 10 US-75, rank 11 US-66, … rank 28 US-32. US-74/75/76 have **no rank headers at all** in EVALUATION §2 (they live tier-less in §2.3). **Why it bites:** gate 19 records the cut line *by rank*, and the two files disagree by 1–3 positions over the whole band. **Fix:** renumber EVALUATION §2's Tier B headers to BUILDPLAN's post-Amendment-8 ranks and give US-74/75/76 rank headers; or delete rank numbers from EVALUATION §2 entirely and make `BUILDPLAN.md` §5 the single rank authority, cited by gate 19.
+> **Editor: second option taken.** B-4's applied text already declares §5 the single authority for rank, hours, and deps, so renumbering EVALUATION's headers would have re-created the same two-authority drift a week later. All 25 Tier B rank prefixes are removed; §2 now lists stories in build order and gate 19 cites §5 explicitly.
 
-### F-6 · S-2 can only run *after* the ticket it is supposed to de-risk
+### F-6 · S-2 can only run *after* the ticket it is supposed to de-risk  **→ APPLIED**
 `BUILDPLAN.md` §6: S-2 (ICS rendering in real clients) is boxed at 1 h, blocks "M-24 sign-off, gate 10", and is scheduled "Sunday, as soon as the first invite emits." §9 puts S-2 "Sunday morning" — but M-24 (the ICS builder) is Wave 2 rank 2, Sun night→Mon 12:00. **No invite exists on Sunday morning.** The spike that answers the single most-unverifiable question in the stack ("Neither Google nor Microsoft publishes a normative statement") is scheduled to run after the code betting on the answer is written. **Fix:** make S-2 a standalone 30-line script that hand-builds a `METHOD:REQUEST` + `SEQUENCE+1` + `CANCEL` triplet and sends it through Resend to the three inboxes — it needs no product code and can run the moment `marquee@stage11.systems` is confirmed. Move it to Saturday-night/dispatch+2h and make M-24 depend on its verdict, not the reverse.
 
-### F-7 · S-3 does not block the ticket that builds the helper it settles
+### F-7 · S-3 does not block the ticket that builds the helper it settles  **→ APPLIED**
 S-3 settles "which pattern wins — chunk at ≤90 or a single `json_each` parameter" and is listed as blocking **M-18**. But §10 trap 11 says "one chunking helper in **M-07**", and M-07 is Wave 0 with no S-3 dependency. M-07 will pick a pattern before S-3 answers. **Fix:** add S-3 to M-07's deps (it is 1 h and runs Sat night alongside M-01/M-02 anyway), or state that M-07 ships both patterns behind one interface and S-3 selects the default.
+> **Editor: first option taken** — S-3 now blocks M-07 as well as M-18, and trap 11's row says so. It runs D+0 → D+3 alongside M-01/M-02, so it costs the chain nothing.
 
-### F-8 · The audit track has no hours, no owner, and no window
+### F-8 · The audit track has no hours, no owner, and no window  **→ APPLIED**
 `BUILDPLAN.md` §5 "Audit track" lists **A-1 … A-11**, each "owned by an auditor who did not write the code," with **no hour estimates and no row in §9's schedule** except one shared mention inside "Tue 08:00 → 14:00 | Wave 2 ranks 21–28 to the cut line; audit track A-1 – A-11". Eleven audits, several requiring code-level scans and one (A-11) a live reset drill, sharing a 6-hour window with eight feature tickets. Nothing in the ~250 agent-hour total accounts for them. **Fix:** estimate them (realistically 1–2 h each, ~15 h), give them a dedicated lane starting at CP-2 rather than Tuesday morning (A-3, A-4, A-5, A-9 can all run the moment their code lands), and name A-1's second run as a hard gate on the push per §8 item 13.
 
-### F-9 · Reviewer export is required by two ACs and exists in no route table and no ticket
+### F-9 · Reviewer export is required by two ACs and exists in no route table and no ticket  **→ APPLIED**
 AC-64: "no reviewer-visible surface exposes … **including API responses and exports**" — verified by byte-scanning "every reviewer-scoped API route **and every export** as a reviewer." AC-246: "queue/detail/file/**export**/evaluation-write all invoke the centralized helper." But `SPEC.md` §4.2's reviewer-scope route list is queue, submission detail, files, evaluations, comparisons, abstain — **no export route** — and M-17's scope mentions "detail/file/export/write routes" without one existing. **Fix:** either add `GET /rounds/:id/export?format=csv` to §4.2 under reviewer scope and to M-17 (+1 h), or amend AC-64/AC-246 to drop "export" from the reviewer surface and state that exports are admin-scope only. Leaving it as written means A-8 and A-9 have an unfindable target and will sign a scan that covered nothing.
+> **Editor: route added, ACs untouched.** `GET /rounds/:id/export?format=csv` is now in SPEC §4.2's reviewer scope and M-17 (+1 h → 9 h). The alternative would have amended AC-64 and AC-246, both inside Tier A's no-waiver set and both client-signed — not an editor's call, and the additive fix satisfies the criteria as written.
 
-### F-10 · A judge who submits from incognito cannot then log in as that speaker
+### F-10 · A judge who submits from incognito cannot then log in as that speaker  **→ APPLIED**
 `competition-requirements.md` §3 spells out the judge's script: "open it in incognito → submit as a speaker → **log in as that speaker** and see status/tasks/bio." AC-38 delivers the way in as an emailed link. `SPEC.md` §4.1 puts the on-screen magic link on `POST /api/v1/auth/magic-link` — but §5.5's **submitted** state is specified as "confirmation screen + confirmation email with a link back", with no on-screen link. A judge who types `test@test.com` (the overwhelmingly likely behaviour on a demo) submits successfully and then has no route into that speaker's portal; the `[Enter as speaker]` demo button lands a *different*, seeded speaker, so the continuity the video establishes is broken. **Fix:** §5.5's submitted state, in demo mode, renders the portal magic link **on screen** beside the confirmation ("Open your speaker portal →"), same mechanism as §4.1's demo magic link. One line of spec, one e2e assertion under AC-38, and it closes the seam between loop steps 5 and 6.
+> **Editor: applied, with one flag for the client.** SPEC §5.5 and AC-38's row now carry it. **The v1.4 prototype does not render this affordance**, and SPEC §10's fidelity rule says what the client signs ships one-to-one — so the prototype should be shown carrying the on-screen portal link before the sign-off binds, or the divergence acknowledged at sign-off. Noted in §5.5 itself so it cannot be missed.
 
-### F-11 · The public form has no failure state
+### F-11 · The public form has no failure state  **→ APPLIED**
 `SPEC.md` §5.5 enumerates open · closed · at-limit · draft-resumed · submitted · password-gated. There is **no submit-failure state** — no copy for a 5xx, a Turnstile challenge failure, a rate-limit 429 (which AC-232 makes reachable per-IP), or a dropped connection mid-submit. `PHILOSOPHY.md` 1 says "a save that fails, says so," §5.2 gives the dashboard an inline error banner, and C3 reads error copy aloud — but C3's script is validation failures and empty states, not submit failures. The one screen where a public stranger meets a failure is the one with no failure state. **Fix:** add a failure state to §5.5 (inline banner above the submit row, preserves all entered values, offers retry, and states that the draft is saved) and to C3's read-aloud script; assert value preservation in AC-25's e2e row.
 
-### F-12 · `reset:demo` re-queues the entire Airtable base on every invocation, and its 20 s budget is unmodelled
+### F-12 · `reset:demo` re-queues the entire Airtable base on every invocation, and its 20 s budget is unmodelled  **→ APPLIED**
 `SPEC.md` §3.9: `mirror_outbox` is written by "an `afterWrite` hook on **every** mirrored table." `reset:demo` (AC-230, ≤20 s, "safe mid-judging") deletes and re-inserts the whole seed. Nothing exempts it. So each reset enqueues ~1,000 submissions + speakers + tasks as mirror upserts, draining at 10 records/PATCH ≤4 req/s ≈ 25 s+ of Airtable traffic per reset — during judging, against the base gate 9's manual demo runs on. Separately, a full reseed of ~5–10 k rows behind `POST /api/v1/admin/reset-demo` has to respect Workers' CPU/subrequest limits and the 100-bound-parameter cap; the 20 s figure is asserted, never derived. **Fix:** state in §3.9 and §4.1 that `reset:demo` **short-circuits the mirror change feed** (writes with `last_write_source='marquee'` and a `suppress_mirror` flag, then enqueues **one** reconcile job at the end), and that the route enqueues the reseed to a Queue and returns a job id the button polls — so the 20 s budget is about the observable restore, not one Worker invocation. Add both to M-03's scope and to A-11's drill.
 
-### F-13 · Nothing resets the demo between judges
+### F-13 · Nothing resets the demo between judges  **→ SKIPPED: needs an operator ruling**
 AC-230 and gate 13 make reset *possible*; nothing makes it *happen*. `BUILDPLAN.md` §9 Wednesday: "Re-run `reset:demo` and gate 4 so **the first judge** inherits a clean demo." Judges arrive unannounced across four days. US-73's own rationale is "the demo degrades monotonically across exactly the audience we are being scored by" — which the current plan permits after judge #1. **Fix:** a cron in M-03 that runs `reset:demo` when the demo event has uncommitted mutations and has been idle ≥20 minutes (the audit log already gives the mutation signal, and AC-230's "never observable in a partially-reset state" already covers concurrency). Cheap, and it is the difference between one good demo and thirty.
 
-### F-14 · An Airtable-inbound status change has undefined cascade semantics
-`SPEC.md` §3.9 makes `submissions.status` **inbound-writable**. Gate 9's manual demo is literally "change a submission's status in Airtable → refresh Marquee → it's there." But nothing says whether an inbound `→ accepted` runs the acceptance cascade (`PHILOSOPHY.md` 2: "Status change **is** the notification" — emails queued, portal updated, task sets assigned, invites offered). Both answers are defensible; neither is written. If it cascades, an ops person's spreadsheet edit can mass-mail; if it doesn't, the product has two acceptance paths with different side effects and the portal silently diverges from the record. **Fix:** state it — recommended: *inbound writes set status and `last_write_source='airtable'` and do **not** run the cascade; the record surfaces "changed in Airtable · cascade not run" with a one-click "run onboarding cascade" action.* Add to §3.9, to M-26's scope, and one assertion to AC-226.
+> **Editor, 2026-08-09 — SKIPPED, needs an operator ruling.** The diagnosis is right and unchallenged: nothing today makes a reset *happen* between judges, and US-73's own rationale is that the demo degrades monotonically across the audience scoring us. But the fix installs an **unattended destructive action during judging**, and AC-230's coherence guarantee does not cover the case it introduces — a judge who reads a submission for twenty-one minutes, or leaves a tab open while watching the walkthrough video, has the state wiped underneath them mid-evaluation. That is a worse failure than a stale demo, and the 20-minute threshold is a guess with no evidence behind it. Two live questions the reviewer did not settle: what counts as idle (last mutation, or last *read*?), and does the reset announce itself to a session in flight? Both change what a judge experiences, so this is Atin's call, not the amendment editor's. Everything else in F-12 (mirror short-circuit, queued reseed) **is** applied, so the mechanism this would ride on is now safe to invoke repeatedly — the remaining decision is purely *when*.
 
-### F-15 · AC-235/236 are owned by three tickets, and AC-152–154 by two
+### F-14 · An Airtable-inbound status change has undefined cascade semantics  **→ APPLIED**
+`SPEC.md` §3.9 makes `submissions.status` **inbound-writable**. Gate 9's manual demo is literally "change a submission's status in Airtable → refresh Marquee → it's there." But nothing says whether an inbound `→ accepted` runs the acceptance cascade (`PHILOSOPHY.md` 2: "Status change **is** the notification" — emails queued, portal updated, task sets assigned, invites offered). Both answers are defensible; neither is written. If it cascades, an ops person's spreadsheet edit can mass-mail; if it doesn't, the product has two acceptance paths with different side effects and the portal silently diverges from the record. **Fix:** state it — recommended: *inbound writes set status and `last_write_source='airtable'` and do **not** run the cascade; the record surfaces "changed in Airtable · cascade not run" with a one-click "run onboarding cascade" action.* Add to §3.9, to M-26's scope, and one assertion to AC-226.
+> **Editor: the reviewer's recommendation adopted verbatim** — inbound sets status + `last_write_source='airtable'` and runs no cascade; the record surfaces "changed in Airtable · cascade not run" with a one-click cascade action. It is the direction that cannot mass-mail from a spreadsheet edit, which is the same blast radius G3 exists to contain. If the client prefers the cascading semantics, this is a one-line reversal.
+
+### F-15 · AC-235/236 are owned by three tickets, and AC-152–154 by two  **→ APPLIED**
 **AC-235** appears in M-15's ACs (portal), M-18's ACs (bulk + record decisions), and M-52's ACs (decision feedback). **AC-236** in M-18 and M-52. Meanwhile **M-15's scope text** says "role confirm/decline" and "acknowledge/form/file" task surfaces, but confirm/decline is ticketed as **M-42** (AC-152–154, rank 23) and file uploads as **M-40** (AC-146–148, rank 21). **Why it bites:** `BUILDPLAN.md` §7 exists because "sixteen tickets writing into one repo overnight fail on shared files" — three tickets owning one AC across `src/ui/portal/*` is exactly that failure, and an AC owned by everyone is owned by no one when `trace:ac` asks who covers it. **Fix:** one owner per AC. M-52 owns AC-235/236 end to end (schema use, render-once, portal display, record log); M-15 and M-18 *call* it and drop those IDs from their AC lists. M-15's scope text drops "role confirm/decline" (M-42's) and keeps only the task-surface rendering; if the portal must demo confirm/decline at CP-2, promote M-42 into Wave 1 rather than duplicating it in prose.
 
-### F-16 · M-05 builds AC-1/AC-2 without depending on the seed or the demo login
+### F-16 · M-05 builds AC-1/AC-2 without depending on the seed or the demo login  **→ APPLIED**
 M-05 (design system, admin shell, **landing page**) carries **AC-1, AC-2, AC-4** with deps **M-01 only**. But §5.1's landing shows "live pipeline preview with **real counts from the seed**… There is no loading state — the counts are server-rendered", and AC-2 requires both demo buttons to "land on a populated screen." The seed is M-04, the demo login is M-03, the first populated screen is M-08. **Fix:** M-05 deps → M-01, M-03, M-04 (or split: M-05a shell/tokens on M-01, M-05b landing on M-03/M-04). Otherwise M-05 merges "green" against zeros and AC-1/AC-2 are asserted against a page that cannot yet be true.
+> **Editor: split option taken** — M-05a (shell + tokens, 2 h, deps M-01) and M-05b (landing, 2 h, deps M-03/M-04a/M-05a). Simply re-pointing M-05's deps would have put a 4-hour ticket on the Wave 0 critical chain behind M-04a and pushed CP-1 from D+13 to D+17, undoing B-5's split. M-08 depends on M-05a only.
 
-### F-17 · M-19a depends on M-16 for no stated reason, adding 7 h to the Wave 1 critical path
+### F-17 · M-19a depends on M-16 for no stated reason, adding 7 h to the Wave 1 critical path  **→ APPLIED**
 M-19a (agenda data/pool/placement/views) lists **Deps: M-16** (evaluation plan + committees). The unscheduled pool is "accepted-and-unplaced" (AC-70) — it needs *accepted submissions*, which come from the seed (M-04) and the bulk path (M-18), not from an evaluation plan. As written this serializes the entire agenda branch behind evaluation and makes M-08→M-16→M-19a→M-20→M-22 the 23 h longest chain in Wave 1. **Fix:** M-19a deps → **M-08** (list/queries) and, if a live accept must be demoable in-flow, M-18. That alone takes ~7 h off the CP-2 critical path — the single cheapest schedule win available.
 
-### F-18 · SPEC's own send route has two different paths
+### F-18 · SPEC's own send route has two different paths  **→ APPLIED**
 `SPEC.md` §4.2 Comms row: `POST /messages/preview`, `POST /messages/send {selector, template_key}`. `SPEC.md` Amendment 9: "`POST /api/v1/events/:id/comms/send` … accept `{template_id}` **or** `{subject, body}`." Different path (`/messages/send` vs `/comms/send`), different body key (`template_key` vs `template_id`), and §4.3's CLI registry still reads `remind --filter --template` with no ad-hoc form. `check:api` asserts "docs/CLI/SKILL derive from one route registry; operation counts and content hashes must match" — a two-named route is exactly what that check exists to catch, discovered at gate time. **Fix:** pick one (`POST /events/:id/comms/send`, body `{selector, template_key?, subject?, body?}` with exactly-one-of enforced) and correct §4.2, §4.3, Amendment 9, and M-35/M-38 scope.
 
-### F-19 · F-2 reads OPEN in two contract files and CLOSED in the run state
+### F-19 · F-2 reads OPEN in two contract files and CLOSED in the run state  **→ APPLIED**
 `run-state.md` decisions log, 2026-08-09: "**F-2 CLOSED — seed A′ confirmed** … (Atin)". `SPEC.md` §11: "**F-2 · 🔶 OPEN — client review**." `BUILDPLAN.md` §11: "**Still open — the client rules at review: F-2**." `BUILDPLAN.md` §8 item 7 still assigns Atin "rule on the seed-scale question (flag F-2)" as a live Sunday action. **Why it bites:** the build assumes A′ either way, so the *code* is safe — but the human track carries a phantom item competing for the operator's Sunday, and the gate report will name an open flag that was decided. **Fix:** mark F-2 ✅ RESOLVED (A′, Atin, 2026-08-09) in `SPEC.md` §11 and `BUILDPLAN.md` §11; §8 item 7 reduces to "review/sign the v1.4 prototype."
 
-### F-20 · Bulk accept and the record-owned decision write different histories
+### F-20 · Bulk accept and the record-owned decision write different histories  **→ APPLIED**
 AC-235's guarantee is that feedback "renders from **one decision row** into both email and portal" — `submission_decisions` is written by "the confirmed record-owned decision action" (`SPEC.md` §3.4). But the wave path is **bulk accept** (AC-66/67, M-18), which sets status for hundreds of records at once. Nothing says whether bulk accept writes `submission_decisions` rows. If it doesn't, the acceptance emails for the 60 accepted seed sessions and every judge-performed wave come from a *different* render path than the portal display, and the "cannot diverge" property holds only for one-at-a-time decisions — while the demo's headline action is the bulk one. **Fix:** state that every status transition into `accepted|waitlisted|rejected` writes a `submission_decisions` row (feedback null for bulk), and that the decision email and the portal both render from it. Add to M-18's scope and one assertion to AC-235's row ("bulk accept 3 records → 3 decision rows → 3 portals render from them").
 
-### F-21 · M-52's estimate and dependencies differ between the amendment that created it and the table that schedules it
+### F-21 · M-52's estimate and dependencies differ between the amendment that created it and the table that schedules it  **→ APPLIED**
 `BUILDPLAN.md` Amendment 2: "New ticket **M-52** … **2h**, depends **M-11/M-23**." §5 Wave 2 table: "M-52 … **3** … Deps **M-11, M-15, M-17, M-32**." Amendment 2 was never reconciled. A delegator reading the amendment starts M-52 as soon as the chase board lands and finds M-32 unbuilt. **Fix:** delete the estimate/dep clause from Amendment 2 and point it at the table; make §5's table the sole authority for hours and deps, stated once at the top of §5.
 
-### F-22 · The `mq_session` cookie and the reviewer/speaker shells share one `SameSite=Lax` session, but embeds are cross-origin iframes
+### F-22 · The `mq_session` cookie and the reviewer/speaker shells share one `SameSite=Lax` session, but embeds are cross-origin iframes  **→ APPLIED**
 `SPEC.md` §4.1 pins the cookie `SameSite=Lax` with no `Domain` — correct for trap 15. `/embed/:slug` (AC-87–90) renders inside a **third-party site's iframe**. Nothing states that embeds are strictly anonymous and must never depend on a session — which they don't need, being public and KV-cached — but the fleet may reasonably reuse the shared public shell and pull an authed fragment, which silently degrades for a logged-in organizer previewing on their own site and works locally. **Fix:** one line in §5.12: *embed routes are anonymous-only; they never read `mq_session` and never vary by identity; `Cache-Control: public` and the KV key carry no user dimension.* Add to A-5's scope (it already owns cookie behaviour).
 
 ---
@@ -198,3 +211,5 @@ AC-235's guarantee is that feedback "renders from **one decision row** into both
 ---
 
 *Adversarial pass complete, 2026-08-09. No contract file was edited. Findings ranked by whether the fleet can safely start with them open.*
+
+*Amendments applied 2026-08-09 by the amendment editor across `EVALUATION.md`, `SPEC.md`, `BUILDPLAN.md`, and `sequence/USER_STORIES.md`. 8/8 BLOCKING · 21/22 FIX · F-13 skipped pending an operator ruling. The prototype, the dossiers, and `run-state.md` were not touched, and no existing AC was renumbered.*

@@ -49,7 +49,7 @@ Credentials, plan tiers, and third-party accounts gate *suites*, not individual 
 | `npm run check:api` | Validates the OpenAPI document, asserts docs route reachable, asserts **route-manifest parity**: replays a full-loop Playwright session with network recording, collects every non-GET request, and fails if any path is absent from the public schema. **Amendment 6:** also asserts single-source generation — served JSON, rendered docs, and the CLI registry derive from one route registry; operation counts and content hashes must match. | ≤2 min. | Every PR; the gate. |
 | `npm run check:repo` | Secret scan (`gitleaks` + a Marquee-specific ruleset), PROTOTYPE-badge absence in `src/`, README lint (numbered deploy sequence present, extension points named), `Atin/` and Stage-11-internal path scan, plus a **third-party-content denylist** — `sources/`, `*.pdf`, `competitor-*`, `AGENT-BRIEF-*`, `run-state`, `C11_`, `surface:`, `workspace:`, `/Users/` — because a redistributed brief or a rival entrant's document is neither a secret nor an internal path, and republishing one under Apache-2.0 cannot be un-pushed. Runs over **the full history of the tree being published**, not the tip. | ≤30s. | Pre-push; the gate; against the assembled orphan history (M-56) and again against the pushed remote. |
 | `npm run check:readme` | Executes the README's numbered deploy sequence verbatim — commands extracted from its fenced blocks — from a clean checkout in a fresh container against a scratch Workers project, with **no human input at any step**. Asserts exit 0, a 200 on the deployed URL, and non-zero seeded counts. | ≤10 min. | Once per milestone; the gate. |
-| `npm run trace:ac` | Scans test names for `AC-nnn` prefixes and produces `ac-coverage.json` — every live in-scope AC with the suites covering it, and a list of ACs with zero mechanical coverage. **Fails if any `auto`-tagged AC has zero tests, if struck AC-239 is treated as live, or if an unknown/recycled ID appears.** | ≤10s. | Every PR; the gate. |
+| `npm run trace:ac` | Scans test names for `AC-nnn` prefixes and produces `ac-coverage.json` — every live in-scope AC with the suites covering it, and a list of ACs with zero mechanical coverage. Fails if struck AC-239 is treated as live or an unknown/recycled ID appears, and — **scoped by mode** — if an `auto`-tagged AC has zero tests. **`--scope=merged` (the default on PRs)** considers only the ACs claimed by already-merged tickets plus the ACs the current PR names; **`--scope=all` (the gate, CP-2 onward)** fails on any uncovered `auto` AC in scope. Unscoped, the rule would block the first PR and every PR after it, since no PR can cover 184 ACs. | ≤10s. | Every PR (`merged`); the gate (`all`). |
 | `npm run check:mirror` | Airtable two-way mirror against a **dedicated test base**: outbound latency, inbound webhook apply, allowlist rejection, echo suppression under sustained two-way editing, keepalive cron advancing the webhook expiry. Covers AC-225 – AC-229 and gate 9. Requires a deployed preview (the webhook needs a public URL). | ≤3 min. | Every PR touching the mirror; the gate. |
 | `npm run reset:demo` | Restores the seeded demo to a known state (also a button in the product). Idempotent; safe mid-judging. Covers AC-230 and gate 13. | ≤20s. | Between judges; the gate. |
 
@@ -89,7 +89,7 @@ Speed is a graded feature (R7; three unprompted complaints in a ten-minute video
 
 - **Tier A admits no waivers.** The no-waiver set is `AC-1 – AC-90` **plus AC-231, AC-234, AC-240, and AC-244–246**. It is not a numeric range: AC-232 is Tier B, AC-233 is explicitly cuttable, and AC-239 is struck. Any AC in the no-waiver set showing red is a build failure regardless of Tier B completeness. A chain has no most-important link.
 - **Tier B is cut from the bottom.** A cut Tier B story's ACs are recorded as *cut* in the gate report with the cut line named. Silently missing ≠ cut.
-- `trace:ac` failing (an `auto` AC with zero tests) blocks merge.
+- `trace:ac --scope=merged` failing (an `auto` AC claimed by a merged ticket or by this PR with zero tests) blocks merge; `trace:ac --scope=all` is the gate's form and runs from CP-2 onward.
 
 ### 1.5 The three oracle smokes
 
@@ -186,7 +186,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC | Tag | How verified |
 |---|---|---|
 | AC-24 | `auto` | `test:` each rule configurable per field and round-trips. |
-| AC-25 | `auto` | `test:` raw API POSTs bypassing the client for each rule → 4xx and zero rows written; `e2e:` blur fires client-side. |
+| AC-25 | `auto` | `test:` raw API POSTs bypassing the client for each rule → 4xx and zero rows written; `e2e:` blur fires client-side. `e2e:` inject a 5xx and a 429 on submit; assert the inline failure banner renders above the submit row, **every entered value is preserved**, retry is offered, and the draft-saved statement is present. |
 | AC-26 | `felt` | `e2e:` asserts focus moves to the first invalid field (hard half); residual — language a non-technical submitter understands — settled at **C3**. |
 
 **US-10 · Speaker and sponsor limits**
@@ -213,14 +213,14 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-34 | `auto` | `e2e:` fresh context, no cookies or storage; load and submit successfully. |
 | AC-35 | `auto` | `e2e:mobile` completes the form end to end at 375px. |
 | AC-36 | `auto` | `speed:` cold load → interactive, p95 ≤ 1000ms. |
-| AC-231 | `auto` | `test:` three rejection cases — missing, replayed, invalid token — each 4xx with **zero rows written and no presign issued**; the siteverify client is stubbed here. `e2e:` one pass against real Turnstile on the deployed preview, covering both the public write and the upload-presign path. **Binding: Tier A no-waiver set** *(appended 2026-08-08)* |
+| AC-231 | `auto` | `test:` three rejection cases — missing, replayed, invalid token — each 4xx with **zero rows written and no presign issued**; the siteverify client is stubbed here. The gated set is **draft creation, submit, and every presign**; `test:` also asserts that `PATCH …/drafts/:token` autosave requires **no** Turnstile token, is rejected without a valid resume token, and is rate-limited per token — the intended shape, not the literal per-write reading, which would break AC-41. `e2e:` one pass against real Turnstile on the deployed preview, covering both the public write and the upload-presign path. **Binding: Tier A no-waiver set** *(appended 2026-08-08)* |
 
 **US-17 · Submit an abstract in one sitting**
 
 | AC | Tag | How verified |
 |---|---|---|
 | AC-37 | `auto` | `e2e:` full submission with no pre-existing account. |
-| AC-38 | `oracle` | `e2e:` asserts confirmation screen + outbox row + the link resolves to the submission. **Live arrival in a real inbox is proved by `oracle: smoke:mail`** — this is the judge's own path and must not be suppressed by demo-safe mode. |
+| AC-38 | `oracle` | `e2e:` asserts confirmation screen + outbox row + the link resolves to the submission; **in demo mode the confirmation screen also renders a working portal magic link on screen, and following it lands the portal of the speaker just submitted** (the judge's incognito path — loop steps 5 → 6). **Live arrival in a real inbox is proved by `oracle: smoke:mail`** — this is the judge's own path and must not be suppressed by demo-safe mode. |
 | AC-39 | `auto` | `e2e:` record present in the admin list immediately after submit, no intermediate step. |
 
 **US-19 · Save a draft and come back**
@@ -352,9 +352,9 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 
 ### Tier B — ordered differentiators (28 stories, ranked · 97 live ACs)
 
-Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 rank 6, and US-72 rank 8. Later insertions shifted positions but **no AC ID moved**.
+**This file carries no rank numbers. `BUILDPLAN.md` §5 is the single rank authority**, and gate 19 records the cut line against it. Stories below are listed in build order; two files each asserting a rank drifted by 1–3 positions across the whole band, and the cut line is keyed to rank. US-74, US-75, and US-76 are ranked there too — their criteria live at §2.3 with explicit tier labels. Later insertions shifted positions but **no AC ID moved**.
 
-**Rank 1 · US-44 · Chase the stragglers from one screen**
+**US-44 · Chase the stragglers from one screen**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -363,7 +363,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-93 | `auto` | `e2e:` one action against a filtered set → one outbox row per recipient from the template, and a send logged on each speaker record. |
 | AC-94 | `auto` | `e2e:` speaker completes a task in a second context; board updates live with no report run and no prior configuration. |
 
-**Rank 2 · US-47 · Calendar invite to the speaker's own calendar**
+**US-47 · Calendar invite to the speaker's own calendar**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -371,13 +371,13 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-96 | `auto` | `test:` parsed invite carries `VTIMEZONE` matching `TZID`, room/location, title, and a resolving session-page URL. |
 | AC-97 | `oracle` | `test:` reschedule emits same `UID` with `SEQUENCE+1`; un-accept emits `METHOD:CANCEL` + `STATUS:CANCELLED`. **"Replaces rather than duplicates" is client behaviour — verdict from `oracle: smoke:ics`.** |
 
-**Rank 3 · US-73 · Reset the demo** *(new — amendment 2026-08-08)*
+**US-73 · Reset the demo** *(new — amendment 2026-08-08)*
 
 | AC | Tag | How verified |
 |---|---|---|
 | AC-230 | `auto` | `e2e:` mutate the demo (bulk-accept a wave, un-accept a talk, reschedule a session), run `reset:demo` **and** the in-product button, then re-run `check:seed` — both paths restore the seeded state. Invoke twice consecutively for idempotence. A second context polls the public agenda and the dashboard throughout and must observe only coherent states — never a partial reset (e.g. zero sessions alongside non-zero speakers). |
 
-**Rank 4 · US-30 · Two-round funnel**
+**US-30 · Two-round funnel**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -385,7 +385,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-99 | `auto` | `e2e:` bulk promote from a filtered round-1 list; promoted set appears in round 2, unpromoted does not. |
 | AC-100 | `auto` | `e2e:` submission record shows both rounds' scores together. |
 
-**Rank 5 · US-67 · Find anything from anywhere**
+**US-67 · Find anything from anywhere**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -394,7 +394,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-103 | `auto` | `speed:` keystroke → results painted, p95 ≤ 200ms over ≥10 queries; results update as typed. |
 | AC-104 | `auto` | `e2e:` selecting a result lands on the record; a fixture of partial and misspelled seeded names still matches on name and title. |
 
-**Rank 6 · US-68 · Every capability over a real API**
+**US-68 · Every capability over a real API**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -403,17 +403,17 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-107 | `auto` | `test:` token issued from the UI authenticates with **no cookie present**; revoking it → 401 on the next call. |
 | AC-108 | `auto` | `test:` for ≥3 filter combinations, API result IDs equal the UI-rendered IDs; pagination total and page boundaries agree. |
 
-**Rank 7 · US-72 · Genuine two-way Airtable mirror** *(new — amendment 2026-08-08)* — all five run under `mirror:` against a **dedicated test base**, never the demo base; the base and its PAT are an operator-assisted precondition (§1.6 item 9), not a per-AC tag, because the Airtable API is fully known and only the credential is missing.
+**US-72 · Genuine two-way Airtable mirror** *(new — amendment 2026-08-08)* — all five run under `mirror:` against a **dedicated test base**, never the demo base; the base and its PAT are an operator-assisted precondition (§1.6 item 9), not a per-AC tag, because the Airtable API is fully known and only the credential is missing.
 
 | AC | Tag | How verified |
 |---|---|---|
 | AC-225 | `auto` | `mirror:` commit a local change, poll the Airtable Records API for the mirrored row; assert it lands ≤60s and record the actual. |
-| AC-226 | `auto` | `mirror:` write an allowlisted field in Airtable → assert applied locally within one webhook cycle. Write a non-allowlisted field → assert the local record is **byte-identical** afterwards and a log line records the ignore. Requires a publicly reachable webhook, so this runs against a deployed preview, never locally. |
+| AC-226 | `auto` | `mirror:` write an allowlisted field in Airtable → assert applied locally within one webhook cycle. Write a non-allowlisted field → assert the local record is **byte-identical** afterwards and a log line records the ignore. Write `status → accepted` inbound → assert the status and `last_write_source='airtable'` land, **zero outbox rows are enqueued and zero task sets assigned**, and the record renders "changed in Airtable · cascade not run" with the one-click cascade action. Requires a publicly reachable webhook, so this runs against a deployed preview, never locally. |
 | AC-227 | `auto` | `mirror:` 20 alternating two-way edits on one record; assert the per-record write count is bounded (no growth), `last_write_source` flips as expected, and the outbox drains to depth 0. |
 | AC-228 | `auto` | `e2e:` Settings → Airtable renders a resolving `airtable.com/app…` link, row counts on both sides, last successful sync time, and current outbox depth. |
 | AC-229 | `auto` | `mirror:` invoke the keepalive cron against the real test base and assert the webhook's `expirationTime` **advances**; `test:` a clock-injected fixture proves refresh fires before expiry and that a near-expiry state surfaces on the Settings page. ⚠️ The 7-day duration itself is proven by *refresh-advances-expiry*, not by waiting seven days — the window does not contain a real 7-day observation. |
 
-**Rank 8 · US-66 · Switch without losing an open CFP** *(fixture fidelity is the story-level risk — one real export settles it)*
+**US-66 · Switch without losing an open CFP** *(fixture fidelity is the story-level risk — one real export settles it)*
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -423,7 +423,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-112 | `auto` | `test:` import an updated export twice — matched records update, new rows insert, zero duplicates. |
 | AC-113 | `auto` | `test:` per-row outcomes (created/updated/skipped/failed+reason) reported; undo restores the pre-import state exactly. |
 
-**Rank 9 · US-34 · Reject with a template, kindly and at scale**
+**US-34 · Reject with a template, kindly and at scale**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -432,7 +432,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-116 | `auto` | `e2e:` rejected submitter's portal shows the outcome; outbox carries the email. |
 | AC-117 | `auto` | `test:` invoke the bulk action twice — exactly one outbox row per (template, submission); `Idempotency-Key` present on each provider call. |
 
-**Rank 10 · US-22 · Manual admin entry**
+**US-22 · Manual admin entry**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -440,7 +440,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-119 | `auto` | `test:` bypass-evaluation session reaches the agenda with no evaluation record. |
 | AC-120 | `auto` | `e2e:` admin-created rows carry a textual origin marker in lists. |
 
-**Rank 11 · US-36 · Un-accept a talk after a speaker drops**
+**US-36 · Un-accept a talk after a speaker drops**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -449,7 +449,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-123 | `auto` | `e2e:` the reversal dialog enumerates portal tasks, scheduled emails, and calendar invites, each with cancel/retain, and honours the choice. |
 | AC-124 | `oracle` | `test:` a `METHOD:CANCEL` with the same `UID` and `SEQUENCE+1` is emitted for every previously-sent invite. **"Receives" and removal from the calendar — verdict from `oracle: smoke:ics`.** |
 
-**Rank 12 · US-46 · Automate the recurring messages**
+**US-46 · Automate the recurring messages**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -457,7 +457,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-126 | `auto` | `test:` each trigger toggles off (no row emitted) and its template edit round-trips into the rendered body. |
 | AC-127 | `auto` | `test:` time-travel fixture + scheduled-handler invocation; the pre-close reminder fires at the configured offset and not before. |
 
-**Rank 13 · US-45 · Templated email to a filtered group**
+**US-45 · Templated email to a filtered group**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -466,7 +466,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-130 | `auto` | `e2e:` preview renders one real recipient's version before sending. |
 | AC-131 | `auto` | `test:` every send logged per recipient and visible on the speaker record. |
 
-**Rank 14 · US-11 · Conditional logic**
+**US-11 · Conditional logic**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -474,7 +474,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-133 | `auto` | `test:` hidden fields absent from the submitted payload and not required server-side; revealing applies the field's validation. |
 | AC-134 | `auto` | `e2e:` conditions visible in the builder list without opening a field. |
 
-**Rank 15 · US-12 · Route submissions by category**
+**US-12 · Route submissions by category**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -482,7 +482,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-136 | `auto` | `test:` routing applies at submission time; `e2e:` the applied rule is named on the submission record. |
 | AC-137 | `auto` | `test:` vendor-flagged submission lands in workshop/expo review and not in the mainstage pool. |
 
-**Rank 16 · US-69 · Drive the core workflows from a terminal**
+**US-69 · Drive the core workflows from a terminal**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -491,7 +491,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-140 | `auto` | `e2e:cli` authenticates with an API token and targets two distinct instance URLs. |
 | AC-141 | `auto` | `test:` `--help` output enumerates exactly the command registry with one-line descriptions; every subcommand's own help returns 0. |
 
-**Rank 17 · US-70 · Ship a skill file that teaches an agent to run a conference**
+**US-70 · Ship a skill file that teaches an agent to run a conference**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -500,7 +500,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-144 | `auto` | `repo:` the seven product terms present; a banned-synonym list (proposal, talk submission, CFP entry, panel review) absent. |
 | AC-145 | `oracle` | `oracle: check:skill-agent` — a clean agent given only `SKILL.md`, a URL, and a token completes seed → triage → accept → schedule; asserted over the API. |
 
-**Rank 18 · US-41 · Upload slides and supporting documents**
+**US-41 · Upload slides and supporting documents**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -509,7 +509,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-148 | `auto` | `e2e:` organizer's task view reflects the upload with no refresh. |
 | AC-232 | `auto` | Four assertions. `test:` presign refuses a disallowed extension **and** a disallowed MIME independently. `test:` upload bytes whose magic number contradicts the declared type → rejected on completion **and** the R2 object is gone (HEAD 404). `test:` exceed the per-IP and the per-submission cap → 429 each. `e2e:` a served upload returns `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` from a host that is **not** the app host. *(appended 2026-08-08)* |
 
-**Rank 19 · US-21 · Add a co-speaker**
+**US-21 · Add a co-speaker**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -517,7 +517,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-150 | `auto` | `test:` outbox row names who added them, to what, and carries a working profile-completion link. Live delivery covered by `oracle: smoke:mail`. |
 | AC-151 | `auto` | `e2e:` co-speaker supplies bio and headshot via their link without the abstract becoming editable. |
 
-**Rank 20 · US-37 · Speaker confirms or declines**
+**US-37 · Speaker confirms or declines**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -525,7 +525,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-153 | `auto` | `test:` a person holding two roles on one submission confirms each independently; one response does not settle the other. |
 | AC-154 | `auto` | `e2e:` decline notifies the program lead and flags the agenda slot. |
 
-**Rank 21 · US-18 · Submit from a phone**
+**US-18 · Submit from a phone**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -533,14 +533,14 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-156 | `auto` | `e2e:mobile` `scrollWidth ≤ clientWidth` at every step; on-screen keyboard modelled as a 375×340 visual viewport, asserting the focused field's box stays inside it. Real-device confirmation at **C6**, which is the tiebreaker if the two disagree. |
 | AC-157 | `auto` | `e2e:` partial mobile fill → resume the draft link in the desktop project → values restored. |
 
-**Rank 22 · US-27 · Review on a phone**
+**US-27 · Review on a phone**
 
 | AC | Tag | How verified |
 |---|---|---|
 | AC-158 | `auto` | `e2e:mobile` read, score, comment, advance — all at 375px. |
 | AC-159 | `auto` | `e2e:` the reviewer surface contains no admin navigation, no admin routes reachable from it. |
 
-**Rank 23 · US-02 · An operator stands up their own instance**
+**US-02 · An operator stands up their own instance**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -548,7 +548,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-161 | `auto` | `e2e:empty` crawler over an empty install: every route renders an empty-state component containing a next-action link; no crash, no 500, no blank page. |
 | AC-162 | `auto` | `repo:` README names registration-platform sync, Airtable mirror, and calendar OAuth as extension points. |
 
-**Rank 24 · US-71 · Comparison-mode triage**
+**US-71 · Comparison-mode triage**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -557,7 +557,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-165 | `auto` | `test:` aggregate order equals win count over recorded comparisons; visible to the review chair. |
 | AC-166 | `auto` | `test:` switch a round's mode both ways; scores recorded in the other mode survive intact. |
 
-**Rank 25 · US-32 · Optional AI first-pass scoring**
+**US-32 · Optional AI first-pass scoring**
 
 | AC | Tag | How verified |
 |---|---|---|
@@ -570,7 +570,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC | Tier | Tag | How verified |
 |---|---|---|---|
 | AC-234 | A | `auto` | `e2e + test:` submit with 0/1/3 tracks; 0 is rejected, first is primary, any-match routing/filtering/reviewer scope works, and the agenda swimlane uses primary; `check:seed` proves ≥15% multi-track and ≥3 scheduled multi-track Sessions. |
-| AC-235 | B | `auto` | `e2e:` decide with feedback; assert the outbox's rendered decision message and speaker portal show byte-equivalent normalized feedback from one decision row. Repeat with no note. |
+| AC-235 | B | `auto` | `e2e:` decide with feedback; assert the outbox's rendered decision message and speaker portal show byte-equivalent normalized feedback from one decision row. Repeat with no note. **Bulk-accept 3 records → assert 3 `submission_decisions` rows exist and all 3 portals render from them** — the demo's headline action must not use a second render path. |
 | AC-236 | B | `auto` | `e2e:` send a one-off templated email from record and review contexts; one rendered outbox row and one record-history entry appear, with demo-safe delivery semantics. |
 | AC-237 | B | `auto` | `test + e2e:` speaker edits title/description while open; both update immediately and history stamps actor/time. Close CFP → 403 until organizer re-opens that submission's editing. |
 | AC-238 | B | `auto` | `e2e + speed:` board contains every non-draft submission exactly once in its derived lifecycle stage; title/speakers/tracks/time-in-stage render; composed filters remain inside the full-seed objective. |
@@ -585,7 +585,7 @@ Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 ra
 | AC-247 | B | `auto` | `e2e:` create/apply/rename/update/delete a personal saved view; reload restores query/filter/sort/column order; another user and event cannot read it; built-ins reject rename/delete. |
 | AC-248 | B | `auto` | `e2e:` show/hide/reorder every registered column; Title cannot be removed; table changes immediately, persists after reload, and round-trips through a saved view. |
 | AC-249 | B | `auto` | `test + e2e:` built-in Drafts queue count equals derived draft rows; each shows last-save/contact/applicable missing fields; open/edit leaves status draft; reviewer/speaker 403 while form-admin/program-staff succeed. |
-| AC-250 | B | `auto` | `test + e2e:` a stored template **or** a caller-supplied `{subject, body}` is accepted on `POST /api/v1/events/:id/comms/send` and on `marquee remind`; merge fields render in both forms; exactly-one-of is enforced server-side; an ad-hoc send writes an outbox row and a recipient-record log entry byte-identical in shape to a templated send; demo-safe suppression and the `comms:send` scope behave unchanged. |
+| AC-250 | B | `auto` | `test + e2e:` a stored template **or** a caller-supplied `{subject, body}` is accepted on `POST /api/v1/events/:id/comms/send` — the single send route, no `/messages/send` alias, asserted by `check:api`'s registry parity — and on `marquee remind`; merge fields render in both forms; exactly-one-of is enforced server-side; an ad-hoc send writes an outbox row and a recipient-record log entry byte-identical in shape to a templated send; demo-safe suppression and the `comms:send` scope behave unchanged. |
 
 ---
 
@@ -597,7 +597,7 @@ Four in-scope ACs are judgements no assertion settles. Each is a scheduled human
 |---|---|---|---|---|
 | **C1** | AC-1 | Walking skeleton up — landing page and both demo entries live on a deployed preview. | A person who has not seen Marquee opens the URL cold and is timed. Three questions, unprompted: what is this, how do I get in, whose tool is it. | All three answered inside 10s with no help. Re-run at C7. |
 | **C2** | AC-16 | Dashboard complete against the full seed. | Operator opens it and names their next action without hunting. A report says what happened; a home says what to do. | Operator affirms and names one next action visible on screen. |
-| **C3** | AC-26 (+ reads AC-42, AC-44, AC-49, AC-161 copy) | Public form and speaker portal complete. | Force every validation failure and every empty state; read the copy aloud. | No sentence contains a field name, a type name, an error code, or "invalid" without a remedy. |
+| **C3** | AC-26 (+ reads AC-42, AC-44, AC-49, AC-161 copy) | Public form and speaker portal complete. | Force every validation failure, every empty state, **and every submit failure — 5xx, Turnstile challenge failure, 429, dropped connection**; read the copy aloud. | No sentence contains a field name, a type name, an error code, or "invalid" without a remedy. |
 | **C5** | AC-75 | Agenda track view complete **on deployed infra**, not local. | Place ten sessions with a trackpad and with a mouse. | No perceptible lag, no snap-back, no ghost offset. The frame instrument's p95 is evidence, not the verdict. |
 | **C6** | Real-device confirmation of AC-35, AC-85, AC-155–AC-159 | Every mobile-affecting surface complete. | One real iPhone and one real Android against the deployed URL: submit the form, resume a draft, clear five reviews, read the public agenda. | Each completes. Disagreement with the headless proxy resolves in the device's favour. |
 | **C7** | All four felt ACs + the whole loop | Tuesday, before the public repo push. | A person who did not build it drives the walkthrough script end to end, cold, narrating. | Zero dead ends, zero moments of "wait, where is…", C1–C6 verdicts re-affirmed. |
@@ -618,7 +618,7 @@ Run in order by the final auditor, who did not write the spec. Every item is pas
 | 4 | Seeded demo present | `npm run check:seed` against **production** | ≥800 submissions, ≥150 accepted speakers, populated agenda, the deliberate ugliness present, the organizer demo persona's review queue ≥20 unreviewed |
 | 5 | Both demo logins work | Manual, then `e2e` | One click each, no form, no gate, both land populated; and with `demo_mode=0` the route 403s with no cookie (AC-2) |
 | 6 | **Full loop, zero dead ends, on the deployed site** | `npm run e2e` against production, desktop + mobile | All 11 steps green; crawler finds no stub, placeholder, or dead link |
-| 7 | Speed budgets met on deployed infra | `npm run check:speed` against production | Every p95 inside §1.3; `speed-report.json` attached with actuals |
+| 7 | Speed budgets met on deployed infra | `npm run check:speed` against production | Every **AC-sourced** p95 inside §1.3. Objective misses (the seven client-signed *proposed* budgets) are reported with a ⚠ banner and **do not fail the gate** — the client declassified them on 2026-08-09. `speed-report.json` attached with actuals |
 | 8 | API parity holds | `npm run check:api` | No UI-only write endpoint; OpenAPI valid; docs reachable |
 | 9 | **Airtable round-trip demonstrated** — **AC-225 – AC-229** | `npm run check:mirror` against the test base, **then** the manual ≤60s demo against the *demo* base: change a submission's status in Airtable → refresh Marquee → it's there; change it in Marquee → it appears in Airtable. | Suite green (AC-225 outbound ≤60s, AC-226 allowlist applied / non-allowlisted ignored, AC-227 no sync loop, AC-229 keepalive advances expiry); both manual directions land; Settings→Airtable shows base link, row counts both sides, last sync, outbox depth (AC-228) |
 | 10 | **ICS invite accepted in a real Gmail** | `npm run smoke:ics -- --to <gmail>` | Gmail renders Accept/Decline (not an attachment); Accept lands the event at the right time and room; a reschedule **replaces** it; a cancel removes it. Outlook and Apple strongly wanted, Gmail mandatory |
@@ -630,7 +630,7 @@ Run in order by the final auditor, who did not write the spec. Every item is pas
 | 16 | **No secret material and no third-party content in the public repo** | `npm run check:repo` over the **pushed remote's full history** | The repo is an orphan/squashed initial commit with no ancestry from the working repo (M-56). Zero tokens, keys, or `.dev.vars`; no `Atin/` content; no Stage 11 internals; no `sources/` tree, brief PDF, competitor document, agent brief, `run-state`, `/Users/` path, or c11 workspace/surface ID; curated research docs only; Apache-2.0 present |
 | 17 | Felt checkpoints signed | C1, C2, C3, C5, C6, C7 verdicts | All recorded with dates; C7 run after the last functional change |
 | 18 | Tier A complete, no waivers | Coverage report | **AC-1 – AC-90 plus AC-231, AC-234, AC-240, and AC-244–246** all green. AC-239 is struck; AC-233 is cuttable — read §"Build scope", not the ID range |
-| 19 | Cut line stated | Gate report | Every cut Tier B story named with its ACs and the reason — **explicitly including AC-233 (Speaker Handbook) if it was cut**, since it is the one cuttable criterion sitting on a Tier A story and is the easiest to lose silently. Silently missing is a failure; deliberately cut is not |
+| 19 | Cut line stated | Gate report, against **`BUILDPLAN.md` §5's ranks** (the single rank authority) | Every cut Tier B story named with its rank, its ACs, and the reason. The 🔒 gate-backing tickets (M-45, M-38, M-39, M-56) are outside the cut band and may never appear here — **explicitly including AC-233 (Speaker Handbook) if it was cut**, since it is the one cuttable criterion sitting on a Tier A story and is the easiest to lose silently. Silently missing is a failure; deliberately cut is not |
 
 ---
 
