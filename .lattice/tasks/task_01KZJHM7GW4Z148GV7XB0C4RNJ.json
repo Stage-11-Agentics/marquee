@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:200",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 2,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:41Z",
   "created_by": "agent:orchestrator-intake",
@@ -23,8 +23,8 @@
     }
   ],
   "id": "task_01KZJHM7GW4Z148GV7XB0C4RNJ",
-  "last_event_id": "ev_01KZJMZRJ4X5NAZD5BK14JT9K6",
-  "last_status_changed_at": "2026-08-09T06:44:30Z",
+  "last_event_id": "ev_01KZJN51FASKJ56TCQ7N89V9ZQ",
+  "last_status_changed_at": "2026-08-09T07:00:18Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -39,10 +39,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-2",
-  "status": "in_progress",
+  "status": "review",
   "tags": null,
   "title": "Database schema \u2014 the whole init migration",
   "type": "task",
-  "updated_at": "2026-08-09T06:57:25Z",
+  "updated_at": "2026-08-09T07:00:18Z",
   "urgency": null
 }

@@ -15,10 +15,15 @@
       "id": "art_01KZJMN1AJHF8N20CAZTSF2T9F",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJN2QDWQFBC6YD2P3Z0R9VJ",
+      "role": "plan-review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8NGV7SK9EVZTXVQWA5A",
-  "last_event_id": "ev_01KZJMRB3FJ2NF0NAN7B4JXZEP",
+  "last_event_id": "ev_01KZJN2QDY9X3W9Z9HN8X1VJSB",
   "last_status_changed_at": "2026-08-09T06:53:22Z",
   "linked_files": [],
   "priority": "medium",
@@ -38,6 +43,6 @@
   "tags": null,
   "title": "Uploads: presign, verify, and serve",
   "type": "task",
-  "updated_at": "2026-08-09T06:53:22Z",
+  "updated_at": "2026-08-09T06:59:02Z",
   "urgency": null
 }
