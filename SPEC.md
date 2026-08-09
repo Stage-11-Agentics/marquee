@@ -677,4 +677,11 @@ Submission record → evaluation panel: current reviewers per round + coverage; 
 
 ---
 
-*v1.4 contract revision, 2026-08-09; folded against `USER_STORIES.md` Amendments 1–9. Amendments follow that file's rules: **the next criteria append from AC-252**; deletions are struck, never recycled. Next input — client review and sign-off of the v1.4 prototype; only then mint `DESIGN.md` and hand the complete contract to orchestration.*
+## Amendment 11 — venue model (2026-08-09)
+
+**`buildings`** (AC-252) — `event_id`, `name`, `address`, `position`. Writer: Event Settings → Buildings card; seed (the real 2025 four). Reader: room grouping/labels, ICS `LOCATION` ("Room · Building"), public session pages.
+**`rooms`** gains `building_id` (required), `av_capabilities` (JSON tag array), `notes` (AC-253). Writers: Event Settings → Rooms card (building select, AV tag editor, notes). Readers: agenda room headers + tooltip panel, room view, day-of surfaces. Lands in M-02's single migration; Event Settings, seed, and agenda tickets absorb +2h. **[Settings card and room-header rendering: beyond v1.5 prototype unless the v1.6 micro-round lands first.]**
+
+---
+
+*v1.4 contract revision, 2026-08-09; folded against `USER_STORIES.md` Amendments 1–9. Amendments follow that file's rules: **the next criteria append from AC-254**; deletions are struck, never recycled. Next input — client review and sign-off of the v1.4 prototype; only then mint `DESIGN.md` and hand the complete contract to orchestration.*
