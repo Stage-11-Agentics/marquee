@@ -45,6 +45,7 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - **Brief Research** (surface:130): competition-requirements authority → `sequence/research/competition-requirements.md`. **First pass complete 2026-08-08** (R1–R50). Stays alive for Discord pastes + Sat/Sun videos. Prompt: `sequence/research/sources/AGENT-BRIEF-competition-research.md`.
 - **Landscape Features** (surface:132): **First pass complete** — feature matrix keyed to R-numbers, deep profiles (Sessionize corrected: $499/event, has collision detection + undocumented "calendar placeholders"), D1–D15 differentiator ranking, pretalx threat read (5 structural misses), vocabulary crib, L1–L4 new open questions.
 - **Stakeholder Stories** (surface:133): **First pass + follow-up complete** — 15 seats, 67 stories (US-66 Sessionize mid-CFP migration, US-67 quick-search added), 45-story MVP. Sessionize API is accepted-only by default → importer eats Export spreadsheets, idempotent.
+- **Seed Source** (this surface): **Complete** → `sequence/research/seed-source-2025.md` + machine-readable `sequence/research/sources/aie-summit-2025-program.json`. Chose **AI Engineer Summit NYC, Feb 19–22 2025** as the seed source (AIE's own site calls it "the flagship AI Engineer Summit held in NYC"; it's the ~150-speaker "AIE New York" budget line; its 2025 theme was already finance-forward — Jane Street/BlackRock/Bloomberg/Morgan Stanley — matching NYC 2026's "Where AI Engineering Meets Wall Street"; and it is the **only** AIE NYC event with a published session-level grid). Full 76-item grid recovered from the page's embedded JSON: 60 real speaker-bearing sessions, 75 speakers, 58 companies, 8 rooms across 4 buildings, exact timing grid. CODE Summit Nov 2025 captured as secondary (89-name roster, category taxonomy, 4-day shape). Recommends 1,000 submissions / 60 accepted = **6.0%**, inside AIE's published 5–15%.
 - **Seams Feasibility** (surface:134): **First pass complete** — Airtable/Cloudflare/email/ICS/auth with hard numbers, 16 deadline traps, 33–54h seams estimate. Q1 bet: D1 source of truth + genuine two-way Airtable mirror (never read Airtable on a request path). Q9 confirmed: ICS METHOD:REQUEST; OAuth infeasible by deadline.
 
 ## Key findings so far (from Brief Research first pass)
@@ -60,7 +61,7 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 2. **Create an R2 bucket and fetch a public object now** — Stage 11's R2 entitlement has silently lapsed account-wide before (403s every public URL; dashboard-only fix).
 3. Check **Resend plan tier** (30s in dashboard) — Free's 100/day cap decides how urgent the outbox/demo-safe mode is.
 4. If a bespoke sending domain (e.g. a marquee.* domain) is wanted: register + verify **Saturday or not at all**. Default: send as `marquee@stage11.systems` (verified since March).
-5. Airtable demo base needs **Team plan or above** (Free caps at 1,000 records/base; seed target is ~1,000).
+5. Airtable demo base needs **Team plan or above** (Free caps at 1,000 records/base; seed target is ~1,000). ⚠️ Seed Source confirms the target is **exactly 1,000 submissions** — dead on the Free cap, before speakers/sessions/evaluations are counted. Treat the plan upgrade as required, not optional.
 
 ## Touchpoints
 

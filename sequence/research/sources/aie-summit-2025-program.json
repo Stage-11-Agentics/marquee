@@ -1,0 +1,1831 @@
+{
+ "_source": "https://www.ai.engineer/summit/2025/schedule (__NEXT_DATA__), captured 2026-08-08",
+ "_event": "AI Engineer Summit NYC — Feb 19–22, 2025, The Times Center, New York NY",
+ "_scrubbed": "speaker email addresses and headshot/profile-photo URLs REMOVED at capture time — see seed-source-2025.md \"Do not replicate\"",
+ "_counts": {
+  "grid_items": 76,
+  "content_sessions_talk_or_workshop": 60,
+  "content_sessions_with_named_speakers": 57,
+  "all_items_with_named_speakers": 60,
+  "unique_speakers": 75,
+  "unique_companies": 58
+ },
+ "sessions": [
+  {
+   "id": "255",
+   "slug": "feb19-welcome-reception",
+   "title": "Leadership Track Welcome Reception",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-19T17:00:00",
+   "end": "2025-02-19T19:00:00",
+   "duration_min": 120,
+   "abstract": "Attendees with a Leadership Track or Bundle Pass: Join your fellow Leadership track attendees at the conference venue for a casual evening filled with food, drink, & conversation! We'll also have the Expo open for demos & discussions with many companies on the cutting edge of AI Engineering -- and will even have featured presentations from the expo stage!",
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "266",
+   "slug": "day1-registration-breakfast",
+   "title": "Registration & Breakfast",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T08:00:00",
+   "end": "2025-02-20T09:00:00",
+   "duration_min": 60,
+   "abstract": null,
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "299",
+   "slug": "aie-leadership-welcome",
+   "title": "AI Leadership Welcome",
+   "track": "Plenary",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T09:00:00",
+   "end": "2025-02-20T09:07:00",
+   "duration_min": 7,
+   "abstract": null,
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "223",
+   "slug": "beyond-the-consensus-navigating-ais-frontier-in-2025",
+   "title": "Beyond the Consensus: Navigating AI’s Frontier in 2025",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T09:07:00",
+   "end": "2025-02-20T09:27:00",
+   "duration_min": 20,
+   "abstract": "Lux Capital Partner Grace Isford discusses the AI Frontier in NYC, sharing 10 'hot takes' on where the industry is going from a technical perspective. She covers key considerations for technical leaders building agentic systems, as well as the second-degree implications of LLMs for human behavior.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/HS5a8VIKsvA?si=56AkKROxh_WFvrNI",
+   "speakers": [
+    {
+     "name": "Grace Isford",
+     "title": "Partner",
+     "company": "Lux Capital",
+     "company_url": "https://www.luxcapital.com/",
+     "bio": "As a Partner based in our New York City office, Grace invests in companies innovating at the nexus of the computational sciences – data, AI and ML infrastructure, open source software, network infrastructure, developer tools, vertical software applications and more.\n\nBefore joining Lux, Grace was a principal at Canvas Ventures where she sourced 10 investments. She got her start as a campus scout while attending Stanford University.\n\nPrior to Canvas, Grace worked on the LP side at the Stanford Management Company, in product at edtech startup Handshake, and in growth equity at Stripes Group. She earned a Bachelors of Science and a Masters of Science in Management Science and Engineering from Stanford, where she was a Mayfield Fellow and served as Co-President of Stanford Women in Business, the campus’s largest pre-professional organization for women. In addition, she is on the board of the Stanford Technology Ventures Program, the university’s entrepreneurship center, and is an active member of All Raise, focused on accelerating the success of female and non-binary founders and funders.\n\nGrace is originally from Connecticut, although has lived in Tokyo, Japan, and aspires to re-learn Japanese. She’s an avid runner and cyclist.",
+     "social": "https://twitter.com/graceisford\nhttps://www.linkedin.com/in/graceisford/\nhttps://www.graceisford.com/"
+    }
+   ]
+  },
+  {
+   "id": "222",
+   "slug": "how-to-build-an-ai-strategy-that-fails",
+   "title": "How To Build an AI Strategy That Fails",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T09:28:00",
+   "end": "2025-02-20T09:48:00",
+   "duration_min": 20,
+   "abstract": "Want to guarantee your AI initiatives are great boardroom presentations but don't actually work? This talk explores the most reliable ways to waste time, money, and resources while building AI strategies. One proven method? Cultivate the perfect disconnect between those building AI solutions and the executives charting the strategic direction. \n\n For business leaders, navigating the AI space is overwhelming. There's a sea of advice on how to allocate resources, hire and execute on AI, but much of it comes from sources that aren't hands-on with the technology. Without practical experience, it's challenging to separate fact from fiction and make informed decisions. On the flip side, AI practitioners who are in the trenches often struggle to communicate their knowledge in a way that resonates with executives. They tend to think and speak in technical terms, which can be off-putting or confusing for those focused on business outcomes.  \nAfter showing you common failure modes, Hamel and Greg will discuss how to overcome and avoid them by drawing on their experience helping 30+ companies develop and execute successful AI projects.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/89aQ7T6cMwA?si=FPdP7afJjdF8LEtu",
+   "speakers": [
+    {
+     "name": "Hamel Husain",
+     "title": "Founder",
+     "company": "Parlance Labs",
+     "company_url": "https://parlance-labs.com/",
+     "bio": "Hamel Husain started working with language models five years ago when he led the team that created CodeSearchNet, a precursor to GitHub CoPilot. Since then, he has seen many successful and unsuccessful approaches to building LLM products. Hamel is also an [active open source maintainer and contributor](https://hamel.dev/oss/opensource.html) of a wide range of ML/AI projects.  Hamel is currently an [independent consultant](https://hamel.dev/hire.html).",
+     "social": "https://www.linkedin.com/in/hamelhusain/\nhamel.dev\ngithub.com/hamelsmu\nhttps://twitter.com/HamelHusain"
+    },
+    {
+     "name": "Greg Ceccarelli",
+     "title": "Co-Founder",
+     "company": "SpecStory",
+     "company_url": "https://specstory.com/",
+     "bio": "Greg is an operator with two decades of experience helping companies create competitive advantage with data. Prior to co-founding SpecStory he was the Chief Product Officer at Pluralsight. And previously had data leadership roles at GitHub, Dropbox and Google.",
+     "social": "https://twitter.com/gregce10\t\nhttps://www.linkedin.com/in/gregceccarelli/\t\nhttps://github.com/gregce \nhttps://www.gregceccarelli.com/"
+    }
+   ]
+  },
+  {
+   "id": "224",
+   "slug": "balancing-innovation-with-security-and-safety-in-multi-agent-systems",
+   "title": "Balancing Innovation with Security & Safety",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T09:49:00",
+   "end": "2025-02-20T10:09:00",
+   "duration_min": 20,
+   "abstract": "Multi-agent systems are revolutionizing industries, driving innovation with autonomous agents that collaborate in dynamic environments. But with great complexity comes great vulnerability.  \nIf you’ve ever worried about adversarial behaviors, privacy breaches, or data leakages in these systems, you’re not alone. These threats can erode trust and jeopardize the integrity of even the most cutting-edge applications.  \nWhat if there were ways to safeguard these systems without stifling innovation? Enter a balanced approach that combines robust security frameworks with adaptive, innovation-friendly strategies.  \nIn this talk, we’ll explore how to identify and mitigate the unique risks inherent in multi-agent systems while fostering an environment where creativity thrives. Learn practical techniques for maintaining security, ensuring safety, and enabling innovation in these transformative systems.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/G7aSH6N7qY4?si=VRhBXTrpBxPG1-Mv",
+   "speakers": [
+    {
+     "name": "Don Bosco Durai",
+     "title": "Co-founder and CTO",
+     "company": "Privacera",
+     "company_url": "http://www.privacera.com",
+     "bio": "Bosco is an entrepreneur and thought leader in enterprise security, known for his work in Security, Compliance, and Governance. He co-created Apache Ranger, an open-source project widely considered the gold standard in Big Data security.\n\nCurrently, as the CTO and co-founder of Privacera, Bosco is leading the effort to open-source PAIG.ai, a project dedicated to security, safety, and governance for Generative AI applications and AI Agents.",
+     "social": "https://twitter.com/BoscoDurai\nhttps://www.linkedin.com/in/donboscodurai/"
+    }
+   ]
+  },
+  {
+   "id": "270",
+   "slug": "building-self-coding-agents",
+   "title": "Building Self-Coding Agents",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T10:10:00",
+   "end": "2025-02-20T10:30:00",
+   "duration_min": 20,
+   "abstract": "What if you built an AI coding agent that…built itself? It sounds like science fiction, but AI coding startup Augment Code built an AI agent that not only writes code, but continuously improves its own codebase - including performance optimizations and system architecture. This level of AI autonomy raises fascinating questions about the future of software engineering, where human engineers may shift from writing code to orchestrating multiple self-improving AI agents working in parallel.\n\nIn this talk, Augment Founding Researcher Colin Faherty will explore:\n\n- What does it look like to supervise AI coding agents at scale?\n- How far can we push AI coding agents - what tasks are out of scope?\n- What might unlock when AI handles complexity and humans drive innovation?",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/Iw_3cRf3lnM?si=zQLvlcbwQtTicRjU",
+   "speakers": [
+    {
+     "name": "Colin Flaherty",
+     "title": "Founding Researcher",
+     "company": "Augment Code",
+     "company_url": "http://www.augmentcode.com",
+     "bio": "Colin Flaherty is a founding researcher at Augment working on AI agents and retrieval systems. Before that, he was a researcher at Facebook AI Research, where he coauthored a paper in Science on \"Cicero\"—an AI that mastered the game of Diplomacy, widely considered the next grand challenge in AI for games after Chess, Go, and Poker.",
+     "social": null
+    }
+   ]
+  },
+  {
+   "id": "260",
+   "slug": "day1-morning-break",
+   "title": "Break",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T10:30:00",
+   "end": "2025-02-20T11:00:00",
+   "duration_min": 30,
+   "abstract": null,
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "337",
+   "slug": "mistral-vps",
+   "title": "Mistral for VPs of AI",
+   "track": "Expo Stage",
+   "type": "TALK",
+   "room": "TimesCenter Expo",
+   "start": "2025-02-20T10:35:00",
+   "end": "2025-02-20T11:00:00",
+   "duration_min": 25,
+   "abstract": null,
+   "description": "Executive briefing and Q&A with Mistral",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Baptiste Rozière",
+     "title": "Researcher",
+     "company": "Mistral",
+     "company_url": "https://mistral.ai/",
+     "bio": null,
+     "social": null
+    },
+    {
+     "name": "Leigh Pember",
+     "title": "Strategy",
+     "company": "Mistral",
+     "company_url": "https://mistral.ai/",
+     "bio": null,
+     "social": "https://www.linkedin.com/in/pember/overlay/photo/"
+    }
+   ]
+  },
+  {
+   "id": "268",
+   "slug": "anchoring-enterprise-genai-with-knowledge-graphs",
+   "title": "Anchoring Enterprise GenAI with Knowledge Graphs",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T11:00:00",
+   "end": "2025-02-20T11:20:00",
+   "duration_min": 20,
+   "abstract": "As enterprises have embraced GenAI architectures the biggest gap is connecting all of the structured and unstructured datasets across your organization. Knowledge graphs are a natural representation of connected data that allows you to enable higher accuracy and more explainable retrieval using GraphRAG. In this session we will talk about how to build organizational support for a connected data architecture that is the fuel for the current and future GenAI applications of your company.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/OpVkWc3YnFc?si=IaXeTkrBjHdkhxMc",
+   "speakers": [
+    {
+     "name": "Stephen Chin",
+     "title": "VP of Developer Relations",
+     "company": "Neo4j",
+     "company_url": "https://neo4j.com/?utm_medium=social&utm_source=linkedIn",
+     "bio": "Stephen Chin is VP of Developer Relations at Neo4j, member of the LF AI & Data Foundation and Open AI Alliance, and author of several titles with O'Reilly, Apress, and McGraw Hill. He has keynoted numerous conferences around the world including AI DevSummit, Devoxx, DevNexus, JNation, JavaOne, Shift, Joker, swampUP, and Open Source India. Stephen is an avid motorcyclist who has done evangelism tours in Europe, Japan, and Brazil, interviewing developers in their natural habitat. When he is not traveling, he enjoys teaching kids how to do AI, embedded, and robot programming together with his daughters.",
+     "social": "https://twitter.com/steveonjava\t\nhttps://www.linkedin.com/in/steveonjava/"
+    },
+    {
+     "name": "Jonathan Lowe",
+     "title": "Senior Director, Operations & Insights",
+     "company": "Pfizer",
+     "company_url": "https://www.pfizer.com/",
+     "bio": "Analytics strategist-builder with 30 years of hands-on technical and leadership experience. Envisions, sells, builds and manages fresh approaches to data-driven decision making for biopharma, agriculture, supply chain and telecom clients. Unlocks value rapidly by bridging business and technical cultures. Thrives when growing new teams.",
+     "social": "https://www.linkedin.com/in/jonathanwlowe/\nhttps://github.com/JWLowe"
+    }
+   ]
+  },
+  {
+   "id": "235",
+   "slug": "building-ai-agents-with-real-roi-in-the-enterprise-sdlc",
+   "title": "Building AI Agents with Real ROI in the Enterprise SDLC",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T11:21:00",
+   "end": "2025-02-20T11:41:00",
+   "duration_min": 20,
+   "abstract": "Is your CEO asking, \"What is the measurable ROI of AI coding agents in our enterprise?\" One way to answer is to tackle a 10-year migration project to replatform the entire enterprise codebase. This is what Booking.com, the largest travel site in the world, is undertaking, using Sourcegraph as its platform for AI automation throughout the SDLC.\n\nIn this talk, we'll cover agents for large-scale code migration, code review, and internal dev tools. We'll walk through a case study of how a large, established engineering org is pushing the frontiers of what AI can do, driving efficiency gains for devs in a way that demonstrates business impact to executive stakeholders. We'll share tips and tricks we've uncovered while building these agents, and how we're rolling lessons learned into an agents platform that will make it seamless for every enterprise to automate the toil—but not the developer—out of the SDLC.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/UXOLprPvr-0?si=YPiKSsAdj3-05QWK",
+   "speakers": [
+    {
+     "name": "Bruno Passos",
+     "title": "Developer Experience & GenAI Innovation Lead",
+     "company": "Booking.com",
+     "company_url": "https://careers.booking.com/",
+     "bio": "I’m Bruno Passos, a Group Product Manager with 15 years of experience in the tech industry. I lead Developer Experience and GenAI initiatives at Booking.com, focusing on leveraging AI to enhance developer productivity and innovation. I’m passionate about crafting solutions that drive both efficiency and creativity and re-platforming large-scale businesses like Booking.com, leveraging GenAI to accelerate that journey. When I’m not working, I’m most likely cycling or spending time with my family. As a speaker at the AI Engineering Summit, I’m excited to share insights on the transformative power of AI in engineering.",
+     "social": "https://twitter.com/brunopassos\nhttps://www.linkedin.com/in/brpassos/"
+    },
+    {
+     "name": "Beyang Liu",
+     "title": "Co-Founder and CTO",
+     "company": "Sourcegraph",
+     "company_url": "https://sourcegraph.com/",
+     "bio": "Beyang Liu is the co-founder and CTO of Sourcegraph, a company that is industrializing software development at scale. Sourcegraph accelerates millions of developers working in large, complex codebases like those of Databricks, Reddit, Uber, Canva, Redfin, Palo Alto Networks and the U.S. government. Sourcegraph's tech combines AI with compilers and semantic search to make AI much more effective in big, collaborative codebases. Beyang began his career working on software for some of the largest banks as a dev at Palantir using his education in machine learning and data analysis at Stanford.",
+     "social": "https://www.linkedin.com/in/beyang-liu/\nhttps://github.com/beyang\nhttps://twitter.com/beyang"
+    }
+   ]
+  },
+  {
+   "id": "236",
+   "slug": "building-trust-in-enterprise-ai-evaluating-domain-specific-llms-for-real-world-financial-scenarios",
+   "title": "Building Trust in Enterprise AI: Evaluating Domain-Specific LLMs for Real-World Financial Scenarios",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T11:42:00",
+   "end": "2025-02-20T12:02:00",
+   "duration_min": 20,
+   "abstract": "In today's rapidly evolving financial landscape, AI applications and agents are transforming high-value workflows, like risk assessment, fraud detection, and customer service. As financial institutions increasingly integrate AI into their operations, the reliability and trustworthiness of these systems – and the underlying LLMs – are paramount. The consequences of inaccurate outputs in finance can be significant, ranging from financial losses to reputational damage, underscoring the need for models that are tailored for industry-specific challenges like nuanced terminology and complex regulatory requirements. In this session, Waseem AlShikh, CTO and Co-founder of Writer, will challenge the scaling narrative around general-purpose models and demonstrate how domain-specific LLMs, particularly within the high-stakes finance industry, are delivering state-of-the-art performance, without the need for endless pre-training budgets and resources.\n\nWaseem will also introduce a groundbreaking financial benchmark that evaluates the performance of AI systems under the complexities and pressures of the financial domain. Drawing on real-world financial applications, Waseem will demonstrate how to evaluate systems that deliver real ROI in complex, mission-critical scenarios.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/pPvoLjYj_mY?si=5IUz_sngABQRYESw",
+   "speakers": [
+    {
+     "name": "Waseem Alshikh",
+     "title": "Co-Founder & CTO",
+     "company": "Writer",
+     "company_url": "https://writer.com/",
+     "bio": "Waseem Alshikh is the Chief Technology Officer and Co-founder of Writer, the full-stack generative AI platform trusted by the world’s leading enterprises to solve mission-critical business challenges and unleash people’s best work.\n\nAn accomplished tech executive with deep expertise in artificial intelligence, machine learning, and natural language processing, Waseem has led Writer to become one of the fastest-growing companies in enterprise generative AI, chosen by hundreds of global leaders like Accenture, Intuit, L’Oreal, Uber, and Vanguard.\n\nUnder Waseem’s leadership, Writer has developed a fully integrated solution to build and deploy secure and reliable generative AI applications and agents across the enterprise. Writer’s Palmyra family of large language models (LLMs) is recognized for state-of-the-art performance, topping leaderboards in natural language understanding and generation, and Writer’s novel approach to graph-based RAG leads industry benchmarks.\n\nFounded in 2020, Writer is backed by strategic investors, including ICONIQ Growth, Insight Partners, WndrCo, Balderton Capital, and Aspect Ventures. Waseem has been recognized for his contributions to the tech industry, earning numerous awards and accolades. He holds degrees in Electronics from Beirut Arab University and Damascus Polytechnic University.",
+     "social": "https://twitter.com/waseem_s\t\nhttps://www.linkedin.com/in/waseemalshikh/"
+    }
+   ]
+  },
+  {
+   "id": "230",
+   "slug": "openai-for-vps-of-ai",
+   "title": "OpenAI for VPs of AI",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T12:03:00",
+   "end": "2025-02-20T12:23:00",
+   "duration_min": 20,
+   "abstract": "Deploying transformative solutions in today's fast-evolving AI landscape is challenging. In this session, we'll share how OpenAI's Technical Success team partners with customers to accelerate AI adoption, mitigate deployment risks, and deliver transformative outcomes through hands-on collaboration and a proven engagement framework. We'll share real-world case studies, explore key insights from our customer partnerships and leave plenty of time for open Q&A. Join us!",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Prashant Mital",
+     "title": "Member of Technical Staff",
+     "company": "OpenAI",
+     "company_url": "https://openai.com/",
+     "bio": "Prashant Mital is a Solutions Architect at OpenAI, where he helps customers build and deploy AI applications using OpenAI’s platform. Before OpenAI, Prashant was one of the first Deployed Engineers at Retool, where he helped grow key enterprise accounts and later founded the company’s Professional Services function. Earlier in their career, they trained as an applied physicist and worked on distributed systems and data infrastructure across various industries.",
+     "social": "https://twitter.com/prashantmital\t\nhttps://www.linkedin.com/in/pmital/"
+    },
+    {
+     "name": "Toki Sherbakov",
+     "title": "Head of Solutions Architecture",
+     "company": "OpenAI",
+     "company_url": "https://openai.com/",
+     "bio": "Toki Sherbakov leads the Solutions Architecture team at OpenAI. His team is responsible for ensuring enterprises are successful in building scalable and high-impact production applications with the OpenAI API platform. Prior to OpenAI, Toki spent 2 years growing and leading the Deployment team at Peregrine Technologies (technology startup serving state and local government customers in the US), and 5 years prior to that at Palantir Technologies driving GTM efforts.",
+     "social": "https://twitter.com/tokisherbakov"
+    }
+   ]
+  },
+  {
+   "id": "258",
+   "slug": "lunch-feb20",
+   "title": "Lunch",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T12:24:00",
+   "end": "2025-02-20T13:24:00",
+   "duration_min": 60,
+   "abstract": null,
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "300",
+   "slug": "frontier-feud",
+   "title": "Frontier Feud",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T13:15:00",
+   "end": "2025-02-20T13:40:00",
+   "duration_min": 25,
+   "abstract": "Get ready for a battle of epic proportions at the Frontier Feud showdown, where teams from leading AI frontier labs will go head-to-head in a battle of wits. Hosted by Barr Yaron, Partner at Amplify Partners!",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/BWqB6aatreE?si=e2WWS0e98es6u2nY",
+   "speakers": [
+    {
+     "name": "Barr Yaron",
+     "title": "Partner",
+     "company": "Amplify Partners",
+     "company_url": "https://www.amplifypartners.com/",
+     "bio": "Barr is a data scientist turned investment partner at Amplify Partners, where she focuses on devtools, infrastructure and AI.",
+     "social": null
+    }
+   ]
+  },
+  {
+   "id": "231",
+   "slug": "missing-pieces-of-workflow-automation-an-enterprise-story",
+   "title": "Missing pieces of workflow automation",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T13:45:00",
+   "end": "2025-02-20T14:05:00",
+   "duration_min": 20,
+   "abstract": "Gen AI is cool, but what does that mean for your function? This is a talk on when AI hit the road, and where it missed and why. 2024 has been such a confusing year! Tech giants vs startups, established service providers vs internal redefinition of tool stack, trials to licenses, and more. As a functional leader for any org, how do you know the state of AI for your business processes? 2024 has been the year we experimented to find that answer. We tried out lots of vendors, open source, even in-house solutions for AI driven workflow automation and business processes across different functions in our enterprise. Join me as we describe the potential for Agentic workflows, learning from our narrative of what worked in 2024, and what we want changing in 2025.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/xq9sz5MksVI?si=2OIgvZVd88anC5tM\" title=\"YouTube video player",
+   "speakers": [
+    {
+     "name": "Shirsha Chaudhuri ",
+     "title": "Director of Engineering",
+     "company": "Thomson Reuters",
+     "company_url": "https://www.thomsonreuters.com/en.html",
+     "bio": "Shirsha heads the co-innovation team in TR Labs that builds solutions for the Editorial and Internal teams in Thomson Reuters. She is passionate about successful operationalizing and sustenance of AI solutions. She works with communities on AI for good, societal impact projects and in the tech for D&I space. She loves to network with people who are using AI and modern tech for building a better world that is more inclusive, more digital and together a better tomorrow.",
+     "social": "https://www.linkedin.com/in/shirsharay"
+    }
+   ]
+  },
+  {
+   "id": "232",
+   "slug": "ensure-ai-agents-work-evaluation-frameworks-for-scaling-success",
+   "title": "Ensure AI Agents Work: Evaluation Frameworks for Scaling Success",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T14:06:00",
+   "end": "2025-02-20T14:26:00",
+   "duration_min": 20,
+   "abstract": "Turning AI agents into reliable, production-ready tools that deliver tangible business results requires more than just great models. It demands robust evaluation frameworks that ensure agents perform at scale, align with organizational objectives, and continuously improve in dynamic environments.\n\nThis session provides an executive-level perspective on evaluating AI agents at scale. We’ll explore practical strategies for designing evaluation processes that drive measurable impact, identifying and mitigating performance bottlenecks, and implementing observability practices to maintain reliability over time. Through insights from real-world deployments, we’ll highlight common pitfalls, share best practices for iterative improvement, and demonstrate how effective evaluation frameworks can transform experimental agents into enterprise-grade solutions.\n\nWhether you're shaping your organization’s GenAI strategy or looking to unlock the full potential of AI agents, this talk offers actionable insights to ensure your agents work—and scale—successfully.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/OC04sP_QgTI?si=kZaCJI4TCCsYYNUo",
+   "speakers": [
+    {
+     "name": "Aparna Dhinkaran",
+     "title": "Founder & CPO",
+     "company": "Arize",
+     "company_url": "https://arize.com/",
+     "bio": "Aparna Dhinakaran is the Co-Founder and Chief Product Officer at Arize AI, a pioneer, and early leader in machine learning (ML) observability. A frequent speaker at top conferences and thought leader in the space, Dhinakaran was recently named to the Forbes 30 Under 30. Before Arize, Dhinakaran was an ML engineer and leader at Uber, Apple, and TubeMogul (acquired by Adobe). During her time at Uber, she built several core ML Infrastructure platforms, including Michelangelo. She has a bachelor’s from Berkeley's Electrical Engineering and Computer Science program, where she published research with Berkeley's AI Research group. She is on a leave of absence from the Computer Vision Ph.D. program at Cornell University.",
+     "social": "https://twitter.com/aparnadhinak\nhttps://www.linkedin.com/in/aparnadhinakaran/\t\nhttps://github.com/Arize-ai/phoenix"
+    }
+   ]
+  },
+  {
+   "id": "234",
+   "slug": "the-devops-engineer-who-never-sleeps-ai-agents-datadog",
+   "title": "The Devops Engineer Who Never Sleeps",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T14:27:00",
+   "end": "2025-02-20T14:47:00",
+   "duration_min": 20,
+   "abstract": "Operate services without getting paged, and not because your phone ran out of battery. Ever get woken up in the middle of the night because a service has gone down, stumbling around looking for your laptop. What if there was an oncall engineer who didn’t need to sleep, always ready to handle issues instead, letting you sleep. In this talk we’ll share how we’re using AI Agents at Datadog to handle alerts and incidents for you, and what we’ve learned building agents to use Datadog and handle DevOps like a human would.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/VZzUhELgYk4?si=w3qg3no34RZAFZzv",
+   "speakers": [
+    {
+     "name": "Diamond Bishop",
+     "title": "Director of Engineering/AI",
+     "company": "Datadog",
+     "company_url": "http://datadoghq.com",
+     "bio": "A survivor of the long AI winter, Diamond currently directs AI Engineering at Datadog, spearheading their AI agents initiative. His journey spans 15 years of work in AI/ML, including the early days of AI assistants at Amazon (Alexa) and Microsoft (Cortana), as well as working on PyTorch at Meta, and co-founding Augmend—an AI startup focused on DevOps automation (acquired by Datadog). Diamond is a perpetual techno-optimist who also keeps a close eye on Roko's basilisk.\n\nWhen not building AI assistants, he's raising his own budding intelligence (human toddler), participating in the occasional drone fighting, and building hobby electronics. It's time to build.",
+     "social": "https://twitter.com/diamondbishop\t\nhttps://www.linkedin.com/in/diamondbishop/\t\nhttps://github.com/dbish\t\nhttps://ageof.diamonds/"
+    }
+   ]
+  },
+  {
+   "id": "233",
+   "slug": "how-to-build-your-own-ai-data-center-in-2025",
+   "title": "How to Build Your Own AI Data Center in 2025",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T14:48:00",
+   "end": "2025-02-20T15:08:00",
+   "duration_min": 20,
+   "abstract": "This presentation talks to AI Executives who are tasked with building self managed AI Networks.  It will talk about some new terminology that is used, list the key considerations around power to the racks, new hardware (GPU servers) and software (workload managers, GPU management and programming) that's required, there are specific storage requirements, multi-tenancy options, uptime, telemetry and visibility.  It will then drill down into the details of the differences between the Data Center networks we build today versus what's required for the next generation of AI Networking.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/3j1dHivahFQ?si=I6Jxu5yLE-PwfPc6",
+   "speakers": [
+    {
+     "name": "Paul Gilbert",
+     "title": "Technical Lead",
+     "company": "Arista Networks",
+     "company_url": "https://www.arista.com/en/",
+     "bio": "Paul Gilbert has spent over 30 years in technology.  He worked at Cisco Systems for over 25 years reaching the title of Distinguished Systems Engineer, the first one in North America.  In 2022 he left Cisco and joined an AI startup, he was there 1 year then moved onto Arista Networks.  He is a tech lead at Arista and focuses on AI and Data Center.",
+     "social": "https://www.linkedin.com/in/paul-gilbert-8ab2075/"
+    }
+   ]
+  },
+  {
+   "id": "252",
+   "slug": "anthropic-for-vps-of-ai",
+   "title": "Anthropic for VPs of AI",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T15:08:00",
+   "end": "2025-02-20T15:28:00",
+   "duration_min": 20,
+   "abstract": "Enterprise AI implementation often fails due to overengineering, poor data infrastructure, or lack of testing - despite pitfalls many industry leaders across finance, customer support, and productivity sectors have achieved transformative results with Claude. This session will dissect Anthropic's Applied AI approach across multiple deployment models (API, cloud partnerships, and enterprise solutions), revealing how to build effective AI roadmaps while avoiding these common pitfalls. Drawing from real-world case studies of frontier model deployment, we'll demonstrate practical strategies for cross-functional collaboration, developing robust evaluation frameworks, and making informed build-vs-buy decisions that align with your organization's AI maturity and safety requirements.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/VhPfM_aGBVc?si=gzSurjTbgCfGruOc",
+   "speakers": [
+    {
+     "name": "Alexander Bricken",
+     "title": "Member of Technical Staff",
+     "company": "Anthropic",
+     "company_url": "https://www.anthropic.com/",
+     "bio": "Alexander Bricken is a member of the Applied AI Product Engineering Team at Anthropic, leading technical implementation for Financial Services. He specializes in building production-grade Claude solutions, working directly with customers while collaborating with the Product Research team. Before Anthropic, he spent 2 years at Palantir, where he balanced his responsibilities as an AI Engineer and Account Strategist, specifically working with North American Insurance customers. He has a background in machine learning, data science, and mathematics as one of the founding students of Minerva University.",
+     "social": "https://twitter.com/ambricken \t\nhttps://www.linkedin.com/in/alexanderbricken/\t\nhttps://github.com/Briiick \t\nhttps://bricken.co/"
+    },
+    {
+     "name": "Joe Bayley",
+     "title": "GTM - Enterprise",
+     "company": "Anthropic",
+     "company_url": "https://www.anthropic.com/",
+     "bio": null,
+     "social": "https://www.linkedin.com/in/jb1234/"
+    }
+   ]
+  },
+  {
+   "id": "261",
+   "slug": "day1-afternoon-break",
+   "title": "Break",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T15:30:00",
+   "end": "2025-02-20T16:00:00",
+   "duration_min": 30,
+   "abstract": null,
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "227",
+   "slug": "insights-on-building-ai-teams-together-with-beacon-ai",
+   "title": "Insights on Building AI teams",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T16:00:00",
+   "end": "2025-02-20T16:20:00",
+   "duration_min": 20,
+   "abstract": "Market trends and people data. In a world with inflating salaries, it's more important now than ever to ensure you're using the proper filtering, timing, and narrative to find and hire the best possible engineering teams in the new AI era. In this talk, we'll share and discuss data sourced from SignalFire’s Beacon AI platform. Whether building a team or expanding one, we'll examine the information and processes we use to give our portfolio companies an edge, and a framework for setting themselves apart from the competition.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/q_ixa5EW8DY?si=dBNacq11XklZ_M8_",
+   "speakers": [
+    {
+     "name": "Heath Black",
+     "title": "Managing Director, Product",
+     "company": "SignalFire",
+     "company_url": "http://www.signalfire.com",
+     "bio": "\"Heath Black joined Signalfire as Head of Product in 2021 to lead Beacon Talent and other machine-learning initiatives that help make our portfolio companies' lives better.\n\nBefore joining SignalFire, Heath was a senior product manager at Facebook (2017-2021), where he worked in the Facebook Reality Labs organization on various machine learning products for the Facebook + Rayban smart glasses collaboration. Before joining Facebook, Heath worked at several startups across Seed to Series A– Appstores, Chirpify, and Imzy. He also worked at Reddit from 2014-16, where he focused on building out new business lines to monetize the site. His favorite product at Reddit was the subscription box he worked on for cat owners. The box people received could be refolded into a tiny cat house.\n\nHeath received a B.A. from Oklahoma Wesleyan University, where he studied English, with history and communications minors. He received his M.A. from DePaul University in English with a focus on Modern Irish Literature. He's a published poet, avid golfer, bookworm, NBA enthusiast, and father of two rambunctious boys.\"",
+     "social": "https://twitter.com/heathwblack\t\nhttps://www.linkedin.com/in/heathwblack"
+    }
+   ]
+  },
+  {
+   "id": "228",
+   "slug": "lessons-from-building-linkedins-genai-platform",
+   "title": "Lessons from Building LinkedIn's GenAI Platform",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T16:21:00",
+   "end": "2025-02-20T16:41:00",
+   "duration_min": 20,
+   "abstract": "In this talk, we will offer insights into building LinkedIn’s GenAI Platform team from the perspective of a first-line manager. We will explore the journey of developing a scalable and adaptable GenAI technology stack in a rapidly evolving tech landscape, seamlessly integrating AI-first principles into LinkedIn’s predominantly Java-based ecosystem, and achieving significant advancements in multi-agent system architectures.\nThe presentation will highlight LinkedIn's GenAI platform innovations, including a centralized registry for dynamic skill-sharing, contextual memory for agent interactions, seamless integration with existing infrastructure, and a balanced approach to leveraging both in-house solutions and popular open-source libraries. Attendees will gain practical insights into fostering collaboration, cultivating a developer-friendly environment, aligning agile execution with long-term platform goals, and identifying the critical talent and skills essential for success. This talk is designed to inspire and guide leaders as they build foundational GenAI teams in dynamic, fast-changing environments.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/n9rjuBuShko?si=QE8NLfj2By38i0kL",
+   "speakers": [
+    {
+     "name": "Xiaofeng Wang",
+     "title": "Engineering Manager, Generative AI Foundations",
+     "company": "LinkedIn",
+     "company_url": "https://careers.linkedin.com",
+     "bio": "Xiaofeng Wang leads a full-stack AI engineering team at LinkedIn, spearheading the development of cutting-edge Generative AI technologies. Their team focuses on LLM post-training optimization, crafting application frameworks, agent architectures, and researching the latest advancements in post-training techniques. They bring innovative solutions to production, empowering agentic applications and products that transform user experiences at LinkedIn.",
+     "social": "https://www.linkedin.com/in/wang-xiaofeng/"
+    }
+   ]
+  },
+  {
+   "id": "229",
+   "slug": "specialized-rag-agents-lessons-learned-from-deploying-complex-rag-agents-in-production",
+   "title": "Specialized RAG Agents: Lessons learned from deploying complex AI systems in production",
+   "track": "AI Leadership",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T16:42:00",
+   "end": "2025-02-20T17:02:00",
+   "duration_min": 20,
+   "abstract": "The latest generation of LLMs is demonstrating impressive test time reasoning capabilities.  However, to be truly valuable in an enterprise setting requires those agentic capabilities to be applied to the right enterprise data. In all the excitement around AI agents, many of us have somehow forgotten the timeless adage “garbage in; garbage out” – language models can only do their job if they are contextualized properly. In this talk, Douwe Kiela will share lessons learned from deploying enterprise RAG systems at scale and how to design a system robust enough for the Fortune 500.",
+   "description": "Lessons learned from deploying complex RAG agents in production",
+   "recording": "https://www.youtube.com/embed/kPL-6-9MVyA?si=Qg8bgNPV57gPAq5f",
+   "speakers": [
+    {
+     "name": "Douwe Kiela",
+     "title": "CEO & Co-Founder",
+     "company": "Contextual AI",
+     "company_url": "https://contextual.ai/",
+     "bio": "Douwe Kiela is the CEO and Co-Founder of Contextual AI. He is also an Adjunct Professor in Symbolic Systems at Stanford University. Previously, he was the Head of Research at Hugging Face and a Research Lead at Meta’s Fundamental AI Research (FAIR) team, where he pioneered Retrieval-Augmented Generation (RAG) among other key AI breakthroughs. His work in multimodality, alignment, and evaluation has set new standards in the field of AI and has made systems safer, more reliable, and more accurate.",
+     "social": "https://twitter.com/douwekiela\t\nhttps://www.linkedin.com/in/douwekiela/\t\nhttps://douwekiela.github.io/"
+    }
+   ]
+  },
+  {
+   "id": "262",
+   "slug": "day1-onsite-networking",
+   "title": "Onsite Reception and Networking (open to all tracks)",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-20T17:00:00",
+   "end": "2025-02-20T19:00:00",
+   "duration_min": 120,
+   "abstract": null,
+   "description": "eat drink and talk to expo booths for all tracks (both Leadership and Agent Engineering)",
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "267",
+   "slug": "day2-registration-breakfast",
+   "title": "Registration & Breakfast",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T08:00:00",
+   "end": "2025-02-21T09:00:00",
+   "duration_min": 60,
+   "abstract": null,
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "297",
+   "slug": "agent-eng",
+   "title": "Why Agent Engineering",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T09:00:00",
+   "end": "2025-02-21T09:15:00",
+   "duration_min": 15,
+   "abstract": "An anthropological approach.\n\nhttps://docs.google.com/presentation/d/1SWoBIvTQu__uNEvSawmNcROiUx-n86O_fP0arZcTGb8/edit?usp=sharing",
+   "description": "Why AIE NYC is all-in on Agent Engineering.",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "swyx",
+     "title": "Editor",
+     "company": "Latent.Space",
+     "company_url": "https://latent.space",
+     "bio": null,
+     "social": "https://twitter.com/swyx"
+    }
+   ]
+  },
+  {
+   "id": "240",
+   "slug": "building-and-evaluating-ai-agents",
+   "title": "Building and evaluating AI Agents That Matter",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T09:15:00",
+   "end": "2025-02-21T09:34:00",
+   "duration_min": 19,
+   "abstract": "Is 2025 the year of AI agents? Will reasoning models allow agents to solve challenging open problems? From software engineering to web task automation, it has been claimed that agents will solve challenging open problems. Unfortunately, current agents suffer from many shortcomings that reduce their utility in real-world tasks — look no further than Rabbit R1 and the Humane Pin. In this talk, we will explore how current agents fall far short of their claimed performance in the real world and understand best practices for improving agent evaluation. Learn how to avoid known pitfalls and build AI agents that actually matter (https://arxiv.org/abs/2407.01502 )",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/d5EltXhbcfA?si=hDTzjQruVFXCYj2s",
+   "speakers": [
+    {
+     "name": "Sayash Kapoor",
+     "title": "Author",
+     "company": "AI Snake Oil",
+     "company_url": "https://www.aisnakeoil.com/",
+     "bio": "Sayash Kapoor is a Senior Fellow at Mozilla, a Laurance S. Rockefeller Graduate Prize Fellow in the University Center for Human Values, and a computer science Ph.D. candidate at Princeton University's Center for Information Technology Policy. He is a coauthor of AI Snake Oil, a book that provides a critical analysis of artificial intelligence, separating the hype from the true advances. He has written for outlets like WIRED and The Wall Street Journal, and his work has been featured in The New York Times, The Atlantic, Washington Post, Bloomberg, and many others. Kapoor has been recognized with various awards, including TIME’s inaugural list of the 100 most influential people in AI.",
+     "social": "https://twitter.com/sayashk\t\nhttps://www.linkedin.com/in/ksayash/\t\nhttps://github.com/ksayash\t\nhttps://www.cs.princeton.edu/~sayashk/"
+    }
+   ]
+  },
+  {
+   "id": "242",
+   "slug": "gemini-deep-research",
+   "title": "Going deep on Gemini Deep Research",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T09:35:00",
+   "end": "2025-02-21T09:54:00",
+   "duration_min": 19,
+   "abstract": "You’re doing research all the time, we just don't always call it that. From figuring out the right summer camp options for your kids to running due-diligence on an investment opportunity, there are plenty of tasks that take up hours of your day and dozens of chrome tabs. Gemini Deep Research is our initiative to turbocharge this process. In this talk we’ll discuss how we built it, learnings along the way and our vision for the future of personal research assistants.",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": " Mukund Sridhar",
+     "title": "Staff ML SWE / TLM",
+     "company": "DeepMind",
+     "company_url": null,
+     "bio": null,
+     "social": "https://www.linkedin.com/in/mukund-sridhar-6a233060/"
+    },
+    {
+     "name": "Aarush Selvan",
+     "title": "Product Manager",
+     "company": "Google Gemini",
+     "company_url": "https://gemini.google.com/",
+     "bio": "Aarush Selvan is a Product Manager at Google working on Gemini App. He leads Gemini Deep Research, which enables Gemini to act as your personal research assistant. Before kicking off Deep Research, he led the Gemini Extensions platform which connects Gemini with apps and services (like GMail, Google Maps, YouTube) to provide more helpful responses.\n\nPrior to this, Aarush has been lucky enough to work on products at every part of the machine learning stack - from next generation ASICS to compilers and frameworks and even Speech and NLP technology for the Google Assistant. He's originally from the UK and lives in New York (though you can often find him in the Bay Area!). He has a BS and MS in Symbolic Systems from Stanford University.",
+     "social": "https://twitter.com/AarushSelvan\t\nhttps://www.linkedin.com/in/aarush-selvan-3a376a8b/"
+    }
+   ]
+  },
+  {
+   "id": "243",
+   "slug": "anthropic-building-effective-agents",
+   "title": "How We Build Effective Agents",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T09:55:00",
+   "end": "2025-02-21T10:14:00",
+   "duration_min": 19,
+   "abstract": null,
+   "description": null,
+   "recording": "https://www.youtube.com/embed/D7_ipDqhtwk?si=KjG280T1qUKM54-t",
+   "speakers": [
+    {
+     "name": "Barry Zhang",
+     "title": "Member of Technical Staff",
+     "company": "Anthropic",
+     "company_url": "https://www.anthropic.com/",
+     "bio": "Barry is a member of technical staff on Anthropic's Applied AI team, focusing on developing agentic systems with enterprises and startups. Previously, he was a tech lead on the Monetization genAI team at Meta, where he claimed the inaugural 'AI Engineer' title. He holds degrees in Computer Science and Industrial Engineering from Northwestern",
+     "social": "https://twitter.com/barry_zyj\nhttps://www.linkedin.com/in/barry-z/"
+    }
+   ]
+  },
+  {
+   "id": "244",
+   "slug": "sierras-agent-development-life-cycle",
+   "title": "Sierra’s Agent Development Life Cycle",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T10:15:00",
+   "end": "2025-02-21T10:34:00",
+   "duration_min": 19,
+   "abstract": "Compared to traditional software, LLMs are creative, flexible, unpredictable, expensive, and slow. A new kind of software demands a new approach to development. At Sierra, we’ve built industrial grade AI agents for consumer brands like Sonos, ADT, and SiriusXM, serving millions of consumers. Every day, their agents are reasoning through complex workflows and helping customers set up speakers, order equipment, and refresh in-car radios. As we’ve scaled with our early customers, we’ve developed a unique methodology to enable Sierra agents to be reliable, testable, and incredibly capable. We've turned scale into an asset that helps align goals, enforce guardrails, and enable continuous self-improvement, even and especially as new models, price points, modalities, and paradigms like reasoning have added complexity and made new experiences possible.",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Zack Reneau-Wedeen",
+     "title": "AI Product Manager",
+     "company": "Sierra",
+     "company_url": "https://sierra.ai/",
+     "bio": "I've been a product manager, executive, and software engineer for over ten years at Google and other technology companies focused primarily on consumer products. I started working with neural networks in 2015, when we were building the first version of Google Lens, and I had no idea that language models would play such a central role in the future. Now I'm building conversational AI agents at Sierra.",
+     "social": "https://twitter.com/zackrw\nhttps://www.linkedin.com/in/zackrw\nhttps://zackrw.com/"
+    }
+   ]
+  },
+  {
+   "id": "298",
+   "slug": "what-rl-means-for-agents",
+   "title": "What RL Means for Agents",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T10:35:00",
+   "end": "2025-02-21T10:54:00",
+   "duration_min": 19,
+   "abstract": null,
+   "description": null,
+   "recording": "https://www.youtube.com/embed/JIsgyk0Paic?si=2o4aGBtmD01FbVTZ",
+   "speakers": [
+    {
+     "name": "Will Brown",
+     "title": "Researcher",
+     "company": "Morgan Stanley",
+     "company_url": null,
+     "bio": "Hi! I’m a machine learning researcher based in New York City.\n\nI am a member of Morgan Stanley’s Machine Learning Research group, where I have been primarily working on projects related to language models and sequential prediction. I completed my PhD (CS) at Columbia, where I was fortunate to be co-advised by Christos Papadimitriou and Tim Roughgarden.\n\nBefore that, I was an undergrad (CS + philosophy) and masters (DS) student at Penn, and I’ve spent time in research and engineering roles at AWS, Two Sigma, MongoDB, and AmFam",
+     "social": "https://twitter.com/willccbb"
+    }
+   ]
+  },
+  {
+   "id": "263",
+   "slug": "day2-morning-break",
+   "title": "Break",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T11:00:00",
+   "end": "2025-02-21T11:30:00",
+   "duration_min": 30,
+   "abstract": null,
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "301",
+   "slug": "are-reasoning-models-better-llm-judges",
+   "title": "Are reasoning models better LLM judges?",
+   "track": "Expo Stage",
+   "type": "TALK",
+   "room": "TimesCenter Expo",
+   "start": "2025-02-21T11:00:00",
+   "end": "2025-02-21T11:12:00",
+   "duration_min": 12,
+   "abstract": "Reasoning models like o1, o3-mini and R1 have taken over the discourse (and tanked the stock market) but are they better at everything than a regular LLM can do? \n\nHypothesis: Reasoning is beneficial for LLM as a judge category of tasks\n\nIn this talk, Alex will break down common pitfalls of LLM as a judge, review and understand the latest research, and show off ways to evaluate judge performance using Meta evaluation techniques.",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Alex Volkov",
+     "title": "AI Evangelist",
+     "company": "Weights & Biases",
+     "company_url": "https://wandb.ai/site",
+     "bio": "Alex Volkov is an AI Evangelist at Weights & Biases as well as the founder and host of ThursdAI, a weekly newsletter and podcast that explores the latest innovations in AI, their practical applications, and the open-source AI community. Alex is an AI startup founder with 20 years of full-stack software engineering experience, offering a deep well of insights into AI innovation. He’s celebrated for his ability to clarify and summarize the complexities of the rapid AI advances and advocating for its beneficial uses.",
+     "social": "https://twitter.com/altryne"
+    }
+   ]
+  },
+  {
+   "id": "305",
+   "slug": "how-do-you-know-your-agent-works",
+   "title": "How do you know your agent works?",
+   "track": "Expo Stage",
+   "type": "TALK",
+   "room": "TimesCenter Expo",
+   "start": "2025-02-21T11:15:00",
+   "end": "2025-02-21T11:27:00",
+   "duration_min": 12,
+   "abstract": "This talk will explore the role of evaluations (evals) in AI agent development, from full-agent assessments to micro-evals. Drawing parallels to traditional software engineering, the talk will discuss why evals are essential for building reliable AI agents that actually solve customer needs and lessons learned from shipping agents at Datadog.",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Evan Fossier ",
+     "title": "Senior Software Engineer",
+     "company": "Datadog",
+     "company_url": "http://datadoghq.com",
+     "bio": "Evan has more than 10 years of experience building customer-facing distributed systems, founded an AI startup in the image generation space, and now hacks on code generation agents at Datadog.",
+     "social": "https://www.linkedin.com/in/efossier/"
+    },
+    {
+     "name": "Joey Pinhas",
+     "title": "Senior Software Engineer",
+     "company": "Datadog",
+     "company_url": "http://datadoghq.com",
+     "bio": "Joey is a born and bred New Yorker with an MEng in Computer Science from Cornell Tech. He built low latency distributed systems that process petabaytes of data per day at Datadog and now works on building AI agents at Datadog.",
+     "social": "https://www.linkedin.com/in/joeypinhas/"
+    }
+   ]
+  },
+  {
+   "id": "245",
+   "slug": "agents-in-investment-management-aladdin-copilot",
+   "title": "Agents in Investment Management: Aladdin Copilot",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T11:30:00",
+   "end": "2025-02-21T11:49:00",
+   "duration_min": 19,
+   "abstract": "BlackRock's Aladdin® Copilot is an innovative generative AI tool that helps institutional investors instantly harness the power of BlackRock’s Aladdin investment management platform to make more-informed business decisions faster. As Aladdin® Copilot's capabilities continue to expand, we have developed an enterprise, multi-agent platform that enables federated application development in a controlled and explainable environment that can scale with the needs of the organization. During this presentation, we will dive into the technical architecture of this multi-agent orchestration platform, including key design decisions made to reduce platform latency and support developer productivity. We will also discuss how we approach evaluation of the system and the challenges that we’ve faced in bringing this powerful product to production.",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Brennan Rosales",
+     "title": "Vice President, AI Engineering",
+     "company": "BlackRock",
+     "company_url": "http://www.blackrock.com",
+     "bio": "Brennan Rosales is a Senior ML Engineer Lead in the Aladdin AI Engineering Group at BlackRock. Within this role, Brennan is responsible for designing and delivering AI Solutions in Aladdin, BlackRock's financial risk software, and shaping the AI engineering vision at the firm.",
+     "social": "https://www.linkedin.com/in/brosales20/"
+    }
+   ]
+  },
+  {
+   "id": "246",
+   "slug": "john-crepezzi",
+   "title": "Building AI-Powered Developer Tools at Jane Street",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T11:50:00",
+   "end": "2025-02-21T12:09:00",
+   "duration_min": 19,
+   "abstract": "Programmers using mainstream languages enjoy a wealth of intelligent coding assistants and tools. At Jane Street, where we primarily use OCaml, we faced the challenge of building these tools for a powerful but low-resource functional programming language. This talk explores our journey in creating custom assistants and editor tooling for OCaml, tackling everything from data collection and model training to seamless editor integrations. We'll dive into our end-to-end process: gathering quality training data, developing meaningful evaluations for custom-trained models, building out underlying infrastructure, and creating tools that fit how we work.",
+   "description": "Programmers using mainstream languages enjoy a wealth of intelligent coding assistants and tools. At Jane Street, where we primarily use OCaml, we faced the challenge of building these tools for a powerful but low-resource functional programming language. This talk explores our journey in creating custom assistants and editor tooling for OCaml, tackling everything from data collection and model training to seamless editor integrations. We'll dive into our end-to-end process: gathering quality training data, developing meaningful evaluations for custom-trained models, building out underlying infrastructure, and creating tools that fit how we work.",
+   "recording": "https://www.youtube.com/embed/0ML7ZLMdcl4?si=6r91SwVyzrFtgfkV",
+   "speakers": [
+    {
+     "name": "John Crepezzi",
+     "title": "Software Engineer",
+     "company": "Jane Street",
+     "company_url": "http://www.janestreet.com",
+     "bio": "John Crepezzi is an engineer at Jane Street, where he works on building LLM-powered coding assistants and the infrastructure to enable others to create applications leveraging large language models. His work focuses on enhancing developer productivity, particularly in Jane Street's OCaml-centric environment.\n\nBefore joining Jane Street, John was a Principal Software Engineer at GitHub, where he contributed to several impactful projects in the developer productivity space, including Codespaces, Merge Queues, and Contribution Graphs. With a career dedicated to improving how developers work, John is passionate about creating tools that empower engineers to solve complex problems more effectively.",
+     "social": "https://twitter.com/seejohnrun\nhttps://www.linkedin.com/in/johncrepezzi/\t\nhttps://github.com/seejohnrun\t\nhttp://johncrepezzi.com/"
+    }
+   ]
+  },
+  {
+   "id": "247",
+   "slug": "lessons-learned-overcoming-challenges-to-scaling-generative-ai-products",
+   "title": "Challenges to Scaling Agents for Generative AI Products",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T12:10:00",
+   "end": "2025-02-21T12:29:00",
+   "duration_min": 19,
+   "abstract": null,
+   "description": null,
+   "recording": "https://www.youtube.com/embed/b2GqTDWtg6s?si=zR6saQX89j3AlLUp",
+   "speakers": [
+    {
+     "name": "Anju Kambadur",
+     "title": "Head of AI Engineering",
+     "company": "Bloomberg ",
+     "company_url": "http://bloomberg.com/company",
+     "bio": "Dr. Prabhanjan (Anju) Kambadur is the Head of the AI Engineering group at Bloomberg, which consists of 350+ researchers responsible for building financial solutions, including search and conversational systems, high-precision extraction pipelines, and time-series forecasts, as well as the firm’s underlying AI infrastructure. The members of his group are active in the academic community, where they have published more than 100 peer-reviewed papers in the last three years. Anju is one of the authors of the BloombergGPT research paper. He was also recognized on Insider's \"AI 100\" list of the top 100 people in artificial intelligence in 2023.\n\nBefore Bloomberg, Anju was a research staff member at IBM Research’s Thomas J. Watson Research Center, where he worked on problems in machine learning, such as matrix completion and sketching, sparse coding, genome-wide association studies, temporal causal modeling, and high performance computing.",
+     "social": "https://twitter.com/TechAtBloomberg\nhttps://www.linkedin.com/in/anju-kambadur-48aa78162/"
+    }
+   ]
+  },
+  {
+   "id": "248",
+   "slug": "trust-but-verify-high-fidelity-reasoning-in-agentic-workflows",
+   "title": "Trust, but Verify: High-Fidelity Reasoning in Agentic Workflows",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T12:30:00",
+   "end": "2025-02-21T12:49:00",
+   "duration_min": 19,
+   "abstract": "Join us for a deep dive into the engineering and interaction design patterns that power the automated creation of high-signal, information-dense investment research reports. Distilling accurate, actionable insights from vast, multimodal data sources requires a thoughtful approach to both the underlying models and the product affordances that give users granular visibility into a system’s reasoning across thousands of pages of material. We’ll explore how these design considerations foster trust, clarity, and effectiveness in modern financial workflows.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/MWTJIAwAAnk?si=5Ejbd7caZg6HHMcj",
+   "speakers": [
+    {
+     "name": "Mike Conover",
+     "title": "Founder & CEO",
+     "company": "Brightwave",
+     "company_url": "https://www.brightwave.io",
+     "bio": "Mike Conover is the CEO and co-founder of Brightwave, the AI research and diligence platform purpose-build for investment professionals. A pioneer in the field of artificial intelligence, prior to Brightwave Mike led LLM engineering efforts at Databricks where he created Dolly, one of the first open-source models to exhibit instruction following behavior.\n\n\nMike has built AI systems & products for more than fifteen years, including tours of duty at Workday as Director of Financials Machine Learning, SkipFlag (acquired by Workday), and LinkedIn. He has a Ph.D. in complexity science from Indiana University, and his work has been featured in Bloomberg, The Wall Street Journal, The New York Times, TechCrunch, Hacker News, Nature Communications, MIT Technology Review and on NPR.",
+     "social": "https://twitter.com/vagabondjack\t\nhttps://www.linkedin.com/in/michaelconover/"
+    }
+   ]
+  },
+  {
+   "id": "259",
+   "slug": "lunch-feb21",
+   "title": "Lunch",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T13:00:00",
+   "end": "2025-02-21T14:00:00",
+   "duration_min": 60,
+   "abstract": null,
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "306",
+   "slug": "evaluate-this-mitigating-hallucinations-in-rag-and-ai-agents-with-galileo",
+   "title": "Evaluate This! Mitigating Hallucinations in RAG & AI Agents with Galileo",
+   "track": "Expo Stage",
+   "type": "TALK",
+   "room": "TimesCenter Expo",
+   "start": "2025-02-21T13:05:00",
+   "end": "2025-02-21T13:19:00",
+   "duration_min": 14,
+   "abstract": "In this session, we’ll showcase how Galileo’s evaluation platform helps teams systematically measure and mitigate errors across RAG pipelines and AI agents. We’ll walk through real-world examples of detecting hallucinations in RAG contexts and debugging multi-step AI agents using automated evaluation techniques. This fast-paced, demo-led session will highlight how teams can quickly improve application accuracy through a combination of AI-enabled evals and human feedback.",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Atin Sanyal",
+     "title": "Co-founder & CTO",
+     "company": "Galileo",
+     "company_url": "https://www.rungalileo.io/?utm_medium=paid&utm_source=ai_eng_wf_24",
+     "bio": "Atin is the Co-founder and CTO of Galileo. Prior to Galileo, Atin was an Engineering Leader at Uber AI, responsible for various Machine Learning initiatives at the company. He was one of the architects of the world's first Features Store (Michelangelo) and an early engineer on Siri at Apple, building their foundational technology and infrastructure that democratized ML at Apple.",
+     "social": "https://linkedin.com/in/atinsanyal"
+    },
+    {
+     "name": "Erin Mikail",
+     "title": "Senior DX Engineer",
+     "company": "Galileo",
+     "company_url": "https://www.rungalileo.io/?utm_medium=paid&utm_source=ai_eng_wf_24",
+     "bio": "Erin Mikail Staples is a senior developer experience engineer, stand-up comedian and dog mom living in Brooklyn, NYC  by way of Reno, NV. Her work spans the breadth of open source contributions to technical demos and content in both D. Erin's various shenanigans have taken her to speaking at events like StrangeLoop, How to Web, DevOpsDays, KCDCPyData Berlin, and PyCon, garnered Jeff Staple's attention, appeared in The New York Times, broadcasted across the sound waves on the Practical AI podcast, or in USA Today's Storytellers Project, exist in the archive of the Museum of Alternate History and her mom's dogs's Instagram account.",
+     "social": "https://www.linkedin.com/in/erinmikail/"
+    }
+   ]
+  },
+  {
+   "id": "303",
+   "slug": "path-towards-100-percent-accurate-and-repeatable-data-agents-for-ai",
+   "title": "Path towards 100% Accurate & Repeatable Data Agents for AI",
+   "track": "Expo Stage",
+   "type": "TALK",
+   "room": "TimesCenter Expo",
+   "start": "2025-02-21T13:21:00",
+   "end": "2025-02-21T13:35:00",
+   "duration_min": 14,
+   "abstract": "Achieving 100% accuracy in Retrieval-Augmented Generation (RAG) is critical for AI agents handling complex workflows. But most RAG architectures fail due to goal drift, incomplete reasoning, and multi-step errors.\n\nIn this session, we will cover:\n- Why traditional RAG and tool-calling approaches break down in real-world AI workflows.\nAgentic query planning: A structured approach to eliminate errors and improve reliability.\n- Benchmarking results: The path to achieve 100% accuracy where existing approaches fall short, backed by benchmarks.\n- Engineering strategies for verifiable, repeatable AI workflows.\n- We’ll walk through real-world examples and show how structured planning and separate execution fixes common RAG failures.\n- Live Demo: See how PromptQL ensures accurate, repeatable AI actions in production environments.",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Praveen Durairaju",
+     "title": "Field CTO",
+     "company": "Hasura",
+     "company_url": "https://hasura.io/",
+     "bio": "Praveen is a Field CTO at Hasura with over 10 years of full-stack web dev experience. Praveen was a core contributor to open source projects like hasura/graphql-engine and works on solving data access for the AI world. Besides the day job, Praveen runs community meetups like GraphQL SF and Data Agent.",
+     "social": "https://linkedin.com/in/praveenonweb"
+    }
+   ]
+  },
+  {
+   "id": "304",
+   "slug": "supercharge-your-sdlc-how-ai-agents-are-revolutionizing-software-development-abstract",
+   "title": "Supercharge Your SDLC: How AI Agents are Revolutionizing Software Development Abstract",
+   "track": "Expo Stage",
+   "type": "TALK",
+   "room": "TimesCenter Expo",
+   "start": "2025-02-21T13:37:00",
+   "end": "2025-02-21T13:51:00",
+   "duration_min": 14,
+   "abstract": "Learn how AI agents are revolutionizing software development, moving beyond copilots to automate tasks and improve efficiency. This talk will cover practical examples like using agents to:\n\nSpeed up code migration\nEnhance code reviews\nStreamline bug triaging\nGenerate GraphQL schemas\n\nDiscover how these tools can help your team tackle challenges like technical debt and slow releases by using AI to move from code assistant to task automator. Find out about custom agent APIs and how to build your own agents, and discover how AI agents can help you save time, improve quality and prepare for the future of software development.",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Beyang Liu",
+     "title": "Co-Founder and CTO",
+     "company": "Sourcegraph",
+     "company_url": "https://sourcegraph.com/",
+     "bio": "Beyang Liu is the co-founder and CTO of Sourcegraph, a company that is industrializing software development at scale. Sourcegraph accelerates millions of developers working in large, complex codebases like those of Databricks, Reddit, Uber, Canva, Redfin, Palo Alto Networks and the U.S. government. Sourcegraph's tech combines AI with compilers and semantic search to make AI much more effective in big, collaborative codebases. Beyang began his career working on software for some of the largest banks as a dev at Palantir using his education in machine learning and data analysis at Stanford.",
+     "social": "https://www.linkedin.com/in/beyang-liu/\nhttps://github.com/beyang\nhttps://twitter.com/beyang"
+    }
+   ]
+  },
+  {
+   "id": "249",
+   "slug": "kevin-hou",
+   "title": "Agents are built at the fringe: getting from 90 to 100",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T14:00:00",
+   "end": "2025-02-21T14:19:00",
+   "duration_min": 19,
+   "abstract": null,
+   "description": null,
+   "recording": "https://www.youtube.com/embed/bVNNvWq6dKo?si=--Y6vdbr0gGpfGfr",
+   "speakers": [
+    {
+     "name": "Kevin Hou",
+     "title": "Head of Product Engineering",
+     "company": "Windsurf",
+     "company_url": "https://codeium.com/windsurf",
+     "bio": "Kevin is the head of product engineering at Codeium, where he builds AI-powered developer tools. He has spent much of his career in AI, previously working as a tech lead manager at the Nuro, an autonomous vehicle startup, as well as other companies like Airbnb & Salesforce. Kevin enjoys photography, playing basketball, and woodworking. He studied computer science & ML at Princeton University.",
+     "social": "https://twitter.com/kevinhou22\t\nhttps://www.linkedin.com/in/kevinhou22/\nhttps://github.com/khou22'\n https://khou22.com/"
+    }
+   ]
+  },
+  {
+   "id": "250",
+   "slug": "how-we-scaled-500m-ai-agents-in-production-with-2-engineers",
+   "title": "How we scaled 500m AI agents in production with 2 engineers",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T14:20:00",
+   "end": "2025-02-21T14:39:00",
+   "duration_min": 19,
+   "abstract": null,
+   "description": null,
+   "recording": "https://www.youtube.com/embed/zM9RYqCcioM?si=GlMCqBFnQtcdbYig",
+   "speakers": [
+    {
+     "name": "Mustafa Ali",
+     "title": "Senior Software Engineer",
+     "company": "Method Financial",
+     "company_url": "https://methodfi.com",
+     "bio": "Mustafa is a founding & senior engineer at Method Financial, a financial platform that makes it easy for fintechs, banks, and lenders to interface with consumer debt. At Method, Mustafa leads their efforts around building robust and scalable real-time data integration systems with top financial institutions. \n\nPrior to Method, Mustafa worked on product-facing and on-chain applications for the Topl protocol.",
+     "social": "https://twitter.com/mustafaalirm\nhttps://www.linkedin.com/in/mustafaali13/\t\ngithub.com/mustafalii"
+    },
+    {
+     "name": "Kyle Corbitt",
+     "title": "Founder & CEO",
+     "company": "OpenPipe",
+     "company_url": "https://openpipe.ai/",
+     "bio": "Kyle Corbitt is the co-founder and CEO of OpenPipe, the easiest way to train fine-tuned models and deploy them to production. OpenPipe has fine-tuned thousands of customer models, and serves tens of millions of inference requests every day. Before founding OpenPipe, Kyle led the Startup School team at Y Combinator, which was responsible for the product and content that YC produces for early-stage companies. Prior to that he worked in engineering at Google and studied ML at school.",
+     "social": "https://twitter.com/corbtt\nhttps://www.linkedin.com/in/kcorbitt/\nhttps://github.com/corbt\t\nhttps://corbt.com/about/"
+    }
+   ]
+  },
+  {
+   "id": "254",
+   "slug": "voice-ai-your-bot-isnt-special",
+   "title": "Voice AI: Your Bot Isn't Special",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T14:40:00",
+   "end": "2025-02-21T14:59:00",
+   "duration_min": 19,
+   "abstract": "Does your AI voice agent really need to be able to laugh? …Cry? If the answer is no, then you’re probably better off staying a version behind. In 2025, we’ve seen leaps of progress in the Voice AI Stack – particularly with the release of voice to voice models (e.g. the OpenAI Realtime API). At Superdial however, where we’re automating millions of back-office healthcare phone calls, we’ve learned that what’s special about our product isn’t our realistic voices or natural interruption handling – it’s our conversations. By leveraging open source Voice AI orchestration tooling along with the “old school” STT/LLM/TTS sequenced approach, we’re able to build reliable voice agents that navigate phone trees, conduct sensitive healthcare conversations, and learn from human examples. In this talk, you'll learn our blueprint to navigate the Voice AI vendor landscape, avoid common scaling pitfalls, and design conversations that matter.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/2p2ErKRELHM?si=X7rbSJ0HVq6VNCnA",
+   "speakers": [
+    {
+     "name": "Nik Caryotakis",
+     "title": "Staff Software Engineer",
+     "company": "SuperDial",
+     "company_url": "https://www.superdial.ai",
+     "bio": "Nik is a staff engineer at Superdial, a platform for automating inbound and outbound healthcare phonecalls with Voice AI. Superdial's agents call your insurance company, navigate their phone trees, wait on hold, and get all your questions asked, answered, and returned to you via API or EHR integrations.\n\nPrior to Superdial, Nik graduated from Stanford University with a BS & MS in Computer Science, where he contributed to research in automated literature mining and competed on the varsity water polo team. Today, Nik is based in NYC and continues to play water polo, but has recently ventured into endurance running events.",
+     "social": "https://www.linkedin.com/in/nikcaryo/"
+    }
+   ]
+  },
+  {
+   "id": "296",
+   "slug": "scaffold-wisely-how-the-bitter-lesson-applies-to-ai-agents",
+   "title": "Scaffold Wisely",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T15:00:00",
+   "end": "2025-02-21T15:19:00",
+   "duration_min": 19,
+   "abstract": "## Scaffold Wisely: How the Bitter Lesson Applies to AI Agents\n\nDiagrams, algorithms, and handcrafted heuristics have long played a role in constructing AI agents, but are these traditional scaffolding techniques holding us back? Many current approaches lean too heavily on manual design, neglecting the “bitter lesson” that history has taught us: leveraging massive computation and generic methods often trumps tailored engineering. What if we could rethink our scaffolding strategies for AI agents—aligning them with decades of insight from the broader AI research community? In this talk, Rahul Sengottuvelu, Head of Applied AI at Ramp and co-founder of Cohere.io, will explore how embracing the bitter lesson can transform our approach to building AI agents. Attendees will gain actionable strategies to design more robust, scalable systems that minimize over-engineering while maximizing the power of general-purpose learning.",
+   "description": "How the Bitter Lesson Applies to AI Agents",
+   "recording": "https://www.youtube.com/embed/-rsTkYgnNzM?si=8-4sLC7Q312yUyXG",
+   "speakers": [
+    {
+     "name": "Rahul Sengottuvelu",
+     "title": "Head of Applied AI",
+     "company": "Ramp",
+     "company_url": "https://ramp.com",
+     "bio": "Rahul Sengottuvelu is the Head of Applied AI at Ramp. Before that, he co-founded Cohere.io, a customer support automation platform that used advanced AI to resolve support tickets more accurately. Cohere.io was acquired by Ramp in May 2023. He is also the author of Jsonformer, a constrained decoding library for LLMs.",
+     "social": "https://www.linkedin.com/in/rahul-gs/"
+    }
+   ]
+  },
+  {
+   "id": "264",
+   "slug": "day2-afternoon-break",
+   "title": "Break",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T15:20:00",
+   "end": "2025-02-21T15:50:00",
+   "duration_min": 30,
+   "abstract": null,
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "308",
+   "slug": "the-agentic-future-of-search",
+   "title": "The Agentic Future of Search",
+   "track": "Expo Stage",
+   "type": "TALK",
+   "room": "TimesCenter Expo",
+   "start": "2025-02-21T15:25:00",
+   "end": "2025-02-21T15:55:00",
+   "duration_min": 30,
+   "abstract": null,
+   "description": "What will it take to build search agents of the future?",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Dylan Babbs",
+     "title": "CTO",
+     "company": "Profound",
+     "company_url": "https://www.tryprofound.com/",
+     "bio": "Dylan Babbs is the CTO of Profound. Customers like MongoDB, Rippling, and G2 use Profound to understand how they appear in AI search. Prior to founding Profound while at SPC, he was a design engineer at Uber.",
+     "social": "https://www.linkedin.com/in/babbsdj/"
+    },
+    {
+     "name": "Colin Sidoti ",
+     "title": "CEO",
+     "company": "Clerk",
+     "company_url": "https://clerk.com",
+     "bio": "Colin is the CEO of Clerk, where he's building a suite of embeddable UIs, flexible APIs, and tools for authentication. He founded Clerk while at South Park Commons and has raised capital from a16z, CRV, and Madrona.",
+     "social": "https://www.linkedin.com/in/colin-sidoti-751a219/"
+    },
+    {
+     "name": "Anirudh Kamath",
+     "title": "Tech Lead",
+     "company": "Browserbase",
+     "company_url": "https://browserbase.com",
+     "bio": "At Browserbase, Anirudh leads Stagehand, the browser tool for AI agents. Browserbase is backed by AI Grant, Kleiner Perkins, and CRV. Prior to Browserbase, he was an early engineer at Whatnot building recsys engines from the ground up.",
+     "social": "https://www.linkedin.com/in/anirudhk/"
+    },
+    {
+     "name": "Gopal Raman",
+     "title": "Principal",
+     "company": "South Park Commons",
+     "company_url": "http://www.southparkcommons.com/",
+     "bio": "Gopal is a principal at South Park Commons. Prior to investing, he helped scale Retool's deployed engineering team.",
+     "social": "https://www.linkedin.com/in/gopalkraman/"
+    }
+   ]
+  },
+  {
+   "id": "251",
+   "slug": "agents-that-cocreate",
+   "title": "Creating Agents That Co-Create",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T16:00:00",
+   "end": "2025-02-21T16:19:00",
+   "duration_min": 19,
+   "abstract": "In this talk, I will share my thoughts on how two major scaling paradigms in AI are transforming frontier product research——shifting our perspective of AI from narrow, task-focused tools to collaborative agents that meaningfully contribute to real-world innovation. Drawing on lessons learned from my contributions to ChatGPT and Claude, I will explore how AI increasingly handles tasks once reserved for skilled builders, fundamentally altering the fabric of the Internet and the nature of learning. Where, then, are we headed as creators, and what should we be building—and why—if AI increasingly does the work once left to us?",
+   "description": "In this talk, I will share my thoughts on how two major scaling paradigms in AI are transforming frontier product research——shifting our perspective of AI from narrow, task-focused tools to collaborative agents that meaningfully contribute to real-world innovation. Drawing on lessons learned from my contributions to ChatGPT and Claude, I will explore how AI increasingly handles tasks once reserved for skilled builders, fundamentally altering the fabric of the Internet and the nature of learning. Where, then, are we headed as creators, and what should we be building—and why—if AI increasingly does the work once left to us?",
+   "recording": "https://www.youtube.com/embed/1XvN5EBDnDw?si=BYPII4j7nLQygFsQ",
+   "speakers": [
+    {
+     "name": "Karina Nguyen",
+     "title": "Member of Technical Staff",
+     "company": "OpenAI",
+     "company_url": "https://openai.com/",
+     "bio": null,
+     "social": "https://twitter.com/karinanguyen_\t\nhttps://www.linkedin.com/in/karinanguyen28/\t\t\nhttps://karinanguyen.com/"
+    }
+   ]
+  },
+  {
+   "id": "257",
+   "slug": "bee-memory",
+   "title": "Building Perfect Memory",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T16:20:00",
+   "end": "2025-02-21T16:39:00",
+   "duration_min": 19,
+   "abstract": "tba",
+   "description": "tbd",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Maria de Lourdes Zollo",
+     "title": "CoFounder & CEO",
+     "company": "Bee.Computer",
+     "company_url": null,
+     "bio": "Maria de Lourdes Zollo is the CEO and Co-Founder of Bee. She previously worked at Twitter as a Senior Product Manager and creator. Maria de Lourdes Zollo attended Università degli Studi di Milano.",
+     "social": "https://x.com/mariadlzollo?lang=en"
+    },
+    {
+     "name": "Ethan Sutin",
+     "title": "CTO",
+     "company": "Bee.Computer",
+     "company_url": null,
+     "bio": "Ethan is a good, solid software engineer. He has the right balance of competence, theory, and design sense. He's intelligent and expressive.",
+     "social": "https://twitter.com/ethansutin"
+    }
+   ]
+  },
+  {
+   "id": "339",
+   "slug": "tools-next-gen",
+   "title": "Tools for the Next Generation of AI Engineers",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T16:20:00",
+   "end": "2025-02-21T16:39:00",
+   "duration_min": 19,
+   "abstract": "This talks explores all the ways in which we can push the boundaries of our learning and creativity by using a myriad of open-source multimodal agents that are proactive and nudge you to explore different topics, dimensions, approaches to your learning workflow while also pointing certain cognitive biases or misconceptions you might have. I will show some examples of mobile agents I created in Math learning using our math misconceptions benchmark, also examples in science using the Mozart misconceptions benchmark, an a series of reasoning and logical puzzles where a mobile proactive agent can support us to learn or sometimes un-learn ( for inspiration see all the experiments of Daniel Kahneman and Amos Tversky)",
+   "description": "AI for Kids",
+   "recording": "https://www.youtube.com/embed/ySYLsoAhXmg?si=gH5b3dFw8F8318B9",
+   "speakers": [
+    {
+     "name": "Stefania Druga ",
+     "title": "Research Scientist, Gemini",
+     "company": "Google",
+     "company_url": "https://www.google.com/",
+     "bio": "\"Hi! I am Stef. I am currently a research scientist in Google Gemini team working on real-world applications for multimodal language models. I was a principal researcher at the Center of Applied AI Research at the University of Chicago and graduated with a Ph.D. in Creative AI Literacies 🎓 at the University of Washington Information School. In the past I worked with Microsoft’s Human-AI eXperience Team, X Moonshot Factory, Fixie.ai.\n\nI also enjoy designing and building an AI coding plaftorm for kids which started as my master project at MIT (cognimates.me). When I am not coding & writing papers 👩🏽‍💻 I love trail running and rocket yoga. \"",
+     "social": "https://twitter.com/Stefania_druga\thttps://www.linkedin.com/in/drugastefania/\thttps://github.com/stefania11\thttps://stefania11.github.io/"
+    }
+   ]
+  },
+  {
+   "id": "241",
+   "slug": "what-does-it-take-to-build-a-personal-local-private-ai-agent-that-augments-you-deeply",
+   "title": "What does it take to build a personal, local, private AI Agent that augments you deeply?",
+   "track": "Agent Engineering",
+   "type": "TALK",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T16:40:00",
+   "end": "2025-02-21T16:59:00",
+   "duration_min": 19,
+   "abstract": "AI Agents are being worked upon by lots of people. But can they run locally, fast, keep your information access in your control and help you trust them with your most intimate information? We'll try to take a stab at answering these questions.",
+   "description": null,
+   "recording": "https://www.youtube.com/embed/jMoAaZP_Kkw?si=-pF7d23dM9ZKk4ow",
+   "speakers": [
+    {
+     "name": "Soumith Chintala",
+     "title": "Co-founder",
+     "company": "Meta PyTorch",
+     "company_url": "https://pytorch.org/",
+     "bio": "Soumith Chintala is a Scientist-Engineer focused on AI and Robotics, leading influential AI work such as PyTorch, DCGAN and Torch-7; work which is used by several top institutions including NASA, Meta, Google, Tesla, Microsoft, Disney, Genentech, and numerous other Fortune-500 companies and in the curriculum of top-ranked universities such as Stanford, Harvard, Oxford and MIT. He currently leads PyTorch and other AI projects at Meta, is a Visiting Professor at New York University, and maintains advisory roles at various institutions.",
+     "social": "https://twitter.com/soumithchintala\nhttps://www.linkedin.com/in/soumith/\t\nhttps://github.com/soumith/\t\nhttps://soumith.ch/"
+    }
+   ]
+  },
+  {
+   "id": "265",
+   "slug": "day2-onsite-networking",
+   "title": "Doors close",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "TimesCenter Theater",
+   "start": "2025-02-21T17:00:00",
+   "end": "2025-02-21T18:00:00",
+   "duration_min": 60,
+   "abstract": "We have around 30 mins to hang out in the first floor hallway but please make your way to the exits starting 5:30pm as we need to be out of the venue by 6:00pm. Downstairs will be closed starting at 4:00pm for expo break down.",
+   "description": null,
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "256",
+   "slug": "workshop-day-mingle",
+   "title": "Workshop Day and Online Track Welcome",
+   "track": "Plenary",
+   "type": "WORKSHOP",
+   "room": "Jay Suites C - 109 W 39th 2nd floor",
+   "start": "2025-02-22T09:00:00",
+   "end": "2025-02-22T10:00:00",
+   "duration_min": 60,
+   "abstract": "Rooms are open. Meet and Mingle!",
+   "description": "Rooms are open. Meet and Mingle! (no breakfast served)",
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "293",
+   "slug": "ai-eng-agents",
+   "title": "Challenges of Building Agents",
+   "track": "Online",
+   "type": "TALK",
+   "room": "AIE Youtube",
+   "start": "2025-02-22T09:35:00",
+   "end": "2025-02-22T10:00:00",
+   "duration_min": 25,
+   "abstract": "a few challenges\n\n1. accuracy requirements: if you fail 10% at each step, it becomes like 90% failures after a few steps very quickly\n2. tool use challenge: extremely hard to get the model to get the right params, both because of the tool's API and bc of human's internal knowledge. like, if someone says \"work hours\", AI might cut off it at 9am - 5pm, but humans might give a wider range\n3. complexity evaluation: we don't understand a lot yet about what makes a problem complex for machines. what's complex for humans isn't necessarily complex for machines\n\nand also tips for working with agents",
+   "description": "AI Engineering: Agents",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Chip Huyen",
+     "title": "Author, AI Engineering",
+     "company": "Independent",
+     "company_url": null,
+     "bio": "https://x.com/chipro/status/1876681640505901266",
+     "social": "https://x.com/chipro/status/1876681640505901266"
+    }
+   ]
+  },
+  {
+   "id": "294",
+   "slug": "modal-platform",
+   "title": "The Ideal AI Engineering Platform",
+   "track": "Online",
+   "type": "TALK",
+   "room": "AIE Youtube",
+   "start": "2025-02-22T10:00:00",
+   "end": "2025-02-22T10:25:00",
+   "duration_min": 25,
+   "abstract": "The Ideal AI Engineering Platform",
+   "description": "The Ideal AI Engineering Platform",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Erik Bernhardsson",
+     "title": "CEO",
+     "company": "Modal Labs",
+     "company_url": "https://modal.com",
+     "bio": null,
+     "social": "https://x.com/bernhardsson/"
+    }
+   ]
+  },
+  {
+   "id": "271",
+   "slug": "openai-structured",
+   "title": "Function calling is all you need: Building with OpenAI 4o/o1/o3/Realtime",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "Jay Suites A & B - 109 W 39th 2nd floor",
+   "start": "2025-02-22T10:00:00",
+   "end": "2025-02-22T12:00:00",
+   "duration_min": 120,
+   "abstract": "tbc",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Ilan Bigio",
+     "title": "Developer Experience Engineer",
+     "company": "OpenAI",
+     "company_url": "https://openai.com/",
+     "bio": "Ilan Bigio is a founding member of OpenAI’s Developer Experience team, where he built the 2024 AI phone ordering demo showcased at DevDay and also created Swarm, a framework for multi-agent orchestration. Prior to that, he was a Solutions Architect at OpenAI, partnering with companies like Cursor, Khan Academy, and Klarna to shape their AI products. Before OpenAI, he was a full-stack Software Engineer at Google, building for YouTube at scale.\nIlan’s journey started as a hobby hacker, diving into operating systems and reverse engineering, before shifting to language models in 2020. He created projects like ShellAI—an open-source, AI-powered terminal assistant—and is passionate about sharing knowledge. With a multidisciplinary background spanning web development, AI/ML, and operating systems, he’s designed and taught courses at Brown and continues to share his expertise through in-depth technical OpenAI guides on topics like Function Calling and Latency Optimization.",
+     "social": "https://www.twitter.com/ilanbigio"
+    }
+   ]
+  },
+  {
+   "id": "272",
+   "slug": "anthropic-mcp",
+   "title": "Building (Agents) with Model Context Protocol",
+   "track": "Workshops",
+   "type": "OTHER",
+   "room": "Jay Suites C - 109 W 39th 2nd floor",
+   "start": "2025-02-22T10:00:00",
+   "end": "2025-02-22T12:00:00",
+   "duration_min": 120,
+   "abstract": "This workshop, from the creators of MCP, talks about the philosophy behind MCP, its impact on the broader ecosystem since launch, and how developers can use it to build context-rich AI apps and agentic experiences.",
+   "description": "This workshop talks about the philosophy behind MCP, its impact on the broader ecosystem since launch, and how developers can use it to build context-rich AI apps and agentic experiences.",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Mahesh Murag",
+     "title": "Member of Technical Staff",
+     "company": "Anthropic",
+     "company_url": "https://www.anthropic.com/",
+     "bio": "Mahesh is a Member of Technical Staff on Anthropic's Applied AI team, focused on Model Context Protocol, agents, and helping make Claude more useful to enterprises. He was previously a Product Manager at Scale AI & Tecton and did research at UC Berkeley on how self-driving cars impact traffic systems.",
+     "social": "https://www.linkedin.com/in/maheshmurag/"
+    }
+   ]
+  },
+  {
+   "id": "288",
+   "slug": "workshop-day-lunch",
+   "title": "Workshop day Lunch",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "Jay Suites A & B - 109 W 39th 2nd floor",
+   "start": "2025-02-22T12:00:00",
+   "end": "2025-02-22T12:30:00",
+   "duration_min": 30,
+   "abstract": "Workshop day lunch! Lunch is served at both workshop locations (Jay Suites and AWS, NOT TimesCenter -- CMS issue)",
+   "description": "Workshop day lunch! Lunch is served at both workshop locations.",
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "275",
+   "slug": "solana-lets-agents-create-wealth",
+   "title": "Solana Lets Agents Create Wealth",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "Jay Suites C - 109 W 39th 2nd floor",
+   "start": "2025-02-22T12:30:00",
+   "end": "2025-02-22T14:15:00",
+   "duration_min": 105,
+   "abstract": "Are you worried about exponential takeoff? Prepare to reset your priors. The first LLM millionaire has already risen on Solana. To date, Solana has powered over $50 million in payments to AI agents. In this workshop, you will learn how to build your own agent payment system and explore frontier research grants that push this technology even further.\n\nRepo: https://github.com/ngundotra/ai-engineer-workshop-solana\n\nPrerequisites:\n\n- Interest in Solana, crypto, agentic finance\n\n- Basic Typescript experience\n\n- Desire to experiment",
+   "description": "tbc",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Noah Gundotra",
+     "title": "Product Engineer",
+     "company": "Solana",
+     "company_url": "https://solana.com/",
+     "bio": "I’m a software engineer at the Solana Foundation, specializing in developer tooling. Day to day, I explore how AI can elevate the developer experience and unlock new solutions on Solana. Over the past few years, I’ve built smart contracts, authored protocol standards, and even pioneered the first ChatGPT plugin capable of interpreting Solana transactions. My current mission is opening up new frontiers for agentic interactions on Solana.",
+     "social": "https://twitter.com/ngundotra\nhttps://linkedin.com/in/ngundotra\nhttps://github.com/ngundotra\nhttps://github.com/ngundotra"
+    }
+   ]
+  },
+  {
+   "id": "279",
+   "slug": "wandb-production",
+   "title": "AI in production: Observe, Compile, Eval",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "AWS JFK27 (12 W 39th St) 300/301 - entrance 39th St & 5th Ave, large gold doors, bring ID",
+   "start": "2025-02-22T12:30:00",
+   "end": "2025-02-22T13:50:00",
+   "duration_min": 80,
+   "abstract": "Building LLM-based applications is exciting, but keeping them reliably performant in production is a challenge—even for the best teams. How do you track user interactions? Diagnose issues? Prevent regressions when prompts or models change? At Weights & Biases, we’ve worked with hundreds of companies to tackle questions like these.\n\nJoin us for this exclusive workshop, where we’ll guide you through building and evaluating an AI application using a proven, future-proof workflow, learning how to:\n\n- Trace and Log everything\n- Collect and leverage user feedback\n- Build evaluation datasets\n- Design evaluations (Programmatic, HITL, LLM as a judge)\n- Confidently iterate and optimize performance of your applications\n\nNo prior experience with evaluations? No problem. Just bring your laptop, and leave with practical skills to future-proof your AI applications.",
+   "description": "Building LLM-based applications is exciting, but keeping them reliably performant in production is a challenge—even for the best teams. How do you track user interactions? Diagnose issues? Prevent regressions when prompts or models change? At Weights & Biases, we’ve worked with hundreds of companies to tackle questions like these.",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Alex Volkov",
+     "title": "AI Evangelist",
+     "company": "Weights & Biases",
+     "company_url": "https://wandb.ai/site",
+     "bio": "Alex Volkov is an AI Evangelist at Weights & Biases as well as the founder and host of ThursdAI, a weekly newsletter and podcast that explores the latest innovations in AI, their practical applications, and the open-source AI community. Alex is an AI startup founder with 20 years of full-stack software engineering experience, offering a deep well of insights into AI innovation. He’s celebrated for his ability to clarify and summarize the complexities of the rapid AI advances and advocating for its beneficial uses.",
+     "social": "https://twitter.com/altryne"
+    }
+   ]
+  },
+  {
+   "id": "281",
+   "slug": "flow-eng-101",
+   "title": "Flow Engineering 101",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "AWS JFK27 (12 W 39th St) 200/201 - entrance 39th St & 5th Ave, large gold doors, bring ID",
+   "start": "2025-02-22T12:30:00",
+   "end": "2025-02-22T13:50:00",
+   "duration_min": 80,
+   "abstract": "If you've built a advanced LLM app, you know how finicky it is to break down complex goals into sub-tasks and organize them into a workflow. For instance, what are the best practices when decomposing tasks? How to manage the state within a workflow? Are generic flows better than complicated ones?\n\nFlow engineering is an emerging skill among AI engineers that covers these questions. \n\nIn this workshop, we'll explore the four fundamentals of flow engineering: managing state, curating context, improving conditional edges, and best architectural practices. Through these fundamentals, you'll learn to transform complex LLM interactions into well-structured, maintainable systems that deliver reliable results.",
+   "description": "In this workshop, we'll explore the four fundamentals of flow engineering: managing state, curating context, improving conditional edges, and best architectural practices. Through these fundamentals, you'll learn to transform complex LLM interactions into well-structured, maintainable systems that deliver reliable results.\"",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Minki Jung",
+     "title": "AI Engineer",
+     "company": "Independent",
+     "company_url": null,
+     "bio": "Minki Jung is an AI Engineer at the Government of Canada, where he builds AI applications for citizens. With a bachelor's degree in physics and philosophy, he transitioned to the tech space as a full-stack engineer in 2022 and now specializes in AI engineering. Based in Montreal, he organizes the local AI Tinkerer community.",
+     "social": "https://www.linkedin.com/in/minkijung/"
+    }
+   ]
+  },
+  {
+   "id": "283",
+   "slug": "smarter-ai-with-graphrag-connecting-structured-and-unstructured-data-for-better-retrieval",
+   "title": "Smarter AI with GraphRAG – Connecting Structured & Unstructured Data for Better Retrieval",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "Jay Suites A & B - 109 W 39th 2nd floor",
+   "start": "2025-02-22T12:30:00",
+   "end": "2025-02-22T14:15:00",
+   "duration_min": 105,
+   "abstract": "Generative AI is only as good as the data it retrieves—but traditional RAG (Retrieval-Augmented Generation) is limited by flat, disconnected search. AI models struggle to connect structured data (databases, APIs) with unstructured data (docs, PDFs, chat logs), leading to incomplete answers and hallucinations.\n\nEnter GraphRAG—a next-generation retrieval approach powered by Neo4j. This workshop will show you how graphs unlock deeper context, better reasoning, and enterprise-ready AI applications. No graph experience needed!\n\nYou’ll learn how to:\n - Integrate structured and unstructured data into a unified retrieval system.\n - Use GraphRAG to improve accuracy, explainability, and trust in AI-generated answers.\n - Leverage graph-native retrieval, embeddings, and hybrid search for better responses.\n - Apply GraphRAG to real-world use cases, from enterprise AI copilots to knowledge-driven automation.\n \nWhether you’re building AI-powered search, chatbots, or intelligent assistants—GraphRAG makes AI retrieval smarter. Join us to learn how Neo4j can take your Generative AI applications to the next level.",
+   "description": null,
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Alison Cossette",
+     "title": "Data Science Strategist, Advocate, Educator",
+     "company": "Neo4j",
+     "company_url": "https://neo4j.com/?utm_medium=social&utm_source=linkedIn",
+     "bio": "Alison Cossette is a dynamic Data Science Strategist, Educator, and Podcast Host. As a Developer Advocate at Neo4j specializing in Graph Data Science, she brings a wealth of expertise to the field. With her strong technical background and exceptional communication skills, Alison bridges the gap between complex data science concepts and practical applications. Alison’s passion for responsible AI shines through in her work. She actively promotes ethical and transparent AI practices and believes in the transformative potential of responsible AI for industries and society. Through her engagements with industry professionals, policymakers, and the public, she advocates for the responsible development and deployment of AI technologies. She is currently a Volunteer Member of the US Department of Commerce - National Institute of Standards and Technology’s Generative AI Public Working Group Alison’s academic journey includes Masters of Science in Data Science studies, specializing in Artificial Intelligence, at Northwestern University and research with Stanford University Human-Computer Interaction Crowd Research Collective. Alison combines academic knowledge with real-world experience. She leverages this expertise to educate and empower individuals and organizations in the field of data science. Overall, Alison Cossette’s multifaceted background, commitment to responsible AI, and expertise in data science make her a respected figure in the field. Through her role as a Developer Advocate at Neo4j and her podcast, she continues to drive innovation, education, and responsible practices in the exciting realm of data science and AI.",
+     "social": "https://twitter.com/alison_cossette\nhttps://www.linkedin.com/in/alison-cossette-7115857/"
+    }
+   ]
+  },
+  {
+   "id": "289",
+   "slug": "workshop-day-break",
+   "title": "Workshop Day Break",
+   "track": "Plenary",
+   "type": "OTHER",
+   "room": "Jay Suites A & B - 109 W 39th 2nd floor",
+   "start": "2025-02-22T14:15:00",
+   "end": "2025-02-22T14:30:00",
+   "duration_min": 15,
+   "abstract": "Workshop day break",
+   "description": "Workshop day break",
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "274",
+   "slug": "open-ml-universe-models-agents-and-beyond",
+   "title": "Open ML Universe: Models, Agents, and Beyond",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "Jay Suites C - 109 W 39th 2nd floor",
+   "start": "2025-02-22T14:30:00",
+   "end": "2025-02-22T15:50:00",
+   "duration_min": 80,
+   "abstract": "Navigating the landscape of open models, agents, and tools can be overwhelming, even for experienced practitioners. But what if you could quickly grasp the core concepts and explore a curated set of essential tools and resources? In this workshop, we'll explore the history of Open ML, introduce key open models, the tooling to run, deploy, and train them, and finally how to use them for agentic use cases. From RLHF and distillation to multimodality and quantization, this workshop will give you a comprehensive overview.",
+   "description": "Navigating the landscape of open models, agents, and tools can be overwhelming, even for experienced practitioners. But what if you could quickly grasp the core concepts and explore a curated set of essential tools and resources? In this workshop, we'll explore the history of Open ML, introduce key open models, the tooling to run, deploy, and train them, and finally how to use them for agentic use cases. From RLHF and distillation to multimodality and quantization, this workshop will give you a comprehensive overview.",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Omar Sanseviero",
+     "title": "Gemma Tech Lead",
+     "company": "DeepMind",
+     "company_url": null,
+     "bio": "Omar Sanseviero is a lead of Gemma, Google’s family of open models. Previously, Omar was the Head of Platform and Community at Hugging Face, where he led on-device and DevRel engineering, working at the intersection of open source, product, research, and technical communities. He is a co-author of Hands-On Generative AI with Transformers and Diffusion Models with O'Reilly.",
+     "social": "https://twitter.com/osanseviero\t\nhttps://www.linkedin.com/in/omarsanseviero/"
+    }
+   ]
+  },
+  {
+   "id": "276",
+   "slug": "an-opinionated-blueprint-for-the-future-of-genai-applications",
+   "title": "An Opinionated Blueprint for the Future of GenAI Applications",
+   "track": "Workshops",
+   "type": "OTHER",
+   "room": "Jay Suites A & B - 109 W 39th 2nd floor",
+   "start": "2025-02-22T14:30:00",
+   "end": "2025-02-22T15:50:00",
+   "duration_min": 80,
+   "abstract": "We think people are over-complicating AI application development.\n\nWith the right abstractions, there's no need to reinvent software engineering for AI applications — existing tools like Pydantic can form the foundation of the AI engineering stack.\n\nThe key challenge today is identifying patterns that allow you to build maintainable, AI-powered components within larger software systems.\n\nIn this talk, Samuel Colvin, creator of Pydantic, will present a blueprint for the most critical components of new AI applications.\n\nBased on our experience building AI functionality into our commercial platform, Pydantic Logfire, this blueprint includes:\n\nData Validation, Reflection and Self-Correction: The critical role of enforcing strict data contracts at the API level and validating inputs to and outputs from AI models to ensure reliability — simple and obvious though this might see, it’s easy to get wrong and many people do\nSchema Generation: tool calls are critical to leveraging LLMs, but you shouldn’t be hand-writing JSON Schema to define tools, instead Pydantic should be generating schema from the same source of truth used for data validation.\n\nEvaluations and Iterative Improvement: The importance of continuous evaluation and iterative refinement to improve AI models and applications over time.\n\nObservability: Implementing observability to monitor AI systems, detect issues early, and maintain robust performance.\nWe'll motivate the importance of each of these bullets and, perhaps surprisingly, show through concrete examples and code snippets demonstrating how straightforward they can be to implement using familiar tools like Pydantic.",
+   "description": "tbc",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Samuel Colvin ",
+     "title": "Founder & CEO",
+     "company": "Pydantic Logfire",
+     "company_url": "https://pydantic.dev/",
+     "bio": "Samuel Colvin is a Python and Rust developer and Founder of Pydantic Inc., backed by Sequoia to build Pydantic Logfire — developer first observability. The Pydantic library, which he created is downloaded over 290M/month and is a dependency of many GenAI Python libraries including the OpenAI SDK, the Anthropic SDK, Langchain and LlamaIndex.",
+     "social": "https://twitter.com/samuel_colvin\nhttps://github.com/pydantic/pydantic"
+    }
+   ]
+  },
+  {
+   "id": "278",
+   "slug": "aws-deepseek",
+   "title": "Building Agentic Workflows with DeepSeek and Amazon Nova",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "AWS JFK27 (12 W 39th St) 200/201 - entrance 39th St & 5th Ave, large gold doors, bring ID",
+   "start": "2025-02-22T14:30:00",
+   "end": "2025-02-22T15:50:00",
+   "duration_min": 80,
+   "abstract": "Learn how to build Agentic Workflows, where LLMs act autonomously to perform tasks or provide assistance on behalf of users. Participants will learn to leverage capabilities in Amazon Bedrock and Amazon SageMaker to create both agentic workflows, incorporating features such as memory, planning and tools. We will also see how we can use 3rd party agentic tools such as Crewai and open weight models such as Deepseek. We will also use Amazon Q Developer to assist in coding and debugging. You will be provided an AWS account to go through this workshop.",
+   "description": "how to experiment with Distilled Models on AWS and finetune your own Models, using Amazon SageMaker",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Deepam Mishra",
+     "title": "Sr Advisor, AI/ML Startups",
+     "company": "AWS",
+     "company_url": "https://aws.amazon.com/",
+     "bio": "Deepam Mishra is a Sr Advisor to Startups at AWS and advises startups on AI/ML, sustainability and supply chain related topics. Before joining AWS, Deepam co-founded and led AI & Sustainability at Microsoft Corporation. Deepam has been a serial entrepreneur and investor, having founded 4 AI/ML startups in areas including waste-to-energy, logistics and security. He was the co-founder/investor of Green Power Systems, a leading waste-to-energy startup and Shippr, an app-based logistics optimization platform. He also co-founded Venture Studio, a unique incubator and seed-fund, to focus on impact investing in areas such as sustainability, global health and infrastructure. Deepam has a BSEE from IIT Kanpur, an MSEE from Texas A&M and an MBA from The Wharton School. He has 5 US patents and numerous publications. He is based in the Silicon Valley.",
+     "social": "https://www.linkedin.com/in/semaan/"
+    },
+    {
+     "name": "Karan Singh",
+     "title": "Generative AI PM",
+     "company": "AWS",
+     "company_url": "https://aws.amazon.com/",
+     "bio": "As a Senior GenAI Specialist, I work on Generative AI GTM Initiatives, Product Strategy, and Strategic Partnerships with 3rd party foundational model providers such as Cohere, Meta etc and OSS Frameworks which include CrewAI, Llamaindex etc\n\nPast: \n- Senior Solution Architect in AWS to create new cloud & AI based solutions for the Semiconductor Industry. Cloud/AI brings faster time to market, agility and improved quality to the chip development process.\n- Software Engineering Lead with experience in back-end chip design.",
+     "social": "https://www.linkedin.com/in/karan-singh-a8aa7518/"
+    }
+   ]
+  },
+  {
+   "id": "282",
+   "slug": "clay-evals",
+   "title": "How Clay Performs Agent Evaluation",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "Jay Suites Sydney - 109 W 39th 2nd floor",
+   "start": "2025-02-22T14:30:00",
+   "end": "2025-02-22T15:50:00",
+   "duration_min": 80,
+   "abstract": "In this workshop, Nick (LangChain) will explain agent evaluation concepts. Jeff Barg will then show how Clay performs E2E agent tests for Claygent for a few different prompt categories against a ground truth dataset, and discuss how Clay is running prompt-level evals.",
+   "description": "In this workshop, Nick (LangChain) will explain agent evaluation concepts. Jeff Barg will then show how Clay performs E2E agent tests for Claygent for a few different prompt categories against a ground truth dataset, and discuss how Clay is running prompt-level evals.",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Nick Huang",
+     "title": "FDE",
+     "company": "LangChain",
+     "company_url": "https://www.langchain.com/",
+     "bio": null,
+     "social": "https://www.linkedin.com/in/ncchuang/"
+    },
+    {
+     "name": "Ratch Sujithan",
+     "title": "AI Engineer",
+     "company": "Clay GTM",
+     "company_url": "https://www.clay.com/",
+     "bio": null,
+     "social": "https://www.linkedin.com/in/ratchahan-sujithan-31589027a/"
+    }
+   ]
+  },
+  {
+   "id": "285",
+   "slug": "email-agent",
+   "title": "Build a personal AI email agent",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "AWS JFK27 (12 W 39th St) 300/301 - entrance 39th St & 5th Ave, large gold doors, bring ID",
+   "start": "2025-02-22T14:30:00",
+   "end": "2025-02-22T15:50:00",
+   "duration_min": 80,
+   "abstract": "Build a personal AI Email Agent that automatically processes, labels, and drafts responses to incoming messages. You'll create the agent with Next.js, TypeScript, the Vercel AI SDK, and Neon Postgres. \n\nBy the end of the workshop, you'll have a fully working email assistant and gain practical experience building AI features you can include in future projects.\n\nWhen it comes to assumptions & prerequisites, workshop attendees should have:\n- Knowledge of git, building APIs, and writing server-side code with JavaScript/TypeScript\n- Familiarity with command-line tools and installing Node.js packages\n\nThe workshop focuses exclusively on backend development and AI integration, so no frontend experience is required. The entire workshop material and exercises will be available on GitHub, and the project will be runnable in a cloud-based IDE.",
+   "description": "Build a personal AI Email Agent that automatically processes, labels, and drafts responses to incoming messages. You'll create the agent with Next.js, TypeScript, the Vercel AI SDK, and Neon Postgres.",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Mahmoud Abdelwahab",
+     "title": "Senior Developer Advocate",
+     "company": "Neon",
+     "company_url": "https://x.com/neondatabase",
+     "bio": "Mahmoud is a Software Engineer focused on Developer Tools working at the intersection of Product, Marketing, Education, and Community. He is currently a Senior Developer Advocate at Neon.",
+     "social": "https://twitter.com/thisismahmoud_ \nhttps://github.com/m-abdelwahab"
+    }
+   ]
+  },
+  {
+   "id": "290",
+   "slug": "workshop-afternoon-break",
+   "title": "Workshop Afternoon Break",
+   "track": "Plenary",
+   "type": "WORKSHOP",
+   "room": "Jay Suites A & B - 109 W 39th 2nd floor",
+   "start": "2025-02-22T15:50:00",
+   "end": "2025-02-22T16:10:00",
+   "duration_min": 20,
+   "abstract": "Workshop afternoon break",
+   "description": "Workshop afternoon break",
+   "recording": null,
+   "speakers": []
+  },
+  {
+   "id": "273",
+   "slug": "letta-workshop",
+   "title": "Agent Memory and the LLM OS",
+   "track": "Workshops",
+   "type": "OTHER",
+   "room": "AWS JFK27 (12 W 39th St) 200/201 - entrance 39th St & 5th Ave, large gold doors, bring ID",
+   "start": "2025-02-22T16:10:00",
+   "end": "2025-02-22T17:30:00",
+   "duration_min": 80,
+   "abstract": "A cornerstone of human intelligence is the ability to learn: as humans interact with the world, we form new memories and can adapt from experience. In this workshop, participants will learn about “stateful agents”: agents that live indefinitely, and can form new memories by learning from data and experience. The workshop will cover best practices for context and state management for agents, as well as how to avoid common challenges with agents (e.g. context overflow errors, memory loss, and lack of user personalization). In this workshop you will:\nLearn the principles behind context and memory management from the lead author of the MemGPT paper\nLearn about stateful agents in practice and deployment (scaling to hundreds of thousands of agents)\nGet hands on experience building stateful agents with the Letta framework and ADE (Agent Development Environment)\nNotebook materials: https://github.com/letta-ai/tutorials/tree/main/python",
+   "description": "Get hands on experience building stateful agents with the Letta framework and ADE (Agent Development Environment)\nNotebook materials: https://github.com/letta-ai/tutorials/tree/main/python",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Charles Packer",
+     "title": "Co-Founder & CEO",
+     "company": "Letta",
+     "company_url": "https://www.letta.com/",
+     "bio": "Charles is the co-founder and CEO of Letta. Prior to Letta, Charles was a PhD student at the Berkeley AI Research Lab (BAIR) and RISELab at UC Berkeley, where he worked on reinforcement learning and agentic systems. While at UC Berkeley, Charles created the MemGPT open source project and research paper which spearheaded early work on long-term memory for LLM agents and the concept of the “LLM operating system” (LLM OS).",
+     "social": "https://www.linkedin.com/in/charles-packer/"
+    }
+   ]
+  },
+  {
+   "id": "277",
+   "slug": "aws-agentic-rag",
+   "title": "Agentic RAG with Vision Language Models",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "AWS JFK27 (12 W 39th St) 200/201 - entrance 39th St & 5th Ave, large gold doors, bring ID",
+   "start": "2025-02-22T16:10:00",
+   "end": "2025-02-22T17:30:00",
+   "duration_min": 80,
+   "abstract": "Discover the transformative potential of Multimodal Agentic Retrieval-Augmented Generation (RAG) in this hands-on workshop. Participants will explore the integration of advanced AI engineering techniques with Amazon Nova to build systems that leverage text and image embeddings, LangChain, and Amazon Bedrock for creating context-aware multimodal AI agents. The workshop focuses on the practical application of Multimodal RAG to automate complex workflows, such as insurance claim optimization, through enhanced decision-making and operational efficiency.\n\nThis workshop will provide attendees with step-by-step guidance to:\n\n- Build multimodal AI agents that process text, images, and video.\n- Implement sophisticated retrieval systems using Amazon Nova and LangChain.\n- Create real-world applications leveraging Bedrock-powered agents and knowledge bases.\n- Attendees will leave with a solid understanding of building and deploying Multimodal RAG systems that integrate seamlessly into enterprise frameworks, paving the way for innovation in AI-powered solutions.",
+   "description": "Discover the transformative potential of Multimodal Agentic Retrieval-Augmented Generation (RAG) in this hands-on workshop. Participants will explore the integration of advanced AI engineering techniques with Amazon Nova to build systems that leverage text and image embeddings, LangChain, and Amazon Bedrock for creating context-aware multimodal AI agents. The workshop focuses on the practical application of Multimodal RAG to automate complex workflows, such as insurance claim optimization, through enhanced decision-making and operational efficiency.",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Suman Debnath",
+     "title": null,
+     "company": "AWS",
+     "company_url": "https://aws.amazon.com/",
+     "bio": null,
+     "social": "https://github.com/debnsuma"
+    }
+   ]
+  },
+  {
+   "id": "280",
+   "slug": "advanced-aisdk",
+   "title": "Advanced AI Engineering with AI SDK",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "Jay Suites C - 109 W 39th 2nd floor",
+   "start": "2025-02-22T16:10:00",
+   "end": "2025-02-22T17:30:00",
+   "duration_min": 80,
+   "abstract": "see https://build-ai-app-dec-24.vercel.app/docs for prereading\n\nworkshop content: https://aie-feb-25.vercel.app/docs",
+   "description": "workshop content: https://aie-feb-25.vercel.app/docs",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Nico Albanese",
+     "title": "AI SDK Maintainer",
+     "company": "Vercel",
+     "company_url": "https://vercel.com",
+     "bio": null,
+     "social": "https://www.nicoalbanese.com/"
+    }
+   ]
+  },
+  {
+   "id": "286",
+   "slug": "mcp-workflows",
+   "title": "Multi-Agent Workflows with MCP",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "Jay Suites Sydney - 109 W 39th 2nd floor",
+   "start": "2025-02-22T16:10:00",
+   "end": "2025-02-22T17:30:00",
+   "duration_min": 80,
+   "abstract": "Agents aren't really agents unless they can discover the world outside of the chatbox, and act on it -- and the MCP (Model Context Protocol) is an emerging standard for connecting agents to physical and digital worlds.  This workshop will teach you how to build your own MCP client (not just the one built into Claude) and connect it to a multi-agent system (we'll be using LangGraph but this approach works with Autogen, Crew AI and many more).  This allows you to build powerful workflows that go way beyond writing code, and rethink how to express business logic as a set of roles, tools, and desired outcomes.  We'll walk through examples together and then put them into practice -- come with ideas of workflows you want to build!  [List of existing MCP servers here]",
+   "description": "Agents aren't really agents unless they can discover the world outside of the chatbox, and act on it -- and the MCP (Model Context Protocol) is an emerging standard for connecting agents to physical and digital worlds.  This workshop will teach you how to build your own MCP client (not just the one built into Claude) and connect it to a multi-agent system (we'll be using LangGraph but this approach works with Autogen, Crew AI and many more).  This allows you to build powerful workflows that go way beyond writing code, and rethink how to express business logic as a set of roles, tools, and desired outcomes.  We'll walk through examples together and then put them into practice -- come with ideas of workflows you want to build!  [List of existing MCP servers here]",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Dan Mason",
+     "title": "Principal, AI",
+     "company": "Stride",
+     "company_url": "https://www.linkedin.com/company/stride-build/",
+     "bio": "https://www.linkedin.com/in/dnmason/",
+     "social": "https://www.linkedin.com/in/dnmason/"
+    }
+   ]
+  },
+  {
+   "id": "287",
+   "slug": "improving-rag",
+   "title": "From Guesswork to Metrics : Systematically improving your RAG system",
+   "track": "Workshops",
+   "type": "WORKSHOP",
+   "room": "Jay Suites A & B - 109 W 39th 2nd floor",
+   "start": "2025-02-22T16:10:00",
+   "end": "2025-02-22T17:30:00",
+   "duration_min": 80,
+   "abstract": "Metrics. Synthetic data. Metadata filtering. RAG.\n\nMany teams build RAG systems based solely on intuition, resulting in unpredictable outcomes and mounting operational costs. What if you could turn that guesswork into a repeatable, measurable process? In this talk I will show you how to bootstrap your retrieval  evaluation pipeline with synthetic queries that establish clear success metrics and then apply techniques such as metadata filtering to improve retrieval quality. You’ll learn actionable methods that let you iterate on your RAG ranking system rapidly, understand the exact impact of every change to your RAG application and learn to make data driven decisions based on objective metrics",
+   "description": "Many teams build RAG systems based solely on intuition, resulting in unpredictable outcomes and mounting operational costs. What if you could turn that guesswork into a repeatable, measurable process?",
+   "recording": null,
+   "speakers": [
+    {
+     "name": "Ivan Leo",
+     "title": "Research Engineer",
+     "company": "567 Labs (Instructor)",
+     "company_url": "https://jxnl.github.io/instructor/",
+     "bio": "Ivan is a research engineer at 567 Labs specializing in language model evaluation and open source development. He maintains several popular packages including instructor, indomee, and Kura - a tool for analyzing conversational patterns and topic clusters using language models.",
+     "social": "https://twitter.com/ivanleomk\nhttps://www.linkedin.com/in/ivanleo/"
+    },
+    {
+     "name": "Jason Liu",
+     "title": "Consultant (Instructor)",
+     "company": "Independent",
+     "company_url": null,
+     "bio": "Jason is an independent consultant, machine learning engineer, angel investor, startup advisor, and a16z scout who teaches teams to work scientifically by measuring improvements and iterating quickly. After years at top tech companies, he now creates educational content and courses on open source and systematic AI application improvement, and is the creator of Instructor—a popular Python library that inspired OpenAI’s structured output feature.",
+     "social": "https://twitter.com/jxnlco \nhttps://www.linkedin.com/in/jxnlco/"
+    }
+   ]
+  }
+ ]
+}
