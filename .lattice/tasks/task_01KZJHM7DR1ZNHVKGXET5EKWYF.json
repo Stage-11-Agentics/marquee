@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:196",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 6,
+  "comment_count": 7,
   "complexity": null,
   "created_at": "2026-08-09T05:58:41Z",
   "created_by": "agent:orchestrator-intake",
@@ -15,21 +15,26 @@
       "id": "art_01KZJJWV7MF9MYJ4T1DCQAV34F",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJKRGM8TDM6BMXYY118JA81",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM7DR1ZNHVKGXET5EKWYF",
-  "last_event_id": "ev_01KZJKEJQYPWND1973MS5R50C6",
-  "last_status_changed_at": "2026-08-09T06:30:09Z",
+  "last_event_id": "ev_01KZJKVTSTRVZE4TSBFJN48A35",
+  "last_status_changed_at": "2026-08-09T06:37:47Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-1",
-  "status": "review",
+  "status": "in_progress",
   "tags": null,
   "title": "Platform skeleton and first real deploy",
   "type": "task",
-  "updated_at": "2026-08-09T06:30:33Z",
+  "updated_at": "2026-08-09T06:37:48Z",
   "urgency": null
 }

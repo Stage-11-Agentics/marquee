@@ -28,10 +28,11 @@
 
 | Ticket | Surface | Mode | Note |
 |---|---|---|---|
-| MRQ-1 (M-01) | surface:196 pane:56 | inline-full | `in_progress`; deploy deferred to MRQ-57, local validation is the merge bar |
+| MRQ-1 (M-01) | surface:196 pane:56 | inline-full | **`review`**; deploy deferred to MRQ-57, local validation is the merge bar. Context at 75% — watch for compaction. |
 | MRQ-2 (M-02) | surface:200 pane:56 | planning-only press-ahead | relaunched after cwd-guard halt + trust dialog; halts at `planned` |
 | MRQ-6 (M-05a+06) | surface:201 pane:57 | planning-only press-ahead | design system + admin shell + harness; halts at `planned` |
 | MRQ-8 (M-07) | surface:202 pane:57 | planning-only press-ahead | API core — on the CP-1 chain; boot prompt carries the S-3 verdict |
+| MRQ-14 (M-13) | surface:203 pane:56 | planning-only press-ahead | uploads/presign; unblocked by MRQ-1 reaching review. Guardrail-adjacent (AC-231) → held for orchestrator eyes at merge |
 | ~~MRQ-55 (S-2)~~ | closed | **done** | **MERGED** PR #2 (3ef7c647). Code done; `needs_human` stands for the client-rendering oracle. |
 | ~~MRQ-56 (S-3)~~ | closed | **done** | **MERGED** PR #1 (4f429473). Verdict below. |
 
@@ -51,6 +52,7 @@
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-09 02:41 [moderate] Press-ahead audit on MRQ-1 → `review`: MRQ-14 (M-13 uploads) was the only newly-unblocked ticket; spawned planning-only. Fleet at N=5 (1 impl + 4 planners).
 - 2026-08-09 02:36 [moderate] Press-ahead: MRQ-8 (M-07, CP-1 chain) spawned planning-only with the S-3 verdict inlined; 4 of 5 slots active.
 - 2026-08-09 02:34 [moderate] MRQ-55 (S-2) merged, PR #2 squash 3ef7c647. Review named 2344974 vs head e67476e — resolved as rebase-only: identical tree hash b5d6c73, so review evidence valid. Secret scan clean (key read from env, recipient parameterized, no personal address in the diff). `needs_human` left standing — the client-rendering half is an operator oracle, not agent-verifiable.
 - 2026-08-09 02:30 [moderate] MRQ-56 (S-3) merged, PR #1 squash 4f429473 — first PR of the run; auto-merge criteria verified (head≠base, fresh self-review PASS naming HEAD, .merged==true re-GET, diff confined to spikes/).

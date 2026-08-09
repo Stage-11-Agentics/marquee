@@ -72,3 +72,5 @@ Review artifact: `art_01KZJJWV7MF9MYJ4T1DCQAV34F` — **PASS**.
 - Local validation is the gate: run `wrangler dev` with local D1/KV/R2/Queue emulation, curl `/health`, curl the localhost-only cookie-contract route, and attach the transcript as `--role validation`.
 - The PR body must open with `DEPLOY DEFERRED — see MRQ-57` and list exactly: `wrangler login` as `projects@stage11.ai`; confirm Workers Paid; create real D1/KV/R2/Queue resources; fill placeholders; deploy; wire `marquee.stage11.dev`.
 - Green local validation plus an exact-HEAD PASS review is sufficient to reach `pr_open`.
+
+## Reset 2026-08-09 by agent:delegator-mrq-1
