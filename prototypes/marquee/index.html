@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marquee — AIE NYC 2026 program studio</title>
+  <style>
+    :root {
+      --ink: #f5f0e7;
+      --muted: #9f9a91;
+      --paper: #151515;
+      --panel: #1d1d1d;
+      --panel-2: #242424;
+      --line: #383733;
+      --signal: #ffe04b;
+      --danger: #ff6b62;
+      --good: #72d69c;
+      --blue: #78a9ff;
+      --shadow: 0 22px 60px rgba(0,0,0,.42);
+      --serif: Georgia, "Times New Roman", serif;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #101010; color: var(--ink); font-family: var(--sans); }
+    body { overflow: hidden; }
+    button, input, select, textarea { font: inherit; }
+    button { color: inherit; }
+    button, [role="button"], a { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid var(--signal); outline-offset: 2px;
+    }
+
+    .prototype-badge {
+      position: fixed; z-index: 1000; right: 14px; top: 14px; padding: 8px 12px;
+      border: 1px solid rgba(255,224,75,.8); color: #16130a; background: var(--signal);
+      font-size: 10px; line-height: 1; font-weight: 900; letter-spacing: .14em; text-transform: uppercase;
+      box-shadow: 0 6px 24px rgba(0,0,0,.35); pointer-events: none;
+    }
+    .prototype-badge span { opacity: .68; font-weight: 800; }
+    #toast {
+      position: fixed; z-index: 1200; left: 50%; bottom: 22px; transform: translate(-50%, 18px);
+      padding: 11px 15px; border: 1px solid #4f4d46; background: #f6f1e8; color: #191919;
+      border-radius: 3px; font-size: 12px; font-weight: 750; box-shadow: var(--shadow);
+      opacity: 0; pointer-events: none; transition: .18s ease; min-width: 220px; text-align: center;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    .landing {
+      min-height: 100vh; overflow: auto; background:
+        radial-gradient(circle at 73% 23%, rgba(255,224,75,.10), transparent 27%),
+        repeating-linear-gradient(90deg, transparent 0 79px, rgba(255,255,255,.025) 80px), #111;
+      padding: 34px clamp(24px,5vw,80px) 50px; display: grid; grid-template-rows: auto 1fr auto; gap: 38px;
+    }
+    .landing-head { display: flex; align-items: center; justify-content: space-between; }
+    .wordmark { font-family: var(--serif); font-size: 29px; font-style: italic; letter-spacing: -.04em; }
+    .landing-kicker, .eyebrow { text-transform: uppercase; letter-spacing: .15em; font-size: 10px; font-weight: 850; color: var(--signal); }
+    .hero { display: grid; grid-template-columns: minmax(420px,1.05fr) minmax(460px,.95fr); gap: 7vw; align-items: center; }
+    .hero h1 { margin: 15px 0 19px; font: 400 clamp(64px,8vw,124px)/.83 var(--serif); letter-spacing: -.075em; max-width: 850px; }
+    .hero h1 em { color: var(--signal); font-weight: 400; }
+    .hero-copy { color: #c4bfb6; max-width: 610px; font-size: 17px; line-height: 1.55; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 29px; }
+    .btn {
+      border: 1px solid #4a4945; background: #282725; color: var(--ink); min-height: 38px; padding: 9px 13px;
+      border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: 760; transition: border-color .15s, background .15s, transform .1s;
+    }
+    .btn:hover { border-color: #77736a; background: #32312e; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: var(--signal); color: #16140a; border-color: var(--signal); }
+    .btn.primary:hover { background: #ffea70; }
+    .btn.ghost { background: transparent; }
+    .btn.danger { color: #ffd3cf; border-color: #78433f; background: #35201e; }
+    .btn.small { min-height: 30px; padding: 6px 9px; font-size: 11px; }
+    .btn.wide { min-width: 158px; }
+
+    .poster {
+      background: #e6e0d6; color: #171717; padding: 20px; transform: rotate(1deg); box-shadow: 18px 24px 0 #080808;
+      min-height: 490px; display: grid; grid-template-rows: auto auto 1fr auto; gap: 18px;
+    }
+    .poster-head { display: flex; justify-content: space-between; border-bottom: 3px solid #111; padding-bottom: 12px; font-weight: 900; }
+    .poster h2 { margin: 0; font: 400 clamp(47px,5vw,78px)/.88 var(--serif); letter-spacing: -.06em; }
+    .poster-schedule { display: grid; grid-template-columns: 70px 1fr; gap: 7px 11px; align-content: start; }
+    .poster-time { font: 700 12px/1 var(--sans); padding-top: 6px; }
+    .poster-session { padding: 9px 10px; border-left: 6px solid var(--c); background: rgba(0,0,0,.055); font: 700 13px/1.2 var(--sans); }
+    .poster-foot { display:flex; justify-content:space-between; align-items:end; font-size:11px; text-transform:uppercase; letter-spacing:.1em; font-weight:800; }
+    .landing-foot { display:flex; justify-content:space-between; color:#77736d; font-size:11px; }
+
+    .admin-shell { height: 100vh; display: grid; grid-template-rows: 56px 42px 1fr; background: var(--paper); }
+    .topbar { display: grid; grid-template-columns: 270px 1fr auto; align-items:center; border-bottom:1px solid var(--line); padding:0 70px 0 17px; background:#151515; }
+    .brand-cluster { display:flex; align-items:center; gap:13px; min-width:0; }
+    .brand-cluster .wordmark { font-size:22px; }
+    .event-switch { border-left:1px solid var(--line); padding-left:13px; min-width:0; }
+    .event-switch strong { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px; }
+    .event-switch span { display:block; color:var(--muted); font-size:9px; margin-top:2px; }
+    .global-search { max-width:480px; width: min(46vw,480px); margin:auto; border:1px solid var(--line); background:#202020; color:#aaa49a; padding:9px 12px; border-radius:3px; text-align:left; cursor:pointer; font-size:11px; }
+    .global-search kbd { float:right; color:#777; font:10px var(--sans); border:1px solid #45433f; padding:1px 5px; border-radius:3px; }
+    .account { display:flex; gap:9px; align-items:center; font-size:11px; }
+    .avatar { width:28px; height:28px; border-radius:50%; background:#efe7da; color:#151515; display:grid; place-items:center; font-weight:900; }
+
+    .walkthrough { display:flex; overflow-x:auto; border-bottom:1px solid var(--line); background:#191919; scrollbar-width:none; padding:0 10px; }
+    .walkthrough::-webkit-scrollbar { display:none; }
+    .walk-step { flex:0 0 auto; height:41px; border:0; border-bottom:2px solid transparent; background:transparent; color:#7f7b74; padding:0 11px; font-size:9px; font-weight:790; letter-spacing:.045em; cursor:pointer; text-transform:uppercase; }
+    .walk-step:hover { color:#c9c3b9; }
+    .walk-step.active { color:var(--signal); border-color:var(--signal); }
+    .walk-step b { color:#5d5a55; margin-right:4px; font-variant-numeric:tabular-nums; }
+    .walk-step.active b { color:var(--signal); }
+
+    .studio { position:relative; min-height:0; overflow:hidden; display:grid; grid-template-columns:264px 1fr 228px; }
+    .pool { border-right:1px solid var(--line); background:#171717; min-width:0; display:flex; flex-direction:column; z-index:3; }
+    .pool-head, .rail-head { padding:14px; border-bottom:1px solid var(--line); }
+    .pool-head h3, .rail-head h3 { margin:2px 0 4px; font:400 21px/1 var(--serif); }
+    .tiny { font-size:10px; color:var(--muted); line-height:1.4; }
+    .pool-filter { display:flex; gap:6px; padding:10px 12px; border-bottom:1px solid var(--line); }
+    .pool-filter input, .pool-filter select { min-width:0; width:100%; padding:7px 8px; border:1px solid #393834; background:#222; color:#ddd8ce; border-radius:2px; font-size:10px; }
+    .pool-list { overflow:auto; padding:8px; flex:1; }
+    .pool-card { border:1px solid #34332f; border-left:4px solid var(--track); background:#212120; padding:9px; margin-bottom:7px; cursor:grab; border-radius:2px; transition:background .12s, opacity .12s; }
+    .pool-card:hover { background:#292927; }
+    .pool-card.dragging, .session-tile.dragging { opacity:.35; }
+    .pool-card strong { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:11px; line-height:1.25; }
+    .pool-card .meta { color:#99958d; font-size:9px; margin-top:6px; display:flex; justify-content:space-between; gap:5px; }
+    .pool-foot { padding:10px 12px; border-top:1px solid var(--line); color:#817d76; font-size:9px; }
+
+    .canvas { min-width:0; overflow:hidden; display:grid; grid-template-rows:58px 1fr; background:#131313; }
+    .canvas-tools { display:flex; align-items:center; gap:9px; padding:9px 12px; border-bottom:1px solid var(--line); background:#1c1c1b; min-width:0; }
+    .segmented { display:flex; flex:0 0 302px; width:302px; border:1px solid #3d3b37; border-radius:3px; overflow:hidden; }
+    .segmented button { width:60px; height:31px; border:0; border-right:1px solid #3d3b37; background:#20201f; color:#8c8880; font-size:9px; text-transform:uppercase; font-weight:800; cursor:pointer; }
+    .segmented button:last-child { border:0; }
+    .segmented button.active { color:#17150c; background:var(--signal); }
+    .canvas-tools select { height:32px; border:1px solid #3d3b37; background:#242423; color:#cbc5bc; padding:0 8px; border-radius:3px; font-size:10px; }
+    .tool-spacer { flex:1; }
+    .conflict-btn { color:#ffaaa5; }
+    .canvas-scroll { overflow:auto; min-width:0; position:relative; }
+    .canvas-scroll.drag-over { box-shadow: inset 0 0 0 3px var(--signal); }
+
+    .track-board { min-width:820px; padding:15px; }
+    .time-axis { margin-left:226px; display:grid; grid-template-columns:repeat(7,1fr); color:#65615b; font-size:9px; padding:0 8px 8px; }
+    .lane { display:grid; grid-template-columns:158px 1fr; min-height:104px; border-top:1px solid #302f2c; }
+    .lane-label { position:sticky; left:0; z-index:2; padding:16px 13px; background:#151515; border-right:1px solid #302f2c; }
+    .lane-label i { display:block; width:26px; height:3px; background:var(--track); margin-bottom:9px; }
+    .lane-label strong { font:400 17px/1.05 var(--serif); display:block; }
+    .lane-label span { color:#77736d; font-size:9px; display:block; margin-top:5px; }
+    .lane-days { min-width:0; }
+    .day-band { display:grid; grid-template-columns:60px 1fr; min-height:94px; border-bottom:1px solid #292825; }
+    .day-band:last-child { border-bottom:0; }
+    .day-label { padding:11px 7px; border-right:1px solid #302f2c; color:#77736c; font-size:8px; line-height:1.35; text-transform:uppercase; font-weight:850; letter-spacing:.04em; }
+    .day-label b { display:block; color:#bbb5ab; font:400 16px/1 var(--serif); margin-bottom:3px; }
+    .day-slots { display:grid; grid-template-columns:repeat(7,minmax(100px,1fr)); background:repeating-linear-gradient(90deg, transparent 0 calc(14.285% - 1px), #2d2c29 calc(14.285% - 1px) 14.285%); padding:8px; gap:7px; }
+    .slot { min-height:84px; border:1px dashed transparent; position:relative; }
+    .slot.drag-target { border-color:#706a48; background:rgba(255,224,75,.05); }
+    .session-tile { position:relative; border:1px solid color-mix(in srgb, var(--track), #000 35%); border-top:4px solid var(--track); background:#252524; padding:8px; min-height:78px; cursor:grab; border-radius:2px; box-shadow:0 6px 13px rgba(0,0,0,.16); }
+    .session-tile + .session-tile { margin-top:6px; }
+    .session-tile strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; font-size:10px; line-height:1.23; }
+    .session-tile .tile-time { color:var(--track); font-size:8px; font-weight:850; margin-bottom:4px; text-transform:uppercase; letter-spacing:.04em; }
+    .session-tile .tile-speaker { color:#aaa59c; font-size:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:6px; }
+    .session-tile.conflict { border-color:var(--danger); box-shadow:inset 0 0 0 1px var(--danger), 0 6px 13px rgba(0,0,0,.2); }
+    .conflict-mark { position:absolute; right:5px; top:4px; width:16px; height:16px; border-radius:50%; display:grid; place-items:center; color:#1a1110; background:var(--danger); font-size:9px; font-weight:950; }
+
+    .agenda-table { min-width:780px; padding:14px; }
+    table { border-collapse:collapse; width:100%; }
+    th { color:#7e7a73; text-transform:uppercase; font-size:8px; letter-spacing:.09em; text-align:left; padding:9px 10px; border-bottom:1px solid #45433e; }
+    td { padding:10px; border-bottom:1px solid #2f2e2b; font-size:10px; vertical-align:middle; }
+    tbody tr:hover { background:#20201f; }
+    .track-dot { width:8px; height:8px; border-radius:50%; display:inline-block; background:var(--track); margin-right:7px; }
+    .view-board { min-width:820px; padding:14px; display:grid; gap:9px; }
+    .view-columns { display:grid; grid-template-columns:repeat(var(--cols), minmax(155px,1fr)); gap:8px; align-items:start; }
+    .view-column { border:1px solid #302f2d; min-height:520px; background:#171717; }
+    .view-column h4 { position:sticky; top:0; margin:0; padding:11px; background:#20201f; border-bottom:1px solid #353430; z-index:2; font:400 16px var(--serif); }
+    .view-column .drop-column { min-height:470px; padding:8px; }
+
+    .balance { border-left:1px solid var(--line); background:#181818; min-width:0; display:flex; flex-direction:column; z-index:3; }
+    .balance-content { overflow:auto; padding:12px; }
+    .curator-note { border:1px solid #4b4430; background:#262318; color:#e8d98a; padding:11px; font:400 14px/1.3 var(--serif); margin-bottom:14px; }
+    .meter { margin-bottom:12px; }
+    .meter-line { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:9px; margin-bottom:4px; }
+    .meter-line span:first-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .meter-line b { font-variant-numeric:tabular-nums; }
+    .bar { height:4px; background:#302f2c; }
+    .bar i { display:block; height:100%; width:var(--w); background:var(--track,var(--signal)); transition:width .2s ease; }
+    .metric-row { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin:14px 0; }
+    .metric { border:1px solid #302f2d; padding:8px 5px; text-align:center; }
+    .metric b { display:block; font:400 20px var(--serif); font-variant-numeric:tabular-nums; }
+    .metric span { color:#77736d; font-size:8px; text-transform:uppercase; }
+    .rail-section { margin-top:16px; padding-top:12px; border-top:1px solid #302f2c; }
+    .rail-section h4 { margin:0 0 9px; font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:#8a867e; }
+
+    .dock {
+      position:absolute; z-index:20; left:0; top:0; bottom:0; width:min(860px,calc(100% - 145px));
+      background:#f1ede5; color:#1b1b1a; box-shadow:18px 0 50px rgba(0,0,0,.48); transform:translateX(-102%);
+      transition:transform .23s cubic-bezier(.2,.8,.2,1); overflow:hidden; display:grid; grid-template-rows:auto 1fr;
+    }
+    .dock.open { transform:translateX(0); }
+    .dock-head { display:flex; align-items:center; gap:14px; padding:16px 18px; border-bottom:1px solid #c9c4ba; background:#f7f2e9; }
+    .dock-head h2 { font:400 30px/1 var(--serif); letter-spacing:-.03em; margin:0; }
+    .dock-head .eyebrow { color:#766927; }
+    .dock-title { min-width:0; }
+    .dock-title p { margin:4px 0 0; color:#6d6962; font-size:10px; }
+    .dock-head .btn { margin-left:auto; background:#e4ded3; color:#222; border-color:#bbb5aa; }
+    .dock-body { overflow:auto; padding:20px; }
+    .dock-body .btn { color:#1b1b1a; background:#ded8cc; border-color:#b9b2a7; }
+    .dock-body .btn.primary { background:#20201f; border-color:#20201f; color:#fff; }
+    .dock-body .btn.danger { background:#f4d9d5; color:#752b26; border-color:#d3aaa5; }
+    .dock-grid { display:grid; grid-template-columns:repeat(12,1fr); gap:12px; }
+    .card { background:#fffdfa; border:1px solid #d4cec3; padding:15px; min-width:0; }
+    .card h3 { margin:0 0 5px; font:400 20px/1.08 var(--serif); }
+    .card p { color:#716d65; font-size:11px; line-height:1.45; }
+    .span-12 { grid-column:span 12; } .span-8 { grid-column:span 8; } .span-7 { grid-column:span 7; }
+    .span-6 { grid-column:span 6; } .span-5 { grid-column:span 5; } .span-4 { grid-column:span 4; }
+    .stat { font:400 38px/1 var(--serif); font-variant-numeric:tabular-nums; letter-spacing:-.05em; }
+    .stat-label { color:#817b72; font-size:9px; text-transform:uppercase; letter-spacing:.08em; margin-top:5px; }
+    .status-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .status-box { padding:12px; background:#f4f0e8; border-left:3px solid var(--c); cursor:pointer; }
+    .status-box b { display:block; font:400 27px var(--serif); font-variant-numeric:tabular-nums; }
+    .status-box span { font-size:9px; color:#6e6a63; }
+    .field { display:grid; gap:5px; margin-bottom:13px; }
+    .field label { font-size:9px; font-weight:850; text-transform:uppercase; letter-spacing:.08em; color:#68645e; }
+    .field input, .field select, .field textarea { width:100%; border:1px solid #c8c2b7; background:#fffefa; color:#1e1e1d; padding:9px 10px; border-radius:2px; font-size:11px; }
+    .field textarea { min-height:88px; resize:vertical; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .inline-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .subtle { color:#77726a; font-size:10px; }
+    .pill { display:inline-flex; align-items:center; border-radius:999px; padding:4px 7px; background:#e9e3d9; color:#57534c; font-size:8px; font-weight:850; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
+    .pill.session { background:#211f1b; color:#f8df67; }
+    .pill.accepted { background:#d9f0df; color:#27623a; }
+    .pill.overdue { background:#f6d8d5; color:#842e28; }
+    .pill.review { background:#e2e7f6; color:#3a4b83; }
+    .list-row { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #ddd7cc; min-height:50px; }
+    .list-row:last-child { border:0; }
+    .list-row strong { font-size:11px; display:block; }
+    .list-row small { color:#79746c; font-size:9px; display:block; margin-top:3px; }
+    .check { width:16px; height:16px; accent-color:#222; }
+    .progress { height:7px; background:#ddd8cf; overflow:hidden; }
+    .progress i { display:block; height:100%; width:var(--w); background:#20201f; }
+    .task-table td, .task-table th { border-color:#ded8cd; }
+    .task-check { width:22px; height:22px; border-radius:50%; border:1px solid #b8b2a8; background:#fff; cursor:pointer; }
+    .task-check.done { background:#20201f; box-shadow:inset 0 0 0 5px #fff; }
+    .form-field-card { display:grid; grid-template-columns:26px 1fr auto; align-items:center; gap:8px; border:1px solid #d4cec3; background:#fff; padding:10px; margin-bottom:7px; }
+    .drag-handle { color:#99938a; cursor:grab; letter-spacing:-2px; }
+    .preview-form { background:#171717; color:#f1ece3; padding:22px; min-height:430px; }
+    .preview-form .field label { color:#99958d; }
+    .preview-form .field input, .preview-form .field textarea, .preview-form .field select { background:#242423; border-color:#46443f; color:#eee9df; }
+    .tabs { display:flex; border-bottom:1px solid #ccc6ba; margin-bottom:14px; }
+    .tab { border:0; border-bottom:2px solid transparent; padding:10px 12px; background:transparent; color:#77726a; font-size:10px; font-weight:800; cursor:pointer; }
+    .tab.active { border-color:#222; color:#222; }
+    .review-card { max-width:680px; margin:auto; background:#fff; border:1px solid #d1cabf; padding:26px; box-shadow:0 15px 40px rgba(51,45,37,.1); }
+    .review-card h3 { font:400 31px/1.1 var(--serif); letter-spacing:-.035em; margin:9px 0 13px; }
+    .review-card blockquote { margin:16px 0; padding-left:14px; border-left:3px solid #ddd4c2; color:#5e5a53; font:400 14px/1.55 var(--serif); }
+    .scores { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+    .score-btn { height:46px; border:1px solid #bbb4a9; background:#faf7f0; color:#222; cursor:pointer; font:400 19px var(--serif); }
+    .score-btn:hover, .score-btn.selected { background:#20201f; color:#fff; }
+    .bulk-toolbar { position:sticky; top:-20px; z-index:3; margin:-20px -20px 13px; padding:12px 20px; background:#eee9e0; border-bottom:1px solid #cec8bd; display:flex; align-items:center; gap:9px; }
+    .bulk-toolbar strong { font-size:11px; font-variant-numeric:tabular-nums; }
+    .bulk-toolbar .spacer { flex:1; }
+    .pager { display:flex; align-items:center; justify-content:space-between; padding:12px 0; font-size:10px; color:#767169; }
+    .mini-canvas { position:absolute; z-index:10; right:0; top:0; bottom:0; width:145px; pointer-events:none; opacity:.62; background:#101010; border-left:1px solid #47443e; padding:10px; overflow:hidden; }
+    .mini-canvas h4 { font:400 17px var(--serif); margin:0 0 11px; }
+    .mini-lane { height:62px; border-top:1px solid #333; padding:6px 0; }
+    .mini-lane i { display:block; height:9px; background:var(--track); opacity:.8; margin:4px 0; width:var(--w); }
+
+    .public-shell { min-height:100vh; overflow:auto; background:#ece6dc; color:#151515; padding:26px clamp(18px,5vw,72px) 60px; }
+    .public-head { display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #191919; padding:4px 0 16px; }
+    .public-head .wordmark { font-size:25px; }
+    .public-head nav { display:flex; gap:7px; }
+    .public-shell .btn { color:#171717; background:#ded6ca; border-color:#b9b1a5; }
+    .public-shell .btn.primary { background:#171717; color:#fff; border-color:#171717; }
+    .public-hero { padding:42px 0 24px; display:flex; justify-content:space-between; align-items:end; gap:20px; }
+    .public-hero h1 { font:400 clamp(48px,7vw,90px)/.86 var(--serif); letter-spacing:-.065em; margin:7px 0; }
+    .public-hero p { max-width:470px; color:#69645c; line-height:1.5; font-size:12px; }
+    .public-agenda { display:grid; grid-template-columns:100px 1fr; border-top:1px solid #aaa399; }
+    .public-time { padding:20px 8px; font:700 11px var(--sans); border-bottom:1px solid #c9c1b7; }
+    .public-session { display:grid; grid-template-columns:8px 1fr auto; gap:13px; padding:17px 12px; border-bottom:1px solid #c9c1b7; cursor:pointer; }
+    .public-session:hover { background:#e3dbd0; }
+    .public-session i { background:var(--track); }
+    .public-session h3 { margin:0 0 5px; font:400 21px/1.05 var(--serif); }
+    .public-session p { margin:0; color:#6d675f; font-size:10px; }
+    .public-session time { font-size:10px; color:#5f5a53; text-align:right; }
+
+    .speaker-shell { min-height:100vh; overflow:auto; background:#f0ebe2; color:#1b1b1a; }
+    .speaker-top { background:#171717; color:#eee9e0; padding:17px clamp(18px,5vw,66px); display:flex; align-items:center; justify-content:space-between; }
+    .speaker-main { max-width:1050px; margin:auto; padding:36px 24px 60px; }
+    .speaker-welcome { display:flex; align-items:end; justify-content:space-between; gap:20px; margin-bottom:26px; }
+    .speaker-welcome h1 { margin:5px 0 0; font:400 52px/.95 var(--serif); letter-spacing:-.05em; }
+    .status-banner { background:#dfeee2; border-left:7px solid #3f9a60; padding:20px; margin-bottom:17px; display:flex; justify-content:space-between; align-items:center; gap:20px; }
+    .status-banner h2 { font:400 29px var(--serif); margin:0 0 4px; }
+    .status-banner p { color:#526156; margin:0; font-size:10px; }
+    .speaker-grid { display:grid; grid-template-columns:1.25fr .75fr; gap:14px; }
+
+    .modal-backdrop { position:fixed; z-index:900; inset:0; background:rgba(0,0,0,.72); display:none; align-items:center; justify-content:center; padding:20px; }
+    .modal-backdrop.open { display:flex; }
+    .modal { width:min(620px,100%); max-height:85vh; overflow:auto; background:#f5f0e7; color:#1b1b1a; box-shadow:var(--shadow); padding:20px; }
+    .modal h2 { font:400 29px var(--serif); margin:0 0 13px; }
+    .search-input { width:100%; padding:13px; border:1px solid #c1baaf; background:white; font-size:14px; }
+    .search-results { margin-top:10px; }
+    .embed-code { background:#171717; color:#ddd8cf; padding:13px; overflow:auto; font:10px/1.5 ui-monospace, monospace; }
+    .embed-preview { border:1px solid #ccc5ba; padding:12px; margin-top:10px; }
+
+    .empty { padding:32px; text-align:center; border:1px dashed #c2bbb0; color:#77716a; }
+    .hidden { display:none !important; }
+
+    @media (max-width: 1080px) {
+      .studio { grid-template-columns:230px 1fr; }
+      .balance { position:absolute; right:0; top:0; bottom:0; width:220px; box-shadow:-10px 0 30px rgba(0,0,0,.35); transform:translateX(calc(100% - 34px)); transition:transform .2s; }
+      .balance:hover { transform:translateX(0); }
+      .hero { grid-template-columns:1fr; }
+      .poster { max-width:680px; }
+    }
+    @media (max-width: 720px) {
+      body { overflow:auto; }
+      .prototype-badge { top:8px; right:8px; font-size:8px; padding:6px 8px; }
+      .landing { min-height:100vh; display:block; padding:22px 18px 40px; }
+      .landing-head { margin-bottom:50px; }
+      .hero { display:block; }
+      .hero h1 { font-size:62px; }
+      .poster { margin:40px 0 25px; min-height:420px; box-shadow:9px 12px 0 #080808; }
+      .landing-foot { gap:20px; }
+      .admin-shell { height:auto; min-height:100vh; grid-template-rows:54px 42px minmax(650px,calc(100vh - 96px)); }
+      .topbar { grid-template-columns:1fr auto; padding-left:12px; }
+      .global-search { display:none; }
+      .account span { display:none; }
+      .studio { grid-template-columns:1fr; }
+      .pool { position:absolute; z-index:9; left:0; top:0; bottom:0; width:232px; transform:translateX(calc(-100% + 30px)); transition:transform .2s; }
+      .pool:hover, .pool:focus-within { transform:translateX(0); }
+      .balance { display:none; }
+      .canvas-tools { padding-left:38px; overflow-x:auto; }
+      .segmented { flex-basis:280px; width:280px; }
+      .segmented button { width:56px; }
+      .dock { width:calc(100% - 28px); }
+      .mini-canvas { width:28px; padding:3px; }
+      .mini-canvas * { opacity:0; }
+      .span-8,.span-7,.span-6,.span-5,.span-4 { grid-column:span 12; }
+      .form-row, .speaker-grid { grid-template-columns:1fr; }
+      .speaker-welcome, .status-banner, .public-hero { align-items:flex-start; flex-direction:column; }
+      .public-agenda { grid-template-columns:64px 1fr; }
+      .public-session { grid-template-columns:6px 1fr; }
+      .public-session time { grid-column:2; text-align:left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="prototype-badge">Prototype <span>— mock data</span></div>
+  <div id="app"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="modal" class="modal-backdrop" aria-hidden="true"><div class="modal" id="modalContent"></div></div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const tracks = [
+        {name:'AI in Financial Services', short:'Financial AI', color:'#ffb85c'},
+        {name:'Agents', short:'Agents', color:'#e77cff'},
+        {name:'Evals', short:'Evals', color:'#78a9ff'},
+        {name:'Infrastructure', short:'Infra', color:'#54d6c1'},
+        {name:'Open Models', short:'Open Models', color:'#ff786f'},
+        {name:'RAG & Retrieval', short:'RAG', color:'#b9db63'},
+        {name:'Security', short:'Security', color:'#8f8cff'},
+        {name:'Leadership', short:'Leadership', color:'#f08eb4'}
+      ];
+      const formats = [
+        {name:'Workshop', minutes:90}, {name:'Stage Talk', minutes:20},
+        {name:'Lightning', minutes:10}, {name:'Online', minutes:45}
+      ];
+      const rooms = ['Broadway Ballroom','Empire East','Empire West','Liberty 1','Liberty 2','Hudson Studio'];
+      const days = ['Mon, Oct 12','Tue, Oct 13','Wed, Oct 14'];
+      const firstNames = ['Amara','Søren','Priya','Mateo','Élodie','Kwame','Niamh','José','Fatima','Jun','Aleksandar','Róisín','İpek','Thandiwe','Márton','Noor','Zanele','Chloë','Oluwaseun','Léa'];
+      const lastNames = ['Okafor','Kierkegaard-Liu','Ramanathan','García Márquez','Dubois','Mensah','O’Connell','Hernández','Al-Khatib','Watanabe','Petrović','Ní Bhraonáin','Şahin','Ndlovu','Szabó','Ben-Ari','Mbeki','Sørensen-Smith','Adebayo','Lefèvre'];
+      const companies = ['JPMorganChase Applied AI','Bloomberg Engineering','Anthropic','OpenAI','Weights & Biases','LangChain','Mistral AI','Hugging Face','Modal Labs','Pinecone','Capital One','Goldman Sachs','Google DeepMind','Microsoft AI','Databricks Mosaic AI','Together AI','ElevenLabs','Perplexity','Glean','NVIDIA'];
+      const titleA = ['Operating','Evaluating','Securing','Scaling','Designing','Debugging','Shipping','Governing','Rebuilding','Teaching'];
+      const titleB = ['agentic systems','retrieval pipelines','open-weight models','AI products','financial copilots','multimodal evaluators','production inference','long-running agents','enterprise RAG','human-AI teams'];
+      const titleC = ['when the benchmark lies','without losing the humans','from prototype to production','under real-world constraints','at uncomfortable scale','for regulated industries','after the demo ends','with evidence, not vibes','across the messy middle','that survive contact with users'];
+
+      const seeded = mulberry32(20261012);
+      const pick = arr => arr[Math.floor(seeded()*arr.length)];
+      const speakerName = i => i === 7 ? 'Priya Ramanathan' : `${firstNames[i % firstNames.length]} ${lastNames[(i * 7 + Math.floor(i / firstNames.length) * 3 + 3) % lastNames.length]}`;
+      const titleFor = i => i === 22 ? 'A field guide to reliable agent infrastructure across organizations with incompatible risk models' : `${pick(titleA)} ${pick(titleB)} ${pick(titleC)}`;
+      const statuses = ['accepted','in review','submitted','waitlisted','rejected','withdrawn'];
+
+      const submissions = Array.from({length:1040}, (_,i) => {
+        let status = i < 150 ? 'accepted' : i < 240 ? 'in review' : i < 760 ? 'submitted' : i < 850 ? 'waitlisted' : i < 1015 ? 'rejected' : 'withdrawn';
+        const isSession = i >= 1000;
+        if (isSession) status = 'accepted';
+        const track = tracks[i % tracks.length];
+        const format = formats[(i * 3 + 1) % formats.length];
+        const name = i < 3 ? 'Priya Ramanathan' : speakerName(i + 5);
+        const speakers = i === 12 ? ['Amara Okafor','Søren Kierkegaard-Liu','José Hernández','Thandiwe Ndlovu'] : [name];
+        return {
+          id:`A-${String(i+1).padStart(4,'0')}`, entity:isSession?'Session':'Abstract', title:titleFor(i),
+          speaker:name, speakers, company:companies[(i*11)%companies.length], track:track.name,
+          format:format.name, minutes:format.minutes, status, score:(2.6 + seeded()*2.3).toFixed(1),
+          wave: status==='accepted' ? ['Aug 15','Sep 1','Sep 15'][i%3] : '—', adminCreated:isSession
+        };
+      });
+
+      const scheduled = [];
+      const scheduleSeed = [
+        [0,0,0,'09:00'],[1,0,1,'09:25'],[2,0,2,'10:00'],[3,0,3,'10:25'],
+        [4,1,0,'09:00'],[5,1,1,'09:25'],[6,1,2,'10:00'],[7,1,3,'10:25'],
+        [8,2,0,'09:00'],[9,2,1,'09:25'],[10,2,2,'10:00'],[11,2,3,'10:25'],
+        [12,3,0,'09:00'],[13,3,1,'09:25'],[14,3,2,'10:00'],[15,3,3,'10:25'],
+        [16,4,0,'09:00'],[17,4,1,'09:25'],[18,4,2,'10:00'],[19,4,3,'10:25'],
+        [20,5,0,'09:00'],[21,5,1,'09:25'],[22,5,2,'10:00'],[23,5,3,'10:25'],
+        [24,6,0,'09:00'],[25,6,1,'09:25'],[26,6,2,'10:00'],[27,6,3,'10:25'],
+        [28,7,0,'09:00'],[29,7,1,'09:25'],[30,7,2,'10:00'],[31,7,3,'10:25']
+      ];
+      const roomUse = {};
+      scheduleSeed.forEach(([idx,trackIndex,slot,time],n) => {
+        const day=days[n%3], roomKey=`${day}|${time}`, roomIndex=roomUse[roomKey]||0;
+        roomUse[roomKey]=roomIndex+1;
+        scheduled.push({...submissions[idx], track:tracks[trackIndex].name, day, room:rooms[roomIndex%rooms.length], time});
+      });
+      scheduled[8].speaker = 'Priya Ramanathan'; scheduled[8].speakers = ['Priya Ramanathan']; scheduled[8].day = 'Tue, Oct 13'; scheduled[8].time='10:00'; scheduled[8].room='Empire East';
+      scheduled[18].speaker = 'Priya Ramanathan'; scheduled[18].speakers = ['Priya Ramanathan']; scheduled[18].day = 'Tue, Oct 13'; scheduled[18].time='10:00'; scheduled[18].room='Liberty 1';
+      scheduled[9].day='Tue, Oct 13'; scheduled[9].time='10:00'; scheduled[9].room='Empire East';
+      scheduled[10].room='Empire West'; scheduled[22].room='Hudson Studio';
+
+      const state = {
+        route: 'landing', agendaView:'track', trackFilter:'all', dayFilter:'all', poolQuery:'',
+        submissionsPage:0, submissionFilter:'all', selected:new Set(), reviewIndex:0,
+        reviewScore:null, dock:null, scrolls:{}, tasks:[
+          {title:'Confirm your participation', due:'Sep 18', kind:'Action', done:true},
+          {title:'Review speaker details', due:'Sep 20', kind:'Form', done:true},
+          {title:'Upload a high-resolution headshot', due:'Sep 22', kind:'File request', done:false},
+          {title:'Share A/V and accessibility needs', due:'Sep 24', kind:'Form', done:false},
+          {title:'Upload final slides', due:'Oct 5 · overdue', kind:'File request', done:false, overdue:true}
+        ],
+        event:{name:'AIE NYC 2026', start:'2026-10-12', end:'2026-10-14', timezone:'America/New_York', venue:'Sheraton New York Times Square'}
+      };
+
+      const routeMeta = {
+        settings:['Event settings','Dates, venue, formats, tracks, rooms','02'],
+        dashboard:['Program dashboard','The whole program, with the next action already visible','03'],
+        forms:['Form builder','Shape the intake; Abstracts enter review, Sessions bypass it','04'],
+        submit:['Public CFP','The speaker sees exactly what they need and nothing they do not','05'],
+        portal:['Speaker portal','Status first, then the work that remains','06'],
+        evaluation:['Evaluation plan','A shared rubric, a committee, and a two-round funnel','07'],
+        review:['Reviewer queue','One abstract at a time; score, then keep moving','08'],
+        submissions:['Bulk accept','Turn the strongest Abstracts into Sessions in one controlled wave','09'],
+        agenda:['Agenda studio','Compose the program in tracks, not spreadsheets','10'],
+        public:['Event site','A public program that stays in step with the studio','11']
+      };
+      const steps = [
+        ['landing','Landing'],['settings','Event'],['dashboard','Dashboard'],['forms','Form'],['submit','CFP'],
+        ['portal','Portal'],['evaluation','Evaluation'],['review','Review'],['submissions','Accept'],['agenda','Agenda'],['public','Publish']
+      ];
+
+      function mulberry32(a) { return function() { let t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+      function trackOf(name) { return tracks.find(t=>t.name===name) || tracks[0]; }
+      function esc(value) { return String(value).replace(/[&<>'"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+      function toast(message='Prototype — not wired (AC-ref)') {
+        const el=document.getElementById('toast'); el.textContent=message; el.classList.add('show');
+        clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),2200);
+      }
+      function navigate(route) { location.hash=route; }
+      function counts() { return statuses.reduce((o,s)=>(o[s]=submissions.filter(x=>x.status===s).length,o),{}); }
+      function setRoute() {
+        const raw=location.hash.replace(/^#/,'') || 'landing'; state.route=routeMeta[raw]||raw==='landing'?raw:'landing';
+        if (state.route==='landing') renderLanding();
+        else if (state.route==='public') renderPublic();
+        else if (state.route==='portal') renderPortal();
+        else renderAdmin(state.route);
+        window.scrollTo(0,0);
+      }
+
+      function renderLanding() {
+        const posterItems = scheduled.slice(0,5);
+        document.getElementById('app').innerHTML = `
+          <main class="landing">
+            <header class="landing-head"><div class="wordmark">Marquee</div><div class="landing-kicker">Open-source program operations</div></header>
+            <section class="hero">
+              <div>
+                <div class="eyebrow">Fantastic conferences, effortlessly.</div>
+                <h1>Your program,<br><em>in full view.</em></h1>
+                <p class="hero-copy">From the first Abstract to the final room change, Marquee gives program teams one fast, living canvas for review, speaker readiness, and the agenda everyone came to see.</p>
+                <div class="hero-actions">
+                  <button class="btn primary wide" data-nav="agenda">Enter as organizer</button>
+                  <button class="btn wide" data-nav="portal">Enter as speaker</button>
+                  <button class="btn ghost" data-nav="submit">Open public CFP</button>
+                </div>
+                <p class="tiny" style="margin-top:12px">Demo event preloaded · 1,040 submissions · 32 scheduled Sessions · no signup</p>
+              </div>
+              <article class="poster" aria-label="Program poster preview">
+                <div class="poster-head"><span>AIE NYC 2026</span><span>OCT 12–14</span></div>
+                <h2>Tuesday<br>in motion.</h2>
+                <div class="poster-schedule">
+                  ${posterItems.map((s,i)=>`<div class="poster-time">${s.time}</div><div class="poster-session" style="--c:${trackOf(s.track).color}">${esc(s.title)}</div>`).join('')}
+                </div>
+                <div class="poster-foot"><span>Sheraton New York Times Square</span><span>Program live</span></div>
+              </article>
+            </section>
+            <footer class="landing-foot"><span>Apache-2.0 · Self-hosted · Your data</span><span>Built for the operator + agent pair</span></footer>
+          </main>`;
+        bindGlobal();
+      }
+
+      function shell(route, dockHtml='') {
+        return `<div class="admin-shell">
+          <header class="topbar">
+            <div class="brand-cluster"><div class="wordmark">Marquee</div><div class="event-switch"><strong>${esc(state.event.name)}</strong><span>Oct 12–14 · New York</span></div></div>
+            <button class="global-search" data-search>Search Abstracts, Sessions, Speakers, forms <kbd>⌘ K</kbd></button>
+            <div class="account"><span>Program team</span><div class="avatar">AW</div></div>
+          </header>
+          <nav class="walkthrough" aria-label="Walkthrough">
+            ${steps.map(([r,label],i)=>`<button class="walk-step ${route===r?'active':''}" data-nav="${r}"><b>${String(i+1).padStart(2,'0')}</b>${label}</button>`).join('')}
+          </nav>
+          <main class="studio">
+            ${renderPool()}
+            ${renderCanvas()}
+            ${renderBalance()}
+            ${dockHtml}
+            ${route!=='agenda'?renderMiniCanvas():''}
+          </main>
+        </div>`;
+      }
+
+      function renderAdmin(route) {
+        const dock = route==='agenda' ? '' : renderDock(route);
+        document.getElementById('app').innerHTML=shell(route,dock);
+        bindGlobal(); bindAgenda(); bindDock(route);
+      }
+
+      function renderPool() {
+        const scheduledIds=new Set(scheduled.map(x=>x.id));
+        let list=submissions.filter(x=>x.status==='accepted'&&!scheduledIds.has(x.id));
+        if(state.trackFilter!=='all') list=list.filter(x=>x.track===state.trackFilter);
+        if(state.poolQuery) { const q=state.poolQuery.toLowerCase(); list=list.filter(x=>(x.title+' '+x.speaker).toLowerCase().includes(q)); }
+        return `<aside class="pool" aria-label="Unscheduled accepted Sessions">
+          <div class="pool-head"><div class="eyebrow">Ready to place</div><h3>Unscheduled</h3><div class="tiny"><b style="color:#eee">${list.length}</b> accepted Sessions</div></div>
+          <div class="pool-filter"><input id="poolSearch" value="${esc(state.poolQuery)}" placeholder="Filter Sessions"><select id="poolTrack"><option value="all">All tracks</option>${tracks.map(t=>`<option ${state.trackFilter===t.name?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
+          <div class="pool-list">${list.slice(0,32).map(s=>poolCard(s)).join('')}</div>
+          <div class="pool-foot">Showing ${Math.min(32,list.length)} of ${list.length} · Drag a Session onto the canvas</div>
+        </aside>`;
+      }
+      function poolCard(s) { const t=trackOf(s.track); return `<article class="pool-card" draggable="true" data-drag-id="${s.id}" style="--track:${t.color}"><strong>${esc(s.title)}</strong><div class="meta"><span>${esc(s.format)} · ${s.minutes}m</span><span>${esc(s.speaker)}</span></div></article>`; }
+
+      function renderCanvas() {
+        return `<section class="canvas">
+          <div class="canvas-tools">
+            <div class="segmented" aria-label="Agenda views">${['list','day','week','track','room'].map(v=>`<button data-view="${v}" class="${state.agendaView===v?'active':''}">${v}</button>`).join('')}</div>
+            <select id="dayFilter"><option value="all">All days</option>${days.map(d=>`<option ${state.dayFilter===d?'selected':''}>${d}</option>`).join('')}</select>
+            <select id="trackFilter"><option value="all">All tracks</option>${tracks.map(t=>`<option ${state.trackFilter===t.name?'selected':''}>${esc(t.name)}</option>`).join('')}</select>
+            <select id="snap"><option>15 min snap</option><option>5 min snap</option><option>30 min snap</option><option>60 min snap</option></select>
+            <div class="tool-spacer"></div>
+            <button class="btn small conflict-btn" data-conflicts>● <span id="conflictCount">0</span> conflicts</button>
+            <button class="btn small primary" data-publish>Publish agenda</button>
+          </div>
+          <div class="canvas-scroll" id="canvasScroll">${renderAgendaView()}</div>
+        </section>`;
+      }
+
+      function visibleSchedule() {
+        return scheduled.filter(s=>(state.trackFilter==='all'||s.track===state.trackFilter)&&(state.dayFilter==='all'||s.day===state.dayFilter));
+      }
+      function renderAgendaView() {
+        const items=visibleSchedule();
+        if(state.agendaView==='track') return renderTrackView(items);
+        if(state.agendaView==='list') return `<div class="agenda-table"><table><thead><tr><th>When</th><th>Session</th><th>Track</th><th>Room</th><th>Format</th></tr></thead><tbody>${items.sort(sortSession).map(s=>`<tr draggable="true" data-drag-id="${s.id}"><td>${esc(s.day)} · ${s.time}</td><td><strong>${esc(s.title)}</strong><br><span class="tiny">${esc(s.speaker)}</span></td><td style="--track:${trackOf(s.track).color}"><i class="track-dot"></i>${esc(s.track)}</td><td>${esc(s.room)}</td><td>${esc(s.format)} · ${s.minutes}m</td></tr>`).join('')}</tbody></table></div>`;
+        if(state.agendaView==='week') return renderColumns(days, d=>items.filter(s=>s.day===d), 'day');
+        if(state.agendaView==='room') return renderColumns(rooms, r=>items.filter(s=>s.room===r), 'room');
+        return renderColumns(rooms.slice(0,5), r=>items.filter(s=>s.room===r && (state.dayFilter==='all'?s.day===days[0]:true)), 'room');
+      }
+      function sortSession(a,b) { return (a.day+a.time).localeCompare(b.day+b.time); }
+      function renderTrackView(items) {
+        const slots=['09:00','09:25','10:00','10:25','11:00','11:25','12:00'];
+        const viewDays=state.dayFilter==='all'?days:[state.dayFilter];
+        return `<div class="track-board"><div class="time-axis">${slots.map(x=>`<span>${x}</span>`).join('')}</div>${tracks.filter(t=>state.trackFilter==='all'||state.trackFilter===t.name).map(t=>{
+          const laneItems=items.filter(s=>s.track===t.name); return `<section class="lane" style="--track:${t.color}"><header class="lane-label"><i></i><strong>${esc(t.name)}</strong><span>${laneItems.length} scheduled · ${laneItems.reduce((a,s)=>a+s.minutes,0)} min</span></header><div class="lane-days">${viewDays.map(day=>`<div class="day-band"><div class="day-label"><b>${day.slice(0,3)}</b>${day.split(' ').slice(1).join(' ')}</div><div class="day-slots">${slots.map((time,idx)=>`<div class="slot" data-drop-track="${esc(t.name)}" data-drop-day="${day}" data-drop-time="${time}" data-drop-room="${rooms[idx%rooms.length]}">${laneItems.filter(s=>s.day===day&&s.time===time).map(tile).join('')}</div>`).join('')}</div></div>`).join('')}</div></section>`;
+        }).join('')}</div>`;
+      }
+      function renderColumns(labels, getItems, type) {
+        return `<div class="view-board"><div class="view-columns" style="--cols:${Math.min(labels.length,6)}">${labels.map((label,i)=>`<section class="view-column"><h4>${esc(label)}</h4><div class="drop-column" data-drop-${type}="${esc(label)}" data-drop-time="${['09:00','09:25','10:00','10:25'][i%4]}" data-drop-room="${type==='room'?esc(label):rooms[i%rooms.length]}">${getItems(label).sort(sortSession).map(tile).join('')}</div></section>`).join('')}</div></div>`;
+      }
+      function tile(s) { const t=trackOf(s.track); return `<article class="session-tile" draggable="true" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track:${t.color}"><div class="tile-time">${s.time} · ${esc(s.room)}</div><strong>${esc(s.title)}</strong><div class="tile-speaker">${esc(s.speaker)} · ${s.minutes}m</div></article>`; }
+
+      function getConflicts() {
+        const out=[];
+        for(let i=0;i<scheduled.length;i++) for(let j=i+1;j<scheduled.length;j++) {
+          const a=scheduled[i], b=scheduled[j]; if(a.day!==b.day||a.time!==b.time) continue;
+          if(a.room===b.room) out.push({type:'Room overlap',a,b});
+          const shared=a.speakers.find(p=>b.speakers.includes(p)); if(shared) out.push({type:`${shared} is double-booked`,a,b});
+        }
+        return out;
+      }
+      function renderBalance() {
+        const cs=tracks.map(t=>({t,count:scheduled.filter(s=>s.track===t.name).length}));
+        const max=Math.max(...cs.map(x=>x.count),1); const heavy=cs.sort((a,b)=>b.count-a.count)[0];
+        const formatCounts=formats.map(f=>({name:f.name,count:scheduled.filter(s=>s.format===f.name).length}));
+        return `<aside class="balance">
+          <div class="rail-head"><div class="eyebrow">Live composition</div><h3>Balance</h3><div class="tiny">Updates as the board changes</div></div>
+          <div class="balance-content">
+            <div class="curator-note">Tuesday’s ${esc(heavy.t.short)} track runs heavy. Two lightning slots open Wednesday.</div>
+            <div class="metric-row"><div class="metric"><b>${scheduled.length}</b><span>placed</span></div><div class="metric"><b>${submissions.filter(s=>s.status==='accepted').length-scheduled.length}</b><span>to place</span></div><div class="metric"><b>${getConflicts().length}</b><span>conflicts</span></div></div>
+            ${cs.map(x=>`<div class="meter"><div class="meter-line"><span>${esc(x.t.short)}</span><b>${x.count}</b></div><div class="bar" style="--track:${x.t.color}"><i style="--w:${x.count/max*100}%"></i></div></div>`).join('')}
+            <div class="rail-section"><h4>Format mix</h4>${formatCounts.map(x=>`<div class="meter-line"><span>${x.name}</span><b>${x.count}</b></div>`).join('')}</div>
+            <div class="rail-section"><h4>Across days</h4>${days.map(d=>`<div class="meter-line"><span>${d.split(',')[0]}</span><b>${scheduled.filter(s=>s.day===d).length}</b></div>`).join('')}</div>
+          </div>
+        </aside>`;
+      }
+      function renderMiniCanvas() { return `<div class="mini-canvas"><h4>Program stays in view</h4>${tracks.slice(0,6).map((t,i)=>`<div class="mini-lane" style="--track:${t.color};--w:${42+i*7}%"><i></i><i style="--w:${25+i*5}%"></i></div>`).join('')}</div>`; }
+
+      function renderDock(route) {
+        const [title,sub,num]=routeMeta[route];
+        return `<section class="dock open" data-dock><header class="dock-head"><div class="dock-title"><div class="eyebrow">Walkthrough ${num}</div><h2>${title}</h2><p>${sub}</p></div><button class="btn small" data-nav="agenda">Close to canvas →</button></header><div class="dock-body">${dockBody(route)}</div></section>`;
+      }
+      function dockBody(route) {
+        if(route==='settings') return settingsDock();
+        if(route==='dashboard') return dashboardDock();
+        if(route==='forms') return formsDock();
+        if(route==='submit') return submitDock();
+        if(route==='evaluation') return evaluationDock();
+        if(route==='review') return reviewDock();
+        if(route==='submissions') return submissionsDock();
+        return `<div class="empty">This module is ready for the next walkthrough step.</div>`;
+      }
+
+      function settingsDock() {
+        return `<div class="dock-grid"><section class="card span-8"><h3>Event details</h3><p>These details flow into every portal, agenda time, and calendar affordance.</p>
+          <div class="field"><label>Event name</label><input id="eventName" value="${esc(state.event.name)}"></div>
+          <div class="form-row"><div class="field"><label>Starts</label><input type="date" id="eventStart" value="${state.event.start}"></div><div class="field"><label>Ends</label><input type="date" id="eventEnd" value="${state.event.end}"></div></div>
+          <div class="form-row"><div class="field"><label>Timezone</label><select id="eventTimezone"><option>America/New_York</option><option>America/Los_Angeles</option><option>Europe/London</option></select></div><div class="field"><label>Venue</label><input id="eventVenue" value="${esc(state.event.venue)}"></div></div>
+          <button class="btn primary" id="saveEvent">Save event settings</button></section>
+          <section class="card span-4"><h3>Brand</h3><p>The Event site inherits this mark and the track palette.</p><div style="height:150px;background:#171717;color:#ffe04b;display:grid;place-items:center;font:italic 34px var(--serif);margin:14px 0">AIE NYC</div><button class="btn" data-sim="AC-5">Replace logo</button></section>
+          <section class="card span-6"><h3>Formats</h3>${formats.map(f=>`<div class="list-row"><div style="width:8px;height:8px;background:#222"></div><div><strong>${f.name}</strong><small>Default duration · ${f.minutes} minutes</small></div><button class="btn small" data-sim="AC-8">Edit</button></div>`).join('')}<button class="btn" data-sim="AC-8">Add format</button></section>
+          <section class="card span-6"><h3>Tracks & rooms</h3>${tracks.slice(0,4).map(t=>`<div class="list-row"><div style="width:10px;height:10px;background:${t.color}"></div><div><strong>${t.name}</strong><small>Shown consistently across every agenda view</small></div><span class="pill">Track</span></div>`).join('')}<button class="btn" data-sim="AC-11">Manage 8 tracks and 6 rooms</button></section></div>`;
+      }
+      function dashboardDock() {
+        const c=counts();
+        return `<div class="dock-grid"><section class="card span-12" style="background:#1c1c1b;color:white;border-color:#1c1c1b"><div style="display:flex;justify-content:space-between;gap:20px;align-items:end"><div><div class="eyebrow">31 days to CFP close</div><h3 style="font-size:34px;margin-top:8px">The program is moving.</h3><p style="color:#aaa59d;margin-bottom:0">Wave 2 is ready for a decision. Speaker readiness needs attention.</p></div><button class="btn primary" data-nav="submissions">Review Wave 2</button></div></section>
+          <section class="card span-7"><h3>Abstracts by status</h3><p>Every number opens the exact list behind it.</p><div class="status-grid">${[['submitted','#a9a49b'],['in review','#718cd6'],['accepted','#64ad7c'],['waitlisted','#d2a751'],['rejected','#cb7169'],['withdrawn','#8b8580']].map(([s,color])=>`<div class="status-box" style="--c:${color}" data-status-filter="${s}"><b>${c[s]}</b><span>${s}</span></div>`).join('')}</div></section>
+          <section class="card span-5"><h3>Review progress</h3><p>Round 1 · Initial Screen</p><div class="stat">68%</div><div class="progress" style="margin:11px 0"><i style="--w:68%"></i></div><div class="list-row"><span></span><div><strong>719 of 1,058 assigned reviews</strong><small>12 reviewers active today</small></div><button class="btn small" data-nav="evaluation">Open</button></div></section>
+          <section class="card span-8"><h3>Speaker readiness</h3><p>The system has already sorted the chase work by urgency.</p><table class="task-table"><thead><tr><th>Speaker</th><th>Missing</th><th>Due</th></tr></thead><tbody><tr><td><strong>Priya Ramanathan</strong></td><td>Headshot · slides</td><td><span class="pill overdue">5 days overdue</span></td></tr><tr><td><strong>Oluwaseun Adebayo</strong></td><td>Travel form</td><td>Tomorrow</td></tr><tr><td><strong>Élodie Dubois</strong></td><td>Participation</td><td>Sep 21</td></tr></tbody></table><button class="btn" data-sim="AC-91">Open all 37 incomplete speakers</button></section>
+          <section class="card span-4"><h3>Agenda</h3><div class="stat">32</div><div class="stat-label">Sessions placed</div><div class="stat" style="margin-top:18px;color:#a43c35">${getConflicts().length}</div><div class="stat-label">Live conflicts</div><button class="btn primary" style="margin-top:18px" data-nav="agenda">Compose program</button></section></div>`;
+      }
+      function formsDock() {
+        const fields=[['Title','Short text · required · 120 chars'],['Abstract','Long text · required · 300–1,500 chars'],['Format','Single select · 4 options'],['Track','Single select · routes to committee'],['Co-speakers','People · 1–4'],['Company URL','URL · public after acceptance']];
+        return `<div class="dock-grid"><section class="card span-7"><div style="display:flex;justify-content:space-between;align-items:start;gap:10px"><div><h3>AIE NYC 2026 · Call for Speakers</h3><p>Published · closes Sep 12 at 11:59 PM ET</p></div><span class="pill">Abstract form</span></div>
+          <div class="form-row"><div class="field"><label>Collect</label><select id="formTarget"><option>Abstracts — enter evaluation</option><option>Sessions — bypass evaluation</option></select></div><div class="field"><label>Speaker limits</label><select><option>1–4 speakers</option><option>1 speaker</option><option>1–6 speakers</option></select></div></div>
+          <div id="builderFields">${fields.map((f,i)=>`<div class="form-field-card" draggable="true"><span class="drag-handle">•••</span><div><strong>${f[0]}</strong><div class="subtle">${f[1]}</div></div><button class="btn small" data-sim="AC-17">Edit</button></div>${i===1?'<button class="btn small" style="width:100%;margin:0 0 7px" data-add-field>＋ Add a field here</button>':''}`).join('')}</div>
+          <div class="inline-actions"><button class="btn primary" id="publishForm">Publish form</button><button class="btn" data-sim="AC-20">Duplicate form</button><button class="btn" data-sim="AC-134">Rules · 2</button></div></section>
+          <section class="span-5 preview-form"><div class="eyebrow">Live speaker preview</div><h2 style="font:400 28px var(--serif);margin:10px 0 5px">Share your work at AIE NYC</h2><p class="tiny" style="margin-bottom:22px">Drafts save automatically. One speaker minimum.</p><div class="field"><label>Session title</label><input placeholder="What should people remember?"></div><div class="field"><label>Abstract</label><textarea placeholder="Give the committee the clearest version of your idea."></textarea></div><div class="field"><label>Format</label><select><option>Stage Talk · 20 min</option><option>Workshop · 90 min</option></select></div><button class="btn primary" data-nav="submit">Open public form</button></section></div>`;
+      }
+      function submitDock() {
+        return `<div class="dock-grid"><section class="span-8" style="grid-column:3 / span 8"><div class="card"><div class="eyebrow" style="color:#776a29">AIE NYC 2026 · Call for Speakers</div><h3 style="font-size:34px;margin-top:9px">Propose a session</h3><p>We’re looking for practical work on AI engineering: what you built, what broke, and what the rest of us can learn.</p><div class="form-row"><div class="field"><label>Your name</label><input id="submitName" value="Anika Sørensen-Smith"></div><div class="field"><label>Email</label><input type="email" id="submitEmail" value="anika@example.com"></div></div><div class="field"><label>Session title</label><input id="submitTitle" value="Evaluating long-running agents after the demo ends" maxlength="120"><span class="subtle">54 of 120 characters</span></div><div class="field"><label>Abstract</label><textarea id="submitAbstract">A field report from twelve months of operating tool-using agents in production, including the evaluator failures that looked like model failures.</textarea></div><div class="form-row"><div class="field"><label>Format</label><select><option>Stage Talk · 20 min</option><option>Workshop · 90 min</option><option>Lightning · 10 min</option><option>Online · 45 min</option></select></div><div class="field"><label>Track</label><select>${tracks.map(t=>`<option>${t.name}</option>`).join('')}</select></div></div><div class="inline-actions"><button class="btn primary" id="submitAbstractBtn">Submit Abstract</button><button class="btn" id="saveDraft">Save draft and email my link</button><span class="subtle" id="saveState">Saved just now</span></div></div></section></div>`;
+      }
+      function evaluationDock() {
+        const members=['Maya Chen','Richie Cotton','Shreya Shankar','Hamel Husain','Latent Space Editorial'];
+        return `<div class="dock-grid"><section class="card span-8"><div class="tabs"><button class="tab active" data-eval-tab="Plan">Plan</button><button class="tab" data-eval-tab="Round 1">Round 1</button><button class="tab" data-eval-tab="Round 2">Round 2</button><button class="tab" data-eval-tab="Progress">Progress</button></div><div style="display:flex;justify-content:space-between;align-items:start"><div><span class="pill review">Active</span><h3 style="font-size:29px;margin-top:8px">AIE program evaluation</h3><p>Two ordered rounds. Abstract identity stays hidden from reviewers.</p></div><button class="btn" data-sim="AC-53">Edit plan</button></div><div class="list-row"><span class="pill">1</span><div><strong>Initial Screen</strong><small>1–5 overall score · 3 reviewers per Abstract · anonymized</small></div><b>68%</b></div><div class="list-row"><span class="pill">2</span><div><strong>Committee Decision</strong><small>Weighted: usefulness 40 · evidence 35 · originality 25</small></div><b>0%</b></div><div class="inline-actions" style="margin-top:14px"><button class="btn primary" data-promote>Promote 90 Abstracts to Round 2</button><button class="btn" data-nav="review">Open reviewer queue</button></div></section>
+          <section class="card span-4"><h3>Committee</h3><p>Program Committee · 3 reviews per Abstract</p>${members.map((m,i)=>`<div class="list-row"><div class="avatar" style="width:25px;height:25px;font-size:9px">${m.split(' ').map(x=>x[0]).slice(0,2).join('')}</div><div><strong>${m}</strong><small>${[82,71,69,58,47][i]}% complete</small></div><span class="pill">Reviewer</span></div>`).join('')}<button class="btn" data-sim="AC-56">Add evaluator</button></section>
+          <section class="card span-12"><h3>Coverage</h3><div class="status-grid"><div class="status-box" style="--c:#3d9560"><b>719</b><span>Reviews complete</span></div><div class="status-box" style="--c:#cb9b42"><b>339</b><span>Still assigned</span></div><div class="status-box" style="--c:#6965aa"><b>90</b><span>Round 2 shortlist</span></div></div></section></div>`;
+      }
+      function reviewDock() {
+        const queue=submissions.filter(s=>s.status==='in review'); const s=queue[state.reviewIndex%queue.length];
+        return `<div class="review-card"><div style="display:flex;justify-content:space-between;align-items:center"><span class="pill review">Identity hidden</span><strong style="font-size:10px;font-variant-numeric:tabular-nums">${state.reviewIndex+1} of ${queue.length} · ${queue.length-state.reviewIndex-1} remaining</strong></div><div class="progress" style="margin:12px 0 24px"><i style="--w:${(state.reviewIndex+1)/queue.length*100}%"></i></div><div class="eyebrow" style="color:#756823">${esc(s.track)} · ${esc(s.format)}</div><h3>${esc(s.title)}</h3><blockquote>We deployed the first version to a regulated team and learned that retrieval accuracy was the least interesting failure. This talk shares the operational evidence, the uncomfortable tradeoffs, and the evaluator we wish we had built first.</blockquote><p class="subtle">Review against usefulness, evidence, and originality. Speaker identity is not included in this Round.</p><div class="field"><label>Overall score</label><div class="scores">${[1,2,3,4,5].map(n=>`<button class="score-btn ${state.reviewScore===n?'selected':''}" data-score="${n}">${n}</button>`).join('')}</div></div><div class="field"><label>Committee note · optional</label><textarea id="reviewNote" placeholder="Visible to the committee, not the Submitter"></textarea></div><div class="inline-actions"><button class="btn primary" id="saveNext" ${state.reviewScore?'':'disabled'}>Save score & next</button><button class="btn" data-sim="AC-61">Skip for now</button><span class="subtle">Keys 1–5 score · Enter advances</span></div></div>`;
+      }
+      function submissionsDock() {
+        let list=submissions.filter(s=>s.entity==='Abstract'); if(state.submissionFilter!=='all')list=list.filter(s=>s.status===state.submissionFilter);
+        const pageSize=24, pages=Math.ceil(list.length/pageSize), page=Math.min(state.submissionsPage,pages-1), rows=list.slice(page*pageSize,(page+1)*pageSize);
+        return `<div class="bulk-toolbar"><input class="check" type="checkbox" id="selectPage"><strong><span id="selectedCount">${state.selected.size}</span> selected</strong><button class="btn small" id="selectMatching">Select all ${list.length} matching</button><div class="spacer"></div><select id="submissionStatus"><option value="all">All statuses</option>${statuses.map(s=>`<option ${state.submissionFilter===s?'selected':''} value="${s}">${s}</option>`).join('')}</select><button class="btn primary" id="bulkAccept">Accept ${state.selected.size||37} Abstracts</button></div><table><thead><tr><th></th><th>Abstract</th><th>Speaker</th><th>Track</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows.map(s=>`<tr><td><input class="check row-check" type="checkbox" data-id="${s.id}" ${state.selected.has(s.id)?'checked':''}></td><td><strong>${esc(s.title)}</strong><br><span class="tiny">${s.id} · ${s.entity}</span></td><td>${esc(s.speaker)}<br><span class="tiny">${esc(s.company)}</span></td><td style="--track:${trackOf(s.track).color}"><i class="track-dot"></i>${esc(trackOf(s.track).short)}</td><td>${s.score}</td><td><span class="pill ${s.status==='accepted'?'accepted':s.status==='in review'?'review':''}">${s.status}</span></td></tr>`).join('')}</tbody></table><div class="pager"><span>Showing ${page*pageSize+1}–${Math.min((page+1)*pageSize,list.length)} of ${list.length} Abstracts</span><div class="inline-actions"><button class="btn small" id="prevPage" ${page===0?'disabled':''}>Previous</button><span>Page ${page+1} of ${pages}</span><button class="btn small" id="nextPage" ${page>=pages-1?'disabled':''}>Next</button></div></div>`;
+      }
+
+      function renderPortal() {
+        const done=state.tasks.filter(t=>t.done).length;
+        document.getElementById('app').innerHTML=`<div class="speaker-shell"><header class="speaker-top"><div class="wordmark">Marquee</div><div style="display:flex;gap:9px;align-items:center"><span style="font-size:10px">Priya Ramanathan</span><div class="avatar">PR</div><button class="btn small" data-nav="landing">Sign out</button></div></header><main class="speaker-main"><div class="speaker-welcome"><div><div class="eyebrow" style="color:#776a29">AIE NYC 2026 · Speaker portal</div><h1>Good afternoon, Priya.</h1></div><button class="btn" data-sim="AC-50">Edit profile & bio</button></div><section class="status-banner"><div><div class="eyebrow" style="color:#3b744e">Your Session</div><h2>Accepted · Wave 2</h2><p>“Operating long-running agents after the demo ends” · Agents track</p></div><button class="btn primary" data-confirm>Confirm participation</button></section><div class="speaker-grid"><section class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div><h3>Your tasks</h3><p>${done} of ${state.tasks.length} complete · next due Sep 22</p></div><strong class="stat">${done}/${state.tasks.length}</strong></div><div class="progress" style="margin:10px 0 13px"><i style="--w:${done/state.tasks.length*100}%"></i></div><table class="task-table"><thead><tr><th></th><th>Task</th><th>Type</th><th>Due</th></tr></thead><tbody>${state.tasks.map((t,i)=>`<tr><td><button class="task-check ${t.done?'done':''}" data-task="${i}" aria-label="${t.done?'Mark incomplete':'Complete task'}"></button></td><td><strong>${t.title}</strong></td><td>${t.kind}</td><td>${t.overdue?'<span class="pill overdue">Oct 5 · overdue</span>':t.due}</td></tr>`).join('')}</tbody></table></section><aside><section class="card" style="margin-bottom:14px"><div class="eyebrow" style="color:#776a29">Scheduled</div><h3 style="margin-top:8px">Tue, Oct 13 · 10:00 AM</h3><p>Liberty 1 · 20 minutes</p><div class="inline-actions"><button class="btn primary" data-calendar>Add to calendar</button><button class="btn" data-nav="public">View Event site</button></div></section><section class="card"><h3>Speaker Handbook</h3><p>Arrival, A/V, stage timing, venue access, and who to call when plans change.</p><button class="btn" data-sim="AC-142">Read handbook page</button></section></aside></div></main></div>`;
+        bindGlobal();
+        document.querySelectorAll('[data-task]').forEach(b=>b.onclick=()=>{state.tasks[+b.dataset.task].done=!state.tasks[+b.dataset.task].done;renderPortal();toast('Task status updated for you and the program team.');});
+        document.querySelector('[data-confirm]').onclick=()=>toast('Participation confirmed. The program team can see it now.');
+        document.querySelector('[data-calendar]').onclick=()=>toast('Calendar invite prepared · Google, Outlook, or .ics');
+      }
+
+      function renderPublic() {
+        const items=scheduled.slice().sort(sortSession).slice(0,14);
+        document.getElementById('app').innerHTML=`<div class="public-shell"><header class="public-head"><div class="wordmark">AIE NYC 2026</div><nav><button class="btn" data-public-filter>All tracks</button><button class="btn" data-embed>Embed</button><button class="btn primary" data-nav="agenda">Organizer studio</button></nav></header><section class="public-hero"><div><div class="eyebrow" style="color:#706322">Oct 12–14 · New York City</div><h1>The program</h1></div><p>Three days with the people turning AI engineering into a discipline. Browse by track, follow a speaker, or add a Session directly to your calendar.</p></section><div class="tabs"><button class="tab active">Monday 12</button><button class="tab">Tuesday 13</button><button class="tab">Wednesday 14</button></div><section class="public-agenda">${items.map(s=>`<time class="public-time">${s.time}</time><article class="public-session" style="--track:${trackOf(s.track).color}" data-session-detail="${s.id}"><i></i><div><h3>${esc(s.title)}</h3><p>${esc(s.speaker)} · ${esc(s.track)}</p></div><time>${esc(s.room)}<br>${s.minutes} min</time></article>`).join('')}</section></div>`;
+        bindGlobal();
+        document.querySelector('[data-embed]').onclick=openEmbed;
+        document.querySelector('[data-public-filter]').onclick=()=>toast('Track filter opened · 8 tracks available.');
+        document.querySelectorAll('.public-shell .tab').forEach((b,i)=>b.onclick=()=>{document.querySelectorAll('.public-shell .tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');toast(`${days[i]} program selected.`);});
+        document.querySelectorAll('[data-session-detail]').forEach(b=>b.onclick=()=>toast('Session permalink opened with speaker and calendar links.'));
+      }
+
+      function bindGlobal() {
+        document.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>navigate(el.dataset.nav));
+        document.querySelectorAll('[data-sim]').forEach(el=>el.onclick=()=>toast(`Prototype — not wired (${el.dataset.sim})`));
+        document.querySelectorAll('[data-search]').forEach(el=>el.onclick=openSearch);
+      }
+      function bindAgenda() {
+        document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{
+          const sc=document.getElementById('canvasScroll'); state.scrolls[state.agendaView]={top:sc.scrollTop,left:sc.scrollLeft};
+          state.agendaView=b.dataset.view; renderAdmin(state.route); const pos=state.scrolls[state.agendaView]||{top:0,left:0};
+          requestAnimationFrame(()=>{const n=document.getElementById('canvasScroll');n.scrollTop=pos.top;n.scrollLeft=pos.left;});
+        });
+        const trackFilter=document.getElementById('trackFilter'); const dayFilter=document.getElementById('dayFilter');
+        trackFilter.onchange=()=>{state.trackFilter=trackFilter.value;renderAdmin(state.route);};
+        dayFilter.onchange=()=>{state.dayFilter=dayFilter.value;renderAdmin(state.route);};
+        document.getElementById('poolTrack').onchange=e=>{state.trackFilter=e.target.value;renderAdmin(state.route);};
+        document.getElementById('poolSearch').oninput=e=>{state.poolQuery=e.target.value; clearTimeout(bindAgenda.poolTimer);bindAgenda.poolTimer=setTimeout(()=>renderAdmin(state.route),180);};
+        document.querySelector('[data-conflicts]').onclick=openConflicts;
+        document.querySelector('[data-publish]').onclick=()=>{toast('Agenda published. Event site and embed are up to date.');setTimeout(()=>navigate('public'),700);};
+        bindDrag(); markConflicts();
+      }
+      function bindDrag() {
+        let dragged=null;
+        document.querySelectorAll('[draggable="true"]').forEach(el=>{
+          el.addEventListener('dragstart',e=>{dragged=el.dataset.dragId;el.classList.add('dragging');e.dataTransfer.setData('text/plain',dragged);e.dataTransfer.effectAllowed='move';});
+          el.addEventListener('dragend',()=>el.classList.remove('dragging'));
+        });
+        document.querySelectorAll('[data-drop-track],[data-drop-day],[data-drop-room]').forEach(zone=>{
+          zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-target');});
+          zone.addEventListener('dragleave',()=>zone.classList.remove('drag-target'));
+          zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-target');const id=e.dataTransfer.getData('text/plain')||dragged;moveSession(id,zone.dataset);});
+        });
+      }
+      function moveSession(id,dataset) {
+        let s=scheduled.find(x=>x.id===id); const source=submissions.find(x=>x.id===id);
+        if(!s&&source){s={...source,day:state.dayFilter==='all'?days[0]:state.dayFilter,room:dataset.dropRoom||rooms[0],time:dataset.dropTime||'09:00'};scheduled.push(s);}
+        if(!s)return;
+        if(dataset.dropTrack)s.track=dataset.dropTrack;if(dataset.dropDay)s.day=dataset.dropDay;if(dataset.dropRoom)s.room=dataset.dropRoom;if(dataset.dropTime)s.time=dataset.dropTime;
+        renderAdmin(state.route);toast(`${s.format} placed at ${s.time}; duration set to ${s.minutes} minutes.`);
+      }
+      function markConflicts() {
+        const conflicts=getConflicts(); const ids=new Set(conflicts.flatMap(c=>[c.a.id,c.b.id]));
+        document.querySelectorAll('[data-session-id]').forEach(el=>{if(ids.has(el.dataset.sessionId)){el.classList.add('conflict');el.insertAdjacentHTML('beforeend','<span class="conflict-mark" title="Conflict">!</span>');}});
+        const count=document.getElementById('conflictCount'); if(count)count.textContent=conflicts.length;
+      }
+      function bindDock(route) {
+        if(route==='settings') document.getElementById('saveEvent').onclick=()=>{state.event.name=document.getElementById('eventName').value;state.event.start=document.getElementById('eventStart').value;state.event.end=document.getElementById('eventEnd').value;state.event.venue=document.getElementById('eventVenue').value;toast('Event settings saved in place.');};
+        if(route==='dashboard') document.querySelectorAll('[data-status-filter]').forEach(x=>x.onclick=()=>{state.submissionFilter=x.dataset.statusFilter;navigate('submissions');});
+        if(route==='forms') {
+          document.querySelector('[data-add-field]').onclick=()=>{document.getElementById('builderFields').insertAdjacentHTML('beforeend','<div class="form-field-card"><span class="drag-handle">•••</span><div><strong>New question</strong><div class="subtle">Short text · optional</div></div><button class="btn small" data-sim="AC-17">Edit</button></div>');toast('Field added. Public preview updated.');bindGlobal();};
+          document.getElementById('publishForm').onclick=()=>toast(`${document.getElementById('formTarget').value.split(' — ')[0]} form published. Public link is live.`);
+        }
+        if(route==='submit') {
+          document.getElementById('saveDraft').onclick=()=>{document.getElementById('saveState').textContent='Draft saved · resume link queued';toast('Draft saved. Resume link queued to anika@example.com.');};
+          document.getElementById('submitAbstractBtn').onclick=()=>{const title=document.getElementById('submitTitle');if(!title.value.trim()){title.focus();title.style.borderColor='#b23b34';toast('Add a Session title before submitting.');return;}toast('Abstract submitted. Confirmation and portal link queued.');setTimeout(()=>navigate('portal'),800);};
+        }
+        if(route==='evaluation') {
+          document.querySelector('[data-promote]').onclick=()=>toast('90 Abstracts promoted to Committee Decision. Round 1 scores preserved.');
+          document.querySelectorAll('[data-eval-tab]').forEach(tab=>tab.onclick=()=>{
+            document.querySelectorAll('[data-eval-tab]').forEach(x=>x.classList.toggle('active',x===tab));
+            toast(`${tab.dataset.evalTab} view selected. Prototype data remains in place.`);
+          });
+        }
+        if(route==='review') {
+          document.querySelectorAll('[data-score]').forEach(b=>b.onclick=()=>{state.reviewScore=+b.dataset.score;document.querySelectorAll('[data-score]').forEach(x=>x.classList.toggle('selected',x===b));document.getElementById('saveNext').disabled=false;});
+          document.getElementById('saveNext').onclick=()=>{if(!state.reviewScore)return;state.reviewIndex++;state.reviewScore=null;renderAdmin('review');toast('Score saved. Next Abstract ready.');};
+        }
+        if(route==='submissions') bindSubmissions();
+      }
+      function bindSubmissions() {
+        const refreshCount=()=>{document.getElementById('selectedCount').textContent=state.selected.size;document.getElementById('bulkAccept').textContent=`Accept ${state.selected.size||37} Abstracts`;};
+        document.querySelectorAll('.row-check').forEach(c=>c.onchange=()=>{c.checked?state.selected.add(c.dataset.id):state.selected.delete(c.dataset.id);refreshCount();});
+        document.getElementById('selectPage').onchange=e=>{document.querySelectorAll('.row-check').forEach(c=>{c.checked=e.target.checked;e.target.checked?state.selected.add(c.dataset.id):state.selected.delete(c.dataset.id);});refreshCount();};
+        document.getElementById('selectMatching').onclick=()=>{let list=submissions.filter(s=>s.entity==='Abstract'&&(state.submissionFilter==='all'||s.status===state.submissionFilter));list.forEach(s=>state.selected.add(s.id));renderAdmin('submissions');toast(`${list.length} matching Abstracts selected across every page.`);};
+        document.getElementById('submissionStatus').onchange=e=>{state.submissionFilter=e.target.value;state.submissionsPage=0;state.selected.clear();renderAdmin('submissions');};
+        document.getElementById('prevPage').onclick=()=>{state.submissionsPage--;renderAdmin('submissions');};
+        document.getElementById('nextPage').onclick=()=>{state.submissionsPage++;renderAdmin('submissions');};
+        document.getElementById('bulkAccept').onclick=()=>{const chosen=state.selected.size?[...state.selected]:submissions.filter(s=>s.status==='in review').slice(0,37).map(s=>s.id);chosen.forEach(id=>{const s=submissions.find(x=>x.id===id);if(s){s.status='accepted';s.wave='Sep 15';}});state.selected.clear();toast(`${chosen.length} Abstracts accepted · emails queued · portals updated · calendar invites offered.`);setTimeout(()=>renderAdmin('submissions'),900);};
+      }
+
+      function openModal(html) { const modal=document.getElementById('modal');document.getElementById('modalContent').innerHTML=html;modal.classList.add('open');modal.setAttribute('aria-hidden','false');modal.onclick=e=>{if(e.target===modal||e.target.closest('[data-close-modal]'))closeModal();}; }
+      function closeModal(){const modal=document.getElementById('modal');modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}
+      function openSearch() {
+        openModal(`<div style="display:flex;justify-content:space-between"><h2>Find anything</h2><button class="btn small" data-close-modal>Close</button></div><input class="search-input" id="searchInput" placeholder="Try ‘Priya’ or ‘agent infrastructure’" autofocus><div class="search-results" id="searchResults"><div class="empty">Search 1,040 Abstracts and Sessions, Speakers, and forms.</div></div>`);
+        const input=document.getElementById('searchInput'); input.focus(); input.oninput=()=>{const q=input.value.toLowerCase().trim();let matches=q?submissions.filter(s=>(s.title+' '+s.speaker+' '+s.company).toLowerCase().includes(q)).slice(0,7):[];document.getElementById('searchResults').innerHTML=matches.length?matches.map(s=>`<div class="list-row" data-search-result><span class="pill ${s.entity==='Session'?'session':''}">${s.entity}</span><div><strong>${esc(s.title)}</strong><small>${esc(s.speaker)} · ${esc(s.company)}</small></div><span>→</span></div>`).join(''):`<div class="empty">${q?'No matches. Try a speaker, company, or title.':'Search 1,040 Abstracts and Sessions, Speakers, and forms.'}</div>`;document.querySelectorAll('[data-search-result]').forEach(x=>x.onclick=()=>{closeModal();toast('Record opened from global search.');});};
+      }
+      function openConflicts() {
+        const conflicts=getConflicts();openModal(`<div style="display:flex;justify-content:space-between"><div><div class="eyebrow" style="color:#9c3f38">Live detection</div><h2>Agenda conflicts · ${conflicts.length}</h2></div><button class="btn small" data-close-modal>Close</button></div>${conflicts.map(c=>`<div class="list-row"><span class="conflict-mark" style="position:static">!</span><div><strong>${esc(c.type)}</strong><small>${esc(c.a.title)} ↔ ${esc(c.b.title)} · ${c.a.day} at ${c.a.time}</small></div><button class="btn small" data-open-conflict>Open</button></div>`).join('')||'<div class="empty">No conflicts. The program is clear.</div>'}`);document.querySelectorAll('[data-open-conflict]').forEach(b=>b.onclick=()=>{closeModal();toast('Conflicting Sessions centered on the canvas.');});
+      }
+      function openEmbed() {
+        openModal(`<div style="display:flex;justify-content:space-between"><div><div class="eyebrow" style="color:#756823">Live embed</div><h2>Put the agenda on your site</h2></div><button class="btn small" data-close-modal>Close</button></div><div class="form-row"><div class="field"><label>Content</label><select><option>Schedule itinerary</option><option>Speaker gallery</option></select></div><div class="field"><label>Track filter</label><select><option>All published tracks</option>${tracks.map(t=>`<option>${t.name}</option>`).join('')}</select></div></div><div class="field"><label>Copy this snippet</label><div class="embed-code">&lt;marquee-agenda event="aie-nyc-2026" theme="inherit"&gt;&lt;/marquee-agenda&gt;<br>&lt;script src="https://marquee.stage11.dev/embed.js" async&gt;&lt;/script&gt;</div></div><button class="btn primary" id="copyEmbed">Copy embed code</button><div class="embed-preview"><strong>Live preview</strong><p class="subtle">AIE NYC 2026 · 32 published Sessions · responsive · updates in under 60 seconds</p>${scheduled.slice(0,3).map(s=>`<div class="list-row"><i class="track-dot" style="--track:${trackOf(s.track).color}"></i><div><strong>${esc(s.title)}</strong><small>${s.day} · ${s.time} · ${s.room}</small></div><span>→</span></div>`).join('')}</div>`);document.getElementById('copyEmbed').onclick=()=>toast('Embed code copied.');
+      }
+
+      window.addEventListener('hashchange',setRoute);
+      window.addEventListener('keydown',e=>{
+        if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch();}
+        if(e.key==='Escape')closeModal();
+        if(state.route==='review'&&['1','2','3','4','5'].includes(e.key)){state.reviewScore=+e.key;renderAdmin('review');}
+        if(state.route==='review'&&e.key==='Enter'&&state.reviewScore){state.reviewIndex++;state.reviewScore=null;renderAdmin('review');toast('Score saved. Next Abstract ready.');}
+      });
+      setRoute();
+    })();
+  </script>
+</body>
+</html>
