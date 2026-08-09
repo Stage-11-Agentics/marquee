@@ -32,6 +32,13 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - 2026-08-08: **Stack (decision 3):** Cloudflare Workers + D1 source of truth + R2/Queues/Turnstile, genuine two-way Airtable mirror off the request path, Resend, ICS METHOD:REQUEST, roll-our-own magic-link auth. Committed without waiting for the Q1 Discord ruling (we'd build the mirror under either answer). (Atin, interview)
 - 2026-08-08: **Repo/license (decision 4):** develop private on Forgejo; public GitHub `marquee` repo pushed near submission (~Tuesday); **Apache-2.0**. Research/strategy docs curated before the public push. (Atin, interview)
 - 2026-08-08: **Domain (decision 6):** stage11 infrastructure only — app at `marquee.stage11.dev`, outbound mail from `marquee@stage11.systems`. No fresh domain; deadline-trap 5 closed, action item 4 dropped. (Atin, interview)
+- 2026-08-08: **Strategic intent:** one-off competition play (hosted-for-fee possible later, not designed for now). Optimize purely for the judges' Wednesday experience. (Atin, interview)
+- 2026-08-08: **Demo seeding:** faithful AIE replica, grounded in the real 2025 NYC event's public program (Seed Source agent capturing); ~1,000 fabricated submissions shaped like the real distribution. (Atin, interview)
+- 2026-08-08: **Comparison-mode triage: in scope**, Tier B (simple win-count aggregation). (Atin, interview)
+- 2026-08-08: **Name confirmed: Marquee** — collisions with npm/GitHub explicitly don't matter; this is a competition entry. (Atin, interview)
+- 2026-08-08: **No entrant video required** — submission = form + repo + deployed site; the walkthrough videos are the organizers' test script. (brief, confirmed to Atin)
+- 2026-08-08: **Timeline set by Atin:** HTML prototypes done TONIGHT → build kicked off overnight (tone-architect contract compressed into late tonight, then lattice-orchestrator) → QA tomorrow (Sun), Sunday video may add requirements → polish Mon/Tue → public push ~Tue → submit Wed.
+- 2026-08-08: **Surfaces note:** Atin closed the Brief Research (was surface:130) and Landscape Features (was surface:132) tabs post-completion. Their dossiers are committed; dossier maintenance against the Sat/Sun videos needs a fresh agent when the videos land. Discord pastes now come to the orchestrator (surface:128).
 
 ## Active agents (all pane:40, all Opus)
 
