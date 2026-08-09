@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:44Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-32 (rank 13, US-22) + M-53 (rank 10, US-75) \u2014 Wave 2 (\u00a75) \u00b7 MERGED at mint (5 h + 4 h = 9 h; M-53 depends on M-32 plus their shared M-08, and AC-243 makes the board a thin read-only surface **onto** the record \u2014 \"the record owns every stage-appropriate action\")\n\n**M-32 \u2014 Admin create + record** (5 h, ACs AC-118 \u2013 AC-120, AC-240, AC-243, dep M-08)\nScope (verbatim): abstract/session, bypass, origin, participants/answers/scores/routing/history, scheduled slot visibility, stage actions on record.\nAmendment 10 fold (SPEC.md, post-BUILDPLAN-v1.4 \u2014 flagged to the orchestrator; SPEC allocates +1 h): the record's **evaluation panel** lists its current reviewers per round with coverage counts; an admin can assign or remove a specific reviewer there (writing `round_assignments`), the affected reviewer's queue updates, and track-scope rules are still enforced. API/CLI equivalent is `/rounds/:id/assignments` CRUD. **AC-251.** *(SPEC tags the UI \"beyond v1.5 prototype \u2014 acknowledged divergence, build per spec.\")*\n\n**M-53 \u2014 Read-only Program board** (4 h, ACs AC-238, AC-243, deps M-08/M-32)\nScope (verbatim): every non-draft submission once across seven stages, full filters/count/reset, card click/Enter/Space to record, no drag/actions on cards, record owns confirmations/cascades; virtualized at seed scale.\nAC-243 is a client ruling (Amendment 7), replacing struck AC-239: **no card drags, no lifecycle action on cards.** Consequential actions belong on the detail screen, deliberately. Agenda drag/drop is unchanged. `trace:ac` fails if AC-239 is treated as live or reused.\n\nACs (union): AC-118 \u2013 AC-120, **AC-238, AC-240, AC-243** \u00b7 **AC-251** (Amendment 10 fold)\nHours: 9 (5 + 4)\nWorkflow: sub-agent-full (\u22657 h combined)\nShared files: none \u2014 module-local.\nDeps: M-08\nSpeed: the board must stay inside the full-seed *objective* budget (measured and reported, not a gate); virtualization is the stated mechanism.\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHMAFAJ3GA2J44AB170HX7",
+  "last_event_id": "ev_01KZJHMH6WR27VC3KKMNT930DF",
+  "last_status_changed_at": "2026-08-09T05:58:44Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:51Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM862JR0BCFKFPFRZTWYW",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-33",
+  "status": "backlog",
+  "tags": null,
+  "title": "Admin create, the submission record, and the program board",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:51Z",
+  "urgency": null
+}

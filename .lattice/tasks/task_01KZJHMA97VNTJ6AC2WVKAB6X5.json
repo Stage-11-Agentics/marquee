@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:44Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-30 \u2014 Tier B rank 11 (US-66), Wave 2 (\u00a75)\n\nScope (verbatim): mapping preview, relationships/scores/statuses, idempotent outcomes, batch undo, named empty-state/README entry.\n\nAC-109 is the plan's **single `op-assist` criterion**: it needs one real Sessionize export from the operator (any event: sessions + speakers + evaluation results) \u2014 the only thing that proves our column fixture's names and status vocabulary match reality. Everything else runs against `fixtures/sessionize/{sessions,speakers}.csv`.\nWhen this lands, fold its real text back into M-45's README import section (which was written against the fixture).\n\nACs: AC-109 \u2013 AC-113\nHours: 7\nWorkflow: sub-agent-full (\u22657 h)\nShared files: `README.md` is **M-45's** \u2014 file the import section as `docs/notes/M-30.md` for M-45 to fold in (\u00a77).\nDeps: M-08\nHuman precondition: one real Sessionize export (\u00a78 item 8, EVALUATION \u00a71.6 item 6)\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHMA97VNTJ6AC2WVKAB6X5",
+  "last_event_id": "ev_01KZJHMGXVT7EKXHDW5D7SCBSA",
+  "last_status_changed_at": "2026-08-09T05:58:44Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:51Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM862JR0BCFKFPFRZTWYW",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-31",
+  "status": "backlog",
+  "tags": null,
+  "title": "Sessionize import",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:51Z",
+  "urgency": null
+}

@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:42Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-10 \u2014 Wave 1 (\u00a74), walkthrough step 3\n\nScope (verbatim): Seven-stage pipeline card (every count clickable to the filtered list behind it), Scheduled/Published explanatory sub-labels, attention strip, wave planner, work-in-motion metrics, speaker-task preview. 5 s SWR poll for liveness.\n\nRecorded decision F-8: liveness is a **5 s poll**, not a push channel.\nAmendment 5 fold (AC-240): the Scheduled and Published stage cards carry clarifying sub-labels \u2014 \"placed on the working agenda\" / \"live on the public site\". The copy is exact and gate-checked.\nFelt checkpoint C2 runs against this surface: the operator opens it and names their next action without hunting. A report says what happened; a home says what to do.\n\nFile surface: `src/routes/dashboard.routes.ts`, `src/ui/dashboard/*`\n\nACs: AC-14 \u2013 AC-16, **AC-240**\nHours: 4\nWorkflow: inline-full\nShared files: none \u2014 module-local.\nDeps: M-08\nSpeed: AC-16 is an AC-sourced budget \u2014 dashboard full render p95 \u2264 1000 ms against the seed, measured by `check:speed` on deployed infra.\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM8C4Y4EW74JJAG60S5MT",
+  "last_event_id": "ev_01KZJHME0SAD86E5R0P2N7W63X",
+  "last_status_changed_at": "2026-08-09T05:58:42Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:48Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM862JR0BCFKFPFRZTWYW",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-11",
+  "status": "backlog",
+  "tags": null,
+  "title": "Program dashboard",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:48Z",
+  "urgency": null
+}

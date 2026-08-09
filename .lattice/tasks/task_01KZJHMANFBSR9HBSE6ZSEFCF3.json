@@ -1,0 +1,42 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:45Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-37 \u2014 Tier B rank 18 (US-12), Wave 2 (\u00a75)\n\nScope (verbatim): track/format/vendor \u2192 plan/pool, stamped rule, any-carried-track match.\n\nAC-234 constraint (Tier A, multi-track): routing rules match if **any** carried track qualifies \u2014 never only the primary.\nAC-136: routing applies at submission time and the applied rule is **named on the submission record**.\n\nACs: AC-135 \u2013 AC-137, **AC-234**\nHours: 4\nWorkflow: inline-full\nShared files: none \u2014 module-local.\nDeps: M-16, M-14\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHMANFBSR9HBSE6ZSEFCF3",
+  "last_event_id": "ev_01KZJHMHJSK002P25W33218W1G",
+  "last_status_changed_at": "2026-08-09T05:58:45Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:52Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM8YR9B5FJ394S7C1HBYF",
+      "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-09T05:58:52Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM8RK9NXFJJ4V6387HCN6",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-35",
+  "status": "backlog",
+  "tags": null,
+  "title": "Category routing",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:52Z",
+  "urgency": null
+}

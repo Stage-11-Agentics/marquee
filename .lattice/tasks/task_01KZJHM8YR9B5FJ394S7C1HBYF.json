@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:43Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-16 \u2014 Wave 1 (\u00a74), walkthrough step 7\n\nScope (verbatim): Plan, optional weighted scorecard, two rounds, committees, both assignment modes, per-reviewer progress, and explicit one-or-more reviewer track responsibilities editable by managers. One centralized intersection helper is exported for M-17 and audits.\n\nBinding: the centralized helper `src/lib/reviewer-scope.ts` is **the** authorization path. Every reviewer route \u2014 queue, record, file, export, evaluation-write \u2014 invokes it; A-9 scans for a route that does not.\nNon-goal (EVALUATION \u00a75): multi-round beyond two. Two ordered rounds and funnel promotion ship; the schema is round-aware from the first migration, so a third round is data, not a migration.\n\nFile surface: `src/routes/evaluation.routes.ts`, `src/lib/reviewer-scope.ts`, `src/ui/evaluation/*`\n\nACs: AC-53 \u2013 AC-58, AC-98, **AC-246**\nHours: 7\nWorkflow: sub-agent-full (\u22657 h)\nShared files: `src/lib/reviewer-scope.ts` \u2014 created here, **added to, never rewritten** by M-17 and the audits.\nDeps: M-08\nAudit that keys off this ticket: A-9 (reviewer event+track isolation), from CP-2\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM8YR9B5FJ394S7C1HBYF",
+  "last_event_id": "ev_01KZJHMEYDQD2HV944YT205XMH",
+  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:49Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM862JR0BCFKFPFRZTWYW",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-17",
+  "status": "backlog",
+  "tags": null,
+  "title": "Evaluation plan, committees, and reviewer track scopes",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:49Z",
+  "urgency": null
+}

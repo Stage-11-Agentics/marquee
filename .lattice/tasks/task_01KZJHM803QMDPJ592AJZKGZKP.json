@@ -1,0 +1,49 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:42Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-05b \u2014 Wave 0 (\u00a73)\n\nScope (verbatim): **Public landing with both demo entries** and the live pipeline preview carrying **real counts from the seed** \u2014 \u00a75.1 has no loading state because the counts are server-rendered, and AC-2 requires both demo buttons to land on a populated screen. Split from M-05a (F-16) because the seed is M-04a/b, the demo login is M-03, and the first populated screen is M-08: built against M-01 alone, this ticket merges green against zeros and asserts AC-1/AC-2 on a page that cannot yet be true.\n\nFelt checkpoint C1 runs against this surface at CP-1: a stranger opens the URL cold and answers three questions (what is this, how do I get in, whose tool is it) inside 10 s with no help.\n\nFile surface: `src/routes/landing.route.tsx`\n\nACs: AC-1, AC-2, AC-4\nHours: 2\nWorkflow: fast-track (\u22642 h)\nShared files: none \u2014 module-local route file.\nDeps: M-03, M-04a, M-05a+M-06\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM803QMDPJ592AJZKGZKP",
+  "last_event_id": "ev_01KZJHMDC5REQ9PVYCBVV3D1G0",
+  "last_status_changed_at": "2026-08-09T05:58:42Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:47Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM7KZXSA88SPKANC2G0H1",
+      "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-09T05:58:47Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM7Q3C3GVRFCGX2V0YMY1",
+      "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-09T05:58:47Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM7X3TP6TG2TSWE4YY32Y",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-7",
+  "status": "backlog",
+  "tags": null,
+  "title": "Public landing page with live pipeline preview",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:47Z",
+  "urgency": null
+}

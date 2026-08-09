@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:43Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-17 \u2014 Wave 1 (\u00a74), walkthrough step 8\n\nScope (verbatim): Own shell; queue constrained by track intersection; one card opens full evaluator-visible fields/files and returns to the same index; primary **Approve/Maybe/Deny** recommendation saves without a numeric score; optional scorecard; resume/advance; blind identity stripped in query layer; **`GET /rounds/:id/export?format=csv` ships (+1 h) \u2014 AC-64 and AC-246 both assert over \"every export\" and there was no reviewer export route to scan**; detail/file/export/write routes all use M-16's helper.\n\nAmendment 8: the recommendation maps to organizer-facing accepted/waitlisted/rejected **decision proposals without changing lifecycle status** until an authorized program lead acts.\nBlind review: identity stripping happens **in the query layer**, not the view \u2014 A-8 byte-scans every reviewer-visible response *and export* for seeded identity strings.\nSeed dependency (B-3): M-04b seeds the demo organizer a reviewer membership, track scopes over every track, and ~40 round-1 assignments, so this queue opens populated and AC-62's 20-advance speed run has material.\n\nFile surface: `src/routes/review.routes.ts`, `src/ui/review/*`\n\nACs: AC-59 \u2013 AC-65, AC-158, AC-159, **AC-244\u2013246**\nHours: 9\nWorkflow: sub-agent-full (\u22657 h)\nShared files: none owned \u2014 consumes `src/lib/reviewer-scope.ts` (M-16's) on **every** route including the export.\nDeps: M-16\nSpeed: AC-62 is an AC-sourced budget \u2014 score submitted \u2192 next card interactive, median \u2264 300 ms over \u226520 consecutive advances.\nAudits that key off this ticket: A-8 (anonymity scan), A-9 (reviewer isolation)\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM91S8KRZST6J185QK1K3",
+  "last_event_id": "ev_01KZJHMF1C8TQD5P99Y3FZ6P2Z",
+  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:49Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM8YR9B5FJ394S7C1HBYF",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-18",
+  "status": "backlog",
+  "tags": null,
+  "title": "Reviewer queue",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:49Z",
+  "urgency": null
+}

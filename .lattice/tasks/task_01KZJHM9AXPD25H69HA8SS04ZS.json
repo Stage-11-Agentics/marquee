@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:43Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-19b \u2014 Wave 1 (\u00a74)\n\nScope (verbatim): True swimlane per track (own lane box per track, day bands, slot columns), conflict computation over rooms **and every participation role**, tile flags, conflicts drawer with jump-to, warn-never-block.\n\nAC-81 is structural, not cosmetic: lane container count equals track count, each lane has its own bounding box, every session's box sits inside its own track's lane. **Colour overlay alone fails.**\nAC-77 is parameterized over all four participation roles \u2014 speaker, co-speaker, moderator, chairperson.\nFelt checkpoint C5 runs here on deployed infra: place ten sessions with a trackpad and with a mouse; no perceptible lag, no snap-back, no ghost offset.\n\nFile surface: `src/ui/agenda/track-board.tsx`, `src/lib/conflicts.ts`\n\nACs: AC-75 \u2013 AC-79, AC-81\nHours: 5\nWorkflow: inline-full\nShared files: none \u2014 `src/lib/conflicts.ts` is a new specific-name helper (\u00a77).\nDeps: M-19a\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM9AXPD25H69HA8SS04ZS",
+  "last_event_id": "ev_01KZJHMFDD26HTPK0VCFFZJM9K",
+  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:50Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM97XAXRCH0J791FE5ESJ",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-21",
+  "status": "backlog",
+  "tags": null,
+  "title": "Agenda: track swimlane and conflicts",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:50Z",
+  "urgency": null
+}

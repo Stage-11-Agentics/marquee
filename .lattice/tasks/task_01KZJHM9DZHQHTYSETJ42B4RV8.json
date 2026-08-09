@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:43Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-20 + M-21 \u2014 Wave 1 (\u00a74) \u00b7 MERGED at mint (same public-surface module, M-21 depends only on M-20, 5 h + 4 h = 9 h \u2264 10 h)\n\n**M-20 \u2014 Public event site + permalinks** (5 h, ACs AC-83 \u2013 AC-86, AC-240; files `src/routes/public-agenda.route.tsx`, `src/ui/public/agenda/*`)\nScope (verbatim): Logged-out agenda with times/rooms/tracks/speakers, day + track + search controls, session and speaker permalinks cross-linked, published-only with no URL-guess leakage, scheduled-but-unpublished distinction, 375 px, cold <1 s.\nAmendment 11 fold (SPEC.md): public session pages render \"Room \u00b7 Building\" (AC-252). AV capabilities and room notes stay **off** public surfaces (AC-253).\n\n**M-21 \u2014 Embeds** (4 h, ACs AC-87 \u2013 AC-90; files `src/routes/embed.routes.tsx`, `src/ui/embeds/*`)\nScope (verbatim): Config screen \u2192 copyable snippet + live preview, agenda and speaker-gallery embeds filterable by track and status, responsive, configured colors, **KV TTL 30 s with explicit purge on publish** so the 60 s budget has headroom.\nRecorded decision F-7: embed KV TTL is 30 s against AC-89's 60 s budget.\nOpen dependency 2 (EVALUATION \u00a76): Discord ruling Q2 on the embeddable gallery. If struck, **AC-87 \u2013 AC-90 move to non-goals** and gate 6's embed steps drop. We build them by default; the video overrides the brief's strikethrough.\nGuardrail A-5: **embed routes never read `mq_session`.**\n\nACs (union): AC-83 \u2013 AC-90, **AC-240** \u00b7 **AC-252** (public \"Room \u00b7 Building\")\nHours: 9 (5 + 4)\nWorkflow: sub-agent-full (\u22657 h combined \u2014 max of the constituents' modes)\nShared files: none \u2014 module-local under `src/routes/` and `src/ui/public/`, `src/ui/embeds/`.\nDeps: M-19a (M-21's dependency on M-20 is internal to this ticket)\nSpeed: AC-85 is an AC-sourced budget (public agenda cold interactive p95 \u2264 1000 ms); AC-89 is AC-sourced (embed reflects a source change \u2264 60 s, actual recorded).\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM9DZHQHTYSETJ42B4RV8",
+  "last_event_id": "ev_01KZJHMFGFR3TF4BJV3WK5YG4E",
+  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:50Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM97XAXRCH0J791FE5ESJ",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-22",
+  "status": "backlog",
+  "tags": null,
+  "title": "Public event site, permalinks, and embeds",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:50Z",
+  "urgency": null
+}

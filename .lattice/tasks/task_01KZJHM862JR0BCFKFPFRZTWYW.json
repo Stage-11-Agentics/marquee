@@ -1,0 +1,49 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:42Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-08 \u2014 Wave 0 (\u00a73), the last ticket before CP-1\n\nScope (verbatim): Server-side filtered/sorted/paginated list at 50/page over the seed, type/status/track filters including Draft, selection state, exact record navigation, empty state, and the stable column registry that M-55 configures. Proves the whole stack end to end on real data.\n\nAmendment 5 fold (AC-240): slot chips (day \u00b7 time \u00b7 room) and the \"Not yet public\" marker land in the submissions list here.\nVocabulary note (SPEC): **`waitlisted` displays as \"Maybe\"** on chips and filters.\n\nFile surface: `src/routes/submissions.routes.ts`, `submissions.queries.ts`, `src/ui/submissions/*`\n\nACs: AC-23, part AC-66, foundation **AC-240, AC-247\u2013249**\nHours: 4\nWorkflow: inline-full\nShared files: none \u2014 module-local. The **column registry** it defines is consumed by M-55; keep it a named module (`src/lib/`-style specific name), never a `utils.ts`.\nDeps: M-04a, M-05a+M-06, M-07\nCP-1 (human-visible checkpoint) closes when this lands: deployed URL, populated, both demo logins land on a real screen, `npm test` green in <30 s, `check:repo` clean; traps 2, 4, 15 closed; felt checkpoint C1 runs.\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM862JR0BCFKFPFRZTWYW",
+  "last_event_id": "ev_01KZJHMDTWXWKCP9VBF3AH70HX",
+  "last_status_changed_at": "2026-08-09T05:58:42Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:48Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM7Q3C3GVRFCGX2V0YMY1",
+      "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-09T05:58:48Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM7X3TP6TG2TSWE4YY32Y",
+      "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-09T05:58:48Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM831WTD0XSD2Q84NVJC7",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-9",
+  "status": "backlog",
+  "tags": null,
+  "title": "First loop screen: submissions list",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:48Z",
+  "urgency": null
+}

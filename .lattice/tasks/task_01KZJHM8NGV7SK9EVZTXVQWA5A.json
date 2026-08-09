@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:43Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-13 \u2014 Wave 1 (\u00a74)\n\nScope (verbatim): `POST /uploads/sign` \u2192 presigned **PUT against `{account}.r2.cloudflarestorage.com`** (never a custom domain \u2014 trap 9), direct browser PUT with progress, `/complete` with HEAD verify + magic-byte sniff, Images variants for headshots, per-IP/per-submission caps in KV, nightly orphan sweep, separate-origin serving with `Content-Disposition: attachment`. **R2 canonical for media; Airtable only ever receives a public R2 URL (trap 10).** Turnstile is verified before a presign is issued; a magic-byte mismatch rejects **and deletes the object**.\n\nNon-goal (EVALUATION \u00a75): no malware scanning in this window \u2014 separate origin + `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`, documented as an extension point.\n\nFile surface: `src/routes/uploads.routes.ts`, `src/lib/r2/*`\n\nACs: AC-52, AC-146 \u2013 AC-148, **AC-231** (presign gate), **AC-232**\nHours: 5\nWorkflow: inline-full\nShared files: none \u2014 module-local.\nDeps: M-01\nAudit that keys off this ticket: A-7 (public write surface), after M-13/M-14\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM8NGV7SK9EVZTXVQWA5A",
+  "last_event_id": "ev_01KZJHMECPVDJQDVF1Z1HSQG4Z",
+  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:48Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM7DR1ZNHVKGXET5EKWYF",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-14",
+  "status": "backlog",
+  "tags": null,
+  "title": "Uploads: presign, verify, and serve",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:48Z",
+  "urgency": null
+}

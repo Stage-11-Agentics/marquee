@@ -1,0 +1,42 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:44Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-25 \u2014 Tier B rank 8 (US-72), Wave 2 (\u00a75) \u00b7 the protected moat block\n\nScope (verbatim): change feed, 10-per-PATCH upserts, token bucket, seeded base, Settings status/live log.\n\nArchitecture (\u00a71): outbound is a `mirror_outbox` change feed draining on a queue, batching 10 records per PATCH with `performUpsert.fieldsToMergeOn: [\"marquee_id\"]` at \u22644 req/s. **Airtable is never on a read path** (guardrail G4, trap 8 \u2014 Team throttles at 2 req/s and 30-hop serial pagination would lose R7 outright). Trap 10: the mirror receives a public R2 URL, never an Airtable attachment URL.\nPositioning (Amendment 4): present the mirror as a deliberate engineering trade \u2014 *\"your team keeps its Airtable view without paying its latency\"* \u2014 never as a claim to the source-of-truth bonus.\n\nACs: **AC-225, AC-228**\nHours: 8\nWorkflow: sub-agent-full (named in the mint brief: mirror)\nShared files: none \u2014 module-local under `src/jobs/mirror/*`. **The Airtable client is importable only from `src/jobs/mirror/*`** \u2014 A-4 scans for a violation, and that isolation is what makes AC-225's 60 s budget affordable.\nDeps: M-02, M-08\nHarness: `npm run check:mirror` already exists as a stub (M-05a+M-06 registered all thirteen commands) \u2014 fill it, do not add a script.\nPrecondition: a **dedicated Airtable test base + PAT**, distinct from the demo base (EVALUATION \u00a71.6 item 9) \u2014 the mirror suite writes destructively and must never be able to corrupt the base a judge will open.\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM9T2YAEYSX5G1HB2M9PE",
+  "last_event_id": "ev_01KZJHMGBWSJ3WCFAJDMBHEZWK",
+  "last_status_changed_at": "2026-08-09T05:58:44Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:50Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM7GW4Z148GV7XB0C4RNJ",
+      "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-09T05:58:51Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM862JR0BCFKFPFRZTWYW",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-26",
+  "status": "backlog",
+  "tags": null,
+  "title": "Airtable mirror \u2014 outbound",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:51Z",
+  "urgency": null
+}

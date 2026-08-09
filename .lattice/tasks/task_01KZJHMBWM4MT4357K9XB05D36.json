@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:46Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: A-6 \u2014 audit track (\u00a75). **Owned by an auditor who did not write the code.**\n\nScope (verbatim): Speed report \u2014 `speed-report.json` attached with actuals, AC-sourced vs objective separated.\nStarts when (verbatim): After M-22.\n\nThe separation is the whole point (client ruling 2026-08-09): **AC-sourced budgets fail the run** (AC-16, AC-36, AC-62, AC-69 completion, AC-85, AC-89, AC-103); the client-signed *objective* budgets are reported with a \u26a0 OBJECTIVE MISSED banner and never exit non-zero. An auditor who mixes the two either fails a green build or passes a red one.\nRule that still binds both kinds: if a number passes while the surface feels slow, the number was wrong \u2014 amend the threshold, do not reclassify the criterion.\n\nACs: \u2014 (backs gate 7; evidence for AC-16, AC-36, AC-62, AC-69, AC-85, AC-89, AC-103)\nHours: 1\nWorkflow: fast-track\nShared files: none \u2014 audit artifact only.\nDeps: M-22\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHMBWM4MT4357K9XB05D36",
+  "last_event_id": "ev_01KZJHMK1P7P5HNJSNZW91SZB9",
+  "last_status_changed_at": "2026-08-09T05:58:46Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:53Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM9H26W9KK121VAJR8G8X",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-48",
+  "status": "backlog",
+  "tags": null,
+  "title": "Audit \u2014 speed report, AC-sourced versus objective",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:53Z",
+  "urgency": null
+}

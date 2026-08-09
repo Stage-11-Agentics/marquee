@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:46Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: A-2 \u2014 audit track (\u00a75). **Owned by an auditor who did not write the code.**\n\nScope (verbatim): PROTOTYPE-badge sweep \u2014 grep `src/` and the built bundle, visual pass over every product route.\nStarts when (verbatim): After M-49.\n\nPass condition (gate 15): the badge exists **only** under `prototypes/`; no product route renders it. The grep must cover the built bundle, not just source \u2014 a badge that survives the build is exactly the failure this audit exists to catch.\n\nACs: \u2014 (backs gate 15)\nHours: 1\nWorkflow: fast-track\nShared files: none \u2014 audit artifact only.\nDeps: M-48+M-49\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHMBGQVN17NRVHJ2GN0T49",
+  "last_event_id": "ev_01KZJHMJNF12P30N05FTS58X13",
+  "last_status_changed_at": "2026-08-09T05:58:46Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:53Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHMB7N2R81QBNK2K2364NJ",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-44",
+  "status": "backlog",
+  "tags": null,
+  "title": "Audit \u2014 PROTOTYPE badge absent from the product",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:53Z",
+  "urgency": null
+}

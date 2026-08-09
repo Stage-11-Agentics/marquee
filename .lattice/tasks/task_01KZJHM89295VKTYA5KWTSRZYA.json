@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:42Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-09 \u2014 Wave 1 (\u00a74), walkthrough step 2\n\nScope (verbatim): Event details (incl. timezone driving every rendered time and ICS `DTSTART`), formats with default durations, tracks with colors + reorder, rooms with capacity. Save confirms in place, no reload.\n\nAmendment 11 fold (SPEC.md, post-BUILDPLAN-v1.4 \u2014 flagged to the orchestrator; SPEC allocates +2 h across Event Settings, seed, and agenda): **Buildings card** \u2014 an event supports multiple buildings, each with a name and address, managed from Event Settings; every room belongs to a building (AC-252). **Rooms card** gains a building select, an **AV capabilities** tag editor (projector, confidence monitor, mic count, livestream), and free-text **notes** (AC-253). Room displays that schedulers and day-of staff read render \"Room \u00b7 Building\". The v1.6 prototype (`prototypes/pipeline-v1.1/index.html`) carries the buildings card, room AV tags/notes, and Room\u00b7Building headers \u2014 reproduce it one-to-one.\n\nFile surface: `src/routes/event-settings.routes.ts`, `src/ui/settings/*`\n\nACs: AC-5 \u2013 AC-13 \u00b7 **AC-252, AC-253** (Amendment 11 fold \u2014 settings-side owner)\nHours: 4 (+~1 for the venue fold)\nWorkflow: inline-full\nShared files: none \u2014 module-local.\nDeps: M-08\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM89295VKTYA5KWTSRZYA",
+  "last_event_id": "ev_01KZJHMDXTWZ7Q7T8GPTZG39YT",
+  "last_status_changed_at": "2026-08-09T05:58:42Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:48Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM862JR0BCFKFPFRZTWYW",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-10",
+  "status": "backlog",
+  "tags": null,
+  "title": "Event settings: details, formats, tracks, rooms, buildings",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:48Z",
+  "urgency": null
+}

@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-09T05:58:44Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "BUILDPLAN: M-22 \u2014 Wave 1 (\u00a74), the last Wave 1 ticket\n\nScope (verbatim): Seed shape/scale assertions over the public API including the deliberate ugliness **and the assertion that the organizer demo persona's review queue returns \u226520 unreviewed candidates** (B-3 \u2014 the check that keeps walkthrough step 8 from going dead); speed harness measuring every \u00a71.3 budget on deployed infra against the real seed, emitting `speed-report.json`.\n\nBinding split (EVALUATION \u00a71.3 + client ruling 2026-08-09): **AC-sourced budgets fail the run** (AC-16, AC-36, AC-62, AC-69 completion, AC-85, AC-89, AC-103). The **seven client-signed *objective* budgets warn loudly with a \u26a0 OBJECTIVE MISSED banner in `speed-report.json` and never exit non-zero.** If a number passes while the surface feels slow, the number was wrong \u2014 amend the threshold, do not reclassify the criterion.\n`check:seed` budget \u226430 s; `check:speed` \u22644 min.\n\nFile surface: `scripts/checks/seed.ts`, `scripts/checks/speed.ts`\n\nACs: AC-3 evidence, guardrail G7\nHours: 4\nWorkflow: inline-full\nShared files: the two script files are new and module-specific; **the `package.json` entries already exist** (M-06 registered all thirteen commands as stubs) \u2014 fill the stubs, do not add scripts.\nDeps: M-20+M-21\nAudit that keys off this ticket: A-6 (speed report), after M-22\nCP-2 (human-visible checkpoint) follows: the eleven-step loop completes on the deployed preview, desktop and mobile, zero dead ends; `trace:ac` shows every Tier A `auto` AC covered; felt checkpoints C2 and C3 run.\nPlan: filled in by delegator's plan phase",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZJHM9H26W9KK121VAJR8G8X",
+  "last_event_id": "ev_01KZJHMFKJZ8TJYVM5E7A8YMWZ",
+  "last_status_changed_at": "2026-08-09T05:58:44Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-09T05:58:50Z",
+      "created_by": "agent:orchestrator-intake",
+      "note": null,
+      "target_task_id": "task_01KZJHM9DZHQHTYSETJ42B4RV8",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-23",
+  "status": "backlog",
+  "tags": null,
+  "title": "Seed and speed check suites",
+  "type": "task",
+  "updated_at": "2026-08-09T05:58:50Z",
+  "urgency": null
+}
