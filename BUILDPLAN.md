@@ -255,4 +255,13 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 
 ---
 
-*Draft, 2026-08-08. The orchestrator finalizes this with the client after the v1.1 prototype review, then turns §3–§5 into Lattice tickets.*
+## Amendment 2 — Discord day-1 rulings (2026-08-08 night, orchestrator)
+
+- **M-02 (first migration) now includes `submission_tracks`** (many-to-many, `is_primary`; SPEC Amendment 2 / AC-234). Landing this before the fleet's first migration is the entire reason this amendment is time-sensitive; retrofit after dependent tickets ship is expensive.
+- **New ticket M-52 — Decision feedback + email-from-review (US-74, AC-235–236), 2h, depends M-11/M-23.** Tier B rank 8; cheap, and it is a *named* bonus from the leads (dossier R51).
+- **Cut-pressure relief, recorded:** the leads' stated floor is narrower than our Tier A (review floor = approve/maybe/deny; agenda floor = day/room + DnD + conflicts; five views confirmed bonus). Tier A does not shrink — it is our margin of victory — but if Tuesday goes badly, this is the honest fallback line.
+- **Kickoff prompt note:** swyx called the competition "somewhat of a recruiting exercise" and entertained judging maintainability ("have them demo implement a change"). Code legibility is part of the deliverable: clean module boundaries, a real CONTRIBUTING section, no clever-but-opaque constructs.
+
+---
+
+*Draft, 2026-08-08 (Amendment 2 applied). The orchestrator finalizes this with the client after the v1.1 prototype review, then turns §3–§5 into Lattice tickets.*

@@ -843,4 +843,20 @@ Every requirement in the register that is not an explicit SKIP maps to at least 
 
 ---
 
-*Canonical as of 2026-08-08. Changes to this file are amendments: new criteria append from AC-225; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), Discord rulings on Q1/Q2, and Phase-4 client review.*
+## Amendment 2 — Discord day-1 rulings (2026-08-08 night, orchestrator)
+
+Source: swyx's day-1 Discord answer thread (dossier §7.5, commit 98e7e89).
+
+**AC-234** *(appended to US-12, Tier A binding set — it changes a Tier A form surface)*: A submission carries **one or more tracks** (multi-select on the public form; at least one required; the first selected is primary). Routing rules and reviewer track scoping match if **any** carried track qualifies; list track-filters match any; the agenda swimlane places a session by its primary track. *(Ruling: "talks are submitted to one or more tracks, and reviewers review one or more tracks.")*
+
+### US-74 · Feedback travels with the decision *(new, Tier B — insert at rank 8, directly after US-72; from ruling R51)*
+
+**As a** program lead deciding submissions, **I want** to attach feedback to an accept/decline and email a speaker directly from the review flow, **so that** decisions carry their reasoning without a separate comms step.
+- **AC-235**: An accept or decline action can carry an optional feedback note; the note renders in the decision email via a merge field and appears on the submission in the speaker's portal.
+- **AC-236**: From a submission's record or review view, an admin can send a one-off templated email to its speaker(s); the send is logged on the record like any other message.
+
+*Next amendment appends from AC-237.*
+
+---
+
+*Canonical as of 2026-08-08 (Amendment 2 applied). Changes to this file are amendments: new criteria append from AC-237; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*

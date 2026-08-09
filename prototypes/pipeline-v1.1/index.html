@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Marquee — Pipeline v1.1 prototype</title>
+  <title>Marquee — Pipeline v1.2 prototype</title>
   <style>
     :root {
       --bg: #f5f6f8;
@@ -127,6 +127,69 @@
     .modal-head p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
     .modal-body { padding: 10px 22px 20px; }
     .modal-actions { padding: 14px 22px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* v1.2 completion surfaces */
+    .route-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; }
+    .route-tabs .button.active { color:var(--accent-dark); border-color:#aaa6ff; background:var(--accent-soft); }
+    .empty-state { min-height:420px; display:grid; place-items:center; text-align:center; padding:48px 24px; }
+    .empty-state > div { max-width:520px; }
+    .empty-mark { width:54px; height:54px; border-radius:14px; margin:0 auto 18px; display:grid; place-items:center; background:var(--accent-soft); color:var(--accent-dark); font-size:23px; }
+    .empty-state h2 { margin:0 0 9px; font-size:20px; }
+    .empty-state p { margin:0 auto 20px; color:var(--muted); font-size:13px; line-height:1.6; }
+    .empty-preview { position:fixed; z-index:999; right:12px; top:51px; font-size:9px; color:#fff; background:#363842; border:1px solid rgba(255,255,255,.2); border-radius:999px; padding:5px 9px; }
+    .detail-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr); gap:16px; align-items:start; }
+    .definition-list { display:grid; grid-template-columns:150px 1fr; gap:0; }
+    .definition-list dt, .definition-list dd { margin:0; padding:11px 0; border-bottom:1px solid var(--line); font-size:11px; }
+    .definition-list dt { color:var(--muted); }
+    .definition-list dd { font-weight:620; }
+    .history-row { position:relative; padding:0 0 18px 22px; font-size:11px; line-height:1.5; }
+    .history-row::before { content:""; position:absolute; left:5px; top:4px; bottom:-4px; width:1px; background:var(--line); }
+    .history-row::after { content:""; position:absolute; left:1px; top:4px; width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+    .history-row:last-child::before { display:none; }
+    .settings-row { display:grid; grid-template-columns:18px minmax(0,1fr) minmax(80px,.45fr) auto; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid var(--line); }
+    .settings-row:last-child { border-bottom:0; }
+    .settings-row input, .settings-row select { width:100%; min-width:0; height:32px; border:1px solid var(--line-strong); border-radius:7px; padding:0 8px; background:#fff; }
+    .settings-row.dragging { opacity:.45; }
+    .drag-button { border:0; background:transparent; color:#999ca4; padding:0; cursor:grab; }
+    .search-dialog { width:min(720px,100%); align-self:start; margin-top:min(14vh,120px); }
+    .search-dialog .search-input { width:100%; height:52px; border:0; border-bottom:1px solid var(--line); padding:0 20px; font-size:15px; outline:none; }
+    .search-dialog-results { max-height:460px; overflow:auto; padding:8px; }
+    .search-dialog .search-result { grid-template-columns:92px 1fr auto; align-items:center; min-height:50px; }
+    .search-dialog .search-result kbd { color:var(--muted); font-size:9px; }
+    .comms-layout { display:grid; grid-template-columns:minmax(230px,.65fr) minmax(360px,1fr); gap:16px; align-items:start; }
+    .list-button { width:100%; border:0; border-bottom:1px solid var(--line); background:#fff; text-align:left; padding:13px 16px; display:flex; justify-content:space-between; gap:10px; }
+    .list-button.active { background:var(--accent-soft); color:var(--accent-dark); }
+    .list-button:last-child { border-bottom:0; }
+    .toggle-line { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px solid var(--line); }
+    .toggle-line:last-child { border-bottom:0; }
+    .switch { width:38px; height:22px; border:0; border-radius:99px; background:#c7c9cf; padding:3px; }
+    .switch::after { content:""; display:block; width:16px; height:16px; border-radius:50%; background:#fff; transition:transform 120ms; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+    .switch.on { background:var(--accent); }
+    .switch.on::after { transform:translateX(16px); }
+    .import-steps { display:grid; grid-template-columns:repeat(5,1fr); margin-bottom:16px; overflow:hidden; }
+    .import-step { padding:11px; background:#f4f4f6; color:var(--muted); border-right:1px solid var(--line); font-size:10px; text-align:center; }
+    .import-step.active { background:var(--accent-soft); color:var(--accent-dark); font-weight:700; }
+    .code-block { background:#17181b; color:#e8e9ef; border-radius:9px; padding:14px; overflow:auto; font:11px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre; }
+    .live-log { background:#17181b; color:#cfd2dc; border-radius:9px; padding:12px; min-height:150px; font:10px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .live-log strong { color:#8bf0c8; font-weight:600; }
+    .agenda-list-head, .agenda-list-row { display:grid; grid-template-columns:110px 72px minmax(220px,1fr) minmax(150px,.7fr) 130px 150px 90px; gap:10px; align-items:center; padding:0 14px; }
+    .agenda-list-head { min-height:38px; position:sticky; top:0; z-index:2; background:#fafafb; border-bottom:1px solid var(--line); color:var(--muted); font-size:9px; text-transform:uppercase; letter-spacing:.07em; font-weight:730; }
+    .agenda-list-head button { border:0; background:transparent; color:inherit; text-align:left; padding:0; font:inherit; text-transform:inherit; letter-spacing:inherit; }
+    .agenda-list-row { min-height:58px; border-bottom:1px solid var(--line); font-size:10px; }
+    .agenda-list-row > * { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .week-grid { min-width:900px; display:grid; grid-template-columns:68px repeat(3,minmax(260px,1fr)); }
+    .week-cell { min-height:100px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:6px; }
+    .week-cell.time { background:#fafafb; color:var(--muted); text-align:right; font-size:9px; padding-right:10px; }
+    .week-cell.head { min-height:42px; position:sticky; top:0; z-index:2; background:#fafafb; font-size:10px; font-weight:700; }
+    .week-session { border-left:3px solid var(--accent); border-radius:6px; background:#f7f7fa; padding:7px; margin-bottom:5px; font-size:9px; }
+    .week-session strong { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .session-tile .tile-actions, .track-tile .tile-actions { display:flex; gap:3px; margin-top:4px; }
+    .tile-actions button { width:19px; height:18px; border:1px solid var(--line); border-radius:4px; background:white; font-size:9px; padding:0; }
+    .break-tile { border-left-color:#81838b !important; background:repeating-linear-gradient(135deg,#f2f2f4,#f2f2f4 6px,#fafafa 6px,#fafafa 12px) !important; }
+    .api-route { display:grid; grid-template-columns:62px 210px 1fr; gap:12px; align-items:center; padding:11px 0; border-bottom:1px solid var(--line); font-size:11px; }
+    .method { font-weight:800; color:var(--accent-dark); }
+    .outcome-table { width:100%; min-width:620px; }
+    .outcome-table td { height:42px; }
 
     /* Landing */
     .landing { min-height: 100vh; background: #f7f7fa; display: grid; grid-template-rows: auto 1fr auto; }
@@ -401,7 +464,7 @@
       .page { padding: 23px 16px 88px; }
       .page-head { display: grid; }
       .head-actions { justify-content: flex-start; }
-      .grid-2, .grid-3, .dashboard-grid, .portal-grid, .review-layout { grid-template-columns: 1fr; }
+      .grid-2, .grid-3, .dashboard-grid, .portal-grid, .review-layout, .detail-grid, .comms-layout { grid-template-columns: 1fr; }
       .attention-strip { grid-template-columns: 1fr; }
       .onboarding-metrics { grid-template-columns: repeat(2,1fr); }
       .hero { grid-template-columns: 1fr; padding-top: 25px; }
@@ -417,6 +480,7 @@
       .round-flow { grid-template-columns: 1fr; }
       .round-arrow { transform: rotate(90deg); }
       .chase-summary { width: 100%; text-align: left; }
+      .agenda-list-head, .agenda-list-row { grid-template-columns:80px 60px minmax(190px,1fr) 120px 110px 130px 80px; }
     }
   </style>
 </head>
@@ -457,6 +521,7 @@
       const titleContexts = ["the demo ends", "incompatible risk models collide", "the benchmark becomes the product", "the first serious incident review", "regulated teams have to ship", "the underlying models change", "automation loses its escape hatch"];
       const rooms = ["Metropolitan Ballroom", "Empire East", "Empire West", "Central Park"];
       const waveDates = ["Aug 15", "Sep 1", "Sep 15"];
+      const formatRanges = { Workshop:"60–120", "Stage Talk":"15–20", Lightning:"5–10", Online:"5–55" };
 
       const state = {
         route: "landing",
@@ -466,6 +531,7 @@
         submissionTrack: "All",
         submissionSearch: "",
         submissionSort: "newest",
+        submissionRecordId: "AIE-0001",
         submissionPage: 1,
         selected: new Set(),
         selectAllMatching: false,
@@ -475,6 +541,7 @@
         agendaTrack: "All tracks",
         agendaPoolSearch: "",
         agendaScrolls: {},
+        agendaSort: "time",
         publicTrack: "All tracks",
         publicSearch: "",
         onboardingFilter: "all",
@@ -485,6 +552,7 @@
         onboardingMessages: {},
         reminderTemplate: "Outstanding speaker tasks",
         formTarget: "Abstract",
+        builderStep: 2,
         builderFields: [
           { id: 1, label: "Session title", kind: "Short text", required: true },
           { id: 2, label: "Abstract", kind: "Long text", required: true },
@@ -504,6 +572,31 @@
           { id: 5, title: "Upload final slides", kind: "File request", due: "Due Oct 5", done: false }
         ],
         scheduled: [],
+        roomCapacities: [1200,420,420,210],
+        taskTemplates: [
+          {id:1,title:"Confirm slot",kind:"Acknowledge",description:"Confirm participation for each accepted role.",due:7},
+          {id:2,title:"Bio + headshot",kind:"Form",description:"Review profile copy and upload a high-resolution headshot.",due:14},
+          {id:3,title:"A/V needs",kind:"Form",description:"Tell the production team what belongs in the room.",due:21},
+          {id:4,title:"Upload slides",kind:"File request",description:"Upload the final presentation deck.",due:42}
+        ],
+        commsTemplates: [
+          {id:"acceptance",name:"Acceptance",subject:"You’re speaking at {{event.name}}",body:"Hi {{speaker.first_name}},\n\nWe’re delighted to accept {{session.title}}. Open your portal to confirm and complete your tasks."},
+          {id:"rejection",name:"Rejection",subject:"An update on {{session.title}}",body:"Hi {{speaker.first_name}},\n\nThank you for sharing {{session.title}}. We aren’t able to include it in this year’s program."},
+          {id:"task-overdue",name:"Task overdue",subject:"AIE NYC: {{task.title}} is overdue",body:"Hi {{speaker.first_name}},\n\nPlease complete {{task.title}} in your speaker portal."}
+        ],
+        activeCommsTemplate: "acceptance",
+        commsTriggers: {confirmation:true,closing:true,added:true,acceptance:true,rejection:true,assigned:true,overdue:true},
+        outbox: [
+          {id:"MSG-01842",recipient:"amara.vandermeer@example.com",template:"Acceptance",subject:"You’re speaking at AIE NYC 2026",outcome:"Delivered",time:"Today · 10:04 AM"},
+          {id:"MSG-01841",recipient:"joao.garcia@example.com",template:"Task overdue",subject:"AIE NYC: Bio + headshot is overdue",outcome:"Bounced",time:"Today · 9:42 AM"},
+          {id:"MSG-01840",recipient:"fatima.alkhatib@example.com",template:"Submission confirmation",subject:"We received your abstract",outcome:"Delivered",time:"Today · 9:17 AM"}
+        ],
+        importStep: 0,
+        importBatch: null,
+        airtableLog: ["09:42:17 connected to appAIE2026", "09:42:18 local 1,040 · Airtable 1,040", "09:42:18 outbox clear · mirror healthy"],
+        apiTokens: [{id:"tok_92Jf",name:"Agenda publisher",prefix:"mq_live_92Jf…",created:"Aug 8",lastUsed:"2 minutes ago"}],
+        aiEnabled: false,
+        emptyInstall: false,
         event: loadEvent()
       };
 
@@ -648,7 +741,10 @@
       const routeNames = {
         landing: "Demo", settings: "Event settings", dashboard: "Program pipeline", forms: "Form builder",
         cfp: "Public CFP form", portal: "Speaker portal", evaluation: "Evaluation plan", reviewer: "Reviewer queue",
-        submissions: "Abstracts", onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Event site"
+        submissions: "Abstracts", submissionDetail:"Submission record", submissionNew:"Create submission",
+        onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Event site", comms:"Communications",
+        taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", apiTokens:"API tokens",
+        apiDocs:"API documentation", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker"
       };
 
       function esc(value) {
@@ -662,16 +758,26 @@
         toast.timer = setTimeout(() => toastEl.classList.remove("show"), 2400);
       }
 
-      function notWired(ac = "AC-ref") { toast(`Prototype — not wired (${ac})`); }
-
       function navigate(route, options = {}) {
         Object.assign(state, options);
         location.hash = route;
-        if (state.route === route) render();
+        const normalized = routeKey(route);
+        if (state.route === normalized) render();
+      }
+
+      function routeKey(path) {
+        if (/^submissions\/new$/.test(path)) return "submissionNew";
+        if (/^submissions\/[^/]+$/.test(path)) { state.submissionRecordId = decodeURIComponent(path.split("/")[1]); return "submissionDetail"; }
+        if (/^s\/[^/]+$/.test(path)) { state.publicRecordId = decodeURIComponent(path.split("/")[1]); return "publicSession"; }
+        if (/^p\/[^/]+$/.test(path)) { state.publicPersonName = decodeURIComponent(path.slice(2)); return "publicSpeaker"; }
+        return ({"settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"apiTokens","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer"})[path] || path;
       }
 
       function currentRoute() {
-        const route = location.hash.replace(/^#\/?/, "") || "landing";
+        const raw = location.hash.replace(/^#\/?/, "") || "landing";
+        const [path,query=""] = raw.split("?");
+        state.emptyInstall = new URLSearchParams(query).get("empty") === "1";
+        const route = routeKey(path);
         return routeNames[route] ? route : "landing";
       }
 
@@ -706,13 +812,14 @@
               ${navItem("evaluation","◇","Evaluation plan")}
               ${navItem("reviewer","✓","Review queue")}
               ${navItem("agenda","▦","Agenda")}
+              ${navItem("comms","✉","Communications")}
               ${navItem("portal","○","Speaker portal")}
               ${navItem("publicAgenda","↗","Event site")}
               ${navItem("settings","⚙","Event settings")}
             </nav>
             <div class="sidebar-foot">
-              <button data-toast="Prototype — API docs preview (AC-106)">⌘ API & CLI</button>
-              <button data-toast="Prototype — mock data reset (AC-2)">↻ Reset demo</button>
+              <button data-route="api/docs">⌘ API & CLI</button>
+              <button id="reset-demo">↻ Reset demo</button>
             </div>
           </aside>
           <main class="main">
@@ -720,15 +827,18 @@
               <div class="breadcrumbs">AIE NYC 2026&nbsp; / &nbsp;<strong>${esc(routeNames[state.route])}</strong></div>
               <div class="global-search">
                 <span class="search-glyph">⌕</span>
-                <input id="global-search" aria-label="Search everything" autocomplete="off" placeholder="Search abstracts, speakers, sessions…">
+                <input id="global-search" aria-label="Search everything" autocomplete="off" placeholder="Search abstracts, speakers, sessions…" readonly>
                 <span class="shortcut">⌘K</span>
-                <div id="global-results"></div>
               </div>
               <div class="top-user" title="Maya Chen · Program lead">MC</div>
             </header>
             ${content}
           </main>
-        </div>`;
+        </div><a class="empty-preview" href="#${routePath(state.route)}${state.emptyInstall?"":"?empty=1"}">${state.emptyInstall?"Exit empty preview":"Preview empty state"}</a>`;
+      }
+
+      function routePath(route) {
+        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
       }
 
       function pageHead(title, copy, actions = "") {
@@ -739,7 +849,7 @@
         return `<div class="landing">
           <header class="landing-nav">
             <a class="brand" href="#landing"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
-            <div class="landing-links"><button class="button" data-toast="Prototype — self-hosting guide (AC-165)">View on GitHub ↗</button><a class="button primary" href="#dashboard">Enter demo</a></div>
+            <div class="landing-links"><button class="button" id="open-self-host">View on GitHub ↗</button><a class="button primary" href="#dashboard">Enter demo</a></div>
           </header>
           <section class="hero">
             <div class="hero-copy">
@@ -800,7 +910,7 @@
               </div>
             </section>
             <section class="card">
-              <div class="card-head"><div><h2>Work in motion</h2><span class="subtle">Updated just now</span></div><button class="button small" data-toast="Prototype — report export (AC-14)">Export</button></div>
+              <div class="card-head"><div><h2>Work in motion</h2><span class="subtle">Updated just now</span></div><button class="button small" id="export-dashboard">Export</button></div>
               <div class="card-body">
                 <div class="metric-grid">
                   <button class="metric-box" style="border:0;text-align:left;background:white" data-attention-filter="In Review"><span class="eyebrow">Reviews done</span><div class="metric">1,842</div><span class="subtle">of 2,130</span></button>
@@ -853,7 +963,8 @@
 
       function settingsView() {
         return shell(`<div class="page">
-          ${pageHead("Event settings", "The event record is inherited by forms, portals, agenda times, and calendar invites.", `<button class="button" data-toast="Prototype — branding preview (AC-5)">Preview branding</button><button class="button primary" id="save-settings">Save event settings</button>`)}
+          ${pageHead("Event settings", "The event record is inherited by forms, portals, agenda times, and calendar invites.", `<button class="button" id="preview-branding">Preview branding</button><button class="button primary" id="save-settings">Save event settings</button>`)}
+          <nav class="route-tabs"><a class="button active" href="#settings">Event</a><a class="button" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav>
           <div class="grid-2">
             <section class="card"><div class="card-head"><h2>Event details</h2><span class="chip published"><span class="dot"></span> Published</span></div><div class="card-body stack">
               <div class="field"><label for="event-name">Event name</label><input id="event-name" value="${esc(state.event.name)}"></div>
@@ -862,11 +973,11 @@
               <div class="field"><label for="event-logo">Event logo</label><input id="event-logo" type="file" accept="image/png,image/jpeg,image/svg+xml"><span class="field-note">PNG, JPEG, or SVG · preview uses the Marquee mark.</span></div>
               <div class="field"><label for="event-timezone">Timezone</label><select id="event-timezone"><option selected>America/New_York</option><option>America/Los_Angeles</option><option>Europe/London</option></select><span class="field-note">Agenda and calendar invites inherit this timezone.</span></div>
             </div></section>
-            <section class="card"><div class="card-head"><h2>Formats</h2><button class="button small" data-toast="Prototype — not wired (AC-8)">+ Add format</button></div><div class="card-body">
-              ${formats.map(f => `<div class="wave-row"><div><strong style="font-size:12px">${f}</strong><div class="wave-date">${f === "Workshop" ? "60–120" : f === "Stage Talk" ? "15–20" : f === "Lightning" ? "5–10" : "5–55"} minutes allowed</div></div><span class="subtle">Default</span><strong class="tabular">${formatDurations[f]}m</strong></div>`).join("")}
+            <section class="card"><div class="card-head"><h2>Formats</h2><button class="button small" id="add-format">+ Add format</button></div><div class="card-body" id="format-settings">
+              ${formats.map((f,i) => `<div class="settings-row" data-format-index="${i}"><span class="drag-handle">⋮</span><input aria-label="Format name" data-format-name="${i}" value="${esc(f)}"><input aria-label="Allowed range" data-format-range="${i}" value="${esc(formatRanges[f]||"15–30")}"><label class="field" style="display:flex;align-items:center;gap:4px"><input aria-label="Default duration" data-format-duration="${i}" type="number" min="5" max="180" value="${formatDurations[f]}"><span class="subtle">min</span></label></div>`).join("")}
             </div></section>
-            <section class="card"><div class="card-head"><h2>Tracks</h2><button class="button small" data-toast="Prototype — not wired (AC-11)">Reorder tracks</button></div><div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap">${tracks.map(t => `<span class="chip" style="border-left:3px solid ${t.color}">${t.name}</span>`).join("")}</div></section>
-            <section class="card"><div class="card-head"><h2>Rooms</h2><button class="button small" data-toast="Prototype — not wired (AC-11)">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="wave-row"><strong style="font-size:12px">${r}</strong><span class="subtle">Capacity</span><strong class="tabular">${[1_200,420,420,210][i]}</strong></div>`).join("")}</div></section>
+            <section class="card"><div class="card-head"><div><h2>Tracks</h2><span class="subtle">Drag to reorder · edit names and colors in place</span></div><button class="button small" id="add-track">+ Add track</button></div><div class="card-body" id="track-settings">${tracks.map((t,i) => `<div class="settings-row" draggable="true" data-track-index="${i}"><button class="drag-button" aria-label="Drag ${esc(t.name)}">⋮⋮</button><input aria-label="Track name" data-track-name="${i}" value="${esc(t.name)}"><input aria-label="Track color" data-track-color="${i}" type="color" value="${t.color}"><span class="chip" style="border-left:3px solid ${t.color}">${i+1}</span></div>`).join("")}</div></section>
+            <section class="card"><div class="card-head"><h2>Rooms</h2><button class="button small" id="add-room">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="settings-row"><span class="drag-handle">${i+1}</span><input aria-label="Room name" data-room-name="${i}" value="${esc(r)}"><input aria-label="Room capacity" data-room-capacity="${i}" type="number" min="1" step="1" value="${state.roomCapacities[i]}"><button class="button small" data-remove-room="${i}" ${rooms.length<=1?"disabled":""}>Remove</button></div>`).join("")}</div></section>
           </div>
         </div>`);
       }
@@ -876,23 +987,30 @@
           ${pageHead("Call for speakers form", "Build the intake once. The public form updates immediately and routes each response to the right lifecycle.", `<button class="button" data-route="cfp">Open public form ↗</button><button class="button primary" id="publish-form">Publish changes</button>`)}
           <div class="builder">
             <section class="card builder-steps">
-              ${["Type & basics","Welcome","Form fields","Participants","Rules & routing","Messages","Publish"].map((s,i) => `<button class="builder-step ${i === 2 ? "active" : ""}" data-toast="Prototype — ${s} step (AC-17)"><span class="step-number">${i+1}</span><span>${s}</span></button>`).join("")}
+              ${["Type & basics","Welcome","Form fields","Participants","Rules & routing","Messages","Publish"].map((s,i) => `<button class="builder-step ${state.builderStep === i ? "active" : ""}" data-builder-step="${i}"><span class="step-number">${i+1}</span><span>${s}</span></button>`).join("")}
               <div class="divider"></div>
               <div class="field"><label>Collects</label><div class="segment"><button data-form-target="Abstract" class="${state.formTarget === "Abstract" ? "active" : ""}">Abstracts</button><button data-form-target="Session" class="${state.formTarget === "Session" ? "active" : ""}">Sessions</button></div><span class="field-note">${state.formTarget === "Abstract" ? "Enters the evaluation pipeline." : "Bypasses evaluation; ready for agenda."}</span></div>
               <div class="divider"></div>
               <div class="field"><label>Closes</label><input id="form-closes" value="Sep 12, 2026 · 11:59 PM"></div>
               <div class="field"><label>Submissions per person</label><input id="form-limit" type="number" value="3" min="1" max="5"></div>
             </section>
-            <section class="card">
-              <div class="card-head"><div><h2>Form fields</h2><span class="subtle">Drag a field or use its arrows to reorder</span></div><span class="chip ${state.formTarget === "Session" ? "session" : ""}">${state.formTarget}</span></div>
-              <div class="form-fields">
-                ${state.builderFields.map((f,i) => `<div class="form-field-row ${state.builderActive === f.id ? "active" : ""}" draggable="true" data-field-drag="${f.id}" data-field-id="${f.id}"><span class="drag-handle">⋮⋮</span><div><strong style="font-size:11px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="field-kind">${esc(f.kind)} · ${f.required ? "Required" : "Optional"}</div></div><div class="field-controls"><button aria-label="Move up" data-move-field="up" data-id="${f.id}" ${i === 0 ? "disabled" : ""}>↑</button><button aria-label="Move down" data-move-field="down" data-id="${f.id}" ${i === state.builderFields.length-1 ? "disabled" : ""}>↓</button></div></div>`).join("")}
-                <button class="add-field" id="add-field">＋ Add a field</button>
-              </div>
-            </section>
-            <section class="card preview-card"><div class="card-head"><h2>Live preview</h2><span class="chip">Public</span></div><div class="preview-window"><div class="preview-top"><i></i><i></i><i></i></div><div class="preview-form"><div class="eyebrow">AIE NYC 2026</div><h3>Call for speakers</h3><p>${state.formTarget === "Abstract" ? "Share an idea for the program." : "Add a guaranteed session to the program."}</p>${state.builderFields.slice(0,5).map(f => `<div style="margin-bottom:13px"><strong style="font-size:9px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="preview-input"></div></div>`).join("")}<button class="button primary small" data-toast="Prototype — live preview continues to the next form step (AC-19)">Continue</button></div></div></section>
+            ${builderCenterView()}
+              <section class="card preview-card"><div class="card-head"><h2>Live preview</h2><span class="chip">Public</span></div><div class="preview-window"><div class="preview-top"><i></i><i></i><i></i></div><div class="preview-form"><div class="eyebrow">AIE NYC 2026</div><h3>Call for speakers</h3><p>${state.formTarget === "Abstract" ? "Share an idea for the program." : "Add a guaranteed session to the program."}</p>${state.builderFields.slice(0,5).map(f => `<div style="margin-bottom:13px"><strong style="font-size:9px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="preview-input"></div></div>`).join("")}<button class="button primary small" data-route="cfp">Open complete form</button></div></div></section>
           </div>
         </div>`);
+      }
+
+      function builderCenterView() {
+        if(state.builderStep===2)return `<section class="card"><div class="card-head"><div><h2>Form fields</h2><span class="subtle">Drag a field or use its arrows to reorder</span></div><span class="chip ${state.formTarget === "Session" ? "session" : ""}">${state.formTarget}</span></div><div class="form-fields">${state.builderFields.map((f,i) => `<div class="form-field-row ${state.builderActive === f.id ? "active" : ""}" draggable="true" data-field-drag="${f.id}" data-field-id="${f.id}"><span class="drag-handle">⋮⋮</span><div><strong style="font-size:11px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="field-kind">${esc(f.kind)} · ${f.required ? "Required" : "Optional"}</div></div><div class="field-controls"><button aria-label="Move up" data-move-field="up" data-id="${f.id}" ${i === 0 ? "disabled" : ""}>↑</button><button aria-label="Move down" data-move-field="down" data-id="${f.id}" ${i === state.builderFields.length-1 ? "disabled" : ""}>↓</button></div></div>`).join("")}<button class="add-field" id="add-field">＋ Add a field</button></div></section>`;
+        const panels=[
+          ["Type & basics",`<div class="field"><label>Form name</label><input value="Call for speakers"></div><div class="field"><label>Public slug</label><input value="aie-nyc-2026"></div>`],
+          ["Welcome",`<div class="field"><label>Headline</label><input value="Share your work with AIE NYC."></div><div class="field"><label>Welcome copy</label><textarea>We welcome practical, specific sessions for people building and operating AI systems.</textarea></div>`],
+          ["Form fields",""],
+          ["Participants",`<div class="grid-2"><div class="field"><label>Minimum speakers</label><input type="number" value="1" min="1"></div><div class="field"><label>Maximum speakers</label><input type="number" value="4" min="1"></div></div><div class="field"><label>Maximum sponsors</label><input type="number" value="2" min="0"></div>`],
+          ["Rules & routing",`<div class="field"><label>Rule</label><select><option>Track is AI in Financial Services</option></select></div><div class="field"><label>Route to</label><select><option>AIE 2026 program review · Initial screen</option></select></div><label class="toggle-line"><span>Vendor content flag routes to workshop review</span><input type="checkbox" checked></label>`],
+          ["Messages",`<div class="field"><label>Thank-you message</label><textarea>Your abstract is in. We sent a confirmation and private edit link.</textarea></div><div class="field"><label>Pre-close reminder</label><select><option>3 days before close</option><option>7 days before close</option></select></div>`],
+          ["Publish",`<div class="message-preview"><strong>Open · 350 submissions</strong><br><span class="subtle">Public URL: marquee.stage11.dev/f/aie-nyc-2026 · closes Sep 12 at 11:59 PM America/New_York</span></div><button class="button" data-route="cfp" style="margin-top:14px">Open public form ↗</button>`]
+        ];const panel=panels[state.builderStep];return `<section class="card"><div class="card-head"><div><h2>${panel[0]}</h2><span class="subtle">Changes update the public form preview immediately</span></div><span class="chip ${state.formTarget === "Session" ? "session" : ""}">${state.formTarget}</span></div><div class="card-body stack">${panel[1]}<button class="button primary" id="save-builder-step">Save ${panel[0].toLowerCase()}</button></div></section>`;
       }
 
       function cfpView() {
@@ -913,12 +1031,12 @@
         const done = state.tasks.filter(t => t.done).length;
         return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)} · Speaker portal</a><a class="button small" href="#landing">Sign out</a></header><main class="public-body wide">
           <div class="portal-head"><div><div class="eyebrow">Welcome back</div><h1>Amara van der Meer</h1><span class="subtle">Your status, tasks, profile, and event details in one place.</span></div><div class="portal-progress"><strong style="font-size:12px">${done} of ${state.tasks.length} tasks done</strong><div class="progress-track"><i style="width:${done/state.tasks.length*100}%"></i></div></div></div>
-          <section class="status-hero"><div><div class="eyebrow">Accepted · Wave 2</div><h2>Beyond the demo: reliable multi-agent systems</h2><p>Stage Talk · Tue, Oct 13 · 10:00 AM · Empire East</p></div><button class="button" data-toast="Calendar invite downloaded · METHOD:REQUEST (AC-97)">Add to calendar</button></section>
+          <section class="status-hero"><div><div class="eyebrow">Accepted · Wave 2</div><h2>Beyond the demo: reliable multi-agent systems</h2><p>Stage Talk · Tue, Oct 13 · 10:00 AM · Empire East</p><div style="display:flex;gap:7px;margin-top:12px"><button class="button primary small" id="confirm-role">Confirm this role</button><button class="button small danger" id="decline-role">Decline</button></div></div><button class="button" id="download-invite">Add to calendar</button></section>
           <div class="portal-grid">
             <section class="card"><div class="card-head"><div><h2>Your tasks</h2><span class="subtle">Complete the overdue item first</span></div><span class="chip overdue">1 overdue</span></div><div class="card-body" id="task-list">${state.tasks.map(taskRow).join("")}</div></section>
             <div class="stack">
-              <section class="card"><div class="card-head"><h2>Speaker profile</h2><button class="button small" data-toast="Prototype — edit profile (AC-50)">Edit</button></div><div class="card-body"><div class="profile-block"><div class="avatar">AV</div><strong>Amara van der Meer</strong><div class="subtle" style="margin-top:4px">Director of Applied AI · Capital One</div></div><p class="subtle" style="line-height:1.55">Amara builds evaluation and governance systems for AI teams operating in regulated environments.</p></div></section>
-              <section class="card"><div class="card-head"><h2>Speaker handbook</h2><span class="chip">Handbook page</span></div><div class="card-body"><button class="button ghost" style="width:100%;justify-content:space-between" data-toast="Prototype — handbook page (AC-167)"><span>Venue, arrival, and green room</span><span>→</span></button><button class="button ghost" style="width:100%;justify-content:space-between" data-toast="Prototype — handbook page (AC-167)"><span>Presentation and A/V guidance</span><span>→</span></button></div></section>
+              <section class="card"><div class="card-head"><h2>Speaker profile</h2><button class="button small" id="edit-profile">Edit</button></div><div class="card-body"><div class="profile-block"><div class="avatar">AV</div><strong>Amara van der Meer</strong><div class="subtle" style="margin-top:4px">Director of Applied AI · Capital One</div></div><p class="subtle" style="line-height:1.55">Amara builds evaluation and governance systems for AI teams operating in regulated environments.</p></div></section>
+              <section class="card"><div class="card-head"><h2>Speaker handbook</h2><span class="chip">Handbook page</span></div><div class="card-body"><button class="button ghost" style="width:100%;justify-content:space-between" data-handbook="venue"><span>Venue, arrival, and green room</span><span>→</span></button><button class="button ghost" style="width:100%;justify-content:space-between" data-handbook="av"><span>Presentation and A/V guidance</span><span>→</span></button></div></section>
             </div>
           </div>
         </main></div>`;
@@ -927,18 +1045,18 @@
 
       function evaluationView() {
         return shell(`<div class="page">
-          ${pageHead("Evaluation plan", "A two-round funnel turns 1,000 abstracts into a focused committee decision without order-dependent setup.", `<button class="button" data-route="reviewer">Open reviewer view</button><button class="button primary" data-toast="Prototype — add evaluation plan (AC-53)">+ New evaluation plan</button>`)}
+          ${pageHead("Evaluation plan", "A two-round funnel turns 1,000 abstracts into a focused committee decision without order-dependent setup.", `<button class="button" data-route="reviewer">Open reviewer view</button><button class="button" data-route="evaluation/ai">AI assist</button><button class="button primary" data-eval-action="plan">+ New evaluation plan</button>`)}
           <div class="grid-2">
             <section class="card"><div class="card-head"><div><h2>AIE 2026 program review</h2><span class="subtle">Active · 1,842 of 2,130 reviews</span></div><span class="chip published"><span class="dot"></span> On track</span></div><div class="card-body">
               <div class="round-flow"><div class="round-card"><span class="eyebrow">Round 1</span><strong>Initial screen</strong><div class="subtle">All submissions · 15-person committee</div><div class="progress-track"><i style="width:86%"></i></div><div class="wave-date">86% complete · 214 remain</div></div><div class="round-arrow">→</div><div class="round-card"><span class="eyebrow">Round 2</span><strong>Committee decision</strong><div class="subtle">240 promoted · 6-person committee</div><div class="progress-track"><i style="width:48%"></i></div><div class="wave-date">48% complete · closes Aug 26</div></div></div>
-              <div class="divider"></div><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><strong style="font-size:12px">Scorecard</strong><div class="subtle">Impact 40% · Specificity 35% · Novelty 25% · Comment</div></div><button class="button small" data-toast="Prototype — edit scorecard (AC-54)">Edit scorecard</button></div>
+              <div class="divider"></div><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><strong style="font-size:12px">Scorecard</strong><div class="subtle">Impact 40% · Specificity 35% · Novelty 25% · Comment</div></div><button class="button small" data-eval-action="scorecard">Edit scorecard</button></div>
             </div></section>
-            <section class="card"><div class="card-head"><div><h2>Program committee</h2><span class="subtle">15 reviewers · 3 reviews per abstract</span></div><button class="button small" data-toast="Prototype — assign committee (AC-56)">Manage</button></div><div class="card-body committee-list">
+            <section class="card"><div class="card-head"><div><h2>Program committee</h2><span class="subtle">15 reviewers · 3 reviews per abstract</span></div><button class="button small" data-eval-action="committee">Manage</button></div><div class="card-body committee-list">
               ${["Maya Chen","João García Márquez","Fatima Al-Khatib","Tobias Sørensen","Priyanka Mukherjee"].map((n,i)=>`<div class="committee-person"><span class="mini-avatar">${n.split(" ").map(x=>x[0]).slice(0,2).join("")}</span><div><strong style="font-size:11px">${n}</strong><div class="wave-date">${["Program lead","Agents","Evals","Infra","Leadership"][i]}</div></div><span class="tabular subtle">${[188,172,164,151,149][i]} / 200</span></div>`).join("")}
-              <button class="button ghost" data-toast="Prototype — 10 more committee members (AC-58)">View all 15 reviewers →</button>
+              <button class="button ghost" data-eval-action="reviewers">View all 15 reviewers →</button>
             </div></section>
-            <section class="card"><div class="card-head"><h2>Evaluation summary</h2><button class="button small" data-toast="Prototype — report filters (AC-58)">Filter</button></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Evaluations</span><div class="metric">1,842</div></div><div class="metric-box"><span class="eyebrow">With ≥1 review</span><div class="metric">812</div></div><div class="metric-box"><span class="eyebrow">Highest score</span><div class="metric">4.92</div></div><div class="metric-box"><span class="eyebrow">Wide spread</span><div class="metric">27</div></div></div><div class="spark">${[35,52,39,71,67,81,74,92,83,96,88,91].map(h=>`<i style="height:${h}%"></i>`).join("")}</div></div></section>
-            <section class="card"><div class="card-head"><h2>Round promotion</h2><span class="chip">Funnel</span></div><div class="card-body"><p class="subtle" style="line-height:1.6">Round 1 has 214 unreviewed abstracts. When review closes, promote a filtered shortlist into Committee decision in one action.</p><button class="button primary" data-toast="Prototype — promote filtered shortlist (AC-99)">Preview 240 promotions</button></div></section>
+            <section class="card"><div class="card-head"><h2>Evaluation summary</h2><button class="button small" data-eval-action="filters">Filter</button></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Evaluations</span><div class="metric">1,842</div></div><div class="metric-box"><span class="eyebrow">With ≥1 review</span><div class="metric">812</div></div><div class="metric-box"><span class="eyebrow">Highest score</span><div class="metric">4.92</div></div><div class="metric-box"><span class="eyebrow">Wide spread</span><div class="metric">27</div></div></div><div class="spark">${[35,52,39,71,67,81,74,92,83,96,88,91].map(h=>`<i style="height:${h}%"></i>`).join("")}</div></div></section>
+            <section class="card"><div class="card-head"><h2>Round promotion</h2><span class="chip">Funnel</span></div><div class="card-body"><p class="subtle" style="line-height:1.6">Round 1 has 214 unreviewed abstracts. When review closes, promote a filtered shortlist into Committee decision in one action.</p><button class="button primary" data-eval-action="promotion">Preview 240 promotions</button></div></section>
           </div>
         </div>`);
       }
@@ -951,7 +1069,7 @@
           ${pageHead("Reviewer queue", `${state.reviewIndex + 1} of ${queue.length} · ${queue.length - state.reviewIndex - 1} remaining · identity hidden`, `<span class="chip">Anonymous review</span><button class="button" data-route="evaluation">Exit queue</button>`)}
           <div class="review-layout">
             <article class="card"><div class="card-body review-copy"><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip">${esc(item.format)}</span><span class="chip">${esc(item.track)}</span><span class="chip">${item.id}</span></div><h2>${esc(item.title)}</h2><div class="eyebrow">Abstract</div><p>Teams can make agent systems reliable without slowing delivery to a crawl. This session presents a field-tested approach to scenario design, trace review, and deployment gates, including the failures that changed our process.</p><p>Attendees leave with a lightweight evaluation ladder, concrete signals for escalating risk, and a framework for deciding when human review belongs inside the loop.</p><div class="divider"></div><div class="eyebrow">What attendees will learn</div><p>How to define useful failure taxonomies, choose representative test cases, and measure recovery behavior before the system reaches production traffic.</p></div></article>
-            <aside class="card review-score"><div class="card-head"><div><h2>Your score</h2><span class="subtle">Keys 1–5 score instantly</span></div></div><div class="card-body"><div class="subtle">Overall recommendation</div><div class="score-buttons">${[1,2,3,4,5].map(n=>`<button class="score-button ${score === n ? "active" : ""}" data-score="${n}">${n}</button>`).join("")}</div><div class="field"><label for="review-comment">Committee note</label><textarea id="review-comment" placeholder="Optional context for the committee"></textarea></div><button class="button primary" style="width:100%;margin-top:12px" id="save-next" ${score ? "" : "disabled"}>Save & next →</button><button class="button ghost" style="width:100%;margin-top:6px" data-toast="Marked as a conflict · next abstract (AC-61)">Abstain / conflict</button></div></aside>
+            <aside class="card review-score"><div class="card-head"><div><h2>Your score</h2><span class="subtle">Keys 1–5 score instantly</span></div></div><div class="card-body"><div class="subtle">Overall recommendation</div><div class="score-buttons">${[1,2,3,4,5].map(n=>`<button class="score-button ${score === n ? "active" : ""}" data-score="${n}">${n}</button>`).join("")}</div><div class="field"><label for="review-comment">Committee note</label><textarea id="review-comment" placeholder="Optional context for the committee"></textarea></div><button class="button primary" style="width:100%;margin-top:12px" id="save-next" ${score ? "" : "disabled"}>Save & next →</button><button class="button ghost" style="width:100%;margin-top:6px" id="abstain-review">Abstain / conflict</button></div></aside>
           </div>
         </div>`);
       }
@@ -982,7 +1100,7 @@
         const rows = all.slice((state.submissionPage-1)*pageSize, state.submissionPage*pageSize);
         const selectedCount = state.selectAllMatching ? all.length : state.selected.size;
         return shell(`<div class="page">
-          ${pageHead("Abstracts & sessions", `${all.length.toLocaleString()} matching records · rendered 50 at a time for an instant response at full scale.`, `<button class="button" data-toast="Prototype — export matching records (AC-108)">Export</button><button class="button primary" data-toast="Prototype — admin-created session (AC-118)">+ Add session</button>`)}
+          ${pageHead("Abstracts & sessions", `${all.length.toLocaleString()} matching records · rendered 50 at a time for an instant response at full scale.`, `<button class="button" id="export-submissions">Export</button><button class="button primary" data-route="submissions/new" data-create-session>+ Add session</button>`)}
           <section class="card table-card">
             <div class="toolbar">
               <input id="submission-search" value="${esc(state.submissionSearch)}" placeholder="Search 1,000 submissions…">
@@ -992,13 +1110,97 @@
               <span class="toolbar-spacer"></span>
               <select id="sort-filter"><option value="newest">Newest</option><option value="score" ${state.submissionSort==="score"?"selected":""}>Score high → low</option><option value="title" ${state.submissionSort==="title"?"selected":""}>Title A → Z</option></select>
             </div>
-            ${selectedCount ? `<div class="selection-bar"><strong>${selectedCount.toLocaleString()} selected</strong>${!state.selectAllMatching && selectedCount < all.length ? `<button class="button small" id="select-matching">Select all ${all.length.toLocaleString()} matching</button>` : `<span>All matching records selected</span>`}<span class="toolbar-spacer"></span><button class="button small" data-toast="Prototype — reject preview (AC-115)">Reject…</button><button class="button primary small" id="bulk-accept">Accept ${selectedCount.toLocaleString()} ${selectedCount===1?"abstract":"abstracts"}</button></div>` : ""}
+            ${selectedCount ? `<div class="selection-bar"><strong>${selectedCount.toLocaleString()} selected</strong>${!state.selectAllMatching && selectedCount < all.length ? `<button class="button small" id="select-matching">Select all ${all.length.toLocaleString()} matching</button>` : `<span>All matching records selected</span>`}<span class="toolbar-spacer"></span><button class="button small" id="bulk-reject">Reject…</button><button class="button primary small" id="bulk-accept">Accept ${selectedCount.toLocaleString()} ${selectedCount===1?"abstract":"abstracts"}</button></div>` : ""}
             <div class="table-wrap"><table><thead><tr><th class="check-col"><input type="checkbox" id="select-page" aria-label="Select visible rows"></th><th class="type-col">Type</th><th class="title-col">Title</th><th class="speaker-col">Speaker</th><th class="status-col">Status</th><th class="track-col">Track</th><th class="score-col">Score</th></tr></thead><tbody>
-              ${rows.length ? rows.map(s => `<tr><td class="check-col"><input type="checkbox" class="row-check" data-id="${s.id}" ${state.selectAllMatching || state.selected.has(s.id) ? "checked" : ""}></td><td><span class="chip ${s.entity === "Session" ? "session" : ""}">${s.entity}</span></td><td><div class="table-title" title="${esc(s.title)}">${esc(s.title)}</div><span class="wave-date">${s.id} · ${s.source}</span></td><td title="${esc(s.speakers.join(", "))}">${esc(s.speakers.length > 1 ? `${s.speaker} +${s.speakers.length-1}` : s.speaker)}</td><td><span class="chip ${s.status.toLowerCase().replace(" ","-")}">${s.status}</span></td><td>${esc(s.track)}</td><td class="score-col">${s.score}</td></tr>`).join("") : `<tr><td colspan="7" style="height:180px;text-align:center"><strong>No matching records</strong><div class="subtle" style="margin-top:7px">Clear a filter to bring abstracts back into view.</div></td></tr>`}
+              ${rows.length ? rows.map(s => `<tr><td class="check-col"><input type="checkbox" class="row-check" data-id="${s.id}" ${state.selectAllMatching || state.selected.has(s.id) ? "checked" : ""}></td><td><span class="chip ${s.entity === "Session" ? "session" : ""}">${s.entity}</span></td><td><a href="#submissions/${s.id}" class="table-title" title="${esc(s.title)}">${esc(s.title)}</a><span class="wave-date">${s.id} · ${s.source}</span></td><td title="${esc(s.speakers.join(", "))}">${esc(s.speakers.length > 1 ? `${s.speaker} +${s.speakers.length-1}` : s.speaker)}</td><td><span class="chip ${s.status.toLowerCase().replace(" ","-")}">${s.status}</span></td><td>${esc(s.track)}</td><td class="score-col">${s.score}</td></tr>`).join("") : `<tr><td colspan="7" style="height:180px;text-align:center"><strong>No matching records</strong><div class="subtle" style="margin-top:7px">Clear a filter to bring abstracts back into view.</div></td></tr>`}
             </tbody></table></div>
             <div class="pagination"><span>Showing ${all.length ? (state.submissionPage-1)*pageSize+1 : 0}–${Math.min(state.submissionPage*pageSize,all.length)} of ${all.length.toLocaleString()}</span><div class="page-buttons"><button class="button small" id="prev-page" ${state.submissionPage===1?"disabled":""}>Previous</button><span class="button small" style="cursor:default">${state.submissionPage} / ${maxPage}</span><button class="button small" id="next-page" ${state.submissionPage===maxPage?"disabled":""}>Next</button></div></div>
           </section>
         </div>`);
+      }
+
+      function submissionDetailView() {
+        const s = state.submissions.find(item=>item.id===state.submissionRecordId) || state.submissions[0];
+        const participantRows = s.speakers.map((name,i)=>`<div class="wave-row"><div><strong>${esc(name)}</strong><div class="wave-date">${i===0?"Submitter · Speaker":"Speaker"}</div></div><span class="subtle">${i===0?s.company:"Guest participant"}</span><strong>${i===0?"Primary":"Co-speaker"}</strong></div>`).join("");
+        return shell(`<div class="page">
+          ${pageHead(`${s.entity} record`, `${s.id} · ${s.source} · Submitted ${s.submitted}`, `<button class="button" data-route="submissions">← All records</button>${s.accepted?`<button class="button danger" id="open-unaccept">Reverse acceptance…</button>`:""}<button class="button primary" id="edit-record">Edit record</button>`)}
+          <div class="detail-grid">
+            <div class="stack">
+              <section class="card"><div class="card-head"><div><span class="chip ${s.entity==="Session"?"session":""}">${s.entity}</span><h2 style="font-size:18px;margin-top:9px">${esc(s.title)}</h2></div><span class="chip ${s.status.toLowerCase().replace(" ","-")}">${s.status}</span></div><div class="card-body"><dl class="definition-list"><dt>Format</dt><dd>${esc(s.format)}</dd><dt>Track</dt><dd><span style="color:${trackColor(s.track)}">●</span> ${esc(s.track)}</dd><dt>Origin</dt><dd>${esc(s.source)}${s.entity==="Session"?" · Evaluation bypassed":""}</dd><dt>Applied routing rule</dt><dd>Track is ${esc(s.track)} → AIE 2026 program review · Initial screen</dd><dt>Abstract</dt><dd>Teams can make complex AI systems useful without hiding uncertainty. This session shares concrete production lessons, a decision framework, and the incidents that changed the approach.</dd><dt>Attendee outcome</dt><dd>A practical checklist for choosing evaluation evidence and escalation points.</dd></dl></div></section>
+              <section class="card"><div class="card-head"><h2>Participants</h2><span class="subtle">Roles are explicit per submission</span></div><div class="card-body" style="padding-top:2px;padding-bottom:2px">${participantRows}</div></section>
+              <section class="card"><div class="card-head"><h2>Form answers</h2><span class="chip">Public CFP</span></div><div class="card-body"><dl class="definition-list"><dt>Audience</dt><dd>Platform and product engineers operating agent systems</dd><dt>Experience level</dt><dd>Intermediate</dd><dt>Vendor content</dt><dd>No</dd><dt>Recording consent</dt><dd>Yes</dd></dl></div></section>
+            </div>
+            <aside class="stack">
+              <section class="card"><div class="card-head"><h2>Scores by round</h2><span class="chip review">2 rounds</span></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Initial screen</span><div class="metric">${s.score==="—"?"4.3":s.score}</div><span class="subtle">3 reviewers</span></div><div class="metric-box"><span class="eyebrow">Committee</span><div class="metric">4.6</div><span class="subtle">6 reviewers</span></div></div><div class="message-preview" style="margin-top:12px">“Specific, credible, and unusually honest about recovery paths.”<br><span class="subtle">Committee note · identity visible to admins</span></div></div></section>
+              <section class="card"><div class="card-head"><h2>History</h2><button class="button small" data-route="comms">Messages</button></div><div class="card-body"><div class="history-row"><strong>${s.status}</strong><div class="subtle">Wave ${s.wave||"—"} · Aug ${s.accepted?"15":"8"}, 10:04 AM</div></div><div class="history-row"><strong>Promoted to Committee decision</strong><div class="subtle">Aug 7, 4:18 PM · Maya Chen</div></div><div class="history-row"><strong>Routing rule applied</strong><div class="subtle">${esc(s.track)} → Initial screen</div></div><div class="history-row"><strong>Submitted</strong><div class="subtle">${s.submitted} · ${esc(s.source)}</div></div></div></section>
+            </aside>
+          </div>
+        </div>`);
+      }
+
+      function submissionNewView() {
+        return shell(`<div class="page">
+          ${pageHead("Create a submission", "Add invited talks, sponsor slots, and administratively entered abstracts without pretending they came through the public CFP.", `<button class="button" data-route="submissions">Cancel</button><button class="button primary" id="create-submission">Create ${state.formTarget.toLowerCase()}</button>`)}
+          <section class="card" style="max-width:820px"><div class="card-head"><div><h2>Submission details</h2><span class="subtle">Required fields are marked</span></div><div class="segment"><button data-create-kind="Abstract" class="${state.formTarget==="Abstract"?"active":""}">Abstract</button><button data-create-kind="Session" class="${state.formTarget==="Session"?"active":""}">Session</button></div></div><div class="card-body stack">
+            <div class="field"><label for="new-title">Title *</label><input id="new-title" value="Invited keynote: the operating model for trustworthy agents"></div>
+            <div class="grid-2"><div class="field"><label for="new-speaker">Speaker *</label><input id="new-speaker" value="Renée García Márquez"></div><div class="field"><label for="new-email">Speaker email *</label><input id="new-email" type="email" value="renee.garcia@example.org"></div></div>
+            <div class="grid-2"><div class="field"><label for="new-format">Format</label><select id="new-format">${formats.map(f=>`<option>${esc(f)}</option>`).join("")}</select></div><div class="field"><label for="new-track">Track</label><select id="new-track">${tracks.map(t=>`<option>${esc(t.name)}</option>`).join("")}</select></div></div>
+            <div class="field"><label for="new-abstract">Abstract</label><textarea id="new-abstract">A practical invited session for the AIE NYC program.</textarea></div>
+            <label class="toggle-line"><span><strong>Bypass evaluation</strong><small class="subtle" style="display:block;margin-top:4px">The record goes directly to Accepted and appears in the agenda pool.</small></span><input id="new-bypass" type="checkbox" ${state.formTarget==="Session"?"checked":""}></label>
+            <div class="field-error" id="new-error"></div>
+          </div></section>
+        </div>`);
+      }
+
+      function commsView() {
+        const template = state.commsTemplates.find(t=>t.id===state.activeCommsTemplate) || state.commsTemplates[0];
+        const triggers = {confirmation:"Submission confirmation",closing:"Submission-closing reminder · 3 days before close",added:"Added to a submission",acceptance:"Acceptance",rejection:"Rejection",assigned:"Task assigned",overdue:"Task overdue"};
+        return shell(`<div class="page">
+          ${pageHead("Communications", "Templates, automated triggers, and every delivery outcome share one demo-safe outbox.", `<button class="button" id="new-template">+ New template</button><button class="button primary" id="queue-test-message">Queue test message</button>`)}
+          <div class="route-tabs"><button class="button active" data-comms-anchor="templates">Templates</button><button class="button" data-comms-anchor="triggers">Triggers</button><button class="button" data-comms-anchor="outbox">Outbox · ${state.outbox.length}</button></div>
+          <div class="comms-layout">
+            <section class="card" id="templates"><div class="card-head"><h2>Templates</h2><span class="subtle">Merge fields render per recipient</span></div>${state.commsTemplates.map(t=>`<button class="list-button ${t.id===template.id?"active":""}" data-template-id="${t.id}"><span><strong>${esc(t.name)}</strong><small style="display:block;margin-top:4px">${esc(t.subject)}</small></span><span>→</span></button>`).join("")}</section>
+            <section class="card"><div class="card-head"><div><h2>${esc(template.name)}</h2><span class="subtle">Rendered preview uses Amara van der Meer</span></div><button class="button small" id="save-template">Save template</button></div><div class="card-body stack"><div class="field"><label>Subject</label><input id="template-subject" value="${esc(template.subject)}"></div><div class="field"><label>Message</label><textarea id="template-body" style="min-height:170px">${esc(template.body)}</textarea></div><div class="field"><label>Rendered preview</label><div class="message-preview" id="template-preview">${renderMergedTemplate(template)}</div></div></div></section>
+            <section class="card" id="triggers"><div class="card-head"><div><h2>Automated triggers</h2><span class="subtle">Each can be paused without deleting its template</span></div><span class="chip published">7 configured</span></div><div class="card-body">${Object.entries(triggers).map(([key,label])=>`<div class="toggle-line"><span><strong style="font-size:11px">${esc(label)}</strong><small class="subtle" style="display:block;margin-top:3px">Uses ${esc(key==="closing"?"Submission-closing reminder":key[0].toUpperCase()+key.slice(1))}</small></span><button class="switch ${state.commsTriggers[key]?"on":""}" data-trigger="${key}" aria-label="Toggle ${esc(label)}" aria-pressed="${state.commsTriggers[key]}"></button></div>`).join("")}</div></section>
+            <section class="card table-card" id="outbox"><div class="card-head"><div><h2>Outbox log</h2><span class="subtle">Demo-safe · no email leaves the prototype</span></div><span class="chip">Rendered bodies retained</span></div><div class="table-wrap" style="min-height:260px"><table><thead><tr><th>ID</th><th>Recipient</th><th>Template</th><th>Subject</th><th>Outcome</th><th></th></tr></thead><tbody>${state.outbox.map((m,i)=>`<tr><td>${m.id}</td><td>${esc(m.recipient)}</td><td>${esc(m.template)}</td><td>${esc(m.subject)}</td><td><span class="chip ${m.outcome==="Delivered"?"published":"overdue"}">${esc(m.outcome)}</span></td><td><button class="button small" data-preview-message="${i}">Preview</button></td></tr>`).join("")}</tbody></table></div></section>
+          </div>
+        </div>`);
+      }
+
+      function renderMergedTemplate(template) {
+        return esc(template.body).replace(/\n/g,"<br>").replace(/\{\{speaker\.first_name\}\}/g,"Amara").replace(/\{\{event\.name\}\}/g,"AIE NYC 2026").replace(/\{\{session\.title\}\}/g,"Beyond the demo: reliable multi-agent systems").replace(/\{\{task\.title\}\}/g,"Bio + headshot");
+      }
+
+      function taskTemplatesView() {
+        return shell(`<div class="page">${pageHead("Task templates", "Every accepted speaker receives the right acknowledgements, forms, and file requests without manual setup.", `<button class="button" data-route="settings">Event settings</button><button class="button primary" id="add-task-template">+ Add task template</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Event</a><a class="button active" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav><section class="card"><div class="card-head"><div><h2>Accepted-speaker task set</h2><span class="subtle">Drag to reorder · due dates are relative to acceptance</span></div><span class="chip">${state.taskTemplates.length} tasks</span></div><div class="card-body" id="task-template-list">${state.taskTemplates.map((t,i)=>`<div class="settings-row" draggable="true" data-task-template="${t.id}"><button class="drag-button">⋮⋮</button><div><input data-task-title="${t.id}" value="${esc(t.title)}"><div class="field-note">${esc(t.description)}</div></div><select data-task-kind="${t.id}">${["Acknowledge","Form","File request"].map(k=>`<option ${k===t.kind?"selected":""}>${k}</option>`).join("")}</select><label class="field" style="display:flex;align-items:center;gap:4px"><input data-task-due="${t.id}" type="number" min="0" value="${t.due}" style="width:62px"><span class="subtle">days</span></label></div>`).join("")}</div></section></div>`);
+      }
+
+      function importerView() {
+        const labels=["Upload","Map columns","Preview","Import","Results"];
+        let body="";
+        if(state.importStep===0) body=`<div class="empty-state"><div><div class="empty-mark">⇩</div><h2>Bring your open CFP from Sessionize</h2><p>Upload the exported Sessions and Speakers spreadsheets. The prototype uses a safe mocked export with undecided submissions, speaker relationships, and historical scores.</p><input id="import-file" type="file" accept=".csv,.xlsx" style="margin-bottom:12px"><br><button class="button primary" id="use-mock-import">Use mocked Sessionize export</button></div></div>`;
+        if(state.importStep===1) body=`<div class="card-body"><div class="grid-2"><div class="field"><label>Sessionize: Session title</label><select><option>Marquee: Title</option></select></div><div class="field"><label>Sessionize: Status</label><select><option>Marquee: Status</option></select></div><div class="field"><label>Sessionize: Speakers</label><select><option>Marquee: Participants</option></select></div><div class="field"><label>Sessionize: Category</label><select><option>Marquee: Track</option></select></div><div class="field"><label>Sessionize: Format</label><select><option>Marquee: Format</option></select></div><div class="field"><label>Sessionize: Score</label><select><option>Marquee: Historical score</option></select></div></div><div class="modal-actions" style="padding-right:0"><button class="button" id="import-back">Back</button><button class="button primary" id="import-next">Preview first rows →</button></div></div>`;
+        if(state.importStep===2) body=`<div class="table-wrap" style="min-height:320px"><table><thead><tr><th>Sessionize ID</th><th>Title</th><th>Status</th><th>Speaker</th><th>Track</th><th>Historical score</th></tr></thead><tbody>${[1,2,3].map((n,i)=>`<tr><td>SZ-${842+n}</td><td>${esc(makeTitle(30+i))}</td><td>${["Undecided","Accepted","Under review"][i]}</td><td>${esc(personName(90+i))}</td><td>${esc(tracks[i].name)}</td><td>${["—","4.7","Unattributed · 3.9"][i]}</td></tr>`).join("")}</tbody></table></div><div class="modal-actions"><button class="button" id="import-back">Back</button><button class="button primary" id="import-next">Import 286 rows →</button></div>`;
+        if(state.importStep===3) body=`<div class="empty-state"><div><div class="empty-mark">↻</div><h2>Import ready</h2><p>286 rows will be matched idempotently by Sessionize ID. Re-running this export updates matches and inserts new records without duplicates.</p><button class="button primary" id="run-import">Run import</button></div></div>`;
+        if(state.importStep===4) body=`<div class="table-wrap" style="min-height:320px"><table class="outcome-table"><thead><tr><th>Row</th><th>Record</th><th>Outcome</th><th>Reason</th></tr></thead><tbody><tr><td>1–241</td><td>Submissions + speakers</td><td><span class="chip published">Created · 241</span></td><td>New Sessionize IDs</td></tr><tr><td>242–278</td><td>Submissions + review history</td><td><span class="chip review">Updated · 37</span></td><td>Matched prior import</td></tr><tr><td>279–284</td><td>Duplicate speaker rows</td><td><span class="chip">Skipped · 6</span></td><td>Relationships already present</td></tr><tr><td>285–286</td><td>Malformed category</td><td><span class="chip overdue">Failed · 2</span></td><td>Missing format; fix and re-run</td></tr></tbody></table></div><div class="modal-actions"><span class="subtle" style="margin-right:auto">Batch SZ-2026-08-08 · 284 applied · 2 failed</span><button class="button danger" id="undo-import">Undo this batch</button><button class="button primary" data-route="submissions">View imported records</button></div>`;
+        return shell(`<div class="page">${pageHead("Import from Sessionize", "Move mid-CFP without losing undecided records, relationships, custom fields, or review history.", `<button class="button" data-route="submissions">All submissions</button>`)}<div class="import-steps">${labels.map((l,i)=>`<div class="import-step ${i===state.importStep?"active":""}">${i+1} · ${l}</div>`).join("")}</div><section class="card">${body}</section></div>`);
+      }
+
+      function airtableView() {
+        return shell(`<div class="page">${pageHead("Airtable mirror", "D1 stays authoritative. The two-way mirror runs off the request path and makes its health visible.", `<a class="button" href="#settings">Event settings</a><button class="button primary" id="sync-airtable">Sync now</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Event</a><a class="button" href="#settings/tasks">Task templates</a><a class="button active" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav><div class="grid-2"><section class="card"><div class="card-head"><h2>AIE NYC 2026 base</h2><a class="button small" href="https://airtable.com/appAIE2026" target="_blank" rel="noreferrer">Open base ↗</a></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Marquee rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Airtable rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Last successful sync</span><div class="metric" style="font-size:16px">23 sec ago</div></div><div class="metric-box"><span class="eyebrow">Outbox depth</span><div class="metric">0</div></div></div><div class="message-preview" style="margin-top:14px"><strong>Webhook healthy · renews automatically</strong><br><span class="subtle">Expires Aug 14, 2026 · keepalive due in 5 days. You’ll see a warning here 48 hours before expiry.</span></div></div></section><section class="card"><div class="card-head"><h2>Live sync log</h2><span class="chip published">Healthy</span></div><div class="card-body"><div class="live-log" id="airtable-log">${state.airtableLog.map((line,i)=>`<div>${i===state.airtableLog.length-1?"<strong>✓</strong>":"·"} ${esc(line)}</div>`).join("")}</div></div></section></div></div>`);
+      }
+
+      function apiTokensView() {
+        return shell(`<div class="page">${pageHead("API tokens", "Issue revocable credentials for agents, scripts, and integrations independently of browser sessions.", `<a class="button" href="#api/docs">Read API docs</a><button class="button primary" id="create-token">Create token</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Event</a><a class="button" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button active" href="#settings/api">API tokens</a></nav><section class="card table-card"><div class="table-wrap" style="min-height:300px"><table><thead><tr><th>Name</th><th>Token</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>${state.apiTokens.map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td><code>${esc(t.prefix)}</code></td><td>${esc(t.created)}</td><td>${esc(t.lastUsed)}</td><td><button class="button small danger" data-revoke-token="${t.id}">Revoke</button></td></tr>`).join("")||`<tr><td colspan="5" style="height:180px;text-align:center"><strong>No API tokens</strong><div class="subtle">Create one for your first agent or integration.</div></td></tr>`}</tbody></table></div></section></div>`);
+      }
+
+      function apiDocsView() {
+        const endpoints=[["GET","/v1/events/:id/submissions","List submissions with status, type, track, search, sort, and cursor filters."],["POST","/v1/events/:id/submissions","Create an Abstract or Session; Session may bypass evaluation."],["PATCH","/v1/submissions/:id","Update status and receive the cascade plan."],["POST","/v1/submissions/:id/reverse-acceptance","Apply explicit retain/cancel choices for dependent work."],["GET","/v1/events/:id/agenda","Read the same filtered agenda shown in the UI."],["POST","/v1/events/:id/imports/sessionize","Create an idempotent import batch."]];
+        return shell(`<div class="page">${pageHead("Marquee API", "Rendered OpenAPI 3.1 documentation · everything the admin UI does uses this same surface.", `<button class="button" id="download-openapi">Download OpenAPI JSON</button><a class="button primary" href="#settings/api">Create API token</a>`)}<div class="detail-grid"><section class="card"><div class="card-head"><div><h2>HTTP endpoints</h2><span class="subtle">Base URL · https://marquee.stage11.dev/api</span></div><span class="chip published">v1</span></div><div class="card-body">${endpoints.map(e=>`<div class="api-route"><span class="method">${e[0]}</span><code>${e[1]}</code><span class="subtle">${e[2]}</span></div>`).join("")}</div></section><aside class="stack"><section class="card"><div class="card-head"><h2>Authentication</h2></div><div class="card-body"><p class="subtle">Send a UI-issued token as a bearer credential. Tokens are event-scoped and independently revocable.</p><div class="code-block">curl https://marquee.stage11.dev/api/v1/events/aie-nyc-2026/submissions \\\n  -H 'Authorization: Bearer mq_live_…' \\\n  -G --data-urlencode 'status=in_review'</div></div></section><section class="card"><div class="card-head"><h2>Agent contract</h2></div><div class="card-body"><p class="subtle">Pagination and filter names mirror the UI. Writes return the resulting record plus queued side effects, so agents never infer whether work was accepted.</p></div></section></aside></div></div>`);
+      }
+
+      function aiAssistView() {
+        return shell(`<div class="page">${pageHead("AI assist", "An optional aid for surfacing likely mismatches. It never makes a program decision or changes status.", `<button class="button" data-route="evaluation">Back to evaluation</button>`)}<section class="card" style="max-width:820px"><div class="card-head"><div><h2>First-pass assistance</h2><span class="subtle">Off by default · deliberately absent from the demo path</span></div><button class="switch ${state.aiEnabled?"on":""}" id="toggle-ai" aria-pressed="${state.aiEnabled}"></button></div><div class="card-body">${state.aiEnabled?`<div class="message-preview"><strong>Aid enabled for preview only</strong><br><span class="subtle">Flags describe evidence for a human reviewer. They cannot accept, reject, promote, or otherwise change a submission.</span></div><div class="divider"></div><button class="button primary" id="run-ai-sample">Analyze 12 unreviewed abstracts</button><div id="ai-results" style="margin-top:14px"></div>`:`<div class="empty-state" style="min-height:280px"><div><div class="empty-mark">◇</div><h2>AI assistance is off</h2><p>Human reviewers see the normal scorecard. Enable this only if you want an additional, clearly labelled evidence pass.</p></div></div>`}</div></section></div>`);
       }
 
       function onboardingSeverity(person) {
@@ -1119,9 +1321,9 @@
         const conflicts = getAgendaConflicts();
         return shell(`<div class="page">
           ${pageHead("Agenda builder", "Drag accepted Sessions into track, day, time, and room. Format defaults set duration; live conflicts warn without blocking.", `<button class="button danger" id="open-conflicts">⚠ ${conflicts.length} conflicts</button><button class="button primary" data-route="publicAgenda">View public agenda ↗</button>`)}
-          <div class="toolbar card" style="margin-bottom:14px"><div class="segment agenda-view-toggle" id="agenda-tabs">${["list","day","week","track","room"].map(v=>`<button data-agenda-view="${v}" class="${state.agendaView===v?"active":""}">${v[0].toUpperCase()+v.slice(1)}</button>`).join("")}</div><select id="agenda-builder-day"><option ${state.agendaBuilderDay==="All days"?"selected":""}>All days</option><option ${state.agendaBuilderDay==="Mon · Oct 12"?"selected":""}>Mon · Oct 12</option><option ${state.agendaBuilderDay==="Tue · Oct 13"?"selected":""}>Tue · Oct 13</option><option ${state.agendaBuilderDay==="Wed · Oct 14"?"selected":""}>Wed · Oct 14</option></select><select id="agenda-track"><option>All tracks</option>${tracks.map(t=>`<option ${state.agendaTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select><select id="agenda-snap"><option>15 minute snap</option><option>5 minute snap</option><option>30 minute snap</option><option>60 minute snap</option></select><span class="toolbar-spacer"></span><button class="button small" data-toast="Prototype — add break (AC-170)">+ Add break</button></div>
+          <div class="toolbar card" style="margin-bottom:14px"><div class="segment agenda-view-toggle" id="agenda-tabs">${["list","day","week","track","room"].map(v=>`<button data-agenda-view="${v}" class="${state.agendaView===v?"active":""}">${v[0].toUpperCase()+v.slice(1)}</button>`).join("")}</div><select id="agenda-builder-day"><option ${state.agendaBuilderDay==="All days"?"selected":""}>All days</option><option ${state.agendaBuilderDay==="Mon · Oct 12"?"selected":""}>Mon · Oct 12</option><option ${state.agendaBuilderDay==="Tue · Oct 13"?"selected":""}>Tue · Oct 13</option><option ${state.agendaBuilderDay==="Wed · Oct 14"?"selected":""}>Wed · Oct 14</option></select><select id="agenda-track"><option>All tracks</option>${tracks.map(t=>`<option ${state.agendaTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select><select id="agenda-snap"><option>15 minute snap</option><option>5 minute snap</option><option>30 minute snap</option><option>60 minute snap</option></select><span class="toolbar-spacer"></span><button class="button small" id="add-break">+ Add break</button></div>
           <div class="agenda-layout">
-            <aside class="card"><div class="card-head"><div><h2>Unscheduled</h2><span class="subtle">${pool.length} accepted Sessions ready to place</span></div><span class="chip">Drag</span></div><div class="toolbar" style="min-height:46px;padding:7px"><input id="agenda-pool-search" value="${esc(state.agendaPoolSearch)}" placeholder="Filter Sessions" style="min-width:0;width:100%"></div><div class="unscheduled">${pool.slice(0,40).map(s=>`<div class="unscheduled-item" draggable="true" data-drag-id="${s.id}" style="--track-color:${trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.format)} · ${formatDurations[s.format]}m · ${esc(s.speaker)}</span></div>`).join("") || `<div style="padding:30px;text-align:center" class="subtle">Everything matching is scheduled.</div>`}</div><div class="pagination" style="min-height:38px"><span>Showing ${Math.min(40,pool.length)} of ${pool.length}</span><span>Drag →</span></div></aside>
+            <aside class="card" id="agenda-pool-drop"><div class="card-head"><div><h2>Unscheduled</h2><span class="subtle">${pool.length} accepted Sessions ready to place</span></div><span class="chip">Drag back here to unplace</span></div><div class="toolbar" style="min-height:46px;padding:7px"><input id="agenda-pool-search" value="${esc(state.agendaPoolSearch)}" placeholder="Filter Sessions" style="min-width:0;width:100%"></div><div class="unscheduled">${pool.slice(0,40).map(s=>`<div class="unscheduled-item" draggable="true" data-drag-id="${s.id}" style="--track-color:${trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.format)} · ${formatDurations[s.format]}m · ${esc(s.speaker)}</span></div>`).join("") || `<div style="padding:30px;text-align:center" class="subtle">Everything matching is scheduled.</div>`}</div><div class="pagination" style="min-height:38px"><span>Showing ${Math.min(40,pool.length)} of ${pool.length}</span><span>Drag →</span></div></aside>
             <section class="card agenda-board" id="agenda-board">${agendaBoard()}</section>
           </div>
         </div>`);
@@ -1136,11 +1338,21 @@
         const selectedDay = state.agendaBuilderDay === "All days" ? "Mon · Oct 12" : state.agendaBuilderDay;
         const daySessions = visible.filter(s=>s.day===selectedDay).slice(0,32);
         if (state.agendaView === "track") return renderTrackAgenda(visible);
-        if (state.agendaView === "list") return agendaList(visible.sort((a,b)=>(a.day+a.time).localeCompare(b.day+b.time)));
-        if (state.agendaView === "week") return agendaList([...visible].sort((a,b)=>(a.day+a.time).localeCompare(b.day+b.time)));
-        if (state.agendaView === "room") return `<div class="swimlanes" style="grid-template-columns:repeat(4,minmax(210px,1fr));min-width:850px">${rooms.map(r=>`<div class="swimlane" style="--track-color:#81838b"><div class="swimlane-head">${r}</div><div class="swimlane-body">${daySessions.filter(s=>s.room===r).map(swimlaneSession).join("")}</div></div>`).join("")}</div>`;
+        if (state.agendaView === "list") return agendaList([...visible]);
+        if (state.agendaView === "week") return renderWeekAgenda(visible);
+        if (state.agendaView === "room") return renderRoomAgenda(visible);
         const times = ["09:00","10:00","11:00","13:30","14:30","15:30"];
         return `<div class="agenda-grid"><div class="agenda-cell head time"></div>${rooms.map(r=>`<div class="agenda-cell head">${r}</div>`).join("")}${times.map(time=>`<div class="agenda-cell time">${time}</div>${rooms.map(room=>{const s=daySessions.find(x=>x.time===time&&x.room===room);return `<div class="agenda-cell drop-target" data-drop-time="${time}" data-drop-room="${room}">${s?sessionTile(s):""}</div>`}).join("")}`).join("")}</div>`;
+      }
+
+      function renderWeekAgenda(items) {
+        const times=["09:00","10:00","11:00","13:30","14:30","15:30","16:30"],days=["Mon · Oct 12","Tue · Oct 13","Wed · Oct 14"];
+        return `<div class="week-grid"><div class="week-cell head time"></div>${days.map(d=>`<div class="week-cell head">${d}</div>`).join("")}${times.map(time=>`<div class="week-cell time">${time}</div>${days.map(day=>`<div class="week-cell drop-target" data-drop-day="${day}" data-drop-time="${time}" data-drop-room="${rooms[(times.indexOf(time)+days.indexOf(day))%rooms.length]}">${items.filter(s=>s.day===day&&s.time===time).map(s=>`<div class="week-session ${s.kind==="break"?"break-tile":""}" style="border-left-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.room)} · ${s.kind==="break"?`${s.duration}m Break`:esc(s.speaker)}</span></div>`).join("")}</div>`).join("")}`).join("")}</div>`;
+      }
+
+      function renderRoomAgenda(items) {
+        const days=state.agendaBuilderDay==="All days"?["Mon · Oct 12","Tue · Oct 13","Wed · Oct 14"]:[state.agendaBuilderDay];
+        return `<div class="swimlanes" style="grid-template-columns:repeat(${rooms.length},minmax(220px,1fr));min-width:${Math.max(850,rooms.length*220)}px">${rooms.map(r=>`<div class="swimlane" style="--track-color:#81838b"><div class="swimlane-head">${esc(r)}</div><div class="swimlane-body">${days.map(day=>`<div class="track-day-label" style="margin:5px 0"><b>${day.slice(0,3)}</b>${day.split(" · ")[1]}</div>${items.filter(s=>s.room===r&&s.day===day).sort((a,b)=>a.time.localeCompare(b.time)).map(swimlaneSession).join("")||`<div class="drop-target message-preview" data-drop-day="${day}" data-drop-room="${esc(r)}" data-drop-time="16:30">Open lane · drop at 16:30</div>`}`).join("")}</div></div>`).join("")}</div>`;
       }
       function renderTrackAgenda(items) {
         const slots = ["09:00","10:00","11:00","13:30","14:30","15:30","16:30"];
@@ -1148,7 +1360,10 @@
         const conflictIds = new Set(getAgendaConflicts().flatMap(c=>[c.a.id,c.b.id]));
         return `<div class="track-board"><div class="track-time-axis">${slots.map(t=>`<span>${t}</span>`).join("")}</div>${tracks.filter(t=>state.agendaTrack==="All tracks"||t.name===state.agendaTrack).map(t=>{const laneItems=items.filter(s=>s.track===t.name);return `<section class="track-lane" style="--track-color:${t.color}"><header class="track-lane-label"><i></i><strong>${esc(t.name)}</strong><span>${laneItems.length} scheduled · ${laneItems.reduce((n,s)=>n+s.duration,0)} min</span></header><div class="track-lane-days">${days.map(day=>`<div class="track-day-band"><div class="track-day-label"><b>${day.slice(0,3)}</b>${day.split(" · ")[1]}</div><div class="track-day-slots">${slots.map((time,i)=>`<div class="track-slot drop-target" data-drop-track="${esc(t.name)}" data-drop-day="${day}" data-drop-time="${time}" data-drop-room="${rooms[i%rooms.length]}">${laneItems.filter(s=>s.day===day&&s.time===time).map(s=>trackAgendaTile(s,conflictIds.has(s.id))).join("")}</div>`).join("")}</div></div>`).join("")}</div></section>`}).join("")}</div>`;
       }
-      function agendaList(sessions) { return `<div>${sessions.map(s=>`<div class="agenda-list-row"><strong>${s.day}</strong><span class="tabular">${s.time}</span><strong>${esc(s.title)}</strong><span>${esc(s.speaker)}</span><span class="chip" style="border-left:3px solid ${trackColor(s.track)}">${esc(s.track)}</span></div>`).join("")}</div>`; }
+      function agendaList(sessions) {
+        const order={day:(a,b)=>(a.day+a.time).localeCompare(b.day+b.time),title:(a,b)=>a.title.localeCompare(b.title),speaker:(a,b)=>(a.speaker||"").localeCompare(b.speaker||""),track:(a,b)=>(a.track||"").localeCompare(b.track||""),room:(a,b)=>a.room.localeCompare(b.room),format:(a,b)=>(a.format||"Break").localeCompare(b.format||"Break")};sessions.sort(order[state.agendaSort]||order.day);
+        return `<div><div class="agenda-list-head"><button data-agenda-sort="day">Day</button><span>Time</span><button data-agenda-sort="title">Title</button><button data-agenda-sort="speaker">Speakers</button><button data-agenda-sort="track">Track</button><button data-agenda-sort="room">Room</button><button data-agenda-sort="format">Format</button></div>${sessions.map(s=>`<div class="agenda-list-row"><strong>${s.day}</strong><span class="tabular">${s.time}</span><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?"—":s.speakers.join(" · "))}</span><span class="chip" style="border-left:3px solid ${s.kind==="break"?"#81838b":trackColor(s.track)}">${esc(s.kind==="break"?"Break":s.track)}</span><span>${esc(s.room)}</span><span>${esc(s.kind==="break"?`Break · ${s.duration}m`:s.format)}</span></div>`).join("")}</div>`;
+      }
       function getAgendaConflicts() {
         const conflicts = [];
         const toMinutes = value => { const [h,m]=value.split(":").map(Number); return h*60+m; };
@@ -1163,14 +1378,28 @@
         return conflicts;
       }
       function agendaConflictIds() { return new Set(getAgendaConflicts().flatMap(c=>[c.a.id,c.b.id])); }
-      function swimlaneSession(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="swimlane-session ${conflict?"conflict":""}" style="border-left:3px solid ${trackColor(s.track)}"><time>${s.time} · ${s.room}</time><strong>${esc(s.title)}</strong><span class="subtle">${esc(s.speaker)}</span>${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
-      function sessionTile(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="session-tile ${conflict?"conflict":""}" draggable="true" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.speaker)}</span>${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
-      function trackAgendaTile(s,conflict) { return `<article class="track-tile ${conflict?"conflict":""}" draggable="true" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${s.time} · ${esc(s.room)} · ${esc(s.speaker)} · ${s.duration}m</span>${conflict?'<i class="track-conflict" title="Conflict">!</i>':""}</article>`; }
+      function swimlaneSession(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="swimlane-session ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" style="border-left:3px solid ${s.kind==="break"?"#81838b":trackColor(s.track)}"><time>${s.time} · ${esc(s.room)}</time><strong>${esc(s.title)}</strong><span class="subtle">${esc(s.kind==="break"?`${s.duration} minute reservation`:s.speaker)}</span>${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
+      function sessionTile(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="session-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?`${s.duration} minute Break`:s.speaker)}</span>${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}" aria-label="Shorten">−</button><button data-resize="5" data-resize-id="${s.id}" aria-label="Lengthen">+</button></span>`:""}${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
+      function trackAgendaTile(s,conflict) { return `<article class="track-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${s.time} · ${esc(s.room)} · ${esc(s.kind==="break"?"Break":s.speaker)} · ${s.duration}m</span>${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}">−</button><button data-resize="5" data-resize-id="${s.id}">+</button></span>`:""}${conflict?'<i class="track-conflict" title="Conflict">!</i>':""}</article>`; }
 
       function publicAgendaView() {
         const q = state.publicSearch.trim().toLowerCase();
-        const sessions = state.scheduled.filter(s=>s.day===state.agendaDay && s.status==="Published" && (state.publicTrack==="All tracks" || s.track===state.publicTrack) && (!q || [s.title,s.speaker,s.company].some(v=>v.toLowerCase().includes(q)))).sort((a,b)=>a.time.localeCompare(b.time)).slice(0,16);
-        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)}</a><div style="display:flex;gap:8px"><button class="button small" id="open-embed">Get embed code</button><a class="button small" href="#dashboard">Organizer demo</a></div></header><main class="public-body wide"><div class="eyebrow">October 12–14 · ${esc(state.event.venue)}</div><div class="portal-head" style="margin-top:10px"><div><h1 style="font-size:36px">Agenda</h1><span class="subtle">Three days of practical sessions for people building and operating AI.</span></div><button class="button" data-toast="Calendar subscription copied (AC-97)">Subscribe to calendar</button></div><div class="public-agenda-controls"><div class="segment"><button data-public-day="Mon · Oct 12" class="${state.agendaDay==="Mon · Oct 12"?"active":""}">Mon 12</button><button data-public-day="Tue · Oct 13" class="${state.agendaDay==="Tue · Oct 13"?"active":""}">Tue 13</button><button data-public-day="Wed · Oct 14" class="${state.agendaDay==="Wed · Oct 14"?"active":""}">Wed 14</button></div><select id="public-track"><option>All tracks</option>${tracks.map(t=>`<option ${state.publicTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select><input id="public-search" value="${esc(state.publicSearch)}" style="height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px" placeholder="Search the agenda"></div><section class="public-card" style="padding-top:8px;padding-bottom:8px">${sessions.length?sessions.map(s=>`<article class="public-session"><time>${s.time}<br><span>${s.room}</span></time><div><button style="border:0;background:none;padding:0;text-align:left" data-toast="Prototype — public session detail (AC-84)"><h3>${esc(s.title)}</h3></button><p><button style="border:0;background:none;padding:0;color:inherit" data-toast="Prototype — public speaker profile (AC-84)">${esc(s.speakers.join(" · "))}</button> · ${esc(s.company)}</p></div><span class="chip" style="border-left:3px solid ${trackColor(s.track)}">${esc(s.track)}</span></article>`).join(""):`<div style="padding:48px;text-align:center"><strong>No published sessions match</strong><div class="subtle" style="margin-top:6px">Clear a filter to see the full program.</div></div>`}</section></main></div>`;
+        const sessions = state.scheduled.filter(s=>s.kind!=="break"&&s.day===state.agendaDay && s.status==="Published" && (state.publicTrack==="All tracks" || s.track===state.publicTrack) && (!q || [s.title,s.speaker,s.company].some(v=>v.toLowerCase().includes(q)))).sort((a,b)=>a.time.localeCompare(b.time)).slice(0,16);
+        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)}</a><div style="display:flex;gap:8px"><button class="button small" id="open-embed">Get embed code</button><a class="button small" href="#dashboard">Organizer demo</a></div></header><main class="public-body wide"><div class="eyebrow">October 12–14 · ${esc(state.event.venue)}</div><div class="portal-head" style="margin-top:10px"><div><h1 style="font-size:36px">Agenda</h1><span class="subtle">Three days of practical sessions for people building and operating AI.</span></div><button class="button" id="subscribe-calendar">Subscribe to calendar</button></div><div class="public-agenda-controls"><div class="segment"><button data-public-day="Mon · Oct 12" class="${state.agendaDay==="Mon · Oct 12"?"active":""}">Mon 12</button><button data-public-day="Tue · Oct 13" class="${state.agendaDay==="Tue · Oct 13"?"active":""}">Tue 13</button><button data-public-day="Wed · Oct 14" class="${state.agendaDay==="Wed · Oct 14"?"active":""}">Wed 14</button></div><select id="public-track"><option>All tracks</option>${tracks.map(t=>`<option ${state.publicTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select><input id="public-search" value="${esc(state.publicSearch)}" style="height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px" placeholder="Search the agenda"></div><section class="public-card" style="padding-top:8px;padding-bottom:8px">${sessions.length?sessions.map(s=>`<article class="public-session"><time>${s.time}<br><span>${esc(s.room)}</span></time><div><a href="#s/${s.id}"><h3>${esc(s.title)}</h3></a><p>${s.speakers.map(name=>`<a href="#p/${encodeURIComponent(name)}" style="text-decoration:underline;text-decoration-color:#d6d6db">${esc(name)}</a>`).join(" · ")} · ${esc(s.company)}</p></div><span class="chip" style="border-left:3px solid ${trackColor(s.track)}">${esc(s.track)}</span></article>`).join(""):`<div style="padding:48px;text-align:center"><strong>No published sessions match</strong><div class="subtle" style="margin-top:6px">Clear a filter to see the full program.</div></div>`}</section></main></div>`;
+      }
+
+      function publicSessionView() {
+        const s=state.scheduled.find(x=>x.id===state.publicRecordId&&x.status==="Published");
+        if(!s) return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#publicAgenda"><span class="brand-mark">M</span>${esc(state.event.name)}</a></header><main class="public-body"><section class="public-card empty-state"><div><div class="empty-mark">404</div><h2>Session not found</h2><p>This session is not published. No private title or speaker information is available.</p><a class="button primary" href="#publicAgenda">View the agenda</a></div></section></main></div>`;
+        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#publicAgenda"><span class="brand-mark">M</span>${esc(state.event.name)}</a><a class="button small" href="#publicAgenda">← Agenda</a></header><main class="public-body"><section class="public-card"><span class="chip" style="border-left:3px solid ${trackColor(s.track)}">${esc(s.track)}</span><h1 style="margin-top:16px">${esc(s.title)}</h1><p>${esc(s.day)} · ${s.time} · ${esc(s.room)} · ${s.duration} minutes</p><div class="divider"></div><h2 style="font-size:14px">About this session</h2><p>Teams can make agent systems reliable without slowing delivery to a crawl. This session presents a field-tested approach, the incidents that changed it, and a decision framework attendees can take home.</p><div class="divider"></div><div class="eyebrow">Speakers</div>${s.speakers.map(name=>`<a class="button ghost" style="margin-top:8px" href="#p/${encodeURIComponent(name)}">${esc(name)} →</a>`).join("")}</section></main></div>`;
+      }
+
+      function publicSpeakerView() {
+        const name=state.publicPersonName;
+        const person=onboardingSpeakers.find(p=>p.name===name);
+        const sessions=state.scheduled.filter(s=>s.status==="Published"&&(s.speakers||[s.speaker]).includes(name));
+        if(!person && !sessions.length) return publicSessionView();
+        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#publicAgenda"><span class="brand-mark">M</span>${esc(state.event.name)}</a><a class="button small" href="#publicAgenda">← Agenda</a></header><main class="public-body"><section class="public-card"><div class="profile-block"><div class="avatar">${esc(name.split(" ").map(n=>n[0]).slice(0,2).join(""))}</div><div><div class="eyebrow">Speaker</div><h1 style="margin:5px 0">${esc(name)}</h1><span class="subtle">${esc(person?.title||"Speaker")} · ${esc(person?.company||sessions[0]?.company||"")}</span></div></div><p>${esc(person?.bio||"Builds and operates production AI systems with an emphasis on evidence, recovery, and human judgment.")}</p><div class="divider"></div><h2 style="font-size:14px">Sessions</h2>${sessions.map(s=>`<a class="list-button" href="#s/${s.id}"><span><strong>${esc(s.title)}</strong><small style="display:block;margin-top:4px">${s.day} · ${s.time} · ${esc(s.room)}</small></span><span>→</span></a>`).join("")||`<p class="subtle">No published sessions yet.</p>`}</section></main></div>`;
       }
 
       function showBulkModal() {
@@ -1186,6 +1415,23 @@
         };
       }
 
+      function showRejectModal() {
+        const all=filteredSubmissions();
+        const chosen=state.selectAllMatching?all:state.submissions.filter(s=>state.selected.has(s.id));
+        const first=chosen[0];
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Reject ${chosen.length.toLocaleString()} ${chosen.length===1?"abstract":"abstracts"}?</h2><p>Review one real merged message before the batch is queued.</p></div><div class="modal-body"><div class="message-preview">Hi ${esc(first?.speaker.split(" ")[0]||"speaker")},<br><br>Thank you for sharing <strong>${esc(first?.title||"your abstract")}</strong>. We aren’t able to include it in this year’s program, but we appreciate the care behind it.</div><p class="subtle">Repeated confirmation is idempotent: already-notified submissions are skipped.</p></div><div class="modal-actions"><button class="button" id="cancel-modal">Cancel</button><button class="button danger" id="confirm-reject">Reject and queue ${chosen.length.toLocaleString()}</button></div></section></div>`;
+        document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
+        document.getElementById("confirm-reject").onclick=()=>{chosen.forEach(s=>{s.status="Rejected";s.accepted=false;});state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:"filtered recipients",template:"Rejection",subject:`${chosen.length} rendered rejection messages`,outcome:"Queued",time:"Just now"});state.selected.clear();state.selectAllMatching=false;modalRoot.innerHTML="";toast(`${chosen.length} rejections queued with rendered per-recipient messages`);render();};
+      }
+
+      function showUnacceptModal() {
+        const s=state.submissions.find(item=>item.id===state.submissionRecordId); if(!s)return;
+        const scheduled=state.scheduled.some(item=>item.id===s.id);
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow" style="color:var(--danger)">Acceptance reversal</div><h2>Withdraw ${esc(s.title)}?</h2><p>The agenda and public event site always update. Choose what happens to each dependent workflow before confirming.</p></div><div class="modal-body"><div class="toggle-line"><span><strong>Agenda placement + public surfaces</strong><small class="subtle" style="display:block">${scheduled?"Remove the scheduled Session and expose the vacated slot.":"Not currently scheduled."}</small></span><span class="chip overdue">Remove</span></div><div class="toggle-line"><span><strong>Portal tasks</strong><small class="subtle" style="display:block">5 assigned tasks · 2 complete</small></span><select id="cascade-tasks"><option value="cancel">Cancel open tasks</option><option value="retain">Retain for records</option></select></div><div class="toggle-line"><span><strong>Scheduled emails</strong><small class="subtle" style="display:block">2 reminders queued · none delivered</small></span><select id="cascade-emails"><option value="cancel">Cancel queued emails</option><option value="retain">Retain queued emails</option></select></div><div class="toggle-line"><span><strong>Calendar invites</strong><small class="subtle" style="display:block">1 invite already sent</small></span><select id="cascade-calendar"><option value="cancel">Send cancellation</option><option value="retain">Retain invite</option></select></div><div class="field"><label>New outcome</label><select id="cascade-status"><option>Withdrawn</option><option>Rejected</option></select></div></div><div class="modal-actions"><button class="button" id="cancel-modal">Keep accepted</button><button class="button danger" id="confirm-unaccept">Reverse acceptance</button></div></section></div>`;
+        document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
+        document.getElementById("confirm-unaccept").onclick=()=>{const result={tasks:document.getElementById("cascade-tasks").value,emails:document.getElementById("cascade-emails").value,calendar:document.getElementById("cascade-calendar").value};s.status=document.getElementById("cascade-status").value;s.accepted=false;state.scheduled=state.scheduled.filter(item=>item.id!==s.id);if(result.calendar==="cancel")state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:`${s.speaker.toLowerCase().replace(/[^a-z]+/g,".")}@example.org`,template:"Calendar cancellation",subject:`Cancelled: ${s.title}`,outcome:"Queued",time:"Just now"});modalRoot.innerHTML="";toast(`Acceptance reversed · tasks ${result.tasks}ed · queued emails ${result.emails}ed · calendar ${result.calendar}led`);render();};
+      }
+
       function showEmbedModal() {
         const paint = kind => {
           const gallery = kind === "speakers";
@@ -1199,23 +1445,43 @@
       }
 
       function bindCommon() {
-        document.querySelectorAll("[data-route]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); navigate(el.dataset.route); }));
+        document.querySelectorAll("[data-route]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); if(el.hasAttribute("data-create-session"))state.formTarget="Session"; navigate(el.dataset.route); }));
         document.querySelectorAll("[data-nav-filter]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); const route=el.dataset.navRoute; navigate(route,route==="submissions"?{submissionFilter:el.dataset.navFilter,submissionTrack:"All",submissionPage:1}:{ }); }));
         document.querySelectorAll("[data-toast]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); toast(el.dataset.toast); }));
         const gs = document.getElementById("global-search");
-        if (gs) {
-          gs.addEventListener("input", () => renderGlobalResults(gs.value));
-          gs.addEventListener("focus", () => { if (gs.value) renderGlobalResults(gs.value); });
-        }
+        gs?.addEventListener("focus",openGlobalSearch);
+        gs?.addEventListener("click",openGlobalSearch);
+        document.getElementById("reset-demo")?.addEventListener("click",resetDemo);
       }
 
-      function renderGlobalResults(query) {
-        const host = document.getElementById("global-results"); if (!host) return;
-        const q = query.trim().toLowerCase(); if (!q) { host.innerHTML=""; return; }
-        const hits = state.submissions.filter(s=>[s.title,s.speaker,s.company,s.id].some(v=>v.toLowerCase().includes(q))).slice(0,6);
-        const formHit = "call for speakers".includes(q) ? [{ id:"FORM", title:"Call for speakers", entity:"Form" }] : [];
-        host.innerHTML = `<div class="search-results">${hits.concat(formHit).map(s=>`<button class="search-result" data-global-hit="${s.entity === "Form" ? "forms" : "submissions"}"><span class="result-type">${s.entity}</span><span class="result-title">${esc(s.title)}${s.speaker?` · ${esc(s.speaker)}`:""}</span></button>`).join("") || `<div class="subtle" style="padding:12px">No result for “${esc(query)}”. Try a speaker, session, or form name.</div>`}</div>`;
-        host.querySelectorAll("[data-global-hit]").forEach(b=>b.onclick=()=>navigate(b.dataset.globalHit,{submissionSearch:query,submissionPage:1}));
+      function normalizeSearch(value) { return String(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,""); }
+      function fuzzyMatch(value,query) {
+        const hay=normalizeSearch(value),needle=normalizeSearch(query); if(!needle)return true; if(hay.includes(needle))return true;
+        let j=0; for(const ch of hay)if(ch===needle[j])j++; return j===needle.length;
+      }
+      function globalSearchResults(query) {
+        const submissions=state.submissions.filter(s=>[s.title,s.id,s.company].some(v=>fuzzyMatch(v,query))).slice(0,6).map(s=>({type:s.entity,title:s.title,note:`${s.id} · ${s.speaker}`,route:`submissions/${s.id}`}));
+        const speakers=onboardingSpeakers.filter(p=>fuzzyMatch(p.name,query)||fuzzyMatch(p.company,query)).slice(0,4).map(p=>({type:"Speaker",title:p.name,note:`${p.company} · ${p.sessions.length} Sessions`,route:"onboarding",speakerId:p.id}));
+        const forms=fuzzyMatch("Call for speakers",query)?[{type:"Form",title:"Call for speakers",note:"Open · closes Sep 12",route:"forms"}]:[];
+        return [...submissions,...speakers,...forms].slice(0,10);
+      }
+      function openGlobalSearch() {
+        modalRoot.innerHTML=`<div class="modal-backdrop" id="search-backdrop"><section class="modal search-dialog" role="dialog" aria-modal="true" aria-label="Search everything"><input class="search-input" id="search-overlay-input" placeholder="Search submissions, speakers, sessions, or forms…" autocomplete="off"><div class="search-dialog-results" id="search-overlay-results"></div><div class="modal-actions"><span class="subtle" style="margin-right:auto">Type a partial or misspelled name · results update instantly</span><button class="button small" id="close-search">Esc · Close</button></div></section></div>`;
+        const input=document.getElementById("search-overlay-input"),host=document.getElementById("search-overlay-results");
+        const paint=()=>{const hits=globalSearchResults(input.value);host.innerHTML=(input.value?hits:globalSearchResults("AIE-00").slice(0,5)).map((hit,i)=>`<button class="search-result" data-search-index="${i}"><span class="result-type">${esc(hit.type)}</span><span><strong class="result-title" style="display:block">${esc(hit.title)}</strong><small class="subtle">${esc(hit.note)}</small></span><kbd>${i+1}</kbd></button>`).join("")||`<div class="empty-state" style="min-height:180px"><div><h2>No result for “${esc(input.value)}”</h2><p>Try a speaker, Session, Abstract, form name, or record ID.</p></div></div>`;host.querySelectorAll("[data-search-index]").forEach(b=>b.onclick=()=>{const hit=(input.value?hits:globalSearchResults("AIE-00").slice(0,5))[Number(b.dataset.searchIndex)];modalRoot.innerHTML="";navigate(hit.route,hit.speakerId?{openSpeakerId:hit.speakerId}:{});});};
+        input.addEventListener("input",paint);paint();input.focus();document.getElementById("close-search").onclick=()=>{modalRoot.innerHTML="";};document.getElementById("search-backdrop").onclick=e=>{if(e.target.id==="search-backdrop")modalRoot.innerHTML="";};
+      }
+
+      function downloadText(name,text,type="text/plain") {
+        const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),500);
+      }
+
+      function resetDemo() {
+        state.submissions=seedSubmissions(); state.selected.clear(); state.selectedSpeakers.clear(); state.selectAllMatching=false; state.reviewIndex=0; state.reviewScores={}; state.importStep=0; state.importBatch=null; state.outbox=state.outbox.slice(-3); state.event=loadEvent(); seedAgenda(); toast("Demo reset complete · seeded AIE NYC workspace restored"); render();
+      }
+
+      function bindLanding() {
+        document.getElementById("open-self-host")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div class="eyebrow">Public open-source project</div><h2>Self-host Marquee</h2><p>The competition repository is prepared for Apache-2.0 publication. This prototype stays self-contained and does not link to a placeholder remote.</p></div><div class="modal-body"><div class="code-block">git clone https://github.com/stage11/marquee.git\ncd marquee\nnpm install\nnpm run db:migrate\nnpm run seed\nnpm run dev</div></div><div class="modal-actions"><button class="button" id="download-guide">Download setup guide</button><button class="button primary" id="close-self-host">Done</button></div></section></div>`;document.getElementById("close-self-host").onclick=()=>modalRoot.innerHTML="";document.getElementById("download-guide").onclick=()=>downloadText("MARQUEE-SELF-HOST.txt","Marquee self-host setup\n1. Clone the public repository.\n2. Install dependencies.\n3. Configure Cloudflare bindings.\n4. Run migrations and seed.\n5. Start the development server.\n");});
       }
 
       function bindDashboard() {
@@ -1223,17 +1489,28 @@
         document.querySelectorAll("[data-attention-filter]").forEach(b=>b.onclick=()=>navigate("submissions",{submissionFilter:b.dataset.attentionFilter,submissionTrack:b.textContent.includes("Agents")?"Agents":"All",submissionPage:1}));
         document.querySelectorAll("[data-unreviewed-track]").forEach(b=>b.onclick=()=>navigate("submissions",{submissionFilter:"Unreviewed",submissionTrack:b.dataset.unreviewedTrack,submissionPage:1}));
         document.querySelector("[data-scroll-wave]")?.addEventListener("click",()=>document.getElementById("wave-planner")?.scrollIntoView({behavior:"smooth"}));
+        document.getElementById("export-dashboard")?.addEventListener("click",()=>downloadText("aie-nyc-program-status.csv",`metric,value\nsubmissions,${state.submissions.length}\naccepted,${pipelineCounts().AcceptedTotal}\nscheduled,${pipelineCounts().Scheduled}\noverdue_tasks,${onboardingCounts().overdueTasks}\nconflicts,${getAgendaConflicts().length}\n`,`text/csv`));
       }
 
       function bindSettings() {
         document.getElementById("save-settings")?.addEventListener("click",()=>{
+          document.querySelectorAll("[data-format-name]").forEach((input,i)=>{const old=formats[i],name=input.value.trim()||old;formats[i]=name;formatRanges[name]=document.querySelector(`[data-format-range="${i}"]`).value;formatDurations[name]=Math.max(5,Number(document.querySelector(`[data-format-duration="${i}"]`).value)||20);if(name!==old){delete formatRanges[old];delete formatDurations[old];}});
+          document.querySelectorAll("[data-track-name]").forEach((input,i)=>{tracks[i].name=input.value.trim()||tracks[i].name;tracks[i].color=document.querySelector(`[data-track-color="${i}"]`).value;});
+          document.querySelectorAll("[data-room-name]").forEach((input,i)=>{rooms[i]=input.value.trim()||rooms[i];state.roomCapacities[i]=Math.max(1,Math.round(Number(document.querySelector(`[data-room-capacity="${i}"]`).value)||1));});
           state.event = { ...state.event, name: document.getElementById("event-name").value, start: document.getElementById("event-start").value, end: document.getElementById("event-end").value, venue: document.getElementById("event-venue").value, timezone: document.getElementById("event-timezone").value };
           try { localStorage.setItem("marquee-prototype-event",JSON.stringify(state.event)); } catch (_) { }
           toast("Event settings saved · agenda and invites updated"); render();
         });
+        document.getElementById("add-format")?.addEventListener("click",()=>{const name=`New format ${formats.length+1}`;formats.push(name);formatRanges[name]="15–30";formatDurations[name]=20;render();});
+        document.getElementById("add-track")?.addEventListener("click",()=>{tracks.push({name:`New track ${tracks.length+1}`,color:"#64748b"});render();});
+        document.getElementById("add-room")?.addEventListener("click",()=>{rooms.push(`New room ${rooms.length+1}`);state.roomCapacities.push(100);render();});
+        document.querySelectorAll("[data-remove-room]").forEach(b=>b.onclick=()=>{rooms.splice(Number(b.dataset.removeRoom),1);state.roomCapacities.splice(Number(b.dataset.removeRoom),1);render();});
+        let trackFrom=null;document.querySelectorAll("[data-track-index]").forEach(row=>{row.addEventListener("dragstart",()=>{trackFrom=Number(row.dataset.trackIndex);row.classList.add("dragging")});row.addEventListener("dragend",()=>row.classList.remove("dragging"));row.addEventListener("dragover",e=>e.preventDefault());row.addEventListener("drop",e=>{e.preventDefault();const to=Number(row.dataset.trackIndex);if(trackFrom===null||to===trackFrom)return;const [track]=tracks.splice(trackFrom,1);tracks.splice(to,0,track);render();});});
+        document.getElementById("preview-branding")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Event branding preview</h2><p>Public form, portal, event site, and calendar invite identity.</p></div><div class="modal-body"><div class="hero-pipeline" style="transform:none"><div class="brand"><span class="brand-mark">M</span><span class="brand-name">${esc(document.getElementById("event-name").value)}</span></div><div class="eyebrow">October 12–14 · ${esc(document.getElementById("event-venue").value)}</div><h2>Fantastic conferences, effortlessly.</h2></div></div><div class="modal-actions"><button class="button primary" id="close-preview">Close preview</button></div></section></div>`;document.getElementById("close-preview").onclick=()=>modalRoot.innerHTML="";});
       }
 
       function bindForms() {
+        document.querySelectorAll("[data-builder-step]").forEach(b=>b.onclick=()=>{state.builderStep=Number(b.dataset.builderStep);render();});
         document.querySelectorAll("[data-form-target]").forEach(b=>b.onclick=()=>{state.formTarget=b.dataset.formTarget;render();});
         document.querySelectorAll("[data-field-id]").forEach(row=>row.addEventListener("click",e=>{if(e.target.closest("button"))return;state.builderActive=Number(row.dataset.fieldId);render();}));
         document.querySelectorAll("[data-move-field]").forEach(b=>b.onclick=()=>{const i=state.builderFields.findIndex(f=>f.id===Number(b.dataset.id));const j=b.dataset.moveField==="up"?i-1:i+1;if(j<0||j>=state.builderFields.length)return;[state.builderFields[i],state.builderFields[j]]=[state.builderFields[j],state.builderFields[i]];render();});
@@ -1245,6 +1522,7 @@
         });
         document.getElementById("add-field")?.addEventListener("click",()=>{const id=Math.max(...state.builderFields.map(f=>f.id))+1;state.builderFields.push({id,label:"Audience experience level",kind:"Single select",required:false});state.builderActive=id;toast("Field added to form and live preview");render();});
         document.getElementById("publish-form")?.addEventListener("click",()=>toast("Form published · public CFP updated"));
+        document.getElementById("save-builder-step")?.addEventListener("click",()=>toast("Form step saved · public preview updated"));
         document.getElementById("form-closes")?.addEventListener("change",()=>toast("Close date updated in public form"));
         document.getElementById("form-limit")?.addEventListener("change",e=>toast(`Submission limit set to ${e.target.value}`));
       }
@@ -1254,11 +1532,23 @@
         document.getElementById("cfp-form")?.addEventListener("submit",e=>{e.preventDefault();const fields=[['title',document.getElementById('cfp-title').value.trim().length>=8,'Use at least 8 characters so reviewers can identify your session.'],['abstract',document.getElementById('cfp-abstract').value.trim().length>=40,'Tell reviewers a little more — at least 40 characters.'],['format',!!document.getElementById('cfp-format').value,'Choose the format you want to present.'],['track',!!document.getElementById('cfp-track').value,'Choose the closest track.'],['email',/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(document.getElementById('cfp-email').value),'Enter an email address we can send your resume link to.']];fields.forEach(([id,ok,msg])=>document.getElementById(`error-${id}`).textContent=ok?'':msg);const bad=fields.find(x=>!x[1]);if(bad){document.getElementById(`cfp-${bad[0]}`).focus();return;}document.getElementById("cfp-card").innerHTML=`<div class="eyebrow">Abstract submitted · AIE-1001</div><h1>Your idea is in.</h1><p>We sent a confirmation and private edit link to ${esc(document.getElementById('cfp-email').value)}. Review begins after September 12; the next decision wave is September 15.</p><div style="padding:16px;background:var(--success-soft);border-radius:9px;margin:24px 0"><strong>${esc(document.getElementById('cfp-title').value)}</strong><div class="subtle" style="margin-top:5px">Submitted · ${esc(document.getElementById('cfp-format').value)} · ${esc(document.getElementById('cfp-track').value)}</div></div><a class="button primary" href="#portal">Open speaker portal →</a>`;});
       }
 
-      function bindPortal() { document.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>{const t=state.tasks.find(x=>x.id===Number(b.dataset.task));t.done=!t.done;if(t.done)t.overdue=false;toast(t.done?"Task completed · organizer dashboard updated":"Task reopened");render();}); }
+      function bindPortal() {
+        document.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>{const t=state.tasks.find(x=>x.id===Number(b.dataset.task));t.done=!t.done;if(t.done)t.overdue=false;toast(t.done?"Task completed · organizer dashboard updated":"Task reopened");render();});
+        document.getElementById("download-invite")?.addEventListener("click",()=>downloadText("aie-nyc-session.ics","BEGIN:VCALENDAR\nVERSION:2.0\nMETHOD:REQUEST\nBEGIN:VEVENT\nSUMMARY:Beyond the demo: reliable multi-agent systems\nDTSTART:20261013T140000Z\nDTEND:20261013T142000Z\nLOCATION:Empire East\nEND:VEVENT\nEND:VCALENDAR","text/calendar"));
+        document.getElementById("confirm-role")?.addEventListener("click",e=>{e.currentTarget.textContent="Role confirmed ✓";e.currentTarget.disabled=true;toast("Participation confirmed for this speaker role");});
+        document.getElementById("decline-role")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Decline this speaker role?</h2><p>The program team will be notified; other roles and submissions are unchanged.</p></div><div class="modal-body field"><label>Optional note</label><textarea placeholder="Tell the program team what changed"></textarea></div><div class="modal-actions"><button class="button" id="cancel-decline">Keep role</button><button class="button danger" id="confirm-decline">Decline role</button></div></section></div>`;document.getElementById("cancel-decline").onclick=()=>modalRoot.innerHTML="";document.getElementById("confirm-decline").onclick=()=>{modalRoot.innerHTML="";toast("Role declined · program team notified");};});
+        document.getElementById("edit-profile")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Edit speaker profile</h2><p>Public speaker surfaces update after save.</p></div><div class="modal-body stack"><div class="grid-2"><div class="field"><label>Title</label><input value="Director of Applied AI"></div><div class="field"><label>Company</label><input value="Capital One"></div></div><div class="field"><label>Biography</label><textarea>Amara builds evaluation and governance systems for AI teams operating in regulated environments.</textarea></div><div class="field"><label>Headshot</label><input type="file" accept="image/*"><div class="message-preview">Crop preview · square safe area · initials placeholder retained until save</div></div><div class="field"><label>Social link</label><input value="https://www.linkedin.com/in/amara-example"></div></div><div class="modal-actions"><button class="button" id="cancel-profile">Cancel</button><button class="button primary" id="save-profile">Save profile</button></div></section></div>`;document.getElementById("cancel-profile").onclick=()=>modalRoot.innerHTML="";document.getElementById("save-profile").onclick=()=>{modalRoot.innerHTML="";toast("Speaker profile saved · event site updated");};});
+        document.querySelectorAll("[data-handbook]").forEach(b=>b.onclick=()=>{const venue=b.dataset.handbook==="venue";modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div class="eyebrow">Speaker handbook</div><h2>${venue?"Venue, arrival, and green room":"Presentation and A/V guidance"}</h2></div><div class="modal-body"><div class="message-preview" style="line-height:1.7">${venue?"Arrive at the Sheraton New York Times Square 45 minutes before your session. Check in at the program desk, then meet your room producer in the speaker green room on level two.":"Bring a 16:9 deck as PDF and PPTX. Every room provides HDMI and USB-C. Upload the final deck by October 5; the production team will test video and audio."}</div></div><div class="modal-actions"><button class="button primary" id="close-handbook">Done</button></div></section></div>`;document.getElementById("close-handbook").onclick=()=>modalRoot.innerHTML="";});
+      }
+
+      function bindEvaluation() {
+        document.querySelectorAll("[data-eval-action]").forEach(b=>b.onclick=()=>{const action=b.dataset.evalAction;const configs={plan:["New evaluation plan",`<div class="field"><label>Name</label><input value="AIE 2026 workshop review"></div><div class="field"><label>Round 1 mode</label><select><option>Scorecard</option><option>Comparison</option></select></div><label class="toggle-line"><span>Anonymized review</span><input type="checkbox" checked></label>`],scorecard:["Edit scorecard",`<div class="settings-row"><span>1</span><input value="Impact"><input type="number" value="40"><span>%</span></div><div class="settings-row"><span>2</span><input value="Specificity"><input type="number" value="35"><span>%</span></div><div class="settings-row"><span>3</span><input value="Novelty"><input type="number" value="25"><span>%</span></div><label class="toggle-line"><span>Require committee comment</span><input type="checkbox" checked></label>`],committee:["Manage committee",`<div class="field"><label>Assignment distribution</label><select><option>3 reviewers per submission</option><option>Everyone reviews everything</option></select></div><div class="field"><label>Add reviewer</label><input value="reviewer@example.org"></div><div class="message-preview">15 active reviewers · assignments rebalance without replacing completed reviews.</div>`],reviewers:["Program committee · 15",`<div class="stack">${["Maya Chen","João García Márquez","Fatima Al-Khatib","Tobias Sørensen","Priyanka Mukherjee","Nikhil Okafor","Sofía Kowalska","Kwame Dela Cruz","Élodie Nwosu","Ravi Ben-Ari","Noor Nakamura","Mateo Petrović","Zainab Cheung","Léa Wachowski","Dmitri Adeyemi"].map((n,i)=>`<div class="wave-row"><strong>${n}</strong><span class="subtle">${140+i*3} / 200</span><span class="chip published">Active</span></div>`).join("")}</div>`],filters:["Filter evaluation summary",`<div class="grid-2"><div class="field"><label>Round</label><select><option>All rounds</option><option>Initial screen</option><option>Committee decision</option></select></div><div class="field"><label>Track</label><select><option>All tracks</option>${tracks.map(t=>`<option>${esc(t.name)}</option>`).join("")}</select></div></div>`],promotion:["Promote 240 abstracts",`<div class="message-preview"><strong>Preview of the filtered promotion set</strong><br><span class="subtle">240 abstracts with ≥3 reviews and weighted score ≥4.10. Existing Committee-decision records are skipped.</span></div><div class="wave-row"><strong>Promoted</strong><span></span><strong>240</strong></div><div class="wave-row"><strong>Committee assignments</strong><span></span><strong>1,440</strong></div>`]};const cfg=configs[action];modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>${cfg[0]}</h2><p>Changes apply to the same evaluation plan reviewers use.</p></div><div class="modal-body stack">${cfg[1]}</div><div class="modal-actions"><button class="button" id="cancel-eval">Cancel</button><button class="button primary" id="save-eval">${action==="promotion"?"Promote 240":"Save changes"}</button></div></section></div>`;document.getElementById("cancel-eval").onclick=()=>modalRoot.innerHTML="";document.getElementById("save-eval").onclick=()=>{modalRoot.innerHTML="";toast(action==="promotion"?"240 abstracts promoted · committee assignments created":"Evaluation plan updated");};});
+      }
 
       function bindReviewer() {
         document.querySelectorAll("[data-score]").forEach(b=>b.onclick=()=>{const item=state.submissions.filter(s=>s.status==="In Review")[state.reviewIndex%90];state.reviewScores[item.id]=Number(b.dataset.score);render();});
         document.getElementById("save-next")?.addEventListener("click",()=>{state.reviewIndex=(state.reviewIndex+1)%90;toast("Score saved · next abstract ready");render();});
+        document.getElementById("abstain-review")?.addEventListener("click",()=>{state.reviewIndex=(state.reviewIndex+1)%90;toast("Conflict recorded · next abstract ready");render();});
       }
 
       function bindSubmissions() {
@@ -1272,8 +1562,61 @@
         document.getElementById("select-page")?.addEventListener("change",e=>{const ids=filteredSubmissions().slice((state.submissionPage-1)*50,state.submissionPage*50).map(s=>s.id);ids.forEach(id=>e.target.checked?state.selected.add(id):state.selected.delete(id));render();});
         document.getElementById("select-matching")?.addEventListener("click",()=>{state.selectAllMatching=true;render();});
         document.getElementById("bulk-accept")?.addEventListener("click",showBulkModal);
+        document.getElementById("bulk-reject")?.addEventListener("click",showRejectModal);
+        document.getElementById("export-submissions")?.addEventListener("click",()=>{const rows=filteredSubmissions();downloadText("marquee-submissions.csv",`id,type,title,speaker,status,track,score\n${rows.map(s=>[s.id,s.entity,`"${s.title.replace(/"/g,'""')}"`,`"${s.speaker.replace(/"/g,'""')}"`,s.status,`"${s.track}"`,s.score].join(",")).join("\n")}`,"text/csv");toast(`${rows.length.toLocaleString()} matching records exported`);});
         document.getElementById("prev-page")?.addEventListener("click",()=>{state.submissionPage--;render();});
         document.getElementById("next-page")?.addEventListener("click",()=>{state.submissionPage++;render();});
+      }
+
+      function bindSubmissionDetail() {
+        document.getElementById("open-unaccept")?.addEventListener("click",showUnacceptModal);
+        document.getElementById("edit-record")?.addEventListener("click",()=>{const s=state.submissions.find(item=>item.id===state.submissionRecordId);modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Edit ${esc(s.id)}</h2><p>The applied routing rule is recomputed when track or format changes.</p></div><div class="modal-body stack"><div class="field"><label>Title</label><input id="edit-title" value="${esc(s.title)}"></div><div class="grid-2"><div class="field"><label>Format</label><select id="edit-format">${formats.map(f=>`<option ${f===s.format?"selected":""}>${esc(f)}</option>`).join("")}</select></div><div class="field"><label>Track</label><select id="edit-track">${tracks.map(t=>`<option ${t.name===s.track?"selected":""}>${esc(t.name)}</option>`).join("")}</select></div></div></div><div class="modal-actions"><button class="button" id="cancel-edit-record">Cancel</button><button class="button primary" id="save-record">Save record</button></div></section></div>`;document.getElementById("cancel-edit-record").onclick=()=>modalRoot.innerHTML="";document.getElementById("save-record").onclick=()=>{s.title=document.getElementById("edit-title").value;s.format=document.getElementById("edit-format").value;s.track=document.getElementById("edit-track").value;modalRoot.innerHTML="";toast("Record saved · routing rule and agenda references updated");render();};});
+      }
+
+      function bindSubmissionNew() {
+        document.querySelectorAll("[data-create-kind]").forEach(b=>b.onclick=()=>{state.formTarget=b.dataset.createKind;render();});
+        document.getElementById("create-submission")?.addEventListener("click",()=>{const title=document.getElementById("new-title").value.trim(),speaker=document.getElementById("new-speaker").value.trim(),email=document.getElementById("new-email").value.trim();if(title.length<8||!speaker||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){document.getElementById("new-error").textContent="Add a clear title, speaker name, and deliverable email address.";return;}const bypass=document.getElementById("new-bypass").checked,id=`AIE-${String(state.submissions.length+1).padStart(4,"0")}`;const s={id,title,entity:state.formTarget,speaker,speakers:[speaker],company:"Invited speaker",status:bypass?"Accepted":"Submitted",accepted:bypass,wave:bypass?2:null,waveDate:bypass?waveDates[1]:null,track:document.getElementById("new-track").value,format:document.getElementById("new-format").value,score:"—",submitted:"2026-08-08",source:"Admin created"};state.submissions.unshift(s);if(bypass)ensureOnboardingSpeaker(s);toast(`${s.entity} created · ${bypass?"evaluation bypassed · ready for agenda":"entered evaluation pipeline"}`);navigate(`submissions/${id}`);});
+      }
+
+      function bindComms() {
+        document.querySelectorAll("[data-template-id]").forEach(b=>b.onclick=()=>{state.activeCommsTemplate=b.dataset.templateId;render();});
+        document.querySelectorAll("[data-trigger]").forEach(b=>b.onclick=()=>{const key=b.dataset.trigger;state.commsTriggers[key]=!state.commsTriggers[key];render();});
+        document.querySelectorAll("[data-comms-anchor]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.commsAnchor)?.scrollIntoView({behavior:"smooth"}));
+        document.getElementById("save-template")?.addEventListener("click",()=>{const t=state.commsTemplates.find(x=>x.id===state.activeCommsTemplate);t.subject=document.getElementById("template-subject").value;t.body=document.getElementById("template-body").value;toast("Template saved · future triggers use this version");render();});
+        document.getElementById("new-template")?.addEventListener("click",()=>{const id=`custom-${state.commsTemplates.length+1}`;state.commsTemplates.push({id,name:`Custom update ${state.commsTemplates.length-2}`,subject:"An update from {{event.name}}",body:"Hi {{speaker.first_name}},\n\nHere is an update about {{session.title}}."});state.activeCommsTemplate=id;render();});
+        document.getElementById("queue-test-message")?.addEventListener("click",()=>{const t=state.commsTemplates.find(x=>x.id===state.activeCommsTemplate);state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:"amara.vandermeer@example.com",template:t.name,subject:t.subject.replace("{{event.name}}","AIE NYC 2026").replace("{{session.title}}","Beyond the demo"),outcome:"Suppressed · demo mode",time:"Just now"});toast("Rendered test message queued in the demo-safe outbox");render();});
+        document.querySelectorAll("[data-preview-message]").forEach(b=>b.onclick=()=>{const m=state.outbox[Number(b.dataset.previewMessage)];modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div class="eyebrow">${esc(m.id)} · ${esc(m.outcome)}</div><h2>${esc(m.subject)}</h2><p>To ${esc(m.recipient)} · ${esc(m.time)}</p></div><div class="modal-body"><div class="message-preview">Hi Amara,<br><br>This is the fully rendered <strong>${esc(m.template)}</strong> message retained in the Marquee outbox. Merge fields have been resolved for this recipient.<br><br>AIE program team</div></div><div class="modal-actions"><button class="button primary" id="close-message">Done</button></div></section></div>`;document.getElementById("close-message").onclick=()=>modalRoot.innerHTML="";});
+      }
+
+      function bindTaskTemplates() {
+        document.getElementById("add-task-template")?.addEventListener("click",()=>{state.taskTemplates.push({id:Date.now(),title:"New speaker task",kind:"Form",description:"Describe what the speaker must complete.",due:14});render();});
+        const save=()=>{state.taskTemplates.forEach(t=>{const title=document.querySelector(`[data-task-title="${t.id}"]`),kind=document.querySelector(`[data-task-kind="${t.id}"]`),due=document.querySelector(`[data-task-due="${t.id}"]`);if(title)t.title=title.value;if(kind)t.kind=kind.value;if(due)t.due=Math.max(0,Number(due.value)||0);});};document.querySelectorAll("[data-task-title],[data-task-kind],[data-task-due]").forEach(el=>el.addEventListener("change",()=>{save();toast("Task template updated · future acceptances inherit it");}));
+        let from=null;document.querySelectorAll("[data-task-template]").forEach(row=>{row.addEventListener("dragstart",()=>from=Number(row.dataset.taskTemplate));row.addEventListener("dragover",e=>e.preventDefault());row.addEventListener("drop",e=>{e.preventDefault();save();const to=Number(row.dataset.taskTemplate),i=state.taskTemplates.findIndex(t=>t.id===from),j=state.taskTemplates.findIndex(t=>t.id===to);if(i<0||j<0)return;const [task]=state.taskTemplates.splice(i,1);state.taskTemplates.splice(j,0,task);render();});});
+      }
+
+      function bindImporter() {
+        document.getElementById("use-mock-import")?.addEventListener("click",()=>{state.importStep=1;render();});
+        document.getElementById("import-file")?.addEventListener("change",()=>{state.importStep=1;render();});
+        document.getElementById("import-back")?.addEventListener("click",()=>{state.importStep=Math.max(0,state.importStep-1);render();});
+        document.getElementById("import-next")?.addEventListener("click",()=>{state.importStep++;render();});
+        document.getElementById("run-import")?.addEventListener("click",()=>{state.importBatch={id:"SZ-2026-08-08",applied:284};state.importStep=4;toast("Import complete · 241 created · 37 updated · 6 skipped · 2 failed");render();});
+        document.getElementById("undo-import")?.addEventListener("click",()=>{state.importBatch=null;state.importStep=0;toast("Import batch undone · prior records restored");render();});
+      }
+
+      function bindAirtable() {
+        document.getElementById("sync-airtable")?.addEventListener("click",e=>{e.currentTarget.disabled=true;const log=document.getElementById("airtable-log"),lines=["manual sync requested · reading local outbox","pushed 3 local changes · received 2 webhook records","echo suppression matched 2 origins · no loop","sync complete · local 1,040 · Airtable 1,040 · outbox 0"];let i=0;const tick=()=>{if(i>=lines.length){state.airtableLog.push(...lines);toast("Airtable sync complete · both sides have 1,040 rows");e.currentTarget.disabled=false;return;}const div=document.createElement("div");div.innerHTML=`${i===lines.length-1?"<strong>✓</strong>":"·"} ${esc(new Date().toLocaleTimeString([], {hour12:false}))} ${esc(lines[i++])}`;log.appendChild(div);log.scrollTop=log.scrollHeight;setTimeout(tick,180);};tick();});
+      }
+
+      function bindApiTokens() {
+        document.getElementById("create-token")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Create API token</h2><p>The secret is shown once. Store it in the client that needs it.</p></div><div class="modal-body field"><label>Token name</label><input id="token-name" value="Conference agent"></div><div class="modal-actions"><button class="button" id="cancel-token">Cancel</button><button class="button primary" id="issue-token">Issue token</button></div></section></div>`;document.getElementById("cancel-token").onclick=()=>modalRoot.innerHTML="";document.getElementById("issue-token").onclick=()=>{const name=document.getElementById("token-name").value||"Untitled token",id=`tok_${Math.random().toString(36).slice(2,6)}`;state.apiTokens.push({id,name,prefix:`mq_live_${id.slice(-4)}…`,created:"Just now",lastUsed:"Never"});modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Copy this token now</h2><p>Marquee will not show the full secret again.</p></div><div class="modal-body"><div class="code-block" id="issued-token">mq_live_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}</div></div><div class="modal-actions"><button class="button primary" id="done-token">I stored it</button></div></section></div>`;document.getElementById("done-token").onclick=()=>{modalRoot.innerHTML="";render();};};});
+        document.querySelectorAll("[data-revoke-token]").forEach(b=>b.onclick=()=>{state.apiTokens=state.apiTokens.filter(t=>t.id!==b.dataset.revokeToken);toast("API token revoked · requests using it now fail");render();});
+      }
+
+      function bindApiDocs() { document.getElementById("download-openapi")?.addEventListener("click",()=>downloadText("marquee-openapi.json",JSON.stringify({openapi:"3.1.0",info:{title:"Marquee API",version:"1.0.0"},paths:{"/v1/events/{id}/submissions":{get:{summary:"List submissions"},post:{summary:"Create submission"}},"/v1/submissions/{id}":{patch:{summary:"Update submission"}}}},null,2),"application/json")); }
+
+      function bindAiAssist() {
+        document.getElementById("toggle-ai")?.addEventListener("click",()=>{state.aiEnabled=!state.aiEnabled;render();});
+        document.getElementById("run-ai-sample")?.addEventListener("click",()=>{document.getElementById("ai-results").innerHTML=`<div class="stack"><div class="message-preview"><strong>Aid · likely format mismatch</strong><br><span class="subtle">A 90-minute workshop description is attached to Stage Talk. Human action required; status unchanged.</span></div><div class="message-preview"><strong>Aid · vendor-content signal</strong><br><span class="subtle">Product-specific claims appear in the abstract. Consider workshop routing. Human action required; status unchanged.</span></div></div>`;});
       }
 
       function bindOnboarding() {
@@ -1285,6 +1628,7 @@
         document.querySelectorAll("[data-speaker-drawer]").forEach(b=>b.onclick=()=>showSpeakerDrawer(b.dataset.speakerDrawer));
         document.querySelectorAll("[data-nudge-speaker]").forEach(b=>b.onclick=()=>showReminderDrawer([b.dataset.nudgeSpeaker]));
         document.getElementById("send-selected-reminder")?.addEventListener("click",()=>showReminderDrawer([...state.selectedSpeakers]));
+        if(state.openSpeakerId){const id=state.openSpeakerId;state.openSpeakerId=null;setTimeout(()=>showSpeakerDrawer(id),0);}
       }
 
       function showConflictsDrawer() {
@@ -1303,12 +1647,23 @@
         let poolTimer;document.getElementById("agenda-pool-search")?.addEventListener("input",e=>{state.agendaPoolSearch=e.target.value;const cursor=e.target.selectionStart;clearTimeout(poolTimer);poolTimer=setTimeout(()=>{render();const next=document.getElementById("agenda-pool-search");next?.focus();next?.setSelectionRange?.(cursor,cursor);},100);});
         document.getElementById("agenda-snap")?.addEventListener("change",e=>toast(`${e.target.value} applied to drag placement`));
         document.getElementById("open-conflicts")?.addEventListener("click",showConflictsDrawer);
+        document.querySelectorAll("[data-agenda-sort]").forEach(b=>b.onclick=()=>{state.agendaSort=b.dataset.agendaSort;render();});
+        document.querySelectorAll("[data-resize]").forEach(b=>b.onclick=e=>{e.stopPropagation();const s=state.scheduled.find(item=>item.id===b.dataset.resizeId);if(!s)return;s.duration=Math.max(5,s.duration+Number(b.dataset.resize));toast(`${s.title} resized to ${s.duration} minutes`);render();});
+        document.getElementById("add-break")?.addEventListener("click",showBreakModal);
         let dragged=null;document.querySelectorAll("[draggable=true]").forEach(el=>{el.addEventListener("dragstart",e=>{dragged=el.dataset.dragId;e.dataTransfer?.setData("text/plain",dragged);el.style.opacity=".45";});el.addEventListener("dragend",()=>el.style.opacity="");});
         document.querySelectorAll(".drop-target").forEach(cell=>{cell.addEventListener("dragover",e=>{e.preventDefault();cell.classList.add("drag-over")});cell.addEventListener("dragleave",()=>cell.classList.remove("drag-over"));cell.addEventListener("drop",e=>{e.preventDefault();cell.classList.remove("drag-over");const id=e.dataTransfer?.getData("text/plain")||dragged;const base=state.submissions.find(s=>s.id===id);if(!base)return;if(board)state.agendaScrolls[state.agendaView]={top:board.scrollTop,left:board.scrollLeft};let sched=state.scheduled.find(s=>s.id===id);if(!sched){sched={...base,day:state.agendaBuilderDay==="All days"?"Mon · Oct 12":state.agendaBuilderDay,duration:formatDurations[base.format]};state.scheduled.push(sched)}if(cell.dataset.dropTrack)sched.track=cell.dataset.dropTrack;if(cell.dataset.dropDay)sched.day=cell.dataset.dropDay;if(cell.dataset.dropTime)sched.time=cell.dataset.dropTime;if(cell.dataset.dropRoom)sched.room=cell.dataset.dropRoom;toast(`${base.format} placed at ${sched.time} · duration set to ${sched.duration} minutes`);render();});});
+        const poolDrop=document.getElementById("agenda-pool-drop");poolDrop?.addEventListener("dragover",e=>{e.preventDefault();poolDrop.style.boxShadow="inset 0 0 0 2px var(--accent)";});poolDrop?.addEventListener("dragleave",()=>poolDrop.style.boxShadow="");poolDrop?.addEventListener("drop",e=>{e.preventDefault();const id=e.dataTransfer?.getData("text/plain")||dragged;const before=state.scheduled.length;state.scheduled=state.scheduled.filter(s=>s.id!==id);if(state.scheduled.length<before){toast("Session returned to the unscheduled pool");render();}});
+      }
+
+      function showBreakModal() {
+        const selectedDay=state.agendaBuilderDay==="All days"?"Mon · Oct 12":state.agendaBuilderDay;
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Reserve space for a Break</h2><p>A Break occupies a room lane like a Session and participates in room-overlap detection.</p></div><div class="modal-body stack"><div class="field"><label>Label</label><input id="break-title" value="Coffee + hallway conversations"></div><div class="grid-2"><div class="field"><label>Day</label><select id="break-day">${["Mon · Oct 12","Tue · Oct 13","Wed · Oct 14"].map(d=>`<option ${d===selectedDay?"selected":""}>${d}</option>`).join("")}</select></div><div class="field"><label>Starts</label><select id="break-time">${["09:00","10:00","11:00","13:30","14:30","15:30","16:30"].map(t=>`<option>${t}</option>`).join("")}</select></div></div><div class="grid-2"><div class="field"><label>Room lane</label><select id="break-room">${rooms.map(r=>`<option>${esc(r)}</option>`).join("")}</select></div><div class="field"><label>Duration</label><input id="break-duration" type="number" min="5" step="5" value="30"></div></div></div><div class="modal-actions"><button class="button" id="cancel-break">Cancel</button><button class="button primary" id="place-break">Place Break</button></div></section></div>`;
+        document.getElementById("cancel-break").onclick=()=>modalRoot.innerHTML="";document.getElementById("place-break").onclick=()=>{state.scheduled.push({id:`BREAK-${Date.now()}`,kind:"break",entity:"Break",title:document.getElementById("break-title").value||"Break",day:document.getElementById("break-day").value,time:document.getElementById("break-time").value,room:document.getElementById("break-room").value,duration:Math.max(5,Number(document.getElementById("break-duration").value)||30),track:"Break",speakers:[],speaker:"",company:"",status:"Published"});modalRoot.innerHTML="";toast("Break placed · room lane reserved");render();};
       }
 
       function bindPublicAgenda() {
         document.getElementById("open-embed")?.addEventListener("click",showEmbedModal);
+        document.getElementById("subscribe-calendar")?.addEventListener("click",()=>downloadText("aie-nyc-2026-calendar.ics","BEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:AIE NYC 2026\nURL:https://marquee.stage11.dev/aie-nyc-2026/calendar.ics\nEND:VCALENDAR","text/calendar"));
         document.querySelectorAll("[data-public-day]").forEach(b=>b.onclick=()=>{state.agendaDay=b.dataset.publicDay;render();});
         document.getElementById("public-track")?.addEventListener("change",e=>{state.publicTrack=e.target.value;render();});
         let publicTimer;document.getElementById("public-search")?.addEventListener("input",e=>{state.publicSearch=e.target.value;const cursor=e.target.selectionStart;clearTimeout(publicTimer);publicTimer=setTimeout(()=>{render();const next=document.getElementById("public-search");next?.focus();next?.setSelectionRange?.(cursor,cursor);},80);});

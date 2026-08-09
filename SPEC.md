@@ -184,7 +184,8 @@ Writer: Settings → API tokens; `marquee auth login` does not mint, it consumes
 | `title` | TEXT | submit, admin edit, import | every list, review card, agenda tile, public session page, merge field |
 | `abstract` | TEXT | submit | review card, public session page |
 | `status` | TEXT — **the enum ships complete: `draft`, `submitted`, `in_review`, `accepted`, `waitlisted`, `rejected`, `withdrawn` (AC-176)** | submit, bulk accept/reject, un-accept, reviewer promotion | pipeline counts, list chips, portal status, public visibility |
-| `track_id`, `format_id` | TEXT | submit, admin edit | filters, agenda defaults (AC-74), swimlane assignment |
+| `format_id` | TEXT | submit, admin edit | filters, agenda defaults (AC-74) |
+| `primary_track_id` | TEXT | submit (first selected track), admin edit | swimlane default placement, single-track surfaces (Amendment 2) |
 | `origin` | TEXT `public\|admin\|import` | insert site | origin marker in lists (AC-120) |
 | `vendor_affiliation` | TEXT `none\|vendor_to_fi\|vendor_with_champion` | public form field, import | routing rules (AC-137) |
 | `wave_id` | TEXT NULL | bulk accept | wave planner, portal "Accepted · Wave 2" |
@@ -294,7 +295,7 @@ Writer: drain, webhook receive, daily keepalive cron (trap 7). Reader: **Setting
 
 | Table | Inbound-writable |
 |---|---|
-| `submissions` | `status`, `track_id`, `format_id`, `vendor_affiliation` |
+| `submissions` | `status`, `primary_track_id`, `tracks` (names, comma-joined), `format_id`, `vendor_affiliation` |
 | `speaker_tasks` | `status` |
 | `people` | `title`, `company` |
 
@@ -302,7 +303,9 @@ An allowlisted edit applies within one webhook cycle; **an edit to any other fie
 
 ### 3.10 Operations and provenance
 
-**`routing_rules`** (AC-135–AC-137) — `event_id`, `name`, `when_json` (`{field, op, value}` over track/format/vendor flag), `then_json` (`{plan_id}` or `{committee_id}`), `position`, `enabled`. Applied at submit; the applied rule id is stamped on the submission (`applied_rule_id`) and named on the record (AC-136).
+**`submission_tracks`** (Amendment 2, AC-234) — `submission_id`, `track_id`, `is_primary` (exactly one per submission). Writer: public form multi-select, admin edit, import. Reader: routing rules, reviewer track scoping, list filters (a submission appears under every track it carries), track chips on records; the swimlane places a session by its primary track (or the schedule item's override). Source: Discord ruling 2026-08-08 — *"talks are submitted to one or more tracks, and reviewers review one or more tracks."*
+
+**`routing_rules`** (AC-135–AC-137) — `event_id`, `name`, `when_json` (`{field, op, value}` over track/format/vendor flag), `then_json` (`{plan_id}` or `{committee_id}`), `position`, `enabled`. Applied at submit; the applied rule id is stamped on the submission (`applied_rule_id`) and named on the record (AC-136). A `track` condition matches if **any** of the submission's tracks satisfies it (Amendment 2).
 
 **`imports`** / **`import_rows`** (AC-109–AC-113) — `event_id`, `source`, `file_key`, `mapping` JSON, `status`, `undone_at`; per row `row_index`, `entity`, `outcome` ∈ `created\|updated\|skipped\|failed`, `reason`, `target_id`, `before_json`. `before_json` is what makes the whole import undoable as one batch (AC-113).
 
