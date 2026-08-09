@@ -17,6 +17,7 @@
 | 2026-08-08 ~16:14 EDT | Luma event page: **647 registered**. Sessionboard sitemap (497 URLs) + knowledge base sitemap (226 URLs) harvested → `sources/sessionboard-kb-urls.txt`. |
 | 2026-08-08 ~16:16 EDT | AIE's real workflow reconstructed: they run **4 events/yr on Sessionize today**; AIE NYC 2026 CFP is public and live. |
 | 2026-08-08 ~16:18 EDT | Sessionboard KB deep-read: forms, evaluations (round-based), agenda/conflicts, automated emails, portal tasks, roles. First full pass complete. |
+| 2026-08-08 evening | **Discord batch 1** (Atin paste; Discord Intel agent). swyx answers day-1 threads: **Q1 answered** (mirror permitted, bonus = Airtable as source of truth), **Q5 answered** (conditional fine; routing = tracks↔reviewers, *one or more* on both sides), review-workflow floor set (`unreviewed → approve/maybe/deny`), agenda floor narrowed (day/room + DnD + conflicts "enough"), onboarding task list enumerated, emails/ICS "should work on an MVP basis," Accelevents skip re-confirmed, **another follow-up video promised "today" covering email/calendar depth**. R4/R5 notes amended; **R51–R52 added**; §7 updated; rulings log added below §7. |
 
 **Requirements status: STILL MOVING.** Two more videos are promised (Saturday = *today*, Sunday = *tomorrow*), after which requirements FREEZE. Nothing below is frozen yet. See [Timeline](#timeline--logistics).
 
@@ -57,6 +58,10 @@ Tags: **[BRIEF]** in the written brief · **[VIDEO-ONLY]** stated only in the wa
 > Verbatim, R5: *"Drag-and-drop schedule and agenda building, with automatic conflict detection across rooms and tracks, viewable by list, day, week, track, or room"*
 
 **Note on R5's view list.** The brief says list / day / week / **track** / room. Sessionboard's own product ships list / day / week / **month** / rooms — it has *no* track view (tracks are a color overlay). The brief asking for a track view is therefore a deliberate ask for something the incumbent lacks. Build the track swimlane view; it is cheap and it is a visible win.
+
+**Note on R4's floor (Discord ruling, 2026-08-08).** swyx: *"minimum workflow is just go from 'unreviewed' -> 'approve/maybe/deny'. bonus is being able to email speaker from inside the app to ask for changes/attach feedback when sending the approve/deny decision."* The brief's scoring/rounds language still stands as stated preference, but the ruled floor is a three-way disposition. Our scorecards/committees/rounds build is a superset — safe. The **"maybe"** state maps to our `waitlist` disposition; consider surfacing the word "maybe" (or "shortlist") somewhere a judge would recognize. The feedback-email bonus is minted as **R51** below.
+
+**Note on R5's floor (Discord ruling, 2026-08-08).** Asked *"is day/room + drag-and-drop + conflict detection enough?"* swyx: *"yes that is enough."* The five-view list (list/day/week/track/room) remains in the brief and stays a differentiator — but it is now confirmed **bonus surface, not floor**. Cut-pressure may take views before anything in the loop.
 
 **Note on R3's calendar invites.** Sessionboard's full automated-email documentation lists ~25 email triggers and **contains no calendar-invite feature at all**. R3 is very likely a documented pain point rather than a clone target — i.e. the brief is asking for something they wanted and could not get. Treat ICS generation + Google/Outlook add-to-calendar links as a **high-visibility, low-cost win**. ([INFERRED] from absence in `learn.sessionboard.com/communications/automated-emails`.)
 
@@ -124,6 +129,15 @@ Not stated by the leads, but reconstructed from AIE's live public CFP pages. Mar
 | **R48** | **Up to N proposals per submitter** (AIE uses 3). Concretises R36. | BONUS | [INFERRED] from AIE Code Summit CFP |
 | **R49** | **Travel/accommodation intake as onboarding tasks** — AIE covers flights + 2–3 hotel nights, so they must collect this per accepted speaker. Natural content for R6's task dashboard. | BONUS | [INFERRED] from AIE CFP speaker benefits |
 | **R50** | **Blind / anonymized review.** Industry-standard, Sessionboard ships it, and AIE's "all submissions receive human review" at 5–15% acceptance implies real review rigor. | BONUS | [INFERRED] + Sessionboard KB |
+
+### 1.5 Discord-ruled requirements — [DISCORD], 2026-08-08 evening batch
+
+Stated by swyx in Discord answer threads (pasted by Atin; quotes verbatim from the paste).
+
+| # | Requirement | Class | Source |
+|---|---|---|---|
+| **R51** | **Email the speaker from inside the review flow** — request changes, and/or attach feedback to the accept/deny decision email. | BONUS (named by swyx) | [DISCORD] *"bonus is being able to email speaker from inside the app to ask for changes/attach feedback when sending the approve/deny decision"* |
+| **R52** | **Submissions target one or more tracks; reviewers review one or more tracks.** Track is the routing key on both sides, and both sides are stated as *plural-capable*. | SHOULD | [DISCORD] *"yes talks are submitted to one or more tracks, and reviewes review one or more tracks"* — ⚠️ SPEC `submissions.track_id` is a single FK; see rulings log below |
 
 ---
 
@@ -297,9 +311,9 @@ Items 1, 2, 3, and 4 are all **craft** complaints, not feature complaints. That 
 
 Ranked by how much a wrong guess costs us. Each carries the default we proceed on if unanswered.
 
-**Q1 — Is Airtable expected as the actual primary datastore, or is a synced mirror enough for the bonus?**
-*Why it matters:* Determines the entire persistence architecture, and Airtable-as-primary directly threatens R7 (speed) and R46 (volume) — the two things most likely to decide the outcome. Cannot be cheaply reversed on Tuesday.
-*Default:* Real database as source of truth (Cloudflare D1 or Postgres) + a genuine, demonstrable Airtable sync. Claim the bonus, keep the speed, and say so explicitly in the README.
+**Q1 — Is Airtable expected as the actual primary datastore, or is a synced mirror enough for the bonus? — ✅ ANSWERED (Discord, 2026-08-08)**
+Asked near-verbatim by a competitor (*"main database and Airtable as a synced team view, or did you want Airtable itself to be the database?"*). swyx: ***"up to you but yes the bonus points would be airtable as source of truth."***
+*Consequence:* The mirror architecture is **permitted** — no forced change to stack decision 3, which was signed anticipating either answer. But the earlier strategic read in §5 ("claims the bonus *and* the speed win") is now **wrong on the bonus half**: the bonus as swyx defines it attaches to Airtable-as-primary. README/positioning must present the mirror honestly ("your team keeps its Airtable view without paying Airtable's latency") rather than claiming the source-of-truth bonus. Whether to accept partial-or-no bonus credit in exchange for the R7/R46 speed win is a client-level positioning call — the architecture itself stands.
 
 **Q2 — The embeddable speaker gallery / schedule itinerary is struck through in the brief but described in the video at [08:22]. Which governs?**
 *Why it matters:* It is a visible, demo-able surface, and the two primary sources disagree.
@@ -313,11 +327,11 @@ Ranked by how much a wrong guess costs us. Each carries the default we proceed o
 *Why it matters:* Multi-tenancy/multi-event shapes the data model from the first migration. Retrofitting is expensive; over-building costs scarce hours.
 *Default:* Model events as first-class from the start (every entity keyed to an event), but ship a UI that presents one event well. Cheap insurance, no demo cost.
 
-**Q5 — What exactly must "conditional logic and category-based routing" (R1) do?**
-*Why it matters:* This spans "show field B if answer A" (an afternoon) through "route submissions to different evaluation committees by track" (a real subsystem). The phrase "category-based routing" plus their vendor-talk policy (R47) hints at the latter.
-*Default:* Both, minimally: per-field show/hide conditions, plus a rule that maps a submission's category/track to an evaluation plan or reviewer pool. The routing half is what makes it more than a form builder.
+**Q5 — What exactly must "conditional logic and category-based routing" (R1) do? — ✅ ANSWERED (Discord, 2026-08-08)**
+swyx: *"conditional fine for now"* (basic conditional logic suffices) and routing = *"talks are submitted to one or more tracks, and reviewes review one or more tracks."*
+*Consequence:* Our default was right on both halves — per-field conditions + track→reviewer mapping. One new wrinkle: **both sides are plural** (R52). Our routing_rules cover reviewers-across-tracks; submission-side multi-track is not in the schema (single `track_id`). See rulings log.
 
-**Q6 — Is "optional AI-assisted review" scored at all, given [09:23] "I don't care about the AI workflow thing"?**
+**Q6 — Is "optional AI-assisted review" scored at all? — reinforced (Discord, 2026-08-08).** Asked *"is a small useful agent enough since admin ui is the priority?"* swyx: *"yes correct admin ui is the priority."* Default below stands, now with a ruling behind it.
 *Why it matters:* Determines whether to spend hours on AI scoring. The brief and the video pull in opposite directions, and many of the 647 competitors will over-invest here.
 *Default:* Ship a small, honest AI first-pass scorer behind a clearly optional toggle — enough to satisfy brief item 4 — and spend the saved time on speed and the walkthrough loop. Do not lead with it.
 
@@ -332,6 +346,32 @@ Ranked by how much a wrong guess costs us. Each carries the default we proceed o
 **Q9 — Is calendar-invite delivery (R3) expected as ICS attachments, or genuine two-way calendar API integration?**
 *Why it matters:* ICS is hours; Google/Microsoft OAuth calendar write is a day-plus with consent screens that may not be approved in time.
 *Default:* ICS attachment + "Add to Google / Outlook" links. Sessionboard itself ships nothing here (§1.1 note), so ICS already beats the incumbent — and OAuth verification cannot realistically complete before Wednesday.
+
+---
+
+## 7.5 Discord rulings log
+
+Every material item from Atin's pastes, one row each, newest batch first. Severity is against the finalized-draft contract (SPEC/EVALUATION/BUILDPLAN/USER_STORIES, 2026-08-08 night).
+
+### Batch 1 — day-1 answer threads, pasted 2026-08-08 (timestamps as shown in paste)
+
+| Item | Ruling (verbatim where quoted) | Impact | Severity |
+|---|---|---|---|
+| **Airtable (Q1)** | *"up to you but yes the bonus points would be airtable as source of truth"* | Mirror permitted; bonus reserved for Airtable-as-primary. Stack decision 3 stands; README positioning must stop short of claiming the bonus. | **PLAN-CHANGE** (positioning; client reconfirm) |
+| **Multi-track (R52)** | *"talks are submitted to one or more tracks, and reviewes review one or more tracks"* | SPEC `submissions.track_id` is a single FK. If multi-track is honored it must land **before/with the first migration** (fleet M-02). Cheap now, expensive later. | **PLAN-CHANGE** (time-sensitive, schema) |
+| **Review floor** | *"minimum workflow is just go from 'unreviewed' -> 'approve/maybe/deny'"* | Our scoring/committees/rounds are a superset. `waitlist` ≈ "maybe" — consider label surfacing. | NOTE |
+| **Decision-feedback email (R51)** | *"bonus is being able to email speaker from inside the app to ask for changes/attach feedback when sending the approve/deny decision"* | No AC covers it. Cheap Tier B candidate: message field on accept/decline actions + per-submission compose. | **PLAN-CHANGE** (candidate, orchestrator routes) |
+| **Onboarding tasks enumerated** | Must-show: *"1) hotel stay requirement form, 2) flight reimbursement form"*; optional: finalize description, finalize bio/photos, announce participation, invite colleagues w/ discount | AC-179/180 already cover 1–2. Seed should lead with these task types and plausibly include the optional four. | NOTE (seed content) |
+| **Emails/ICS real** | *"yes they should work on an MVP basis (it's easy to setup with cloudflare email or resend)"* | Confirms real Resend+ICS build (Q9 default). Not stubbable. | NOTE (confirms) |
+| **Agenda floor** | *"is day/room + drag-and-drop + conflict detection enough?" → "yes that is enough"*; separately: agendas = *"sessions assigned to tracks/rooms/time slots — yeah thats about it"* | R5's five views confirmed bonus surface, not floor. Track swimlane stays a differentiator. | NOTE |
+| **Accelevents** | *"skip accelevents its fine, like i said its not required"* | Confirms descope verdict on brief item 7. | NOTE |
+| **Sending domain** | *"set something up for the demo. try to get it to work… but if you can't its ok"* | Our verified `marquee@stage11.systems` beats the bar. | NOTE (confirms) |
+| **Cloudflare lock-in** | *"its fine as far as i'm concerned… it is just a nice to have since our other internal tools are on cloudflare"* | Confirms stack bet. | NOTE (confirms) |
+| **Follow-up video** | *"i will try to record a followup video today showing this further"* (context: email/calendar depth) | The Saturday video will likely demo comms/calendar expectations. Watch for the link — highest-priority artifact. | NOTE (watch) |
+| **Recruiting/maintainability** | swyx *"this is somewhat of a recruiting exercise also"*; agrees (*"yep"*) with a commenter that code must be maintainable by a non-technical team's dev, and the suggestion to *"shortlist winning submissions, have your team request an update/change and have them demo implement that change"* | Code legibility and a possible "implement a change" round may factor into judging. Favors clean repo, README quality, and our agent-native story (an agent that can drive changes). | NOTE |
+| **Field intel** | Competitors: one reports a live pilot w/ "367 automated tests and 30 browser journeys"; stacks skew CF Workers + D1/DO; names announced elsewhere: `opensession`, `Program Cue`, `SuperStage` | Color only. Field is moving fast; no course change. | NOTE |
+
+**Unanswered in this batch** (asked by competitors, no swyx reply in the paste): edit-after-submit, sponsor/exhibitor groups, rich text, Accept/Decline Queue semantics, blind-vs-open reviewer scores, drafts counting toward submission limit, file-request central page.
 
 ---
 
