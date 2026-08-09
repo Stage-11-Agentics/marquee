@@ -1,6 +1,6 @@
 # Marquee — Orchestration Run State
 
-**DISPATCHED 2026-08-09 02:15 EDT (D+0).** CP-1 = D+15h → **2026-08-09 ~17:15 EDT** (chain corrected at intake: M-01→M-02→M-07→M-08 = 15h). CP-2 = D+36h → **2026-08-10 ~14:15 EDT**. Deadline Wed 2026-08-12 22:00 PT.
+**DISPATCHED 2026-08-09 02:15 EDT (D+0).** ⚠ **CP-1 revised to D+18h** (MRQ-8 plan-review: M-07 is 7h, not 4h — chain M-01 3 + M-02 4 + M-07 7 + M-08 4). Superseded: CP-1 = D+15h → **2026-08-09 ~17:15 EDT** (chain corrected at intake: M-01→M-02→M-07→M-08 = 15h). CP-2 = D+36h → **2026-08-10 ~14:15 EDT**. Deadline Wed 2026-08-12 22:00 PT.
 
 ## Configuration
 
@@ -29,9 +29,9 @@
 | Ticket | Surface | Mode | Note |
 |---|---|---|---|
 | MRQ-1 (M-01) | surface:196 pane:56 | inline-full | **`review`**; deploy deferred to MRQ-57, local validation is the merge bar. Context at 75% — watch for compaction. |
-| MRQ-2 (M-02) | surface:200 pane:56 | planning-only press-ahead | relaunched after cwd-guard halt + trust dialog; halts at `planned` |
-| MRQ-6 (M-05a+06) | surface:201 pane:57 | planning-only press-ahead | design system + admin shell + harness; halts at `planned` |
-| MRQ-8 (M-07) | surface:202 pane:57 | planning-only press-ahead | API core — on the CP-1 chain; boot prompt carries the S-3 verdict |
+| MRQ-2 (M-02) | surface:200 pane:56 | **implementing** (inline-full) | worktree `Marquee-worktrees/mrq-2-schema`, branch stacked on `mrq-1-platform-skeleton`; PR body must name the anchor |
+| MRQ-6 (M-05a+06) | surface:201 pane:57 | **planned**, holding | rulings sent; awaiting worktree |
+| MRQ-8 (M-07) | surface:202 pane:57 | **planned**, holding | re-estimated 7h; CAS primitive; awaiting worktree |
 | MRQ-14 (M-13) | surface:203 pane:56 | planning-only press-ahead | uploads/presign; unblocked by MRQ-1 reaching review. Guardrail-adjacent (AC-231) → held for orchestrator eyes at merge |
 | ~~MRQ-55 (S-2)~~ | closed | **done** | **MERGED** PR #2 (3ef7c647). Code done; `needs_human` stands for the client-rendering oracle. |
 | ~~MRQ-56 (S-3)~~ | closed | **done** | **MERGED** PR #1 (4f429473). Verdict below. |
@@ -39,6 +39,14 @@
 **S-3 verdict (relay into MRQ-8/M-07's boot prompt):** one JSON ID array + `json_each(?)` — a single write query at both 150 and 1,000 rows, 6 ms median — beats ≤90-binding chunking (12 queries, 8.5 ms). Helper dedupes, no-ops on empty, stringifies once, runs once. Local D1 accepts 100 bindings, rejects 101.
 
 **Held despite zero deps:** MRQ-41/42 (craft/closure — late-band by design), MRQ-43/46 (audits — run near their checkpoints), MRQ-54 (S-1 — its band opens at CP-1 and it needs the operator's Airtable base).
+
+## ⚠ RESOURCE ESCALATION — harness quota (raised 2026-08-09 02:50)
+
+Measured via glideslope, not estimated. **Codex weekly: 79% consumed, resets Sat Aug 15 — three days AFTER the Wed Aug 12 22:00 PT deadline.** Burn was ~6 points per 30 min at N=5 high-effort, i.e. roughly **90 minutes of runway** for ~50 remaining tickets. Claude Bravo (this session): 76% weekly, resets Thu Aug 13 — also after the deadline. Kimi: 100% spent, but resets **Mon Aug 10 18:20**, before the deadline. **Claude Alpha: ~untouched 20x Max**, but reaching it is a web `/login` only the operator can perform.
+
+Orchestrator mitigations already applied (no operator input needed): resumed delegators downgraded from sub-agent-full to **inline-full** (no sub-agent tabs); no new spawns while at cap; planners hold at `planned` instead of idling in-session.
+
+**Decision needed from the operator** — see the summary in the session for options (throttle vs. Alpha login vs. wait for Kimi Monday evening vs. mixed).
 
 ## Operator gates (standing)
 
@@ -52,6 +60,10 @@
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-09 02:50 [moderate] **Quota escalation raised** (flag + operator summary). Codex 79% weekly with no pre-deadline reset. Mitigations applied unilaterally: resumed tickets run inline-full not sub-agent-full; no spawning above cap.
+- 2026-08-09 02:49 [moderate] MRQ-8 rulings: CAS-over-transactions ACCEPTED (D1 has no interactive transactions; CAS becomes a named API-core primitive); **M-07 re-estimated 4h -> 7h, scope NOT cut** (agent-native API is a moat feature and every later ticket inherits its contracts); CP-1 accordingly D+15 -> **D+18**.
+- 2026-08-09 02:48 [moderate] MRQ-6 rulings: AC-69 speed row SPLIT into 7 failing AC-sourced budgets + 7 warn-only client-signed objectives (no new AC minted — implementation detail of existing rows); local pr-gate command adopted because private Forgejo has no CI runner, to be folded into the delegator contract once MRQ-6's plan lands.
+- 2026-08-09 02:47 [moderate] MRQ-2 rulings: plural API-token event grants stay inside the existing scopes JSON (no 47th table, SPEC §3.2 unamended); resumed to implementation on a worktree cut off MRQ-1's **in-review** branch (press-ahead stacking) rather than waiting for merge, since M-02 is the critical chain.
 - 2026-08-09 02:41 [moderate] Press-ahead audit on MRQ-1 → `review`: MRQ-14 (M-13 uploads) was the only newly-unblocked ticket; spawned planning-only. Fleet at N=5 (1 impl + 4 planners).
 - 2026-08-09 02:36 [moderate] Press-ahead: MRQ-8 (M-07, CP-1 chain) spawned planning-only with the S-3 verdict inlined; 4 of 5 slots active.
 - 2026-08-09 02:34 [moderate] MRQ-55 (S-2) merged, PR #2 squash 3ef7c647. Review named 2344974 vs head e67476e — resolved as rebase-only: identical tree hash b5d6c73, so review evidence valid. Secret scan clean (key read from env, recipient parameterized, no personal address in the diff). `needs_human` left standing — the client-rendering half is an operator oracle, not agent-verifiable.

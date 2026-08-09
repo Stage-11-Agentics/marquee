@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-14",
   "branch_links": [],
+  "c11_surface": "surface:203",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM8NGV7SK9EVZTXVQWA5A",
-  "last_event_id": "ev_01KZJHMECPVDJQDVF1Z1HSQG4Z",
-  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "last_event_id": "ev_01KZJKW9HQPAQ83E39PPA8A0KV",
+  "last_status_changed_at": "2026-08-09T06:38:03Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-14",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Uploads: presign, verify, and serve",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:48Z",
+  "updated_at": "2026-08-09T06:38:03Z",
   "urgency": null
 }

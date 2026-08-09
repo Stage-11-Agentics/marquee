@@ -10,10 +10,16 @@
   "custom_fields": {},
   "description": "BUILDPLAN: M-05a + M-06 \u2014 Wave 0 (\u00a73) \u00b7 MERGED at mint under amended lever 2 (same wave, identical dependency set {M-01}, 2 h + 4 h = 6 h \u2264 10 h). Two clean halves with **zero file overlap**; the merge concentrates two flagged shared-file ownerships (`tokens.css`, `package.json`/`ci.yml`) in one serialized ticket instead of two.\n\n**M-05a \u2014 Design system + admin shell** (2 h, no AC claimed; files `src/styles/tokens.css`, `src/ui/shell/*`)\nScope (verbatim): Tokens + component CSS lifted verbatim from the v1.1 prototype; sidebar (home, seven pipeline stages, modules, footer), topbar with search affordance, toast host, drawer/modal hosts, route table.\nBinding contract: `DESIGN.md` is law \u2014 the Flight Deck design language, tokens in `prototypes/skins/skin-c.html`, geometry from the binding prototype at `prototypes/pipeline-v1.1/index.html` (legacy directory name; the file is at v1.6). The build reproduces the prototype one-to-one. House UI rule: **elements never jump** \u2014 reserved space for swapped text, fixed-width toggles, `\u2014` over removed rows, tabular numerals.\n\n**M-06 \u2014 Harness skeleton** (4 h \u26d4 serialized on `package.json`; files `package.json`, `vitest.config.ts`, `playwright.config.ts`, `scripts/checks/*`, `.github/workflows/ci.yml`)\nScope (verbatim): **All thirteen** `EVALUATION.md` commands registered up front (stubs where empty) \u2014 the ten \u00a71.1 rows `test`, `e2e`, `check:speed`, `check:seed`, `check:api`, `check:repo`, `check:readme`, `trace:ac`, **`check:mirror`**, `reset:demo`, plus the three \u00a71.5 smokes `smoke:mail`, `smoke:ics`, `check:skill-agent`. `package.json` is M-06-owned and its edits serialize through the orchestrator, so M-25/M-26 cannot self-register `check:mirror` later \u2014 without it here, gate 9 and AC-225\u2013229 name a command that exists in the contract and in no `package.json`. `trace:ac` ships both `--scope=merged` (PR default) and `--scope=all` (gate). Vitest + `@cloudflare/vitest-pool-workers`, Playwright desktop+mobile projects, `trace:ac` scanner, `check:repo` (gitleaks + badge + `Atin/` + history scan), CI. **`npm test` budget \u226430 s from the first commit.**\nNaming convention this enforces (EVALUATION \u00a71.1): every test name begins with the AC IDs it covers \u2014 `test('AC-25 \u00b7 a crafted request bypassing the client cannot persist an invalid record', \u2026)`. `trace:ac` is the machinery; without it the coverage table is a promise.\nHard rule (\u00a71.2): `npm test` never touches the network, a deployed Worker, Resend, Airtable, R2, or the 1,000-row seed.\n\nACs (union): \u2014 (no AC directly claimed; backs gates 2, 3, 15 and every `auto` AC's machinery; every admin screen inherits the shell)\nHours: 6 (2 + 4)\nWorkflow: inline-full (max of the constituents' modes; M-05a alone was fast-track)\nShared files: `src/styles/tokens.css` \u2014 OWNED here (\u00a77), **design tokens only**; per-module styles live in the module. `package.json` (scripts) \u2014 OWNED here: the full thirteen-command table registered at once, `check:mirror` included, stubs included; dependency additions are the only other edits and they queue through the orchestrator. `.github/workflows/ci.yml` \u2014 OWNED here, single author.\nDeps: M-01\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZJM2VNW9DGJ9R76HB0ZVBN3",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHM7X3TP6TG2TSWE4YY32Y",
-  "last_event_id": "ev_01KZJKCAF3JEQQZ39CX63D81AT",
-  "last_status_changed_at": "2026-08-09T06:29:19Z",
+  "last_event_id": "ev_01KZJM66YQ0MV7R629F099190A",
+  "last_status_changed_at": "2026-08-09T06:43:28Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +34,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-6",
-  "status": "in_planning",
+  "status": "planned",
   "tags": null,
   "title": "Design system, admin shell, and the check harness",
   "type": "task",
-  "updated_at": "2026-08-09T06:29:19Z",
+  "updated_at": "2026-08-09T06:43:28Z",
   "urgency": null
 }

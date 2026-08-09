@@ -160,3 +160,95 @@ Add test names/comments carrying `AC-105`, `AC-106`, or `AC-108` where they actu
 3. Implement the glob manifest and generated registration, then assemble OpenAPI and meta routes from the same definitions.
 4. Add the Amendment 7 contract exports and ensure no unhandled contract is registered.
 5. Run the complete verification matrix, commit owned files, and proceed through review, running-system validation, Forgejo PR, and `pr_open` under COMMON.md. Those phases are explicitly out of scope until the Orchestrator sends `RESUME IMPLEMENTATION`.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+Artifact `art_01KZJM16YMF9MMAAM9CMTTMZFX` returned **FAIL (plan-level)** with six major and five minor findings. Every finding is triaged below. This block is authoritative over any earlier conflicting wording in this plan; implementation must apply these resolutions, not the superseded clauses.
+
+### R1 — D1 concurrency is compare-and-swap, never an interactive transaction (MAJOR, accepted)
+
+The earlier instruction to expose a read/check/write “transaction boundary” is withdrawn. D1 has no interactive transaction spanning awaited reads. Every mutable handler must perform the version check in the mutation itself:
+
+```sql
+UPDATE resource
+SET ..., updated_at = CASE WHEN updated_at >= ? THEN updated_at + 1 ELSE ? END
+WHERE id = ? AND event_id = ? AND updated_at = ?
+```
+
+The expected `updated_at` is decoded from the strong `If-Match` tag. `meta.changes === 1` is success. On `meta.changes === 0`, the handler re-reads through the same authorized/event-scoped query only to classify the response: concealed/missing becomes 404; present with a different version becomes 409 with the current strong ETag and safe resource summary. A read followed later by an unconditional write is a defect.
+
+For multi-statement state changes, do **not** assume a `db.batch()` guard statement prevents later statements from running when it changes zero rows. Use a single atomic SQL statement where possible; otherwise every dependent statement in one `db.batch()` must be conditioned on the same expected resource version (or on a guard result materialized within SQL) so stale input produces zero side effects. The monotonic update expression makes two writes in the same wall-clock millisecond produce distinct versions without asking MRQ-2 for a new column.
+
+### R2 — filename discriminator and pure manifest builder (MAJOR, accepted)
+
+The fleet convention is now explicit:
+
+- JSON API modules use plural `src/routes/<feature>.routes.ts`; they contain no JSX and export the required `apiRoutes` value.
+- SSR/page modules use singular `src/routes/<feature>.route.tsx`; they are never API-manifest inputs. BUILDPLAN's `embed.routes.tsx` spelling is normalized to `embed.route.tsx` when that ticket lands, with a deviate-with-flag note because the contract itself uses inconsistent singular/plural SSR examples.
+- `_manifest.ts` globs only `./**/*.routes.ts`, excluding itself and test files. A static convention test rejects JSON `/api/` route declarations from any nonconforming filename and rejects JSX/API modules that evade this split.
+
+Factor discovery logic into `buildManifest(modules: Record<string, unknown>): RouteEntry[]` under `src/api/`. The production `_manifest.ts` is only the eager `import.meta.glob` call plus `buildManifest(modules)`. Unit tests inject fixture module records directly into the pure builder, so fixtures prove discovery/order/duplicate/malformed diagnostics without being discoverable or shipped in the production glob. This resolves the earlier fixture-versus-test-exclusion contradiction.
+
+### R3 — Node CLI consumes generated outputs, never `_manifest.ts` (MAJOR, accepted)
+
+`import.meta.glob` is Vite-only. Neither M-38 nor any Node script may import `src/routes/_manifest.ts`. The consumption path is:
+
+1. The Vite/Worker build assembles OpenAPI from the glob-derived route objects.
+2. That same build emits generated-only `dist/api-registry.json` (canonical operation signatures plus the SHA-256 of canonical OpenAPI JSON) and `dist/openapi.json` from the in-memory document. These are outputs, never inputs and never hand-edited.
+3. The packaged CLI uses the generated registry for offline `--help`/command enumeration and fetches `GET /api/openapi.json` from its selected `--url` for target-aware execution/compatibility. It never carries a separately authored operation list.
+4. M-29's completed `check:api` compares manifest signatures, emitted registry/document, served JSON, and rendered docs content hash. M-38 consumes the emitted artifact; if build wiring requires a `vite.config.ts` or package-script change, serialize it through the M-01/M-06 owner rather than editing those shared files unilaterally.
+
+### R4 — literal people paths and one shared upload service (MAJOR, accepted with explicit decision)
+
+The earlier fully nested people-detail paths are withdrawn. Follow Amendment 7 literally:
+
+- `GET /api/v1/events/:eventId/people` is event-scoped and paginated.
+- `GET/PATCH /api/v1/people/:personId` and `GET /api/v1/people/:personId/submissions` are org-scoped paths because `people` is one org-level model, not duplicated per event.
+
+Authorization still fails closed. The list requires membership/grant intersection for its path event. An org-scoped detail is visible only when the principal has an effective relationship to the person through at least one permitted event; otherwise return concealed 404. Its submissions projection includes only events in the caller's effective event set. PATCH mutates the one shared person identity, uses CAS/If-Match, and requires the program-write/owner authority supplied by M-03/M-29; no event-restricted token may use the org path to learn or mutate fields outside its effective event set.
+
+The three audience paths for uploads are aliases over one M-13 service, not three implementations: public form presign/complete adds Turnstile and public keying; `/me/uploads/sign|complete` adds speaker ownership; event submission file lifecycle adds admin/reviewer authorization. All use one object-key/versioning, validation, completion, and deletion service. Admin replacement is a new upload version; there is no byte-replace route.
+
+### R5 — `router.ts` is closed after M-07; middleware extends through adapters/metadata (MAJOR, accepted)
+
+`src/api/router.ts` is not a shared edit point after this ticket. `createApiRouter(runtime)` receives typed adapters (`credentialResolver`, `rateLimiter`, and other request services) through an `ApiRuntime` interface. Route definitions declare auth policy, required scopes/role, rate bucket/keying, concurrency mode, and request schema. The fixed pipeline is:
+
+1. request ID/error boundary;
+2. credential resolution (anonymous remains a real principal state);
+3. rate-limit selection/enforcement using principal or public keying;
+4. route authorization/concealment;
+5. request validation;
+6. handler;
+7. response normalization/standard headers.
+
+M-03/M-13/M-29 add route modules and adapter implementations/composition files; they do not edit middleware order or append registrations in `router.ts`. Auth-required policies fail closed when no credential adapter is installed. R2 behavior is a handler service, not central middleware. If the merged composition root needs wiring, coordinate its owner as a serialized shared-file edit. The ticket's “no shared files” claim remains true for post-M-07 route fan-out because all extension seams are additive outside the core router.
+
+### R6 — estimate contradiction and coherent implementation order (MAJOR, flagged)
+
+The reviewer correctly found conflicting source arithmetic: BUILDPLAN's amendment says M-07 absorbs `+3 h`, while its row/CP-1 math and this ticket say 4 h with the fold already included. This plan does not silently rewrite board estimates or CP-1. The boot prompt/ticket's 4 h remains the scheduling value for this run, but the Orchestrator must decide whether the source plan should read 4 h/CP-1 15 h or 7 h/CP-1 18 h before implementation is resumed.
+
+Implementation order is coherent even if the estimate is corrected: (A) route definition + pure manifest/glob + error envelope; (B) list/pagination + bulk selector + exact S-3 helper; (C) OpenAPI assembly + both live meta routes; (D) concurrency/rate adapters + Amendment 7 contract exports; (E) full verification. All five segments are binding M-07 scope. A time box may stop and report after a segment, but may not merge or advertise a partial substrate as complete without an explicit Orchestrator scope ruling.
+
+### R7 — OpenAPI version follows validated library support (MINOR, accepted)
+
+OpenAPI 3.1 is preferred only if the exact merged `@hono/zod-openapi`/Zod versions support its 3.1 document builder and the repository validator is configured for 3.1. Otherwise emit a valid supported 3.0.x document and configure the validator accordingly. AC-106 requires a valid document, not an unsupported version aspiration. The chosen version is pinned in tests and cannot drift silently.
+
+### R8 — docs are self-contained and hashes are over canonical bytes (MINOR, accepted)
+
+`/api/docs` uses a renderer bundled in the Worker/static assets; it has no CDN script/style dependency and works in the clean self-host container without public network access. Canonicalize the OpenAPI object deterministically, serialize it once, and compute SHA-256 over those exact UTF-8 bytes. The JSON response ETag and `dist/api-registry.json` content hash use that digest; the docs shell identifies/references the same digest so `check:api` can compare served JSON, emitted artifact, and rendered docs mechanically.
+
+### R9 — preserve the <=30 s inner loop (MINOR, accepted)
+
+Default `npm test` includes fast pure manifest/error/list/pagination/selector/OpenAPI contract tests and remains hermetic and <=30 s. The 150/1,000-row local-D1 helper probe and full Worker endpoint integration run in M-06's explicit integration/check lane (prefer the existing `check:api` project once active), not the default suite. M-07 does not add a package script itself; it coordinates the test-file convention with M-06. Evidence records the before/after default-suite wall time and the separate integration command/time so later tickets do not inherit a hidden slow inner loop.
+
+### R10 — durable strong ETags without a schema change (MINOR, accepted)
+
+ETags are strong quoted encodings of resource ID plus the monotonic stored `updated_at`, not merely wall-clock time. The R1 conditional update advances `updated_at` to at least prior+1, so same-millisecond writes cannot reuse a tag. Tests freeze the clock and prove two consecutive successful writes produce distinct tags and a stale tag produces zero mutation. Local Worker validation asserts the exact strong ETag survives the response path; the later deployed validation/check asserts Cloudflare does not weaken/drop it. If the deployed stack cannot preserve the strong header, implementation stops and reports rather than weakening `If-Match` semantics.
+
+### R11 — four buckets; public is a keying mode (MINOR, accepted)
+
+Withdraw the fifth `public_write` bucket. Route metadata exposes exactly Amendment 7's `read | write | send | import` buckets plus a separate keying mode. Public writes use bucket `write` with `keying: ip_submission` (or the appropriate draft token identity); authenticated cookie and bearer calls use the same bucket policy keyed to the effective principal. Standard headers and 429 behavior remain as already planned.
+
+### Cycle 1 disposition
+
+All review findings are resolved above; none is deferred or ignored. R4 fixes a fleet-wide path ambiguity toward the literal SPEC and records the authorization consequence. R6 is the only outstanding architectural/scheduling flag: it does not block a complete plan or `planned`, but it must be resolved by the Orchestrator before `RESUME IMPLEMENTATION`. No code, worktree, branch, or status beyond `planned` is authorized in this run.

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-09T06:40:44Z",
+  "created_by": "agent:delegator-mrq-8-plan-reviewer",
+  "custom_fields": {},
+  "id": "art_01KZJM16YMF9MMAAM9CMTTMZFX",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZJM16YMF9MMAAM9CMTTMZFX.md",
+    "size_bytes": 16021
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "plan-review (plan-review)",
+  "token_usage": null,
+  "type": "file"
+}
