@@ -30,12 +30,23 @@ Vocabulary: `backlog → in_planning → planned → in_progress → review → 
 - Remote is **`forgejo`** (never `origin`), base branch **`master`**. At every phase boundary: `git fetch forgejo` and record "working against forgejo/master @ <sha>"; rebase before editing.
 - Pre-commit guard before EVERY commit: `test "$(git rev-parse --show-toplevel)" = "<your-abs-worktree>"` — never commit from any other cwd, never `cd` into the root repo to commit or push.
 - Push verification: after `git push forgejo <branch>`, run `git fetch forgejo && test "$(git rev-parse HEAD)" = "$(git rev-parse forgejo/<branch>)"`; re-push until equal.
+- **If your branch was cut off another ticket's branch (a "stacked" ticket — your boot prompt says so), its parent is squash-merged into master and is therefore NOT an ancestor of your branch.** A plain `git rebase forgejo/master` will try to replay the parent's commits again and produce phantom conflicts. Rebase with the explicit cut point instead: `git rebase --onto forgejo/master <parent-tip-sha> <your-branch>`, then `git push --force-with-lease`, then wait ~15 s before expecting the forge to report your PR mergeable — Forgejo recomputes asynchronously and reports stale state in the meantime. Your PR body names its anchor: "stacked on MRQ-N — merge that first; this rebases."
+
+## Contract conflicts are the Orchestrator's to resolve, not yours
+
+If your implementation must diverge from `SPEC.md` (or any contract doc), implement the correct thing, keep moving, and report the divergence in one line to the Orchestrator. **Do not edit contract docs and do not mint AC IDs** — the Orchestrator either amends the contract (making your divergence ratified, not a deviation) or tells you to change course. This has already happened once this run: an upload-lifecycle schema divergence became SPEC Amendment 12. Waiting on a contract question is almost always wrong; flag and continue.
 
 ## Reviews (inline-full mode; skip for fast-track, self-review instead)
 
 - After planning: `(cd "$LATTICE_ROOT" && lattice plan-review MRQ-N --mode single --actor agent:delegator-mrq-N-plan-reviewer)`. Triage every finding into an amendment block appended to the plan file (`## Plan-Review Cycle K Resolutions (AUTHORITATIVE)`); never implement over untriaged findings. Restore your tab title after review calls.
 - After implementing: `(cd <worktree> && timeout 600 bash -c "LATTICE_SPAWN_BACKEND=headless lattice code-review MRQ-N --mode single --base forgejo/master --actor agent:delegator-mrq-N-reviewer")`. On RC 124 / empty diff / vacuous output: **own-reviewer fallback** — compute the diff yourself, write a standard-shape review (Verdict PASS / PASS-WITH-NITS / FAIL; findings with file:line), attach `--role review`, note the fallback in your completion comment.
 - Before bumping `pr_open`: a review artifact must exist that postdates this cycle's `→ review` transition, names the reviewed commit (== branch HEAD), and carries a PASS verdict. A dead or stale review does not count.
+
+## Before you open a PR: the local gate
+
+Private Forgejo has **no CI runner** — nothing runs your tests after you push, so a broken PR looks identical to a green one. MRQ-6 owns a single documented pre-PR gate script (see the README once MRQ-6 has merged); run it and paste its result into your completion comment. Until it exists, run the equivalent by hand: typecheck, the fast test suite, and a build.
+
+Keep the default test suite hermetic and under 30 seconds — it is the whole fleet's inner-loop clock. Slow integration or end-to-end work belongs in a separately-invoked suite, never the default.
 
 ## Validation phase
 
