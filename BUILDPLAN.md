@@ -285,6 +285,10 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 - **AC-240 folds into existing tickets**: slot chips + "Not yet public" into the submissions-list and record tickets; stage sub-labels into the dashboard ticket; publish affordance into the agenda/publish ticket. +1h total, spread.
 - **M-04 seed**: multi-track distribution (≥15%, ≥3 accepted+scheduled two-track sessions) asserted by `check:seed`.
 
+## Amendment 6 — client v1.3 board refinement (2026-08-09)
+
+- **M-53 scope correction (AC-241–242):** replace board drag/drop with composable search/type/track/format/wave filters and exact-record card navigation; lifecycle buttons and confirmation/cascade behavior belong to the submission-record ticket. Agenda drag/drop is unchanged. Estimate remains 4h because the board interaction is simpler and the record action surface reuses existing transition logic.
+
 ---
 
 *Draft, 2026-08-08 (Amendment 2 applied). The orchestrator finalizes this with the client after the v1.1 prototype review, then turns §3–§5 into Lattice tickets.*

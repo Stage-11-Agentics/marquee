@@ -608,6 +608,10 @@ Deviations and gaps, raised rather than silently forked (living-artifacts norm).
 
 **Seed** (§6): ≥15% of submissions multi-track; ≥3 accepted-and-scheduled sessions carry two tracks; asserted by `check:seed`.
 
+## Amendment 6 — board filtering + record-owned actions (2026-08-09)
+
+**Program board `/board`** (AC-241–242): filters compose across free-text search (title, speaker, record ID, company), type, any carried track, format, and wave, with filtered count + one-click reset. The board is a read-only overview: no card is draggable and no lifecycle action appears on a card. Mouse click, Enter, or Space opens the exact submission record. The record owns stage-appropriate actions (review, wave, accept, onboarding, agenda placement, publish, public view), with the existing confirmation/cascade preview for consequential transitions. Agenda drag-and-drop is unaffected.
+
 ---
 
-*Draft, 2026-08-08; folded against `USER_STORIES.md` Amendments 1–5. Amendments follow that file's rules: **the next criteria append from AC-241**; deletions are struck, never recycled. Next inputs — orchestrator review with the client, the Sunday clarification video (requirements freeze), remaining Discord rulings, and final prototype sign-off as the binding visual contract.*
+*Draft, 2026-08-08; folded against `USER_STORIES.md` Amendments 1–6. Amendments follow that file's rules: **the next criteria append from AC-243**; deletions are struck, never recycled. Next inputs — orchestrator review with the client, the Sunday clarification video (requirements freeze), remaining Discord rulings, and final prototype sign-off as the binding visual contract.*

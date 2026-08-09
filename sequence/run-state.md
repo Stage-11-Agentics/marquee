@@ -7,7 +7,7 @@
 ## Current stage & phase
 
 - **Stage:** tone-prototype v1.3 review gate / tone-architect contract ready (2026-08-08).
-- **State:** Pipeline v1.3 is complete in place: v1.2 remains intact, scheduled/published records expose their exact slot and publication state, `/board` renders all 1,040 cards across seven lifecycle columns with confirmed drag transitions and derived-column refusal, and 15% of the seed is visibly multi-track. Playwright observed 23 populated + 23 empty routes plus the new board, native mouse drag/refusal/confirmation, publication, CFP multi-select, schedule metadata, and six scheduled multi-track cards with no JavaScript errors; measured board render 45.1 ms and track-filter render 33.5 ms.
+- **State:** Pipeline v1.3 is complete in place: v1.2 remains intact, scheduled/published records expose their exact slot and publication state, `/board` renders all 1,040 cards across seven lifecycle columns with composable search/type/track/format/wave filters and click-through records (no board drag or card actions), and 15% of the seed is visibly multi-track. Record pages own stage-appropriate confirmed lifecycle actions. Playwright verified board filtering/reset, mouse + keyboard exact-record routing, publish/review transitions, CFP multi-select, schedule metadata, and six scheduled multi-track cards with no JavaScript errors.
 - **THE GATE:** Atin drives v1.3 → love/iterate; confirms F-2 seed A′ and signs the seven proposed speed budgets (EVALUATION §1.3). Then: DESIGN.md minted → adversarial contract pass → lattice-orchestrator kickoff with a **codex build fleet** (Atin directive).
 - **Externals still open:** Discord relay (Sat video, Sun freeze video, Q1/Q2 posts); account checks (Workers Paid, R2 entitlement, Resend tier, Airtable Team ×2 bases); gate materials (Gmail/Outlook/Apple inboxes, real Sessionize export, CF API token, model credential).
 
@@ -25,6 +25,7 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 
 ## Decisions log
 
+- 2026-08-08: **Board interaction refined (AC-241–242)** — no board drag or card actions; filters are expanded and composable, cards open exact records, and lifecycle buttons live on record pages. Agenda drag remains. (Atin + codex)
 - 2026-08-08: **Pipeline v1.3 completed** — program board, scheduled/public slot legibility, publish affordances, clarifying pipeline labels, and ≥15% multi-track seed coverage are implemented and Playwright-verified at full mock scale. (codex)
 - 2026-08-08: **Pipeline v1.2 completed** — all 24 specified screens/states represented, no stub-toast affordances, five finished agenda views, live Event Settings collections, Sessionize import, comms/outbox, reversal cascade, Airtable/API surfaces, multi-track AC-234, and portal talk editing AC-237. Playwright gate passed; client drive remains the love gate. (codex)
 - 2026-08-08: Project named Marquee, homed at `deployments/Marquee`. (Atin)

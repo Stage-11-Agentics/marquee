@@ -881,6 +881,16 @@ Source: Atin driving v1.2 (scheduled/published legibility; multi-track demo visi
 
 *Next amendment appends from AC-241.*
 
+## Amendment 6 — client v1.3 board refinement (2026-08-09, client)
+
+Source: Atin driving the v1.3 Program board (filtering and action-placement refinement).
+
+**AC-241** *(appended to US-75)*: The Program board has prominent, composable filters for free-text search (title, speaker, record ID, or company), record type, any carried track, format, and wave; it displays the filtered count and provides one action to clear every filter.
+
+**AC-242** *(supersedes AC-239's board drag behavior)*: The Program board performs **no drag transitions and exposes no lifecycle actions on cards**. Clicking or keyboard-opening a card navigates to that exact submission record. Stage-appropriate action buttons live on the record page; consequential transitions retain their confirmation and cascade preview there. Agenda drag-and-drop remains unchanged.
+
+*Next amendment appends from AC-243.*
+
 ---
 
-*Canonical as of 2026-08-08 (Amendment 2 applied). Changes to this file are amendments: new criteria append from AC-237; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*
+*Canonical as of 2026-08-09 (Amendments 1–6 applied). Changes to this file are amendments: new criteria append from AC-243; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*

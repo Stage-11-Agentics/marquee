@@ -1042,13 +1042,16 @@
         {name:"In Review",hint:"Committee work underway"},
         {name:"Waved",hint:"Decision wave prepared"},
         {name:"Accepted",hint:"Decision confirmed"},
-        {name:"Onboarding",hint:"Complete tasks to enter",derived:true,entry:"Derived stage · complete speaker tasks to advance here."},
-        {name:"Scheduled",hint:"Place on the agenda to enter",derived:true,entry:"Derived stage · place an accepted Session on the working agenda."},
-        {name:"Published",hint:"Publish to enter",derived:true,entry:"Derived stage · use Publish on a scheduled Session to make it public."}
+        {name:"Onboarding",hint:"Speaker work underway",derived:true,entry:"Open an accepted record to manage speaker tasks and onboarding."},
+        {name:"Scheduled",hint:"Placed on working agenda",derived:true,entry:"Open an accepted record, then choose Place on agenda."},
+        {name:"Published",hint:"Live on public site",derived:true,entry:"Open a scheduled record, then choose Publish Session."}
       ];
 
       function filteredBoardSubmissions() {
+        const q=state.boardSearch.trim().toLowerCase();
         return state.submissions.filter(s=>
+          (!q||[s.id,s.title,s.company,...s.speakers].some(value=>String(value).toLowerCase().includes(q))) &&
+          (state.boardType==="All types"||`${s.entity}s`===state.boardType) &&
           (state.boardTrack==="All tracks"||(s.tracks||[s.track]).includes(state.boardTrack)) &&
           (state.boardFormat==="All formats"||s.format===state.boardFormat) &&
           (state.boardWave==="All waves"||(state.boardWave==="Unwaved"?!s.wave:`Wave ${s.wave}`===state.boardWave))
@@ -1057,26 +1060,26 @@
 
       function boardCard(submission) {
         const actualStatus = submission.status!==boardStageFor(submission) ? `<span class="chip">${submission.status==="Waitlisted"?"Maybe":esc(submission.status)}</span>` : "";
-        return `<article class="board-card" draggable="true" data-board-card="${submission.id}" style="--track-color:${trackColor(submission.track)}"><div style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span class="chip ${submission.entity==="Session"?"session":""}">${submission.entity}</span>${actualStatus}</div><a href="#submissions/${submission.id}"><h3>${esc(submission.title)}</h3></a><p>${esc(submission.speakers.join(" · "))}</p>${trackChips(submission,true)}${scheduleMeta(submission,true)}<div class="board-card-foot"><span>${esc(submission.format)} · ${submission.wave?`Wave ${submission.wave}`:"Unwaved"}</span><strong>${formatTimeInStage(submission.timeInStageHours)}</strong></div></article>`;
+        return `<article class="board-card" role="link" tabindex="0" data-board-card="${submission.id}" data-board-record="${submission.id}" aria-label="Open ${esc(submission.id)}: ${esc(submission.title)}" style="--track-color:${trackColor(submission.track)}"><div style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span class="chip ${submission.entity==="Session"?"session":""}">${submission.entity}</span>${actualStatus}</div><h3>${esc(submission.title)}</h3><p>${esc(submission.speakers.join(" · "))}</p>${trackChips(submission,true)}${scheduleMeta(submission,true,false)}<div class="board-card-foot"><span>${esc(submission.format)} · ${submission.wave?`Wave ${submission.wave}`:"Unwaved"}</span><strong>${formatTimeInStage(submission.timeInStageHours)}</strong></div></article>`;
       }
 
       function boardView() {
         const matching=filteredBoardSubmissions();
         return shell(`<div class="page">
-          ${pageHead("Program board", `${matching.length.toLocaleString()} submissions across the seven lifecycle stages · every card is present; off-screen cards use browser paint containment.`, `<button class="button" data-route="dashboard">Pipeline dashboard</button><button class="button primary" data-route="submissions">Open list</button>`)}
-          <section class="card"><div class="toolbar"><select id="board-track-filter"><option>All tracks</option>${tracks.map(t=>`<option ${state.boardTrack===t.name?"selected":""}>${esc(t.name)}</option>`).join("")}</select><select id="board-format-filter"><option>All formats</option>${formats.map(f=>`<option ${state.boardFormat===f?"selected":""}>${esc(f)}</option>`).join("")}</select><select id="board-wave-filter">${["All waves","Wave 1","Wave 2","Wave 3","Unwaved"].map(w=>`<option ${state.boardWave===w?"selected":""}>${w}</option>`).join("")}</select><span class="toolbar-spacer"></span><span class="subtle">Drag into Submitted, In Review, Waved, or Accepted · derived stages explain their entry action.</span></div><div class="card-body" style="padding:10px"><div class="program-board-shell"><div class="program-board">
+          ${pageHead("Program board", `${matching.length.toLocaleString()} matching submissions across seven lifecycle stages · click any card to open its record and take action.`, `<button class="button" data-route="dashboard">Pipeline dashboard</button><button class="button primary" data-route="submissions">Open list</button>`)}
+          <section class="card"><div class="toolbar" aria-label="Program board filters"><input id="board-search" value="${esc(state.boardSearch)}" aria-label="Search board" placeholder="Search title, speaker, ID, or company"><select id="board-type-filter" aria-label="Filter by type">${["All types","Abstracts","Sessions"].map(value=>`<option ${state.boardType===value?"selected":""}>${value}</option>`).join("")}</select><select id="board-track-filter" aria-label="Filter by track"><option>All tracks</option>${tracks.map(t=>`<option ${state.boardTrack===t.name?"selected":""}>${esc(t.name)}</option>`).join("")}</select><select id="board-format-filter" aria-label="Filter by format"><option>All formats</option>${formats.map(f=>`<option ${state.boardFormat===f?"selected":""}>${esc(f)}</option>`).join("")}</select><select id="board-wave-filter" aria-label="Filter by wave">${["All waves","Wave 1","Wave 2","Wave 3","Unwaved"].map(w=>`<option ${state.boardWave===w?"selected":""}>${w}</option>`).join("")}</select><span class="toolbar-spacer"></span><div class="board-filter-summary"><strong>${matching.length.toLocaleString()}</strong> of ${state.submissions.length.toLocaleString()}<button class="button small" id="clear-board-filters">Clear filters</button></div></div><div class="card-body" style="padding:10px"><div class="program-board-shell"><div class="program-board">
             ${programBoardStages.map(stage=>{const cards=matching.filter(s=>boardStageFor(s)===stage.name);return `<section class="board-column ${stage.derived?"derived":""}" data-board-column="${stage.name}" data-derived="${stage.derived?"true":"false"}"><header class="board-column-head"><div><strong>${stage.name}</strong><small>${stage.hint}</small></div><span class="board-count">${cards.length}</span></header>${stage.derived?`<div class="board-derived-note">${stage.entry}</div>`:""}<div class="board-card-list">${cards.map(boardCard).join("")||`<div class="subtle" style="padding:24px;text-align:center">No matching submissions</div>`}</div></section>`}).join("")}
           </div></div></div></section>
         </div>`);
       }
 
-      function showBoardTransition(id,targetStage) {
+      function showLifecycleTransition(id,targetStage) {
         const submission=state.submissions.find(s=>s.id===id); if(!submission)return;
         const fromStage=boardStageFor(submission); if(fromStage===targetStage){toast(`${submission.id} is already in ${targetStage}`);return;}
         const slot=sessionSlot(submission), accepting=targetStage==="Accepted";
-        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Lifecycle transition</div><h2>Move ${esc(submission.id)} to ${esc(targetStage)}?</h2><p>${esc(fromStage)} → ${esc(targetStage)} · the card moves only after confirmation.</p></div><div class="modal-body stack"><div class="message-preview"><strong>${esc(submission.title)}</strong><br><span class="subtle">${esc(submission.speakers.join(" · "))}</span></div>${accepting?`<div class="wave-row"><strong>Portal + acceptance email</strong><span></span><strong>Queue</strong></div><div class="wave-row"><strong>Speaker task set</strong><span></span><strong>Assign</strong></div>`:""}${slot?`<div class="wave-row"><strong>Agenda + public surfaces</strong><span></span><strong class="chip overdue">Remove</strong></div>`:""}<p class="subtle">The transition is stamped in history. Existing review evidence remains attached to the record.</p></div><div class="modal-actions"><button class="button" id="cancel-board-transition">Cancel</button><button class="button primary" id="confirm-board-transition">Move to ${esc(targetStage)}</button></div></section></div>`;
-        document.getElementById("cancel-board-transition").onclick=()=>modalRoot.innerHTML="";
-        document.getElementById("confirm-board-transition").onclick=()=>{
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Lifecycle transition</div><h2>Move ${esc(submission.id)} to ${esc(targetStage)}?</h2><p>${esc(fromStage)} → ${esc(targetStage)} · the record updates only after confirmation.</p></div><div class="modal-body stack"><div class="message-preview"><strong>${esc(submission.title)}</strong><br><span class="subtle">${esc(submission.speakers.join(" · "))}</span></div>${accepting?`<div class="wave-row"><strong>Portal + acceptance email</strong><span></span><strong>Queue</strong></div><div class="wave-row"><strong>Speaker task set</strong><span></span><strong>Assign</strong></div>`:""}${slot?`<div class="wave-row"><strong>Agenda + public surfaces</strong><span></span><strong class="chip overdue">Remove</strong></div>`:""}<p class="subtle">The transition is stamped in history. Existing review evidence remains attached to the record.</p></div><div class="modal-actions"><button class="button" id="cancel-lifecycle-transition">Cancel</button><button class="button primary" id="confirm-lifecycle-transition">Move to ${esc(targetStage)}</button></div></section></div>`;
+        document.getElementById("cancel-lifecycle-transition").onclick=()=>modalRoot.innerHTML="";
+        document.getElementById("confirm-lifecycle-transition").onclick=()=>{
           if(slot)state.scheduled=state.scheduled.filter(item=>item.id!==submission.id);
           submission.boardStage=targetStage;
           submission.timeInStageHours=1;
@@ -1091,12 +1094,13 @@
       }
 
       function bindBoard() {
+        let searchTimer;document.getElementById("board-search")?.addEventListener("input",e=>{state.boardSearch=e.target.value;const cursor=e.target.selectionStart;clearTimeout(searchTimer);searchTimer=setTimeout(()=>{render();const next=document.getElementById("board-search");next?.focus();next?.setSelectionRange?.(cursor,cursor);},80);});
+        document.getElementById("board-type-filter")?.addEventListener("change",e=>{state.boardType=e.target.value;render();});
         document.getElementById("board-track-filter")?.addEventListener("change",e=>{state.boardTrack=e.target.value;render();});
         document.getElementById("board-format-filter")?.addEventListener("change",e=>{state.boardFormat=e.target.value;render();});
         document.getElementById("board-wave-filter")?.addEventListener("change",e=>{state.boardWave=e.target.value;render();});
-        let dragged=null;
-        document.querySelectorAll("[data-board-card]").forEach(card=>{card.addEventListener("dragstart",e=>{dragged=card.dataset.boardCard;e.dataTransfer?.setData("text/plain",dragged);card.classList.add("dragging");});card.addEventListener("dragend",()=>{card.classList.remove("dragging");document.querySelectorAll(".board-column").forEach(c=>c.classList.remove("drag-over"));});});
-        document.querySelectorAll("[data-board-column]").forEach(column=>{column.addEventListener("dragover",e=>{e.preventDefault();column.classList.add("drag-over");});column.addEventListener("dragleave",e=>{if(!column.contains(e.relatedTarget))column.classList.remove("drag-over");});column.addEventListener("drop",e=>{e.preventDefault();column.classList.remove("drag-over");const id=e.dataTransfer?.getData("text/plain")||dragged;if(!id)return;if(column.dataset.derived==="true"){const stage=programBoardStages.find(s=>s.name===column.dataset.boardColumn);toast(`${stage.name} accepts no drops · ${stage.entry.replace("Derived stage · ","")}`);return;}showBoardTransition(id,column.dataset.boardColumn);});});
+        document.getElementById("clear-board-filters")?.addEventListener("click",()=>{state.boardSearch="";state.boardType="All types";state.boardTrack="All tracks";state.boardFormat="All formats";state.boardWave="All waves";render();});
+        document.querySelectorAll("[data-board-record]").forEach(card=>{const open=()=>navigate(`submissions/${card.dataset.boardRecord}`);card.addEventListener("click",open);card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();open();}});});
       }
 
       function pipelineCounts() {
@@ -1286,11 +1290,24 @@
         </div>`);
       }
 
+      function recordActionCard(submission) {
+        const stage=boardStageFor(submission), slot=sessionSlot(submission);
+        let buttons="";
+        if(stage==="Submitted")buttons=`<button class="button primary" data-lifecycle-target="In Review">Start review</button>`;
+        if(stage==="In Review")buttons=`<button class="button" data-lifecycle-target="Waved">Move to decision wave</button><button class="button primary" data-lifecycle-target="Accepted">Accept into Wave 2</button>`;
+        if(stage==="Waved")buttons=`<button class="button" data-lifecycle-target="In Review">Return to review</button><button class="button primary" data-lifecycle-target="Accepted">Accept into Wave 2</button>`;
+        if(stage==="Accepted"||stage==="Onboarding")buttons=`<button class="button" data-route="onboarding">Manage speaker onboarding</button><button class="button primary" data-route="agenda">Place on agenda</button>`;
+        if(stage==="Scheduled")buttons=`<button class="button" data-route="agenda">Open working agenda</button><button class="button primary" data-publish-id="${submission.id}">Publish Session</button>`;
+        if(stage==="Published")buttons=`<button class="button" data-route="agenda">Open agenda</button><button class="button primary" data-route="s/${submission.id}">View public Session ↗</button>`;
+        return `<section class="card record-action-card"><div class="card-head"><div><h2>Record actions</h2><span class="subtle">${esc(stage)} · lifecycle changes are confirmed and stamped in history</span></div><span class="chip ${slot?.status==="Published"?"published":slot?"scheduled":""}">${esc(stage)}</span></div><div class="card-body record-action-buttons">${buttons}</div></section>`;
+      }
+
       function submissionDetailView() {
         const s = state.submissions.find(item=>item.id===state.submissionRecordId) || state.submissions[0];
         const participantRows = s.speakers.map((name,i)=>`<div class="wave-row"><div><strong>${esc(name)}</strong><div class="wave-date">${i===0?"Submitter · Speaker":"Speaker"}</div></div><span class="subtle">${i===0?s.company:"Guest participant"}</span><strong>${i===0?"Primary":"Co-speaker"}</strong></div>`).join("");
         return shell(`<div class="page">
           ${pageHead(`${s.entity} record`, `${s.id} · ${s.source} · Submitted ${s.submitted}`, `<button class="button" data-route="submissions">← All records</button>${s.accepted?`<button class="button danger" id="open-unaccept">Reverse acceptance…</button>`:""}<button class="button primary" id="edit-record">Edit record</button>`)}
+          ${recordActionCard(s)}
           <div class="detail-grid">
             <div class="stack">
               <section class="card"><div class="card-head"><div><span class="chip ${s.entity==="Session"?"session":""}">${s.entity}</span><h2 style="font-size:18px;margin-top:9px">${esc(s.title)}</h2>${scheduleMeta(s)}</div><span class="chip ${s.status.toLowerCase().replace(" ","-")}">${s.status}</span></div><div class="card-body"><dl class="definition-list"><dt>Format</dt><dd>${esc(s.format)}</dd><dt>Tracks</dt><dd><div style="display:flex;gap:5px;flex-wrap:wrap">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div></dd><dt>Origin</dt><dd>${esc(s.source)}${s.entity==="Session"?" · Evaluation bypassed":""}</dd><dt>Applied routing rule</dt><dd>Any carried track matches ${esc((s.tracks||[s.track]).join(" / "))} → AIE 2026 program review · Initial screen</dd><dt>Abstract</dt><dd>Teams can make complex AI systems useful without hiding uncertainty. This session shares concrete production lessons, a decision framework, and the incidents that changed the approach.</dd><dt>Attendee outcome</dt><dd>A practical checklist for choosing evaluation evidence and escalation points.</dd></dl></div></section>
@@ -1755,6 +1772,7 @@
 
       function bindSubmissionDetail() {
         document.getElementById("open-unaccept")?.addEventListener("click",showUnacceptModal);
+        document.querySelectorAll("[data-lifecycle-target]").forEach(button=>button.addEventListener("click",()=>showLifecycleTransition(state.submissionRecordId,button.dataset.lifecycleTarget)));
         document.getElementById("edit-record")?.addEventListener("click",()=>{
           const s=state.submissions.find(item=>item.id===state.submissionRecordId),selected=[...(s.tracks||[s.track])];
           const paint=()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Edit ${esc(s.id)}</h2><p>The first selected track is primary. Routing matches any carried track.</p></div><div class="modal-body stack"><div class="field"><label>Title</label><input id="edit-title" value="${esc(s.title)}"></div><div class="field"><label>Format</label><select id="edit-format">${formats.map(f=>`<option ${f===s.format?"selected":""}>${esc(f)}</option>`).join("")}</select></div><div class="field"><label>Tracks</label><div class="track-picker">${tracks.map(t=>{const i=selected.indexOf(t.name);return `<button type="button" data-edit-track="${esc(t.name)}" class="${i>=0?"active":""}"><span style="color:${t.color}">●</span> ${esc(t.name)}${i===0?"<small>Primary</small>":""}</button>`}).join("")}</div><div class="field-error" id="edit-track-error"></div></div></div><div class="modal-actions"><button class="button" id="cancel-edit-record">Cancel</button><button class="button primary" id="save-record">Save record</button></div></section></div>`;document.querySelectorAll("[data-edit-track]").forEach(b=>b.onclick=()=>{const i=selected.indexOf(b.dataset.editTrack);if(i>=0)selected.splice(i,1);else selected.push(b.dataset.editTrack);paint();});document.getElementById("cancel-edit-record").onclick=()=>modalRoot.innerHTML="";document.getElementById("save-record").onclick=()=>{if(!selected.length){document.getElementById("edit-track-error").textContent="Choose at least one track.";return;}s.title=document.getElementById("edit-title").value;s.format=document.getElementById("edit-format").value;s.tracks=[...selected];s.track=selected[0];modalRoot.innerHTML="";toast("Record saved · primary track, routing, and agenda references updated");render();};};paint();
