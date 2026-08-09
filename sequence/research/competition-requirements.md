@@ -213,7 +213,7 @@ All times PT. **Today is Saturday 2026-08-08.**
 |---|---|
 | Thu 2026-08-06 (evening PT) | Origin tweet posted (`created_at` 2026-08-07T00:05:04Z). 406 likes, 86 replies. |
 | Fri 2026-08-07 | Brief + Discord + Luma go out. Luma fills to 647. |
-| **Sat 2026-08-08** | Hasty walkthrough video published (YouTube upload date 20260808). **A more polished walkthrough is promised for today.** |
+| **Sat 2026-08-08** | Hasty walkthrough video published (YouTube upload date 20260808). A more polished walkthrough was promised for today — **not observed in Discord as of Sat ~23:30 EDT** (Atin confirms no Saturday link). swyx also said in-thread he'd *"try to record a followup video today"* on email/calendar depth. Working assumption: the polished walkthrough and clarifications consolidate into **Sunday's video**, which remains the freeze trigger. |
 | **Sun 2026-08-09** | Second clarification video, *"clarifying requirements based on your feedback."* |
 | **After Sun 2026-08-09** | **REQUIREMENTS FREEZE** — *"after which we will FREEZE adding any requirements so that you can have some certainty/polish."* |
 | **Wed 2026-08-12, 10:00 PM PT** | **Submission deadline.** ~104 hours from now. |
@@ -395,6 +395,8 @@ Every material item from Atin's pastes, one row each, newest batch first. Severi
 | **Field intel** | Competitors: one reports a live pilot w/ "367 automated tests and 30 browser journeys"; stacks skew CF Workers + D1/DO; names announced elsewhere: `opensession`, `Program Cue`, `SuperStage` | Color only. Field is moving fast; no course change. | NOTE |
 
 **Unanswered in this batch** (asked by competitors, no swyx reply in the paste): edit-after-submit, sponsor/exhibitor groups, rich text, Accept/Decline Queue semantics, blind-vs-open reviewer scores, drafts counting toward submission limit, file-request central page. *(The recovered brief screenshots — §1.6 — answer three of these at the incumbent level: Accept/Decline Queue are real intermediate statuses, file requests are central "stored, not attached" pages, and descriptions/bios are wysiwyg rich text.)*
+
+**Operator rulings on batch 2 (Atin, 2026-08-08 night):** Forge mirror (R54) **deferred** — no action for now, revisit at the Tuesday public push if at all. Saturday video confirmed absent (see §4 timeline). Contract sync authorized; orchestrator folded Amendments 2–3 (AC-234 multi-track, AC-235-236 decision feedback, AC-237 talk-content editing, R53 sourcing).
 
 ### Batch 2 — competitor CONTEXT.md verification + full-brief recovery, 2026-08-08 night
 
