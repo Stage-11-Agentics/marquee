@@ -64,6 +64,20 @@ Bravo (78% used) is deliberately excluded: it is the pool this orchestrator sess
 
 Housekeeping done at the same time: all five merged worktrees removed, their local branches deleted, and their **remote branches deleted on Forgejo** (all HTTP 204) — the repo now has exactly one branch, `master`.
 
+## Schedule reality (computed 2026-08-09 05:10)
+
+BUILDPLAN totals ~209 agent-hours of feature work; roughly 25 h are banked (M-01, M-02, M-05a+M-06, both spikes), leaving **~180 agent-hours** across 52 tickets. At five parallel delegators that is **~36 h of wall-clock critical path**, before review overhead.
+
+- Deadline is Wed Aug 12 22:00 PT = **Thu Aug 13 01:00 EDT**.
+- Resuming **now** (Alpha) → ~92 h available for ~36 h of critical path. Comfortable.
+- Resuming at **Kimi's Monday 18:20 reset** → ~55 h available for the same ~36 h. Feasible but tight, with no room for a bad day.
+
+**The Alpha login is worth roughly 37 hours of slack.** That is the whole argument for doing it on waking rather than letting Monday arrive.
+
+## Loop cadence change (05:10)
+
+Hourly parked ticks would have cost ~37 wake-ups against **Bravo's remaining 22%** — the same pool this orchestrator runs on — to learn nothing. The dispatch loop is therefore **stopped**, and the Monday resume is armed as a one-shot cron (job `c927e30c`, fires Mon Aug 10 18:27 EDT) carrying the full resume-on-Kimi instructions. An operator message wakes this session immediately regardless, so nothing is lost on the Alpha path. **Caveat: the cron is session-only** — if this Claude session ends, re-arm it or resume manually.
+
 ## Operator gates (standing)
 
 1. ~~`wrangler login`~~ — **DEFERRED by operator 2026-08-09 02:25 ("put demo credentials in, I'll deal with that tomorrow"). Carved out as MRQ-57**; MRQ-1 ships locally-validated with placeholder resource IDs. Everything the operator must do is enumerated in MRQ-57's description. The deployed URL a judge opens comes from MRQ-57, so it cannot slip past Tuesday.
@@ -76,6 +90,7 @@ Housekeeping done at the same time: all five merged worktrees removed, their loc
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-09 05:10 [moderate] Codex at **100%**. Dispatch loop stopped and replaced with a one-shot cron for Kimi's Monday reset (c927e30c) — hourly parked ticks would have spent Bravo's remaining quota to observe a static board. Schedule math computed and logged: Alpha tonight buys ~37 h more slack than waiting for Monday.
 - 2026-08-09 04:05 [moderate] Codex confirmed exhausted (96%). Verified both parked plans committed with their resolutions, then closed surfaces 202/203 — idle codex sessions on a dead quota serve nothing and invite an accidental resume. Decision set narrowed to Alpha login or Kimi's Monday reset.
 - 2026-08-09 03:33 [moderate] Parked-tick housekeeping (zero model spend): verified no stranded work in any worktree, confirmed every merged artifact is present in master, pruned five worktrees + five local + five remote branches, and ran the pr-gate against merged master — PASS. Codex 89% at this reading; **fleet remains parked, no ruling yet**. Decision NOT to spawn Claude delegators on Bravo: Bravo (78%) is the same pool this orchestrator session runs on, so spending it on delegators risks losing orchestration itself. Alpha (fresh 20x, operator login) or Kimi (resets Mon 18:20) remain the real options.
 - 2026-08-09 03:20 [moderate] **MRQ-2 and MRQ-6 both merged** (PR #5 616f55e6, PR #4 09aa26ad) — the quota triage worked: both high-value tickets landed before the floor. Master now carries the skeleton, the complete D1 schema, the design tokens/admin shell, and the full check harness. `npm run pr-gate -- --ticket MRQ-N` verified present and folded into COMMON as mandatory. **CP-1's deliverables are effectively met except M-07/M-08.**
