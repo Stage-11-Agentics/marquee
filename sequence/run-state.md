@@ -38,6 +38,8 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - 2026-08-08: **Name confirmed: Marquee** — collisions with npm/GitHub explicitly don't matter; this is a competition entry. (Atin, interview)
 - 2026-08-08: **No entrant video required** — submission = form + repo + deployed site; the walkthrough videos are the organizers' test script. (brief, confirmed to Atin)
 - 2026-08-08: **Timeline set by Atin:** HTML prototypes done TONIGHT → build kicked off overnight (tone-architect contract compressed into late tonight, then lattice-orchestrator) → QA tomorrow (Sun), Sunday video may add requirements → polish Mon/Tue → public push ~Tue → submit Wed.
+- 2026-08-08 (night): **Build fleet runs on Codex agents** — Atin directive: implementation work in the orchestrated build uses codex workers (as the prototypes did). Research/drafting agents may remain Opus. (Atin)
+- 2026-08-08 (night): **Contract flags F-1/F-5/F-6/F-3 resolved by AC appendix** — AC-225..233 dispatched to the stories agent (mirror US-72, reset-demo US-73, Turnstile/upload-safety on US-14/US-41, handbook AC-233 below cut line). **F-2 (seed A′) and F-4 (v1.1 toast affordances) await Atin's v1.1 review**, bundled with the seven proposed speed budgets. (Mabel, full-ahead)
 - 2026-08-08: **Surfaces note:** Atin closed the Brief Research (was surface:130) and Landscape Features (was surface:132) tabs post-completion. Their dossiers are committed; dossier maintenance against the Sat/Sun videos needs a fresh agent when the videos land. Discord pastes now come to the orchestrator (surface:128).
 
 ## Active agents (all pane:40, all Opus)
