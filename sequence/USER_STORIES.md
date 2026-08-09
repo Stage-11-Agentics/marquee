@@ -12,7 +12,7 @@
 
 **Story IDs (`US-nn`)** are carried over unchanged from the draft corpus so the archive stays cross-referenceable. They are *not* sequential in this file: they appear in build order, not numeric order. `US-68`–`US-71` are new here.
 
-**Criterion style.** Every AC is pass/fail. A criterion that is inherently experiential — a judgement about feel that no assertion settles — is tagged **(candidate-felt)** and belongs to design review and the prototype stage, not the test suite. There are 11 of them; everything else is mechanically testable.
+**Criterion style.** Every AC is pass/fail. A criterion that is inherently experiential — a judgement about feel that no assertion settles — is tagged **(candidate-felt)** and belongs to design review and the prototype stage, not the test suite. **There are 5 of them.** The other 219 are mechanically testable.
 
 **Tags.** `[R-nn]` traces to the requirements register. `[felt]` markers are inline. `(new)` marks stories minted at consolidation.
 
@@ -752,11 +752,13 @@ Modeled where the data model makes it cheap; not built by Wednesday. Ordered rou
 
 ## Candidate-felt criteria
 
-Eleven criteria are judgements about feel rather than assertions. They belong to design review and the prototype stage; they are not test-suite failures.
+**Five criteria are judgements about feel rather than assertions.** They are owned by design review and the prototype stage, and they are not test-suite failures:
 
-**AC-1** (a first-time viewer orients unaided) · **AC-16** (dashboard reads as an operator's home) · **AC-26** (error language a non-technical submitter understands) · **AC-75** (drag feedback without perceptible lag) · **AC-204** (legible in low light).
+**AC-1** a first-time viewer orients unaided · **AC-16** the dashboard reads as an operator's home rather than a report · **AC-26** error language a non-technical submitter understands · **AC-75** drag feedback without perceptible lag · **AC-204** legible in low ambient light.
 
-Six further criteria carry a measurable half and a felt half, and are treated as testable on the measurable half: **AC-36**, **AC-62**, **AC-85**, **AC-103**, **AC-89**, **AC-191** — each has a hard number that settles pass/fail, with "feels instant" as the design-review question behind it.
+**Six further criteria have a felt dimension but are settled by a hard number**, so they stay in the test suite and are *not* tagged: **AC-36** and **AC-85** (<1s to interactive) · **AC-62** (<300ms card advance) · **AC-103** and **AC-191** (<200ms) · **AC-89** (<60s embed propagation). Each has a threshold that decides pass/fail; "does it feel instant?" is the separate design-review question behind it, and if the answer is no while the number passes, the number was wrong — amend the threshold rather than reclassify the criterion.
+
+The remaining **219 criteria are mechanically testable** with no felt component.
 
 ---
 
