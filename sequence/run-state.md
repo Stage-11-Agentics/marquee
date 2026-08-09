@@ -6,9 +6,9 @@
 
 ## Current stage & phase
 
-- **Stage:** tone-prototype v1.3 review gate / tone-architect contract ready (2026-08-08).
-- **State:** Pipeline v1.3 is complete in place: v1.2 remains intact, scheduled/published records expose their exact slot and publication state, `/board` renders all 1,040 cards across seven lifecycle columns with composable search/type/track/format/wave filters and click-through records (no board drag or card actions), and 15% of the seed is visibly multi-track. Record pages own stage-appropriate confirmed lifecycle actions. Playwright verified board filtering/reset, mouse + keyboard exact-record routing, publish/review transitions, CFP multi-select, schedule metadata, and six scheduled multi-track cards with no JavaScript errors.
-- **THE GATE:** Atin drives v1.3 → love/iterate; confirms F-2 seed A′ and signs the seven proposed speed budgets (EVALUATION §1.3). Then: DESIGN.md minted → adversarial contract pass → lattice-orchestrator kickoff with a **codex build fleet** (Atin directive).
+- **Stage:** tone-prototype v1.4 client review gate / tone-architect contract reconciled (2026-08-09).
+- **State:** Pipeline v1.4 is complete in place (legacy path `prototypes/pipeline-v1.1/index.html`): multiple independent forms; complete CFP participant/profile/file/conditional fields; open/closed/at-limit/resumed states; real acknowledge/form/file portal tasks; decision feedback and one-off mail; reviewer full detail plus score-optional Approve/Maybe/Deny and explicit track scopes; saved personal views; configurable columns; and a role-gated Drafts needing attention queue. Program board remains read-only with record-owned actions. `USER_STORIES.md`, `SPEC.md`, `EVALUATION.md`, and `BUILDPLAN.md` now agree through 248 live criteria / AC-249 (AC-239 struck).
+- **THE GATE:** Atin drives v1.4 → love/iterate/sign. Then: mint `DESIGN.md` from the signed prototype → adversarial contract pass → lattice-orchestrator kickoff with a **Codex build fleet**. Do not dispatch before that gate.
 - **Externals still open:** Discord relay (Sat video, Sun freeze video, Q1/Q2 posts); account checks (Workers Paid, R2 entitlement, Resend tier, Airtable Team ×2 bases); gate materials (Gmail/Outlook/Apple inboxes, real Sessionize export, CF API token, model credential).
 
 ## Commission facts (from Atin, 2026-08-08)
@@ -25,11 +25,13 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 
 ## Decisions log
 
+- 2026-08-09: **Context-coverage closure approved** — add full form/portal/reviewer demonstrations plus saved views, configurable columns, and Draft queue; make all pre-build contract repairs. AC-245–249 minted; downstream contract reconciled. (Atin)
+- 2026-08-09: **No Month view and no generalized CMS** — Month was only a reference-image label; generalized CMS was optional/R8-skipped. Narrow Handbook and embeds remain. (Atin)
 - 2026-08-09: **Speed budgets signed as OBJECTIVES** — the seven proposed §1.3 numbers report + warn, never fail CI; AC-sourced budgets remain binding. (Atin)
 - 2026-08-09: **Board ruling (client): NO drag** — AC-239 struck, AC-243 ratified; consequential actions live on the detail screen. (Atin)
 - 2026-08-09: **F-2 CLOSED — seed A′ confirmed** (real Feb-2025 sessions + CODE-2025 roster → ~150 accepted, zero fabricated accepted people). (Atin)
 - 2026-08-09: **API comparison folded** (Amendments 6–7): four pre-kickoff API gaps + pinned semantics + webhooks behind Tier A (AC-241) + scoped tokens (AC-242); reviewer full-detail AC-244 minted from client feedback; v1.4 in flight. (Mabel)
-- 2026-08-08: **Board interaction refined (AC-241–242)** — no board drag or card actions; filters are expanded and composable, cards open exact records, and lifecycle buttons live on record pages. Agenda drag remains. (Atin + codex)
+- 2026-08-08: **Board interaction refined (canonical AC-238/AC-243; AC-239 struck)** — no board drag or card actions; filters are expanded and composable, cards open exact records, and lifecycle buttons live on record pages. Agenda drag remains. Earlier notes that called these AC-241/242 were an ID-allocation defect and are superseded. (Atin + Codex)
 - 2026-08-08: **Pipeline v1.3 completed** — program board, scheduled/public slot legibility, publish affordances, clarifying pipeline labels, and ≥15% multi-track seed coverage are implemented and Playwright-verified at full mock scale. (codex)
 - 2026-08-08: **Pipeline v1.2 completed** — all 24 specified screens/states represented, no stub-toast affordances, five finished agenda views, live Event Settings collections, Sessionize import, comms/outbox, reversal cascade, Airtable/API surfaces, multi-track AC-234, and portal talk editing AC-237. Playwright gate passed; client drive remains the love gate. (codex)
 - 2026-08-08: Project named Marquee, homed at `deployments/Marquee`. (Atin)
@@ -51,7 +53,7 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - 2026-08-08 (night): **Contract flags F-1/F-5/F-6/F-3 resolved by AC appendix** — AC-225..233 dispatched to the stories agent (mirror US-72, reset-demo US-73, Turnstile/upload-safety on US-14/US-41, handbook AC-233 below cut line). **F-2 (seed A′) and F-4 (v1.1 toast affordances) await Atin's v1.1 review**, bundled with the seven proposed speed budgets. (Mabel, full-ahead)
 - 2026-08-08: **Surfaces note:** Atin closed the Brief Research (was surface:130) and Landscape Features (was surface:132) tabs post-completion. Their dossiers are committed; dossier maintenance against the Sat/Sun videos needs a fresh agent when the videos land. Discord pastes now come to the orchestrator (surface:128).
 
-## Active agents (all pane:40, all Opus)
+## Historical research agents (completed; none currently active)
 
 - **Brief Research** (surface:130): competition-requirements authority → `sequence/research/competition-requirements.md`. **First pass complete 2026-08-08** (R1–R50). Stays alive for Discord pastes + Sat/Sun videos. Prompt: `sequence/research/sources/AGENT-BRIEF-competition-research.md`.
 - **Landscape Features** (surface:132): **First pass complete** — feature matrix keyed to R-numbers, deep profiles (Sessionize corrected: $499/event, has collision detection + undocumented "calendar placeholders"), D1–D15 differentiator ranking, pretalx threat read (5 structural misses), vocabulary crib, L1–L4 new open questions.
@@ -72,11 +74,10 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 
 ## Human action items (updated from EVALUATION.md §1.6, 2026-08-08 night)
 
-New (for the oracle smokes and gate — not urgent tonight, needed before Tuesday):
+New (for the oracle smokes and gate — needed before Tuesday):
 - Real inboxes for the ICS chain: one Gmail, one Outlook, one Apple Calendar.
 - One real Sessionize export file (any event) to validate the importer fixture (AC-109).
 - A Cloudflare API token for CI (`check:readme` scratch deploy) + a model credential for `check:skill-agent`.
-- Sign or amend the seven *proposed* speed budgets in EVALUATION.md §1.3 (at v1.1 review).
 
 ## Earlier action items (from Seams first pass, 2026-08-08)
 

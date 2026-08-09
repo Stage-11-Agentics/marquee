@@ -1,6 +1,17 @@
-# Pipeline v1.1 — the converged take
+# Pipeline v1.4 — the converged, context-complete take
 
-**Read `prototypes/PROTOTYPE-CONTRACT.md` first — still fully binding** (badge, vocabulary, mock-data scale and ugliness, elements-never-jump, the 11-step loop, speed). This build converges the client-chosen direction with the best of the other two takes into **one super solid prototype**: `prototypes/pipeline-v1.1/index.html`, self-contained.
+**Read `prototypes/PROTOTYPE-CONTRACT.md` first — still fully binding** (badge, vocabulary, mock-data scale and ugliness, elements-never-jump, the 11-step loop, speed). This build converges the client-chosen direction with the best of the other two takes into **one super solid prototype**: `prototypes/pipeline-v1.1/index.html`, self-contained. The directory name is retained for lineage; the file is now the **v1.4 client-review candidate**.
+
+## v1.4 context-coverage closure (client-approved scope, 2026-08-09)
+
+- Demonstrate multiple independent forms and the complete CFP participant/profile/file/conditional flow, including open, closed, at-limit, resumed-draft, and submitted states.
+- Make portal acknowledge/form/file tasks real completion surfaces; show organizer-controlled talk editing and one-source decision feedback across email + portal.
+- Make reviewer responsibility explicit by track; open full evaluator-visible submissions/files without losing queue position; use **Approve · Maybe · Deny** as the simple path with numeric scoring optional.
+- Add personal event-scoped saved views, configurable table columns (Title mandatory), and the role-gated **Drafts needing attention** queue. Opening/editing a draft never submits it.
+- Preserve the v1.3 ruling: Program board cards are read-only navigation; consequential actions belong on the record. Agenda drag remains.
+- Do **not** add Month view or a generalized CMS. Month was reference-image vocabulary, and generalized CMS support is optional/R8-skipped; the narrow Handbook and embeds remain.
+
+This prototype is not yet signed. Do not mint `DESIGN.md` or begin orchestration until Atin drives and approves v1.4.
 
 ## Base and sources — steal code, don't rewrite
 
@@ -10,7 +21,7 @@
 
 All three are working, verified prototypes. Lift their markup/CSS/JS wholesale where it serves; unify naming and styling to the Pipeline base's system.
 
-## The three changes (client-decided)
+## Original convergence changes (still binding)
 
 ### 1. Onboarding becomes a first-class pipeline stage
 
@@ -33,8 +44,8 @@ The agenda keeps Pipeline's list/day/week/room views; the **track view becomes M
 
 Keep Pipeline's clean, typography-led language as the base — data surfaces stay quiet. Add **restrained Marquee identity in brand moments only**: the wordmark, the landing page, and the pipeline strip itself may carry a touch of display-type theater and track-color energy. If a flourish competes with data legibility, the flourish loses.
 
-## Verification gate (before declaring ready)
+## Verification gate (before presenting v1.4)
 
-Drive the full 11-step loop headlessly (you have Playwright available — the Marquee builder's probe pattern works). Confirm: every loop screen reachable and populated; the three changes above actually function (filter→select→count updates; drag→conflict flags; stage click→board); no JS errors; no dead controls (toast rule from the contract).
+Drive the full 11-step loop headlessly. Confirm: every loop screen reachable and populated; the original three convergence changes function; every v1.4 context-closure control mutates/restores the expected state; desktop and 375px layouts remain operable; no JavaScript errors; no dead controls (toast rule from the contract).
 
-When done print exactly: `PROTOTYPE READY: prototypes/pipeline-v1.1/index.html` plus a 3-bullet summary of what you grafted and how.
+Handoff as a client review candidate, not as a signed design.

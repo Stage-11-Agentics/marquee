@@ -8,7 +8,7 @@
 
 ## The AC ID contract
 
-**AC IDs are permanent.** `AC-1` … `AC-249` are allocated once, here, and are never renumbered, never reused, and never reordered. Reordering stories does not move AC IDs — `AC-225`–`AC-229` belong to a Tier B rank-7 story and `AC-230` to a rank-3 story, which is expected: **ID order is allocation order, not build order.** If a criterion is deleted it is struck, not recycled. **The next amendment appends from `AC-250`.** Every downstream artifact — SPEC, test names, PR descriptions, the evaluation harness — cites these IDs.
+**AC IDs are permanent.** `AC-1` … `AC-249` are allocated once, here, and are never renumbered, never reused, and never reordered. Reordering stories does not move AC IDs — `AC-225`–`AC-229` belong to a Tier B rank-8 story and `AC-230` to a rank-3 story, which is expected: **ID order is allocation order, not build order.** If a criterion is deleted it is struck, not recycled. **The next amendment appends from `AC-250`.** Every downstream artifact — SPEC, test names, PR descriptions, the evaluation harness — cites these IDs.
 
 **Story IDs (`US-nn`)** are carried over unchanged from the draft corpus so the archive stays cross-referenceable. They are *not* sequential in this file: they appear in build order, not numeric order. `US-68`–`US-71` were minted at consolidation; `US-72`–`US-73` at the contract-review fold; `US-74`–`US-76` by amendment.
 
@@ -44,7 +44,7 @@ Closes four `SPEC.md` flags that identified contract items with no acceptance cr
 
 | # | Change | IDs | Closes |
 |---|---|---|---|
-| 1 | **`US-72` minted** — genuine two-way Airtable mirror. Tier B **rank 7**, directly after the API story it rides on. | AC-225 – AC-229 | **F-1** (gate 9 uncovered) |
+| 1 | **`US-72` minted** — genuine two-way Airtable mirror. Initially Tier B rank 7, directly after the API story it rides on; final rank **8** after Amendment 8 inserted US-76. | AC-225 – AC-229 | **F-1** (gate 9 uncovered) |
 | 2 | **`US-73` minted** — reset the demo. Tier B **rank 3**. | AC-230 | **F-5** (gate 13 uncovered) |
 | 3 | Turnstile verified server-side, appended to `US-14`. | AC-231 | **F-6** (guardrail G8) |
 | 4 | Upload allowlist / magic-byte sniff / rate caps / separate origin, appended to `US-41`. | AC-232 | **F-6** (guardrail G8) |
@@ -849,7 +849,7 @@ Source: swyx's day-1 Discord answer thread (dossier §7.5, commit 98e7e89).
 
 **AC-234** *(appended to US-12, Tier A binding set — it changes a Tier A form surface)*: A submission carries **one or more tracks** (multi-select on the public form; at least one required; the first selected is primary). Routing rules and reviewer track scoping match if **any** carried track qualifies; list track-filters match any; the agenda swimlane places a session by its primary track. *(Ruling: "talks are submitted to one or more tracks, and reviewers review one or more tracks.")*
 
-### US-74 · Feedback travels with the decision *(new, Tier B — insert at rank 8, directly after US-72; from ruling R51)*
+### US-74 · Feedback travels with the decision *(new, Tier B — inserted directly after US-72; final rank 9 after Amendment 8; from ruling R51)*
 
 **As a** program lead deciding submissions, **I want** to attach feedback to an accept/decline and email a speaker directly from the review flow, **so that** decisions carry their reasoning without a separate comms step.
 - **AC-235**: An accept or decline action can carry an optional feedback note; the note renders in the decision email via a merge field and appears on the submission in the speaker's portal.

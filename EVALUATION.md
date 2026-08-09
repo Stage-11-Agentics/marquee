@@ -1,15 +1,15 @@
 # Marquee — Evaluation Contract
 
-**Status:** DRAFT for orchestrator review · tone-architect Phase 1 · authored 2026-08-08.
+**Status:** v1.4 contract revision for client prototype review · updated 2026-08-09; not yet signed for orchestration.
 **Authority once signed:** this file defines what "done" means for the Marquee build and *how an agent proves each criterion without a human in the loop*. The build fleet writes against it; the terminal auditor — who did not write the spec — runs it.
-**Upstream:** `sequence/USER_STORIES.md` (AC-1–233) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
+**Upstream:** `sequence/USER_STORIES.md` (248 live criteria through AC-249; AC-239 struck) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
 
-**Build scope: 178 criteria — read the tier, not the number.** Since Amendment 1 (2026-08-08) an AC's numeric range no longer tells you its tier: `AC-225`–`AC-233` were appended in allocation order and belong to Tier A, Tier B, and the cut line respectively. **`sequence/USER_STORIES.md` §"Scope at a glance" is the authority on tier membership**; this file follows it and never re-derives it from ID arithmetic.
+**Build scope: 193 live criteria — read the tier, not the number.** Amendments allocate IDs without implying tier; AC-239 is struck and deliberately has no test. **`sequence/USER_STORIES.md` §"Scope at a glance" is the authority on tier membership**; this file follows it and never re-derives it from ID arithmetic.
 
 | Tier | ACs | Count | Consequence here |
 |---|---|---|---|
-| **A — the walkthrough loop** | AC-1 – AC-90, **AC-231** | 91 | Binding, no waivers (§1.4, gate 18) |
-| **B — ordered differentiators** | AC-91 – AC-169, **AC-225 – AC-230**, **AC-232** | 86 | Cut from the bottom; a cut must be named (gate 19) |
+| **A — the walkthrough loop** | AC-1 – AC-90, **AC-231, AC-234, AC-240, AC-244–246** | 96 | Binding, no waivers (§1.4, gate 18) |
+| **B — ordered differentiators** | AC-91 – AC-169, **AC-225 – AC-230, AC-232, AC-235–238, AC-241–243, AC-247–249** | 96 | Cut from the bottom; a cut must be named (gate 19) |
 | **Cut-line criterion on a Tier A story** | **AC-233** | 1 | Speaker Handbook — hosted on US-39, outside Tier A's no-waiver set; cuttable if named |
 | **Post-competition** | AC-170 – AC-224 | 55 | Not built, not tested, not a defect (§7) |
 
@@ -30,9 +30,9 @@ Every AC in scope carries exactly one **primary** tag — the strongest thing it
 
 **Strength order:** `felt` > `oracle` > `op-assist` > `auto`. An AC with a hard assertion *and* a residual judgement is tagged by the residual and appears in both places — the assertion still runs every build.
 
-**Counts across all 178 in-scope criteria:** **168 `auto` · 1 `op-assist` · 5 `oracle` · 4 `felt`.** All nine ACs added at Amendment 1 are `auto`.
+**Counts across all 193 in-scope live criteria:** **183 `auto` · 1 `op-assist` · 5 `oracle` · 4 `felt`.** All fifteen live criteria added after AC-233 are `auto`; struck AC-239 is excluded.
 
-Credentials, plan tiers, and third-party accounts gate *suites*, not individual criteria. They are enumerated once in §1.6 rather than smeared across 178 rows. The one `op-assist` tag (AC-109) is the exception on purpose: there the missing thing is *knowledge* — the column names and status vocabulary of a real Sessionize export, which cannot be synthesized. A missing credential against a fully-documented API (Airtable, AC-225–229) is a precondition, not a tag.
+Credentials, plan tiers, and third-party accounts gate *suites*, not individual criteria. They are enumerated once in §1.6 rather than smeared across 193 rows. The one `op-assist` tag (AC-109) is the exception on purpose: there the missing thing is *knowledge* — the column names and status vocabulary of a real Sessionize export, which cannot be synthesized. A missing credential against a fully-documented API (Airtable, AC-225–229) is a precondition, not a tag.
 
 ---
 
@@ -49,7 +49,7 @@ Credentials, plan tiers, and third-party accounts gate *suites*, not individual 
 | `npm run check:api` | Validates the OpenAPI document, asserts docs route reachable, asserts **route-manifest parity**: replays a full-loop Playwright session with network recording, collects every non-GET request, and fails if any path is absent from the public schema. **Amendment 6:** also asserts single-source generation — served JSON, rendered docs, and the CLI registry derive from one route registry; operation counts and content hashes must match. | ≤2 min. | Every PR; the gate. |
 | `npm run check:repo` | Secret scan (`gitleaks` + a Marquee-specific ruleset), PROTOTYPE-badge absence in `src/`, README lint (numbered deploy sequence present, extension points named), `Atin/` and Stage-11-internal path scan. | ≤30s. | Pre-push; the gate; mandatory immediately before the public push. |
 | `npm run check:readme` | Executes the README's numbered deploy sequence verbatim — commands extracted from its fenced blocks — from a clean checkout in a fresh container against a scratch Workers project, with **no human input at any step**. Asserts exit 0, a 200 on the deployed URL, and non-zero seeded counts. | ≤10 min. | Once per milestone; the gate. |
-| `npm run trace:ac` | Scans test names for `AC-nnn` prefixes and produces `ac-coverage.json` — every in-scope AC with the suites covering it, and a list of ACs with zero mechanical coverage. **Fails if any `auto`-tagged AC has zero tests.** | ≤10s. | Every PR; the gate. |
+| `npm run trace:ac` | Scans test names for `AC-nnn` prefixes and produces `ac-coverage.json` — every live in-scope AC with the suites covering it, and a list of ACs with zero mechanical coverage. **Fails if any `auto`-tagged AC has zero tests, if struck AC-239 is treated as live, or if an unknown/recycled ID appears.** | ≤10s. | Every PR; the gate. |
 | `npm run check:mirror` | Airtable two-way mirror against a **dedicated test base**: outbound latency, inbound webhook apply, allowlist rejection, echo suppression under sustained two-way editing, keepalive cron advancing the webhook expiry. Covers AC-225 – AC-229 and gate 9. Requires a deployed preview (the webhook needs a public URL). | ≤3 min. | Every PR touching the mirror; the gate. |
 | `npm run reset:demo` | Restores the seeded demo to a known state (also a button in the product). Idempotent; safe mid-judging. Covers AC-230 and gate 13. | ≤20s. | Between judges; the gate. |
 
@@ -87,7 +87,7 @@ Speed is a graded feature (R7; three unprompted complaints in a ten-minute video
 
 ### 1.4 Coverage rules
 
-- **Tier A admits no waivers.** The no-waiver set is `AC-1 – AC-90` **plus AC-231** — Turnstile is binding because US-14 puts an open write endpoint on the public internet for four days with a public repo pointing at it. It is *not* every ID up to AC-233: AC-232 is Tier B and AC-233 is explicitly cuttable. Any AC in the no-waiver set showing red is a build failure regardless of Tier B completeness. A chain has no most-important link.
+- **Tier A admits no waivers.** The no-waiver set is `AC-1 – AC-90` **plus AC-231, AC-234, AC-240, and AC-244–246**. It is not a numeric range: AC-232 is Tier B, AC-233 is explicitly cuttable, and AC-239 is struck. Any AC in the no-waiver set showing red is a build failure regardless of Tier B completeness. A chain has no most-important link.
 - **Tier B is cut from the bottom.** A cut Tier B story's ACs are recorded as *cut* in the gate report with the cut line named. Silently missing ≠ cut.
 - `trace:ac` failing (an `auto` AC with zero tests) blocks merge.
 
@@ -115,13 +115,13 @@ These gate suites, not individual ACs. Each is a human action item; unresolved o
 
 ---
 
-## 2. Per-AC verifiability — all 178 in-scope criteria
+## 2. Per-AC verifiability — all 193 live in-scope criteria
 
-Grouped by story in build order, so the grouping — not the ID — carries tier membership. Rows appended at Amendment 1 sit with their host story and are marked *(appended 2026-08-08)*.
+The original 178 rows remain grouped by story in build order; the fifteen live context/amendment rows are consolidated at §2.3 with explicit tier labels. Grouping — not ID arithmetic — carries membership. AC-239 is struck and excluded.
 
 Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:` · `api:` · `repo:` · `readme:` · `oracle:` · `C1`–`C7` = checkpoints in §3.
 
-### Tier A — the walkthrough loop (27 stories · AC-1 – AC-90 + AC-231; AC-233 rides on US-39 but is cut-line, not Tier A)
+### Tier A — the walkthrough loop (27 stories · 96 live ACs; AC-233 rides on US-39 but is cut-line, not Tier A)
 
 **US-01 · A judge lands on a working, populated product**
 
@@ -350,9 +350,9 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-89 | `auto` | `speed:` mutate via API, poll the embed from a clean context; assert ≤60s, record actual. |
 | AC-90 | `auto` | `e2e:` embed at 375px and 1440px with no horizontal overflow; configured colors present in the resolved styles. |
 
-### Tier B — ordered differentiators (25 stories, ranked · AC-91 – AC-169 + AC-225 – AC-230 + AC-232)
+### Tier B — ordered differentiators (28 stories, ranked · 96 live ACs)
 
-Ranks follow `USER_STORIES.md` after Amendment 1 opened two slots: US-73 took rank 3 and US-72 rank 7, shifting the former ranks 3–23 down to 4–25. **No AC ID moved.**
+Ranks follow `USER_STORIES.md` after Amendments 1–8: US-73 is rank 3, US-76 rank 6, and US-72 rank 8. Later insertions shifted positions but **no AC ID moved**.
 
 **Rank 1 · US-44 · Chase the stragglers from one screen**
 
@@ -565,6 +565,27 @@ Ranks follow `USER_STORIES.md` after Amendment 1 opened two slots: US-73 took ra
 | AC-168 | `auto` | `test:` run the AI pass over 50 submissions with a stubbed model; assert zero status transitions. |
 | AC-169 | `auto` | `e2e:` crawler from both demo entries reaches no AI surface without explicitly enabling the flag. |
 
+### 2.3 Amendment criteria — AC-234–AC-249
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-234 | A | `auto` | `e2e + test:` submit with 0/1/3 tracks; 0 is rejected, first is primary, any-match routing/filtering/reviewer scope works, and the agenda swimlane uses primary; `check:seed` proves ≥15% multi-track and ≥3 scheduled multi-track Sessions. |
+| AC-235 | B | `auto` | `e2e:` decide with feedback; assert the outbox's rendered decision message and speaker portal show byte-equivalent normalized feedback from one decision row. Repeat with no note. |
+| AC-236 | B | `auto` | `e2e:` send a one-off templated email from record and review contexts; one rendered outbox row and one record-history entry appear, with demo-safe delivery semantics. |
+| AC-237 | B | `auto` | `test + e2e:` speaker edits title/description while open; both update immediately and history stamps actor/time. Close CFP → 403 until organizer re-opens that submission's editing. |
+| AC-238 | B | `auto` | `e2e + speed:` board contains every non-draft submission exactly once in its derived lifecycle stage; title/speakers/tracks/time-in-stage render; composed filters remain inside the full-seed objective. |
+| AC-239 | — | — | **STRUCK; no test.** `trace:ac` fails if this ID is counted live or reused. Replaced by AC-243. |
+| AC-240 | A | `auto` | `e2e:` every scheduled fixture shows day/time/room on list, record, portal, and board; unpublished items show "Not yet public" + publish; Scheduled/Published stage copy is exact. |
+| AC-241 | B | `auto` | `test + deployed integration:` endpoint CRUD/test/log; six-event allowlist; queued retry/backoff; HMAC verifies over `id.timestamp.body`; replay idempotency prevents a second effect. Runs only after Tier A is green. |
+| AC-242 | B | `auto` | `test + e2e:` issue token with scopes/event restrictions, show secret once, store only hash, prove effective authority is grant∩membership, and revoke → immediate 401. |
+| AC-243 | B | `auto` | `e2e + static:` no board card has `draggable` or lifecycle controls; click/Enter/Space opens exact record; consequential record action opens confirmation/cascade; agenda drag still operates. |
+| AC-244 | A | `auto` | `e2e:` open full submission from queue; assert all evaluator-visible fields and downloadable-file metadata, seeded identity absent under blind mode, and close returns to identical queue ID/index. |
+| AC-245 | A | `auto` | `test + e2e:` Approve, Maybe, and Deny each save with score/criteria null; revisit restores recommendation/actor/time; lifecycle status remains unchanged until a program-lead decision. |
+| AC-246 | A | `auto` | `test + route scan:` multi-track intersection controls queue membership; committee manager edits scopes; queue/detail/file/export/evaluation-write all invoke the centralized helper; guessed out-of-scope IDs return 403 with no metadata. |
+| AC-247 | B | `auto` | `e2e:` create/apply/rename/update/delete a personal saved view; reload restores query/filter/sort/column order; another user and event cannot read it; built-ins reject rename/delete. |
+| AC-248 | B | `auto` | `e2e:` show/hide/reorder every registered column; Title cannot be removed; table changes immediately, persists after reload, and round-trips through a saved view. |
+| AC-249 | B | `auto` | `test + e2e:` built-in Drafts queue count equals derived draft rows; each shows last-save/contact/applicable missing fields; open/edit leaves status draft; reviewer/speaker 403 while form-admin/program-staff succeed. |
+
 ---
 
 ## 3. Felt checkpoints
@@ -607,7 +628,7 @@ Run in order by the final auditor, who did not write the spec. Every item is pas
 | 15 | **PROTOTYPE badge absent from the product** | `npm run check:repo` + visual sweep | The badge exists only under `prototypes/`; no product route renders it |
 | 16 | **No secret material in the public repo** | `npm run check:repo` + full history scan | Zero tokens, keys, or `.dev.vars`; no `Atin/` content; no Stage 11 internals; curated research docs only; Apache-2.0 present |
 | 17 | Felt checkpoints signed | C1, C2, C3, C5, C6, C7 verdicts | All recorded with dates; C7 run after the last functional change |
-| 18 | Tier A complete, no waivers | Coverage report | **AC-1 – AC-90 plus AC-231** all green. Not AC-232 (Tier B) and not AC-233 (cuttable) — read §"Build scope", not the ID range |
+| 18 | Tier A complete, no waivers | Coverage report | **AC-1 – AC-90 plus AC-231, AC-234, AC-240, and AC-244–246** all green. AC-239 is struck; AC-233 is cuttable — read §"Build scope", not the ID range |
 | 19 | Cut line stated | Gate report | Every cut Tier B story named with its ACs and the reason — **explicitly including AC-233 (Speaker Handbook) if it was cut**, since it is the one cuttable criterion sitting on a Tier A story and is the easiest to lose silently. Silently missing is a failure; deliberately cut is not |
 
 ---
@@ -627,6 +648,8 @@ The auditor must not raise any of the following as a defect. They are decisions,
 - **Multi-event UI.** Modeled in the schema (a person exists at the org level), single-event UI ships.
 - **Custom sending domain.** Mail goes from `marquee@stage11.systems`, verified since March. A fresh domain is a deadline trap.
 - **D1 read replication and Smart Placement.** Neither helps a sparse demo; read replication takes up to 24h to disable and is a one-way door inside the window.
+- **Month agenda view.** The word appeared only in a context reference image, not as a desired capability. List, Day, Week, Track, and Room remain the signed views.
+- **Generalized CMS / arbitrary resource pages.** R8 remains an explicit SKIP. The narrow Speaker Handbook and configured agenda/speaker embeds still ship and must not be misclassified as a CMS.
 
 **Not a defect:** a Tier B story below the cut line, provided §4 gate 19 names it.
 
@@ -638,13 +661,13 @@ Named, not guessed. Each changes something specific in this contract.
 
 | # | Dependency | What it changes | Status |
 |---|---|---|---|
-| 1 | **Sunday clarification video** — requirements freeze | May add or remove ACs. New criteria append from **AC-234**; nothing here is renumbered. Any new criterion needs a row in §2, a tier assignment in `USER_STORIES.md`, and — if it lands in Tier A's no-waiver set — a line in §1.4, all before the gate. | Open. Video is unlisted, announced only in Discord. |
+| 1 | **Sunday clarification video** — requirements freeze | May add or remove ACs. New criteria append from **AC-250**; nothing here is renumbered or reused. Any new criterion needs a row in §2, a tier assignment in `USER_STORIES.md`, and — if it lands in Tier A's no-waiver set — a line in §1.4, all before the gate. | Open. Video is unlisted, announced only in Discord. |
 | 2 | **Discord ruling Q2 — embeddable gallery** (struck in the brief, described in the video) | If struck: **AC-87 – AC-90 move to §5 non-goals** and gate 6's embed steps drop. Currently building them; the video overrides the strikethrough. | Open. |
 | 3 | **Discord ruling Q1 — Airtable as literal primary datastore** | If ruled primary, gate 9 changes shape and the §5 entry is void. The mirror is built under either answer. | Open; we build the mirror regardless. |
 | 4 | **Resend plan tier** | Free is 100 sends/day. Decides whether gates 10 and 11 must be rationed and whether Pro is bought for the judging window. | Open — a 30-second dashboard check. |
 | 5 | **Real Sessionize export** | The only thing that settles AC-109's `op-assist` tag. | Open. |
 | 6 | **Airtable demo base plan** | Free caps at 1,000 records/base; the seed is exactly 1,000. Gate 1 fails without Team+. | Open. |
-| 7 | **Prototype `pipeline-v1.1`** | Becomes the binding visual contract on completion — prototype-to-product fidelity is a taste rule, so a divergence from it is a defect. §2 does not yet carry per-screen fidelity rows; add them when v1.1 lands. | In build. |
+| 7 | **v1.4 Pipeline prototype** (`prototypes/pipeline-v1.1`, legacy directory name) | Becomes the binding visual contract only after client sign-off. §2 now carries the context-closure behaviors; `DESIGN.md` and orchestration wait on this gate. | Candidate complete; client review pending. |
 
 ---
 
@@ -661,8 +684,10 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 
 ## Amendment log
 
-**Amendment 1 — contract-review fold, 2026-08-08.** `USER_STORIES.md` appended AC-225 – AC-233, closing four `SPEC.md` flags that named contract items with no acceptance criterion. Folded here: nine `auto` rows added to §2 (in-scope count 169 → 178, `auto` 159 → 168); `check:mirror` added to the harness; a dedicated Airtable test base added as precondition 9; gate 9 now cites AC-225 – AC-229 and gate 13 cites AC-230; gate 18's no-waiver set widened to include AC-231; gate 19 now names AC-233 explicitly. Tier B ranks 3–23 renumbered 4–25 to seat US-73 at rank 3 and US-72 at rank 7 — **no AC ID moved**. Two flags this closes were previously invisible defects in this file: gates 9 and 13 asserted behaviour that no AC covered, so a build could have passed §2 whole and still failed the gate.
+**Amendment 1 — contract-review fold, 2026-08-08.** `USER_STORIES.md` appended AC-225 – AC-233, closing four `SPEC.md` flags that named contract items with no acceptance criterion. Folded here: nine `auto` rows added to §2 (in-scope count 169 → 178, `auto` 159 → 168); `check:mirror` added to the harness; a dedicated Airtable test base added as precondition 9; gate 9 now cites AC-225 – AC-229 and gate 13 cites AC-230; gate 18's no-waiver set widened to include AC-231; gate 19 now names AC-233 explicitly. At that amendment, Tier B ranks 3–23 renumbered 4–25 to seat US-73 at rank 3 and US-72 at rank 7; Amendment 8 later shifted US-72 to final rank 8 — **no AC ID moved**. Two flags this closes were previously invisible defects in this file: gates 9 and 13 asserted behaviour that no AC covered, so a build could have passed §2 whole and still failed the gate.
+
+**Amendment 8 — context-coverage closure, 2026-08-09.** Folded live AC-234–249 except struck AC-239: 15 `auto` rows, taking in-scope live count 178 → 193 and `auto` 168 → 183. Gate 18 now includes multi-track visibility, scheduled/public legibility, reviewer detail, the simple recommendation path, and centralized track authorization. Saved views, configurable columns, and the Draft queue are mechanically isolated by user/event/role. `trace:ac` treats AC-239 as a tombstone. Month view and generalized CMS are explicit non-goals.
 
 ---
 
-*Draft. Amendments follow `USER_STORIES.md` rules: **the next new criteria append from AC-234**, deletions are struck and never recycled. Next inputs — orchestrator review with the client, the Sunday video, Discord rulings on Q1/Q2, and `pipeline-v1.1` becoming the visual contract.*
+*v1.4 contract revision. Amendments follow `USER_STORIES.md` rules: **the next new criteria append from AC-250**, deletions are struck and never recycled. Next input — client review/sign-off of the v1.4 Pipeline prototype; then mint `DESIGN.md` and hand the complete contract to orchestration.*

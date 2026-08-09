@@ -1,13 +1,13 @@
 # Marquee — Technical Specification
 
-**Status:** DRAFT for orchestrator review · tone-architect Phase 2 · authored 2026-08-08 night.
+**Status:** v1.4 contract revision for client prototype review · updated 2026-08-09; not yet signed for orchestration.
 **Authority once signed:** this file is what the build fleet implements. `EVALUATION.md` says what "done" means; this says what the thing *is*. Where the two disagree, `EVALUATION.md` wins on verification and this file wins on shape — and the disagreement is a defect to reconcile, not a choice to make at build time.
-**Upstream:** `PHILOSOPHY.md` · `sequence/USER_STORIES.md` (AC-1–AC-224) · `EVALUATION.md` · `sequence/research/seams-feasibility.md` · `sequence/research/competition-requirements.md` (R1–R50) · `sequence/research/seed-source-2025.md` + `sequence/research/sources/aie-summit-2025-program.json` · `prototypes/PROTOTYPE-CONTRACT.md`.
-**Build scope:** Tier A + Tier B = **AC-1 – AC-169 plus AC-225 – AC-233** (the contract-review fold, `USER_STORIES.md` Amendment 1). AC-170 – AC-224 are modeled where cheap, not built (§10). Two things the numbering no longer tells you and the tier table does: **AC-231 (server-side Turnstile) is inside Tier A's no-waiver set**, and **AC-233 (Speaker Handbook) sits below the Tier B cut line** despite hosting on a Tier A story. Read the tier, not the number.
+**Upstream:** `PHILOSOPHY.md` · `sequence/USER_STORIES.md` (248 live criteria through AC-249; AC-239 struck) · `EVALUATION.md` · `sequence/research/seams-feasibility.md` · `sequence/research/competition-requirements.md` (R1–R50) · `sequence/research/seed-source-2025.md` + `sequence/research/sources/aie-summit-2025-program.json` · `prototypes/PROTOTYPE-CONTRACT.md`.
+**Build scope:** Tier A + Tier B = **AC-1 – AC-169, AC-225 – AC-232, and AC-234 – AC-249 except struck AC-239** (192 live criteria). AC-233 is the named cut-line criterion and AC-170 – AC-224 remain modeled where cheap, not built (§10). Tier A's no-waiver additions are **AC-231, AC-234, AC-240, and AC-244–246**. Read the tier, not the number.
 
-**Binding design used for this draft:** `prototypes/pipeline-v1.1/index.html` — read complete at 2026-08-08 22:08 EDT (1,327 lines, all twelve routes present, onboarding stage grafted, swimlane track view grafted), together with `prototypes/pipeline-v1.1/DIRECTION.md`. Screens the v1.1 file leaves as a `notWired` toast are specified here from `prototypes/chase/index.html`, `prototypes/marquee/index.html`, and the story text, and are marked **[beyond v1.1]** so the orchestrator re-verifies them against the final prototype at client review.
+**Binding design candidate:** the **v1.4 Pipeline prototype** at `prototypes/pipeline-v1.1/index.html` (directory retained for lineage; 2,221 lines at this revision), together with `prototypes/pipeline-v1.1/DIRECTION.md`. It now demonstrates every loop-critical screen and the context-closure additions interactively. It becomes binding only after client sign-off; until then, no `DESIGN.md` is minted and orchestration does not begin.
 
-**Prototype-to-product fidelity is a taste rule (`PHILOSOPHY.md`).** What was loved in v1.1 ships one-to-one: the same information architecture, the same screen order, the same control placement, the same copy where copy is given. Divergence is a defect, not a liberty.
+**Prototype-to-product fidelity is a taste rule (`PHILOSOPHY.md`).** What the client signs in v1.4 ships one-to-one: the same information architecture, the same screen order, the same control placement, the same copy where copy is given. Divergence is a defect, not a liberty.
 
 ---
 
@@ -50,7 +50,7 @@ Two rendering modes in one Worker, split by audience:
 - **Public routes are server-rendered** (`/`, `/f/:formSlug`, `/agenda`, `/s/:sessionSlug`, `/p/:speakerSlug`, `/embed/*`, `/i/:uid.ics`). HTML arrives complete; JS hydrates only the interactive islands (form validation, agenda filters). This is how AC-36 and AC-85 (<1 s cold to interactive) are won — an SPA boot plus a fetch cannot be relied on to.
 - **The admin app is a client-rendered SPA** served from static assets, which talks to the JSON API and nothing else. This is how AC-105 is won structurally: the admin UI has no privileged channel, because it has no channel at all except `/api/v1/*`.
 
-Stack: **TypeScript · Hono (routing, middleware, OpenAPI assembly) · Preact (SPA + `preact-render-to-string` for public SSR) · Vite build · raw SQL against D1 through a thin typed query helper · numbered `.sql` migrations applied with `wrangler d1 migrations apply`.** No ORM: a migration-tool debugging session at 3 AM is exactly the research project seams §9 says we cannot afford. CSS is lifted from `prototypes/pipeline-v1.1/index.html` verbatim into design tokens plus per-module sheets — the prototype's visual language *is* the product's.
+Stack: **TypeScript · Hono (routing, middleware, OpenAPI assembly) · Preact (SPA + `preact-render-to-string` for public SSR) · Vite build · raw SQL against D1 through a thin typed query helper · numbered `.sql` migrations applied with `wrangler d1 migrations apply`.** No ORM: a migration-tool debugging session at 3 AM is exactly the research project seams §9 says we cannot afford. CSS is lifted from the v1.4 Pipeline prototype verbatim into design tokens plus per-module sheets — the prototype's visual language *is* the product's.
 
 **Rule the fleet must not break:** the SPA may not read `document`-embedded bootstrap data for anything a route can return. Every admin read is a GET on `/api/v1/*`; every admin write is a non-GET on `/api/v1/*`. `check:api` replays a full loop and fails on any request path missing from the public OpenAPI document (AC-105).
 
@@ -148,7 +148,7 @@ Writer: Settings → API tokens; `marquee auth login` does not mint, it consumes
 |---|---|---|---|
 | `event_id`, `name`, `slug` | TEXT | Form builder | forms list, public URL `/f/:slug` |
 | `kind` | TEXT `abstract\|session` | Builder, **at build time**, immutable once the form has opened (AC-21) | routing at submit (AC-22), form list badge, submissions `kind` |
-| `status` | TEXT `draft\|open\|closed` | Builder publish; cron at `closes_at` | public route behaviour (AC-31) |
+| `status` | TEXT `draft\|open\|closed` | Builder publish/re-open; cron at `closes_at` | public route behaviour, open/closed/resumed previews (AC-31) |
 | `opens_at`, `closes_at` | INTEGER | Builder | closed copy, pre-close reminder schedule (AC-127), public "closes Sep 12" line |
 | `welcome_md` | TEXT | Builder → Welcome step (AC-30) | public form, above the first field |
 | `per_submitter_limit` | INTEGER (default 3, **not a constant**, AC-32) | Builder | submit guard, cap copy (AC-220) |
@@ -171,6 +171,8 @@ Writer: Settings → API tokens; `marquee auth login` does not mint, it consumes
 | `position` | INTEGER | Builder drag-reorder (AC-17) | public field order — **the builder's order is the public order, asserted deep-equal (AC-19)** |
 | `config` | JSON — `{options[], min, max, minLength, maxLength, pattern, accept[], maxBytes}` (AC-24) | Builder field editor | both validators, preview |
 | `condition` | JSON — `{all:[{fieldKey, op, value}]}` (AC-132) | Builder | client show/hide, server "hidden ⇒ not required, not persisted" (AC-133), builder list summary (AC-134) |
+
+**`form_admins`** — `form_id`, `person_id`; UNIQUE(`form_id`,`person_id`). Writer: Builder → Messages & access. Reader: draft-queue and form-response authorization. Event program staff (`owner|program_lead|ops`) are authorized independently; reviewers and speakers are not.
 
 ### 3.4 Submissions — one table, two kinds (moat M1)
 
@@ -199,6 +201,12 @@ Writer: Settings → API tokens; `marquee auth login` does not mint, it consumes
 
 **`submission_answers`** — `submission_id`, `field_id`, `value_text`, `value_json`. Writer: submit/draft-save. Reader: review card, admin record, export, import. Hidden-by-condition fields are **absent**, not null (AC-133).
 
+**`submission_decisions`** (AC-235, AC-236) — `event_id`, `submission_id`, `decision` ∈ `approve\|maybe\|deny`, `resulting_status` ∈ `accepted\|waitlisted\|rejected`, `feedback_md` NULL, `decided_by_person_id`, `decided_at`, `outbox_id` NULL. Writer: the confirmed record-owned decision action. Reader: record history, decision-email merge field, speaker portal. The feedback is rendered once into the outbox and displayed from the same row in the portal; the two surfaces cannot diverge.
+
+**`saved_views`** (AC-247, AC-248) — `event_id`, `person_id`, `name`, `config_json` containing `{q, filters, sort, columns[]}`, `created_at`, `updated_at`; UNIQUE(`event_id`,`person_id`,`name`). Built-in views are code-defined and immutable, not rows. Column IDs are the fixed registry in AC-248; `title` is mandatory. Writer: submissions table Save/Update/Delete view actions. Reader: the same user's submissions table in the same event. Event and person are both enforced in every query.
+
+**Draft queue is derived, not copied** (AC-249): `status='draft'` plus `last_saved_at`, submitter email, and missing required fields computed against the form's currently applicable required fields (including conditional visibility). Opening or PATCHing a draft cannot call the submit transition. The route requires `owner|program_lead|ops` or explicit form-admin membership.
+
 **`participations`** — the `(person, submission, role)` triple. **One table at the first migration; retrofitting it is expensive and it gates AC-77, AC-153, AC-222.**
 
 | Field | Type | Writer | Reader |
@@ -219,9 +227,11 @@ Writer: Settings → API tokens; `marquee auth login` does not mint, it consumes
 
 **`committees`** / **`committee_members`** (AC-56) — `event_id`, `name`; `committee_id`, `person_id`, `role`. Reader: committee card, assignment picker, per-evaluator progress (AC-58).
 
+**`reviewer_track_scopes`** (AC-246) — `event_id`, `person_id`, `track_id`; UNIQUE(`event_id`,`person_id`,`track_id`). A queue candidate qualifies when `submission_tracks.track_id` intersects this set. That same intersection predicate lives in one authorization helper used by queue reads, submission detail, files, exports, and evaluation writes; a guessed out-of-scope ID returns 403. Committee management is the only UI writer.
+
 **`round_assignments`** (AC-57) — `round_id`, `submission_id`, `reviewer_person_id` NULL, `committee_id` NULL, `status`. Two distribution modes: *everyone reviews everything*, and *N reviewers per submission distributed across the committee*. Reader: the reviewer's queue, coverage progress.
 
-**`evaluations`** — `round_id`, `submission_id`, `reviewer_person_id`, `score`, `criteria_scores` JSON, `comment`, `abstained` bool, `created_at`, `updated_at`. UNIQUE(`round_id`,`submission_id`,`reviewer_person_id`). Reader: queue resume position (AC-60), per-round scores together on the record (AC-100), aggregate ordering.
+**`evaluations`** — `round_id`, `submission_id`, `reviewer_person_id`, `recommendation` ∈ `approve\|maybe\|deny` NULL, `score` NULL, `criteria_scores` JSON NULL, `comment`, `abstained` bool, `created_at`, `updated_at`. UNIQUE(`round_id`,`submission_id`,`reviewer_person_id`). **Recommendation is the Tier-A path and does not require a numeric score (AC-245);** configured scorecards remain optional evidence. Reader: queue resume position (AC-60), per-round recommendations/scores together on the record (AC-100), aggregate ordering.
 
 **`comparisons`** (AC-164, AC-165) — `round_id`, `reviewer_person_id`, `submission_ids` JSON (exactly 3), `ranking` JSON (ties permitted). Aggregate order = win count. Switching a round's mode discards nothing (AC-166).
 
@@ -351,19 +361,20 @@ Scopes resolve from `memberships`: `public` < `speaker` (own records only) < `re
 | GET | `/api/v1/public/embeds/:slug` | filtered by track/status (AC-88) |
 | GET | `/i/:uid.ics` · `/api/v1/public/agenda.ics` · `/agenda.json` | stable invite URL; feeds (AC-197 modeled) |
 
-**Authenticated — speaker scope:** `GET/PATCH /me`, `GET /me/submissions`, `GET /me/tasks`, `POST /me/tasks/:id/complete`, `POST /me/participations/:id/confirm|decline` (AC-152, AC-153), `POST /me/uploads/sign|complete`.
+**Authenticated — speaker scope:** `GET/PATCH /me`, `GET /me/submissions`, `PATCH /me/submissions/:id` for organizer-permitted title/description editing (AC-237), `GET /me/tasks`, `POST /me/tasks/:id/complete` with kind-specific acknowledge/form/file payload validation, `POST /me/participations/:id/confirm|decline` (AC-152, AC-153), `POST /me/uploads/sign|complete`.
 
-**Authenticated — reviewer scope:** `GET /rounds/:id/queue` (next unreviewed, position, remaining — AC-59, AC-60), `POST /rounds/:id/evaluations`, `POST /rounds/:id/comparisons`, `POST /rounds/:id/abstain`. Anonymized responses strip name, company, email, bio, headshot **from the payload, not the template** (AC-64).
+**Authenticated — reviewer scope:** `GET /rounds/:id/queue` (next unreviewed, position, remaining — AC-59, AC-60), `GET /rounds/:id/submissions/:submissionId`, `GET …/files`, `POST /rounds/:id/evaluations` accepting required `recommendation: approve|maybe|deny` and optional numeric scorecard fields (AC-245), `POST /rounds/:id/comparisons`, `POST /rounds/:id/abstain`. Every read/write uses the AC-246 track-intersection helper in addition to assignment checks. Anonymized responses strip name, company, email, bio, headshot **from the query payload, not the template** (AC-64).
 
 **Authenticated — admin scope** (`/events/:eventId/…`):
 
 | Resource | Routes |
 |---|---|
 | Event | `GET/PATCH /` , `GET/POST/PATCH/DELETE /tracks|/rooms|/formats|/waves` |
-| Forms | `… /forms` CRUD, `/forms/:id/fields` CRUD + `PATCH /reorder`, `POST /forms/:id/duplicate` (AC-20), `POST /forms/:id/publish` |
-| Submissions | `GET /submissions` (filters: status, kind, track, format, wave, origin, q), `POST` (admin create — AC-118), `GET/PATCH/DELETE /submissions/:id`, `POST /submissions/bulk` `{selector, action}` where `selector` is **either ids or a filter — select-all-matching is a server concept, not a page of checkboxes (AC-66)**; actions `accept`, `reject`, `waitlist`, `withdraw`, `promote`, `assign` |
+| Forms | `… /forms` CRUD, `/forms/:id/fields` CRUD + `PATCH /reorder`, `/forms/:id/admins` CRUD, `POST /forms/:id/duplicate` (AC-20), `POST /forms/:id/publish|close|reopen` |
+| Submissions | `GET /submissions` (filters: status including `draft`, kind, track, format, wave, origin, missing field, q), `POST` (admin create — AC-118), `GET/PATCH/DELETE /submissions/:id`, `POST /submissions/:id/decision` `{recommendation, feedback_md?}` (AC-235), `POST /submissions/:id/messages` (AC-236), `POST /submissions/bulk` `{selector, action}` where `selector` is **either ids or a filter — select-all-matching is a server concept, not a page of checkboxes (AC-66)**; actions `accept`, `reject`, `waitlist`, `withdraw`, `promote`, `assign` |
+| Views | `GET/POST /views`, `PATCH/DELETE /views/:id`; always event- and person-scoped; built-in views are returned with `built_in:true` and reject mutation (AC-247, AC-248) |
 | Participation | `POST/PATCH/DELETE /submissions/:id/participants` |
-| Evaluation | `/plans`, `/plans/:id/rounds`, `/rounds/:id/criteria`, `/committees`, `/rounds/:id/assignments`, `POST /rounds/:id/promote` (AC-99) |
+| Evaluation | `/plans`, `/plans/:id/rounds`, `/rounds/:id/criteria`, `/committees`, `/committees/:id/reviewers/:personId/tracks` CRUD (AC-246), `/rounds/:id/assignments`, `POST /rounds/:id/promote` (AC-99) |
 | Agenda | `GET /agenda`, `POST /agenda/items`, `PATCH /agenda/items/:id` (move/resize), `DELETE`, `GET /agenda/conflicts`, `POST /agenda/publish` |
 | Tasks | `/task-templates` CRUD, `/speaker-tasks` list + `POST /assign`, `GET /chase` (the board's matrix in one query) |
 | Comms | `/templates` CRUD, `POST /messages/preview`, `POST /messages/send` `{selector, template_key}` (AC-129, AC-130), `GET /outbox`, `GET /people/:id/messages` |
@@ -384,7 +395,7 @@ Scopes resolve from `memberships`: `public` < `speaker` (own records only) < `re
 
 ## 5. Screen-by-screen specification
 
-Keyed to `prototypes/pipeline-v1.1/index.html`. Every screen lists its states; **empty, loading, and error are part of the spec, not an afterthought** — AC-161 tests them on a fresh install and AC-4 crawls for stubs. No design decision is left to the implementer: where this section is silent, the prototype's markup is the answer.
+Keyed to the v1.4 Pipeline prototype at `prototypes/pipeline-v1.1/index.html` (legacy directory name only). Every screen lists its states; **empty, loading, and error are part of the spec, not an afterthought** — AC-161 tests them on a fresh install and AC-4 crawls for stubs. No design decision is left to the implementer: where this section is silent, the signed prototype's markup is the answer.
 
 **Global chrome (admin).** Left sidebar: brand → event switcher → **Program home** → *Pipeline* group (the seven stages, numbered 1–7, `Onboarding` routing to the chase board and the rest to the filtered submissions list) → *Modules* group (CFP forms, Evaluation plan, Review queue, Agenda, Speaker portal, Event site, Event settings) → footer (`⌘ API & CLI`, `↻ Reset demo`). Topbar: breadcrumb `AIE NYC 2026 / <screen>`, global search with `⌘K`/`/` (AC-101), user chip. Every module is one click from home (`PHILOSOPHY.md` 1). Toasts confirm; nothing that changes state is silent.
 
@@ -407,43 +418,46 @@ Keyed to `prototypes/pipeline-v1.1/index.html`. Every screen lists its states; *
 
 ### 5.3 Event settings `/settings`
 *Covers AC-5 – AC-13.* Four cards: **Event details** (name, starts, ends, venue, logo upload, timezone select with the note "Agenda and calendar invites inherit this timezone"), **Formats** (name, allowed range, default duration; add/edit), **Tracks** (colored chips; add/rename/reorder), **Rooms** (name + capacity; add/edit). Primary action `Save event settings` confirms **in place with no page reload** (AC-7).
-**Beyond v1.1:** the add/edit/reorder affordances are toasts in the prototype and must be real. Track reorder is drag; room capacity is an integer input.
+The v1.4 prototype demonstrates real add/edit/reorder controls. Track reorder is drag; room capacity is an integer input.
 **States:** dirty-state save button; per-field inline validation; save failure states the failure (`PHILOSOPHY.md` 1 — "a save that fails, says so").
 
 ### 5.4 CFP forms & builder `/forms`
 *Covers AC-17 – AC-21, AC-24, AC-27 – AC-33, AC-132 – AC-134.* Three-column builder: **steps rail** (Type & basics · Welcome · Form fields · Participants · Rules & routing · Messages · Publish) with the `Collects: [Abstracts | Sessions]` segmented control (fixed width; the note beneath swaps between "Enters the evaluation pipeline." and "Bypasses evaluation; ready for agenda." **without moving anything**), close date, submissions-per-person; **field list** (drag handle, label, type · required, ↑/↓ controls, `＋ Add a field`); **live preview** in a browser-chrome frame that matches the public form exactly (AC-19 asserts deep-equality of label/type/order/required).
 Participants step: min speakers (**default 1**), max speakers, max sponsors. Rules & routing: validation per field, conditional logic (`Show this field when …`, visible in the list without opening a field), routing rules. Messages: welcome copy, thank-you, pre-close reminder offset, form admins.
-Forms list: name, `kind` badge, status, close date, submission count, `Duplicate`.
-**States:** unpublished changes badge; a form that has opened locks `kind` with an explanation, not a disabled control with no reason.
+Forms catalog: every event can carry multiple independent forms; each card shows name, kind, status, public/private detail, response count, and `Duplicate`. `+ New form` starts an unpublished form with zero responses; duplicating copies fields/rules but never responses. Selecting a form changes only that form's builder and publish target.
+The baseline CFP visibly includes title, abstract, attendee outcome, format, **one-or-more tracks**, primary speaker name/email/role/company, biography, headshot, optional co-speaker, optional supporting file, and a vendor-content question whose product field and routing appear only when answered Yes. These are ordinary schema-driven fields/participants/files, not a hardcoded alternate form.
+**States:** unpublished changes badge; open, closed, at-limit, and resumed-draft public previews; a form that has opened locks `kind` with an explanation, not a disabled control with no reason.
 
 ### 5.5 Public CFP form `/f/:slug` — public, server-rendered
 *Covers AC-25, AC-26, AC-29, AC-30 – AC-42, AC-155 – AC-157, **AC-231**.* Public shell (event wordmark, `Resume draft`). Header block: "Call for speakers · closes Sep 12", headline, welcome copy, progress dots. Fields in builder order, with character counters where a max exists, the speaker-limit sentence **before** the first add-person control (AC-29), Turnstile, and a footer row: left `Draft saved locally · just now` (AC-41), right `Submit abstract`.
 **Validation (AC-25, AC-26):** fires client-side on blur *and* server-side on submit; a failed submit moves focus to the first invalid field and states the problem in a sentence a non-technical submitter understands — no field names, no type names, no error codes, no bare "invalid" (this is exactly what checkpoint C3 reads aloud). Example strings, which ship as written: *"Use at least 8 characters so reviewers can identify your session."* · *"Tell reviewers a little more — at least 40 characters."*
-**States:** open · **closed** (200 with a closed message, never an error; POST rejected server-side — AC-31) · at-limit (explains the cap — AC-220) · draft-resumed (banner naming when it was saved) · submitted (confirmation screen + confirmation email with a link back — AC-38) · password-gated (post-competition).
+**States:** open · **closed** (200 with a closed message, never an error; POST rejected server-side — AC-31) · at-limit (explains the cap and lists existing submissions — AC-220) · draft-resumed (private-link banner naming when it was saved and restoring all completed values/files) · submitted (confirmation screen + confirmation email with a link back — AC-38) · password-gated (post-competition). Re-opening preserves the URL, drafts, responses, and limits.
 **Mobile:** every field type including file upload operable at 375 px, no horizontal scroll, focused field never behind the keyboard (AC-155, AC-156).
 **Turnstile is verified server-side before the write commits and before any upload presign is issued; a missing, replayed, or invalid token is rejected with no side effects (AC-231).** This criterion is inside Tier A's no-waiver set — R19 puts an open write endpoint on the public internet for four days with a public repo pointing at it.
 **Budget:** cold load → interactive p95 ≤ 1000 ms.
 
 ### 5.6 Speaker portal `/portal`
 *Covers AC-43 – AC-52, AC-146 – AC-148, AC-152 – AC-154, **AC-233**.* Public-ish shell with `Sign out`. Head: "Welcome back" + name + tasks-done progress. **Status hero is the most prominent element on the screen (AC-43):** `Accepted · Wave 2` eyebrow, session title, `Format · Day · Time · Room`, `[Add to calendar]`. Pre-decision it reads a concrete next-wave date, never blank and never the bare word "pending" (AC-44).
-Below: **Your tasks** (checkbox, title, `kind · due`, state chip; ordered by due date; overdue rows carry a textual `Overdue` marker) and a right stack: **Speaker profile** (avatar, name, title·company, bio, `Edit` → inline edit of bio/headshot/title/company/social links, with a crop preview before save) and **Speaker handbook** — handbook pages authored as static markdown per event, rendering inside the portal (**AC-233**, US-39). **AC-233 sits below the Tier B cut line**: it may be cut, and if it is, the gate report names it with its AC ID and reason (gate 19). Silently missing is a failure.
+Below: **Your tasks** (title, `kind · due`, state chip, `Complete/Update`; ordered by due date; overdue rows carry a textual `Overdue` marker). Opening a task renders its real kind: agreement acknowledgment, required form fields, or direct file upload; only a valid kind-specific payload completes it. The right stack is **Speaker profile** (avatar, name, title·company, bio, `Edit` → bio/headshot/title/company/social links, with crop preview before save) and **Speaker handbook** — handbook pages authored as static markdown per event, rendering inside the portal (**AC-233**, US-39). **AC-233 sits below the Tier B cut line**: it may be cut, and if it is, the gate report names it with its AC ID and reason (gate 19). Silently missing is a failure.
+The status hero exposes organizer-controlled title/description editing (AC-237). A confirmed program decision renders its optional feedback immediately below the hero, stamped with decision/time, from the same row used to render the decision email (AC-235).
 **Confirm/decline** sits in the status hero once accepted, **once per role held (AC-153)**.
 **States:** submitted · in review · accepted · waitlisted · rejected (the outcome is visible here as well as by email — AC-116) · withdrawn. Multiple submissions render as multiple status cards (AC-221 modeled).
 
 ### 5.7 Evaluation plan `/evaluation`
 *Covers AC-53 – AC-58, AC-98 – AC-100, AC-163 – AC-166.* Cards: **plan** (name, progress, two-round funnel diagram — Round 1 *Initial screen* → Round 2 *Committee decision*, each with committee size, progress bar, remaining count — and the scorecard line `Impact 40% · Specificity 35% · Novelty 25% · Comment` with `Edit scorecard`), **Program committee** (member rows with per-evaluator progress `188 / 200`, `Manage`, `View all 15 reviewers`), **Evaluation summary** (metric boxes + score-distribution sparkline), **Round promotion** (`Preview 240 promotions` → bulk promote from a filtered list — AC-99).
 Round settings include **mode** (`Scorecard` default | `Comparison`) and **anonymized review**, both admin-only (AC-63).
-**Beyond v1.1:** plan creation, scorecard editing, committee management, and assignment distribution are toasts in the prototype and must be real screens; assignment offers *everyone reviews everything* and *N reviewers per submission* (AC-57).
+Plan creation, scorecard editing, committee management, assignment distribution, promotion preview, and reviewer track-scope editing are real controls in v1.4. Assignment offers *everyone reviews everything* and *N reviewers per submission* (AC-57). Each reviewer row names its carried track responsibilities; changing them recalculates queue membership without replacing completed reviews (AC-246).
 
 ### 5.8 Reviewer queue `/review`
-*Covers AC-59 – AC-65, AC-158, AC-159.* Head: `N of M · K remaining · identity hidden`, chips `[Anonymous review]`, `[Exit queue]`. Left: one submission — format/track/id chips, title, abstract, "What attendees will learn". Right: score buttons 1–5 (**keys 1–5 score directly**), committee note, `Save & next →` (disabled until scored), `Abstain / conflict`.
+*Covers AC-59 – AC-65, AC-158, AC-159, AC-244–246.* Head: `N of M in your authorized tracks · K remaining · identity hidden`, chips `[Anonymous review]`, `[Exit queue]`, followed by the reviewer's explicit track-scope chips and the intersection rule. Left: one submission — format/track/id chips, title, abstract, "What attendees will learn" — opens the full evaluator-visible field/file detail in a modal and returns to the same queue position (AC-244). Right: the primary **Approve · Maybe · Deny** recommendation path, committee note, `Save recommendation & next →`, optional score buttons 1–5, and `Abstain / conflict`. Numeric scores are never required to submit a recommendation (AC-245).
 Advancing does **not** navigate (AC-59) and resumes at the correct index on return (AC-60). **No admin chrome is present and no admin route is reachable from this surface (AC-159)** — the reviewer shell is its own layout, not the admin shell with items hidden.
 **Comparison mode** renders three cards side by side with a rank control that permits ties (AC-164).
-**States:** queue complete ("You've cleared your queue" + coverage) · not assigned · anonymized (identity fields absent from the payload).
+**States:** queue complete ("You've cleared your queue" + coverage) · not assigned · no matching track scope · anonymized (identity fields absent from the payload) · out-of-scope guessed record (403, no metadata leakage). Queue/detail/file/export/write authorization all call the same intersection helper (AC-246).
 **Budget:** median score→next-card-interactive ≤ 300 ms over ≥20 advances.
 
 ### 5.9 Abstracts & sessions `/submissions`
-*Covers AC-23, AC-66 – AC-69, AC-114 – AC-120.* Head: `N matching records · rendered 50 at a time…`, actions `[Export] [+ Add session]`. Toolbar: search, status filter, **type filter (Abstract | Session)**, track filter, sort. Table columns: checkbox · **Type chip** · Title (with `id · origin` beneath — `Public CFP` / `Admin created`) · Speaker (`+N` collapse) · Status chip · Track · Score.
+*Covers AC-23, AC-66 – AC-69, AC-114 – AC-120, AC-247–249.* Head: `N matching records · rendered 50 at a time…`, actions `[Export] [+ Add session]`. Toolbar: search, status filter, **type filter (Abstract | Session)**, track filter, sort, and `Columns`. Above it, built-in and personal saved-view chips apply search/filter/sort/column-order together; personal views can be created, renamed, updated, and deleted and persist per user/event (AC-247). The column chooser shows/hides/reorders the fixed AC-248 registry while Title stays mandatory.
+The immutable built-in **Drafts needing attention** view shows a live count and columns for title, submitter contact, Draft status, last saved, and missing currently-applicable required fields. Opening/editing a draft preserves Draft status; only form admins and program staff can access this view (AC-249).
 **Selection bar** appears above the table when anything is selected: `N selected`, `Select all N matching` (a server-side selector, not a page of rows — AC-66), `Reject…`, `Accept N abstracts`.
 **Bulk accept modal (AC-67):** "Accept N abstracts into Wave 2?" with the downstream effects enumerated *before* the action — portal status updates, acceptance emails queued, speaker task sets assigned, calendar invites offered after scheduling — and the honest line that records without valid speaker emails will remain unchanged and appear in the result summary. On confirm: per-record success/failure summary; **the form stays open and new submissions still succeed (AC-68)**.
 **Bulk reject (AC-115):** the same shape with a rendered preview of one real recipient's merged message before sending.
@@ -473,13 +487,13 @@ Drag from pool → slot sets date, start time, and room; duration defaults from 
 
 ### 5.12 Event site `/agenda` (public) and embeds
 *Covers AC-83 – AC-90.* Public shell with `Get embed code` and `Organizer demo`. Header: dates · venue, `Agenda`, `Subscribe to calendar`. Controls: day segment, track select, search. Session rows: time + room gutter, title (→ permalink), speakers (→ permalink), track chip. Only published records appear; an unpublished record's URL 404s with no title leakage (AC-86).
-**Session and speaker permalinks** (`/s/:slug`, `/p/:slug`) cross-link both ways (AC-84) **[beyond v1.1 — toasts in the prototype; flag F-4]**.
+**Session and speaker permalinks** (`/s/:slug`, `/p/:slug`) cross-link both ways (AC-84) and are interactive in v1.4.
 **Embed dialog:** `Agenda | Speaker gallery` segment, copyable `<iframe …>` snippet, live preview, `Copy embed code`. Embeds are responsive, filterable by track and status, inherit configured colors, and reflect a source change **within 60 s** (measured, recorded).
 **Budget:** cold interactive p95 ≤ 1000 ms; operable at 375 px.
 
-### 5.13 Screens the loop needs that v1.1 renders as toasts **[beyond v1.1]**
+### 5.13 Complete supporting screens demonstrated in v1.4
 
-Each is specified here and must be built; the orchestrator re-verifies each against the final prototype (flag F-5).
+Each is specified here and demonstrated as a real route, overlay, modal, or stateful control in the candidate binding prototype; no toast stands in for the operation.
 
 | Screen | Route | ACs |
 |---|---|---|
@@ -553,7 +567,7 @@ Each carries an enforcement criterion and **a demanded audit ticket** — a tick
 | **G7** | **Every list surface is budgeted and measured** | `check:speed` covers, at minimum: dashboard, submissions list (1,000 rows), filter/sort re-render, chase board, review-queue advance, agenda view switch, search, public form cold, public agenda cold, portal, embed propagation, bulk-accept main-thread task. p95 over budget = non-zero exit (`EVALUATION.md` §1.3) | **A-6 · speed report** — `speed-report.json` attached to the gate with actuals |
 | **G8** | **Public writes are bot-defended and upload-safe** | **AC-231** — Turnstile verified server-side before any public write commits and before any presign is issued; missing, replayed, or invalid tokens rejected with no side effects. **AC-232** — extension **and** MIME allowlist at presign, **magic-byte sniff on completion with a mismatch rejected and the object deleted**, per-IP and per-submission caps in KV, served from an origin separate from the app with `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff` | **A-7 · public write surface** |
 | **G9** | **Blind review leaks nothing, anywhere** | Identity is stripped **in the query layer for reviewer-scoped reads**, so API responses and exports are covered by construction; AC-64 byte-scans every reviewer-visible response and export for seeded identity strings | **A-8 · anonymity scan** |
-| **G10** | **Reviewer scope never crosses events** | Every `reviewer` membership carries a non-null `event_id`; a test asserts a reviewer of event A gets 403 on event B's queue and on B's submissions (AC-214) | **A-9 · cross-event isolation** |
+| **G10** | **Reviewer scope never crosses events or assigned tracks** | Every `reviewer` membership carries a non-null `event_id`; AC-214 asserts event-A/event-B isolation. AC-246 mechanically scans that queue, detail, file, export, and evaluation-write routes all call the same track-intersection authorization helper, then probes an out-of-scope ID for 403 with no metadata leakage | **A-9 · reviewer-scope isolation** |
 | **G11** | **Bulk operations never exceed D1's bound-parameter cap** | All bulk paths go through one chunking helper (≤90 params or `json_each`); a test drives 150- and 1,000-record selections | **A-10 · bulk-write audit** (trap 11) |
 | **G12** | **Demo resettable between judges** | **AC-230** — `npm run reset:demo` (and the in-product button) ≤20 s, idempotent under repeat invocation, safe mid-judging, never observable in a partially-reset state by a concurrent visitor; second judge inherits nothing (gate 13) | **A-11 · reset drill** |
 
@@ -565,7 +579,7 @@ Copied so nothing creeps back in. **The auditor must not raise any of these as a
 
 **Explicit SKIPs** (`USER_STORIES.md` traceability table, `PRODUCT-DEFINITION.md` §3): **R33 payment/ticketing · R39 multi-language · R8 CRM, marketing, CMS · SMS · AI agenda builder · attendee ticketing and attendee app · speaker availability constraints · optimal reviewer assignment.**
 
-**Deliberately out of scope for this build** (`EVALUATION.md` §5, ratified 2026-08-08): OAuth calendar write (ICS `METHOD:REQUEST` is the shipped path; OAuth is a documented extension point) · Airtable as primary datastore · malware scanning of uploads · multi-round beyond two · multi-event UI (modeled, not built) · custom sending domain · D1 read replication and Smart Placement.
+**Deliberately out of scope for this build** (`EVALUATION.md` §5, ratified 2026-08-08 and clarified 2026-08-09): OAuth calendar write (ICS `METHOD:REQUEST` is the shipped path; OAuth is a documented extension point) · Airtable as primary datastore · malware scanning of uploads · multi-round beyond two · multi-event UI (modeled, not built) · custom sending domain · D1 read replication and Smart Placement · **Month agenda view** (it appeared only as a label in a context reference image, never as a desired capability) · **a generalized CMS or arbitrary resource-page system** (R8 remains an explicit SKIP). The narrow Speaker Handbook and configured agenda/speaker embeds are product features, not a generalized CMS.
 
 **Not a defect:** a Tier B story below the cut line, provided the gate report names it (`EVALUATION.md` gate 19).
 
@@ -585,14 +599,14 @@ The words on screen are the words a program team already uses (`PHILOSOPHY.md` 6
 
 ## 11. Flags for the orchestrator
 
-Deviations and gaps, raised rather than silently forked (living-artifacts norm). **Four closed by `USER_STORIES.md` Amendment 1 (the contract-review fold, 2026-08-08); two remain open pending client review.**
+Deviations and gaps, raised rather than silently forked (living-artifacts norm). **All prototype-contract gaps are closed in v1.4; only F-2's seed-source choice remains open for client review.**
 
 | # | Flag | Status | Resolution / recommendation |
 |---|---|---|---|
-| **F-1** | **The Airtable two-way mirror had no acceptance criterion** — `EVALUATION.md` gate 9 and the competition's *larger* stack bonus, uncovered. | ✅ **RESOLVED** | **`US-72` · Genuine two-way Airtable mirror, Tier B rank 7** (directly after US-68, the API story it rides on), carrying **AC-225** (local change reaches Airtable ≤60 s) · **AC-226** (allowlisted inbound applies within one webhook cycle; non-allowlisted ignored and logged, never partially applied) · **AC-227** (echo suppression; no sync loop under sustained two-way editing) · **AC-228** (Settings → Airtable shows base link, both row counts, last sync, outbox depth) · **AC-229** (keepalive cron survives 7 days; expiry visible before silent data loss). Built by M-25/M-26 and **not cuttable**. |
+| **F-1** | **The Airtable two-way mirror had no acceptance criterion** — `EVALUATION.md` gate 9 and the competition's *larger* stack bonus, uncovered. | ✅ **RESOLVED** | **`US-72` · Genuine two-way Airtable mirror, Tier B rank 8** (directly after US-68, the API story it rides on), carrying **AC-225** (local change reaches Airtable ≤60 s) · **AC-226** (allowlisted inbound applies within one webhook cycle; non-allowlisted ignored and logged, never partially applied) · **AC-227** (echo suppression; no sync loop under sustained two-way editing) · **AC-228** (Settings → Airtable shows base link, both row counts, last sync, outbox depth) · **AC-229** (keepalive cron survives 7 days; expiry visible before silent data loss). Built by M-25/M-26 and **not cuttable**. |
 | **F-2** | **Seed scale collides with AC-3.** AC-3 requires ≥150 accepted speakers; the recommended faithful seed (Option A) yields 75. | 🔶 **OPEN — client review** | Ship **A′** — the 60 real Feb-2025 sessions plus the real, non-overlapping CODE-2025 roster, reaching ~150 accepted speakers with zero fabricated accepted people. The build assumes A′ until told otherwise. |
-| **F-3** | **Speaker Handbook page** (brief item 8, present in the v1.1 portal) had no story and no AC. | ✅ **RESOLVED** | **AC-233**, appended to `US-39`. Static markdown per event, rendering in the portal. Hosted on a Tier A story but **explicitly below the Tier B cut line** — cuttable, provided the cut is named in the gate report (gate 19). Tier A's no-waiver set stays `AC-1 – AC-90` **plus AC-231**. |
-| **F-4** | The v1.1 prototype renders several loop-critical affordances as toasts (public session/speaker permalinks, admin manual entry, plan/scorecard/committee editing, add break, export). | 🔶 **OPEN — client review** | §5.13 specifies them, but the prototype is the binding contract and it does not show them. Orchestrator re-verifies §5.13 against the final v1.1; anything the client wants different is a prototype amendment, not a build decision. |
+| **F-3** | **Speaker Handbook page** (brief item 8, present in the v1.1 portal) had no story and no AC. | ✅ **RESOLVED** | **AC-233**, appended to `US-39`. Static markdown per event, rendering in the portal. Hosted on a Tier A story but **explicitly below the Tier B cut line** — cuttable, provided the cut is named in the gate report (gate 19). Tier A's no-waiver additions are AC-231, AC-234, AC-240, and AC-244–246. |
+| **F-4** | The original v1.1 prototype rendered several loop-critical affordances as toasts (public session/speaker permalinks, admin manual entry, plan/scorecard/committee editing, add break, export). | ✅ **RESOLVED in v1.4** | §5.13's operations now have interactive routes/modals/controls in the candidate binding prototype. Static/runtime verification must still prove every control, but no build-time design choice remains. |
 | **F-5** | `reset:demo` was `EVALUATION.md` gate 13 and a product button with no AC. | ✅ **RESOLVED** | **`US-73` · Reset the demo, Tier B rank 3**, carrying **AC-230** — command *and* button, idempotent under repeat invocation, safe mid-judging, never observable in a partially-reset state. Built in Wave 0 (M-03) even though it ranks in Tier B, because the demo logins need it from the first deploy. |
 | **F-6** | **Turnstile, upload magic-byte sniffing, and per-IP caps** (guardrail G8) had no AC. | ✅ **RESOLVED** | **AC-231** appended to `US-14` — server-side Turnstile before any public write or presign; **inside Tier A's no-waiver set**, because R19 puts an open write endpoint on the public internet for four days with a public repo pointing at it. **AC-232** appended to `US-41` — extension + MIME allowlist, magic-byte sniff with deletion on mismatch, per-IP/per-submission caps, separate serving origin. |
 | **F-7** | **AC-89 (embed reflects a change within 60 s) vs KV caching.** | Recorded decision | Spec'd at a **30 s TTL with explicit purge on publish**, so the number is a decision rather than an accident. |
@@ -602,7 +616,7 @@ Deviations and gaps, raised rather than silently forked (living-artifacts norm).
 
 ## Amendment 5 — program board + scheduled/published legibility (2026-08-09)
 
-**New screen — Program board `/board`** (US-75, AC-238–239): Kanban across the seven lifecycle stages, every submission a card (title, speakers, track chips, time-in-stage), filters for track/format/wave shared with the submissions list. Drag = the legal status transition with the standard confirmation/cascade; the three *derived* columns (Onboarding, Scheduled, Published) accept no drops and state their entry action ("complete tasks" / "place on the agenda" / "publish"). Virtualized columns; full-seed fast. Nav placement finalized by prototype v1.3.
+**New screen — Program board `/board`** (US-75, AC-238 and AC-243; **AC-239 struck**): read-only Kanban across the seven lifecycle stages, every submitted record a card (title, speakers, track chips, time-in-stage), filters for text/type/track/format/wave. Cards never drag and contain no lifecycle actions; click/Enter/Space opens the exact record. The three *derived* columns (Onboarding, Scheduled, Published) state their entry action. Virtualized columns; full-seed fast. Drafts stay in the dedicated AC-249 queue and do not appear as Submitted board cards.
 
 **Scheduled/published legibility** (AC-240): scheduled rows everywhere show `day · time · room`; scheduled-but-unpublished carries "Not yet public" + a publish affordance; pipeline stage cards sub-labeled — Scheduled *"placed on the working agenda"*, Published *"live on the public site"*. The §5.2 attention strip and §5.9 list chips inherit this.
 
@@ -624,6 +638,18 @@ Source: `sequence/research/api-comparison.md`. Four gaps amended into the pre-ki
 
 **Pinned semantics (bind every route):** `page`/`per_page` (default 50, max 100), stable ULID secondary sort, `{data,page,per_page,total,total_pages}` · `ETag` from `updated_at`, `If-Match` on PATCH/DELETE/agenda-move/publish, 409 with current state — agents and humans are simultaneous first-class operators · one error envelope `{error:{code,message,field?,details?}, request_id}` with the pinned status map · rate-limit buckets (read/write/send/import; public by IP+submission) with `RateLimit-*` + `Retry-After` · bulk operations return a durable `operation_id` with selected/succeeded/failed counts · **OpenAPI is generated from the route registry and is the single source** for docs, CLI registry, and SKILL.md links.
 
+## Amendment 8 — context-coverage closure (2026-08-09)
+
+**Tier A review path (AC-244–246).** The reviewer can open full evaluator-visible fields/files without losing position; Approve/Maybe/Deny is the primary recommendation and does not require a score; explicit multi-track reviewer responsibility is enforced by one server authorization helper across queue/detail/file/export/write. The prototype shows all three as interactions, not copy.
+
+**Decision and portal completion (AC-235–237).** Program-lead decisions own optional speaker feedback that renders from one decision row into both email and portal. Records can send a logged one-off templated email. Speaker title/description edits are organizer-controlled and history-stamped. Acknowledge/form/file portal tasks open and validate their actual response surface.
+
+**Operator table (US-76, AC-247–249).** Personal event-scoped saved views capture query, filters, sort, and visible-column order; the fixed column registry is configurable with Title mandatory; the immutable Drafts needing attention queue exposes count, last-save, contact, and missing fields without implicitly submitting anything. Draft access is limited to form admins and program staff.
+
+**Prototype coverage repairs.** v1.4 shows multiple independently publishable forms, the complete CFP field/participant/file/conditional path, open/closed/at-limit/resumed states, the real kind-specific speaker-task completion surfaces, decision feedback, and the existing integration seams. Real Resend, ICS delivery, Airtable mirroring, D1 persistence, auth, and R2 behavior remain product/runtime obligations settled by `EVALUATION.md`; a static prototype never substitutes for their probes.
+
+**Explicit exclusion.** No Month view and no generalized CMS are added. Month was reference-image vocabulary, not a context requirement; generalized CMS support is explicitly optional/skipped. The narrow handbook and embeds remain.
+
 ---
 
-*Draft, 2026-08-08; folded against `USER_STORIES.md` Amendments 1–7. Amendments follow that file's rules: **the next criteria append from AC-245**; deletions are struck, never recycled. Next inputs — orchestrator review with the client, the Sunday clarification video (requirements freeze), remaining Discord rulings, and final prototype sign-off as the binding visual contract.*
+*v1.4 contract revision, 2026-08-09; folded against `USER_STORIES.md` Amendments 1–8. Amendments follow that file's rules: **the next criteria append from AC-250**; deletions are struck, never recycled. Next input — client review and sign-off of the v1.4 prototype; only then mint `DESIGN.md` and hand the complete contract to orchestration.*
