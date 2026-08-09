@@ -55,7 +55,15 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - Judge is likely AIE's program/ops person. Evaluation = driving the deployed site through the walkthrough loop; seeded demo data essential; 647 entrants registered.
 - Core data model: Abstracts (apply to speak) vs Sessions (guaranteed, e.g. sponsors) — video-only, easy to get wrong.
 
-## Human action items (from Seams first pass, 2026-08-08)
+## Human action items (updated from EVALUATION.md §1.6, 2026-08-08 night)
+
+New (for the oracle smokes and gate — not urgent tonight, needed before Tuesday):
+- Real inboxes for the ICS chain: one Gmail, one Outlook, one Apple Calendar.
+- One real Sessionize export file (any event) to validate the importer fixture (AC-109).
+- A Cloudflare API token for CI (`check:readme` scratch deploy) + a model credential for `check:skill-agent`.
+- Sign or amend the seven *proposed* speed budgets in EVALUATION.md §1.3 (at v1.1 review).
+
+## Earlier action items (from Seams first pass, 2026-08-08)
 
 1. Verify/enable **Workers Paid** ($5/mo) on the Cloudflare account (Free's 10ms CPU cap breaks SSR; fails at deploy, not in dev).
 2. **Create an R2 bucket and fetch a public object now** — Stage 11's R2 entitlement has silently lapsed account-wide before (403s every public URL; dashboard-only fix).
