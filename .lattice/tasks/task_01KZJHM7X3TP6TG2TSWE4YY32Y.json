@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:201",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
@@ -23,7 +23,7 @@
     }
   ],
   "id": "task_01KZJHM7X3TP6TG2TSWE4YY32Y",
-  "last_event_id": "ev_01KZJMXCJZ7H6WZG9V1QQMQPS9",
+  "last_event_id": "ev_01KZJMXFA20E2CPYEKDF3B8CEA",
   "last_status_changed_at": "2026-08-09T06:56:07Z",
   "linked_files": [],
   "priority": "medium",
@@ -43,6 +43,6 @@
   "tags": null,
   "title": "Design system, admin shell, and the check harness",
   "type": "task",
-  "updated_at": "2026-08-09T06:56:07Z",
+  "updated_at": "2026-08-09T06:56:10Z",
   "urgency": null
 }
