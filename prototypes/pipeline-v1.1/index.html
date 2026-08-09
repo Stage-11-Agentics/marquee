@@ -449,9 +449,12 @@
       const firstNames = ["Amara", "João", "Sofía", "Kwame", "Élodie", "Nikhil", "Mei-Ling", "Alejandro", "Fatima", "Ravi", "Noor", "Tobias", "Priyanka", "Mateo", "Zainab", "Léa", "Dmitri", "Ananya", "Oluwaseun", "Hana", "Camille", "Jae-Hyun", "Santiago", "Ifeoma", "Márton", "Aisha", "Casey", "Renée", "Theo", "Mina"];
       const lastNames = ["van der Meer", "O'Connell-Singh", "García Márquez", "Okafor", "Al-Khatib", "Kowalska", "Dela Cruz", "Nwosu", "Sørensen", "Mukherjee", "Hernández-López", "Ben-Ari", "Nakamura", "Björnsdóttir", "Ibrahim", "Petrović", "Cheung", "de la Fontaine", "Wachowski", "Adeyemi"];
       const companies = ["Anthropic", "OpenAI", "Modal", "Mistral AI", "Capital One", "JPMorgan Chase", "Bloomberg", "LangChain", "Weights & Biases", "Hugging Face", "Together AI", "Pinecone", "Baseten", "Replicate", "Writer", "Databricks", "MongoDB", "Google DeepMind", "Microsoft AI", "Redwood Research"];
-      const titleA = ["What we learned deploying", "Beyond the benchmark:", "A field guide to", "The hidden cost of", "Building trust in", "When agents meet", "Rethinking", "Operating", "From prototype to production:", "Why your team needs", "Lessons from rebuilding", "The practical limits of", "Designing for failure in", "What survives contact with", "An operator’s guide to", "Making evidence useful in", "The architecture behind"];
-      const titleB = ["reliable multi-agent systems", "evaluation infrastructure", "retrieval for regulated teams", "open-weight models", "human-in-the-loop workflows", "secure tool-using agents", "AI governance", "low-latency inference", "long-context financial analysis", "the last mile of enterprise AI", "agent observability", "production model routing", "adaptive safety systems", "durable tool protocols", "real-time decision support", "multimodal operations", "failure-aware orchestration", "privacy-preserving copilots", "high-volume agent fleets"];
-      const titleC = ["after the demo ends", "across incompatible risk models", "with evidence instead of vibes", "when the benchmark lies", "for teams that have to ship", "under adversarial production conditions", "without losing the humans", "through the messy middle", "inside regulated organizations", "at one hundred million requests a day", "when every millisecond matters", "with an audit trail people can trust", "after the first incident review", "for systems that must recover", "before the second migration", "with constraints the prototype never showed", "across banks, labs, and startups", "while the underlying models change", "when automation needs an escape hatch", "for the decisions nobody rehearsed", "after two years in production", "without a clean-room rewrite", "when ownership stays with the operator"];
+      const titleAngles = ["An operator’s", "A reviewer’s", "A platform team’s", "A field engineer’s", "A research lead’s", "A security team’s", "A founder’s", "A program owner’s"];
+      const titleActions = ["field guide to", "postmortem of", "practical case for", "hard-won lessons from", "architecture for", "decision framework for", "unfinished argument about"];
+      const titleDomains = ["reliable", "failure-aware", "audit-ready", "low-latency", "human-centered", "privacy-preserving", "evidence-driven"];
+      const titleSystems = ["multi-agent systems", "evaluation infrastructure", "enterprise retrieval", "open-weight models", "tool-using agents", "financial copilots", "production inference", "long-context workflows"];
+      const titleContextLeads = ["after", "across", "before", "during", "inside", "through", "under", "without"];
+      const titleContexts = ["the demo ends", "incompatible risk models collide", "the benchmark becomes the product", "the first serious incident review", "regulated teams have to ship", "the underlying models change", "automation loses its escape hatch"];
       const rooms = ["Metropolitan Ballroom", "Empire East", "Empire West", "Central Park"];
       const waveDates = ["Aug 15", "Sep 1", "Sep 15"];
 
@@ -522,7 +525,14 @@
       }
 
       function makeTitle(i) {
-        let title = `${titleA[i % titleA.length]} ${titleB[(i * 7 + 2) % titleB.length]} ${titleC[(i * 11 + 4) % titleC.length]}`;
+        const n = i % 56;
+        const openingIndex = (n * 17) % 56;
+        const subjectIndex = (n * 13 + 5) % 56;
+        const contextIndex = (n * 23 + 11) % 56;
+        const opening = `${titleAngles[openingIndex % titleAngles.length]} ${titleActions[Math.floor(openingIndex / titleAngles.length)]}`;
+        const subject = `${titleDomains[subjectIndex % titleDomains.length]} ${titleSystems[Math.floor(subjectIndex / titleDomains.length)]}`;
+        const context = `${titleContextLeads[contextIndex % titleContextLeads.length]} ${titleContexts[Math.floor(contextIndex / titleContextLeads.length)]}`;
+        let title = `${opening} ${subject} ${context}`;
         if (i % 17 === 0) title += ": lessons from two years, fourteen teams, and one very long incident review";
         return title;
       }
@@ -770,9 +780,9 @@
               ${pipelineStage("In Review", counts["In Review"], "62% assigned", "In Review")}
               ${pipelineStage("Waved", acceptedByWave(1) + acceptedByWave(2), "2 of 3 waves", "Waved")}
               ${pipelineStage("Accepted", counts.AcceptedTotal, `${(counts.AcceptedTotal / state.submissions.length * 100).toFixed(1)}% of all`, "Accepted")}
-              ${pipelineStage("Onboarding", onboardingCounts().incomplete, `${onboardingCounts().risk} at risk`, "Onboarding", "onboarding")}
+              ${pipelineStage("Onboarding", onboardingCounts().incomplete, `owe tasks · ${onboardingCounts().risk} at risk`, "Onboarding", "onboarding")}
               ${pipelineStage("Scheduled", counts.Scheduled, `${counts.AcceptedTotal - counts.Scheduled} still unplaced`, "Scheduled")}
-              ${pipelineStage("Published", counts.Published, "2 conflicts", "Published")}
+              ${pipelineStage("Published", counts.Published, `${getAgendaConflicts().length} live conflicts`, "Published")}
             </div>
           </section>
           <div class="attention-strip">
@@ -796,7 +806,7 @@
                   <button class="metric-box" style="border:0;text-align:left;background:white" data-attention-filter="In Review"><span class="eyebrow">Reviews done</span><div class="metric">1,842</div><span class="subtle">of 2,130</span></button>
                   <button class="metric-box" style="border:0;text-align:left;background:white" data-route="onboarding"><span class="eyebrow">Tasks overdue</span><div class="metric">${onboardingCounts().overdueTasks}</div><span class="subtle">across ${onboardingCounts().overdue} speakers</span></button>
                   <button class="metric-box" style="border:0;text-align:left;background:white" data-route="agenda"><span class="eyebrow">Unscheduled</span><div class="metric">${counts.AcceptedTotal - counts.Scheduled}</div><span class="subtle">accepted sessions</span></button>
-                  <button class="metric-box" style="border:0;text-align:left;background:white" data-route="agenda"><span class="eyebrow">Conflicts</span><div class="metric" style="color:var(--danger)">2</div><span class="subtle">2 affected sessions · 1 speaker</span></button>
+                  <button class="metric-box" style="border:0;text-align:left;background:white" data-route="agenda"><span class="eyebrow">Conflicts</span><div class="metric" style="color:var(--danger)">${getAgendaConflicts().length}</div><span class="subtle">${agendaConflictIds().size} affected Sessions · live</span></button>
                 </div>
                 <div class="divider"></div>
                 <div class="eyebrow" style="margin-bottom:9px">Review pressure by track</div>
