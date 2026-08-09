@@ -295,6 +295,12 @@
     .status-col { width: 104px; }
     .track-col { width: 16%; }
     .score-col { width: 65px; text-align: right; }
+    .saved-view-bar { padding: 10px 14px; border-bottom: 1px solid var(--line); display:flex; align-items:center; gap:7px; flex-wrap:wrap; background:#fcfcfd; }
+    .saved-view-bar .view-label { color:var(--muted); font-size:9px; font-weight:750; letter-spacing:.06em; text-transform:uppercase; margin-right:2px; }
+    .saved-view { height:29px; border:1px solid var(--line); border-radius:999px; padding:0 10px; background:white; color:var(--muted); font-size:10px; }
+    .saved-view.active { border-color:#aaa6ff; background:var(--accent-soft); color:var(--accent-dark); font-weight:720; }
+    .view-meta { color:var(--muted); font-size:9px; }
+    .draft-warning { color:#765300; font-size:9px; font-weight:700; }
     .table-title { color: var(--ink); font-weight: 640; overflow: hidden; text-overflow: ellipsis; }
     .pagination { min-height: 48px; padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
     .page-buttons { display: flex; gap: 5px; }
@@ -322,6 +328,13 @@
     .preview-form h3 { margin: 0 0 5px; font-size: 15px; }
     .preview-form p { margin: 0 0 17px; color: var(--muted); font-size: 10px; }
     .preview-input { height: 32px; border: 1px solid var(--line); border-radius: 6px; background: white; margin-top: 6px; }
+    .form-catalog { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+    .form-catalog-card { border:1px solid var(--line); border-radius:10px; background:white; padding:13px; text-align:left; cursor:pointer; }
+    .form-catalog-card.active { border-color:#aaa6ff; box-shadow:0 0 0 3px var(--accent-soft); }
+    .form-catalog-card strong { display:block; margin:8px 0 5px; font-size:11px; }
+    .form-catalog-card small { color:var(--muted); font-size:9px; line-height:1.45; }
+    .prototype-state-switch { display:flex; gap:5px; flex-wrap:wrap; margin:0 0 18px; padding:8px; border:1px dashed #c8c9cf; border-radius:9px; background:#fafafb; }
+    .prototype-state-switch span { align-self:center; color:var(--muted); font-size:9px; font-weight:750; text-transform:uppercase; letter-spacing:.06em; margin-right:4px; }
 
     /* Public form + portal */
     .public-shell { min-height: 100vh; background: #f7f7fa; }
@@ -393,6 +406,10 @@
     .score-buttons { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; margin: 15px 0; }
     .score-button { border: 1px solid var(--line-strong); background: white; border-radius: 8px; min-height: 46px; font-weight: 730; color: #50525a; }
     .score-button:hover, .score-button.active { background: var(--accent-soft); border-color: #aaa6ff; color: var(--accent-dark); }
+    .decision-buttons { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:10px 0 16px; }
+    .decision-button { min-height:42px; border:1px solid var(--line-strong); border-radius:8px; background:white; color:#50525a; font-size:10px; font-weight:750; }
+    .decision-button.active { border-color:#aaa6ff; background:var(--accent-soft); color:var(--accent-dark); box-shadow:0 0 0 2px rgba(99,91,255,.08); }
+    .scope-row { display:flex; gap:4px; flex-wrap:wrap; margin-top:4px; }
 
     /* Agenda */
     .agenda-layout { display: grid; grid-template-columns: 250px minmax(0,1fr); gap: 14px; }
@@ -525,6 +542,7 @@
       .hero-pipeline { display: none; }
       .landing-links .button:first-child { display: none; }
       .builder { grid-template-columns: 1fr; }
+      .form-catalog { grid-template-columns:1fr; }
       .builder-steps, .preview-card { position: static; }
       .agenda-layout { grid-template-columns: 1fr; }
       .unscheduled { max-height: 210px; }
@@ -576,6 +594,17 @@
       const rooms = ["Metropolitan Ballroom", "Empire East", "Empire West", "Central Park"];
       const waveDates = ["Aug 15", "Sep 1", "Sep 15"];
       const formatRanges = { Workshop:"60–120", "Stage Talk":"15–20", Lightning:"5–10", Online:"5–55" };
+      const submissionColumnDefs = [
+        {id:"type",label:"Type"},{id:"id",label:"ID"},{id:"title",label:"Title",required:true},{id:"speakers",label:"Speakers"},
+        {id:"status",label:"Status"},{id:"tracks",label:"Tracks"},{id:"score",label:"Score"},{id:"submitted",label:"Submitted"},
+        {id:"updated",label:"Last updated"},{id:"origin",label:"Origin"},{id:"missing",label:"Missing fields"}
+      ];
+      const defaultSavedViews = [
+        {id:"all",name:"All submissions",builtIn:true,config:{search:"",status:"All",type:"All",track:"All",sort:"newest",columns:["type","title","speakers","status","tracks","score"]}},
+        {id:"drafts",name:"Drafts needing attention",builtIn:true,config:{search:"",status:"Draft",type:"All",track:"All",sort:"newest",columns:["title","speakers","status","updated","missing"]}},
+        {id:"review",name:"Active review",builtIn:true,config:{search:"",status:"In Review",type:"Abstract",track:"All",sort:"score",columns:["id","title","speakers","tracks","score","updated"]}},
+        {id:"my-finalists",name:"My finalists",builtIn:false,config:{search:"",status:"Waved",type:"All",track:"All",sort:"score",columns:["type","title","speakers","tracks","score","status"]}}
+      ];
 
       const state = {
         route: "landing",
@@ -587,6 +616,9 @@
         submissionSort: "newest",
         submissionRecordId: "AIE-0001",
         submissionPage: 1,
+        submissionColumns: loadJson("marquee-prototype-columns", ["type","title","speakers","status","tracks","score"]),
+        savedViews: loadJson("marquee-prototype-views", defaultSavedViews),
+        activeSavedView: localStorage.getItem("marquee-prototype-active-view") || "all",
         boardSearch: "",
         boardType: "All types",
         boardTrack: "All tracks",
@@ -611,6 +643,14 @@
         onboardingMessages: {},
         reminderTemplate: "Outstanding speaker tasks",
         formTarget: "Abstract",
+        activeFormId: "cfp",
+        forms: [
+          {id:"cfp",name:"Call for speakers",status:"Open",target:"Abstract",responses:1040,detail:"Public · closes Sep 12"},
+          {id:"invited",name:"Invited session intake",status:"Open",target:"Session",responses:18,detail:"Private link · no evaluation"},
+          {id:"workshops",name:"Workshop proposals",status:"Closed",target:"Abstract",responses:86,detail:"Closed Jul 31 · conditional sponsor fields"}
+        ],
+        cfpMode: "open",
+        cfpVendorContent: "No",
         cfpTracks: [],
         newSubmissionTracks: ["AI in Financial Services"],
         builderStep: 2,
@@ -618,13 +658,20 @@
           { id: 1, label: "Session title", kind: "Short text", required: true },
           { id: 2, label: "Abstract", kind: "Long text", required: true },
           { id: 3, label: "Format", kind: "Single select", required: true },
-          { id: 4, label: "Track", kind: "Single select", required: true },
+          { id: 4, label: "Tracks", kind: "Multi-select", required: true },
           { id: 5, label: "What will attendees learn?", kind: "Long text", required: true },
-          { id: 6, label: "Speaker details", kind: "Person", required: true }
+          { id: 6, label: "Speaker name, role, company", kind: "Person", required: true },
+          { id: 7, label: "Biography + headshot", kind: "Profile + file", required: true },
+          { id: 8, label: "Co-speakers", kind: "Repeating person", required: false },
+          { id: 9, label: "Supporting material", kind: "File", required: false },
+          { id: 10, label: "Product named", kind: "Conditional text", required: false }
         ],
         builderActive: 1,
         reviewIndex: 0,
         reviewScores: {},
+        reviewRecommendations: {},
+        reviewerScopes: ["Agents","Evals","AI in Financial Services"],
+        decisionFeedback: {},
         tasks: [
           { id: 1, title: "Accept speaker agreement", kind: "Acknowledge", due: "Overdue · Aug 4", overdue: true, done: false },
           { id: 2, title: "Confirm name, title, and company", kind: "Form", due: "Due Aug 12", done: true },
@@ -665,6 +712,17 @@
         event: loadEvent()
       };
 
+      function loadJson(key, fallback) {
+        try { const value=JSON.parse(localStorage.getItem(key)||"null"); return value ?? fallback; }
+        catch (_) { return fallback; }
+      }
+
+      function persistSubmissionPreferences() {
+        localStorage.setItem("marquee-prototype-columns",JSON.stringify(state.submissionColumns));
+        localStorage.setItem("marquee-prototype-views",JSON.stringify(state.savedViews));
+        localStorage.setItem("marquee-prototype-active-view",state.activeSavedView);
+      }
+
       function loadEvent() {
         const fallback = { name: "AIE NYC 2026", start: "2026-10-12", end: "2026-10-14", timezone: "America/New_York", venue: "Sheraton New York Times Square", accent: "Violet" };
         try { return { ...fallback, ...JSON.parse(localStorage.getItem("marquee-prototype-event") || "{}") }; }
@@ -704,7 +762,8 @@
           if (i < 280) return "In Review";
           if (i < 630) return "Submitted";
           if (i < 750) return "Waitlisted";
-          if (i < 1010) return "Rejected";
+          if (i < 1000) return "Rejected";
+          if (i < 1020) return "Draft";
           return "Withdrawn";
         };
         for (let i = 0; i < 1040; i++) {
@@ -721,7 +780,7 @@
           const carriedTracks = i % 20 < 3
             ? [trackName, tracks[(primaryTrackIndex+3)%tracks.length].name, ...(i%40===0?[tracks[(primaryTrackIndex+5)%tracks.length].name]:[])]
             : [trackName];
-          const boardStage = i < 26 ? "Published" : i < 32 ? "Scheduled" : i < 92 ? "Accepted" : i < 190 ? "Onboarding" : i < 280 ? "In Review" : i < 630 ? "Submitted" : "Waved";
+          const boardStage = i < 26 ? "Published" : i < 32 ? "Scheduled" : i < 92 ? "Accepted" : i < 190 ? "Onboarding" : i < 280 ? "In Review" : i < 630 ? "Submitted" : i < 1000 ? "Waved" : null;
           out.push({
             id: `AIE-${String(i + 1).padStart(4,"0")}`,
             title: i===26 ? "Beyond the demo: reliable multi-agent systems" : makeTitle(i), entity, speaker, speakers: coSpeakers,
@@ -736,6 +795,9 @@
             format: formats[(i * 3 + 1) % formats.length],
             score: i >= 150 && i < 240 ? (2.8 + seededRandom(i) * 2.1).toFixed(1) : "—",
             submitted: `2026-0${6 + (i % 2)}-${String(2 + (i * 7) % 27).padStart(2,"0")}`,
+            updated: i>=1000&&i<1020 ? `${2+(i%11)}h ago` : `${1+(i%29)}d ago`,
+            email: `${speaker.toLowerCase().replace(/[^a-z0-9]+/g,".").replace(/^\.|\.$/g,"")}@example.org`,
+            missingFields: i>=1000&&i<1020 ? [["Abstract","Headshot"],["Tracks"],["Biography","Supporting file"],["Format","Biography"]][i%4] : [],
             source: entity === "Session" ? "Admin created" : "Public CFP"
           });
         }
@@ -1069,7 +1131,7 @@
 
       function filteredBoardSubmissions() {
         const q=state.boardSearch.trim().toLowerCase();
-        return state.submissions.filter(s=>
+        return state.submissions.filter(s=>s.status!=="Draft" &&
           (!q||[s.id,s.title,s.company,...s.speakers].some(value=>String(value).toLowerCase().includes(q))) &&
           (state.boardType==="All types"||`${s.entity}s`===state.boardType) &&
           (state.boardTrack==="All tracks"||(s.tracks||[s.track]).includes(state.boardTrack)) &&
@@ -1168,8 +1230,11 @@
       }
 
       function formsView() {
+        const activeForm=state.forms.find(form=>form.id===state.activeFormId)||state.forms[0];
         return shell(`<div class="page">
-          ${pageHead("Call for speakers form", "Build the intake once. The public form updates immediately and routes each response to the right lifecycle.", `<button class="button" data-route="cfp">Open public form ↗</button><button class="button primary" id="publish-form">Publish changes</button>`)}
+          ${pageHead("Forms", `${state.forms.length} event forms · each has its own audience, fields, rules, response state, and public or private link.`, `<button class="button" id="duplicate-form">Duplicate</button><button class="button" id="new-form">+ New form</button><button class="button primary" id="publish-form">Publish changes</button>`)}
+          <section class="form-catalog" aria-label="Event forms">${state.forms.map(form=>`<button class="form-catalog-card ${form.id===state.activeFormId?"active":""}" data-form-id="${form.id}"><span class="chip ${form.status==="Open"?"published":""}">${form.status}</span><strong>${esc(form.name)}</strong><small>${esc(form.detail)}<br>${form.responses.toLocaleString()} ${form.responses===1?"response":"responses"} · collects ${form.target}s</small></button>`).join("")}</section>
+          <div class="message-preview" style="margin-bottom:14px"><strong>Editing · ${esc(activeForm.name)}</strong><br><span class="subtle">${esc(activeForm.detail)} · changes and publication are isolated to this form.</span></div>
           <div class="builder">
             <section class="card builder-steps">
               ${["Type & basics","Welcome","Form fields","Participants","Rules & routing","Messages","Publish"].map((s,i) => `<button class="builder-step ${state.builderStep === i ? "active" : ""}" data-builder-step="${i}"><span class="step-number">${i+1}</span><span>${s}</span></button>`).join("")}
@@ -1194,7 +1259,7 @@
           ["Participants",`<div class="grid-2"><div class="field"><label>Minimum speakers</label><input type="number" value="1" min="1"></div><div class="field"><label>Maximum speakers</label><input type="number" value="4" min="1"></div></div><div class="field"><label>Maximum sponsors</label><input type="number" value="2" min="0"></div>`],
           ["Rules & routing",`<div class="field"><label>Rule</label><select><option>Track is AI in Financial Services</option></select></div><div class="field"><label>Route to</label><select><option>AIE 2026 program review · Initial screen</option></select></div><label class="toggle-line"><span>Vendor content flag routes to workshop review</span><input type="checkbox" checked></label>`],
           ["Messages",`<div class="field"><label>Thank-you message</label><textarea>Your abstract is in. We sent a confirmation and private edit link.</textarea></div><div class="field"><label>Pre-close reminder</label><select><option>3 days before close</option><option>7 days before close</option></select></div>`],
-          ["Publish",`<div class="message-preview"><strong>Open · 350 submissions</strong><br><span class="subtle">Public URL: marquee.stage11.dev/f/aie-nyc-2026 · closes Sep 12 at 11:59 PM America/New_York</span></div><button class="button" data-route="cfp" style="margin-top:14px">Open public form ↗</button>`]
+          ["Publish",`<div class="message-preview"><strong>Open · 350 submitted · 20 drafts</strong><br><span class="subtle">Public URL: marquee.stage11.dev/f/aie-nyc-2026 · closes Sep 12 at 11:59 PM America/New_York</span></div><div class="field"><label>Preview a real form state</label><div class="segment"><button data-cfp-preview="open">Open</button><button data-cfp-preview="resumed">Resumed draft</button><button data-cfp-preview="limit">At limit</button><button data-cfp-preview="closed">Closed</button></div></div><button class="button" data-route="cfp" style="margin-top:14px">Open public form ↗</button>`]
         ];const panel=panels[state.builderStep];return `<section class="card"><div class="card-head"><div><h2>${panel[0]}</h2><span class="subtle">Changes update the public form preview immediately</span></div><span class="chip ${state.formTarget === "Session" ? "session" : ""}">${state.formTarget}</span></div><div class="card-body stack">${panel[1]}<button class="button primary" id="save-builder-step">Save ${panel[0].toLowerCase()}</button></div></section>`;
       }
 
@@ -1763,6 +1828,10 @@
       }
 
       function bindForms() {
+        document.querySelectorAll("[data-form-id]").forEach(button=>button.onclick=()=>{const form=state.forms.find(item=>item.id===button.dataset.formId);state.activeFormId=form.id;state.formTarget=form.target;state.builderStep=2;render();});
+        document.getElementById("new-form")?.addEventListener("click",()=>{const id=`form-${Date.now()}`;state.forms.push({id,name:`New event form ${state.forms.length+1}`,status:"Draft",target:"Abstract",responses:0,detail:"Private until published"});state.activeFormId=id;state.formTarget="Abstract";toast("New form created · publication is isolated");render();});
+        document.getElementById("duplicate-form")?.addEventListener("click",()=>{const source=state.forms.find(form=>form.id===state.activeFormId),copy={...source,id:`copy-${Date.now()}`,name:`${source.name} copy`,status:"Draft",responses:0,detail:"Private copy · unpublished"};state.forms.push(copy);state.activeFormId=copy.id;toast("Form duplicated with fields and rules · responses not copied");render();});
+        document.querySelectorAll("[data-cfp-preview]").forEach(button=>button.onclick=()=>{state.cfpMode=button.dataset.cfpPreview;navigate("cfp");});
         document.querySelectorAll("[data-builder-step]").forEach(b=>b.onclick=()=>{state.builderStep=Number(b.dataset.builderStep);render();});
         document.querySelectorAll("[data-form-target]").forEach(b=>b.onclick=()=>{state.formTarget=b.dataset.formTarget;render();});
         document.querySelectorAll("[data-field-id]").forEach(row=>row.addEventListener("click",e=>{if(e.target.closest("button"))return;state.builderActive=Number(row.dataset.fieldId);render();}));

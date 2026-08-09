@@ -25,6 +25,7 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 
 ## Decisions log
 
+- 2026-08-09: **Speed budgets signed as OBJECTIVES** — the seven proposed §1.3 numbers report + warn, never fail CI; AC-sourced budgets remain binding. (Atin)
 - 2026-08-09: **Board ruling (client): NO drag** — AC-239 struck, AC-243 ratified; consequential actions live on the detail screen. (Atin)
 - 2026-08-09: **F-2 CLOSED — seed A′ confirmed** (real Feb-2025 sessions + CODE-2025 roster → ~150 accepted, zero fabricated accepted people). (Atin)
 - 2026-08-09: **API comparison folded** (Amendments 6–7): four pre-kickoff API gaps + pinned semantics + webhooks behind Tier A (AC-241) + scoped tokens (AC-242); reviewer full-detail AC-244 minted from client feedback; v1.4 in flight. (Mabel)

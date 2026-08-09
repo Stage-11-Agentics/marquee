@@ -1,6 +1,6 @@
 # Marquee — User Stories (canonical)
 
-**Status:** Phase-3 canonical artifact, minted 2026-08-08 · Amendments 1–6 applied (see tail sections). **75 stories · 242 acceptance criteria** (US-74/US-75 and AC-234–242 minted in Amendments 2–6; the head tables below predate them — the amendment sections are authoritative for the deltas).
+**Status:** Phase-3 canonical artifact, minted 2026-08-08 · Amendments 1–8 applied (see tail sections). **76 stories · 248 live acceptance criteria** (249 IDs allocated; AC-239 is struck and retired).
 **Authority:** This file supersedes `research/user-stories-draft.md` for all build purposes. The draft is retained unchanged as the research archive.
 **Upstream:** `PHILOSOPHY.md` · `sequence/PRODUCT-DEFINITION.md` · `research/competition-requirements.md` (R1–R50) · `research/stakeholders.md` (15 seats) · `research/landscape-features.md` (D1–D15) · `research/seams-feasibility.md`.
 
@@ -8,11 +8,11 @@
 
 ## The AC ID contract
 
-**AC IDs are permanent.** `AC-1` … `AC-233` are allocated once, here, and are never renumbered, never reused, and never reordered. Reordering stories does not move AC IDs — `AC-225`–`AC-229` belong to a Tier B rank-7 story and `AC-230` to a rank-3 story, which is expected: **ID order is allocation order, not build order.** If a criterion is deleted it is struck, not recycled. **The next amendment appends from `AC-234`.** Every downstream artifact — SPEC, test names, PR descriptions, the evaluation harness — cites these IDs.
+**AC IDs are permanent.** `AC-1` … `AC-249` are allocated once, here, and are never renumbered, never reused, and never reordered. Reordering stories does not move AC IDs — `AC-225`–`AC-229` belong to a Tier B rank-7 story and `AC-230` to a rank-3 story, which is expected: **ID order is allocation order, not build order.** If a criterion is deleted it is struck, not recycled. **The next amendment appends from `AC-250`.** Every downstream artifact — SPEC, test names, PR descriptions, the evaluation harness — cites these IDs.
 
-**Story IDs (`US-nn`)** are carried over unchanged from the draft corpus so the archive stays cross-referenceable. They are *not* sequential in this file: they appear in build order, not numeric order. `US-68`–`US-71` were minted at consolidation; `US-72`–`US-73` at the contract-review fold.
+**Story IDs (`US-nn`)** are carried over unchanged from the draft corpus so the archive stays cross-referenceable. They are *not* sequential in this file: they appear in build order, not numeric order. `US-68`–`US-71` were minted at consolidation; `US-72`–`US-73` at the contract-review fold; `US-74`–`US-76` by amendment.
 
-**Criterion style.** Every AC is pass/fail. A criterion that is inherently experiential — a judgement about feel that no assertion settles — is tagged **(candidate-felt)** and belongs to design review and the prototype stage, not the test suite. **There are 5 of them.** The other 228 are mechanically testable; all nine criteria added at the contract-review fold are mechanical.
+**Criterion style.** Every live AC is pass/fail. A criterion that is inherently experiential — a judgement about feel that no assertion settles — is tagged **(candidate-felt)** and belongs to design review and the prototype stage, not the test suite. **There are 5 of them.** The other 243 live criteria are mechanically testable; AC-239 is struck and has no test.
 
 **Tags.** `[R-nn]` traces to the requirements register. `(new)` marks stories minted at consolidation or later; `*(appended <date>)*` marks a criterion added to a pre-existing story.
 
@@ -22,14 +22,14 @@
 
 | Tier | Stories | ACs | Count | Meaning |
 |---|---|---|---|---|
-| **A — the walkthrough loop** | 27 | AC-1 – AC-90, **AC-231** | 91 | Binding. Any one failing loses the competition regardless of the rest — no waivers (`EVALUATION.md` gate 18) |
-| **B — ordered differentiators** | 25 | AC-91 – AC-169, **AC-225 – AC-230**, **AC-232** | 86 | Built in the order listed; the cut line moves up from the bottom |
+| **A — the walkthrough loop** | 27 | AC-1 – AC-90, **AC-231, AC-234, AC-240, AC-244–246** | 96 | Binding. Any one failing loses the competition regardless of the rest — no waivers (`EVALUATION.md` gate 18) |
+| **B — ordered differentiators** | 28 | AC-91 – AC-169, **AC-225 – AC-230, AC-232, AC-235–238, AC-241–243, AC-247–249** | 96 | Built in the order listed; the cut line moves up from the bottom |
 | **Cut-line criterion on a Tier A story** | — | **AC-233** | 1 | Speaker Handbook. Hosted on US-39, *outside* Tier A's no-waiver set; may be cut if the cut is named (gate 19) |
 | **Post-competition** | 21 | AC-170 – AC-224 | 55 | Modeled where cheap, not built by Wednesday |
 
-**Tier A + Tier B = 52 stories = the Wednesday target.** Totals: **73 stories · 233 criteria.**
+**Tier A + Tier B = 55 stories = the Wednesday target.** Totals: **76 stories · 248 live criteria** (249 allocated IDs; one struck).
 
-> **Note for gate 18.** Tier A's no-waiver set is `AC-1 – AC-90` **plus AC-231, AC-234, and AC-240** (Turnstile; multi-track on the Tier A form; scheduled/published legibility on Tier A surfaces — all minted by amendment onto Tier A stories). AC-232/235–239/241–242 are Tier B; AC-233 is explicitly cuttable. The AC range and the tier are not the same thing; read the table and the amendment sections, not the numbering.
+> **Note for gate 18.** Tier A's no-waiver set is `AC-1 – AC-90` **plus AC-231, AC-234, AC-240, and AC-244–246** (Turnstile; multi-track; scheduled/published legibility; reviewer detail, recommendation path, and track authorization). AC-232/235–238/241–243/247–249 are Tier B; AC-239 is struck; AC-233 is explicitly cuttable. The AC range and the tier are not the same thing; read the table and the amendment sections, not the numbering.
 
 ### What changed at consolidation (2026-08-08)
 
@@ -804,7 +804,7 @@ Modeled where the data model makes it cheap; not built by Wednesday. Ordered rou
 
 **Six further criteria have a felt dimension but are settled by a hard number**, so they stay in the test suite and are *not* tagged: **AC-36** and **AC-85** (<1s to interactive) · **AC-62** (<300ms card advance) · **AC-103** and **AC-191** (<200ms) · **AC-89** (<60s embed propagation). Each has a threshold that decides pass/fail; "does it feel instant?" is the separate design-review question behind it, and if the answer is no while the number passes, the number was wrong — amend the threshold rather than reclassify the criterion.
 
-The remaining **228 criteria are mechanically testable** with no felt component — including all nine added at the contract-review fold (AC-225 – AC-233), each of which has a threshold, a state, or an artifact that settles it.
+The remaining **243 live criteria are mechanically testable** with no felt component — including all nine added at the contract-review fold (AC-225 – AC-233) and every live amendment criterion through AC-249. AC-239 is struck and excluded.
 
 ---
 
@@ -899,16 +899,21 @@ Semantic pins (SPEC Amendment 7, no new ACs): event discovery (`GET /events`), e
 
 *Next amendment appends from AC-245.*
 
-## Amendment 6 — client v1.3 board refinement (2026-08-09, client)
+## Amendment 8 — context-coverage closure (2026-08-09, client)
 
-Source: Atin driving the v1.3 Program board (filtering and action-placement refinement).
+Source: client approval of the v1.3 context-gap audit against `/Users/atin/Downloads/CONTEXT.md`. Month view was only a reference-image label, not a stated requirement; generalized CMS support was optional and remains outside product scope.
 
-**AC-241** *(appended to US-75)*: The Program board has prominent, composable filters for free-text search (title, speaker, record ID, or company), record type, any carried track, format, and wave; it displays the filtered count and provides one action to clear every filter.
+**AC-245** *(appended to US-26, Tier A — simple reviewer path)*: Every review card offers the exact recommendations **Approve**, **Maybe**, and **Deny**. A reviewer can submit one without entering numeric scores; when a scorecard is configured, scores remain available but optional for this path. The recommendation is saved with reviewer identity and time, restores on revisit, and maps to organizer-facing accepted, waitlisted, or rejected decision proposals without changing lifecycle status until an authorized program lead acts.
 
-**AC-242** *(supersedes AC-239's board drag behavior)*: The Program board performs **no drag transitions and exposes no lifecycle actions on cards**. Clicking or keyboard-opening a card navigates to that exact submission record. Stage-appropriate action buttons live on the record page; consequential transitions retain their confirmation and cascade preview there. Agenda drag-and-drop remains unchanged.
+**AC-246** *(appended to US-25, Tier A — reviewer responsibility and authorization)*: Each reviewer is assigned one or more explicit track scopes. Their queue includes a submission when any carried track intersects that scope. The same rule is enforced server-side for record, file, export, and review-write access; out-of-scope records cannot be opened by guessing an ID. A committee manager can inspect and edit the scopes.
 
-*Next amendment appends from AC-243.*
+### US-76 · Return to the exact slice of work *(new, Tier B — insert after US-67)*
+
+**As a** program operator handling hundreds of submissions, **I want** reusable table views, relevant columns, and a first-class draft queue, **so that** recurring triage does not begin by reconstructing filters or hunting incomplete proposals.
+- **AC-247**: A user can create, name, apply, rename, and delete personal event-scoped saved views containing free text, filters, sort, and visible-column order. Built-in views are immutable. Reloading and returning later preserve the active saved view; another event or user cannot see the personal view.
+- **AC-248**: The submissions table's column chooser can show, hide, and reorder Type, ID, Title, Speakers, Status, Tracks, Score, Submitted, Last updated, Origin, and Missing fields. Title is mandatory. The chosen order renders immediately, persists per event and user, and is captured when a saved view is created or updated.
+- **AC-249**: A built-in **Drafts needing attention** queue shows its live count and each draft's last-saved time, submitter contact, and missing required fields. Opening a draft never submits it or changes status. Only form administrators and program staff can use the queue.
 
 ---
 
-*Canonical as of 2026-08-09 (Amendments 1–6 applied). Changes to this file are amendments: new criteria append from AC-243; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*
+*Canonical as of 2026-08-09 (Amendments 1–8 applied). Changes to this file are amendments: new criteria append from AC-250; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*
