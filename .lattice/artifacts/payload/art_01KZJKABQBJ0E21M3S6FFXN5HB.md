@@ -1,0 +1,1 @@
+Merged via auto-merge (PR #2, squash, 3ef7c647). Wire format + delivery verified; client-rendering half remains an operator oracle — needs_human stands with the inbox checklist. Review sha mismatch (2344974 vs head e67476e) resolved: identical tree hash b5d6c73, rebase-only.

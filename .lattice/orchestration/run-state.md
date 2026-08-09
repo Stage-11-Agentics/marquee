@@ -29,10 +29,11 @@
 | Ticket | Surface | Mode | Note |
 |---|---|---|---|
 | MRQ-1 (M-01) | surface:196 pane:56 | inline-full | `in_progress`; deploy deferred to MRQ-57, local validation is the merge bar |
-| MRQ-2 (M-02) | surface:200 pane:56 | planning-only press-ahead | relaunched after cwd-guard halt; halts at `planned` |
+| MRQ-2 (M-02) | surface:200 pane:56 | planning-only press-ahead | relaunched after cwd-guard halt + trust dialog; halts at `planned` |
 | MRQ-6 (M-05a+06) | surface:201 pane:57 | planning-only press-ahead | design system + admin shell + harness; halts at `planned` |
-| MRQ-55 (S-2) | surface:198 pane:57 | fast-track spike | ICS series → benevolent.futures@gmail.com; Outlook/Apple inboxes pending operator |
-| ~~MRQ-56 (S-3)~~ | closed | done | **MERGED** PR #1 (4f429473). Verdict below. |
+| MRQ-8 (M-07) | surface:202 pane:57 | planning-only press-ahead | API core — on the CP-1 chain; boot prompt carries the S-3 verdict |
+| ~~MRQ-55 (S-2)~~ | closed | **done** | **MERGED** PR #2 (3ef7c647). Code done; `needs_human` stands for the client-rendering oracle. |
+| ~~MRQ-56 (S-3)~~ | closed | **done** | **MERGED** PR #1 (4f429473). Verdict below. |
 
 **S-3 verdict (relay into MRQ-8/M-07's boot prompt):** one JSON ID array + `json_each(?)` — a single write query at both 150 and 1,000 rows, 6 ms median — beats ≤90-binding chunking (12 queries, 8.5 ms). Helper dedupes, no-ops on empty, stringifies once, runs once. Local D1 accepts 100 bindings, rejects 101.
 
@@ -41,7 +42,7 @@
 ## Operator gates (standing)
 
 1. ~~`wrangler login`~~ — **DEFERRED by operator 2026-08-09 02:25 ("put demo credentials in, I'll deal with that tomorrow"). Carved out as MRQ-57**; MRQ-1 ships locally-validated with placeholder resource IDs. Everything the operator must do is enumerated in MRQ-57's description. The deployed URL a judge opens comes from MRQ-57, so it cannot slip past Tuesday.
-2. S-2 inbox checklist: open `benevolent.futures@gmail.com` when the spike reports sent; provide Outlook + Apple addresses.
+2. **S-2 oracle (MRQ-55, `needs_human`, code already merged):** open `benevolent.futures@gmail.com` and judge the `[S-2 spike]` triplet — 1/3 should show **Accept/Decline**; 2/3 should **replace** the 15:00 entry with 16:00 (not duplicate); 3/3 should **remove** it. Then supply an Outlook address and an Apple-backed address; re-run is `node send.mjs <address>` from `spikes/s2-ics-clients/`. Sent 06:21 UTC, all three delivered per Resend.
 3. Airtable Team + two bases (blocks S-1/MRQ-54, then M-25/M-26); Resend tier check; real Sessionize export (M-30); model credential (M-47).
 
 ## Decision log (append-only)
@@ -50,6 +51,8 @@
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-09 02:36 [moderate] Press-ahead: MRQ-8 (M-07, CP-1 chain) spawned planning-only with the S-3 verdict inlined; 4 of 5 slots active.
+- 2026-08-09 02:34 [moderate] MRQ-55 (S-2) merged, PR #2 squash 3ef7c647. Review named 2344974 vs head e67476e — resolved as rebase-only: identical tree hash b5d6c73, so review evidence valid. Secret scan clean (key read from env, recipient parameterized, no personal address in the diff). `needs_human` left standing — the client-rendering half is an operator oracle, not agent-verifiable.
 - 2026-08-09 02:30 [moderate] MRQ-56 (S-3) merged, PR #1 squash 4f429473 — first PR of the run; auto-merge criteria verified (head≠base, fresh self-review PASS naming HEAD, .merged==true re-GET, diff confined to spikes/).
 - 2026-08-09 02:27 [moderate] Press-ahead: MRQ-6 spawned planning-only into the freed slot (deps only on MRQ-1).
 - 2026-08-09 02:26 [operator] **Cloudflare deploy deferred to tomorrow** — placeholder credentials, local `wrangler dev` validation, deploy carved out as **MRQ-57** (depends MRQ-1, MRQ-2). MRQ-1's merge no longer gated on deploy.
@@ -65,3 +68,5 @@
 | Symptom | Cause | Mitigation |
 |---|---|---|
 | Codex delegator HALTs on the line-1 cwd guard with a correct-looking path | A scratchpad path under `/private/tmp` did not match what the spawned shell reported; the guard is exact-match so any resolution difference is fatal | Put sandbox/worktree paths under the project's own tree (`Marquee-worktrees/<slug>`), never `/tmp`. Every guard now prints `actual: $(pwd)` on failure so the next halt is self-diagnosing (2026-08-09, MRQ-2 planner, cost: one relaunch). |
+| A launched codex agent shows a full context read but never claims its ticket, sitting at what looks like an idle prompt | Codex's **directory-trust dialog** ("Do you trust the contents of this directory?") blocks the argv prompt entirely on any newly-created cwd; `--yolo` does not bypass it. Git worktrees of an already-trusted repo do not trigger it — fresh sandbox dirs always do | After EVERY `launch-agent` into a new directory, `read-screen` once and `send-key enter` if the trust dialog is up. Budget ~10s before the check (2026-08-09, MRQ-2/6/8 planners, all three parked). |
+| A codex pane looks idle but is working | The line under the transcript is codex's placeholder input hint ("› Write tests for @filename"), not a returned prompt | Judge liveness by the `• Working (Ns)` line and a moving context/cost counter, never by the hint line. |

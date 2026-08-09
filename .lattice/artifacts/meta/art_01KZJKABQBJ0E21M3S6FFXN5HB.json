@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-09T06:28:15Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZJKABQBJ0E21M3S6FFXN5HB",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZJKABQBJ0E21M3S6FFXN5HB.md",
+    "size_bytes": 277
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged via auto-merge (PR #2, squash, 3ef7c647). Wire format + delivery verified; client-rendering half remains an operator oracle \u2014 needs_human stands with the inbox checklist. Review sha mismatch (2",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

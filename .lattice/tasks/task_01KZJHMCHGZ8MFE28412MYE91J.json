@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:198",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 1,
+  "comment_count": 4,
   "complexity": null,
   "created_at": "2026-08-09T05:58:47Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: S-2 \u2014 spike (\u00a76). Time-boxed; **fails loudly rather than leaking into a feature build.**\n\nQuestion it settles (verbatim): Does a `METHOD:REQUEST` invite render as **Accept/Decline** in Gmail, Outlook, and Apple Calendar \u2014 and does a `SEQUENCE+1` update *replace* the entry rather than duplicate it, and a `CANCEL` remove it? Neither Google nor Microsoft publishes a normative statement; this is the 15 minutes that separate R3 working from R3 looking like it works. **Runs as a standalone ~30-line script that hand-builds a `METHOD:REQUEST` + `SEQUENCE+1` + `CANCEL` triplet and sends it through Resend to the three inboxes \u2014 it needs no product code and can fire the moment `marquee@stage11.systems` is confirmed.**\n\nBox: 1 h + operator inboxes. Blocks: **M-24** \u2014 the builder is written against the verdict, not the reverse. When: **D+2**, before any product code depends on the answer.\nHuman precondition (\u00a78 item 6): three real inboxes \u2014 one Gmail (mandatory), one Outlook, one Apple Calendar \u2014 and a click on **Accept** in each. Needed within two hours of dispatch, not on Sunday afternoon.\n\nACs: \u2014 (de-risks AC-95, AC-97, AC-124; settles gate 10's shape)\nHours: 1\nWorkflow: fast-track\nShared files: none \u2014 standalone script; nothing merges into `src/` from here.\nDeps: none\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-09T06:28:15Z",
   "evidence_refs": [
     {
       "id": "art_01KZJK473G7H8H6D2W4JTB4XK8",
@@ -25,11 +25,36 @@
       "id": "art_01KZJK4PQ3VCH8D71Y1CJF0P1D",
       "role": null,
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJK5G08JF09HX8DGNFTGM9B",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJK6W3GHE4K5KYKJNRAQ1VB",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZJK7C2NE7WBPAZ5G4BA896R",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZJKABQBJ0E21M3S6FFXN5HC",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZJKABQBJ0E21M3S6FFXN5HB",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMCHGZ8MFE28412MYE91J",
-  "last_event_id": "ev_01KZJK4PT3JRC5QPG4G7XAH0MP",
-  "last_status_changed_at": "2026-08-09T06:24:39Z",
+  "last_event_id": "ev_01KZJKABQBJ0E21M3S6FFXN5HF",
+  "last_status_changed_at": "2026-08-09T06:28:15Z",
   "linked_files": [],
   "needs_human": {
     "flagged_by": "agent:delegator-mrq-55",
@@ -38,13 +63,13 @@
   },
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-55",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Spike \u2014 ICS rendering in real mail clients",
   "type": "spike",
-  "updated_at": "2026-08-09T06:25:10Z",
+  "updated_at": "2026-08-09T06:28:15Z",
   "urgency": null
 }
