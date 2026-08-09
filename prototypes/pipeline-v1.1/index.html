@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Marquee — Pipeline v1.5 prototype</title>
+  <title>Marquee — Pipeline v1.6 prototype</title>
   <style>
     /* ════════════════════════════════════════════════════════════════════
        MARQUEE v1.5 — FLIGHT DECK
@@ -104,7 +104,7 @@
     .page-head h1 { margin: 0 0 6px; letter-spacing: -.018em; font-size: 22px; line-height: 1.2; font-weight: 600; }
     .page-head p { margin: 0; color: var(--ink-soft); max-width: 680px; font-size: 12.5px; line-height: 1.55; font-variant-numeric: tabular-nums; }
     .head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; min-height: 36px; }
-    .button { min-height: 30px; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 7px 12px; background: var(--panel); color: var(--ink-soft); font: 600 11.5px/1 var(--mono); letter-spacing: .02em; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background 110ms, color 110ms, border-color 110ms; }
+    .button { min-height: 30px; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 7px 12px; background: var(--panel); color: var(--ink-soft); font: 600 11.5px/1 var(--mono); letter-spacing: .02em; display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; transition: background 110ms, color 110ms, border-color 110ms; }
     .button:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
     .button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
     .button.primary:hover { background: #095b62; border-color: #095b62; color: #fff; }
@@ -557,6 +557,56 @@
     .track-tile span { display: block; margin-top: 5px; color: #90a8b4; font: 400 8px/1.3 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .track-tile.conflict { border-color: #ff8a80; box-shadow: inset 0 0 0 1px #ff8a80; }
     .track-conflict { position: absolute; right: 5px; top: 4px; width: 16px; height: 16px; border-radius: 2px; display: grid; place-items: center; background: #ff8a80; color: #2a0f0c; font: 700 9px/1 var(--mono); }
+    /* ── v1.6: buildings, room AV metadata, room detail panel ───────────── */
+    .building-row { display:grid; grid-template-columns:18px minmax(0,1fr) minmax(0,1.6fr) 74px auto; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid var(--line); }
+    .building-row:last-child { border-bottom:0; }
+    .building-row input { width:100%; min-width:0; height:30px; border:1px solid var(--line-strong); border-radius:var(--radius); padding:0 8px; background:var(--panel); font-size:12px; }
+    .building-row input:focus { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); outline:none; }
+    .building-rooms { color:var(--muted); font:400 10px/1 var(--mono); text-align:right; white-space:nowrap; }
+
+    .room-row { padding:11px 0; border-bottom:1px solid var(--line); display:grid; gap:8px; }
+    .room-row:last-child { border-bottom:0; }
+    .room-row-main { display:grid; grid-template-columns:18px minmax(0,1fr) 74px minmax(0,150px) auto; align-items:center; gap:9px; }
+    .room-row-main input, .room-row-main select { width:100%; min-width:0; height:30px; border:1px solid var(--line-strong); border-radius:var(--radius); padding:0 8px; background:var(--panel); font-size:12px; }
+    .room-row-main input:focus, .room-row-main select:focus { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); outline:none; }
+    .room-row-meta { display:grid; grid-template-columns:46px minmax(0,1fr); align-items:center; gap:9px; padding-left:27px; }
+    .room-meta-label { font:600 9px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+    .room-row-meta input { width:100%; min-width:0; height:28px; border:1px solid var(--line); border-radius:var(--radius); padding:0 8px; background:var(--sunk); font-size:11.5px; }
+    .room-row-meta input:focus { border-color:var(--accent); background:var(--panel); box-shadow:0 0 0 2px var(--accent-soft); outline:none; }
+    .av-tags { display:flex; gap:5px; flex-wrap:wrap; }
+    /* fixed width + constant weight: toggling a tag must not move its neighbours */
+    .av-tag { min-width:132px; height:26px; padding:0 9px; border:1px solid var(--line-strong); border-radius:2px; background:var(--panel);
+      color:var(--muted); font:400 10px/1 var(--mono); text-align:center; transition:background 110ms, border-color 110ms, color 110ms; }
+    .av-tag:hover { border-color:var(--accent); color:var(--accent-dark); }
+    .av-tag.on { background:var(--accent-soft); border-color:var(--accent); color:var(--accent-dark); }
+
+    /* Room label inside an agenda grid header: one line, ellipsised, so the
+       header height is identical whether or not a building is assigned. */
+    .room-head { display:flex; align-items:center; gap:6px; width:100%; min-width:0; padding:0; border:0; background:none;
+      color:inherit; font:inherit; text-align:left; }
+    .room-head-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .room-head-info { flex:0 0 auto; width:13px; height:13px; display:grid; place-items:center; border:1px solid var(--line-strong);
+      border-radius:50%; color:var(--muted); font:600 8px/1 var(--mono); text-transform:none; letter-spacing:0; }
+    .room-head:hover .room-head-text, .room-head:focus-visible .room-head-text { color:var(--accent-dark); }
+    .room-head:hover .room-head-info, .room-head:focus-visible .room-head-info { border-color:var(--accent); color:var(--accent); }
+
+    .room-panel { position:fixed; z-index:1100; width:280px; background:var(--panel); border:1px solid var(--accent);
+      border-radius:var(--radius); padding:12px 13px; display:grid; gap:9px; box-shadow:none; }
+    .room-panel[hidden] { display:none; }
+    .rp-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+    .rp-head strong { font:600 12px/1.2 var(--mono); letter-spacing:.04em; }
+    .rp-cap { color:var(--muted); font:400 10px/1 var(--mono); white-space:nowrap; }
+    .rp-building { display:grid; gap:3px; }
+    .rp-building strong { font-size:11.5px; font-weight:600; }
+    .rp-building span { color:var(--muted); font-size:10.5px; line-height:1.45; }
+    .rp-section { display:grid; gap:5px; }
+    .rp-label { font:600 9px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+    .rp-tags { display:flex; gap:4px; flex-wrap:wrap; }
+    .rp-tag { border:1px solid var(--line-strong); border-radius:2px; background:var(--sunk); color:var(--ink-soft);
+      padding:2px 6px; font:400 9.5px/1.3 var(--mono); }
+    .rp-notes { margin:0; font-size:11px; line-height:1.5; color:var(--ink-soft); }
+    .rp-empty { color:var(--muted); font-size:10.5px; font-style:italic; }
+
     /* Dark-canvas overrides: `.track-tile span` out-specifies `.chip`, so light
        chips inherited the canvas's muted text colour (measured 2.2-2.3:1).
        Inherited from v1.4; fixed here rather than carried into the contract. */
@@ -652,6 +702,16 @@
       const titleContextLeads = ["after", "across", "before", "during", "inside", "through", "under", "without"];
       const titleContexts = ["the demo ends", "incompatible risk models collide", "the benchmark becomes the product", "the first serious incident review", "regulated teams have to ship", "the underlying models change", "automation loses its escape hatch"];
       const rooms = ["Metropolitan Ballroom", "Empire East", "Empire West", "Central Park"];
+      // Buildings seeded from the real AI Engineer Summit NYC 2025 program
+      // (sequence/research/sources/aie-summit-2025-program.json) — that event genuinely
+      // ran across three physical venues plus a stream.
+      const buildings = [
+        { id:"b1", name:"The Times Center",  address:"242 W 41st St, New York, NY 10036" },
+        { id:"b2", name:"Jay Suites",        address:"109 W 39th St, 2nd floor, New York, NY 10018" },
+        { id:"b3", name:"AWS JFK27",         address:"12 W 39th St, New York, NY 10018 · entrance on 39th St at 5th Ave, large gold doors" },
+        { id:"b4", name:"AIE YouTube",       address:"Online · streamed, no physical venue" }
+      ];
+      const AV_TAGS = ["Projector", "Confidence monitor", "Mics", "Livestream"];
       const waveDates = ["Aug 15", "Sep 1", "Sep 15"];
       const formatRanges = { Workshop:"60–120", "Stage Talk":"15–20", Lightning:"5–10", Online:"5–55" };
       const submissionColumnDefs = [
@@ -745,6 +805,19 @@
         portalSessionDescription: "A field-tested account of evaluation ladders, recovery behavior, and the incidents that changed how the team operates agent systems.",
         scheduled: [],
         roomCapacities: [1200,420,420,210],
+        roomBuildings: ["b1","b2","b2","b3"],
+        roomAV: [
+          ["Projector","Confidence monitor","Mics","Livestream"],
+          ["Projector","Mics"],
+          ["Projector","Confidence monitor","Mics"],
+          ["Projector","Mics"]
+        ],
+        roomNotes: [
+          "Mainstage. Confidence monitors downstage; the livestream feed powers the event site.",
+          "Breakout. Shares a wall with Empire West — avoid amplified sessions in both at once.",
+          "Breakout. Livestream is not cabled; record locally and upload after the session.",
+          "Photo ID required at the 39th St entrance. Allow ten minutes for building security."
+        ],
         taskTemplates: [
           {id:1,title:"Confirm slot",kind:"Acknowledge",description:"Confirm participation for each accepted role.",due:7},
           {id:2,title:"Bio + headshot",kind:"Form",description:"Review profile copy and upload a high-resolution headshot.",due:14},
@@ -959,6 +1032,22 @@
       function trackChips(record, compact = false) {
         if (!record || record.kind === "break") return "";
         return `<div class="track-chip-row">${(record.tracks||[record.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)};${compact?"font-size:7px;padding:2px 5px":""}">${esc(name)}${i===0&&!compact?" · Primary":""}</span>`).join("")}</div>`;
+      }
+
+      function buildingById(id) { return buildings.find(b => b.id === id) || null; }
+      function roomIndex(name) { return rooms.indexOf(name); }
+      function buildingForRoom(name) { const i = roomIndex(name); return i < 0 ? null : buildingById(state.roomBuildings[i]); }
+      function roomsInBuilding(id) { return state.roomBuildings.filter(b => b === id).length; }
+      // "Room · Building" — falls back to the bare room name when unassigned.
+      function roomLabel(name) { const b = buildingForRoom(name); return b ? `${name} · ${b.name}` : name; }
+      function roomInfo(name) {
+        const i = roomIndex(name); if (i < 0) return null;
+        return { name, building: buildingForRoom(name), av: state.roomAV[i] || [], notes: (state.roomNotes[i] || "").trim(), capacity: state.roomCapacities[i] };
+      }
+      // Grid label for a room column/lane: one line, ellipsised, with the full
+      // detail behind a hover/click panel so the header height never changes.
+      function roomHeadLabel(name) {
+        return `<button class="room-head" data-room-head="${esc(name)}" title="${esc(roomLabel(name))}"><span class="room-head-text">${esc(roomLabel(name))}</span><span class="room-head-info" aria-hidden="true">i</span></button>`;
       }
 
       function sessionSlot(recordOrId) {
@@ -1287,7 +1376,8 @@
               ${formats.map((f,i) => `<div class="settings-row" data-format-index="${i}"><span class="drag-handle">⋮</span><input aria-label="Format name" data-format-name="${i}" value="${esc(f)}"><input aria-label="Allowed range" data-format-range="${i}" value="${esc(formatRanges[f]||"15–30")}"><label class="field" style="display:flex;align-items:center;gap:4px"><input aria-label="Default duration" data-format-duration="${i}" type="number" min="5" max="180" value="${formatDurations[f]}"><span class="subtle">min</span></label></div>`).join("")}
             </div></section>
             <section class="card"><div class="card-head"><div><h2>Tracks</h2><span class="subtle">Drag to reorder · edit names and colors in place</span></div><button class="button small" id="add-track">+ Add track</button></div><div class="card-body" id="track-settings">${tracks.map((t,i) => `<div class="settings-row" draggable="true" data-track-index="${i}"><button class="drag-button" aria-label="Drag ${esc(t.name)}">⋮⋮</button><input aria-label="Track name" data-track-name="${i}" value="${esc(t.name)}"><input aria-label="Track color" data-track-color="${i}" type="color" value="${t.color}"><span class="chip" style="border-left:3px solid ${t.color}">${i+1}</span></div>`).join("")}</div></section>
-            <section class="card"><div class="card-head"><h2>Rooms</h2><button class="button small" id="add-room">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="settings-row"><span class="drag-handle">${i+1}</span><input aria-label="Room name" data-room-name="${i}" value="${esc(r)}"><input aria-label="Room capacity" data-room-capacity="${i}" type="number" min="1" step="1" value="${state.roomCapacities[i]}"><button class="button small" data-remove-room="${i}" ${rooms.length<=1?"disabled":""}>Remove</button></div>`).join("")}</div></section>
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Rooms belong to a building; the agenda and the event site show both.</span></div><button class="button small" id="add-building">+ Add building</button></div><div class="card-body">${buildings.map((b,i) => `<div class="building-row"><span class="drag-handle">${i+1}</span><input aria-label="Building name" data-building-name="${b.id}" value="${esc(b.name)}"><input aria-label="Building address" data-building-address="${b.id}" value="${esc(b.address)}" placeholder="Street address, floor, entrance notes"><span class="building-rooms tabular">${roomsInBuilding(b.id)} ${roomsInBuilding(b.id)===1?"room":"rooms"}</span><button class="button small" data-remove-building="${b.id}" ${buildings.length<=1?"disabled":""}>Remove</button></div>`).join("")}</div></section>
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Rooms</h2><span class="subtle">Capacity, building, AV capability, and the notes an ops lead needs on the day</span></div><button class="button small" id="add-room">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="room-row"><div class="room-row-main"><span class="drag-handle">${i+1}</span><input aria-label="Room name" data-room-name="${i}" value="${esc(r)}"><input aria-label="Room capacity" data-room-capacity="${i}" type="number" min="1" step="1" value="${state.roomCapacities[i]}"><select aria-label="Building" data-room-building="${i}"><option value="">Unassigned</option>${buildings.map(b=>`<option value="${b.id}" ${state.roomBuildings[i]===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}</select><button class="button small" data-remove-room="${i}" ${rooms.length<=1?"disabled":""}>Remove</button></div><div class="room-row-meta"><span class="room-meta-label">AV</span><div class="av-tags">${AV_TAGS.map(tag=>`<button class="av-tag ${(state.roomAV[i]||[]).includes(tag)?"on":""}" data-room-av="${i}" data-av-tag="${esc(tag)}" aria-pressed="${(state.roomAV[i]||[]).includes(tag)?"true":"false"}">${esc(tag)}</button>`).join("")}</div></div><div class="room-row-meta"><span class="room-meta-label">Notes</span><input aria-label="Room notes" data-room-notes="${i}" value="${esc(state.roomNotes[i]||"")}" placeholder="Access, load-in, quirks — shown on the agenda and to speakers"></div></div>`).join("")}</div></section>
           </div>
         </div>`);
       }
@@ -1826,7 +1916,7 @@
         if (state.agendaView === "week") return renderWeekAgenda(visible);
         if (state.agendaView === "room") return renderRoomAgenda(visible);
         const times = ["09:00","10:00","11:00","13:30","14:30","15:30"];
-        return `<div class="agenda-grid"><div class="agenda-cell head time"></div>${rooms.map(r=>`<div class="agenda-cell head">${r}</div>`).join("")}${times.map(time=>`<div class="agenda-cell time">${time}</div>${rooms.map(room=>{const s=daySessions.find(x=>x.time===time&&x.room===room);return `<div class="agenda-cell drop-target" data-drop-time="${time}" data-drop-room="${room}">${s?sessionTile(s):""}</div>`}).join("")}`).join("")}</div>`;
+        return `<div class="agenda-grid"><div class="agenda-cell head time"></div>${rooms.map(r=>`<div class="agenda-cell head">${roomHeadLabel(r)}</div>`).join("")}${times.map(time=>`<div class="agenda-cell time">${time}</div>${rooms.map(room=>{const s=daySessions.find(x=>x.time===time&&x.room===room);return `<div class="agenda-cell drop-target" data-drop-time="${time}" data-drop-room="${room}">${s?sessionTile(s):""}</div>`}).join("")}`).join("")}</div>`;
       }
 
       function renderWeekAgenda(items) {
@@ -1836,7 +1926,7 @@
 
       function renderRoomAgenda(items) {
         const days=state.agendaBuilderDay==="All days"?["Mon · Oct 12","Tue · Oct 13","Wed · Oct 14"]:[state.agendaBuilderDay];
-        return `<div class="swimlanes" style="grid-template-columns:repeat(${rooms.length},minmax(220px,1fr));min-width:${Math.max(850,rooms.length*220)}px">${rooms.map(r=>`<div class="swimlane" style="--track-color:var(--muted)"><div class="swimlane-head">${esc(r)}</div><div class="swimlane-body">${days.map(day=>`<div class="track-day-label" style="margin:5px 0"><b>${day.slice(0,3)}</b>${day.split(" · ")[1]}</div>${items.filter(s=>s.room===r&&s.day===day).sort((a,b)=>a.time.localeCompare(b.time)).map(swimlaneSession).join("")||`<div class="drop-target message-preview" data-drop-day="${day}" data-drop-room="${esc(r)}" data-drop-time="16:30">Open lane · drop at 16:30</div>`}`).join("")}</div></div>`).join("")}</div>`;
+        return `<div class="swimlanes" style="grid-template-columns:repeat(${rooms.length},minmax(220px,1fr));min-width:${Math.max(850,rooms.length*220)}px">${rooms.map(r=>`<div class="swimlane" style="--track-color:var(--muted)"><div class="swimlane-head">${roomHeadLabel(r)}</div><div class="swimlane-body">${days.map(day=>`<div class="track-day-label" style="margin:5px 0"><b>${day.slice(0,3)}</b>${day.split(" · ")[1]}</div>${items.filter(s=>s.room===r&&s.day===day).sort((a,b)=>a.time.localeCompare(b.time)).map(swimlaneSession).join("")||`<div class="drop-target message-preview" data-drop-day="${day}" data-drop-room="${esc(r)}" data-drop-time="16:30">Open lane · drop at 16:30</div>`}`).join("")}</div></div>`).join("")}</div>`;
       }
       function renderTrackAgenda(items) {
         const slots = ["09:00","10:00","11:00","13:30","14:30","15:30","16:30"];
@@ -1870,13 +1960,13 @@
       function publicAgendaView() {
         const q = state.publicSearch.trim().toLowerCase();
         const sessions = state.scheduled.filter(s=>s.kind!=="break"&&s.day===state.agendaDay && s.status==="Published" && (state.publicTrack==="All tracks" || (s.tracks||[s.track]).includes(state.publicTrack)) && (!q || [s.title,s.speaker,s.company].some(v=>v.toLowerCase().includes(q)))).sort((a,b)=>a.time.localeCompare(b.time)).slice(0,16);
-        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)}</a><div style="display:flex;gap:8px"><button class="button small" id="open-embed">Get embed code</button><a class="button small" href="#dashboard">Organizer demo</a></div></header><main class="public-body wide"><div class="eyebrow">October 12–14 · ${esc(state.event.venue)}</div><div class="portal-head" style="margin-top:10px"><div><h1 style="font-size:36px">Agenda</h1><span class="subtle">Three days of practical sessions for people building and operating AI.</span></div><button class="button" id="subscribe-calendar">Subscribe to calendar</button></div><div class="public-agenda-controls"><div class="segment"><button data-public-day="Mon · Oct 12" class="${state.agendaDay==="Mon · Oct 12"?"active":""}">Mon 12</button><button data-public-day="Tue · Oct 13" class="${state.agendaDay==="Tue · Oct 13"?"active":""}">Tue 13</button><button data-public-day="Wed · Oct 14" class="${state.agendaDay==="Wed · Oct 14"?"active":""}">Wed 14</button></div><select id="public-track"><option>All tracks</option>${tracks.map(t=>`<option ${state.publicTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select><input id="public-search" value="${esc(state.publicSearch)}" style="height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px" placeholder="Search the agenda"></div><section class="public-card" style="padding-top:8px;padding-bottom:8px">${sessions.length?sessions.map(s=>`<article class="public-session"><time>${s.time}<br><span>${esc(s.room)}</span></time><div><a href="#s/${s.id}"><h3>${esc(s.title)}</h3></a><p>${s.speakers.map(name=>`<a href="#p/${encodeURIComponent(name)}" style="text-decoration:underline;text-decoration-color:var(--line-strong)">${esc(name)}</a>`).join(" · ")} · ${esc(s.company)}</p></div><div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div></article>`).join(""):`<div style="padding:48px;text-align:center"><strong>No published sessions match</strong><div class="subtle" style="margin-top:6px">Clear a filter to see the full program.</div></div>`}</section></main></div>`;
+        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)}</a><div style="display:flex;gap:8px"><button class="button small" id="open-embed">Get embed code</button><a class="button small" href="#dashboard">Organizer demo</a></div></header><main class="public-body wide"><div class="eyebrow">October 12–14 · ${esc(state.event.venue)}</div><div class="portal-head" style="margin-top:10px"><div><h1 style="font-size:36px">Agenda</h1><span class="subtle">Three days of practical sessions for people building and operating AI.</span></div><button class="button" id="subscribe-calendar">Subscribe to calendar</button></div><div class="public-agenda-controls"><div class="segment"><button data-public-day="Mon · Oct 12" class="${state.agendaDay==="Mon · Oct 12"?"active":""}">Mon 12</button><button data-public-day="Tue · Oct 13" class="${state.agendaDay==="Tue · Oct 13"?"active":""}">Tue 13</button><button data-public-day="Wed · Oct 14" class="${state.agendaDay==="Wed · Oct 14"?"active":""}">Wed 14</button></div><select id="public-track"><option>All tracks</option>${tracks.map(t=>`<option ${state.publicTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select><input id="public-search" value="${esc(state.publicSearch)}" style="height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px" placeholder="Search the agenda"></div><section class="public-card" style="padding-top:8px;padding-bottom:8px">${sessions.length?sessions.map(s=>`<article class="public-session"><time>${s.time}<br><span>${esc(roomLabel(s.room))}</span></time><div><a href="#s/${s.id}"><h3>${esc(s.title)}</h3></a><p>${s.speakers.map(name=>`<a href="#p/${encodeURIComponent(name)}" style="text-decoration:underline;text-decoration-color:var(--line-strong)">${esc(name)}</a>`).join(" · ")} · ${esc(s.company)}</p></div><div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div></article>`).join(""):`<div style="padding:48px;text-align:center"><strong>No published sessions match</strong><div class="subtle" style="margin-top:6px">Clear a filter to see the full program.</div></div>`}</section></main></div>`;
       }
 
       function publicSessionView() {
         const s=state.scheduled.find(x=>x.id===state.publicRecordId&&x.status==="Published");
         if(!s) return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#publicAgenda"><span class="brand-mark">M</span>${esc(state.event.name)}</a></header><main class="public-body"><section class="public-card empty-state"><div><div class="empty-mark">404</div><h2>Session not found</h2><p>This session is not published. No private title or speaker information is available.</p><a class="button primary" href="#publicAgenda">View the agenda</a></div></section></main></div>`;
-        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#publicAgenda"><span class="brand-mark">M</span>${esc(state.event.name)}</a><a class="button small" href="#publicAgenda">← Agenda</a></header><main class="public-body"><section class="public-card"><div style="display:flex;gap:5px;flex-wrap:wrap">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div><h1 style="margin-top:16px">${esc(s.title)}</h1><p>${esc(s.day)} · ${s.time} · ${esc(s.room)} · ${s.duration} minutes</p><div class="divider"></div><h2 style="font-size:14px">About this session</h2><p>Teams can make agent systems reliable without slowing delivery to a crawl. This session presents a field-tested approach, the incidents that changed it, and a decision framework attendees can take home.</p><div class="divider"></div><div class="eyebrow">Speakers</div>${s.speakers.map(name=>`<a class="button ghost" style="margin-top:8px" href="#p/${encodeURIComponent(name)}">${esc(name)} →</a>`).join("")}</section></main></div>`;
+        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#publicAgenda"><span class="brand-mark">M</span>${esc(state.event.name)}</a><a class="button small" href="#publicAgenda">← Agenda</a></header><main class="public-body"><section class="public-card"><div style="display:flex;gap:5px;flex-wrap:wrap">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div><h1 style="margin-top:16px">${esc(s.title)}</h1><p>${esc(s.day)} · ${s.time} · ${esc(roomLabel(s.room))} · ${s.duration} minutes</p><div class="divider"></div><h2 style="font-size:14px">About this session</h2><p>Teams can make agent systems reliable without slowing delivery to a crawl. This session presents a field-tested approach, the incidents that changed it, and a decision framework attendees can take home.</p><div class="divider"></div><div class="eyebrow">Speakers</div>${s.speakers.map(name=>`<a class="button ghost" style="margin-top:8px" href="#p/${encodeURIComponent(name)}">${esc(name)} →</a>`).join("")}</section></main></div>`;
       }
 
       function publicSpeakerView() {
@@ -1884,7 +1974,7 @@
         const person=onboardingSpeakers.find(p=>p.name===name);
         const sessions=state.scheduled.filter(s=>s.status==="Published"&&(s.speakers||[s.speaker]).includes(name));
         if(!person && !sessions.length) return publicSessionView();
-        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#publicAgenda"><span class="brand-mark">M</span>${esc(state.event.name)}</a><a class="button small" href="#publicAgenda">← Agenda</a></header><main class="public-body"><section class="public-card"><div class="profile-block"><div class="avatar">${esc(name.split(" ").map(n=>n[0]).slice(0,2).join(""))}</div><div><div class="eyebrow">Speaker</div><h1 style="margin:5px 0">${esc(name)}</h1><span class="subtle">${esc(person?.title||"Speaker")} · ${esc(person?.company||sessions[0]?.company||"")}</span></div></div><p>${esc(person?.bio||"Builds and operates production AI systems with an emphasis on evidence, recovery, and human judgment.")}</p><div class="divider"></div><h2 style="font-size:14px">Sessions</h2>${sessions.map(s=>`<a class="list-button" href="#s/${s.id}"><span><strong>${esc(s.title)}</strong><small style="display:block;margin-top:4px">${s.day} · ${s.time} · ${esc(s.room)}</small></span><span>→</span></a>`).join("")||`<p class="subtle">No published sessions yet.</p>`}</section></main></div>`;
+        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#publicAgenda"><span class="brand-mark">M</span>${esc(state.event.name)}</a><a class="button small" href="#publicAgenda">← Agenda</a></header><main class="public-body"><section class="public-card"><div class="profile-block"><div class="avatar">${esc(name.split(" ").map(n=>n[0]).slice(0,2).join(""))}</div><div><div class="eyebrow">Speaker</div><h1 style="margin:5px 0">${esc(name)}</h1><span class="subtle">${esc(person?.title||"Speaker")} · ${esc(person?.company||sessions[0]?.company||"")}</span></div></div><p>${esc(person?.bio||"Builds and operates production AI systems with an emphasis on evidence, recovery, and human judgment.")}</p><div class="divider"></div><h2 style="font-size:14px">Sessions</h2>${sessions.map(s=>`<a class="list-button" href="#s/${s.id}"><span><strong>${esc(s.title)}</strong><small style="display:block;margin-top:4px">${s.day} · ${s.time} · ${esc(roomLabel(s.room))}</small></span><span>→</span></a>`).join("")||`<p class="subtle">No published sessions yet.</p>`}</section></main></div>`;
       }
 
       function showBulkModal() {
@@ -1983,15 +2073,31 @@
         document.getElementById("save-settings")?.addEventListener("click",()=>{
           document.querySelectorAll("[data-format-name]").forEach((input,i)=>{const old=formats[i],name=input.value.trim()||old;formats[i]=name;formatRanges[name]=document.querySelector(`[data-format-range="${i}"]`).value;formatDurations[name]=Math.max(5,Number(document.querySelector(`[data-format-duration="${i}"]`).value)||20);if(name!==old){delete formatRanges[old];delete formatDurations[old];}});
           document.querySelectorAll("[data-track-name]").forEach((input,i)=>{tracks[i].name=input.value.trim()||tracks[i].name;tracks[i].color=document.querySelector(`[data-track-color="${i}"]`).value;});
-          document.querySelectorAll("[data-room-name]").forEach((input,i)=>{rooms[i]=input.value.trim()||rooms[i];state.roomCapacities[i]=Math.max(1,Math.round(Number(document.querySelector(`[data-room-capacity="${i}"]`).value)||1));});
+          document.querySelectorAll("[data-room-name]").forEach((input,i)=>{rooms[i]=input.value.trim()||rooms[i];state.roomCapacities[i]=Math.max(1,Math.round(Number(document.querySelector(`[data-room-capacity="${i}"]`).value)||1));state.roomBuildings[i]=document.querySelector(`[data-room-building="${i}"]`).value||"";state.roomNotes[i]=document.querySelector(`[data-room-notes="${i}"]`).value.trim();});
+          document.querySelectorAll("[data-building-name]").forEach(input=>{const b=buildingById(input.dataset.buildingName);if(!b)return;b.name=input.value.trim()||b.name;b.address=document.querySelector(`[data-building-address="${b.id}"]`).value.trim();});
           state.event = { ...state.event, name: document.getElementById("event-name").value, start: document.getElementById("event-start").value, end: document.getElementById("event-end").value, venue: document.getElementById("event-venue").value, timezone: document.getElementById("event-timezone").value };
           try { localStorage.setItem("marquee-prototype-event",JSON.stringify(state.event)); } catch (_) { }
           toast("Event settings saved · agenda and invites updated"); render();
         });
         document.getElementById("add-format")?.addEventListener("click",()=>{const name=`New format ${formats.length+1}`;formats.push(name);formatRanges[name]="15–30";formatDurations[name]=20;render();});
         document.getElementById("add-track")?.addEventListener("click",()=>{tracks.push({name:`New track ${tracks.length+1}`,color:"#64748b"});render();});
-        document.getElementById("add-room")?.addEventListener("click",()=>{rooms.push(`New room ${rooms.length+1}`);state.roomCapacities.push(100);render();});
-        document.querySelectorAll("[data-remove-room]").forEach(b=>b.onclick=()=>{rooms.splice(Number(b.dataset.removeRoom),1);state.roomCapacities.splice(Number(b.dataset.removeRoom),1);render();});
+        document.getElementById("add-room")?.addEventListener("click",()=>{rooms.push(`New room ${rooms.length+1}`);state.roomCapacities.push(100);state.roomBuildings.push(buildings[0]?.id||"");state.roomAV.push([]);state.roomNotes.push("");render();});
+        document.querySelectorAll("[data-remove-room]").forEach(b=>b.onclick=()=>{const i=Number(b.dataset.removeRoom);rooms.splice(i,1);state.roomCapacities.splice(i,1);state.roomBuildings.splice(i,1);state.roomAV.splice(i,1);state.roomNotes.splice(i,1);render();});
+        document.getElementById("add-building")?.addEventListener("click",()=>{buildings.push({id:`b${Date.now().toString(36)}`,name:`New building ${buildings.length+1}`,address:""});render();});
+        document.querySelectorAll("[data-remove-building]").forEach(b=>b.onclick=()=>{
+          const id=b.dataset.removeBuilding, orphaned=roomsInBuilding(id), name=buildingById(id)?.name||"Building";
+          buildings.splice(buildings.findIndex(x=>x.id===id),1);
+          state.roomBuildings=state.roomBuildings.map(x=>x===id?"":x);
+          render();
+          toast(orphaned?`${name} removed · ${orphaned} room${orphaned===1?"":"s"} are now unassigned`:`${name} removed`);
+        });
+        document.querySelectorAll("[data-room-building]").forEach(sel=>sel.addEventListener("change",()=>{state.roomBuildings[Number(sel.dataset.roomBuilding)]=sel.value;render();toast(sel.value?`Room moved to ${buildingById(sel.value).name}`:"Room is now unassigned");}));
+        document.querySelectorAll("[data-room-av]").forEach(btn=>btn.onclick=()=>{
+          const i=Number(btn.dataset.roomAv), tag=btn.dataset.avTag, list=state.roomAV[i]||(state.roomAV[i]=[]), at=list.indexOf(tag);
+          if(at>=0)list.splice(at,1); else list.push(tag);
+          render();
+        });
+        document.querySelectorAll("[data-room-notes]").forEach(input=>input.addEventListener("change",()=>{state.roomNotes[Number(input.dataset.roomNotes)]=input.value.trim();toast("Room notes saved · visible on the agenda");}));
         let trackFrom=null;document.querySelectorAll("[data-track-index]").forEach(row=>{row.addEventListener("dragstart",()=>{trackFrom=Number(row.dataset.trackIndex);row.classList.add("dragging")});row.addEventListener("dragend",()=>row.classList.remove("dragging"));row.addEventListener("dragover",e=>e.preventDefault());row.addEventListener("drop",e=>{e.preventDefault();const to=Number(row.dataset.trackIndex);if(trackFrom===null||to===trackFrom)return;const [track]=tracks.splice(trackFrom,1);tracks.splice(to,0,track);render();});});
         document.getElementById("preview-branding")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Event branding preview</h2><p>Public form, portal, event site, and calendar invite identity.</p></div><div class="modal-body"><div class="hero-pipeline" style="transform:none"><div class="brand"><span class="brand-mark">M</span><span class="brand-name">${esc(document.getElementById("event-name").value)}</span></div><div class="eyebrow">October 12–14 · ${esc(document.getElementById("event-venue").value)}</div><h2>Fantastic conferences, effortlessly.</h2></div></div><div class="modal-actions"><button class="button primary" id="close-preview">Close preview</button></div></section></div>`;document.getElementById("close-preview").onclick=()=>modalRoot.innerHTML="";});
       }
@@ -2255,12 +2361,55 @@
         return shell(`<div class="page">${pageHead(routeNames[route],"Fresh-install preview · every empty state points to the next useful action.")} ${content}</div>`);
       }
 
+      // Room detail panel. Rendered at body level and positioned fixed so the
+      // agenda's overflow container cannot clip it, and so opening it never
+      // reflows the grid. Hover previews; click pins until dismissed.
+      let roomPanelPinned = false;
+      function roomPanel() {
+        let el = document.getElementById("room-panel");
+        if (!el) { el = document.createElement("div"); el.id = "room-panel"; el.className = "room-panel"; el.hidden = true; document.body.appendChild(el); }
+        return el;
+      }
+      function showRoomPanel(anchor, name, pin) {
+        const info = roomInfo(name); if (!info) return;
+        const el = roomPanel();
+        el.innerHTML = `<div class="rp-head"><strong>${esc(info.name)}</strong><span class="rp-cap tabular">${info.capacity ? info.capacity.toLocaleString() + " seats" : "—"}</span></div>
+          <div class="rp-building">${info.building ? `<strong>${esc(info.building.name)}</strong>${info.building.address ? `<span>${esc(info.building.address)}</span>` : ""}` : `<span class="rp-empty">No building assigned</span>`}</div>
+          <div class="rp-section"><span class="rp-label">AV</span>${info.av.length ? `<div class="rp-tags">${info.av.map(t => `<span class="rp-tag">${esc(t)}</span>`).join("")}</div>` : `<span class="rp-empty">No AV equipment recorded</span>`}</div>
+          <div class="rp-section"><span class="rp-label">Notes</span>${info.notes ? `<p class="rp-notes">${esc(info.notes)}</p>` : `<span class="rp-empty">No notes</span>`}</div>`;
+        el.hidden = false;
+        const r = anchor.getBoundingClientRect(), w = 280;
+        el.style.left = Math.round(Math.min(Math.max(8, r.left), innerWidth - w - 8)) + "px";
+        el.style.top = Math.round(Math.min(r.bottom + 6, innerHeight - el.offsetHeight - 8)) + "px";
+        roomPanelPinned = !!pin;
+      }
+      function hideRoomPanel(force) { if (roomPanelPinned && !force) return; const el = document.getElementById("room-panel"); if (el) el.hidden = true; }
+      function bindRoomHeads() {
+        document.querySelectorAll("[data-room-head]").forEach(btn => {
+          const name = btn.dataset.roomHead;
+          btn.addEventListener("mouseenter", () => { if (!roomPanelPinned) showRoomPanel(btn, name, false); });
+          btn.addEventListener("mouseleave", () => hideRoomPanel(false));
+          btn.addEventListener("focus", () => { if (!roomPanelPinned) showRoomPanel(btn, name, false); });
+          btn.addEventListener("blur", () => hideRoomPanel(false));
+          btn.addEventListener("click", e => {
+            e.stopPropagation();
+            const el = document.getElementById("room-panel");
+            if (roomPanelPinned && el && !el.hidden) { roomPanelPinned = false; hideRoomPanel(true); }
+            else showRoomPanel(btn, name, true);
+          });
+        });
+      }
+      addEventListener("click", () => { if (roomPanelPinned) { roomPanelPinned = false; hideRoomPanel(true); } });
+      addEventListener("keydown", e => { if (e.key === "Escape") { roomPanelPinned = false; hideRoomPanel(true); } });
+
       function render() {
         state.route = currentRoute();
         const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
         app.innerHTML = state.emptyInstall ? emptyStateView(state.route) : views[state.route]();
         modalRoot.innerHTML = "";
+        hideRoomPanel(true); roomPanelPinned = false;
         bindCommon();
+        bindRoomHeads();
         const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
         if(!state.emptyInstall&&binder)binder();
         window.scrollTo(0,0);
