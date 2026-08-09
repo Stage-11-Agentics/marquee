@@ -925,4 +925,10 @@ Source: client approval of the v1.3 context-gap audit against `/Users/atin/Downl
 
 ---
 
-*Canonical as of 2026-08-09 (Amendments 1–9 applied). Changes to this file are amendments: new criteria append from AC-251; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*
+## Amendment 10 — per-item reviewer assignment (2026-08-09, orchestrator; client review question)
+
+**AC-251** *(appended to US-25, Tier B high — table stakes per the landscape matrix; UI tagged [beyond v1.5 prototype — acknowledged divergence])*: A submission record's evaluation panel lists its current reviewers per round with coverage counts; an admin can assign or remove a specific reviewer there (writing `round_assignments`), with the affected reviewer's queue updating accordingly and track-scope rules still enforced. The API/CLI equivalent is `/rounds/:id/assignments` CRUD.
+
+---
+
+*Canonical as of 2026-08-09 (Amendments 1–9 applied). Changes to this file are amendments: new criteria append from AC-252; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*

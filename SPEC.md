@@ -671,4 +671,10 @@ Source: `sequence/research/api-comparison.md`. Four gaps amended into the pre-ki
 
 ---
 
-*v1.4 contract revision, 2026-08-09; folded against `USER_STORIES.md` Amendments 1–9. Amendments follow that file's rules: **the next criteria append from AC-251**; deletions are struck, never recycled. Next input — client review and sign-off of the v1.4 prototype; only then mint `DESIGN.md` and hand the complete contract to orchestration.*
+## Amendment 10 — per-item reviewer assignment (2026-08-09)
+
+Submission record → evaluation panel: current reviewers per round + coverage; assign/remove a specific reviewer (AC-251, `round_assignments` write, track scopes enforced). **[beyond v1.5 prototype — acknowledged divergence, build per spec.]** Fold into the record-screen and assignments tickets, +1h.
+
+---
+
+*v1.4 contract revision, 2026-08-09; folded against `USER_STORIES.md` Amendments 1–9. Amendments follow that file's rules: **the next criteria append from AC-252**; deletions are struck, never recycled. Next input — client review and sign-off of the v1.4 prototype; only then mint `DESIGN.md` and hand the complete contract to orchestration.*
