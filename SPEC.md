@@ -531,6 +531,7 @@ The seeded demo *is* the product a judge sees. Generator lives at `scripts/seed/
 
 **Formats** (verbatim from the 2026 CFP): Stage Talk 15–20 m (default 20) · Workshop 1–2 h (default 90) · Lightning 5–10 m (default 10) · Online 5–55 m (default 25).
 **Tracks:** AI in Financial Services (mainstage) · Agents · Evals · Infra · Open Models · RAG/Retrieval · Security · Leadership.
+**Buildings** (Amendment 11): Sheraton New York Times Square, 811 7th Ave (ballrooms + Expo Stage) · Workshop Annex — Lower Conference Level, 811 7th Ave (Workshop Rooms A–E) · Online (virtual sessions; address "Virtual"). Three buildings exercise grouping, the ICS "Room · Building" location, and the Buildings settings card without inventing a second real venue.
 **Rooms:** Metropolitan Ballroom (2,500) · Central Park Ballroom · New York Ballroom (1,200) · Expo Stage · Workshop Rooms A–E. Only the three named ballrooms are verified; everything else is labelled generically on purpose.
 **Waves:** Aug 15 (sent) · Sep 1 (pending) · Sep 15 (planned). CFP closes Sep 12.
 
@@ -679,7 +680,7 @@ Submission record → evaluation panel: current reviewers per round + coverage; 
 
 ## Amendment 11 — venue model (2026-08-09)
 
-**`buildings`** (AC-252) — `event_id`, `name`, `address`, `position`. Writer: Event Settings → Buildings card; seed (the real 2025 four). Reader: room grouping/labels, ICS `LOCATION` ("Room · Building"), public session pages.
+**`buildings`** (AC-252) — `event_id`, `name`, `address`, `position`. Writer: Event Settings → Buildings card; seed: the Sheraton-coherent trio in §6 (ruled 2026-08-09 under operator-delegated authority — a 2026 event at the Sheraton cannot coherently seed 2025's venue buildings, and §6's room list is already Sheraton-native). Reader: room grouping/labels, ICS `LOCATION` ("Room · Building"), public session pages.
 **`rooms`** gains `building_id` (required), `av_capabilities` (JSON tag array), `notes` (AC-253). Writers: Event Settings → Rooms card (building select, AV tag editor, notes). Readers: agenda room headers + tooltip panel, room view, day-of surfaces. Lands in M-02's single migration; Event Settings, seed, and agenda tickets absorb +2h. **[Settings card and room-header rendering: beyond v1.5 prototype unless the v1.6 micro-round lands first.]**
 
 ---
