@@ -1,0 +1,12 @@
+{
+  "name": "marquee-s3-d1-chunking-spike",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-08",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "s3-d1-chunking-local",
+      "database_id": "00000000-0000-0000-0000-000000000056"
+    }
+  ]
+}
