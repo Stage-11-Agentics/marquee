@@ -71,7 +71,7 @@ New (for the oracle smokes and gate — not urgent tonight, needed before Tuesda
 2. **Create an R2 bucket and fetch a public object now** — Stage 11's R2 entitlement has silently lapsed account-wide before (403s every public URL; dashboard-only fix).
 3. Check **Resend plan tier** (30s in dashboard) — Free's 100/day cap decides how urgent the outbox/demo-safe mode is.
 4. If a bespoke sending domain (e.g. a marquee.* domain) is wanted: register + verify **Saturday or not at all**. Default: send as `marquee@stage11.systems` (verified since March).
-5. Airtable demo base needs **Team plan or above** (Free caps at 1,000 records/base; seed target is ~1,000). ⚠️ Seed Source confirms the target is **exactly 1,000 submissions** — dead on the Free cap, before speakers/sessions/evaluations are counted. Treat the plan upgrade as required, not optional.
+5. Airtable needs **Team plan or above** and now **two bases**: the demo base (seed mirror, judge-visible) and a dedicated `check:mirror` test base (the suite writes destructively — EVALUATION precondition 9). ⚠️ Seed Source confirms the target is **exactly 1,000 submissions** — dead on the Free cap, before speakers/sessions/evaluations are counted. Treat the plan upgrade as required, not optional.
 
 ## Touchpoints
 
