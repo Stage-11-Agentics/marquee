@@ -608,10 +608,22 @@ Deviations and gaps, raised rather than silently forked (living-artifacts norm).
 
 **Seed** (§6): ≥15% of submissions multi-track; ≥3 accepted-and-scheduled sessions carry two tracks; asserted by `check:seed`.
 
-## Amendment 6 — board filtering + record-owned actions (2026-08-09)
+## Amendment 6 — board filtering + record-owned actions (2026-08-09; **AC IDs corrected by the orchestrator**)
 
-**Program board `/board`** (AC-241–242): filters compose across free-text search (title, speaker, record ID, company), type, any carried track, format, and wave, with filtered count + one-click reset. The board is a read-only overview: no card is draggable and no lifecycle action appears on a card. Mouse click, Enter, or Space opens the exact submission record. The record owns stage-appropriate actions (review, wave, accept, onboarding, agenda placement, publish, public view), with the existing confirmation/cascade preview for consequential transitions. Agenda drag-and-drop is unaffected.
+> Authored by the v1.3 prototype builder, which is why its original text misallocated AC-241/242 (already minted for webhooks and token scopes in `USER_STORIES.md` Amendment 6). Corrected IDs below. **The design change itself is PROPOSED, pending client ruling** — it contradicts AC-239's drag-transition semantics.
+
+**Program board `/board`** (extends AC-238; proposes **AC-243** replacing AC-239): filters compose across free-text search (title, speaker, record ID, company), type, any carried track, format, and wave, with filtered count + one-click reset. The board is a read-only overview: no card is draggable and no lifecycle action appears on a card. Mouse click, Enter, or Space opens the exact submission record. The record owns stage-appropriate actions (review, wave, accept, onboarding, agenda placement, publish, public view), with the existing confirmation/cascade preview for consequential transitions. Agenda drag-and-drop is unaffected.
+
+## Amendment 7 — API surface upgrades from the Sessionboard comparison (2026-08-09)
+
+Source: `sequence/research/api-comparison.md`. Four gaps amended into the pre-kickoff surface; one deferred behind Tier A; six cross-cutting semantics pinned.
+
+**New/changed routes:** `GET /api/v1/events` (token-visible events with id/slug/name/dates/timezone/role — tokens must be able to discover their event IDs) · `GET /events/:id/people` (+ `?q=&role=&task_status=`), `GET/PATCH /people/:personId`, `GET /people/:personId/submissions` (no duplicate Speaker/Contact models) · full file lifecycle: `GET .../submissions/:id/files`, `POST .../files/sign`, `POST .../files/complete`, `PATCH/DELETE .../files/:fileId` (replacement = new upload version) · `POST /org/tokens` accepts `{name, scopes[], event_ids[]}` (AC-242 semantics).
+
+**Deferred behind Tier A green:** signed outbound webhooks (AC-241) — endpoint CRUD, test delivery, deliveries log, six event types, HMAC over `id.timestamp.body`.
+
+**Pinned semantics (bind every route):** `page`/`per_page` (default 50, max 100), stable ULID secondary sort, `{data,page,per_page,total,total_pages}` · `ETag` from `updated_at`, `If-Match` on PATCH/DELETE/agenda-move/publish, 409 with current state — agents and humans are simultaneous first-class operators · one error envelope `{error:{code,message,field?,details?}, request_id}` with the pinned status map · rate-limit buckets (read/write/send/import; public by IP+submission) with `RateLimit-*` + `Retry-After` · bulk operations return a durable `operation_id` with selected/succeeded/failed counts · **OpenAPI is generated from the route registry and is the single source** for docs, CLI registry, and SKILL.md links.
 
 ---
 
-*Draft, 2026-08-08; folded against `USER_STORIES.md` Amendments 1–6. Amendments follow that file's rules: **the next criteria append from AC-243**; deletions are struck, never recycled. Next inputs — orchestrator review with the client, the Sunday clarification video (requirements freeze), remaining Discord rulings, and final prototype sign-off as the binding visual contract.*
+*Draft, 2026-08-08; folded against `USER_STORIES.md` Amendments 1–7. Amendments follow that file's rules: **the next criteria append from AC-245**; deletions are struck, never recycled. Next inputs — orchestrator review with the client, the Sunday clarification video (requirements freeze), remaining Discord rulings, and final prototype sign-off as the binding visual contract.*

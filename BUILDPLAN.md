@@ -285,6 +285,12 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 - **AC-240 folds into existing tickets**: slot chips + "Not yet public" into the submissions-list and record tickets; stage sub-labels into the dashboard ticket; publish affordance into the agenda/publish ticket. +1h total, spread.
 - **M-04 seed**: multi-track distribution (≥15%, ≥3 accepted+scheduled two-track sessions) asserted by `check:seed`.
 
+## Amendment 6 — API comparison fold (2026-08-09, orchestrator)
+
+- **M-07 (API core) absorbs the four pre-kickoff gaps** (+3h): `GET /events` discovery, people reads, file lifecycle, scoped tokens (AC-242) — plus the pinned semantics (pagination, ETag/If-Match, error envelope, rate-limit headers, bulk `operation_id`). All are contract-level; none add product screens.
+- **New ticket M-54 — signed outbound webhooks (AC-241), 4h, gated on CP-2 (Tier A green).** Tier B low; the strongest direct R53 comparator after core REST.
+- **`check:api` strengthened** (EVALUATION §1.1): docs/CLI/SKILL derive from one route registry; operation counts and hashes must match across served JSON and rendered docs — this directly beats the incumbent's own 177-vs-18 docs drift.
+
 ## Amendment 6 — client v1.3 board refinement (2026-08-09)
 
 - **M-53 scope correction (AC-241–242):** replace board drag/drop with composable search/type/track/format/wave filters and exact-record card navigation; lifecycle buttons and confirmation/cascade behavior belong to the submission-record ticket. Agenda drag/drop is unchanged. Estimate remains 4h because the board interaction is simpler and the record action surface reuses existing transition logic.

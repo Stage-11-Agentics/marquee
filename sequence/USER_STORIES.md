@@ -1,6 +1,6 @@
 # Marquee — User Stories (canonical)
 
-**Status:** Phase-3 canonical artifact, minted 2026-08-08 · amended 2026-08-08 (contract-review fold). **73 stories · 233 acceptance criteria.**
+**Status:** Phase-3 canonical artifact, minted 2026-08-08 · Amendments 1–6 applied (see tail sections). **75 stories · 242 acceptance criteria** (US-74/US-75 and AC-234–242 minted in Amendments 2–6; the head tables below predate them — the amendment sections are authoritative for the deltas).
 **Authority:** This file supersedes `research/user-stories-draft.md` for all build purposes. The draft is retained unchanged as the research archive.
 **Upstream:** `PHILOSOPHY.md` · `sequence/PRODUCT-DEFINITION.md` · `research/competition-requirements.md` (R1–R50) · `research/stakeholders.md` (15 seats) · `research/landscape-features.md` (D1–D15) · `research/seams-feasibility.md`.
 
@@ -29,7 +29,7 @@
 
 **Tier A + Tier B = 52 stories = the Wednesday target.** Totals: **73 stories · 233 criteria.**
 
-> **Note for gate 18.** Tier A's no-waiver set is `AC-1 – AC-90` **plus AC-231** — the Turnstile criterion is binding because US-14 puts an open write endpoint on the public internet. It is *not* `AC-1 – AC-233`: AC-232 is Tier B and AC-233 is explicitly cuttable. The AC range and the tier are no longer the same thing; read the table, not the numbering.
+> **Note for gate 18.** Tier A's no-waiver set is `AC-1 – AC-90` **plus AC-231, AC-234, and AC-240** (Turnstile; multi-track on the Tier A form; scheduled/published legibility on Tier A surfaces — all minted by amendment onto Tier A stories). AC-232/235–239/241–242 are Tier B; AC-233 is explicitly cuttable. The AC range and the tier are not the same thing; read the table and the amendment sections, not the numbering.
 
 ### What changed at consolidation (2026-08-08)
 
@@ -880,6 +880,24 @@ Source: Atin driving v1.2 (scheduled/published legibility; multi-track demo visi
 *Seed addendum (SPEC §6): ≥15% of submissions carry two or more tracks, including at least three accepted-and-scheduled sessions, so multi-track chips are demonstrably visible on the form, lists, board, and agenda; `check:seed` asserts it.*
 
 *Next amendment appends from AC-241.*
+
+## Amendment 6 — API comparison fold (2026-08-09, orchestrator)
+
+Source: `sequence/research/api-comparison.md` (Sessionboard's public API docs crawled and diffed; R53 API bonus is the frame).
+
+**AC-241** *(appended to US-68's area, Tier B — build only after Tier A is green)*: Signed outbound webhooks: endpoint CRUD per event, a test-delivery action, and a deliveries log; only six event types (`submission.created|updated|status_changed`, `person.updated`, `speaker_task.completed`, `agenda.published`); deliveries queued with retry/backoff, HMAC-signed over `id.timestamp.body`, replay-idempotent.
+
+**AC-242** *(appended to US-68, Tier B)*: API tokens are issued with named scopes (`program:read/write`, `review:write`, `speaker:write`, `agenda:write`, `comms:send`, `mirror:write`) and optional event restriction; effective authority is the intersection of the token's grants and the issuer's membership; the secret is shown once and stored only as a hash; revocation is immediate.
+
+Semantic pins (SPEC Amendment 7, no new ACs): event discovery (`GET /events`), event people reads, full submission-file lifecycle, pinned list/pagination semantics, `ETag`/`If-Match` optimistic concurrency, one error envelope, standard rate-limit headers, durable bulk `operation_id` results, OpenAPI as the single source for docs/CLI/SKILL.
+
+## Amendment 7 — board fork + reviewer detail (2026-08-09, orchestrator)
+
+**AC-243** *(proposed replacement for AC-239 — CLIENT RULING PENDING)*: The program board is a read-only overview: no card drags, no lifecycle action on cards; click/Enter/Space opens the submission record, which owns every stage-appropriate action with the standard confirmation/cascade previews; board filters compose (free-text, type, any track, format, wave) with a one-click reset. *Origin: the v1.3 builder implemented this in place of AC-239's drag-transitions and argued it — cleaner action ownership, cascade UX in one place. Exactly one of AC-239 / AC-243 survives the client ruling; the other is struck.*
+
+**AC-244** *(appended to US-26, Tier A — the reviewer queue is loop step 8)*: From the review queue, a reviewer can open the full submission — every evaluator-visible field, the complete abstract, and attached files, honoring blind-mode redaction — without losing queue position; closing the detail returns to the same card. *(Client feedback while driving v1.3: "we need to be able to click and open the paper.")*
+
+*Next amendment appends from AC-245.*
 
 ## Amendment 6 — client v1.3 board refinement (2026-08-09, client)
 
