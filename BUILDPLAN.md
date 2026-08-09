@@ -1,7 +1,8 @@
 # Marquee — Build Plan
 
 **Status:** DRAFT for orchestrator review · tone-architect Phase 3 · authored 2026-08-08 night.
-**Reads with:** `SPEC.md` (what it is) · `EVALUATION.md` (what "done" means) · `sequence/USER_STORIES.md` (AC-1–AC-224) · `sequence/research/seams-feasibility.md` (limits, hour estimates §9, the 16 deadline traps §8).
+**Reads with:** `SPEC.md` (what it is) · `EVALUATION.md` (what "done" means) · `sequence/USER_STORIES.md` (AC-1–AC-233, including Amendment 1's contract-review fold) · `sequence/research/seams-feasibility.md` (limits, hour estimates §9, the 16 deadline traps §8).
+**Folded 2026-08-08 night** against `USER_STORIES.md` Amendment 1: US-72 (Airtable mirror) and US-73 (reset the demo) minted, AC-231/AC-232/AC-233 appended, Tier B ranks 3–23 shifted to 4–25. Ticket ACs, ordering, and the cut line below reflect that fold.
 **Deadline:** **Wed 2026-08-12, 22:00 PT.** From this file's timestamp that is ~98 hours, of which roughly a day elapses before requirements freeze.
 
 Hours below are **agent-hours**, not wall-clock. The fleet runs ~4–6 delegators in parallel; wall-clock is the critical path through the dependency graph, not the sum.
@@ -128,7 +129,7 @@ Ranks are `USER_STORIES.md`'s, **as shifted by Amendment 1** — US-73 took rank
 
 ### Audit track
 
-Guardrail audits from `SPEC.md` §7, each owned by an auditor who did not write the code: **A-1** repo hygiene · **A-2** PROTOTYPE-badge sweep · **A-3** mail containment · **A-4** mirror isolation · **A-5** cookie scope · **A-6** speed report · **A-7** public write surface · **A-8** anonymity scan · **A-9** cross-event isolation · **A-10** bulk-write audit · **A-11** reset drill. **A-1 is mandatory immediately before the public repo push and again after it.**
+Guardrail audits from `SPEC.md` §7, each owned by an auditor who did not write the code: **A-1** repo hygiene · **A-2** PROTOTYPE-badge sweep · **A-3** mail containment · **A-4** mirror isolation · **A-5** cookie scope · **A-6** speed report · **A-7** public write surface · **A-8** anonymity scan · **A-9** cross-event isolation · **A-10** bulk-write audit · **A-11** reset drill (**AC-230**). **A-1 is mandatory immediately before the public repo push and again after it.** A-7 now has ACs behind it (**AC-231, AC-232**) and A-4's isolation rule is what makes **AC-225**'s 60-second budget affordable.
 
 ---
 
@@ -246,7 +247,11 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 
 ## 11. Flags carried from `SPEC.md`
 
-The plan builds these; the client rules on them at review. **F-1** the Airtable mirror has no AC (M-25/M-26 are the largest unbudgeted-by-AC work in the plan — propose AC-225 – AC-229) · **F-2** seed scale collides with AC-3 (build assumes seed option **A′**) · **F-3** Speaker Handbook page has no story · **F-4** several loop affordances are toasts in v1.1 and are specified in `SPEC.md` §5.13 · **F-5** `reset:demo` has no AC · **F-6** Turnstile and upload safety have no AC · **F-7** embed KV TTL set to 30 s against AC-89's 60 s budget · **F-8** liveness is a 5 s poll, not a push channel.
+**Closed by `USER_STORIES.md` Amendment 1** — no longer open questions, now ordinary ticket work: **F-1** → US-72, AC-225 – AC-229, Tier B rank 7, built by M-25/M-26 · **F-3** → AC-233 on US-39, built by M-15, explicitly cuttable if named · **F-5** → US-73, AC-230, Tier B rank 3, built early by M-03 · **F-6** → AC-231 on US-14 (Tier A no-waiver, M-13/M-14) and AC-232 on US-41 (M-13/M-40).
+
+**Still open — the client rules at review:** **F-2** seed scale collides with AC-3, and the build assumes seed option **A′** until told otherwise · **F-4** several loop affordances are toasts in v1.1 and are specified in `SPEC.md` §5.13 pending re-verification against the final prototype.
+
+**Recorded decisions, not questions:** **F-7** embed KV TTL set to 30 s against AC-89's 60 s budget · **F-8** liveness is a 5 s poll, not a push channel.
 
 ---
 
