@@ -1,6 +1,6 @@
 # Marquee — User Stories (canonical)
 
-**Status:** Phase-3 canonical artifact, minted 2026-08-08. **71 stories · 224 acceptance criteria.**
+**Status:** Phase-3 canonical artifact, minted 2026-08-08 · amended 2026-08-08 (contract-review fold). **73 stories · 233 acceptance criteria.**
 **Authority:** This file supersedes `research/user-stories-draft.md` for all build purposes. The draft is retained unchanged as the research archive.
 **Upstream:** `PHILOSOPHY.md` · `sequence/PRODUCT-DEFINITION.md` · `research/competition-requirements.md` (R1–R50) · `research/stakeholders.md` (15 seats) · `research/landscape-features.md` (D1–D15) · `research/seams-feasibility.md`.
 
@@ -8,32 +8,49 @@
 
 ## The AC ID contract
 
-**AC IDs are permanent.** `AC-1` … `AC-224` are allocated once, here, and are never renumbered, never reused, and never reordered. Reordering stories does not move AC IDs. If a criterion is deleted it is struck, not recycled; new criteria append from `AC-225`. Every downstream artifact — SPEC, test names, PR descriptions, the evaluation harness — cites these IDs.
+**AC IDs are permanent.** `AC-1` … `AC-233` are allocated once, here, and are never renumbered, never reused, and never reordered. Reordering stories does not move AC IDs — `AC-225`–`AC-229` belong to a Tier B rank-7 story and `AC-230` to a rank-3 story, which is expected: **ID order is allocation order, not build order.** If a criterion is deleted it is struck, not recycled. **The next amendment appends from `AC-234`.** Every downstream artifact — SPEC, test names, PR descriptions, the evaluation harness — cites these IDs.
 
-**Story IDs (`US-nn`)** are carried over unchanged from the draft corpus so the archive stays cross-referenceable. They are *not* sequential in this file: they appear in build order, not numeric order. `US-68`–`US-71` are new here.
+**Story IDs (`US-nn`)** are carried over unchanged from the draft corpus so the archive stays cross-referenceable. They are *not* sequential in this file: they appear in build order, not numeric order. `US-68`–`US-71` were minted at consolidation; `US-72`–`US-73` at the contract-review fold.
 
-**Criterion style.** Every AC is pass/fail. A criterion that is inherently experiential — a judgement about feel that no assertion settles — is tagged **(candidate-felt)** and belongs to design review and the prototype stage, not the test suite. **There are 5 of them.** The other 219 are mechanically testable.
+**Criterion style.** Every AC is pass/fail. A criterion that is inherently experiential — a judgement about feel that no assertion settles — is tagged **(candidate-felt)** and belongs to design review and the prototype stage, not the test suite. **There are 5 of them.** The other 228 are mechanically testable; all nine criteria added at the contract-review fold are mechanical.
 
-**Tags.** `[R-nn]` traces to the requirements register. `[felt]` markers are inline. `(new)` marks stories minted at consolidation.
+**Tags.** `[R-nn]` traces to the requirements register. `(new)` marks stories minted at consolidation or later; `*(appended <date>)*` marks a criterion added to a pre-existing story.
 
 ---
 
 ## Scope at a glance
 
-| Tier | Stories | ACs | Meaning |
-|---|---|---|---|
-| **A — the walkthrough loop** | 27 | AC-1 – AC-90 | Any one failing loses the competition regardless of the rest |
-| **B — ordered differentiators** | 23 | AC-91 – AC-169 | Built in the order listed; the cut line moves up from the bottom |
-| **Post-competition** | 21 | AC-170 – AC-224 | Modeled where cheap, not built by Wednesday |
+| Tier | Stories | ACs | Count | Meaning |
+|---|---|---|---|---|
+| **A — the walkthrough loop** | 27 | AC-1 – AC-90, **AC-231** | 91 | Binding. Any one failing loses the competition regardless of the rest — no waivers (`EVALUATION.md` gate 18) |
+| **B — ordered differentiators** | 25 | AC-91 – AC-169, **AC-225 – AC-230**, **AC-232** | 86 | Built in the order listed; the cut line moves up from the bottom |
+| **Cut-line criterion on a Tier A story** | — | **AC-233** | 1 | Speaker Handbook. Hosted on US-39, *outside* Tier A's no-waiver set; may be cut if the cut is named (gate 19) |
+| **Post-competition** | 21 | AC-170 – AC-224 | 55 | Modeled where cheap, not built by Wednesday |
 
-**Tier A + Tier B = 50 stories = the Wednesday target.**
+**Tier A + Tier B = 52 stories = the Wednesday target.** Totals: **73 stories · 233 criteria.**
 
-### What changed at consolidation
+> **Note for gate 18.** Tier A's no-waiver set is `AC-1 – AC-90` **plus AC-231** — the Turnstile criterion is binding because US-14 puts an open write endpoint on the public internet. It is *not* `AC-1 – AC-233`: AC-232 is Tier B and AC-233 is explicitly cuttable. The AC range and the tier are no longer the same thing; read the table, not the numbering.
 
-1. **US-30 (multi-round) promoted from deferred into Tier B rank 3**, at reduced scope: two rounds, funnel promotion, per-round scorecard. It was flagged in the draft as the riskiest deferral — brief item 4 says *"across multiple rounds"* verbatim. Signed 2026-08-08.
+### What changed at consolidation (2026-08-08)
+
+1. **US-30 (multi-round) promoted from deferred into Tier B**, at reduced scope: two rounds, funnel promotion, per-round scorecard. Flagged in the draft as the riskiest deferral — brief item 4 says *"across multiple rounds"* verbatim. Signed.
 2. **Three agent-native stories minted** — `US-68` (REST API the UI rides on), `US-69` (`marquee` CLI), `US-70` (shipped `SKILL.md`) — from PHILOSOPHY principle 3. Tier B, explicitly framed so they cannot eat the loop.
 3. **`US-71` minted** — comparison-mode triage as an optional round-1 evaluation mode. Tier B, low.
 4. `US-66` (Sessionize mid-CFP migration) and `US-67` (global quick-search) stay where the follow-up pass placed them.
+
+### Amendment 1 — contract-review fold (2026-08-08)
+
+Closes four `SPEC.md` flags that identified contract items with no acceptance criterion. Appended per this file's own rules: no renumbering, new IDs from AC-225.
+
+| # | Change | IDs | Closes |
+|---|---|---|---|
+| 1 | **`US-72` minted** — genuine two-way Airtable mirror. Tier B **rank 7**, directly after the API story it rides on. | AC-225 – AC-229 | **F-1** (gate 9 uncovered) |
+| 2 | **`US-73` minted** — reset the demo. Tier B **rank 3**. | AC-230 | **F-5** (gate 13 uncovered) |
+| 3 | Turnstile verified server-side, appended to `US-14`. | AC-231 | **F-6** (guardrail G8) |
+| 4 | Upload allowlist / magic-byte sniff / rate caps / separate origin, appended to `US-41`. | AC-232 | **F-6** (guardrail G8) |
+| 5 | Speaker Handbook page, appended to `US-39`, below the cut line. | AC-233 | **F-3** |
+
+Tier B ranks 3–23 shifted down to 4–25 to open the two slots. **No AC ID moved.** Flags **F-2** (seed scale vs AC-3), **F-4** (prototype toast affordances), **F-7** (KV TTL, spec'd at 30s), and **F-8** (5s SWR poll) are not AC changes and remain where `SPEC.md` records them.
 
 ---
 
@@ -150,8 +167,9 @@ The judge's test script is the walkthrough video: someone opens the deployed URL
 - **AC-34** The form URL loads and submits successfully in a private window with no session.
 - **AC-35** The public form is operable end to end at 375px width.
 - **AC-36** The form page reaches interactive in under 1s on a cold load.
+- **AC-231** Turnstile is verified **server-side** before any public write commits and before any upload presign is issued; a request with a missing, replayed, or invalid token is rejected without side effects. *(appended 2026-08-08)*
 
-`[R-19, R-7]` · Source: walkthrough [06:02]
+`[R-19, R-7]` · Source: walkthrough [06:02] · AC-231 from SPEC flag **F-6**, guardrail G8 — R19 puts an open write endpoint on the public internet for four days with a public repo pointing at it
 
 ### US-17 · Submit an abstract in one sitting
 **As a** speaker, **I want** to complete and submit an application without an account, **so that** applying costs me minutes, not a signup.
@@ -189,8 +207,10 @@ The judge's test script is the walkthrough video: someone opens the deployed URL
 - **AC-47** Task types include at minimum: acknowledge, upload a file, and complete a form.
 - **AC-48** Completing a task updates the organizer's dashboard with no admin action.
 - **AC-49** Overdue tasks are visually distinct from upcoming ones.
+- **AC-233** ⚠️ *Below the Tier B cut line — see the scope note.* A Speaker Handbook page, authored as static markdown per event, renders inside the speaker portal. *(appended 2026-08-08)*
 
-`[R-17, R-6]` · Source: walkthrough [07:12] · Moat M3
+`[R-17, R-6]`, brief item 8 · Source: walkthrough [07:12] · Moat M3 · AC-233 from SPEC flag **F-3**
+**Scope note on AC-233.** It is hosted on a Tier A story because the portal is where it renders, but it is **not** part of Tier A's no-waiver guarantee, which remains exactly `AC-1 – AC-90` plus `AC-231`. AC-233 sits below the Tier B cut line and may be cut — under `EVALUATION.md` gate 19, cutting it is acceptable only if the cut is **named** in the gate report with its AC ID and reason. Silently missing is a failure; deliberately cut is not.
 
 ### US-40 · Edit my own biography and headshot
 **As a** speaker, **I want** to update my bio and headshot myself, **so that** the program is accurate and nobody emails me about it.
@@ -348,6 +368,16 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 ## Rank 3
 
+### US-73 · Reset the demo *(new — amendment 2026-08-08)*
+**As a** judge, or as the operator behind a queue of judges, **I want** the demo restorable to its seeded state in one action, **so that** the second judge inherits nothing from the first.
+
+- **AC-230** `npm run reset:demo` — available both as a command and as a button in the product — restores the seeded demo to its known state, is idempotent under repeat invocation, and is safe to run mid-judging: it never leaves the instance in a partially-reset state visible to a concurrent visitor.
+
+`[R-25]`, dossier §3 · `EVALUATION.md` gate 13 · SPEC flag **F-5**
+**Why this ranks third.** It costs one command and it protects the demo value of every other story in the file. The judging model is ~30 deployed sites reviewed shallow and fast; a judge who mutates the seeded event — bulk-accepts a wave, un-accepts a talk, reschedules the agenda — hands the next judge a broken program. Without this, the demo degrades monotonically across exactly the audience we are being scored by.
+
+## Rank 4
+
 ### US-30 · Run a two-round funnel *(promoted, reduced scope)*
 **As a** program lead, **I want** a screening round that feeds a decision round, **so that** a small committee decides on a shortlist instead of the whole pile.
 
@@ -358,7 +388,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 `[R-4]` · Source: brief item 4 verbatim — *"across multiple rounds"* · Signed 2026-08-08
 **Scope note:** two rounds and funnel promotion only. Parallel mode, per-round anonymity variation, and round-specific reviewer visibility layers are post-competition. The schema is round-aware from the first migration, so a third round is data rather than a migration.
 
-## Rank 4
+## Rank 5
 
 ### US-67 · Find anything from anywhere
 **As an** organizer, **I want** one search box, always present, that finds any submission, speaker, session, or form by name, **so that** I never have to remember which module something lives in.
@@ -370,7 +400,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-7, R-11, R-46]` · Source: walkthrough [03:58] and [04:01] — he got lost **twice on camera** · PHILOSOPHY 1, "never lost"
 
-## Rank 5
+## Rank 6
 
 ### US-68 · Every capability reachable over a real API *(new)*
 **As a** developer or agent operating Marquee, **I want** a documented HTTP API that the product's own UI is built on, **so that** nothing is UI-only and anything a human can do, a program can do.
@@ -383,7 +413,22 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 `[R-25]` · PHILOSOPHY 3 — *"A real API — the UI is built on it; nothing is UI-only"*
 **Sequencing note:** ranked here for *ordering*, not value. Adopted from the first commit it is nearly free, because the UI needs those endpoints anyway; retrofitted after Tier A it is a refactor of everything. It is the one Tier B item whose cost rises sharply if deferred.
 
-## Rank 6
+## Rank 7
+
+### US-72 · Genuine two-way Airtable mirror *(new — amendment 2026-08-08)*
+**As an** ops coordinator who lives in spreadsheets, **I want** our program data mirrored into Airtable and my edits there reflected back, **so that** my team keeps the view it already works in without paying Airtable's latency on every page load.
+
+- **AC-225** A local change to a mirrored record appears in Airtable within 60 seconds of the change committing.
+- **AC-226** An edit made in Airtable to an allowlisted field applies to the local record within one webhook cycle; edits to non-allowlisted fields are ignored and logged, never partially applied.
+- **AC-227** Echo suppression holds: a write that originated from the mirror does not bounce back and re-trigger the opposite direction, and no record enters a sync loop under sustained two-way editing.
+- **AC-228** Settings → Airtable displays the base link, the row count on both sides, the last successful sync time, and the current outbox depth.
+- **AC-229** The webhook keepalive cron survives 7 days without manual re-registration, and expiry is visible on the Settings → Airtable page before it causes silent data loss.
+
+`[R-45]`, dossier §5 and Q1 · `EVALUATION.md` gate 9 · SPEC flag **F-1** · Architecture decision 3
+**Why it sits directly after the API.** Airtable is the competition's *larger* stack bonus — the brief awards it "bonus" against Cloudflare's "mild bonus" — and the parenthetical says why: *"because those are what we use on our team."* The bonus is an adoptability signal, not an aesthetic one. The mirror rides on the same write path US-68 establishes, so building it immediately after the API is when it is cheapest; deferred, it becomes a second write path bolted onto a finished one.
+**Non-negotiable from the seams pass:** Airtable is never read on a request path. D1 remains the source of truth; the mirror is queue-driven and asynchronous, which is what lets AC-225's 60-second budget coexist with R7's speed requirement rather than fight it.
+
+## Rank 8
 
 ### US-66 · Switch without losing an open CFP
 **As a** program lead whose call for speakers is open *right now*, **I want** to import my existing submissions, speakers, and review state from Sessionize, **so that** adopting Marquee mid-CFP costs an import instead of a restart.
@@ -398,7 +443,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 **Why spreadsheets, not the API:** Sessionize's API is read-only and *"By default… shows only accepted sessions whose speakers have been informed of being accepted"* — mid-CFP, the ~1,000 undecided submissions are exactly what it omits. The Export page carries sessions, speakers, evaluation results, and team comments as spreadsheets. Build against the export.
 **Visibility requirement:** a named "Import from Sessionize" entry point on the empty-event screen **and** a README section. A capability nobody finds scores zero. Fallback if cut: README plus a documented CSV schema, no UI.
 
-## Rank 7
+## Rank 9
 
 ### US-34 · Reject with a template, kindly and at scale
 **As a** program lead rejecting 85–95% of submissions, **I want** templated rejections that merge in the submission title, **so that** everyone gets a real answer.
@@ -410,7 +455,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-43, R-3, R-16]` · Source: sessionize.com/aienyc2026 (5–15% acceptance)
 
-## Rank 8
+## Rank 10
 
 ### US-22 · Enter a submission manually as an admin
 **As a** program lead, **I want** to create a submission or session directly in the admin, **so that** invited talks and sponsor slots live in the same system as everything else.
@@ -421,7 +466,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-12, R-9]` · Source: walkthrough [03:53] · Makes moat M1 visible rather than theoretical
 
-## Rank 9
+## Rank 11
 
 ### US-36 · Un-accept a talk after a speaker drops
 **As a** program lead whose speaker just cancelled, **I want** to reverse an acceptance and see everything that reversal touches, **so that** the agenda, the public site, and the portal don't keep telling the old story.
@@ -433,7 +478,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-43, R-3, R-23]` · PHILOSOPHY 2 — *"the unglamorous path is designed, not discovered"*
 
-## Rank 10
+## Rank 12
 
 ### US-46 · Automate the recurring messages
 **As an** ops coordinator, **I want** the routine emails to fire on their own, **so that** the system does the reminding.
@@ -444,7 +489,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-3, R-35, R-38]` · Source: learn.sessionboard.com/communications/automated-emails
 
-## Rank 11
+## Rank 13
 
 ### US-45 · Send a templated email to a filtered group
 **As an** ops coordinator, **I want** to email a filtered set of speakers from a template with merge fields, **so that** I never paste a list into BCC again.
@@ -456,7 +501,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-3]` · Source: brief item 3
 
-## Rank 12
+## Rank 14
 
 ### US-11 · Add conditional logic to a form
 **As a** program lead, **I want** fields that appear only when an earlier answer warrants them, **so that** submitters see a short form and I still collect what I need for special cases.
@@ -467,7 +512,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-1]` · Source: brief item 1; dossier Q5
 
-## Rank 13
+## Rank 15
 
 ### US-12 · Route submissions by category
 **As a** program lead, **I want** a submission's category, track, or format to route it to the right evaluation plan or reviewer pool automatically, **so that** intake sorts itself and policy isn't a human's memory.
@@ -478,7 +523,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-1, R-47]` · Source: sessionize.com/aienyc2026 — *"WE WILL NOT ACCEPT VENDOR-ONLY TALKS"* on mainstage
 
-## Rank 14
+## Rank 16
 
 ### US-69 · Drive the core workflows from a terminal *(new)*
 **As an** operator or an agent, **I want** a `marquee` CLI covering the core workflows, **so that** conference operations are scriptable and composable.
@@ -490,7 +535,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-25]` · PHILOSOPHY 3 — *"every workflow drivable from a terminal, scriptable, composable"* · Rides entirely on US-68
 
-## Rank 15
+## Rank 17
 
 ### US-70 · Ship a skill file that teaches an agent to run a conference *(new)*
 **As a** coding agent handed a Marquee instance, **I want** a `SKILL.md` in the repo that teaches me the workflows, **so that** I can operate a conference without a human translating the docs.
@@ -502,7 +547,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-25, R-27]` · PHILOSOPHY 3 · A distinctive signal for *this* judge — the AI Engineer team — without touching the AI-review trap (R-27)
 
-## Rank 16
+## Rank 18
 
 ### US-41 · Upload my slides and supporting documents
 **As a** speaker, **I want** to upload my deck and materials to the portal, **so that** they're in the right place and I'm told they arrived.
@@ -510,10 +555,11 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 - **AC-146** File upload accepts PDF/PPTX/KEY up to a stated size limit, with the limit shown before upload begins.
 - **AC-147** Upload shows progress and confirms success; a failure is recoverable without redoing the form.
 - **AC-148** The organizer sees the upload against the speaker's task without a refresh.
+- **AC-232** Uploads are constrained by an extension **and** MIME allowlist at presign, magic-byte sniffed on completion with a mismatch rejected and the object deleted, rate-limited per IP and per submission, and served from an origin separate from the app with `Content-Disposition: attachment`. *(appended 2026-08-08)*
 
-`[R-2, R-17]` · Source: brief item 2
+`[R-2, R-17]` · Source: brief item 2 · AC-232 from SPEC flag **F-6**, guardrail G8 — a separate origin plus attachment disposition is what stops an uploaded file executing as same-origin script
 
-## Rank 17
+## Rank 19
 
 ### US-21 · Add a co-speaker to a submission
 **As a** speaker proposing a panel, **I want** to add co-speakers by name and email, **so that** the panel is represented correctly from the start.
@@ -524,7 +570,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-30, R-15]` · Source: Sessionboard's dedicated *"Added to a submission"* trigger
 
-## Rank 18
+## Rank 20
 
 ### US-37 · Speaker confirms or declines their slot
 **As a** speaker who has been accepted, **I want** to confirm or decline, **so that** the program knows whether I'm actually coming.
@@ -535,7 +581,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-16, R-17]` · Source: *"Each participant answers for every role they hold on a submission"*
 
-## Rank 19
+## Rank 21
 
 ### US-18 · Submit from a phone
 **As a** speaker who read the CFP on my phone, **I want** to complete the form on that phone, **so that** I don't lose the intention by deferring to a desk.
@@ -546,7 +592,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-19, R-37]`
 
-## Rank 20
+## Rank 22
 
 ### US-27 · Review on a phone
 **As a** volunteer reviewer, **I want** to work my queue on my phone, **so that** the review actually gets done.
@@ -556,7 +602,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-22, R-7, R-46]` · "Clear 40 reviews on the train" — no incumbent offers it
 
-## Rank 21
+## Rank 23
 
 ### US-02 · An operator stands up their own instance
 **As an** organization that wants to own its program tooling, **I want** to deploy Marquee and seed my own event from a documented path, **so that** adopting it is an evening, not a project.
@@ -567,7 +613,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-25]`, dossier §2 item 7 · A judged deliverable, not a nicety
 
-## Rank 22
+## Rank 24
 
 ### US-71 · Comparison-mode triage *(new)*
 **As a** reviewer facing a large round-1 queue, **I want** to rank three submissions at a time with ties allowed, **so that** I can triage faster and more consistently than absolute scoring lets me.
@@ -579,7 +625,7 @@ Built top to bottom. **The cut line moves up from the bottom** — if Tuesday ru
 
 `[R-4, R-22]` · Landscape L2 — the survey pass's favorite steal · Optional round-1 mode, never the only path
 
-## Rank 23
+## Rank 25
 
 ### US-32 · Optional AI first-pass scoring
 **As a** program lead facing 3,000 submissions, **I want** an optional AI first pass that flags obvious mismatches, **so that** human reviewers spend attention where it counts — and I can turn it off entirely.
@@ -758,7 +804,7 @@ Modeled where the data model makes it cheap; not built by Wednesday. Ordered rou
 
 **Six further criteria have a felt dimension but are settled by a hard number**, so they stay in the test suite and are *not* tagged: **AC-36** and **AC-85** (<1s to interactive) · **AC-62** (<300ms card advance) · **AC-103** and **AC-191** (<200ms) · **AC-89** (<60s embed propagation). Each has a threshold that decides pass/fail; "does it feel instant?" is the separate design-review question behind it, and if the answer is no while the number passes, the number was wrong — amend the threshold rather than reclassify the criterion.
 
-The remaining **219 criteria are mechanically testable** with no felt component.
+The remaining **228 criteria are mechanically testable** with no felt component — including all nine added at the contract-review fold (AC-225 – AC-233), each of which has a threshold, a state, or an artifact that settles it.
 
 ---
 
@@ -781,11 +827,12 @@ Every requirement in the register that is not an explicit SKIP maps to at least 
 | R16–R19 | Status, tasks, bio editing, logged-out form | US-38, US-39, US-40, US-14 |
 | R20–R23 | Plans, committees, evaluator queue, agenda handoff | US-24, US-25, US-26, US-50 |
 | R24 | Public agenda + embeds | US-57, US-58, US-59, US-60, US-16 |
-| R25 | Self-serve, no demo gate | US-01, US-02, US-68, US-69, US-70 |
+| R25 | Self-serve, no demo gate | US-01, US-02, US-68, US-69, US-70, US-73 |
+| — | Public-write guardrails (no R-number; SPEC G8) | AC-231 (US-14), AC-232 (US-41) |
 | R29–R41 | Form option enumeration | US-13, US-09, US-10, US-15 |
 | R43 | Multi-wave acceptances | US-33, US-34, US-35, US-36, US-66 |
 | R44 | Formats with default durations | US-04 |
-| R45 | Multi-event | US-65, US-66 |
+| R45 | Multi-event; Airtable mirror | US-65, US-66, US-72 |
 | R46 | Volume tolerance | AC-3, AC-69, AC-62, US-26, US-31 |
 | R47 | Vendor-talk policy routing | US-12 |
 | R48 | Per-submitter proposal cap | US-13, US-20 |
