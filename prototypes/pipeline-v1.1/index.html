@@ -1209,7 +1209,7 @@
       }
 
       function bindDashboard() {
-        document.querySelectorAll("[data-pipeline-filter]").forEach(b=>b.onclick=()=>b.dataset.pipelineRoute==="onboarding"?navigate("onboarding",{onboardingFilter:"incomplete"}):navigate("submissions",{submissionFilter:b.dataset.pipelineFilter,submissionPage:1,selected:new Set(),selectAllMatching:false}));
+        document.querySelectorAll("[data-pipeline-filter]").forEach(b=>b.onclick=()=>b.dataset.pipelineRoute==="onboarding"?navigate("onboarding",{onboardingFilter:"all"}):navigate("submissions",{submissionFilter:b.dataset.pipelineFilter,submissionPage:1,selected:new Set(),selectAllMatching:false}));
         document.querySelectorAll("[data-attention-filter]").forEach(b=>b.onclick=()=>navigate("submissions",{submissionFilter:b.dataset.attentionFilter,submissionTrack:b.textContent.includes("Agents")?"Agents":"All",submissionPage:1}));
         document.querySelectorAll("[data-unreviewed-track]").forEach(b=>b.onclick=()=>navigate("submissions",{submissionFilter:"Unreviewed",submissionTrack:b.dataset.unreviewedTrack,submissionPage:1}));
         document.querySelector("[data-scroll-wave]")?.addEventListener("click",()=>document.getElementById("wave-planner")?.scrollIntoView({behavior:"smooth"}));
