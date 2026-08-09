@@ -2,14 +2,14 @@
 
 **Status:** v1.4 contract revision for client prototype review · updated 2026-08-09; not yet signed for orchestration.
 **Authority once signed:** this file defines what "done" means for the Marquee build and *how an agent proves each criterion without a human in the loop*. The build fleet writes against it; the terminal auditor — who did not write the spec — runs it.
-**Upstream:** `sequence/USER_STORIES.md` (249 live criteria through AC-250; AC-239 struck) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
+**Upstream:** `sequence/USER_STORIES.md` (252 live criteria through AC-253; AC-239 struck) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
 
-**Build scope: 194 live criteria — read the tier, not the number.** Amendments allocate IDs without implying tier; AC-239 is struck and deliberately has no test. **`sequence/USER_STORIES.md` §"Scope at a glance" is the authority on tier membership**; this file follows it and never re-derives it from ID arithmetic.
+**Build scope: 197 live criteria — read the tier, not the number.** Amendments allocate IDs without implying tier; AC-239 is struck and deliberately has no test. **`sequence/USER_STORIES.md` §"Scope at a glance" is the authority on tier membership**; this file follows it and never re-derives it from ID arithmetic.
 
 | Tier | ACs | Count | Consequence here |
 |---|---|---|---|
 | **A — the walkthrough loop** | AC-1 – AC-90, **AC-231, AC-234, AC-240, AC-244–246** | 96 | Binding, no waivers (§1.4, gate 18) |
-| **B — ordered differentiators** | AC-91 – AC-169, **AC-225 – AC-230, AC-232, AC-235–238, AC-241–243, AC-247–250** | 97 | Cut from the bottom; a cut must be named (gate 19) |
+| **B — ordered differentiators** | AC-91 – AC-169, **AC-225 – AC-230, AC-232, AC-235–238, AC-241–243, AC-247–253** | 100 | Cut from the bottom; a cut must be named (gate 19) |
 | **Cut-line criterion on a Tier A story** | **AC-233** | 1 | Speaker Handbook — hosted on US-39, outside Tier A's no-waiver set; cuttable if named |
 | **Post-competition** | AC-170 – AC-224 | 55 | Not built, not tested, not a defect (§7) |
 
@@ -30,9 +30,9 @@ Every AC in scope carries exactly one **primary** tag — the strongest thing it
 
 **Strength order:** `felt` > `oracle` > `op-assist` > `auto`. An AC with a hard assertion *and* a residual judgement is tagged by the residual and appears in both places — the assertion still runs every build.
 
-**Counts across all 194 in-scope live criteria:** **184 `auto` · 1 `op-assist` · 5 `oracle` · 4 `felt`.** All sixteen live criteria added after AC-233 are `auto`; struck AC-239 is excluded.
+**Counts across all 197 in-scope live criteria:** **187 `auto` · 1 `op-assist` · 5 `oracle` · 4 `felt`.** All nineteen live criteria added after AC-233 are `auto`; struck AC-239 is excluded.
 
-Credentials, plan tiers, and third-party accounts gate *suites*, not individual criteria. They are enumerated once in §1.6 rather than smeared across 194 rows. The one `op-assist` tag (AC-109) is the exception on purpose: there the missing thing is *knowledge* — the column names and status vocabulary of a real Sessionize export, which cannot be synthesized. A missing credential against a fully-documented API (Airtable, AC-225–229) is a precondition, not a tag.
+Credentials, plan tiers, and third-party accounts gate *suites*, not individual criteria. They are enumerated once in §1.6 rather than smeared across 197 rows. The one `op-assist` tag (AC-109) is the exception on purpose: there the missing thing is *knowledge* — the column names and status vocabulary of a real Sessionize export, which cannot be synthesized. A missing credential against a fully-documented API (Airtable, AC-225–229) is a precondition, not a tag.
 
 ---
 
@@ -115,7 +115,7 @@ These gate suites, not individual ACs. Each is a human action item; unresolved o
 
 ---
 
-## 2. Per-AC verifiability — all 194 live in-scope criteria
+## 2. Per-AC verifiability — all 197 live in-scope criteria
 
 The original 178 rows remain grouped by story in build order; the sixteen live context/amendment rows are consolidated at §2.3 with explicit tier labels. Grouping — not ID arithmetic — carries membership. AC-239 is struck and excluded.
 
@@ -350,7 +350,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-89 | `auto` | `speed:` mutate via API, poll the embed from a clean context; assert ≤60s, record actual. |
 | AC-90 | `auto` | `e2e:` embed at 375px and 1440px with no horizontal overflow; configured colors present in the resolved styles. |
 
-### Tier B — ordered differentiators (28 stories, ranked · 97 live ACs)
+### Tier B — ordered differentiators (28 stories, ranked · 100 live ACs)
 
 **This file carries no rank numbers. `BUILDPLAN.md` §5 is the single rank authority**, and gate 19 records the cut line against it. Stories below are listed in build order; two files each asserting a rank drifted by 1–3 positions across the whole band, and the cut line is keyed to rank. US-74, US-75, and US-76 are ranked there too — their criteria live at §2.3 with explicit tier labels. Later insertions shifted positions but **no AC ID moved**.
 
@@ -565,7 +565,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-168 | `auto` | `test:` run the AI pass over 50 submissions with a stubbed model; assert zero status transitions. |
 | AC-169 | `auto` | `e2e:` crawler from both demo entries reaches no AI surface without explicitly enabling the flag. |
 
-### 2.3 Amendment criteria — AC-234–AC-250
+### 2.3 Amendment criteria — AC-234–AC-253
 
 | AC | Tier | Tag | How verified |
 |---|---|---|---|
@@ -586,6 +586,9 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-248 | B | `auto` | `e2e:` show/hide/reorder every registered column; Title cannot be removed; table changes immediately, persists after reload, and round-trips through a saved view. |
 | AC-249 | B | `auto` | `test + e2e:` built-in Drafts queue count equals derived draft rows; each shows last-save/contact/applicable missing fields; open/edit leaves status draft; reviewer/speaker 403 while form-admin/program-staff succeed. |
 | AC-250 | B | `auto` | `test + e2e:` a stored template **or** a caller-supplied `{subject, body}` is accepted on `POST /api/v1/events/:id/comms/send` — the single send route, no `/messages/send` alias, asserted by `check:api`'s registry parity — and on `marquee remind`; merge fields render in both forms; exactly-one-of is enforced server-side; an ad-hoc send writes an outbox row and a recipient-record log entry byte-identical in shape to a templated send; demo-safe suppression and the `comms:send` scope behave unchanged. |
+| AC-251 | B | `auto` | `e2e + test:` a record's evaluation panel lists its per-round reviewers with coverage counts; assigning and removing a specific reviewer writes `round_assignments`, the affected reviewer's queue updates, and an out-of-track-scope assignment is rejected; `/rounds/:id/assignments` CRUD appears in `check:api` registry parity. *(Amendment 10 fold — rows added 2026-08-09 at intake ratification; verification transcribed from SPEC.)* |
+| AC-252 | B | `auto` | `e2e + check:seed:` buildings CRUD (name, address) in Event Settings; every room requires a building; `check:seed` asserts the SPEC §6 Sheraton-coherent building trio; agenda room headers, room view, public session pages, and ICS `LOCATION` all render "Room · Building". |
+| AC-253 | B | `auto` | `e2e:` AV capability tags and free-text notes editable per room in Event Settings; rendered in the agenda room-header tooltip/panel; absent from all public surfaces. |
 
 ---
 

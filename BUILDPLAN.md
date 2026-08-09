@@ -54,7 +54,7 @@ Serialized where marked; everything else runs in parallel.
 | **M-07** | **API core** | Hono router with a generated route manifest (glob, never a hand-edited list), error envelope, list contract (`page/per_page/q/sort/filters` → `{data,page,per_page,total}`), pagination helper, **bulk selector type (ids *or* filter)**, `json_each` chunking helper, OpenAPI assembly from route definitions, `/api/openapi.json`, `/api/docs`. **The chunking helper's default pattern is S-3's verdict** — M-07 must not pick one before the spike answers (trap 11). | AC-105, AC-106, AC-108 | `src/api/*`, `src/routes/_manifest.ts` (generated) | 4 | M-02, **S-3** |
 | **M-08** | **First loop screen: submissions list** | Server-side filtered/sorted/paginated list at 50/page over the seed, type/status/track filters including Draft, selection state, exact record navigation, empty state, and the stable column registry that M-55 configures. Proves the whole stack end to end on real data. | AC-23, part AC-66, foundation **AC-240, AC-247–249** | `src/routes/submissions.routes.ts`, `submissions.queries.ts`, `src/ui/submissions/*` | 4 | M-04a, M-05a, M-07 |
 
-**M-04 is split** (adversarial B-5): **M-04a** carries only what M-08 needs, so the Wave 0 critical chain is M-01 (3) → M-02 (4) → M-04a (2) → M-08 (4) = **13 h**, not 18. **M-04b** runs in parallel with Wave 1's opening tickets. Where §7, §10, and the amendment log say "M-04", read the pair.
+**M-04 is split** (adversarial B-5): **M-04a** carries only what M-08 needs, so the Wave 0 critical chain runs M-01 (3) → M-02 (4) → M-07 (4) → M-08 (4) = **15 h** (corrected at intake 2026-08-09: M-07 is also gated on M-02 and also blocks M-08, so it — not M-04a's 2 h — sets the chain; the split still saves 3 h against the unsplit 18 h seed path). **M-04b** runs in parallel with Wave 1's opening tickets. Where §7, §10, and the amendment log say "M-04", read the pair.
 
 **CP-1 — human-visible checkpoint.** Deployed URL, populated, both demo logins land on a real screen, `npm test` green in <30 s, `check:repo` clean. **Traps 2, 4, 15 closed.** Felt checkpoint **C1** runs here (a stranger opens it cold and answers three questions in 10 s).
 
@@ -237,7 +237,7 @@ Agents cannot do these. Each is Atin's, with the deadline that actually binds it
 
 | When | Track | Milestone |
 |---|---|---|
-| **D+0 → D+13** | Fleet | Wave 0. M-01 → M-02 serialized, then M-03/M-04a/M-05a/M-05b/M-06/M-07 in parallel, M-08 last; M-04b starts behind M-04a and runs into Wave 1. **S-3** runs D+0 → D+3 and blocks M-07's chunking helper; **S-2** fires at D+2 as a standalone script, well ahead of M-24. **CP-1 at D+13** — the critical chain is M-01 (3) → M-02 (4) → M-04a (2) → M-08 (4) = 13 h and no number of workers shortens it. Deployed, seeded, both demo logins live; traps 2, 4, 15 dead. |
+| **D+0 → D+13** | Fleet | Wave 0. M-01 → M-02 serialized, then M-03/M-04a/M-05a/M-05b/M-06/M-07 in parallel, M-08 last; M-04b starts behind M-04a and runs into Wave 1. **S-3** runs D+0 → D+3 and blocks M-07's chunking helper; **S-2** fires at D+2 as a standalone script, well ahead of M-24. **CP-1 at D+15** — the critical chain is M-01 (3) → M-02 (4) → M-07 (4) → M-08 (4) = 15 h (intake correction, 2026-08-09) and no number of workers shortens it. Deployed, seeded, both demo logins live; traps 2, 4, 15 dead. |
 | **D+13 → D+36** | Fleet | Wave 1. M-09/M-10/M-11/M-13/M-16 in parallel; then M-12 → M-14, M-15, M-17, M-18, M-19a → M-19b, M-20 → M-21, M-22. **CP-2 at D+36** — after F-17 freed the agenda branch from evaluation, the longest chain from M-08 is **M-09 (4) → M-12 (10) → M-14 (8) = 22 h**, i.e. CP-2 lands at D+35 with an hour of margin; the agenda branch (M-19a 7 → M-20 5 → M-22 4 = 16 h) and the review branch (M-16 7 → M-17 9 = 16 h) both finish ahead of it. **S-1** runs early in this band. **S-2 already returned at D+2** and M-24 is written against its verdict. |
 | **on video drop** *(wall-clock, not dispatch-relative)* | Human + one agent | Sunday clarification video → **requirements freeze**. Dossier re-run, delta triaged into new **AC-251+** criteria and, if needed, new tickets. Q2's ruling decides whether embeds (AC-87 – AC-90) stay or move to non-goals. |
 | **D+36 → D+40** | Human | **CP-2 gate**: full-loop QA on the deployed preview, desktop and mobile. Felt checkpoints **C2** and **C3**. Anything red goes back to the fleet before Wave 2 widens. M-54 unblocks only when this is green. |
@@ -345,3 +345,11 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 ---
 
 *v1.4 contract revision, 2026-08-09 (Amendments 1–9 applied). Await client prototype sign-off; then mint `DESIGN.md` and turn §3–§5 into Lattice tickets. New criteria append from AC-251; AC-239 remains struck and unrecycled.*
+
+## Intake amendment — board mint, 2026-08-09
+
+- **USER_STORIES Amendments 10/11 (AC-251–253) ratified into the plan** per SPEC's fold text: AC-251 → the evaluation/record tickets (MRQ-20/22 lineage), AC-252/253 → schema (M-02), seed (M-04a), Event Settings (M-09), and agenda/public render tickets, exactly as mapped in `.lattice/orchestration/ticket-map.md`. EVALUATION §2.3 carries their rows as of this date.
+- **CP-1 critical chain corrected 13 h → 15 h** (M-07 supersedes M-04a on the chain; edits in §2 and §10 above). Checkpoint clock: CP-1 = dispatch+15 h.
+- **Duplicate AC claims resolved to single owners for `trace:ac`:** AC-155–157 → M-43's ticket (MRQ-37, co-speaker + mobile submit), AC-146–148 → M-40's ticket (MRQ-24, chase board + slide upload); the other claimant (M-14 / M-13) tests but does not own.
+- M-51 does not exist (numbering skip, no gap).
+

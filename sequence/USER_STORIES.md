@@ -933,7 +933,7 @@ Source: client approval of the v1.3 context-gap audit against `/Users/atin/Downl
 
 ## Amendment 11 — venue model: buildings, AV, room notes (2026-08-09, client review)
 
-**AC-252** *(appended to US-05; Tier B high, hosted on a Tier A story)*: Buildings are first-class: an event supports multiple buildings, each with a name and address, managed from Event Settings; every room belongs to a building. The seeded demo uses the real four buildings of the 2025 program. Room displays that schedulers and day-of staff read (agenda room headers, room view, public session pages, ICS `LOCATION`) render "Room · Building".
+**AC-252** *(appended to US-05; Tier B high, hosted on a Tier A story)*: Buildings are first-class: an event supports multiple buildings, each with a name and address, managed from Event Settings; every room belongs to a building. The seeded demo uses the Sheraton-coherent building set defined in SPEC §6 *(amended 2026-08-09, operator-delegated venue ruling; supersedes the earlier "real 2025 four")*. Room displays that schedulers and day-of staff read (agenda room headers, room view, public session pages, ICS `LOCATION`) render "Room · Building".
 
 **AC-253** *(appended to US-05, same placement)*: A room carries editable **AV capabilities** (tag list — e.g. projector, confidence monitor, mic count, livestream) and free-text **notes**, set in Event Settings and visible where placement decisions happen (room header tooltip/panel in the agenda) without cluttering public surfaces.
 
