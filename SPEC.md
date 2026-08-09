@@ -652,4 +652,10 @@ Source: `sequence/research/api-comparison.md`. Four gaps amended into the pre-ki
 
 ---
 
-*v1.4 contract revision, 2026-08-09; folded against `USER_STORIES.md` Amendments 1–8. Amendments follow that file's rules: **the next criteria append from AC-250**; deletions are struck, never recycled. Next input — client review and sign-off of the v1.4 prototype; only then mint `DESIGN.md` and hand the complete contract to orchestration.*
+## Amendment 9 — agent-composed sends (2026-08-09)
+
+`POST /api/v1/events/:id/comms/send` and `marquee remind` accept `{template_id}` **or** `{subject, body}` (merge fields render in both); ad-hoc sends log identically; demo-safe + `comms:send` scope unchanged (**AC-250**). No LLM features in Marquee — the API is the rail, the caller is the writer.
+
+---
+
+*v1.4 contract revision, 2026-08-09; folded against `USER_STORIES.md` Amendments 1–9. Amendments follow that file's rules: **the next criteria append from AC-251**; deletions are struck, never recycled. Next input — client review and sign-off of the v1.4 prototype; only then mint `DESIGN.md` and hand the complete contract to orchestration.*
