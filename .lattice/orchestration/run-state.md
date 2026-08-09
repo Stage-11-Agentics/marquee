@@ -48,7 +48,15 @@ Measured via glideslope, not estimated. **Codex weekly: 79% consumed, resets Sat
 
 Orchestrator mitigations already applied (no operator input needed): resumed delegators downgraded from sub-agent-full to **inline-full** (no sub-agent tabs); no new spawns while at cap; planners hold at `planned` instead of idling in-session.
 
-**Decision needed from the operator** — see the summary in the session for options (throttle vs. Alpha login vs. wait for Kimi Monday evening vs. mixed).
+**04:05 — CODEX IS EXHAUSTED (96% used, 4% left; resets Sat Aug 15, after the deadline).** It rose 89% → 96% with the fleet fully parked; both idle sessions were read and confirmed genuinely idle, so this is lagging accounting for the two heavy merges (2,394-line schema; 30-file harness), not live burn. **Codex is off the table for the rest of this run.**
+
+The option set has therefore narrowed to two real choices, both requiring the operator:
+1. **Alpha login** (`/login` in Claude Code, account `atin@authentic.tech`) — a fresh, untouched Max 20x week. Immediate, and the only option that restarts the wave tonight.
+2. **Wait for Kimi's reset, Mon Aug 10 18:20** (~38 h) — a fresh 15x coding week, still ahead of the Wed 22:00 PT deadline, but costs a full day of build time.
+
+Bravo (78% used) is deliberately excluded: it is the pool this orchestrator session itself runs on, so spending it on delegators risks losing orchestration entirely.
+
+**Parked-state integrity confirmed:** both remaining tickets' plans are on disk and committed (e9b29c2) — MRQ-8 at 288 lines, MRQ-14 at 118, each carrying its Plan-Review Cycle 1 Resolutions and the orchestrator rulings. The idle codex sessions were closed after that verification; **no re-planning is needed on any harness**, whichever is chosen.
 
 ## Master health (assembled-tree validation, 03:33)
 
@@ -68,6 +76,7 @@ Housekeeping done at the same time: all five merged worktrees removed, their loc
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-09 04:05 [moderate] Codex confirmed exhausted (96%). Verified both parked plans committed with their resolutions, then closed surfaces 202/203 — idle codex sessions on a dead quota serve nothing and invite an accidental resume. Decision set narrowed to Alpha login or Kimi's Monday reset.
 - 2026-08-09 03:33 [moderate] Parked-tick housekeeping (zero model spend): verified no stranded work in any worktree, confirmed every merged artifact is present in master, pruned five worktrees + five local + five remote branches, and ran the pr-gate against merged master — PASS. Codex 89% at this reading; **fleet remains parked, no ruling yet**. Decision NOT to spawn Claude delegators on Bravo: Bravo (78%) is the same pool this orchestrator session runs on, so spending it on delegators risks losing orchestration itself. Alpha (fresh 20x, operator login) or Kimi (resets Mon 18:20) remain the real options.
 - 2026-08-09 03:20 [moderate] **MRQ-2 and MRQ-6 both merged** (PR #5 616f55e6, PR #4 09aa26ad) — the quota triage worked: both high-value tickets landed before the floor. Master now carries the skeleton, the complete D1 schema, the design tokens/admin shell, and the full check harness. `npm run pr-gate -- --ticket MRQ-N` verified present and folded into COMMON as mandatory. **CP-1's deliverables are effectively met except M-07/M-08.**
 - 2026-08-09 03:14 [moderate] **Quota triage:** headless code-review suspended fleet-wide (own-reviewer + orchestrator diff scan instead); MRQ-6 given an explicit land-partial priority order (pr-gate + fast suite first). MRQ-8/MRQ-14 stay parked at `planned` — no new codex spend until the operator rules. Remaining Codex is being spent deliberately on the schema (critical chain) and the harness (every later ticket depends on it).
