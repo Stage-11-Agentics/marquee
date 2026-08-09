@@ -899,6 +899,12 @@ Semantic pins (SPEC Amendment 7, no new ACs): event discovery (`GET /events`), e
 
 *Next amendment appends from AC-245.*
 
+## Amendment 8 — agent-composed sends (2026-08-09, orchestrator; client-directed)
+
+**AC-245** *(appended to US-45/US-68, Tier B — rides the comms and API tickets)*: Every send surface (API `POST .../comms/send`, CLI `marquee remind`) accepts **either** a stored template **or** caller-supplied subject/body; merge fields render in both; ad-hoc sends are logged in the outbox and on recipient records identically to templated ones; demo-safe mode and `comms:send` scope apply unchanged. *Client intent: an external LLM/agent may compose nudge text; Marquee provides the rails and builds no LLM features itself.*
+
+*Next amendment appends from AC-246.*
+
 ## Amendment 8 — context-coverage closure (2026-08-09, client)
 
 Source: client approval of the v1.3 context-gap audit against `/Users/atin/Downloads/CONTEXT.md`. Month view was only a reference-image label, not a stated requirement; generalized CMS support was optional and remains outside product scope.
