@@ -1,0 +1,603 @@
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  MARQUEE — SKIN B · "PRESS ROOM"
+  Thesis: the tool that respects you feels made of paper — warm stock, humanist
+  type, letterpressed numerals and cards that sit on the desk rather than float
+  above it, so a day of chase work reads as craft instead of admin.
+
+  TOKEN BLOCK — lifts straight into tokens.css
+  ------------------------------------------------------------------------------
+  :root {
+    --bg:            #efe7d9;   /* desk stock                                 */
+    --surface:       #fffdf7;   /* card stock                                 */
+    --surface-sunk:  #f7f1e4;   /* recessed well inside a card                */
+    --surface-tint:  #f3ece0;   /* sidebar / secondary paper                  */
+
+    --ink:           #2b2521;   /* primary text               14.9:1 on stock */
+    --ink-soft:      #4a4139;   /* secondary                   9.8:1 on stock */
+    --muted:         #6b6055;   /* metadata                    6.0:1 on stock */
+    --rule:          #e0d5c2;   /* hairline / deckle edge                     */
+    --rule-strong:   #cdbfa6;
+
+    --accent:        #1f5f4b;   /* pine ink                    7.4:1 on stock */
+    --accent-ink:    #194c3c;   /* accent text on wash         8.3:1 on wash  */
+    --accent-wash:   #e4efe9;
+
+    --success:       #1f5f4b;   /* 7.4:1 on stock */
+    --warning:       #96601a;   /* 4.8:1 on the note tint */
+    --danger:        #a8402f;   /* 6.0:1 on stock */
+    --danger-wash:   #f7e6e1;
+
+    --track-fin:#635bff; --track-agents:#db4c3f; --track-evals:#0d9488;
+    --track-infra:#d97706; --track-open:#2563eb; --track-rag:#9333ea;
+    --track-sec:#0f766e;
+
+    --sans: "Avenir Next", Avenir, "Segoe UI", system-ui, -apple-system, sans-serif;
+    --figures: "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif; /* tabular-nums */
+
+    --radius:      12px;        /* trimmed corners, not sharp ones            */
+    --radius-sm:   8px;
+    --radius-pill: 999px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+
+    --raise:   0 1px 1px rgba(70,52,30,.06), 0 6px 16px rgba(70,52,30,.10);
+    --raise-2: 0 2px 3px rgba(70,52,30,.08), 0 14px 30px rgba(70,52,30,.13);
+    --press:   inset 0 1px 3px rgba(70,52,30,.16);
+    --emboss:  inset 0 1px 0 rgba(255,255,255,.9);
+  }
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marquee — Skin B · Press Room</title>
+<style>
+  :root {
+    --bg:#efe7d9; --surface:#fffdf7; --surface-sunk:#f7f1e4; --surface-tint:#f3ece0;
+    --ink:#2b2521; --ink-soft:#4a4139; --muted:#6b6055;
+    --rule:#e0d5c2; --rule-strong:#cdbfa6;
+    --accent:#1f5f4b; --accent-ink:#194c3c; --accent-wash:#e4efe9;
+    --success:#1f5f4b; --warning:#96601a; --danger:#a8402f; --danger-wash:#f7e6e1;
+    --track-fin:#635bff; --track-agents:#db4c3f; --track-evals:#0d9488;
+    --track-infra:#d97706; --track-open:#2563eb; --track-rag:#9333ea; --track-sec:#0f766e;
+    --sans:"Avenir Next", Avenir, "Segoe UI", system-ui, -apple-system, sans-serif;
+    --radius:12px; --radius-sm:8px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+    --raise:0 1px 1px rgba(70,52,30,.06), 0 6px 16px rgba(70,52,30,.10);
+    --raise-2:0 2px 3px rgba(70,52,30,.08), 0 14px 30px rgba(70,52,30,.13);
+    --press:inset 0 1px 3px rgba(70,52,30,.16);
+    --emboss:inset 0 1px 0 rgba(255,255,255,.9);
+  }
+  * { box-sizing:border-box; }
+  html {
+    color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased;
+    background-color:var(--bg);
+    /* paper grain: two very low-contrast weaves */
+    background-image:
+      repeating-linear-gradient(45deg,  rgba(120,96,60,.030) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(-45deg, rgba(255,255,255,.36) 0 1px, transparent 1px 3px);
+  }
+  body { margin:0; min-width:320px; }
+  button,input { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  a { color:inherit; text-decoration:none; }
+  .tabular { font-variant-numeric:tabular-nums lining-nums; }
+  .letterpress { text-shadow:0 1px 0 rgba(255,255,255,.92); }
+
+  /* ── Prototype badge ─────────────────────────────────────────────────── */
+  .prototype-badge {
+    position:fixed; z-index:1000; right:16px; top:16px;
+    background:var(--ink); color:#fdf8ee; border:1px solid rgba(255,255,255,.18);
+    padding:8px 14px; border-radius:999px;
+    font:800 10px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase;
+    pointer-events:none; box-shadow:var(--raise-2);
+  }
+
+  /* ── Shell ───────────────────────────────────────────────────────────── */
+  .app { display:grid; grid-template-columns:244px minmax(0,1fr); min-height:100vh; }
+
+  .sidebar {
+    background:var(--surface-tint); padding:var(--s5) var(--s4) var(--s4);
+    display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto;
+    border-right:1px solid var(--rule-strong);
+    box-shadow:inset -6px 0 12px -12px rgba(70,52,30,.5);
+  }
+  .brand { display:flex; align-items:center; gap:11px; padding:0 var(--s2) var(--s5); }
+  .brand-mark {
+    width:34px; height:34px; flex:0 0 34px; border-radius:10px; display:grid; place-items:center;
+    background:var(--accent); color:#fdf8ee; font:800 17px/1 var(--sans);
+    box-shadow:var(--raise), inset 0 1px 0 rgba(255,255,255,.28);
+  }
+  .brand-name { font:700 20px/1 var(--sans); letter-spacing:-.015em; }
+
+  .event-switcher {
+    display:block; margin:0 var(--s1) var(--s5); padding:11px 12px;
+    border:1px solid var(--rule-strong); border-radius:var(--radius-sm);
+    background:var(--surface); box-shadow:var(--raise), var(--emboss);
+    transition:box-shadow 130ms, border-color 130ms;
+  }
+  .event-switcher:hover { box-shadow:var(--raise-2), var(--emboss); border-color:#b8a887; }
+  .event-switcher small { display:block; color:var(--muted); font-size:9.5px; font-weight:700;
+    letter-spacing:.16em; text-transform:uppercase; margin-bottom:5px; }
+  .event-switcher strong { display:block; font-size:13.5px; font-weight:700;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .nav-label { color:var(--muted); font-size:9.5px; font-weight:800; letter-spacing:.16em;
+    text-transform:uppercase; margin:var(--s5) 12px var(--s2); }
+  .nav-label:first-of-type { margin-top:var(--s3); }
+  .nav { display:grid; gap:2px; }
+  .nav a {
+    min-height:36px; padding:8px 12px; display:flex; align-items:center; gap:11px;
+    font-size:13px; color:var(--ink-soft); border-radius:var(--radius-sm);
+    border:1px solid transparent;
+    transition:background 130ms, color 130ms, border-color 130ms, box-shadow 130ms;
+  }
+  .nav a:hover { background:var(--surface); border-color:var(--rule); color:var(--ink); }
+  .nav a.active {
+    background:var(--surface); border-color:var(--rule-strong); color:var(--accent-ink);
+    font-weight:700; box-shadow:var(--raise), var(--emboss);
+  }
+  .nav-icon { width:16px; text-align:center; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .nav a.active .nav-icon { color:var(--accent); }
+
+  .sidebar-foot { margin-top:auto; padding-top:var(--s5); display:grid; gap:3px;
+    border-top:1px dashed var(--rule-strong); }
+  .sidebar-foot button {
+    text-align:left; padding:8px 12px; background:none; border:0; border-radius:var(--radius-sm);
+    color:var(--muted); font-size:12px; transition:background 130ms, color 130ms;
+  }
+  .sidebar-foot button:hover { background:var(--surface); color:var(--ink); }
+
+  /* ── Topbar ──────────────────────────────────────────────────────────── */
+  .main { display:flex; flex-direction:column; min-width:0; }
+  .topbar {
+    display:flex; align-items:center; gap:var(--s5);
+    padding:0 232px 0 var(--s6); height:68px; background:var(--surface-tint);
+    border-bottom:1px solid var(--rule-strong); position:sticky; top:0; z-index:20;
+  }
+  .breadcrumbs { font-size:12.5px; color:var(--muted); white-space:nowrap; }
+  .breadcrumbs strong { color:var(--ink); font-weight:700; }
+  .global-search {
+    flex:1; max-width:520px; display:flex; align-items:center; gap:var(--s2);
+    border:1px solid var(--rule-strong); border-radius:999px; padding:0 var(--s4); height:38px;
+    background:var(--surface-sunk); box-shadow:var(--press);
+    transition:border-color 130ms, background 130ms;
+  }
+  .global-search:hover { border-color:#b8a887; background:#f4eddf; }
+  .global-search input { flex:1; border:0; background:none; outline:none; font-size:13px; }
+  .global-search input::placeholder { color:#8b7f70; }
+  .search-glyph { color:var(--muted); font-size:14px; }
+  .shortcut { font-size:10px; font-weight:700; color:var(--muted); letter-spacing:.05em;
+    background:var(--surface); border:1px solid var(--rule); border-radius:6px; padding:2px 6px;
+    box-shadow:0 1px 0 var(--rule-strong); }
+  .top-user {
+    width:36px; height:36px; flex:0 0 36px; display:grid; place-items:center; border-radius:50%;
+    background:var(--surface); border:1px solid var(--rule-strong); color:var(--accent-ink);
+    font:800 12px/1 var(--sans); letter-spacing:.04em;
+    box-shadow:var(--raise), var(--emboss);
+  }
+
+  /* ── Page ────────────────────────────────────────────────────────────── */
+  .page { padding:var(--s6) var(--s6) var(--s7); max-width:1360px; width:100%; }
+  .page-head { display:flex; align-items:flex-end; justify-content:space-between; gap:var(--s5);
+    margin-bottom:var(--s5); }
+  .page-head h1 { margin:0 0 8px; font:700 30px/1.15 var(--sans); letter-spacing:-.02em;
+    text-shadow:0 1px 0 rgba(255,255,255,.9); }
+  .page-head p { margin:0; max-width:70ch; font-size:14px; line-height:1.6; color:var(--ink-soft); }
+  .head-actions { display:flex; gap:var(--s2); flex:0 0 auto; }
+
+  .button {
+    height:38px; min-width:140px; padding:0 var(--s5); border:1px solid var(--rule-strong);
+    background:var(--surface); color:var(--ink); border-radius:999px;
+    font:700 12.5px/1 var(--sans); letter-spacing:.005em;
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    box-shadow:var(--raise), var(--emboss);
+    transition:box-shadow 130ms, background 130ms, border-color 130ms, color 130ms;
+  }
+  .button:hover { background:#fffefb; border-color:#b8a887; box-shadow:var(--raise-2), var(--emboss); }
+  .button:active { box-shadow:var(--press); }
+  .button.primary { background:var(--accent); border-color:#164c3b; color:#fdf8ee;
+    box-shadow:var(--raise), inset 0 1px 0 rgba(255,255,255,.22); }
+  .button.primary:hover { background:#256d57; border-color:#164c3b; color:#fdf8ee;
+    box-shadow:var(--raise-2), inset 0 1px 0 rgba(255,255,255,.22); }
+  .button.small { height:32px; min-width:124px; padding:0 var(--s4); font-size:11.5px; }
+
+  /* ── Pipeline: seven cards of stock ──────────────────────────────────── */
+  .pipeline-scroll { overflow-x:auto; overflow-y:hidden; margin-bottom:var(--s4); padding:3px 3px 6px; }
+  .pipeline { display:grid; grid-template-columns:repeat(7,1fr); gap:var(--s3); min-width:820px; }
+  .pipeline-stage {
+    position:relative; text-align:left; background:var(--surface);
+    border:1px solid var(--rule); border-radius:var(--radius);
+    padding:var(--s4) var(--s4) var(--s4); overflow:hidden;
+    display:grid; align-content:start; gap:7px; min-height:146px;
+    box-shadow:var(--raise), var(--emboss);
+    transition:box-shadow 130ms, border-color 130ms, transform 130ms;
+  }
+  .pipeline-stage::before {
+    content:""; position:absolute; inset:0 0 auto 0; height:4px; background:var(--stage-hue, var(--accent));
+  }
+  .pipeline-stage:hover { box-shadow:var(--raise-2), var(--emboss); border-color:var(--rule-strong); }
+  .pipeline-name { font-size:10px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); margin-top:2px; }
+  .pipeline-count { font:700 clamp(30px,2.6vw,38px)/1 var(--sans); letter-spacing:-.035em;
+    font-variant-numeric:tabular-nums lining-nums; text-shadow:0 1px 0 rgba(255,255,255,.95); }
+  .pipeline-delta { font-size:11.5px; line-height:1.4; color:var(--accent-ink); font-weight:600; }
+  .pipeline-meaning { font-size:10.5px; line-height:1.4; color:var(--muted); }
+
+  /* ── Attention strip: pinned notes ───────────────────────────────────── */
+  .attention-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s3); margin-bottom:var(--s5); }
+  .attention-item {
+    text-align:left; background:#fbf3e2; border:1px solid #e6d6b4; border-radius:var(--radius);
+    padding:var(--s4) var(--s4) var(--s4) var(--s5); display:grid; gap:6px;
+    min-height:76px; align-content:center; position:relative;
+    box-shadow:var(--raise), var(--emboss);
+    transition:box-shadow 130ms, background 130ms, border-color 130ms;
+  }
+  .attention-item::before {
+    content:""; position:absolute; left:14px; top:50%; transform:translateY(-50%);
+    width:6px; height:6px; border-radius:50%; background:var(--warning);
+    box-shadow:0 0 0 3px rgba(150,96,26,.16);
+  }
+  .attention-item:hover { background:#fdf7ea; border-color:#d8c396; box-shadow:var(--raise-2), var(--emboss); }
+  .attention-item strong { font-size:15.5px; font-weight:700; letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums lining-nums; text-shadow:0 1px 0 rgba(255,255,255,.9); }
+  .attention-item span { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  /* ── Cards ───────────────────────────────────────────────────────────── */
+  .dashboard-grid { display:grid; align-items:start; grid-template-columns:1fr 1fr; gap:var(--s4); }
+  .card { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    box-shadow:var(--raise), var(--emboss); overflow:hidden; }
+  .card-wide { grid-column:1 / -1; }
+  .card-head {
+    display:flex; align-items:flex-start; justify-content:space-between; gap:var(--s4);
+    padding:var(--s4) var(--s5) var(--s3); background:linear-gradient(180deg,#fffefb,#fdfaf2);
+    border-bottom:1px solid var(--rule);
+  }
+  .card-head h2 { margin:0 0 4px; font:700 16.5px/1.2 var(--sans); letter-spacing:-.012em; }
+  .card-head .subtle { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .card-body { padding:var(--s4) var(--s5) var(--s5); }
+
+  /* Wave planner */
+  .wave-list { display:grid; gap:var(--s2); }
+  .wave-row {
+    display:grid; grid-template-columns:152px minmax(0,1fr) 92px; align-items:center;
+    gap:var(--s4); padding:var(--s3) var(--s3); min-height:66px;
+    background:var(--surface-sunk); border:1px solid var(--rule); border-radius:var(--radius-sm);
+  }
+  .wave-name { font-size:13px; font-weight:700; }
+  .wave-date { font-size:11.5px; color:var(--muted); margin-top:4px; }
+  .wave-bar { height:9px; background:#eee3cf; border-radius:999px; box-shadow:var(--press); overflow:hidden; }
+  .wave-bar i { display:block; height:100%; border-radius:999px;
+    background:linear-gradient(180deg,#2f7c64,var(--accent)); box-shadow:inset 0 1px 0 rgba(255,255,255,.24); }
+  .wave-target { text-align:right; font-size:11.5px; font-weight:700; font-variant-numeric:tabular-nums; }
+
+  /* Work in motion */
+  .metric-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s2); }
+  .metric-box {
+    text-align:left; background:var(--surface-sunk); border:1px solid var(--rule);
+    border-radius:var(--radius-sm); padding:var(--s3) var(--s4); display:grid; gap:4px;
+    min-height:94px; align-content:center; box-shadow:var(--emboss);
+    transition:background 130ms, border-color 130ms, box-shadow 130ms;
+  }
+  .metric-box:hover { background:#fffdf6; border-color:var(--rule-strong); box-shadow:var(--raise), var(--emboss); }
+  .eyebrow { font-size:9.5px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
+  .metric { font:700 30px/1.05 var(--sans); letter-spacing:-.035em;
+    font-variant-numeric:tabular-nums lining-nums; text-shadow:0 1px 0 rgba(255,255,255,.95); }
+  .metric.alarm { color:var(--danger); }
+  .metric-box .subtle { font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .divider { height:1px; background:var(--rule); margin:var(--s5) 0 var(--s4); }
+  .chip-row { display:flex; gap:7px; flex-wrap:wrap; }
+  .chip {
+    display:inline-flex; align-items:center; height:30px; padding:0 13px;
+    border:1px solid var(--rule-strong); border-radius:999px; background:var(--surface);
+    font-size:12px; font-weight:600; color:var(--ink-soft); font-variant-numeric:tabular-nums;
+    box-shadow:var(--emboss);
+    transition:background 130ms, border-color 130ms, color 130ms, box-shadow 130ms;
+  }
+  button.chip:hover { background:var(--accent-wash); border-color:#a9c8bb; color:var(--accent-ink);
+    box-shadow:var(--raise), var(--emboss); }
+  .chip.overdue { background:var(--danger-wash); border-color:#e3c0b6; color:#8a3325; font-weight:700; }
+
+  /* Speaker task dashboard */
+  .task-list { display:grid; gap:var(--s2); }
+  .task-row {
+    width:100%; text-align:left;
+    display:grid; grid-template-columns:190px minmax(0,1fr) 180px 120px; align-items:center;
+    gap:var(--s4); padding:var(--s3) var(--s4); min-height:66px;
+    background:var(--surface-sunk); border:1px solid var(--rule); border-radius:var(--radius-sm);
+    box-shadow:var(--emboss); transition:background 130ms, border-color 130ms, box-shadow 130ms;
+  }
+  .task-row:hover { background:#fffdf6; border-color:var(--rule-strong); box-shadow:var(--raise), var(--emboss); }
+  .task-row .who { font-size:13px; font-weight:700; }
+  .task-title { min-width:0; }
+  .task-title .t { display:block; font-size:13px; color:var(--ink-soft);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .slot-meta { display:flex; align-items:center; gap:8px; margin-top:5px; flex-wrap:nowrap; min-width:0; }
+  .slot-meta > span:first-child { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .slot-pill { flex:0 0 auto; white-space:nowrap; background:var(--surface);
+    border:1px solid var(--rule-strong); border-radius:999px;
+    padding:2px 8px; font-size:9.5px; font-weight:700; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--muted); }
+  .task-what { font-size:12px; color:var(--muted); }
+  .task-when { justify-self:start; }
+
+  /* Empty-state preview link */
+  .empty-preview {
+    position:fixed; left:16px; bottom:16px; z-index:900;
+    background:var(--surface); border:1px solid var(--rule-strong); border-radius:999px;
+    padding:8px 14px; font-size:11.5px; font-weight:700; color:var(--ink-soft);
+    box-shadow:var(--raise), var(--emboss);
+    transition:background 130ms, color 130ms, box-shadow 130ms;
+  }
+  .empty-preview:hover { background:var(--accent); color:#fdf8ee; box-shadow:var(--raise-2); }
+
+  @media (max-width:1240px) { .dashboard-grid { grid-template-columns:1fr; } }
+  @media (max-width:1080px) { .attention-strip { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="prototype-badge">Prototype · Mock data</div>
+
+<div class="app">
+  <!-- ═══ Sidebar ════════════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <a class="brand" href="#dashboard">
+      <span class="brand-mark">M</span>
+      <span class="brand-name">Marquee</span>
+    </a>
+
+    <a class="event-switcher" href="#settings">
+      <small>Event</small>
+      <strong>AIE NYC 2026</strong>
+    </a>
+
+    <nav class="nav" aria-label="Program home">
+      <a class="active" href="#dashboard"><span class="nav-icon">⌂</span><span>Program home</span></a>
+      <a href="#board"><span class="nav-icon">▥</span><span>Program board</span></a>
+    </nav>
+
+    <div class="nav-label">Pipeline</div>
+    <nav class="nav" aria-label="Program lifecycle">
+      <a href="#submissions"><span class="nav-icon">1</span><span>Submitted</span></a>
+      <a href="#submissions"><span class="nav-icon">2</span><span>In review</span></a>
+      <a href="#submissions"><span class="nav-icon">3</span><span>Waved</span></a>
+      <a href="#submissions"><span class="nav-icon">4</span><span>Accepted</span></a>
+      <a href="#onboarding"><span class="nav-icon">5</span><span>Onboarding</span></a>
+      <a href="#submissions"><span class="nav-icon">6</span><span>Scheduled</span></a>
+      <a href="#submissions"><span class="nav-icon">7</span><span>Published</span></a>
+    </nav>
+
+    <div class="nav-label">Modules</div>
+    <nav class="nav" aria-label="Modules">
+      <a href="#forms"><span class="nav-icon">□</span><span>CFP forms</span></a>
+      <a href="#evaluation"><span class="nav-icon">◇</span><span>Evaluation plan</span></a>
+      <a href="#reviewer"><span class="nav-icon">✓</span><span>Review queue</span></a>
+      <a href="#agenda"><span class="nav-icon">▦</span><span>Agenda</span></a>
+      <a href="#comms"><span class="nav-icon">✉</span><span>Communications</span></a>
+      <a href="#portal"><span class="nav-icon">○</span><span>Speaker portal</span></a>
+      <a href="#publicAgenda"><span class="nav-icon">↗</span><span>Event site</span></a>
+      <a href="#settings"><span class="nav-icon">⚙</span><span>Event settings</span></a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button type="button">⌘ API &amp; CLI</button>
+      <button type="button">↻ Reset demo</button>
+    </div>
+  </aside>
+
+  <!-- ═══ Main ═══════════════════════════════════════════════════════════ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="breadcrumbs">AIE NYC 2026&nbsp; / &nbsp;<strong>Program pipeline</strong></div>
+      <div class="global-search">
+        <span class="search-glyph" aria-hidden="true">⌕</span>
+        <input aria-label="Search everything" autocomplete="off" placeholder="Search abstracts, speakers, sessions…" readonly>
+        <span class="shortcut">⌘K</span>
+      </div>
+      <div class="top-user" title="Maya Chen · Program lead">MC</div>
+    </header>
+
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <h1>Program pipeline</h1>
+          <p>Wave 2 closes Friday — 184 abstracts still need review in Agents. Every count opens the work behind it.</p>
+        </div>
+        <div class="head-actions">
+          <button class="button" type="button">Event settings</button>
+          <button class="button primary" type="button">Work the pipeline →</button>
+        </div>
+      </div>
+
+      <!-- Pipeline -->
+      <div class="pipeline-scroll">
+      <section class="pipeline" aria-label="Program pipeline stages">
+        <button class="pipeline-stage" type="button" style="--stage-hue:var(--track-fin)">
+          <span class="pipeline-name">Submitted</span>
+          <strong class="pipeline-count">350</strong>
+          <span class="pipeline-delta">+41 this week →</span>
+        </button>
+        <button class="pipeline-stage" type="button" style="--stage-hue:var(--track-agents)">
+          <span class="pipeline-name">In Review</span>
+          <strong class="pipeline-count">90</strong>
+          <span class="pipeline-delta">62% assigned →</span>
+        </button>
+        <button class="pipeline-stage" type="button" style="--stage-hue:var(--track-infra)">
+          <span class="pipeline-name">Waved</span>
+          <strong class="pipeline-count">126</strong>
+          <span class="pipeline-delta">2 of 3 waves →</span>
+        </button>
+        <button class="pipeline-stage" type="button" style="--stage-hue:var(--track-evals)">
+          <span class="pipeline-name">Accepted</span>
+          <strong class="pipeline-count">190</strong>
+          <span class="pipeline-delta">18.3% of all →</span>
+        </button>
+        <button class="pipeline-stage" type="button" style="--stage-hue:var(--track-open)">
+          <span class="pipeline-name">Onboarding</span>
+          <strong class="pipeline-count">103</strong>
+          <span class="pipeline-delta">owe tasks · 38 at risk →</span>
+        </button>
+        <button class="pipeline-stage" type="button" style="--stage-hue:var(--track-rag)">
+          <span class="pipeline-name">Scheduled</span>
+          <strong class="pipeline-count">32</strong>
+          <span class="pipeline-delta">158 still unplaced →</span>
+          <span class="pipeline-meaning">placed on the working agenda</span>
+        </button>
+        <button class="pipeline-stage" type="button" style="--stage-hue:var(--track-sec)">
+          <span class="pipeline-name">Published</span>
+          <strong class="pipeline-count">26</strong>
+          <span class="pipeline-delta">7 live conflicts →</span>
+          <span class="pipeline-meaning">live on the public site</span>
+        </button>
+      </section>
+      </div>
+
+      <!-- Attention strip -->
+      <div class="attention-strip">
+        <button class="attention-item" type="button">
+          <strong>Wave 2 in 6 days</strong>
+          <span>63 accepted · 60 target · open planner</span>
+        </button>
+        <button class="attention-item" type="button">
+          <strong>184 unreviewed in Agents</strong>
+          <span>90 in review · 94 waiting for assignment</span>
+        </button>
+        <button class="attention-item" type="button">
+          <strong>103 speakers overdue</strong>
+          <span>Headshots, agreements, and travel · open chase board</span>
+        </button>
+      </div>
+
+      <!-- Cards -->
+      <div class="dashboard-grid">
+        <section class="card" id="wave-planner">
+          <div class="card-head">
+            <div>
+              <h2>Wave planner</h2>
+              <span class="subtle">Accept while the CFP stays open</span>
+            </div>
+            <button class="button small" type="button">Plan next wave</button>
+          </div>
+          <div class="card-body">
+            <div class="wave-list">
+              <div class="wave-row">
+                <div><div class="wave-name">Wave 1</div><div class="wave-date">Aug 15 · sent</div></div>
+                <div>
+                  <div class="wave-bar"><i style="width:100%"></i></div>
+                  <div class="wave-date tabular">63 accepted</div>
+                </div>
+                <strong class="wave-target">48 target</strong>
+              </div>
+              <div class="wave-row">
+                <div><div class="wave-name">Wave 2</div><div class="wave-date">Sep 1 · closes in 6 days</div></div>
+                <div>
+                  <div class="wave-bar"><i style="width:100%"></i></div>
+                  <div class="wave-date tabular">63 accepted</div>
+                </div>
+                <strong class="wave-target">60 target</strong>
+              </div>
+              <div class="wave-row">
+                <div><div class="wave-name">Wave 3</div><div class="wave-date">Sep 15 · planned</div></div>
+                <div>
+                  <div class="wave-bar"><i style="width:100%"></i></div>
+                  <div class="wave-date tabular">64 accepted</div>
+                </div>
+                <strong class="wave-target">50 target</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>Work in motion</h2>
+              <span class="subtle">Updated just now</span>
+            </div>
+            <button class="button small" type="button">Export</button>
+          </div>
+          <div class="card-body">
+            <div class="metric-grid">
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Reviews done</span>
+                <div class="metric">1,842</div>
+                <span class="subtle">of 2,130</span>
+              </button>
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Tasks overdue</span>
+                <div class="metric">157</div>
+                <span class="subtle">across 103 speakers</span>
+              </button>
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Unscheduled</span>
+                <div class="metric">158</div>
+                <span class="subtle">accepted sessions</span>
+              </button>
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Conflicts</span>
+                <div class="metric alarm">7</div>
+                <span class="subtle">10 affected Sessions · live</span>
+              </button>
+            </div>
+            <div class="divider"></div>
+            <div class="eyebrow" style="margin-bottom:10px">Review pressure by track</div>
+            <div class="chip-row">
+              <button class="chip" type="button">Agents · 184</button>
+              <button class="chip" type="button">Evals · 46</button>
+              <button class="chip" type="button">Infra · 41</button>
+              <button class="chip" type="button">Security · 49</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card card-wide">
+          <div class="card-head">
+            <div>
+              <h2>Speaker task dashboard</h2>
+              <span class="subtle">157 overdue tasks across 103 accepted speakers · changes update live</span>
+            </div>
+            <button class="button small" type="button">Open onboarding</button>
+          </div>
+          <div class="card-body">
+            <div class="task-list">
+              <button class="task-row" type="button">
+                <span class="who">Amara van der Meer</span>
+                <span class="task-title">
+                  <span class="t">Beyond the demo: reliable multi-agent systems</span>
+                  <span class="slot-meta"><span>Tue · Oct 13 · 09:00 · Empire West</span><span class="slot-pill">Not yet public</span></span>
+                </span>
+                <span class="task-what">Speaker agreement</span>
+                <span class="chip overdue task-when">4 days overdue</span>
+              </button>
+              <button class="task-row" type="button">
+                <span class="who">João García Márquez</span>
+                <span class="task-title"><span class="t">Operating low-latency inference platforms</span></span>
+                <span class="task-what">High-resolution headshot</span>
+                <span class="chip overdue task-when">2 days overdue</span>
+              </button>
+              <button class="task-row" type="button">
+                <span class="who">Oluwaseun O'Connell-Singh</span>
+                <span class="task-title"><span class="t">AI governance without gridlock</span></span>
+                <span class="task-what">Travel and accommodation</span>
+                <span class="chip task-when">Due today</span>
+              </button>
+              <button class="task-row" type="button">
+                <span class="who">Mei-Ling de la Fontaine</span>
+                <span class="task-title"><span class="t">Secure tool-using agents in regulated teams</span></span>
+                <span class="task-what">Final slides</span>
+                <span class="chip task-when">Due Oct 5</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<a class="empty-preview" href="#dashboard?empty=1">Preview empty state</a>
+</body>
+</html>

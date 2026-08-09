@@ -1,0 +1,567 @@
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  MARQUEE — SKIN A · "HOUSE LIGHTS"
+  Thesis: the program home is a theatre call board — an ink masthead, a bone
+  playbill, serif display heads over grotesque figures, and the track palette
+  running as a light bar across the pipeline, so the name Marquee earns itself.
+
+  TOKEN BLOCK — lifts straight into tokens.css
+  ------------------------------------------------------------------------------
+  :root {
+    --bg:            #f4f1ea;   /* bone playbill stock                        */
+    --surface:       #ffffff;   /* card paper                                 */
+    --surface-sunk:  #faf8f3;   /* recessed strip inside a card               */
+    --masthead:      #141210;   /* ink column: sidebar + brand                */
+    --masthead-ink:  #d6cec1;   /* text on the ink column      12.0:1 on ink  */
+    --masthead-dim:  #8d8478;   /* secondary on ink             5.1:1 on ink  */
+
+    --ink:           #141210;   /* primary text               16.6:1 on paper */
+    --ink-soft:      #3b3630;   /* secondary heads            10.6:1 on paper */
+    --muted:         #665e54;   /* metadata                    5.7:1 on paper */
+    --rule:          #ddd6ca;   /* hairline                                   */
+    --rule-heavy:    #141210;   /* editorial rule under heads                 */
+
+    --accent:        #a32b1c;   /* house red                   6.4:1 on paper */
+    --accent-ink:    #7d2015;   /* accent text on wash         8.5:1 on wash  */
+    --accent-wash:   #f8e9e5;
+
+    --success:       #1a6a4b;   /* 6.6:1 on white */
+    --warning:       #8a5a06;   /* 5.9:1 on white */
+    --danger:        #a32b1c;   /* 6.4:1 on paper */
+
+    /* Track palette — doubles as the light bar over the pipeline */
+    --track-fin:#635bff; --track-agents:#db4c3f; --track-evals:#0d9488;
+    --track-infra:#d97706; --track-open:#2563eb; --track-rag:#9333ea;
+    --track-sec:#0f766e;
+
+    --display: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --grotesk: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --figures: "Helvetica Neue", Helvetica, Arial, sans-serif; /* tabular-nums */
+
+    --radius:     2px;          /* editorial: corners are cut, not rounded    */
+    --radius-pill: 999px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+    --shadow: none;             /* the language is rules and ink, not depth   */
+  }
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marquee — Skin A · House Lights</title>
+<style>
+  :root {
+    --bg:#f4f1ea; --surface:#ffffff; --surface-sunk:#faf8f3;
+    --masthead:#141210; --masthead-ink:#d6cec1; --masthead-dim:#8d8478;
+    --ink:#141210; --ink-soft:#3b3630; --muted:#665e54;
+    --rule:#ddd6ca; --rule-heavy:#141210;
+    --accent:#a32b1c; --accent-ink:#7d2015; --accent-wash:#f8e9e5;
+    --success:#1a6a4b; --warning:#8a5a06; --danger:#a32b1c;
+    --track-fin:#635bff; --track-agents:#db4c3f; --track-evals:#0d9488;
+    --track-infra:#d97706; --track-open:#2563eb; --track-rag:#9333ea; --track-sec:#0f766e;
+    --display: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --grotesk: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --radius:2px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); color:var(--ink); font-family:var(--grotesk); -webkit-font-smoothing:antialiased; }
+  body { margin:0; min-width:320px; }
+  button,input { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  a { color:inherit; text-decoration:none; }
+  .tabular { font-variant-numeric:tabular-nums lining-nums; }
+
+  /* ── Prototype badge ─────────────────────────────────────────────────── */
+  .prototype-badge {
+    position:fixed; z-index:1000; right:14px; top:14px;
+    background:var(--accent); color:#fff; border:1px solid rgba(255,255,255,.28);
+    padding:7px 12px; border-radius:var(--radius);
+    font:800 10px/1 var(--grotesk); letter-spacing:.16em; text-transform:uppercase;
+    pointer-events:none; box-shadow:0 6px 18px rgba(20,18,16,.24);
+  }
+
+  /* ── Shell ───────────────────────────────────────────────────────────── */
+  .app { display:grid; grid-template-columns:236px minmax(0,1fr); min-height:100vh; }
+
+  .masthead {
+    background:var(--masthead); color:var(--masthead-ink);
+    padding:var(--s5) var(--s3) var(--s4);
+    display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .brand { padding:0 var(--s2) var(--s3); }
+  .brand-name { font:italic 700 26px/1 var(--display); letter-spacing:-.03em; color:#fff; display:block; }
+  .bulbs { display:flex; gap:5px; margin-top:9px; }
+  .bulbs i { width:5px; height:5px; border-radius:50%; background:#5d564c; display:block; }
+  .bulbs i:nth-child(2n) { background:var(--accent); }
+  .bulbs i:nth-child(3) { background:#e8dfd0; }
+
+  .event-switcher {
+    display:block; margin:var(--s4) var(--s1) var(--s5); padding:10px 11px;
+    border:1px solid #37312b; border-radius:var(--radius); background:#1d1a17;
+    transition:border-color 120ms, background 120ms;
+  }
+  .event-switcher:hover { border-color:#5c534a; background:#232019; }
+  .event-switcher small { display:block; color:var(--masthead-dim); font-size:9px; font-weight:700;
+    letter-spacing:.18em; text-transform:uppercase; margin-bottom:5px; }
+  .event-switcher strong { display:block; font:italic 600 15px/1.2 var(--display); color:#fff;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .nav-label { color:var(--masthead-dim); font-size:9px; font-weight:800; letter-spacing:.2em;
+    text-transform:uppercase; margin:var(--s5) 10px var(--s2); }
+  .nav-label:first-of-type { margin-top:var(--s4); }
+  .nav { display:grid; gap:1px; }
+  .nav a {
+    min-height:32px; padding:7px 10px; display:flex; align-items:center; gap:10px;
+    font-size:12.5px; color:#b6ada0; border-radius:var(--radius);
+    border-left:2px solid transparent; transition:background 120ms, color 120ms, border-color 120ms;
+  }
+  .nav a:hover { background:#221f1b; color:#f2ece2; }
+  .nav a.active { background:#221f1b; color:#fff; border-left-color:var(--accent); }
+  .nav-icon { width:15px; text-align:center; font-size:11px; color:#7e756a; font-variant-numeric:tabular-nums; }
+  .nav a:hover .nav-icon, .nav a.active .nav-icon { color:var(--accent); }
+
+  .masthead-foot { margin-top:auto; padding-top:var(--s5); display:grid; gap:2px; }
+  .masthead-foot button {
+    text-align:left; padding:7px 10px; background:none; border:0; border-radius:var(--radius);
+    color:#8d8478; font-size:11.5px; transition:background 120ms, color 120ms;
+  }
+  .masthead-foot button:hover { background:#221f1b; color:#e4dbcd; }
+
+  /* ── Topbar ──────────────────────────────────────────────────────────── */
+  .main { display:flex; flex-direction:column; min-width:0; }
+  .topbar {
+    display:flex; align-items:center; gap:var(--s5);
+    padding:0 224px 0 var(--s6); height:60px; background:var(--surface);
+    border-bottom:1px solid var(--rule-heavy); position:sticky; top:0; z-index:20;
+  }
+  .breadcrumbs { font-size:12px; color:var(--muted); white-space:nowrap; }
+  .breadcrumbs strong { color:var(--ink); font-weight:700; }
+  .global-search {
+    flex:1; max-width:520px; display:flex; align-items:center; gap:var(--s2);
+    border:1px solid var(--rule); border-radius:var(--radius); padding:0 10px; height:34px;
+    background:var(--surface-sunk); transition:border-color 120ms;
+  }
+  .global-search:hover { border-color:#bdb3a3; }
+  .global-search input { flex:1; border:0; background:none; outline:none; font-size:12.5px; }
+  .global-search input::placeholder { color:#8d8478; }
+  .search-glyph { color:var(--muted); font-size:13px; }
+  .shortcut { font-size:10px; font-weight:700; color:var(--muted); letter-spacing:.06em;
+    border:1px solid var(--rule); border-radius:var(--radius); padding:2px 5px; }
+  .top-user {
+    width:32px; height:32px; flex:0 0 32px; display:grid; place-items:center; border-radius:50%;
+    background:var(--masthead); color:#fff; font:700 11px/1 var(--grotesk); letter-spacing:.06em;
+  }
+
+  /* ── Page ────────────────────────────────────────────────────────────── */
+  .page { padding:var(--s6) var(--s6) var(--s7); max-width:1360px; width:100%; }
+  .page-head { display:flex; align-items:flex-end; justify-content:space-between; gap:var(--s5);
+    padding-bottom:var(--s4); margin-bottom:var(--s5);
+    border-bottom:1px solid var(--rule-heavy); box-shadow:0 3px 0 -2px var(--rule-heavy); }
+  .page-head h1 { margin:0 0 7px; font:italic 400 40px/1.05 var(--display); letter-spacing:-.02em; }
+  .page-head p { margin:0; max-width:66ch; font-size:13.5px; line-height:1.55; color:var(--ink-soft); }
+  .head-actions { display:flex; gap:var(--s2); flex:0 0 auto; }
+
+  .button {
+    height:34px; min-width:132px; padding:0 var(--s4); border:1px solid var(--rule-heavy);
+    background:var(--surface); color:var(--ink); border-radius:var(--radius);
+    font:700 11px/1 var(--grotesk); letter-spacing:.1em; text-transform:uppercase;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    transition:background 120ms, color 120ms, border-color 120ms;
+  }
+  .button:hover { background:var(--accent-wash); border-color:var(--accent); color:var(--accent-ink); }
+  .button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .button.primary:hover { background:#8c2417; border-color:#8c2417; color:#fff; }
+  .button.small { height:28px; min-width:112px; padding:0 var(--s3); font-size:10px; }
+
+  /* ── Pipeline billboard ──────────────────────────────────────────────── */
+  .billboard { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    margin-bottom:var(--s4); overflow-x:auto; overflow-y:hidden; }
+  .billboard-inner { min-width:780px; }
+  .light-bar { display:grid; grid-template-columns:repeat(7,1fr); height:4px; }
+  .light-bar i { display:block; }
+  .pipeline { display:grid; grid-template-columns:repeat(7,1fr); }
+  .pipeline-stage {
+    position:relative; text-align:left; background:none; border:0;
+    border-right:1px solid var(--rule); padding:var(--s4) clamp(10px,1.1vw,16px);
+    display:grid; align-content:start; gap:6px; min-height:132px;
+    transition:background 120ms;
+  }
+  .pipeline-stage:last-child { border-right:0; }
+  .pipeline-stage:hover { background:var(--surface-sunk); }
+  .pipeline-name { font-size:9.5px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
+  .pipeline-count { font:700 clamp(30px,2.7vw,40px)/1 var(--grotesk); letter-spacing:-.045em;
+    font-variant-numeric:tabular-nums lining-nums; }
+  .pipeline-delta { font:italic 400 12px/1.35 var(--display); color:var(--accent-ink); }
+  .pipeline-meaning { font-size:10.5px; line-height:1.35; color:var(--muted); }
+  .pipeline-stage:hover .pipeline-delta { color:var(--accent); }
+
+  /* ── Attention strip (call-board notices) ────────────────────────────── */
+  .attention-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s3); margin-bottom:var(--s5); }
+  .attention-item {
+    text-align:left; background:var(--surface); border:1px solid var(--rule);
+    border-left:3px solid var(--accent); border-radius:var(--radius);
+    padding:var(--s3) var(--s4); display:grid; gap:5px; min-height:64px; align-content:center;
+    transition:background 120ms, border-color 120ms;
+  }
+  .attention-item:hover { background:var(--accent-wash); border-color:var(--rule-heavy); border-left-color:var(--accent); }
+  .attention-item strong { font:italic 600 16px/1.2 var(--display); font-variant-numeric:tabular-nums lining-nums; }
+  .attention-item span { font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  /* ── Cards ───────────────────────────────────────────────────────────── */
+  .dashboard-grid { display:grid; align-items:start; grid-template-columns:1fr 1fr; gap:var(--s4); }
+  .card { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius); }
+  .card-wide { grid-column:1 / -1; }
+  .card-head {
+    display:flex; align-items:flex-start; justify-content:space-between; gap:var(--s4);
+    padding:var(--s4) var(--s4) var(--s3);
+    border-bottom:1px solid var(--rule-heavy); box-shadow:0 3px 0 -2px var(--rule-heavy);
+  }
+  .card-head h2 { margin:0 0 3px; font:italic 400 20px/1.15 var(--display); letter-spacing:-.01em; }
+  .card-head .subtle { font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .card-body { padding:var(--s4); }
+
+  /* Wave planner */
+  .wave-list { display:grid; }
+  .wave-row {
+    width:100%; text-align:left; background:none; border:0; border-bottom:1px solid var(--rule);
+    display:grid; grid-template-columns:150px minmax(0,1fr) 88px; align-items:center;
+    gap:var(--s4); padding:var(--s3) var(--s2); min-height:60px;
+  }
+  .wave-row:last-child { border-bottom:0; }
+  .wave-name { font:700 12px/1.2 var(--grotesk); letter-spacing:.02em; }
+  .wave-date { font:italic 400 11.5px/1.3 var(--display); color:var(--muted); margin-top:3px; }
+  .wave-bar { height:6px; background:var(--surface-sunk); border:1px solid var(--rule); border-radius:var(--radius); overflow:hidden; }
+  .wave-bar i { display:block; height:100%; background:var(--accent); }
+  .wave-target { text-align:right; font:700 11px/1 var(--grotesk); font-variant-numeric:tabular-nums; letter-spacing:.04em; }
+
+  /* Work in motion */
+  .metric-grid { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--rule); border:1px solid var(--rule); }
+  .metric-box { text-align:left; background:var(--surface); border:0; padding:var(--s3) var(--s4);
+    display:grid; gap:3px; min-height:88px; align-content:center; transition:background 120ms; }
+  .metric-box:hover { background:var(--surface-sunk); }
+  .eyebrow { font-size:9px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; color:var(--muted); }
+  .metric { font:700 30px/1.05 var(--grotesk); letter-spacing:-.04em; font-variant-numeric:tabular-nums lining-nums; }
+  .metric.alarm { color:var(--danger); }
+  .metric-box .subtle { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .divider { height:1px; background:var(--rule); margin:var(--s4) 0 var(--s3); }
+  .chip-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip {
+    display:inline-flex; align-items:center; height:26px; padding:0 11px;
+    border:1px solid var(--rule); border-radius:var(--radius-pill, 999px); background:var(--surface);
+    font:600 11px/1 var(--grotesk); color:var(--ink-soft); font-variant-numeric:tabular-nums;
+    transition:background 120ms, border-color 120ms, color 120ms;
+  }
+  button.chip:hover { background:var(--accent-wash); border-color:var(--accent); color:var(--accent-ink); }
+  .chip.overdue { background:var(--accent-wash); border-color:#e6c6bf; color:var(--accent-ink); font-weight:700; }
+
+  /* Speaker task dashboard */
+  .task-list { display:grid; }
+  .task-row {
+    width:100%; text-align:left; background:none; border:0; border-bottom:1px solid var(--rule);
+    display:grid; grid-template-columns:186px minmax(0,1fr) 176px 116px; align-items:center;
+    gap:var(--s4); padding:var(--s3) var(--s2); min-height:58px; transition:background 120ms;
+  }
+  .task-row:last-child { border-bottom:0; }
+  .task-row:hover { background:var(--surface-sunk); }
+  .task-row .who { font:700 12.5px/1.3 var(--grotesk); }
+  .task-title { min-width:0; }
+  .task-title .t { display:block; font:italic 400 14px/1.3 var(--display); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .slot-meta { display:flex; align-items:center; gap:7px; margin-top:4px; flex-wrap:nowrap; min-width:0; }
+  .slot-meta > span:first-child { font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .slot-pill { flex:0 0 auto; white-space:nowrap; border:1px solid var(--rule); border-radius:999px;
+    padding:1px 7px; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--muted); }
+  .task-what { font-size:11.5px; color:var(--muted); }
+  .task-when { justify-self:start; }
+
+  /* Empty-state preview link */
+  .empty-preview {
+    position:fixed; left:14px; bottom:14px; z-index:900;
+    background:var(--surface); border:1px solid var(--rule-heavy); border-radius:var(--radius);
+    padding:6px 11px; font:700 10px/1 var(--grotesk); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink); transition:background 120ms, color 120ms;
+  }
+  .empty-preview:hover { background:var(--masthead); color:#fff; }
+
+  @media (max-width:1240px) { .dashboard-grid { grid-template-columns:1fr; } }
+  @media (max-width:1080px) { .attention-strip { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="prototype-badge">Prototype · Mock data</div>
+
+<div class="app">
+  <!-- ═══ Ink masthead ═══════════════════════════════════════════════════ -->
+  <aside class="masthead">
+    <a class="brand" href="#dashboard">
+      <span class="brand-name">Marquee</span>
+      <span class="bulbs" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </a>
+
+    <a class="event-switcher" href="#settings">
+      <small>Event</small>
+      <strong>AIE NYC 2026</strong>
+    </a>
+
+    <nav class="nav" aria-label="Program home">
+      <a class="active" href="#dashboard"><span class="nav-icon">⌂</span><span>Program home</span></a>
+      <a href="#board"><span class="nav-icon">▥</span><span>Program board</span></a>
+    </nav>
+
+    <div class="nav-label">Pipeline</div>
+    <nav class="nav" aria-label="Program lifecycle">
+      <a href="#submissions"><span class="nav-icon">1</span><span>Submitted</span></a>
+      <a href="#submissions"><span class="nav-icon">2</span><span>In review</span></a>
+      <a href="#submissions"><span class="nav-icon">3</span><span>Waved</span></a>
+      <a href="#submissions"><span class="nav-icon">4</span><span>Accepted</span></a>
+      <a href="#onboarding"><span class="nav-icon">5</span><span>Onboarding</span></a>
+      <a href="#submissions"><span class="nav-icon">6</span><span>Scheduled</span></a>
+      <a href="#submissions"><span class="nav-icon">7</span><span>Published</span></a>
+    </nav>
+
+    <div class="nav-label">Modules</div>
+    <nav class="nav" aria-label="Modules">
+      <a href="#forms"><span class="nav-icon">□</span><span>CFP forms</span></a>
+      <a href="#evaluation"><span class="nav-icon">◇</span><span>Evaluation plan</span></a>
+      <a href="#reviewer"><span class="nav-icon">✓</span><span>Review queue</span></a>
+      <a href="#agenda"><span class="nav-icon">▦</span><span>Agenda</span></a>
+      <a href="#comms"><span class="nav-icon">✉</span><span>Communications</span></a>
+      <a href="#portal"><span class="nav-icon">○</span><span>Speaker portal</span></a>
+      <a href="#publicAgenda"><span class="nav-icon">↗</span><span>Event site</span></a>
+      <a href="#settings"><span class="nav-icon">⚙</span><span>Event settings</span></a>
+    </nav>
+
+    <div class="masthead-foot">
+      <button type="button">⌘ API &amp; CLI</button>
+      <button type="button">↻ Reset demo</button>
+    </div>
+  </aside>
+
+  <!-- ═══ Main ═══════════════════════════════════════════════════════════ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="breadcrumbs">AIE NYC 2026&nbsp; / &nbsp;<strong>Program pipeline</strong></div>
+      <div class="global-search">
+        <span class="search-glyph" aria-hidden="true">⌕</span>
+        <input aria-label="Search everything" autocomplete="off" placeholder="Search abstracts, speakers, sessions…" readonly>
+        <span class="shortcut">⌘K</span>
+      </div>
+      <div class="top-user" title="Maya Chen · Program lead">MC</div>
+    </header>
+
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <h1>Program pipeline</h1>
+          <p>Wave 2 closes Friday — 184 abstracts still need review in Agents. Every count opens the work behind it.</p>
+        </div>
+        <div class="head-actions">
+          <button class="button" type="button">Event settings</button>
+          <button class="button primary" type="button">Work the pipeline →</button>
+        </div>
+      </div>
+
+      <!-- Pipeline billboard -->
+      <section class="billboard" aria-label="Program pipeline stages">
+       <div class="billboard-inner">
+        <div class="light-bar" aria-hidden="true">
+          <i style="background:var(--track-fin)"></i>
+          <i style="background:var(--track-agents)"></i>
+          <i style="background:var(--track-infra)"></i>
+          <i style="background:var(--track-evals)"></i>
+          <i style="background:var(--track-open)"></i>
+          <i style="background:var(--track-rag)"></i>
+          <i style="background:var(--track-sec)"></i>
+        </div>
+        <div class="pipeline">
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Submitted</span>
+            <strong class="pipeline-count">350</strong>
+            <span class="pipeline-delta">+41 this week →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">In Review</span>
+            <strong class="pipeline-count">90</strong>
+            <span class="pipeline-delta">62% assigned →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Waved</span>
+            <strong class="pipeline-count">126</strong>
+            <span class="pipeline-delta">2 of 3 waves →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Accepted</span>
+            <strong class="pipeline-count">190</strong>
+            <span class="pipeline-delta">18.3% of all →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Onboarding</span>
+            <strong class="pipeline-count">103</strong>
+            <span class="pipeline-delta">owe tasks · 38 at risk →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Scheduled</span>
+            <strong class="pipeline-count">32</strong>
+            <span class="pipeline-delta">158 still unplaced →</span>
+            <span class="pipeline-meaning">placed on the working agenda</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Published</span>
+            <strong class="pipeline-count">26</strong>
+            <span class="pipeline-delta">7 live conflicts →</span>
+            <span class="pipeline-meaning">live on the public site</span>
+          </button>
+        </div>
+       </div>
+      </section>
+
+      <!-- Attention strip -->
+      <div class="attention-strip">
+        <button class="attention-item" type="button">
+          <strong>Wave 2 in 6 days</strong>
+          <span>63 accepted · 60 target · open planner</span>
+        </button>
+        <button class="attention-item" type="button">
+          <strong>184 unreviewed in Agents</strong>
+          <span>90 in review · 94 waiting for assignment</span>
+        </button>
+        <button class="attention-item" type="button">
+          <strong>103 speakers overdue</strong>
+          <span>Headshots, agreements, and travel · open chase board</span>
+        </button>
+      </div>
+
+      <!-- Cards -->
+      <div class="dashboard-grid">
+        <section class="card" id="wave-planner">
+          <div class="card-head">
+            <div>
+              <h2>Wave planner</h2>
+              <span class="subtle">Accept while the CFP stays open</span>
+            </div>
+            <button class="button small" type="button">Plan next wave</button>
+          </div>
+          <div class="card-body">
+            <div class="wave-list">
+              <div class="wave-row">
+                <div><div class="wave-name">Wave 1</div><div class="wave-date">Aug 15 · sent</div></div>
+                <div>
+                  <div class="wave-bar"><i style="width:100%"></i></div>
+                  <div class="wave-date tabular">63 accepted</div>
+                </div>
+                <strong class="wave-target">48 target</strong>
+              </div>
+              <div class="wave-row">
+                <div><div class="wave-name">Wave 2</div><div class="wave-date">Sep 1 · closes in 6 days</div></div>
+                <div>
+                  <div class="wave-bar"><i style="width:100%"></i></div>
+                  <div class="wave-date tabular">63 accepted</div>
+                </div>
+                <strong class="wave-target">60 target</strong>
+              </div>
+              <div class="wave-row">
+                <div><div class="wave-name">Wave 3</div><div class="wave-date">Sep 15 · planned</div></div>
+                <div>
+                  <div class="wave-bar"><i style="width:100%"></i></div>
+                  <div class="wave-date tabular">64 accepted</div>
+                </div>
+                <strong class="wave-target">50 target</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>Work in motion</h2>
+              <span class="subtle">Updated just now</span>
+            </div>
+            <button class="button small" type="button">Export</button>
+          </div>
+          <div class="card-body">
+            <div class="metric-grid">
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Reviews done</span>
+                <div class="metric">1,842</div>
+                <span class="subtle">of 2,130</span>
+              </button>
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Tasks overdue</span>
+                <div class="metric">157</div>
+                <span class="subtle">across 103 speakers</span>
+              </button>
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Unscheduled</span>
+                <div class="metric">158</div>
+                <span class="subtle">accepted sessions</span>
+              </button>
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Conflicts</span>
+                <div class="metric alarm">7</div>
+                <span class="subtle">10 affected Sessions · live</span>
+              </button>
+            </div>
+            <div class="divider"></div>
+            <div class="eyebrow" style="margin-bottom:9px">Review pressure by track</div>
+            <div class="chip-row">
+              <button class="chip" type="button">Agents · 184</button>
+              <button class="chip" type="button">Evals · 46</button>
+              <button class="chip" type="button">Infra · 41</button>
+              <button class="chip" type="button">Security · 49</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card card-wide">
+          <div class="card-head">
+            <div>
+              <h2>Speaker task dashboard</h2>
+              <span class="subtle">157 overdue tasks across 103 accepted speakers · changes update live</span>
+            </div>
+            <button class="button small" type="button">Open onboarding</button>
+          </div>
+          <div class="card-body" style="padding-top:4px;padding-bottom:4px">
+            <div class="task-list">
+              <button class="task-row" type="button">
+                <span class="who">Amara van der Meer</span>
+                <span class="task-title">
+                  <span class="t">Beyond the demo: reliable multi-agent systems</span>
+                  <span class="slot-meta"><span>Tue · Oct 13 · 09:00 · Empire West</span><span class="slot-pill">Not yet public</span></span>
+                </span>
+                <span class="task-what">Speaker agreement</span>
+                <span class="chip overdue task-when">4 days overdue</span>
+              </button>
+              <button class="task-row" type="button">
+                <span class="who">João García Márquez</span>
+                <span class="task-title"><span class="t">Operating low-latency inference platforms</span></span>
+                <span class="task-what">High-resolution headshot</span>
+                <span class="chip overdue task-when">2 days overdue</span>
+              </button>
+              <button class="task-row" type="button">
+                <span class="who">Oluwaseun O'Connell-Singh</span>
+                <span class="task-title"><span class="t">AI governance without gridlock</span></span>
+                <span class="task-what">Travel and accommodation</span>
+                <span class="chip task-when">Due today</span>
+              </button>
+              <button class="task-row" type="button">
+                <span class="who">Mei-Ling de la Fontaine</span>
+                <span class="task-title"><span class="t">Secure tool-using agents in regulated teams</span></span>
+                <span class="task-what">Final slides</span>
+                <span class="chip task-when">Due Oct 5</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<a class="empty-preview" href="#dashboard?empty=1">Preview empty state</a>
+</body>
+</html>
