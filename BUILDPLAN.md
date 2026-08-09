@@ -1,11 +1,11 @@
 # Marquee — Build Plan
 
 **Status:** v1.4 contract revision for client prototype review · updated 2026-08-09; do not dispatch until the prototype is signed and `DESIGN.md` exists.
-**Reads with:** `SPEC.md` (what it is) · `EVALUATION.md` (what "done" means) · `sequence/USER_STORIES.md` (248 live criteria through AC-249; AC-239 struck) · `sequence/research/seams-feasibility.md` (limits, hour estimates §9, the 16 deadline traps §8).
-**Folded through 2026-08-09** against `USER_STORIES.md` Amendments 1–8: reviewer detail/recommendation/track authority are Tier A; decision feedback/talk editing, Program board, webhooks/scoped tokens, saved views/configurable columns/Draft queue are Tier B. Ticket ACs, ordering, and the cut line below reflect that fold.
-**Deadline:** **Wed 2026-08-12, 22:00 PT.** From this file's timestamp that is ~98 hours, of which roughly a day elapses before requirements freeze.
+**Reads with:** `SPEC.md` (what it is) · `EVALUATION.md` (what "done" means) · `sequence/USER_STORIES.md` (249 live criteria through AC-250; AC-239 struck) · `sequence/research/seams-feasibility.md` (limits, hour estimates §9, the 16 deadline traps §8).
+**Folded through 2026-08-09** against `USER_STORIES.md` Amendments 1–9: reviewer detail/recommendation/track authority are Tier A; decision feedback/talk editing, Program board, webhooks/scoped tokens, saved views/configurable columns/Draft queue, and agent-composed sends (**AC-250**, M-35/M-38) are Tier B. Ticket ACs, ordering, and the cut line below reflect that fold.
+**Deadline:** **Wed 2026-08-12, 22:00 PT.** **The window is measured from dispatch, not from this file's timestamp**, and it shrinks hour for hour until the fleet starts: ~86 h remain as of Sunday 2026-08-09 08:00 PT, ~74 h from a Sunday 20:00 dispatch. §9's checkpoints are therefore all expressed as **dispatch + N hours** (`D+N`). A wall-clock schedule anchored to a night that has already passed is worse than no schedule — the fleet reads §9 as its clock, and the cut-line decision keys off it.
 
-Hours below are **agent-hours**, not wall-clock. The fleet runs ~4–6 delegators in parallel; wall-clock is the critical path through the dependency graph, not the sum.
+Hours below are **agent-hours**, not wall-clock. The fleet runs ~4–6 delegators in parallel; **wall-clock is the critical path through the dependency graph, not the sum** — a 13-hour serial chain is 13 hours no matter how many workers are idle beside it. Neither figure includes the delegator's own plan → implement → review → fix loop, so treat every estimate as optimistic.
 
 ---
 
@@ -29,34 +29,37 @@ Three waves, each ending in something a human can look at:
 
 | Wave | Ends at | What is true then |
 |---|---|---|
-| **0 · Walking skeleton** | **CP-1** | A deployed URL on the real plan, on the real seed, with both demo logins and one real loop screen. Traps 2 and 4 are dead by 03:00, not on Tuesday. Felt checkpoint **C1** can run. |
+| **0 · Walking skeleton** | **CP-1** | A deployed URL on the real plan, on the real seed, with both demo logins and one real loop screen. Traps 2 and 4 are dead at **D+13**, not on Tuesday. Felt checkpoint **C1** can run. |
 | **1 · The loop** | **CP-2** | All eleven walkthrough steps complete on the deployed preview with zero dead ends. The full Tier-A no-waiver set — AC-1–90 plus AC-231, AC-234, AC-240, and AC-244–246 — is green. Checkpoints **C2, C3** can run. |
 | **2 · Differentiators** | **CP-3** | Tier B built top-down to the cut line, the Airtable round-trip demonstrable, the gate rehearsed. Checkpoints **C5, C6, C7**. |
 
-**The walking skeleton goes first and it goes tonight.** It is not a nicety: deploying to the real Workers Paid plan on day one is the only way to discover the 10 ms CPU ceiling (trap 2) and a lapsed R2 entitlement (trap 4) while there is still time, because neither is visible in local dev.
+**The walking skeleton goes first and it goes at dispatch.** It is not a nicety: deploying to the real Workers Paid plan on day one is the only way to discover the 10 ms CPU ceiling (trap 2) and a lapsed R2 entitlement (trap 4) while there is still time, because neither is visible in local dev.
 
 ---
 
-## 3. Wave 0 — walking skeleton (tonight)
+## 3. Wave 0 — walking skeleton (D+0 → D+13)
 
 Serialized where marked; everything else runs in parallel.
 
 | # | Ticket | Scope | ACs | File surface | Hrs | Deps |
 |---|---|---|---|---|---|---|
 | **M-01** | **Platform skeleton & first real deploy** | Repo, `wrangler.jsonc` with every binding (D1, R2, KV, Queue, cron, Turnstile secrets), Vite + TS, Hono entry, health route, custom domain `marquee.stage11.dev`, **deploy to the Paid plan before anything else lands**. `https://` only; session cookie helper with **no `Domain` attribute**. | — | `wrangler.jsonc`, `package.json`, `vite.config.ts`, `src/index.ts`, `src/lib/cookies.ts` | 3 | — |
-| **M-02** | **Migration `0001_init.sql` — the whole schema** ⛔serialized | Every table in `SPEC.md` §3 in one migration, including `submission_tracks`, `submission_decisions`, `reviewer_track_scopes`, `saved_views`, and `form_admins`; indexes for submissions/status/kind, track intersections, reviewer scopes, saved-view ownership, participations, tasks, agenda, outbox, and evaluation uniqueness. **Status enum complete including `waitlisted`; `(person, submission, role)` triple; round-aware evaluation; event + explicit-track reviewer authority from day one.** | AC-176, AC-212, AC-214, AC-222, **AC-234, AC-235, AC-246–249** | `migrations/0001_init.sql`, `src/db/schema.ts` | 4 | M-01 |
-| **M-03** | **Auth, demo entry, reset-demo** | Magic links (256-bit random, hash stored, single-use, 15-min TTL), session cookie middleware, bearer-token middleware, scope resolution from `memberships`, **one-click organizer/speaker demo login**, on-screen magic link in demo mode, `POST /admin/reset-demo` + product button + `npm run reset:demo` (idempotent, safe mid-judging, never partially-reset — **US-73 ranks in Tier B but is built here**, because the demo logins need it from the first deploy). | AC-1, AC-2, AC-107, AC-214, **AC-230** | `src/routes/auth.routes.ts`, `src/lib/auth/*`, `src/routes/admin-ops.routes.ts` | 4 | M-02 |
-| **M-04** | **Seed generator v1** | `scripts/seed/` from `sources/aie-summit-2025-program.json`: event, formats, tracks, rooms, waves, 1,000+ records including ~40 incomplete Drafts, the real accepted core, multi-track distribution (≥15%; ≥3 scheduled), reviewer track scopes, participations, tasks, evaluations/recommendations, agenda with **two live double-bookings**, and the deliberate ugliness list. Idempotent; `npm run seed`; `reset:demo` calls it. **Placeholder avatars only; no real emails; no real headshots.** | AC-3, AC-8, **AC-234, AC-245, AC-246, AC-249** | `scripts/seed/*.ts`, `src/lib/ids.ts` | 7 | M-02 |
+| **M-02** | **Migration `0001_init.sql` — the whole schema** ⛔serialized | Every table in `SPEC.md` §3 in one migration, including `submission_tracks`, `submission_decisions`, `reviewer_track_scopes`, `saved_views`, and `form_admins`; indexes for submissions/status/kind, track intersections, reviewer scopes, saved-view ownership, participations, tasks, agenda, outbox, and evaluation uniqueness. **`outbox.send_policy TEXT NOT NULL DEFAULT 'demo_safe'` (`demo_safe|always_live`) lands in this migration** — it is what lets the queue consumer implement G3's tested exception (B-8). **Status enum complete including `waitlisted`; `(person, submission, role)` triple; round-aware evaluation; event + explicit-track reviewer authority from day one.** | AC-176, AC-212, AC-214, AC-222, **AC-234, AC-235, AC-246–249** | `migrations/0001_init.sql`, `src/db/schema.ts` | 4 | M-01 |
+| **M-03** | **Auth, demo entry, reset-demo** | Magic links (256-bit random, hash stored, single-use, 15-min TTL), session cookie middleware, bearer-token middleware, scope resolution from `memberships`, **one-click organizer/speaker demo login — `POST /api/v1/auth/demo` 403s and sets no cookie unless the target event's `demo_mode = 1`** (SPEC §4.1, guardrail G6/A-5), on-screen magic link in demo mode, **auth mail (`magic_link_login`, `draft_resume`, `task_link`) enqueues an `outbox` row and never calls Resend directly — the queue consumer is the only sender (G3/A-3)**, `POST /admin/reset-demo` + product button + `npm run reset:demo` (idempotent, safe mid-judging, never partially-reset — **US-73 ranks in Tier B but is built here**, because the demo logins need it from the first deploy). | AC-1, AC-2, AC-107, AC-214, **AC-230** | `src/routes/auth.routes.ts`, `src/lib/auth/*`, `src/routes/admin-ops.routes.ts` | 4 | M-02 |
+| **M-04a** | **Seed generator — spine** ⛔on the critical path | `scripts/seed/` skeleton from `sources/aie-summit-2025-program.json`: event, formats, tracks, rooms, waves, task templates, and the **60-session real accepted core** with its speakers and participations. Idempotent; `npm run seed`; `reset:demo` calls it. **Placeholder avatars only; no real emails; no real headshots.** Deliberately small so it does not sit on M-08's critical path. | AC-8 | `scripts/seed/index.ts`, `scripts/seed/event.ts`, `scripts/seed/accepted-core.ts`, `src/lib/ids.ts` | 2 | M-02 |
+| **M-04b** | **Seed generator — pool, evaluation, ugliness** | The 940-row rejected/pending pool including ~40 incomplete Drafts, multi-track distribution (≥15%; ≥3 scheduled), participations, tasks, evaluations/recommendations, agenda with **two live double-bookings**, and the deliberate ugliness list. **Seeds the *demo organizer* persona a `reviewer` membership on the demo event, `reviewer_track_scopes` covering every track, and round-1 `round_assignments` over ~40 unreviewed submissions** — so the Review queue the admin sidebar links opens populated instead of on "no matching track scope", and AC-62's 20-advance speed run has material (B-3). Runs in parallel with M-09/M-10; off the CP-1 chain. | AC-3, **AC-234, AC-245, AC-246, AC-249** | `scripts/seed/pool.ts`, `scripts/seed/evaluations.ts`, `scripts/seed/agenda.ts`, `scripts/seed/ugliness.ts` | 5 | M-04a |
 | **M-05** | **Design system, admin shell, landing page** | Tokens + component CSS lifted verbatim from the v1.1 prototype; sidebar (home, seven pipeline stages, modules, footer), topbar with search affordance, toast host, drawer/modal hosts, route table; **public landing with both demo entries**. | AC-1, AC-2, AC-4 | `src/styles/tokens.css`, `src/ui/shell/*`, `src/routes/landing.route.tsx` | 4 | M-01 |
 | **M-06** | **Harness skeleton** ⛔serialized on `package.json` | All eleven `EVALUATION.md` §1.1 scripts registered up front (stubs where empty): `test`, `e2e`, `check:speed`, `check:seed`, `check:api`, `check:repo`, `check:readme`, `trace:ac`, `reset:demo`, `smoke:mail`, `smoke:ics`, `check:skill-agent`. Vitest + `@cloudflare/vitest-pool-workers`, Playwright desktop+mobile projects, `trace:ac` scanner, `check:repo` (gitleaks + badge + `Atin/` + history scan), CI. **`npm test` budget ≤30 s from the first commit.** | — | `package.json`, `vitest.config.ts`, `playwright.config.ts`, `scripts/checks/*`, `.github/workflows/ci.yml` | 4 | M-01 |
 | **M-07** | **API core** | Hono router with a generated route manifest (glob, never a hand-edited list), error envelope, list contract (`page/per_page/q/sort/filters` → `{data,page,per_page,total}`), pagination helper, **bulk selector type (ids *or* filter)**, `json_each` chunking helper, OpenAPI assembly from route definitions, `/api/openapi.json`, `/api/docs`. | AC-105, AC-106, AC-108 | `src/api/*`, `src/routes/_manifest.ts` (generated) | 4 | M-02 |
-| **M-08** | **First loop screen: submissions list** | Server-side filtered/sorted/paginated list at 50/page over the seed, type/status/track filters including Draft, selection state, exact record navigation, empty state, and the stable column registry that M-55 configures. Proves the whole stack end to end on real data. | AC-23, part AC-66, foundation **AC-240, AC-247–249** | `src/routes/submissions.routes.ts`, `submissions.queries.ts`, `src/ui/submissions/*` | 4 | M-04, M-05, M-07 |
+| **M-08** | **First loop screen: submissions list** | Server-side filtered/sorted/paginated list at 50/page over the seed, type/status/track filters including Draft, selection state, exact record navigation, empty state, and the stable column registry that M-55 configures. Proves the whole stack end to end on real data. | AC-23, part AC-66, foundation **AC-240, AC-247–249** | `src/routes/submissions.routes.ts`, `submissions.queries.ts`, `src/ui/submissions/*` | 4 | M-04a, M-05, M-07 |
+
+**M-04 is split** (adversarial B-5): **M-04a** carries only what M-08 needs, so the Wave 0 critical chain is M-01 (3) → M-02 (4) → M-04a (2) → M-08 (4) = **13 h**, not 18. **M-04b** runs in parallel with Wave 1's opening tickets. Where §7, §10, and the amendment log say "M-04", read the pair.
 
 **CP-1 — human-visible checkpoint.** Deployed URL, populated, both demo logins land on a real screen, `npm test` green in <30 s, `check:repo` clean. **Traps 2, 4, 15 closed.** Felt checkpoint **C1** runs here (a stranger opens it cold and answers three questions in 10 s).
 
 ---
 
-## 4. Wave 1 — the loop, in walkthrough order
+## 4. Wave 1 — the loop, in walkthrough order (D+13 → D+36)
 
 The order below is the judge's order. **A chain has no most-important link**: nothing in Wave 2 starts while a Wave 1 ticket is red.
 
@@ -64,10 +67,10 @@ The order below is the judge's order. **A chain has no most-important link**: no
 |---|---|---|---|---|---|---|
 | **M-09** | Event settings | Event details (incl. timezone driving every rendered time and ICS `DTSTART`), formats with default durations, tracks with colors + reorder, rooms with capacity. Save confirms in place, no reload. | AC-5 – AC-13 | `src/routes/event-settings.routes.ts`, `src/ui/settings/*` | 4 | M-08 |
 | **M-10** | Program dashboard | Seven-stage pipeline card (every count clickable to the filtered list behind it), Scheduled/Published explanatory sub-labels, attention strip, wave planner, work-in-motion metrics, speaker-task preview. 5 s SWR poll for liveness. | AC-14 – AC-16, **AC-240** | `src/routes/dashboard.routes.ts`, `src/ui/dashboard/*` | 4 | M-08 |
-| **M-11** | **Email core + demo-safe outbox** ⚠️ before any send path | Template store, `{{merge}}` renderer, `outbox` table writes with `idempotency_key`, queue consumer as **the single choke point** that calls Resend, demo-safe allowlist enforced *in the consumer*, `Idempotency-Key` header, two send paths from the start (**batch for plain bulk, single-send ≤10/s for anything carrying an ICS** — trap 14), comms log screen with rendered previews. | AC-33, AC-117, AC-125 – AC-131 foundation | `src/jobs/mail/*`, `src/routes/comms.routes.ts`, `src/ui/comms/*` | 6 | M-02, M-07 |
-| **M-12** | Form builder + catalog | Multiple independent event forms with name/kind/status/visibility/response count; new + duplicate (fields/rules, never responses); steps rail, immutable post-open target, all field CRUD/types, per-field validation, participant limits, form admins, lifecycle/open-close-reopen settings, and deep-equal live preview. Seeded baseline visibly includes title/abstract/outcome/format/multi-track, primary speaker profile/headshot, co-speaker, supporting file, and conditional vendor field. | AC-17 – AC-21, AC-24, AC-27 – AC-33, **AC-234** | `src/routes/forms.routes.ts`, `forms.queries.ts`, `src/ui/forms/*` | 8 | M-09 |
+| **M-11** | **Email core + demo-safe outbox** ⚠️ before any send path | Template store, `{{merge}}` renderer, `outbox` table writes with `idempotency_key`, queue consumer as **the single choke point** that calls Resend, demo-safe allowlist enforced *in the consumer* as one rule — **suppress unless `send_policy='always_live'` or `to_email` ∈ allowlist** — with `always_live` written by exactly two call sites (the public-form confirmation for an address typed in that request, and the `smoke:mail`/`smoke:ics` harness); the auth trigger keys `magic_link_login`, `draft_resume`, `task_link` exist from the first commit so **no route ever has a reason to call Resend directly**; `Idempotency-Key` header, two send paths from the start (**batch for plain bulk, single-send ≤10/s for anything carrying an ICS** — trap 14), comms log screen with rendered previews. | AC-33, AC-117, AC-125 – AC-131 foundation | `src/jobs/mail/*`, `src/routes/comms.routes.ts`, `src/ui/comms/*` | 6 | M-02, M-07 |
+| **M-12** | Form builder + catalog | Multiple independent event forms with name/kind/status/visibility/response count; new + duplicate (fields/rules, never responses); steps rail, immutable post-open target, all field CRUD/types, per-field validation, participant limits, form admins, lifecycle/open-close-reopen settings, and deep-equal live preview. Seeded baseline visibly includes title/abstract/outcome/format/multi-track, primary speaker profile/headshot, co-speaker, supporting file, and conditional vendor field. **Owns the condition *evaluator* (+2h, moved out of M-36 by B-7):** the `form_fields.condition` schema shape, the shared `isFieldApplicable()` helper in `src/lib/form-conditions.ts`, client show/hide, and the server rule that a hidden field is neither required nor persisted. The evaluator is load-bearing for a Tier A screen on M-14 and for M-55's applicable-missing-fields computation, both of which land before rank 17 — building it here is what stops M-14 hardcoding a vendor conditional that M-36 would then have to unpick. | AC-17 – AC-21, AC-24, AC-27 – AC-33, **AC-132, AC-133, AC-234** | `src/routes/forms.routes.ts`, `forms.queries.ts`, `src/lib/form-conditions.ts`, `src/ui/forms/*` | 10 | M-09 |
 | **M-13** | Uploads | `POST /uploads/sign` → presigned **PUT against `{account}.r2.cloudflarestorage.com`** (never a custom domain — trap 9), direct browser PUT with progress, `/complete` with HEAD verify + magic-byte sniff, Images variants for headshots, per-IP/per-submission caps in KV, nightly orphan sweep, separate-origin serving with `Content-Disposition: attachment`. **R2 canonical for media; Airtable only ever receives a public R2 URL (trap 10).** Turnstile is verified before a presign is issued; a magic-byte mismatch rejects **and deletes the object**. | AC-52, AC-146 – AC-148, **AC-231** (presign gate), **AC-232** | `src/routes/uploads.routes.ts`, `src/lib/r2/*` | 5 | M-01 |
-| **M-14** | Public CFP form | SSR form in builder order with the complete participant/profile/file/conditional path; client-blur + server-authoritative validation; drafts + emailed resume link + restored values/files; **Turnstile server-side before every write/presign**; real open, closed, at-limit, resumed, submitted, and re-opened states; confirmation email; 375 px pass. | AC-25, AC-26, AC-29, AC-30 – AC-42, AC-155 – AC-157, **AC-231, AC-234** | `src/routes/public-form.route.tsx`, `src/ui/public/form/*` | 8 | M-12, M-11, M-13 |
+| **M-14** | Public CFP form | SSR form in builder order with the complete participant/profile/file/conditional path; client-blur + server-authoritative validation; drafts + emailed resume link + restored values/files; **Turnstile server-side before every write/presign**; real open, closed, at-limit, resumed, submitted, and re-opened states; confirmation email; 375 px pass. **The vendor conditional renders through M-12's `isFieldApplicable()` helper — it is an ordinary schema-driven field, never a hardcoded alternate form (SPEC §5.4/§5.5).** M-14 exercises **AC-132/AC-133** on the public surface; M-12 owns those IDs for `trace:ac`. | AC-25, AC-26, AC-29, AC-30 – AC-42, AC-155 – AC-157, **AC-231, AC-234** | `src/routes/public-form.route.tsx`, `src/ui/public/form/*` | 8 | M-12, M-11, M-13 |
 | **M-15** | Speaker portal | Status hero and concrete wave/slot; task list where acknowledge/form/file open and validate their actual payload surface; profile/headshot edit; organizer-controlled talk title/description edit + history; decision feedback from the same row as email; role confirm/decline; handbook pages (AC-233 cuttable if named). | AC-43 – AC-52, **AC-235, AC-237, AC-240**, AC-233 | `src/routes/portal.routes.ts`, `src/ui/portal/*` | 7 | M-13, M-11 |
 | **M-16** | Evaluation plan + committees | Plan, optional weighted scorecard, two rounds, committees, both assignment modes, per-reviewer progress, and explicit one-or-more reviewer track responsibilities editable by managers. One centralized intersection helper is exported for M-17 and audits. | AC-53 – AC-58, AC-98, **AC-246** | `src/routes/evaluation.routes.ts`, `src/lib/reviewer-scope.ts`, `src/ui/evaluation/*` | 7 | M-08 |
 | **M-17** | Reviewer queue | Own shell; queue constrained by track intersection; one card opens full evaluator-visible fields/files and returns to the same index; primary **Approve/Maybe/Deny** recommendation saves without a numeric score; optional scorecard; resume/advance; blind identity stripped in query layer; detail/file/export/write routes all use M-16's helper. | AC-59 – AC-65, AC-158, AC-159, **AC-244–246** | `src/routes/review.routes.ts`, `src/ui/review/*` | 8 | M-16 |
@@ -76,7 +79,7 @@ The order below is the judge's order. **A chain has no most-important link**: no
 | **M-19b** | Agenda: track swimlane + conflicts | True swimlane per track (own lane box per track, day bands, slot columns), conflict computation over rooms **and every participation role**, tile flags, conflicts drawer with jump-to, warn-never-block. | AC-75 – AC-79, AC-81 | `src/ui/agenda/track-board.tsx`, `src/lib/conflicts.ts` | 5 | M-19a |
 | **M-20** | Public event site + permalinks | Logged-out agenda with times/rooms/tracks/speakers, day + track + search controls, session and speaker permalinks cross-linked, published-only with no URL-guess leakage, scheduled-but-unpublished distinction, 375 px, cold <1 s. | AC-83 – AC-86, **AC-240** | `src/routes/public-agenda.route.tsx`, `src/ui/public/agenda/*` | 5 | M-19a |
 | **M-21** | Embeds | Config screen → copyable snippet + live preview, agenda and speaker-gallery embeds filterable by track and status, responsive, configured colors, **KV TTL 30 s with explicit purge on publish** so the 60 s budget has headroom. | AC-87 – AC-90 | `src/routes/embed.routes.tsx`, `src/ui/embeds/*` | 4 | M-20 |
-| **M-22** | `check:seed` + `check:speed` | Seed shape/scale assertions over the public API including the deliberate ugliness; speed harness measuring every §1.3 budget on deployed infra against the real seed, emitting `speed-report.json`. | AC-3 evidence, guardrail G7 | `scripts/checks/seed.ts`, `scripts/checks/speed.ts` | 4 | M-20 |
+| **M-22** | `check:seed` + `check:speed` | Seed shape/scale assertions over the public API including the deliberate ugliness **and the assertion that the organizer demo persona's review queue returns ≥20 unreviewed candidates** (B-3 — the check that keeps walkthrough step 8 from going dead); speed harness measuring every §1.3 budget on deployed infra against the real seed, emitting `speed-report.json`. | AC-3 evidence, guardrail G7 | `scripts/checks/seed.ts`, `scripts/checks/speed.ts` | 4 | M-20 |
 
 **CP-2 — human-visible checkpoint.** The eleven-step loop completes on the deployed preview, desktop and mobile, with zero dead ends; `trace:ac` shows every Tier A `auto` AC covered. Felt checkpoints **C2** (dashboard reads as a home) and **C3** (error and empty-state copy read aloud) run here.
 
@@ -84,9 +87,11 @@ The order below is the judge's order. **A chain has no most-important link**: no
 
 ## 5. Wave 2 — Tier B, top-down, plus the mirror
 
-**Built in this order. The cut line moves up from the bottom.** A cut story is named in the gate report with its ACs and the reason; silently missing is a failure (`EVALUATION.md` gate 19).
+**Built in this order. The cut line moves up from the bottom of the *remaining band*.** A cut story is named in the gate report with its ACs and the reason; silently missing is a failure (`EVALUATION.md` gate 19).
 
-Ranks are `USER_STORIES.md`'s after Amendments 1–8. US-76 sits after US-67; US-74/75 sit after US-72. No AC ID moved or was reused; AC-239 is a tombstone.
+**🔒 Tickets backing an `EVALUATION.md` §4 gate are never in the band.** A gate is unconditional — "a failure stops the gate; it is not noted and passed over" (§4) — so a rule that permits cutting the ticket behind it is not a cut rule, it is a contradiction that resolves differently depending on which file the auditor is holding. Three tickets are therefore built out of rank order, ahead of the band, and are marked 🔒 below: **M-45** (README/self-host, gate 14), **M-38** and **M-39** (CLI + `SKILL.md`, gate 12). They keep their rank numbers — rank is the story's differentiator ordering and gate 19 still records the cut line by rank — but they are not cuttable and their position in this table is their build position, not their rank position. **M-56** (public-repo assembly, gate 16) is 🔒 for the same reason and lives in the cross-cutting table.
+
+Ranks are `USER_STORIES.md`'s after Amendments 1–9. US-76 sits after US-67; US-74/75 sit after US-72. No AC ID moved or was reused; AC-239 is a tombstone. **This table is the single authority for rank, hours, and deps**; where an amendment below quotes an estimate or a dependency, this table wins.
 
 | Rank | Story | # | Ticket | ACs | Hrs | Deps |
 |---|---|---|---|---|---|---|
@@ -95,8 +100,11 @@ Ranks are `USER_STORIES.md`'s after Amendments 1–8. US-76 sits after US-67; US
 | 3 | US-73 | *(M-03)* | **Reset the demo** — built early in Wave 0 rather than here, because the demo logins need it from the first deploy. Ranked third in Tier B; already green by CP-1. | AC-230 | — | done in Wave 0 |
 | 4 | US-30 | **M-27** | Two-round funnel — per-round scorecard and evaluator set, bulk promote from a filtered round-1 list, both rounds' scores together on the record | AC-98 – AC-100 | 4 | M-16 |
 | 5 | US-67 | **M-28** | Quick search — affordance on every admin route, `/` and ⌘K with no navigation, one labelled result list across submissions/speakers/sessions/forms, fuzzy on name and title, <200 ms | AC-101 – AC-104 | 4 | M-10 |
-| 6 | US-76 | **M-55** | **Saved views, configurable columns, Draft queue** — personal event-scoped view CRUD captures query/filters/sort/column order; immutable built-ins; fixed column registry with Title mandatory; `Drafts needing attention` count/contact/last-save/applicable-missing-fields; opening/editing never submits; form-admin/program-staff authorization | **AC-247–249** | 6 | M-08, M-12 |
+| 6 | US-76 | **M-55** | **Saved views, configurable columns, Draft queue** — personal event-scoped view CRUD captures query/filters/sort/column order; immutable built-ins; fixed column registry with Title mandatory; `Drafts needing attention` count/contact/last-save/applicable-missing-fields **computed through M-12's `isFieldApplicable()` helper, never against the full required set** (a draft must not be marked incomplete for a field its submitter can never see); opening/editing never submits; form-admin/program-staff authorization | **AC-247–249** | 6 | M-08, M-12 (`src/lib/form-conditions.ts`) |
+| **26 🔒** | US-02 | **M-45** | **README + self-host + executable clean-checkout deploy, empty states, extension points** — states that demo login is a `demo_mode`-only affordance and how to turn it off (B-2). **Backs gate 14 (`check:readme`); never in the cut band.** Built here rather than at rank 26: it depends on M-30 only for the import section, which is written against `fixtures/sessionize/*` and folded to M-30's real text later. | AC-160 – AC-162 | 5 | M-08 (a deployable, seeded app to document). **Not M-30**: the import section is written against `fixtures/sessionize/*` and reconciled with M-30's real text when M-30 lands — that dependency is what pinned M-45 to rank 26 behind the cut line. |
 | 7 | US-68 | **M-29** | API surface completion — scoped token UI and effective grant∩membership, docs route linked from sidebar, `check:api` route-manifest parity | AC-105 – AC-108, **AC-242** | 5 | M-07 |
+| **19 🔒** | US-69 | **M-38** | **`marquee` CLI** — six commands, clean JSON stdout, token/url targeting, complete help; `remind` carries `--template` *or* `--subject/--body` against M-35's send surface. **Backs gate 12 (`check:skill-agent`); never in the cut band.** | AC-138 – AC-141, **AC-250** (CLI half) | 5 | M-29 |
+| **20 🔒** | US-70 | **M-39** | **`SKILL.md` + clean-agent oracle** — workflow headings, commands resolve, vocabulary, API-only operation. **Backs gate 12; never in the cut band.** | AC-142 – AC-145 | 4 | M-38 |
 | 7 | US-68 | **M-54** | Signed outbound webhooks — endpoint CRUD/test/log, six-event allowlist, queue retry/backoff, HMAC over `id.timestamp.body`, replay idempotency; cannot begin until CP-2/Tier A is green | **AC-241** | 4 | M-07, CP-2 |
 | **8** | **US-72** | **M-25** | **Airtable mirror — outbound** — change feed, 10-per-PATCH upserts, token bucket, seeded base, Settings status/live log | **AC-225, AC-228** | 8 | M-02, M-08 |
 | **8** | **US-72** | **M-26** | **Airtable mirror — inbound** — signed webhook ping/payload pull, allowlist, echo suppression, keepalive/expiry | **AC-226, AC-227, AC-229** | 5 | M-25, S-1 |
@@ -107,21 +115,23 @@ Ranks are `USER_STORIES.md`'s after Amendments 1–8. US-76 sits after US-67; US
 | 13 | US-22 | **M-32** | Admin create + record — abstract/session, bypass, origin, participants/answers/scores/routing/history, scheduled slot visibility, stage actions on record | AC-118 – AC-120, **AC-240, AC-243** | 5 | M-08 |
 | 14 | US-36 | **M-33** | Un-accept cascade — attributed reversal; agenda/public removal; dependent tasks/mail/invites choices; calendar cancellation | AC-121 – AC-124 | 5 | M-24, M-19a |
 | 15 | US-46 | **M-34** | Automated triggers — seven toggleable templates; configurable pre-close cron | AC-125 – AC-127 | 3 | M-11 |
-| 16 | US-45 | **M-35** | Filtered group email — counted selector, real-recipient preview, per-recipient record logging | AC-128 – AC-131 | 3 | M-11 |
-| 17 | US-11 | **M-36** | Conditional logic — one/many prior answers, hidden not required/persisted, condition visible in builder | AC-132 – AC-134 | 4 | M-12 |
+| 16 | US-45 | **M-35** | Filtered group email — counted selector, real-recipient preview, per-recipient record logging; **the send surface accepts a stored template *or* caller-supplied `{subject, body}` (exactly-one-of, merge fields render in both, ad-hoc sends log identically)** | AC-128 – AC-131, **AC-250** | 4 | M-11 |
+| 17 | US-11 | **M-36** | Conditional logic — **builder-list summary affordance only**: conditions visible in the field list without opening a field. The evaluator (schema, `isFieldApplicable()`, client show/hide, hidden-not-required) is M-12's, built in Wave 1. | AC-134 | 1 | M-12 |
 | 18 | US-12 | **M-37** | Category routing — track/format/vendor → plan/pool, stamped rule, any-carried-track match | AC-135 – AC-137, **AC-234** | 4 | M-16, M-14 |
-| 19 | US-69 | **M-38** | `marquee` CLI — six commands, clean JSON stdout, token/url targeting, complete help | AC-138 – AC-141 | 5 | M-29 |
-| 20 | US-70 | **M-39** | `SKILL.md` + clean-agent oracle — workflow headings, commands resolve, vocabulary, API-only operation | AC-142 – AC-145 | 4 | M-38 |
+| 19 | US-69 | *(M-38)* | **`marquee` CLI** — promoted 🔒 out of the cut band; built directly after M-29. Rank retained for gate 19's cut-line record. | AC-138 – AC-141, AC-250 | — | built above |
+| 20 | US-70 | *(M-39)* | **`SKILL.md` + clean-agent oracle** — promoted 🔒 out of the cut band; built directly after M-38. | AC-142 – AC-145 | — | built above |
 | 21 | US-41 | **M-40** | Slide upload — file types/limit/progress/recovery/live organizer view; upload safety from M-13 | AC-146 – AC-148, **AC-232** | 2 | M-13 |
 | 22 | US-21 | **M-41** | Co-speaker — max enforcement, notification, own-profile completion | AC-149 – AC-151 | 4 | M-14 |
 | 23 | US-37 | **M-42** | Confirm / decline — visible to lead, per role, decline notifies/flags agenda | AC-152 – AC-154 | 3 | M-15 |
 | 24 | US-18 | **M-43** | Mobile submit pass | AC-155 – AC-157 | 3 | M-14 |
 | 25 | US-27 | **M-44** | Mobile reviewer pass | AC-158, AC-159 | 3 | M-17 |
-| 26 | US-02 | **M-45** | README + self-host + executable clean-checkout deploy, empty states, extension points | AC-160 – AC-162 | 5 | M-30 |
+| 26 | US-02 | *(M-45)* | **README + self-host** — promoted 🔒 out of the cut band; built directly after M-55. Rank retained for gate 19's cut-line record. | AC-160 – AC-162 | — | built above |
 | 27 | US-71 | **M-46** | Comparison mode — three-card ranking/ties, win aggregate, mode switch preserves evidence | AC-163 – AC-166 | 4 | M-27 |
 | 28 | US-32 | **M-47** | Optional AI first pass — off, aid-only language, zero status changes, absent from demo path | AC-167 – AC-169 | 3 | M-17 |
 
-**Cut-line guidance.** If Tuesday runs short, cut from **rank 28** upward. The moat/API/mirror block through rank 8 remains protected; rank 26 (README/self-host) is a judged deliverable and must not disappear silently. AC-233 is independently cuttable only when named. Tier A never yields, regardless of rank arithmetic.
+**Cut-line guidance.** The cut line runs up from the bottom of the **remaining band** — the tickets still unbuilt, excluding the 🔒 gate-backing set (M-45, M-38, M-39, M-56), which is built ahead of the band and is never cuttable at any pressure. Within the band, cut from **rank 28** upward. The moat/API/mirror block through rank 8 remains protected. AC-233 is independently cuttable only when named. Tier A never yields, regardless of rank arithmetic.
+
+**When the line moves is a calculation, not a mood.** At each Wave 2 band boundary in §9, compare the remaining band's agent-hours against remaining fleet capacity (workers × wall-hours left before the CP-3 dry run). If demand exceeds capacity, cut from the bottom of the band until they match, and name every cut ticket with its ACs and reason in the gate report. A time-triggered "if Tuesday runs short" leaves the decision to whoever notices first.
 
 ### Cross-cutting tickets (run alongside, not after)
 
@@ -130,10 +140,11 @@ Ranks are `USER_STORIES.md`'s after Amendments 1–8. US-76 sits after US-67; US
 | **M-48** | Empty-state pass — every route renders an empty-state component naming the next action on a fresh install (AC-161) | 3 |
 | **M-49** | Craft sweep — elements never jump (reserved space, fixed-width toggles, `—` over removed rows, tabular numerals), one primary action per screen, textual state markers everywhere colour is used | 3 |
 | **M-50** | `trace:ac` closure — every live `auto` AC in scope named by at least one test; AC-239 treated as a tombstone and any reuse/unknown ID rejected; coverage report attached | 3 |
+| **M-56 🔒** | **Public-repo assembly** — build the publishable tree as an **orphan/squashed initial commit with no ancestry from this working repo** (`src/`, `migrations/`, `scripts/`, `cli/`, `README.md`, `LICENSE`, `SKILL.md`, `SEED-DATA.md`, `PHILOSOPHY.md`, plus whichever of SPEC/EVALUATION/BUILDPLAN survive §8 item 10's curation). Extend `check:repo`'s ruleset with the third-party-content denylist (below) and run it over the assembled history *before* the remote exists. **Backs gate 16; never in the cut band.** Rehearsed at the CP-3 dry run, not improvised at 21:00 Tuesday. | 3 |
 
 ### Audit track
 
-Guardrail audits from `SPEC.md` §7, each owned by an auditor who did not write the code: **A-1** repo hygiene · **A-2** PROTOTYPE-badge sweep · **A-3** mail containment · **A-4** mirror isolation · **A-5** cookie scope · **A-6** speed report · **A-7** public write surface · **A-8** anonymity scan · **A-9** reviewer event+track isolation (**AC-214, AC-246**) · **A-10** bulk-write audit · **A-11** reset drill (**AC-230**). **A-1 is mandatory immediately before the public repo push and again after it.** A-7 now has ACs behind it (**AC-231, AC-232**) and A-4's isolation rule is what makes **AC-225**'s 60-second budget affordable.
+Guardrail audits from `SPEC.md` §7, each owned by an auditor who did not write the code: **A-1** repo hygiene · **A-2** PROTOTYPE-badge sweep · **A-3** mail containment (Resend imported only by the consumer; exactly two `send_policy='always_live'` write sites) · **A-4** mirror isolation · **A-5** cookie scope · **A-6** speed report · **A-7** public write surface · **A-8** anonymity scan · **A-9** reviewer event+track isolation (**AC-214, AC-246**) · **A-10** bulk-write audit · **A-11** reset drill (**AC-230**). **A-1 is mandatory against the assembled orphan history immediately before the public repo push (M-56) and again against the pushed remote's full history after it — that second run is a hard gate on the push, not a formality.** A-7 now has ACs behind it (**AC-231, AC-232**) and A-4's isolation rule is what makes **AC-225**'s 60-second budget affordable.
 
 ---
 
@@ -143,9 +154,9 @@ Three things are genuinely unproven. Each is time-boxed; each blocks a specific 
 
 | # | Spike | Question it settles | Box | Blocks | When |
 |---|---|---|---|---|---|
-| **S-1** | **Airtable webhook inbound loop** | Does the ping→list-payloads→cursor→apply loop actually work against a real base, and does our echo suppression hold when our own outbound write bounces back? Webhooks are **not data-carrying**, the payload pull spends the same 5 req/s budget, and delivery is at-least-once with up to 13 retries over a day. | 2 h | M-26 | Sunday morning |
+| **S-1** | **Airtable webhook inbound loop** | Does the ping→list-payloads→cursor→apply loop actually work against a real base, and does our echo suppression hold when our own outbound write bounces back? Webhooks are **not data-carrying**, the payload pull spends the same 5 req/s budget, and delivery is at-least-once with up to 13 retries over a day. | 2 h | M-26 | Early in the D+13 → D+36 band |
 | **S-2** | **ICS rendering in real clients** | Does a `METHOD:REQUEST` invite render as **Accept/Decline** in Gmail, Outlook, and Apple Calendar — and does a `SEQUENCE+1` update *replace* the entry rather than duplicate it, and a `CANCEL` remove it? Neither Google nor Microsoft publishes a normative statement; this is the 15 minutes that separate R3 working from R3 looking like it works. | 1 h + operator inboxes | M-24 sign-off, gate 10 | Sunday, as soon as the first invite emits |
-| **S-3** | **D1 bulk-write chunking at wave scale** | Does a 150- and a 1,000-record bulk accept survive the **100-bound-parameter cap** and the per-invocation query limit, and which pattern wins — chunk at ≤90 or a single `json_each` parameter? It throws only under real data, only at scale (trap 11). | 1 h | M-18 | Saturday night, before M-18 starts |
+| **S-3** | **D1 bulk-write chunking at wave scale** | Does a 150- and a 1,000-record bulk accept survive the **100-bound-parameter cap** and the per-invocation query limit, and which pattern wins — chunk at ≤90 or a single `json_each` parameter? It throws only under real data, only at scale (trap 11). | 1 h | M-18 | D+0 → D+3, alongside M-01/M-02 |
 
 ---
 
@@ -164,7 +175,7 @@ Sixteen tickets writing into one repo overnight fail on shared files, not on log
 | `package.json` (scripts) | M-06 | The full eleven-command script table registered at once, stubs included. Dependency additions are the only other edits, and they queue. |
 | `src/styles/tokens.css` | M-05 | Design tokens only. Per-module styles live in the module. |
 | `src/db/schema.ts` | M-02 | Type mirror of 0001; later tickets append `src/db/schema.<module>.ts`. |
-| `scripts/seed/index.ts` | M-04 | Orchestration only; per-entity seeders are separate files it globs. |
+| `scripts/seed/index.ts` | M-04a | Orchestration only; per-entity seeders are separate files it globs, so M-04b never edits it. |
 | `.github/workflows/ci.yml` | M-06 | Single author. |
 | `README.md` | M-45 | Single author; other tickets file notes into `docs/notes/<ticket>.md` for M-45 to fold in. |
 
@@ -176,14 +187,14 @@ Sixteen tickets writing into one repo overnight fail on shared files, not on log
 
 Agents cannot do these. Each is Atin's, with the deadline that actually binds it.
 
-**Before the first migration (tonight):**
+**Before the first migration (before dispatch):**
 1. **Enable and verify Workers Paid** ($5/mo). Free's 10 ms CPU will not SSR a 1,000-row table and it fails at deploy, not in dev (trap 2). **Blocks M-01's deploy gate.**
 2. **Probe the R2 entitlement** — create a bucket, fetch a public object. A lapse 403s every public URL while DNS and TLS look fine, and the fix is dashboard-only (trap 4). **Re-probe on deploy day.**
 3. **Confirm the Resend plan tier** (30 seconds in the dashboard). Free is 100/day; it decides whether Pro is bought for the judging window. The outbox and demo-safe allowlist are built either way (trap 3).
 4. **Put the Airtable demo base on Team or above** *before* the seed script runs — Free caps at 1,000 records per base and the seed is exactly 1,000 (trap 6).
 
 **Sunday:**
-5. **Relay both clarification videos and any Discord rulings**, particularly **Q1** (Airtable primary vs mirror) and **Q2** (embeddable gallery). The Sunday video is the requirements freeze; the delta is triaged the same day, new criteria append from **AC-250**, and nothing is renumbered or reused.
+5. **Relay both clarification videos and any Discord rulings**, particularly **Q1** (Airtable primary vs mirror) and **Q2** (embeddable gallery). The Sunday video is the requirements freeze; the delta is triaged the same day, new criteria append from **AC-251** (AC-250 is taken by Amendment 9), and nothing is renumbered or reused.
 6. **Three real inboxes** for the ICS chain — one Gmail (mandatory), one Outlook, one Apple Calendar — and click **Accept** in each when S-2 fires.
 7. **Review/sign the v1.4 Pipeline prototype** and rule on the seed-scale question (flag F-2). The seven proposed speed budgets are already signed as report-only objectives; the old prototype gap batch is closed.
 
@@ -192,10 +203,11 @@ Agents cannot do these. Each is Atin's, with the deadline that actually binds it
 9. **A Cloudflare API token in CI** for `check:readme`'s scratch deploy, and **a model credential** for `check:skill-agent`.
 
 **Tuesday — the public-repo push ritual, in this order:**
-10. Curate which strategy documents ship publicly (this file, `SPEC.md`, `EVALUATION.md`, `PHILOSOPHY.md` are fine; internal budget material, Stage 11 internals, and anything from `Atin/` are not).
+10. Curate which strategy documents ship publicly (this file, `SPEC.md`, `EVALUATION.md`, `PHILOSOPHY.md` are fine; internal budget material, Stage 11 internals, the `sequence/research/` dossiers and `sources/` tree, the agent briefs, `run-state.md`, and anything from `Atin/` are not).
 11. Run **`npm run check:repo` over the full history**, not the tip.
 12. Add **Apache-2.0 `LICENSE`** and `SEED-DATA.md`.
-13. Create the **public** GitHub repo — the one deliberate exception to the privacy-by-default rule, ratified as decision 4 — push, then re-run `check:repo` against the pushed remote.
+12a. **Assemble the public tree as an orphan/squashed initial commit (M-56) — the public repo is *created*, never *curated at the tip*.** This working repo's history carries material that deleting at the tip does not remove: the organizers' full brief PDF, another entrant's context document archived from Discord, absolute `/Users/…` paths, Stage 11 account posture, and c11 workspace/surface IDs. A full-history scan at 18:00 Tuesday either fails four hours before the push with no rewrite budgeted, or passes and the material ships. Neither is acceptable, and republishing a redistributed brief or a rival's document under Apache-2.0 cannot be un-pushed. Run `check:repo` against the assembled orphan history before item 13.
+13. Create the **public** GitHub repo — the one deliberate exception to the privacy-by-default rule, ratified as decision 4 — push **the orphan commit only**, then re-run `check:repo` against the **pushed remote's full history** (audit **A-1**, hard gate on the push).
 14. **Felt checkpoint C6** needs one real iPhone and one real Android; **C7** needs a person who did not build it to drive the walkthrough cold.
 
 **Throughout:** keep token-spend evidence from day one — the $500 reimbursement is claimable on request and reconstructing proof after the fact is painful.
@@ -204,23 +216,27 @@ Agents cannot do these. Each is Atin's, with the deadline that actually binds it
 
 ## 9. Schedule
 
-All times PT. Deadline **Wed 2026-08-12, 22:00**.
+**`D` is the dispatch timestamp** — the moment the orchestrator releases the fleet, recorded in `run-state.md` at dispatch. Every row below is `D+N` **wall-hours**. Deadline **Wed 2026-08-12, 22:00 PT**; the submit target is **deadline − 4 h**, not four minutes.
 
 | When | Track | Milestone |
 |---|---|---|
-| **Sat night → Sun 06:00** | Fleet | Wave 0. M-01 → M-02 serialized, then M-03/M-04/M-05/M-06/M-07 in parallel, M-08 last. **S-3** runs alongside. **CP-1 by ~03:00** — deployed, seeded, both demo logins live. Traps 2 and 4 dead. |
-| **Sun 06:00 → 18:00** | Fleet | Wave 1. M-09/M-10/M-11/M-13/M-16 in parallel; then M-12 → M-14, M-15, M-17, M-18, M-19a → M-19b, M-20 → M-21, M-22. **S-1** and **S-2** run Sunday morning. |
-| **Sun, on video drop** | Human + one agent | Sunday clarification video → **requirements freeze**. Dossier re-run, delta triaged into new AC-250+ criteria and, if needed, new tickets. Q2's ruling decides whether embeds (AC-87 – AC-90) stay or move to non-goals. |
-| **Sun 18:00 → 22:00** | Human | **CP-2**: full-loop QA on the deployed preview, desktop and mobile. Felt checkpoints **C2** and **C3**. Anything red goes back to the fleet before Wave 2 widens. |
-| **Sun night → Mon 12:00** | Fleet | Wave 2 ranks 1–10: chase, invites, reset, funnel, search, **M-55 views/columns/Drafts**, API/webhooks, Airtable mirror, feedback, and Program board. Rank 3 is already green from Wave 0; M-54 waits for CP-2 green. |
-| **Mon 12:00 → Mon 23:00** | Fleet | Wave 2 ranks 11–20 (M-30 – M-39) and cross-cutting M-48/M-49/M-50. `check:speed` runs on every PR against its preview. |
-| **Tue 08:00 → 14:00** | Fleet | Wave 2 ranks 21–28 to the cut line; audit track A-1 – A-11; empty-state and craft sweeps close. |
-| **Tue 14:00 → 18:00** | Human + auditor | **CP-3 / gate dry run** — all nineteen `EVALUATION.md` §4 gates end to end, including the Airtable round-trip (gate 9), the Gmail ICS chain (gate 10), live mail (gate 11), the agent-only run (gate 12), and the reset drill (gate 13). Felt checkpoints **C5** and **C6**. |
-| **Tue 18:00 → 22:00** | Human | **Public repo push ritual** (§8 items 10–13). Production deploy. `check:readme` against the pushed repo from a clean container. |
-| **Wed 08:00 → 14:00** | All | Buffer for whatever the dry run found. **Felt checkpoint C7** after the last functional change: a person who did not build it drives the walkthrough cold, narrating. Re-run `reset:demo` and gate 4 so the first judge inherits a clean demo. |
-| **Wed ~18:00** | Human | **Submit** — form + public repo + deployed URL, **four hours before the deadline, not four minutes.** |
+| **D+0 → D+13** | Fleet | Wave 0. M-01 → M-02 serialized, then M-03/M-04a/M-05/M-06/M-07 in parallel, M-08 last; M-04b starts behind M-04a and runs into Wave 1. **S-3** runs alongside. **CP-1 at D+13** — the critical chain is M-01 (3) → M-02 (4) → M-04a (2) → M-08 (4) = 13 h and no number of workers shortens it. Deployed, seeded, both demo logins live; traps 2, 4, 15 dead. |
+| **D+13 → D+36** | Fleet | Wave 1. M-09/M-10/M-11/M-13/M-16 in parallel; then M-12 → M-14, M-15, M-17, M-18, M-19a → M-19b, M-20 → M-21, M-22. **CP-2 at D+36** — longest chain from M-08 is M-16 (7) → M-19a (7) → M-20 (5) → M-22 (4) = 23 h. **S-1** runs early in this band; **S-2** is boxed against M-24 in Wave 2 (§6). |
+| **on video drop** *(wall-clock, not dispatch-relative)* | Human + one agent | Sunday clarification video → **requirements freeze**. Dossier re-run, delta triaged into new **AC-251+** criteria and, if needed, new tickets. Q2's ruling decides whether embeds (AC-87 – AC-90) stay or move to non-goals. |
+| **D+36 → D+40** | Human | **CP-2 gate**: full-loop QA on the deployed preview, desktop and mobile. Felt checkpoints **C2** and **C3**. Anything red goes back to the fleet before Wave 2 widens. M-54 unblocks only when this is green. |
+| **D+40 → D+50** | Fleet | Wave 2, first band: ranks 1–8 plus the 🔒 promotions — chase, invites, funnel, search, **M-55**, **M-45** (README/self-host, gate 14), **M-29**, **M-38 + M-39** (CLI + SKILL, gate 12), webhooks, Airtable mirror. Rank 3 is already green from Wave 0. **Capacity check at D+50.** |
+| **D+50 → D+58** | Fleet | Wave 2, second band: ranks 9–20 remainder and cross-cutting M-48/M-49/M-50/**M-56**. Audit lane runs concurrently from CP-2 — A-3, A-4, A-5, and A-9 can start the moment their code lands and do not wait for Tuesday. `check:speed` runs on every PR against its preview. **Capacity check at D+58; the cut line is set here.** |
+| **D+58 → D+62** | Fleet + auditor | Wave 2 to the cut line; remaining audits close; empty-state and craft sweeps close. |
+| **D+62 → D+66** | Human + auditor | **CP-3 / gate dry run** — all nineteen `EVALUATION.md` §4 gates end to end, including the Airtable round-trip (gate 9), the Gmail ICS chain (gate 10), live mail (gate 11), the agent-only run (gate 12), and the reset drill (gate 13). Felt checkpoints **C5** and **C6**. **M-56's orphan-commit assembly is rehearsed here**, not improvised at the push. |
+| **D+66 → D+70** | Human | **Public repo push ritual** (§8 items 10–13). Production deploy. `check:readme` against the pushed repo from a clean container. |
+| **D+70 → deadline−4h** | All | Buffer for whatever the dry run found. **Felt checkpoint C7** after the last functional change: a person who did not build it drives the walkthrough cold, narrating. Re-run `reset:demo` and gate 4 so the first judge inherits a clean demo. |
+| **deadline − 4 h** | Human | **Submit** — form + public repo + deployed URL. |
 
-**What moves if we are behind.** The cut line, and nothing else. Tier A never yields — its no-waiver set is `AC-1 – AC-90` plus **AC-231, AC-234, AC-240, and AC-244–246**. The mirror remains protected at rank 8; the README/self-host path at rank 26 is judged. Everything cut is named with its ACs and reason; AC-233 is independently cuttable only when named.
+**The clock and the hours must both be true, and this is the rule that keeps them so.** The table above needs **~70 wall-hours** from dispatch. A Sunday-evening dispatch leaves ~74 — four hours of slack across four days, so the bands are not a forecast, they are a budget. **Wave 2's band carries ~133 agent-hours plus the audit lane against ~18 wall-hours of fleet time (D+40 → D+58); at 5 workers that is ~90 agent-hours of capacity.** The gap is real and it is named here rather than discovered on Tuesday.
+
+**What moves if we are behind.** The cut line, and nothing else — and it moves by the calculation in §5, run at the two capacity checks above: remaining band agent-hours vs. workers × wall-hours left before D+62. Cut from the bottom of the remaining band until they match. Tier A never yields — its no-waiver set is `AC-1 – AC-90` plus **AC-231, AC-234, AC-240, and AC-244–246**. The mirror remains protected at rank 8. **The 🔒 gate-backing tickets — M-45, M-38, M-39, M-56 — are outside the band and are never cut**, because gates 12, 14, and 16 cannot be waived. Everything cut is named with its ACs and reason; AC-233 is independently cuttable only when named.
+
+**If dispatch slips later than a Sunday-evening `D`,** the first thing that gives is Wave 2's second band, not Wave 0's chain and not the CP-2 gate: a walking skeleton on the real plan is what buys back trap-2 and trap-4 time, and an ungated CP-2 is how a red Tier A reaches Tuesday.
 
 ---
 
@@ -233,9 +249,9 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 | 1 | OAuth calendar write | Not built. ICS `METHOD:REQUEST` is the shipped path (M-24); OAuth is a named README extension point (M-45). |
 | 2 | Workers Free 10 ms CPU | Human item 1 + **M-01 deploys to the Paid plan on day one**, before any feature code. |
 | 3 | Resend 100/day | **M-11 builds the outbox and demo-safe allowlist before any send path exists**, with the check in the queue consumer (guardrail G3). |
-| 4 | R2 entitlement lapse | Human item 2, probed tonight and re-probed on deploy day; gate 1. |
+| 4 | R2 entitlement lapse | Human item 2, probed before dispatch and re-probed on deploy day; gate 1. |
 | 5 | Fresh sending domain | Not attempted. `marquee@stage11.systems`, verified since March. |
-| 6 | Airtable demo base on Free (1,000-record cap) | Human item 4, **before** M-04's seed runs. |
+| 6 | Airtable demo base on Free (1,000-record cap) | Human item 4, **before** M-04a's seed runs. |
 | 7 | Airtable webhooks expire in 7 days | Daily keepalive cron in **M-26**. |
 | 8 | Airtable Team throttle at 2 req/s | Architectural: **never read Airtable on a request path** (guardrail G4, import-boundary lint). |
 | 9 | Presigned URLs don't work on custom domains | **M-13** signs against `{account}.r2.cloudflarestorage.com` and serves reads from the custom domain. |
@@ -245,7 +261,7 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 | 13 | Smart Placement won't help | R7 is not budgeted against it; `check:speed` measures reality. |
 | 14 | Resend batch has no attachments | **Two send paths from the first commit** (M-11): batch for plain bulk, single-send ≤10/s for anything carrying an ICS. |
 | 15 | `.dev` is HSTS-preloaded; parent-domain cookies leak | **M-01** sets the session cookie with no `Domain` attribute; guardrail G6 asserts it; `https://` always. |
-| 16 | `api.resend.com` 403s the `Python-urllib` UA | **M-04** sets an explicit `User-Agent` on every stdlib HTTP call in seed/backfill scripts. |
+| 16 | `api.resend.com` 403s the `Python-urllib` UA | **M-04a** sets an explicit `User-Agent` on every stdlib HTTP call in seed/backfill scripts. |
 
 ---
 
@@ -311,4 +327,4 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 
 ---
 
-*v1.4 contract revision, 2026-08-09 (Amendments 1–8 applied). Await client prototype sign-off; then mint `DESIGN.md` and turn §3–§5 into Lattice tickets. New criteria append from AC-250; AC-239 remains struck and unrecycled.*
+*v1.4 contract revision, 2026-08-09 (Amendments 1–9 applied). Await client prototype sign-off; then mint `DESIGN.md` and turn §3–§5 into Lattice tickets. New criteria append from AC-251; AC-239 remains struck and unrecycled.*

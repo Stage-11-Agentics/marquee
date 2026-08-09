@@ -1,6 +1,6 @@
 # Marquee — User Stories (canonical)
 
-**Status:** Phase-3 canonical artifact, minted 2026-08-08 · Amendments 1–8 applied (see tail sections). **76 stories · 248 live acceptance criteria** (249 IDs allocated; AC-239 is struck and retired).
+**Status:** Phase-3 canonical artifact, minted 2026-08-08 · Amendments 1–9 applied (see tail sections). **76 stories · 249 live acceptance criteria** (250 IDs allocated; AC-239 is struck and retired).
 **Authority:** This file supersedes `research/user-stories-draft.md` for all build purposes. The draft is retained unchanged as the research archive.
 **Upstream:** `PHILOSOPHY.md` · `sequence/PRODUCT-DEFINITION.md` · `research/competition-requirements.md` (R1–R50) · `research/stakeholders.md` (15 seats) · `research/landscape-features.md` (D1–D15) · `research/seams-feasibility.md`.
 
@@ -8,11 +8,11 @@
 
 ## The AC ID contract
 
-**AC IDs are permanent.** `AC-1` … `AC-249` are allocated once, here, and are never renumbered, never reused, and never reordered. Reordering stories does not move AC IDs — `AC-225`–`AC-229` belong to a Tier B rank-8 story and `AC-230` to a rank-3 story, which is expected: **ID order is allocation order, not build order.** If a criterion is deleted it is struck, not recycled. **The next amendment appends from `AC-250`.** Every downstream artifact — SPEC, test names, PR descriptions, the evaluation harness — cites these IDs.
+**AC IDs are permanent.** `AC-1` … `AC-250` are allocated once, here, and are never renumbered, never reused, and never reordered. Reordering stories does not move AC IDs — `AC-225`–`AC-229` belong to a Tier B rank-8 story and `AC-230` to a rank-3 story, which is expected: **ID order is allocation order, not build order.** If a criterion is deleted it is struck, not recycled. **The next amendment appends from `AC-251`.** Every downstream artifact — SPEC, test names, PR descriptions, the evaluation harness — cites these IDs.
 
 **Story IDs (`US-nn`)** are carried over unchanged from the draft corpus so the archive stays cross-referenceable. They are *not* sequential in this file: they appear in build order, not numeric order. `US-68`–`US-71` were minted at consolidation; `US-72`–`US-73` at the contract-review fold; `US-74`–`US-76` by amendment.
 
-**Criterion style.** Every live AC is pass/fail. A criterion that is inherently experiential — a judgement about feel that no assertion settles — is tagged **(candidate-felt)** and belongs to design review and the prototype stage, not the test suite. **There are 5 of them.** The other 243 live criteria are mechanically testable; AC-239 is struck and has no test.
+**Criterion style.** Every live AC is pass/fail. A criterion that is inherently experiential — a judgement about feel that no assertion settles — is tagged **(candidate-felt)** and belongs to design review and the prototype stage, not the test suite. **There are 5 of them.** The other 244 live criteria are mechanically testable; AC-239 is struck and has no test.
 
 **Tags.** `[R-nn]` traces to the requirements register. `(new)` marks stories minted at consolidation or later; `*(appended <date>)*` marks a criterion added to a pre-existing story.
 
@@ -23,11 +23,11 @@
 | Tier | Stories | ACs | Count | Meaning |
 |---|---|---|---|---|
 | **A — the walkthrough loop** | 27 | AC-1 – AC-90, **AC-231, AC-234, AC-240, AC-244–246** | 96 | Binding. Any one failing loses the competition regardless of the rest — no waivers (`EVALUATION.md` gate 18) |
-| **B — ordered differentiators** | 28 | AC-91 – AC-169, **AC-225 – AC-230, AC-232, AC-235–238, AC-241–243, AC-247–249** | 96 | Built in the order listed; the cut line moves up from the bottom |
+| **B — ordered differentiators** | 28 | AC-91 – AC-169, **AC-225 – AC-230, AC-232, AC-235–238, AC-241–243, AC-247–250** | 97 | Built in the order listed; the cut line moves up from the bottom |
 | **Cut-line criterion on a Tier A story** | — | **AC-233** | 1 | Speaker Handbook. Hosted on US-39, *outside* Tier A's no-waiver set; may be cut if the cut is named (gate 19) |
 | **Post-competition** | 21 | AC-170 – AC-224 | 55 | Modeled where cheap, not built by Wednesday |
 
-**Tier A + Tier B = 55 stories = the Wednesday target.** Totals: **76 stories · 248 live criteria** (249 allocated IDs; one struck).
+**Tier A + Tier B = 55 stories = the Wednesday target.** Totals: **76 stories · 249 live criteria** (250 allocated IDs; one struck).
 
 > **Note for gate 18.** Tier A's no-waiver set is `AC-1 – AC-90` **plus AC-231, AC-234, AC-240, and AC-244–246** (Turnstile; multi-track; scheduled/published legibility; reviewer detail, recommendation path, and track authorization). AC-232/235–238/241–243/247–249 are Tier B; AC-239 is struck; AC-233 is explicitly cuttable. The AC range and the tier are not the same thing; read the table and the amendment sections, not the numbering.
 
@@ -804,7 +804,7 @@ Modeled where the data model makes it cheap; not built by Wednesday. Ordered rou
 
 **Six further criteria have a felt dimension but are settled by a hard number**, so they stay in the test suite and are *not* tagged: **AC-36** and **AC-85** (<1s to interactive) · **AC-62** (<300ms card advance) · **AC-103** and **AC-191** (<200ms) · **AC-89** (<60s embed propagation). Each has a threshold that decides pass/fail; "does it feel instant?" is the separate design-review question behind it, and if the answer is no while the number passes, the number was wrong — amend the threshold rather than reclassify the criterion.
 
-The remaining **243 live criteria are mechanically testable** with no felt component — including all nine added at the contract-review fold (AC-225 – AC-233) and every live amendment criterion through AC-249. AC-239 is struck and excluded.
+The remaining **244 live criteria are mechanically testable** with no felt component — including all nine added at the contract-review fold (AC-225 – AC-233) and every live amendment criterion through AC-250. AC-239 is struck and excluded.
 
 ---
 
