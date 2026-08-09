@@ -25,6 +25,9 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 
 ## Decisions log
 
+- 2026-08-09: **F-13 ruling: NO unattended reset cron.** Reset stays manual (button + `npm run reset:demo`, AC-230); during the judging window the team resets morning/evening by hand. A judge watching state vanish mid-read is a worse failure than inheriting a predecessor's edits. (Mabel, decide-and-log)
+- 2026-08-09: **F-10 ruling: acknowledged divergence** — SPEC §5.5's on-screen portal magic link is built per spec though absent from the v1.4 prototype; tagged so the fidelity audit passes it. (Mabel, decide-and-log)
+- 2026-08-09: **Adversarial cycle complete**: 8/8 BLOCKING + 21/22 FIX applied (e35b32a, 6aed313); arithmetic reconciled (194 in-scope live, next mint AC-251). (Editor)
 - 2026-08-09: **Context-coverage closure approved** — add full form/portal/reviewer demonstrations plus saved views, configurable columns, and Draft queue; make all pre-build contract repairs. AC-245–249 minted; downstream contract reconciled. (Atin)
 - 2026-08-09: **No Month view and no generalized CMS** — Month was only a reference-image label; generalized CMS was optional/R8-skipped. Narrow Handbook and embeds remain. (Atin)
 - 2026-08-09: **Speed budgets signed as OBJECTIVES** — the seven proposed §1.3 numbers report + warn, never fail CI; AC-sourced budgets remain binding. (Atin)

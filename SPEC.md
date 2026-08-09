@@ -100,7 +100,7 @@ Conventions: every table carries `id TEXT PRIMARY KEY` (ULID), `created_at INTEG
 | `logo_key` | TEXT R2 key | Event settings upload | admin shell, public site, embeds |
 | `accent` | TEXT | Event settings | brand moments, embed colors (AC-90) |
 | `status` | TEXT `draft\|live` | seed | public routes 404 when draft |
-| `demo_mode` | INTEGER bool | seed / `reset:demo` | **the `POST /api/v1/auth/demo` gate (§4.1 — 403 when 0)**, demo-safe mail allowlist (G5), on-screen magic link, demo banner |
+| `demo_mode` | INTEGER bool | seed / `reset:demo` | **the `POST /api/v1/auth/demo` gate (§4.1 — 403 when 0)**, demo-safe mail allowlist (G5), on-screen magic link **[beyond v1.4 prototype — acknowledged divergence, orchestrator ruling 2026-08-09: build per spec; fidelity audit must not flag it]**, demo banner |
 
 **`formats`** (AC-8, AC-9, AC-10) — `event_id`, `name`, `default_duration_min`, `min_duration_min`, `max_duration_min`, `position`.
 Writer: Event settings → Formats card; seed. Reader: form Format select, submission list filter, agenda tile duration default, agenda pool chip, public site.
