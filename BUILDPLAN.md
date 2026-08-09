@@ -262,6 +262,15 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 - **Cut-pressure relief, recorded:** the leads' stated floor is narrower than our Tier A (review floor = approve/maybe/deny; agenda floor = day/room + DnD + conflicts; five views confirmed bonus). Tier A does not shrink — it is our margin of victory — but if Tuesday goes badly, this is the honest fallback line.
 - **Kickoff prompt note:** swyx called the competition "somewhat of a recruiting exercise" and entertained judging maintainability ("have them demo implement a change"). Code legibility is part of the deliverable: clean module boundaries, a real CONTRIBUTING section, no clever-but-opaque constructs.
 
+## Amendment 3 — full-brief recovery (2026-08-08 night, orchestrator)
+
+- **API bonus is explicit in the full brief (R53):** US-68's API ticket is confirmed inside the uncuttable block — it now carries brief-bonus sourcing, not just philosophy. CLI/SKILL (US-69/70) keep their ranks.
+- **Speaker talk-content editing (AC-237):** fold into the portal ticket's scope (+1h) — editable title/description while CFP open, org re-open toggle, history stamp.
+- **Speed re-sourced as MUST *and* explicit bonus** — no change, it was already the thesis.
+- **Relief recorded:** analytics dashboards are "optional/best efforts" in the brief annotations; embeds are marked "(OPTIONAL)" — Q2 resolves to *build by default, safely cuttable under pressure*; success page + confirmation email annotated must-work (already Tier A).
+- **R54 — "very teeny bonus" for hosting on Forge (swyx's side project) instead of GitHub:** client call at push time; a mirror is ~20 min.
+- **Incumbent-fidelity notes held pending rulings** (kyzo's asked questions): rich-text bios/descriptions, accept/decline-queue literal statuses (our outbox + wave planner covers the job), central file-request pages. No contract change until answered; JTBD over fidelity (R26).
+
 ---
 
 *Draft, 2026-08-08 (Amendment 2 applied). The orchestrator finalizes this with the client after the v1.1 prototype review, then turns §3–§5 into Lattice tickets.*

@@ -857,6 +857,14 @@ Source: swyx's day-1 Discord answer thread (dossier §7.5, commit 98e7e89).
 
 *Next amendment appends from AC-237.*
 
+## Amendment 3 — full-brief recovery (2026-08-08 night, orchestrator)
+
+Source: `sequence/research/sources/competition-brief-full.pdf` (the complete 37-page brief; original capture was partial) via Discord Intel batch 2, dossier §1.6.
+
+**AC-237** *(appended to US-40's story area, Tier B — insert beside the portal editing cluster)*: A speaker can edit their **talk's title and description** (not just their profile) from the portal, under organizer control: editable while the CFP is open by default, plus an organizer toggle to re-open editing per submission after close. Edits update the record immediately and are stamped in its history. *(Gap found by triangulation: AC-50 covers profile only; swyx's "finalize talk description" task example and the incumbent's behavior both point here. If a Discord ruling contradicts the default semantics, amend.)*
+
+*Next amendment appends from AC-238.*
+
 ---
 
 *Canonical as of 2026-08-08 (Amendment 2 applied). Changes to this file are amendments: new criteria append from AC-237; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*
