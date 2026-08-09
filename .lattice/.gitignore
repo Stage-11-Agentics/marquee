@@ -1,0 +1,9 @@
+# Ephemeral Lattice runtime state — not part of the durable board.
+# The board (tasks/ events/ plans/ artifacts/ ids.json config.json)
+# stays tracked: it is the audit log and cross-machine coordination
+# state. The paths below are mutated constantly and must never
+# diverge per-worktree or collide on merge.
+review_state/
+tmp-prompts/
+.daemon/
+locks/
