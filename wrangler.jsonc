@@ -1,0 +1,90 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "marquee",
+  "main": "./src/index.ts",
+  "compatibility_date": "2026-08-08",
+  "workers_dev": false,
+  "dev": {
+    "local_protocol": "https"
+  },
+  "routes": [
+    {
+      "pattern": "marquee.stage11.dev",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/",
+      "/api/*",
+      "/health",
+      "/__validation/*",
+      "/f/*",
+      "/agenda*",
+      "/s/*",
+      "/p/*",
+      "/embed/*",
+      "/i/*"
+    ],
+    "not_found_handling": "single-page-application"
+  },
+
+  // TODO-OPERATOR: create the production D1 database and replace both values.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "replace-me-db",
+      "database_id": "REPLACE_ME-DB"
+    }
+  ],
+
+  // TODO-OPERATOR: create the production R2 buckets and replace both names.
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "replace-me-media",
+      "preview_bucket_name": "replace-me-media-preview"
+    }
+  ],
+
+  // TODO-OPERATOR: create the production KV namespace and replace the ID.
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "REPLACE_ME-CACHE"
+    }
+  ],
+
+  // TODO-OPERATOR: create all four production queues and replace every queue name.
+  "queues": {
+    "producers": [
+      { "binding": "MAIL_QUEUE", "queue": "replace-me-mail-queue" },
+      { "binding": "MIRROR_QUEUE", "queue": "replace-me-mirror-queue" },
+      { "binding": "OPERATIONS_QUEUE", "queue": "replace-me-operations-queue" },
+      { "binding": "WEBHOOK_QUEUE", "queue": "replace-me-webhook-queue" }
+    ],
+    "consumers": [
+      { "queue": "replace-me-mail-queue", "max_batch_size": 10 },
+      { "queue": "replace-me-mirror-queue", "max_batch_size": 10 },
+      { "queue": "replace-me-operations-queue", "max_batch_size": 10 },
+      { "queue": "replace-me-webhook-queue", "max_batch_size": 10 }
+    ]
+  },
+
+  "triggers": {
+    "crons": [
+      "0 * * * *",   // Hourly pre-close reminder scan.
+      "15 4 * * *",  // Daily Airtable webhook keepalive.
+      "30 4 * * *"   // Nightly orphaned-upload sweep.
+    ]
+  },
+
+  // Values come from ignored .dev.vars locally and Wrangler secrets in production.
+  "secrets": {
+    "required": [
+      "TURNSTILE_SITE_KEY",
+      "TURNSTILE_SECRET_KEY"
+    ]
+  }
+}
