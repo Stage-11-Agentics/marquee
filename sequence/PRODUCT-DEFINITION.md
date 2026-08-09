@@ -58,11 +58,11 @@ Seeded replica of **AIE NYC 2026** (their real event, Oct 12–14, Sheraton NYT 
 ## 6. Decisions needed from you (⬜ = blocking soon, ○ = soon-ish)
 
 1. ✅ **Philosophy signed** (Atin, 2026-08-08) with two additions: *"we enable fantastic conferences effortlessly"* (now the one-thing) and **agent-native by design** — a real API, a `marquee` CLI, and a shipped skill file so agents are first-class operators. → `PHILOSOPHY.md` minted at repo root. Scope note: for the competition this means a minimal clean REST API (the UI rides on it anyway), a thin CLI, and a SKILL.md — Tier B additions that must not eat the walkthrough loop; also a distinctive differentiator for *this* judge (the AI Engineer team).
-2. ⬜ **Scope sign-off** (§3) — especially the multi-round deferral and the Tier B order.
-3. ⬜ **Stack sign-off** (§4) — Cloudflare/D1/Airtable-mirror is my recommendation; it also happens to be the bonus stack.
-4. ⬜ **Public repo:** GitHub public repo (competition requires open source; Forgejo stays canonical dev home, GitHub as the public face — mirroring the Lattice/Etch exception). Name: `marquee`. **License call: Apache-2.0** (pretalx's choice; patent grant reads as mature) vs MIT. My rec: Apache-2.0.
-5. ○ **Public name:** is "Marquee" the submission name? (Check collisions when we create the repo.)
-6. ○ **Bespoke domain:** `marquee.stage11.dev` vs registering something (must be **today** per email-verification trap, else stage11.systems).
+2. ✅ **Rounds** (Atin, interview 2026-08-08): minimal 2-round funnel UI committed high in Tier B; round-aware schema from day one. Remaining scope tiers stand as proposed.
+3. ✅ **Stack** (Atin, interview): Cloudflare + D1 + two-way Airtable mirror as specified in §4, committed without waiting on the Q1 ruling.
+4. ✅ **Repo/license** (Atin, interview): private on Forgejo now; public GitHub `marquee` + **Apache-2.0** pushed near submission (~Tuesday); strategy docs curated before the flip.
+5. ○ **Public name:** is "Marquee" the submission name? (Check collisions before the public push.)
+6. ✅ **Domain** (Atin, interview): stage11 infra only — `marquee.stage11.dev` + `marquee@stage11.systems`. Deadline-trap 5 closed; account-check 4 dropped.
 7. ○ **Sessionize Comparison-mode triage** (rank 3 at a time) as a round-1 option — the landscape pass's favorite steal (L2). In or post-competition?
 
 **Still open externally:** Discord relay (videos + Q1/Q2), five account checks (Workers Paid, R2 entitlement, Resend tier, Airtable plan, domain).

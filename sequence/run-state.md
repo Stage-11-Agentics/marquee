@@ -28,6 +28,10 @@ Six active features (CFP forms w/ conditional logic; speaker portal; automated c
 - 2026-08-08: Timeline compresses the Tone arc to ~4 days end-to-end; depth stays proportional to stakes but phases run fast and overlapping. (logged, Mabel)
 - 2026-08-08: **Philosophy signed** (PRODUCT-DEFINITION decision 1): one-thing = "fantastic conferences, effortlessly"; respect-the-operator principles; plus **agent-native by design** — real API, `marquee` CLI, shipped skill file; agents are first-class operators. `PHILOSOPHY.md` minted. (Atin)
 - 2026-08-08: Clone target reconfirmed explicitly: **Sessionboard's Program module** per the brief; Sessionize is competitive context (judges' daily tool), not the target. (Atin + brief)
+- 2026-08-08: **Rounds (decision 2 part):** minimal 2-round funnel UI committed high in Tier B; round-aware schema from first migration. (Atin, interview)
+- 2026-08-08: **Stack (decision 3):** Cloudflare Workers + D1 source of truth + R2/Queues/Turnstile, genuine two-way Airtable mirror off the request path, Resend, ICS METHOD:REQUEST, roll-our-own magic-link auth. Committed without waiting for the Q1 Discord ruling (we'd build the mirror under either answer). (Atin, interview)
+- 2026-08-08: **Repo/license (decision 4):** develop private on Forgejo; public GitHub `marquee` repo pushed near submission (~Tuesday); **Apache-2.0**. Research/strategy docs curated before the public push. (Atin, interview)
+- 2026-08-08: **Domain (decision 6):** stage11 infrastructure only — app at `marquee.stage11.dev`, outbound mail from `marquee@stage11.systems`. No fresh domain; deadline-trap 5 closed, action item 4 dropped. (Atin, interview)
 
 ## Active agents (all pane:40, all Opus)
 

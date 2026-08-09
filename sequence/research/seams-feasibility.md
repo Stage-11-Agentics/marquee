@@ -3,7 +3,12 @@
 **Agent:** Seams Feasibility (Marquee Initiation → Seams Feasibility)
 **First pass:** 2026-08-08, ~17:15 EDT. All figures retrieved 2026-08-08 unless dated otherwise.
 **Serves:** Q1 (Airtable primary vs mirror), Q9 (ICS vs OAuth), R3 (comms + calendar invites), R7 (speed is graded), R46 (1,000–3,000 submissions), §5 (stack signals).
-**Status:** Evidence, not decisions. Every "what I'd bet" line below is a **recommendation, not a ruling** — the architecture stage owns the call.
+**Status:** Evidence gathered as recommendations — **Q1 and Q9 ratified by Atin, 2026-08-08 ~17:40 EDT.** The two bets below are now decisions the architecture stage inherits, not options it re-litigates. Everything else on this page remains evidence.
+
+> **Ratified 2026-08-08.**
+> **Q1 —** D1 is the source of truth. Airtable is a genuine, visible, bidirectional mirror over the Records API, off every read path.
+> **Q9 —** ICS `METHOD:REQUEST` + deep links. OAuth calendar-write is out of scope for this build.
+> Reopening either requires a Discord ruling from swyx, not a preference.
 
 ---
 
@@ -470,7 +475,7 @@ Ranked by (probability × cost). Deadline: **Wed 2026-08-12, 22:00 PT**.
 | **1** | **OAuth calendar write (Google/Microsoft)** | Google's own doc says sensitive-scope verification takes **up to 10 days**, and requires Search Console domain verification, a public homepage, a same-domain privacy policy, and an unlisted demo video. Restricted scopes add a **4–12 week** CASA Tier 2 assessment. Testing mode shows an unverified-app warning and expires refresh tokens. **This cannot land by Wednesday.** | ICS `METHOD:REQUEST` + deep links (§4). Document OAuth as an extension point. |
 | **2** | **Workers Free plan's 10 ms CPU per invocation** | SSR of a 1,000-row list, ICS generation, or token hashing will exceed it. Fails *at deploy*, not in local dev where there is no CPU meter. | **Enable Workers Paid ($5/mo) on day 1** and deploy once, early, to the real plan. |
 | **3** | **Resend Free: 100 emails/day** | A judge clicks "remind all speakers" on a demo seeded with 800 submissions and watches it fail. | Outbox + demo-safe allowlist mode from the first commit (§3.6). Consider Pro ($20) for the judging window regardless. |
-| **4** | **Cloudflare R2 entitlement can lapse account-wide** | Documented in `code/platform/cloudflare.md`: a dead payment method silently 403s **every public bucket URL** while DNS, zone, and TLS all look healthy. API returns error **10042** / `NotEntitled`. **Fix is dashboard-only.** Discovering this on Wednesday evening means every headshot and slide is a broken link. | **Create a bucket and fetch a public object today.** Verify, then move on. |
+| **4** | ~~**Cloudflare R2 entitlement can lapse account-wide**~~ **— CHECKED 2026-08-08, healthy** | Documented in `code/platform/cloudflare.md`: a dead payment method silently 403s **every public bucket URL** while DNS, zone, and TLS all look healthy. API returns error **10042** / `NotEntitled`. **Fix is dashboard-only.** | **Probed and clear.** `https://videos.stage11.dev/` returns **HTTP 404**, not 403 — a lapse 403s at the edge *before* key lookup, so 404 proves the custom domain, TLS, and bucket binding are live. Re-probe on deploy day; it can lapse at any time. |
 | **5** | **A fresh sending domain** | Platform notes: Resend verification takes "minutes to **hours**" even with DNS resolving. A Tuesday domain registration is a coin flip. | `stage11.systems` is **already verified** (checked 2026-08-08). Use `marquee@stage11.systems`. If a bespoke domain is wanted, register and verify **Saturday**. |
 | **6** | **Airtable demo base on the Free plan** | Free caps at **1,000 records per base**. A seeded demo of ~1,000 submissions (Q3's default) hits the wall exactly. | Team plan or above for the demo base. Verify the seat/plan **before** writing the seed script. |
 | **7** | **Airtable webhooks expire after 7 days** | Inside the contest window, so it will demo fine — and then silently die the week after, during the exact period AIE might be evaluating it for the NYC pilot. | Daily cron calling webhook refresh. ~20 lines. |
