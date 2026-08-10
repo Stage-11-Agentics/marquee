@@ -1,6 +1,8 @@
 {
   "assigned_to": null,
   "branch_links": [],
+  "c11_surface": "surface:103",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
@@ -10,7 +12,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM7KZXSA88SPKANC2G0H1",
-  "last_event_id": "ev_01KZJHMCTBWZ6TKWEZBS5CJEE0",
+  "last_event_id": "ev_01KZPWXG3QNE0JNHYDWMYCT9SZ",
   "last_status_changed_at": "2026-08-09T05:58:42Z",
   "linked_files": [],
   "priority": "medium",
@@ -30,6 +32,6 @@
   "tags": null,
   "title": "Auth, demo entry, and reset-demo",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:47Z",
+  "updated_at": "2026-08-10T22:32:57Z",
   "urgency": null
 }

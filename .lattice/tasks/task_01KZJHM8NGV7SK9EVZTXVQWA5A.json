@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:delegator-mrq-14",
   "branch_links": [],
-  "c11_surface": "surface:203",
+  "c11_surface": "surface:102",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 2,
   "complexity": null,
@@ -23,7 +23,7 @@
     }
   ],
   "id": "task_01KZJHM8NGV7SK9EVZTXVQWA5A",
-  "last_event_id": "ev_01KZJN2QDY9X3W9Z9HN8X1VJSB",
+  "last_event_id": "ev_01KZPWWTKPWES1RA48WT7R4D1S",
   "last_status_changed_at": "2026-08-09T06:53:22Z",
   "linked_files": [],
   "priority": "medium",
@@ -43,6 +43,6 @@
   "tags": null,
   "title": "Uploads: presign, verify, and serve",
   "type": "task",
-  "updated_at": "2026-08-09T06:59:02Z",
+  "updated_at": "2026-08-10T22:32:35Z",
   "urgency": null
 }

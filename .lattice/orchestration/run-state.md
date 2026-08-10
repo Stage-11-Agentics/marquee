@@ -13,28 +13,24 @@
 - **Master Validator:** on · **Result Validator:** on · **auto-close surfaces:** on
 - **Contract:** SPEC/EVALUATION/BUILDPLAN through Amendment 11; USER_STORIES AC-1–253 (next mint AC-254); binding prototype v1.6; DESIGN.md Flight Deck
 
-## Workspace panes (c11 refs)
+## Workspace panes (c11 refs) — REBOUND 2026-08-10 18:35
 
-- main_view_area: pane:39 (Orchestrator surface:128)
-- control_surface: pane:55 (Lattice Board browser surface:193; dashboard port **56248**)
-- delegate_view_area_1: pane:56 · delegate_view_area_2: pane:57 (soft cap 15 surfaces/pane; route to lightest)
-- operator review browsers: pane:54
+**c11 restarted between sessions and every ref from Aug 9 is dead.** Current: workspace **workspace:9** "Marquee", pane **pane:16**, Orchestrator **surface:60**. Delegators are tabs of pane:16. Re-run `c11 identify --json` at the start of any resumed session before trusting a ref — the first two launches this evening landed in workspace:3 ("acetate stems") because the old `workspace:16 / pane:56` refs silently resolved elsewhere.
+
 
 ## Tickets in scope
 
 56 tickets MRQ-1..MRQ-56 covering all 72 BUILDPLAN items (commit 8f64ee1); authoritative map: `.lattice/orchestration/ticket-map.md`; validation plan: `validation-plan.md`.
 
-## Active dispatch
+## Active dispatch — RESUMED ON KIMI 2026-08-10 18:35 (autonomous)
 
-| Ticket | Surface | Mode | Note |
+| Ticket | Surface | Harness | Note |
 |---|---|---|---|
-| ~~MRQ-1 (M-01)~~ | closed | **done** | **MERGED** PR #3 (44a3fab). Skeleton is master. Own-reviewer fallback used (headless reviewer hit the 600s ceiling) and disclosed. |
-| ~~MRQ-2 (M-02)~~ | closed | **done** | **MERGED** PR #5 (616f55e6). Whole schema incl. Amendment 12 deltas. |
-| ~~MRQ-6 (M-05a+06)~~ | closed | **done** | **MERGED** PR #4 (09aa26ad). Gate is `npm run pr-gate -- --ticket MRQ-N`, now mandatory in COMMON. |
-| MRQ-8 (M-07) | surface:202 pane:57 | **planned**, holding | re-estimated 7h; CAS primitive; awaiting worktree |
-| MRQ-14 (M-13) | surface:203 pane:56 | **planned**, holding | uploads/presign. Guardrail-adjacent (AC-231) → never auto-merge. Its review produced schema deltas for MRQ-2 and deploy items for MRQ-57, both relayed. |
-| ~~MRQ-55 (S-2)~~ | closed | **done** | **MERGED** PR #2 (3ef7c647). Code done; `needs_human` stands for the client-rendering oracle. |
-| ~~MRQ-56 (S-3)~~ | closed | **done** | **MERGED** PR #1 (4f429473). Verdict below. |
+| MRQ-8 (M-07) | surface:101 | kimi | API core, critical chain. Resumed against its committed plan — revalidate, do not re-plan. |
+| MRQ-14 (M-13) | surface:102 | kimi | Uploads. Guardrail-adjacent (AC-231) → **never auto-merge**. |
+| MRQ-3 (M-03) | surface:103 | kimi | Auth/demo entry. Guardrail-adjacent (demo login must 403 outside demo_mode) → orchestrator eyes at merge. |
+| MRQ-4 (M-04a) | surface:104 | kimi | Seed spine, fast-track. MRQ-5 extends it. |
+
 
 **S-3 verdict (relay into MRQ-8/M-07's boot prompt):** one JSON ID array + `json_each(?)` — a single write query at both 150 and 1,000 rows, 6 ms median — beats ≤90-binding chunking (12 queries, 8.5 ms). Helper dedupes, no-ops on empty, stringifies once, runs once. Local D1 accepts 100 bindings, rejects 101.
 
@@ -90,6 +86,8 @@ Hourly parked ticks would have cost ~37 wake-ups against **Bravo's remaining 22%
 - 2026-08-09 [moderate] Private Forgejo repo `atin/marquee` created + master pushed (signed decision 4); remote name `forgejo`.
 - 2026-08-09 [moderate] Lattice init: stage11 preset, project MRQ.
 - 2026-08-09 [moderate] v1.6 judgment call (a) ratified: Buildings/Rooms settings cards span full row (legibility over grid-2 symmetry).
+- 2026-08-10 18:35 [AUTONOMOUS — pre-authorized] **Fleet resumed on Kimi.** Its weekly window reset clean (0% used, next reset Mon Aug 17) and no harness ruling had arrived, so the operator's own standing authorization applied: waiting past a free reset costs more than acting with ~54 h to the deadline. Resumed MRQ-8 and MRQ-14 from their committed plans, then filled to four with MRQ-3 (auth) and MRQ-4 (seed spine) — the only newly-unblocked tickets worth the slots. Codex remains at 100% and unusable; Bravo untouched for delegation by design.
+- 2026-08-10 18:33 [moderate] Ref rebinding after the c11 restart (see Workspace panes). Two agents were launched into another project's workspace before this was caught; both were closed before doing work and relaunched correctly. COMMON.md's reporting address corrected to workspace:9 surface:60 and the contract made harness-neutral.
 - 2026-08-09 05:10 [moderate] Codex at **100%**. Dispatch loop stopped and replaced with a one-shot cron for Kimi's Monday reset (c927e30c) — hourly parked ticks would have spent Bravo's remaining quota to observe a static board. Schedule math computed and logged: Alpha tonight buys ~37 h more slack than waiting for Monday.
 - 2026-08-09 04:05 [moderate] Codex confirmed exhausted (96%). Verified both parked plans committed with their resolutions, then closed surfaces 202/203 — idle codex sessions on a dead quota serve nothing and invite an accidental resume. Decision set narrowed to Alpha login or Kimi's Monday reset.
 - 2026-08-09 03:33 [moderate] Parked-tick housekeeping (zero model spend): verified no stranded work in any worktree, confirmed every merged artifact is present in master, pruned five worktrees + five local + five remote branches, and ran the pr-gate against merged master — PASS. Codex 89% at this reading; **fleet remains parked, no ruling yet**. Decision NOT to spawn Claude delegators on Bravo: Bravo (78%) is the same pool this orchestrator session runs on, so spending it on delegators risks losing orchestration itself. Alpha (fresh 20x, operator login) or Kimi (resets Mon 18:20) remain the real options.
@@ -119,6 +117,8 @@ Hourly parked ticks would have cost ~37 wake-ups against **Bravo's remaining 22%
 
 | Symptom | Cause | Mitigation |
 |---|---|---|
+| Agents launch "successfully" into the wrong project's workspace | c11 restarts renumber surfaces/panes/workspaces; a stale `--workspace/--pane` does not error, it resolves somewhere else | **Re-run `c11 identify --json` and `c11 tree --all` at the start of every resumed session**, before any launch or send. Also re-point the delegator contract's reporting address (2026-08-10; two agents landed in "acetate stems"). |
+| A Kimi agent shows the boot prompt on screen but never acts, context stuck near 0% | Kimi's **"Trust this folder?"** dialog swallows the argv prompt entirely — accepting it does NOT replay the prompt | After `launch-agent --type kimi`: `send-key enter` to accept trust, THEN resend the prompt with `c11 send ... "$(cat <boot file>)"` and a second `send-key enter`. Verify by watching context climb past ~10%. |
 | Codex delegator HALTs on the line-1 cwd guard with a correct-looking path | A scratchpad path under `/private/tmp` did not match what the spawned shell reported; the guard is exact-match so any resolution difference is fatal | Put sandbox/worktree paths under the project's own tree (`Marquee-worktrees/<slug>`), never `/tmp`. Every guard now prints `actual: $(pwd)` on failure so the next halt is self-diagnosing (2026-08-09, MRQ-2 planner, cost: one relaunch). |
 | A launched codex agent shows a full context read but never claims its ticket, sitting at what looks like an idle prompt | Codex's **directory-trust dialog** ("Do you trust the contents of this directory?") blocks the argv prompt entirely on any newly-created cwd; `--yolo` does not bypass it. Git worktrees of an already-trusted repo do not trigger it — fresh sandbox dirs always do | After EVERY `launch-agent` into a new directory, `read-screen` once and `send-key enter` if the trust dialog is up. Budget ~10s before the check (2026-08-09, MRQ-2/6/8 planners, all three parked). |
 | `git rebase` in the root checkout fails "cannot rebase: You have unstaged changes" during a tick | The root checkout's `.lattice/` **is the live board** — delegators write events continuously, so unstaged changes reappear microseconds after any `git add` | Always `git pull --rebase --autostash forgejo master`. Never `stash` by hand, never `reset --hard` this checkout (2026-08-09, twice in one tick). |

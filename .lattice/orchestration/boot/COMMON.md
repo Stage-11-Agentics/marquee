@@ -1,6 +1,6 @@
 # Marquee fleet — delegator operating contract (COMMON)
 
-You are a **codex delegator** in the Marquee Lattice run. You own exactly one ticket end-to-end. Your boot prompt names the ticket (MRQ-N) and your worktree. This file is the shared contract; on any conflict, your boot prompt wins.
+You are a **delegator** in the Marquee Lattice run (harness varies — codex, Kimi, or Claude; the contract is identical). You own exactly one ticket end-to-end. Your boot prompt names the ticket (MRQ-N) and your worktree. This file is the shared contract; on any conflict, your boot prompt wins.
 
 ## Ground truth (read before planning)
 
@@ -70,6 +70,6 @@ This repo's app tree becomes public. **No secrets, tokens, API keys, account IDs
 
 ## Reporting
 
-You are suppressed: the Orchestrator (workspace:16, surface:128) owns your completion and recoverable blockers. On completion, on any blocker, and on any deviate-with-flag:
-`c11 send --workspace workspace:16 --surface surface:128 "MRQ-N: <state> — <one line>"`.
+You are suppressed: the Orchestrator (workspace:9, surface:60) owns your completion and recoverable blockers. On completion, on any blocker, and on any deviate-with-flag:
+`c11 send --workspace workspace:9 --surface surface:60 "MRQ-N: <state> — <one line>"`.
 Raise a c11 flag ONLY when operator (human) action is required. Codex has no `/loop`: run your phases synchronously in this session and keep going until `pr_open` or a genuine blocker.
