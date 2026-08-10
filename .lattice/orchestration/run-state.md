@@ -76,7 +76,18 @@ The 5-hour session went **0% → 99% in ~25 minutes** with four delegators. That
 | BUILDPLAN work remaining | **~180** |
 | **Coverage** | **~10%** |
 
-**Caveat, stated honestly:** that first window included four agents cold-loading contract docs and skills, so steady-state burn per unit of *useful* work should be better. But even at 3× efficiency Kimi covers ~30%. The conclusion is directional and it holds: **Kimi is a supplement, not the engine.**
+**REVISED 19:50 after measuring the actual output — the 10% figure was too pessimistic and is withdrawn.** Inspecting the four worktrees shows that ~25 minutes of four-wide Kimi produced real implementation, not warm-up:
+
+- **MRQ-8**: eleven modules under `src/api/` (bulk, concurrency, errors, grants, ids, list, manifest, pagination, rate-limit, route, runtime) plus a route manifest — the API core's skeleton.
+- **MRQ-3**: ~694 lines of auth library (magic-links, sessions, middleware, scope-resolution, random-token) plus auth and admin-ops routes.
+- **MRQ-4**: seed generator started (`_source`, `_sql`, `event`) plus an id helper.
+- **MRQ-14**: ~223 lines of R2 library.
+
+That is roughly **a third of each ticket's core in one window** — call it ~1.4 ticket-equivalents per window. Across ~11 windows that is **~15 tickets of 52 remaining, so ~30% coverage, not 10%.**
+
+The error was mine: BUILDPLAN's "agent-hours" are effort estimates, and I wrongly treated them as wall-clock that Kimi had to match. Agents produce far more per wall-clock minute than the estimate implies.
+
+**The conclusion survives the correction, with less drama:** Kimi alone still finishes only about a third of what remains, so **Alpha is still the difference between a complete walkthrough loop and a partial one** — but this is a shortfall to close, not a cliff.
 
 **Alpha (`/login`, `atin@authentic.tech`, untouched Max 20x) is now the only path to a finished build by Wednesday.** This is no longer an optimization — it is the difference between shipping the walkthrough loop and shipping a foundation with a hole in it.
 

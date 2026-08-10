@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:102",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 3,
+  "comment_count": 4,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
@@ -23,7 +23,7 @@
     }
   ],
   "id": "task_01KZJHM8NGV7SK9EVZTXVQWA5A",
-  "last_event_id": "ev_01KZPX3X551V5S9TZ60P1539R0",
+  "last_event_id": "ev_01KZQ136EVJ4Y604QX9EPBWSH0",
   "last_status_changed_at": "2026-08-10T22:36:27Z",
   "linked_files": [],
   "priority": "medium",
@@ -43,6 +43,6 @@
   "tags": null,
   "title": "Uploads: presign, verify, and serve",
   "type": "task",
-  "updated_at": "2026-08-10T22:36:27Z",
+  "updated_at": "2026-08-10T23:45:58Z",
   "urgency": null
 }
