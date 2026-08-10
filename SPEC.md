@@ -302,7 +302,7 @@ Writer: schedule/reschedule/un-accept. Reader: ICS builder — same `UID`, `SEQU
 Writer: an `afterWrite` hook on every mirrored table — **except `reset:demo`, which short-circuits the change feed**: it writes with `last_write_source='marquee'` and a `suppress_mirror` flag so no per-row `mirror_outbox` entry is enqueued, then enqueues **one** reconcile job at the end. Without this, every reset would queue ~1,000 submissions plus speakers and tasks as mirror upserts and drain at 10 records/PATCH ≤4 req/s ≈ 25 s+ of Airtable traffic per reset — during judging, against the base gate 9's manual demo runs on. Reader: queue consumer batching **10 records per PATCH** with `performUpsert.fieldsToMergeOn: ["marquee_id"]`, rate-limited to 4 req/s. **A local change reaches Airtable within 60 s of committing (AC-225)** — which is affordable precisely because the drain is asynchronous and off every read path.
 
 **`mirror_state`** — `table_name`, `airtable_table_id`, `cursor`, `webhook_id`, `webhook_expires_at`, `last_sync_at`, `local_row_count`, `remote_row_count`, `last_error`.
-Writer: drain, webhook receive, daily keepalive cron (trap 7). Reader: **Settings → Airtable** page — connected base link, both row counts, last sync, outbox depth, Sync now (**AC-228**), with webhook expiry surfaced *before* it can cause silent data loss (**AC-229**).
+Writer: drain, webhook receive, daily keepalive cron (trap 7) — **the keepalive refreshes `local_row_count` and `remote_row_count` on the same pass that advances the webhook expiry**, so the counts are never staler than 24 h without a drain. Reader: **Settings → Airtable** page — connected base link, both row counts rendered **"as of `last_sync_at`"** rather than as live figures, last sync, outbox depth, Sync now (**AC-228**), with webhook expiry surfaced *before* it can cause silent data loss (**AC-229**).
 
 **Inbound allowlist** — inbound edits apply **only** these fields, per table, and everything else in Airtable is display-only and overwritten on the next outbound pass:
 
@@ -351,7 +351,7 @@ Scopes resolve from `memberships`: `public` < `speaker` (own records only) < `re
 
 ### 4.2 Routes
 
-`/api/v1` prefix throughout. Every route appears in the OpenAPI document (AC-106); the SPA uses only these (AC-105). List endpoints share a contract: `?page&per_page&q&sort&<filter>=` and return `{data[], page, per_page, total}` whose filter semantics match the UI's exactly (AC-108).
+`/api/v1` prefix throughout, with exactly three deliberate exceptions — the calendar and feed URLs `/i/:uid.ics`, `/agenda.json`, and the public server-rendered pages in §2.1 — which are consumed by calendar clients and feed readers that cannot be asked to follow a versioned API prefix. `check:api`'s route-manifest parity treats these three as a named allowlist, not as drift. Every route appears in the OpenAPI document (AC-106); the SPA uses only these (AC-105). List endpoints share a contract: `?page&per_page&q&sort&<filter>=` and return `{data[], page, per_page, total}` whose filter semantics match the UI's exactly (AC-108).
 
 **Public (no auth)**
 

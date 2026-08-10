@@ -210,7 +210,7 @@ The judge's test script is the walkthrough video: someone opens the deployed URL
 - **AC-233** ⚠️ *Below the Tier B cut line — see the scope note.* A Speaker Handbook page, authored as static markdown per event, renders inside the speaker portal. *(appended 2026-08-08)*
 
 `[R-17, R-6]`, brief item 8 · Source: walkthrough [07:12] · Moat M3 · AC-233 from SPEC flag **F-3**
-**Scope note on AC-233.** It is hosted on a Tier A story because the portal is where it renders, but it is **not** part of Tier A's no-waiver guarantee, which remains exactly `AC-1 – AC-90` plus `AC-231`. AC-233 sits below the Tier B cut line and may be cut — under `EVALUATION.md` gate 19, cutting it is acceptable only if the cut is **named** in the gate report with its AC ID and reason. Silently missing is a failure; deliberately cut is not.
+**Scope note on AC-233.** It is hosted on a Tier A story because the portal is where it renders, but it is **not** part of Tier A's no-waiver guarantee, which is `AC-1 – AC-90` plus **AC-231, AC-234, AC-240, and AC-244–246** (the set stated in the tier table above, in `EVALUATION.md` §1.4 and gate 18, and in `BUILDPLAN.md` §9 — read those, not this sentence, if they ever diverge). AC-233 sits below the Tier B cut line and may be cut — under `EVALUATION.md` gate 19, cutting it is acceptable only if the cut is **named** in the gate report with its AC ID and reason. Silently missing is a failure; deliberately cut is not.
 
 ### US-40 · Edit my own biography and headshot
 **As a** speaker, **I want** to update my bio and headshot myself, **so that** the program is accurate and nobody emails me about it.
