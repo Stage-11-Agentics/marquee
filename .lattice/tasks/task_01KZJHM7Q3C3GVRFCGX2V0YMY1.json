@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM7Q3C3GVRFCGX2V0YMY1",
-  "last_event_id": "ev_01KZPWYMG5RDJTSFBAB818TJRD",
-  "last_status_changed_at": "2026-08-10T22:33:34Z",
+  "last_event_id": "ev_01KZPX9MAXTNG2FTDA5BPEJG9Y",
+  "last_status_changed_at": "2026-08-10T22:39:35Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-4",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Seed generator \u2014 spine",
   "type": "task",
-  "updated_at": "2026-08-10T22:33:34Z",
+  "updated_at": "2026-08-10T22:39:35Z",
   "urgency": null
 }

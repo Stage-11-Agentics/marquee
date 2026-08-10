@@ -54,6 +54,24 @@ Bravo (78% used) is deliberately excluded: it is the pool this orchestrator sess
 
 **Parked-state integrity confirmed:** both remaining tickets' plans are on disk and committed (e9b29c2) — MRQ-8 at 288 lines, MRQ-14 at 118, each carrying its Plan-Review Cycle 1 Resolutions and the orchestrator rulings. The idle codex sessions were closed after that verification; **no re-planning is needed on any harness**, whichever is chosen.
 
+## 🛑 KIMI CANNOT FINISH THIS BUILD — arithmetic, 2026-08-10 18:47
+
+The 5-hour session went **0% → 99% in ~25 minutes** with four delegators. That is the duty cycle: ~25 minutes of four-wide work, then ~4.5 hours idle waiting for the roll — about **8% utilization**.
+
+| | |
+|---|---|
+| Agent-hours per Kimi window | ~1.7 |
+| Windows before the deadline (Thu Aug 13 01:00 EDT) | ~10.8 |
+| **Total Kimi agent-hours available** | **~18** |
+| BUILDPLAN work remaining | **~180** |
+| **Coverage** | **~10%** |
+
+**Caveat, stated honestly:** that first window included four agents cold-loading contract docs and skills, so steady-state burn per unit of *useful* work should be better. But even at 3× efficiency Kimi covers ~30%. The conclusion is directional and it holds: **Kimi is a supplement, not the engine.**
+
+**Alpha (`/login`, `atin@authentic.tech`, untouched Max 20x) is now the only path to a finished build by Wednesday.** This is no longer an optimization — it is the difference between shipping the walkthrough loop and shipping a foundation with a hole in it.
+
+**Worktree state at the cap — DO NOT PRUNE THESE:** all four delegators were cut off with uncommitted work on disk (mrq-8-api 4 files, mrq-14-uploads 3, mrq-3-auth 3, mrq-4-seed 2) and zero commits of their own. Files persist on disk and are safe; a WIP commit was deliberately NOT made on their behalf, to avoid corrupting an in-flight agent's git state. Any resumed agent goes back into the **same worktree** and continues; nothing is re-planned and nothing is re-done.
+
 ## Kimi window mechanics (learned 2026-08-10 18:40)
 
 Kimi enforces **two** windows and the tight one is the 5-hour session, not the weekly. Twenty minutes of four delegators spent **56% of the 5 h session but only 11% of the weekly**. So the run's rhythm is: work a session window, stall, wait for the roll (this one rolls 22:20 EDT), resume. Roughly 10 such windows exist before the deadline.
