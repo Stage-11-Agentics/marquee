@@ -254,6 +254,40 @@
     .pipeline-count { display: block; font: 400 30px/1 var(--mono); letter-spacing: -.05em; margin: 9px 0 8px; }
     .pipeline-delta { color: var(--accent-dark); font: 400 10.5px/1.4 var(--mono); }
     .pipeline-meaning { display:block; min-height:22px; margin-top:7px; color:var(--muted); font-size:9.5px; line-height:1.4; }
+    .pipeline-stage.at-zero { background: rgba(255,255,255,.5); }
+    .pipeline-stage.at-zero:hover { background: rgba(255,255,255,.5); }
+    .pipeline-stage.at-zero .pipeline-count { color: var(--line-strong); }
+
+    /* Fresh-install walk --------------------------------------------------- */
+    .page.narrow { max-width: 720px; }
+    .event-switcher-row { display: grid; grid-template-columns: 1fr auto; gap: 4px; align-items: stretch; margin: 0 4px 18px; }
+    .event-switcher-row .event-switcher { margin: 0; }
+    .event-add { display: grid; place-items: center; width: 30px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk); color: var(--muted); font: 400 15px/1 var(--mono); transition: border-color 110ms, background 110ms, color 110ms; }
+    .event-add:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+    .setup-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .choice-card { display: grid; align-content: start; gap: 5px; text-align: left; padding: 13px 14px; min-height: 78px; border: 1px solid var(--line-strong); border-left: 3px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); transition: border-color 110ms, background 110ms; }
+    .choice-card:hover { border-color: var(--accent); }
+    .choice-card.active { border-color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
+    .choice-card strong { font: 600 12px/1.2 var(--mono); }
+    .choice-card span { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+    .setup-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+    .setup-actions .subtle { margin-right: auto; font-size: 11.5px; }
+    .setup-card { margin-bottom: 14px; }
+    .setup-card .setup-progress { color: var(--muted); font: 600 10px/1 var(--mono); letter-spacing: .1em; }
+    .setup-steps { display: grid; gap: 0; padding-top: 2px; padding-bottom: 2px; }
+    /* Fixed row height and an always-present action slot: ticking a step must
+       never move the steps beneath it. */
+    .setup-step { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 12px; min-height: 54px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .setup-step:last-child { border-bottom: 0; }
+    .setup-mark { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--muted); font: 600 10px/1 var(--mono); }
+    .setup-step.done .setup-mark { border-color: var(--success); background: var(--success-soft); color: var(--success); }
+    .setup-step.next .setup-mark { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+    .setup-copy { display: grid; gap: 3px; }
+    .setup-copy strong { font: 600 12px/1.2 var(--mono); }
+    .setup-step.done .setup-copy strong { color: var(--muted); }
+    .setup-copy span { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+    .setup-step.later { opacity: .62; }
+
     .attention-strip { margin: 14px 0; display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
     .attention-item { border: 1px solid var(--line-strong); background: var(--panel); border-radius: var(--radius); text-align: left; padding: 11px 13px 11px 12px; min-height: 60px; border-left: 3px solid var(--warning); transition: background 110ms, border-color 110ms; }
     .attention-item:hover { background: var(--accent-soft); border-color: var(--accent); border-left-color: var(--accent); }
@@ -622,7 +656,7 @@
     @media (max-width: 1000px) {
       .app-shell { grid-template-columns: 68px minmax(0,1fr); }
       .sidebar { padding: 16px 9px; }
-      .brand-name, .event-switcher, .nav-label, .nav a span:not(.nav-icon), .sidebar-foot { display: none; }
+      .brand-name, .event-switcher-row, .nav-label, .nav a span:not(.nav-icon), .sidebar-foot { display: none; }
       .brand { padding: 0 10px 18px; }
       .nav a { justify-content: center; }
       .nav-icon { font-size: 14px; }
@@ -633,7 +667,7 @@
     @media (max-width: 760px) {
       .app-shell { display: block; }
       .sidebar { height: 54px; position: fixed; top: auto; bottom: 0; left: 0; right: 0; z-index: 300; border-right: 0; border-top: 1px solid var(--line-strong); flex-direction: row; padding: 6px; overflow-x: auto; }
-      .sidebar .brand, .event-switcher, .nav-label, .sidebar-foot { display: none; }
+      .sidebar .brand, .event-switcher-row, .nav-label, .sidebar-foot { display: none; }
       .nav { display: flex; min-width: max-content; width: 100%; justify-content: space-around; }
       .nav a { min-width: 47px; min-height: 40px; border-left: 0; border-bottom: 2px solid transparent; border-radius: var(--radius); }
       .nav a.active { border-left-color: transparent; border-bottom-color: var(--accent); }
@@ -728,6 +762,13 @@
 
       const state = {
         route: "landing",
+        // The fresh-install walk: what an organizer meets on a brand-new install,
+        // from "no events yet" through to an open call for speakers. Entered with
+        // ?empty=1 and sticky once entered, so ordinary in-app links stay inside
+        // it. The seeded AIE demo is held in setupSnapshot and restored on exit.
+        setup: { active:false, steps:{ details:false, taxonomy:false, form:false, evaluation:false, intake:false } },
+        setupSnapshot: null,
+        setupSource: "scratch",
         submissions: [],
         submissionFilter: "All",
         submissionType: "All",
@@ -1012,7 +1053,7 @@
       const routeNames = {
         landing: "Demo", settings: "Event settings", dashboard: "Program pipeline", board: "Program board", forms: "Form builder",
         cfp: "Public CFP form", portal: "Speaker portal", evaluation: "Evaluation plan", reviewer: "Reviewer queue",
-        submissions: "Abstracts", submissionDetail:"Submission record", submissionNew:"Create submission",
+        submissions: "Abstracts", submissionDetail:"Submission record", submissionNew:"Create submission", eventNew:"Create event",
         onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Event site", comms:"Communications",
         taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", apiTokens:"API tokens",
         apiDocs:"API documentation", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker"
@@ -1099,6 +1140,7 @@
       }
 
       function routeKey(path) {
+        if (/^events\/new$/.test(path)) return "eventNew";
         if (/^submissions\/new$/.test(path)) return "submissionNew";
         if (/^submissions\/[^/]+$/.test(path)) { state.submissionRecordId = decodeURIComponent(path.split("/")[1]); return "submissionDetail"; }
         if (/^s\/[^/]+$/.test(path)) { state.publicRecordId = decodeURIComponent(path.split("/")[1]); return "publicSession"; }
@@ -1109,9 +1151,77 @@
       function currentRoute() {
         const raw = location.hash.replace(/^#\/?/, "") || "landing";
         const [path,query=""] = raw.split("?");
-        state.emptyInstall = new URLSearchParams(query).get("empty") === "1";
+        if (new URLSearchParams(query).get("empty") === "1") enterFreshInstall();
+        state.emptyInstall = state.setup.active;
         const route = routeKey(path);
         return routeNames[route] ? route : "landing";
+      }
+
+      // Swap the seeded AIE demo out for a genuinely empty install, keeping the
+      // seed whole in a snapshot. Nothing is destroyed: an operator can walk the
+      // cold start and return to the demo exactly as they left it.
+      function enterFreshInstall() {
+        if (state.setup.active) return;
+        state.setupSnapshot = {
+          event: { ...state.event }, tracks: tracks.slice(), formats: formats.slice(),
+          rooms: rooms.slice(), buildings: buildings.slice(), forms: state.forms.slice(),
+          submissions: state.submissions.slice(), activeFormId: state.activeFormId,
+          roomCapacities: state.roomCapacities.slice(), roomBuildings: state.roomBuildings.slice(),
+          roomAV: state.roomAV.slice(), roomNotes: state.roomNotes.slice()
+        };
+        state.event = { name:"", tagline:"", start:"", end:"", venue:"", timezone:"America/New_York" };
+        [tracks, formats, rooms, buildings].forEach(list => { list.length = 0; });
+        state.forms = []; state.submissions = [];
+        state.roomCapacities = []; state.roomBuildings = []; state.roomAV = []; state.roomNotes = [];
+        state.setup = { active:true, steps:{ details:false, taxonomy:false, form:false, evaluation:false, intake:false } };
+        state.setupSource = "scratch";
+      }
+
+      function exitFreshInstall() {
+        const snap = state.setupSnapshot;
+        if (snap) {
+          state.event = snap.event; state.forms = snap.forms; state.submissions = snap.submissions;
+          state.activeFormId = snap.activeFormId;
+          tracks.length = 0; tracks.push(...snap.tracks);
+          formats.length = 0; formats.push(...snap.formats);
+          rooms.length = 0; rooms.push(...snap.rooms);
+          buildings.length = 0; buildings.push(...snap.buildings);
+          state.roomCapacities = snap.roomCapacities; state.roomBuildings = snap.roomBuildings;
+          state.roomAV = snap.roomAV; state.roomNotes = snap.roomNotes;
+        }
+        state.setupSnapshot = null;
+        state.setup.active = false;
+        state.emptyInstall = false;
+      }
+
+      // The cold start, as one ordered list. Each step names the screen that
+      // completes it, so the checklist and the empty states always agree.
+      function setupStepList() {
+        const s = state.setup.steps;
+        return [
+          { key:"details",    label:"Create the event",               note:"Name, dates, timezone, and venue",             done:s.details,    route:"events/new", action:"Create event" },
+          { key:"taxonomy",   label:"Add tracks, formats, and rooms", note:"Forms, agenda, and invites all inherit these", done:s.taxonomy,   route:"settings",   action:"Open event settings" },
+          { key:"form",       label:"Build the call for speakers",    note:"Fields, participants, rules, and routing",     done:s.form,       route:"forms",      action:"Build the form" },
+          { key:"evaluation", label:"Plan evaluation",                note:"Scorecard, committee, and review rounds",      done:s.evaluation, route:"evaluation", action:"Plan evaluation" },
+          { key:"intake",     label:"Open intake",                    note:"Publish the form and share the public link",   done:s.intake,     route:"forms",      action:"Publish the form" }
+        ];
+      }
+
+      function completeSetupStep(key, message) {
+        if (!state.setup.active || state.setup.steps[key]) return;
+        state.setup.steps[key] = true;
+        if (message) toast(message);
+      }
+
+      // A fresh install genuinely has nothing on most screens. These are the ones
+      // that become real the moment the step before them is done.
+      function showsEmptyState(route) {
+        if (!state.setup.active) return false;
+        if (route === "eventNew") return false;
+        if (route === "dashboard" || route === "settings") return !state.setup.steps.details;
+        if (route === "forms") return state.forms.length === 0;
+        if (route === "importer") return !state.setup.steps.details;
+        return true;
       }
 
       function navItem(route, icon, label) {
@@ -1127,7 +1237,10 @@
         return `<div class="app-shell">
           <aside class="sidebar">
             <a class="brand" href="#dashboard"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
-            <a class="event-switcher" href="#settings"><small>Event</small><strong>${esc(state.event.name)}</strong></a>
+            <div class="event-switcher-row">
+              <a class="event-switcher" href="#settings"><small>Event</small><strong>${esc(state.event.name || "No event yet")}</strong></a>
+              <a class="event-add" href="#events/new" title="Create event" aria-label="Create event">＋</a>
+            </div>
             <nav class="nav" aria-label="Program home">${navItem("dashboard","⌂","Program home")}${navItem("board","▥","Program board")}</nav>
             <div class="nav-label">Pipeline</div>
             <nav class="nav" aria-label="Program lifecycle">
@@ -1157,7 +1270,7 @@
           </aside>
           <main class="main">
             <header class="topbar">
-              <div class="breadcrumbs">AIE NYC 2026&nbsp; / &nbsp;<strong>${esc(routeNames[state.route])}</strong></div>
+              <div class="breadcrumbs">${esc(state.event.name || "New install")}&nbsp; / &nbsp;<strong>${esc(routeNames[state.route])}</strong></div>
               <div class="global-search">
                 <span class="search-glyph">⌕</span>
                 <input id="global-search" aria-label="Search everything" autocomplete="off" placeholder="Search abstracts, speakers, sessions…" readonly>
@@ -1167,15 +1280,98 @@
             </header>
             ${content}
           </main>
-        </div><a class="empty-preview" href="#${routePath(state.route)}${state.emptyInstall?"":"?empty=1"}">${state.emptyInstall?"Exit empty preview":"Preview empty state"}</a>`;
+        </div>${state.setup.active
+          ? `<button class="empty-preview" id="exit-fresh-install">Exit fresh install → seeded demo</button>`
+          : `<a class="empty-preview" href="#landing?empty=1">Preview a fresh install</a>`}`;
       }
 
       function routePath(route) {
-        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
+        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"events/new",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
       }
 
       function pageHead(title, copy, actions = "") {
         return `<div class="page-head"><div><h1>${title}</h1><p>${copy}</p></div><div class="head-actions">${actions}</div></div>`;
+      }
+
+      const TIMEZONES = ["America/New_York","America/Chicago","America/Denver","America/Los_Angeles","Europe/London","Europe/Berlin","Asia/Singapore","Australia/Sydney"];
+
+      // The screen that did not exist: a fresh install had no way to make the
+      // event every other screen is scoped to. Two honest doors — start clean, or
+      // bring an in-flight program across from Sessionize.
+      function eventNewView() {
+        const importing = state.setupSource === "sessionize";
+        return shell(`<div class="page narrow">
+          ${pageHead("Create event", "One record, created once. Forms, portals, agenda times, and calendar invites all inherit it.")}
+          <div class="setup-choice">
+            <button class="choice-card ${importing?"":"active"}" data-setup-source="scratch" aria-pressed="${importing?"false":"true"}">
+              <strong>Start from scratch</strong><span>Name the conference and configure tracks, formats, and rooms here.</span>
+            </button>
+            <button class="choice-card ${importing?"active":""}" data-setup-source="sessionize" aria-pressed="${importing?"true":"false"}">
+              <strong>Import from Sessionize</strong><span>Create the event, then bring an open CFP across with its review history.</span>
+            </button>
+          </div>
+          <section class="card"><div class="card-head"><h2>Event details</h2><span class="subtle">Everything here is editable later in Event settings.</span></div>
+            <div class="card-body stack">
+              <div class="field"><label for="new-event-name">Event name</label><input id="new-event-name" value="${esc(state.event.name)}" placeholder="AI Engineer New York 2026" autocomplete="off"><span class="field-note">Used in the sidebar, every email subject, the public site, and calendar invites.</span></div>
+              <div class="field"><label for="new-event-tagline">Tagline</label><input id="new-event-tagline" value="${esc(state.event.tagline||"")}" placeholder="Where AI Engineering Meets Wall Street" autocomplete="off"><span class="field-note">Optional · shown on the public event site.</span></div>
+              <div class="grid-2">
+                <div class="field"><label for="new-event-start">Starts</label><input id="new-event-start" type="date" value="${esc(state.event.start)}"></div>
+                <div class="field"><label for="new-event-end">Ends</label><input id="new-event-end" type="date" value="${esc(state.event.end)}"></div>
+              </div>
+              <div class="field"><label for="new-event-venue">Venue</label><input id="new-event-venue" value="${esc(state.event.venue)}" placeholder="Sheraton New York Times Square" autocomplete="off"></div>
+              <div class="field"><label for="new-event-timezone">Timezone</label><select id="new-event-timezone">${TIMEZONES.map(tz=>`<option ${state.event.timezone===tz?"selected":""}>${tz}</option>`).join("")}</select><span class="field-note">Agenda times and calendar invites inherit this timezone.</span></div>
+            </div>
+          </section>
+          <div class="setup-actions">
+            <span class="subtle">${importing?"You'll land in the Sessionize importer next.":"You'll add tracks, formats, and rooms next."}</span>
+            <a class="button" href="#landing">Cancel</a>
+            <button class="button primary" id="create-event">Create event</button>
+          </div>
+        </div>`);
+      }
+
+      function setupChecklistCard() {
+        const steps = setupStepList(), done = steps.filter(s=>s.done).length;
+        const next = steps.findIndex(s=>!s.done);
+        return `<section class="card setup-card">
+          <div class="card-head">
+            <div><h2>Set up your event</h2><span class="subtle">From a fresh install to an open call for speakers.</span></div>
+            <span class="setup-progress tabular">${done} of ${steps.length}</span>
+          </div>
+          <div class="card-body setup-steps">
+            ${steps.map((s,i)=>`<div class="setup-step ${s.done?"done":i===next?"next":"later"}">
+              <span class="setup-mark">${s.done?"✓":i+1}</span>
+              <div class="setup-copy"><strong>${esc(s.label)}</strong><span>${esc(s.note)}</span></div>
+              <a class="button small ${i===next?"primary":""}" href="#${s.route}">${s.done?"Review":s.action}</a>
+            </div>`).join("")}
+          </div>
+        </section>`;
+      }
+
+      // The program pipeline, before there is a program. The seven stages stay on
+      // screen at zero so the shape of the product is legible from the first
+      // minute — the counts fill in rather than the layout appearing later.
+      function setupDashboardView() {
+        const steps = setupStepList(), complete = steps.every(s=>s.done);
+        return shell(`<div class="page">
+          ${pageHead(
+            complete ? "Intake is open" : "Program pipeline",
+            complete
+              ? `${esc(state.event.name)} is taking submissions. Every stage below fills as they arrive.`
+              : "A new install has no program yet. Work the checklist and the pipeline starts filling itself.",
+            complete
+              ? `<button class="button" data-route="cfp">View public CFP</button><button class="button primary" data-route="submissions">Open submissions</button>`
+              : `<button class="button" data-route="settings">Event settings</button>`
+          )}
+          ${setupChecklistCard()}
+          <section class="card pipeline-card">
+            <div class="pipeline">
+              ${["Submitted","In Review","Waved","Accepted","Onboarding","Scheduled","Published"].map(name=>
+                `<div class="pipeline-stage at-zero"><span class="pipeline-name">${name}</span><strong class="pipeline-count">0</strong><span class="pipeline-delta">${complete?"awaiting submissions":"not started"}</span></div>`
+              ).join("")}
+            </div>
+          </section>
+        </div>`);
       }
 
       function landingView() {
@@ -1753,7 +1949,7 @@
         let body="";
         if(state.importStep===0) body=`<div class="empty-state"><div><div class="empty-mark">⇩</div><h2>Bring your open CFP from Sessionize</h2><p>Upload the exported Sessions and Speakers spreadsheets. The prototype uses a safe mocked export with undecided submissions, speaker relationships, and historical scores.</p><input id="import-file" type="file" accept=".csv,.xlsx" style="margin-bottom:12px"><br><button class="button primary" id="use-mock-import">Use mocked Sessionize export</button></div></div>`;
         if(state.importStep===1) body=`<div class="card-body"><div class="grid-2"><div class="field"><label>Sessionize: Session title</label><select><option>Marquee: Title</option></select></div><div class="field"><label>Sessionize: Status</label><select><option>Marquee: Status</option></select></div><div class="field"><label>Sessionize: Speakers</label><select><option>Marquee: Participants</option></select></div><div class="field"><label>Sessionize: Category</label><select><option>Marquee: Track</option></select></div><div class="field"><label>Sessionize: Format</label><select><option>Marquee: Format</option></select></div><div class="field"><label>Sessionize: Score</label><select><option>Marquee: Historical score</option></select></div></div><div class="modal-actions" style="padding-right:0"><button class="button" id="import-back">Back</button><button class="button primary" id="import-next">Preview first rows →</button></div></div>`;
-        if(state.importStep===2) body=`<div class="table-wrap" style="min-height:320px"><table><thead><tr><th>Sessionize ID</th><th>Title</th><th>Status</th><th>Speaker</th><th>Track</th><th>Historical score</th></tr></thead><tbody>${[1,2,3].map((n,i)=>`<tr><td>SZ-${842+n}</td><td>${esc(makeTitle(30+i))}</td><td>${["Undecided","Accepted","Under review"][i]}</td><td>${esc(personName(90+i))}</td><td>${esc(tracks[i].name)}</td><td>${["—","4.7","Unattributed · 3.9"][i]}</td></tr>`).join("")}</tbody></table></div><div class="modal-actions"><button class="button" id="import-back">Back</button><button class="button primary" id="import-next">Import 286 rows →</button></div>`;
+        if(state.importStep===2) body=`<div class="table-wrap" style="min-height:320px"><table><thead><tr><th>Sessionize ID</th><th>Title</th><th>Status</th><th>Speaker</th><th>Track</th><th>Historical score</th></tr></thead><tbody>${[1,2,3].map((n,i)=>`<tr><td>SZ-${842+n}</td><td>${esc(makeTitle(30+i))}</td><td>${["Undecided","Accepted","Under review"][i]}</td><td>${esc(personName(90+i))}</td><td>${esc(tracks[i]?.name || "Unmapped")}</td><td>${["—","4.7","Unattributed · 3.9"][i]}</td></tr>`).join("")}</tbody></table></div><div class="modal-actions"><button class="button" id="import-back">Back</button><button class="button primary" id="import-next">Import 286 rows →</button></div>`;
         if(state.importStep===3) body=`<div class="empty-state"><div><div class="empty-mark">↻</div><h2>Import ready</h2><p>286 rows will be matched idempotently by Sessionize ID. Re-running this export updates matches and inserts new records without duplicates.</p><button class="button primary" id="run-import">Run import</button></div></div>`;
         if(state.importStep===4) body=`<div class="table-wrap" style="min-height:320px"><table class="outcome-table"><thead><tr><th>Row</th><th>Record</th><th>Outcome</th><th>Reason</th></tr></thead><tbody><tr><td>1–241</td><td>Submissions + speakers</td><td><span class="chip published">Created · 241</span></td><td>New Sessionize IDs</td></tr><tr><td>242–278</td><td>Submissions + review history</td><td><span class="chip review">Updated · 37</span></td><td>Matched prior import</td></tr><tr><td>279–284</td><td>Duplicate speaker rows</td><td><span class="chip">Skipped · 6</span></td><td>Relationships already present</td></tr><tr><td>285–286</td><td>Malformed category</td><td><span class="chip overdue">Failed · 2</span></td><td>Missing format; fix and re-run</td></tr></tbody></table></div><div class="modal-actions"><span class="subtle" style="margin-right:auto">Batch SZ-2026-08-08 · 284 applied · 2 failed</span><button class="button danger" id="undo-import">Undo this batch</button><button class="button primary" data-route="submissions">View imported records</button></div>`;
         return shell(`<div class="page">${pageHead("Import from Sessionize", "Move mid-CFP without losing undecided records, relationships, custom fields, or review history.", `<button class="button" data-route="submissions">All submissions</button>`)}<div class="import-steps">${labels.map((l,i)=>`<div class="import-step ${i===state.importStep?"active":""}">${i+1} · ${l}</div>`).join("")}</div><section class="card">${body}</section></div>`);
@@ -2028,6 +2224,43 @@
         gs?.addEventListener("focus",openGlobalSearch);
         gs?.addEventListener("click",openGlobalSearch);
         document.getElementById("reset-demo")?.addEventListener("click",resetDemo);
+        document.getElementById("exit-fresh-install")?.addEventListener("click",()=>{
+          exitFreshInstall(); toast("Back in the seeded AIE NYC 2026 demo"); navigate("dashboard");
+        });
+        document.getElementById("setup-create-form")?.addEventListener("click",()=>{
+          const id=`form-${Date.now()}`;
+          state.forms.push({id,name:"Call for speakers",status:"Draft",target:"Abstract",responses:0,detail:"Private until published"});
+          state.activeFormId=id; state.formTarget="Abstract"; state.builderStep=2;
+          completeSetupStep("form");
+          toast("Call for speakers created · shape the fields, then publish to open intake");
+          render();
+        });
+        document.querySelectorAll("[data-setup-complete]").forEach(el=>el.addEventListener("click",e=>{
+          e.preventDefault();
+          const key=el.dataset.setupComplete;
+          completeSetupStep(key, el.dataset.setupToast||"Step complete");
+          navigate("dashboard");
+        }));
+      }
+
+      function bindEventNew() {
+        document.querySelectorAll("[data-setup-source]").forEach(b=>b.addEventListener("click",()=>{ state.setupSource=b.dataset.setupSource; render(); }));
+        document.getElementById("create-event")?.addEventListener("click",()=>{
+          const nameField=document.getElementById("new-event-name"), name=nameField.value.trim();
+          if(!name){ toast("Give the event a name before creating it"); nameField.focus(); return; }
+          state.event = {
+            ...state.event, name,
+            tagline: document.getElementById("new-event-tagline").value.trim(),
+            start: document.getElementById("new-event-start").value,
+            end: document.getElementById("new-event-end").value,
+            venue: document.getElementById("new-event-venue").value.trim(),
+            timezone: document.getElementById("new-event-timezone").value
+          };
+          if(state.setup.active) state.setup.steps.details = true;
+          const importing = state.setupSource === "sessionize";
+          toast(`${name} created · ${importing?"bring the Sessionize export across next":"add tracks, formats, and rooms next"}`);
+          navigate(importing ? "import" : "dashboard");
+        });
       }
 
       function normalizeSearch(value) { return String(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,""); }
@@ -2076,7 +2309,9 @@
           document.querySelectorAll("[data-room-name]").forEach((input,i)=>{rooms[i]=input.value.trim()||rooms[i];state.roomCapacities[i]=Math.max(1,Math.round(Number(document.querySelector(`[data-room-capacity="${i}"]`).value)||1));state.roomBuildings[i]=document.querySelector(`[data-room-building="${i}"]`).value||"";state.roomNotes[i]=document.querySelector(`[data-room-notes="${i}"]`).value.trim();});
           document.querySelectorAll("[data-building-name]").forEach(input=>{const b=buildingById(input.dataset.buildingName);if(!b)return;b.name=input.value.trim()||b.name;b.address=document.querySelector(`[data-building-address="${b.id}"]`).value.trim();});
           state.event = { ...state.event, name: document.getElementById("event-name").value, start: document.getElementById("event-start").value, end: document.getElementById("event-end").value, venue: document.getElementById("event-venue").value, timezone: document.getElementById("event-timezone").value };
-          try { localStorage.setItem("marquee-prototype-event",JSON.stringify(state.event)); } catch (_) { }
+          // The fresh-install walk is a sandbox: it must never persist its event
+          // over the seeded demo, or the demo boots as somebody's test conference.
+          if (!state.setup.active) { try { localStorage.setItem("marquee-prototype-event",JSON.stringify(state.event)); } catch (_) { } }
           toast("Event settings saved · agenda and invites updated"); render();
         });
         document.getElementById("add-format")?.addEventListener("click",()=>{const name=`New format ${formats.length+1}`;formats.push(name);formatRanges[name]="15–30";formatDurations[name]=20;render();});
@@ -2099,6 +2334,12 @@
         });
         document.querySelectorAll("[data-room-notes]").forEach(input=>input.addEventListener("change",()=>{state.roomNotes[Number(input.dataset.roomNotes)]=input.value.trim();toast("Room notes saved · visible on the agenda");}));
         let trackFrom=null;document.querySelectorAll("[data-track-index]").forEach(row=>{row.addEventListener("dragstart",()=>{trackFrom=Number(row.dataset.trackIndex);row.classList.add("dragging")});row.addEventListener("dragend",()=>row.classList.remove("dragging"));row.addEventListener("dragover",e=>e.preventDefault());row.addEventListener("drop",e=>{e.preventDefault();const to=Number(row.dataset.trackIndex);if(trackFrom===null||to===trackFrom)return;const [track]=tracks.splice(trackFrom,1);tracks.splice(to,0,track);render();});});
+        // The taxonomy step is done when the event actually has the things every
+        // downstream screen reads — not when the operator merely visited here.
+        document.getElementById("save-settings")?.addEventListener("click",()=>{
+          if(tracks.length && formats.length && rooms.length)
+            completeSetupStep("taxonomy","Tracks, formats, and rooms saved · build the call for speakers next");
+        });
         document.getElementById("preview-branding")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Event branding preview</h2><p>Public form, portal, event site, and calendar invite identity.</p></div><div class="modal-body"><div class="hero-pipeline" style="transform:none"><div class="brand"><span class="brand-mark">M</span><span class="brand-name">${esc(document.getElementById("event-name").value)}</span></div><div class="eyebrow">October 12–14 · ${esc(document.getElementById("event-venue").value)}</div><h2>Fantastic conferences, effortlessly.</h2></div></div><div class="modal-actions"><button class="button primary" id="close-preview">Close preview</button></div></section></div>`;document.getElementById("close-preview").onclick=()=>modalRoot.innerHTML="";});
       }
 
@@ -2119,6 +2360,12 @@
         });
         document.getElementById("add-field")?.addEventListener("click",()=>{const id=Math.max(...state.builderFields.map(f=>f.id))+1;state.builderFields.push({id,label:"Audience experience level",kind:"Single select",required:false});state.builderActive=id;toast("Field added to form and live preview");render();});
         document.getElementById("publish-form")?.addEventListener("click",()=>{const form=state.forms.find(item=>item.id===state.activeFormId);if(form){form.status="Open";form.detail=form.id==="cfp"?"Public · closes Sep 12":"Private link · published";}toast("Form published · only this form’s public surface updated");render();});
+        document.getElementById("new-form")?.addEventListener("click",()=>completeSetupStep("form"));
+        // Publishing the form is what opens intake — the last step of the walk.
+        document.getElementById("publish-form")?.addEventListener("click",()=>{
+          completeSetupStep("form");
+          if(state.forms.some(f=>f.status==="Open")) completeSetupStep("intake","Intake is open · the public CFP is live");
+        });
         document.getElementById("save-builder-step")?.addEventListener("click",()=>toast("Form step saved · public preview updated"));
         document.getElementById("form-closes")?.addEventListener("change",()=>toast("Close date updated in public form"));
         document.getElementById("form-limit")?.addEventListener("change",e=>toast(`Submission limit set to ${e.target.value}`));
@@ -2355,10 +2602,25 @@
           publicSession:["Session not found","Only published Sessions have public permalinks; private titles never leak here.","View event site","publicAgenda"],
           publicSpeaker:["Speaker not found","Public profiles appear only for speakers attached to published Sessions.","View event site","publicAgenda"]
         };
-        const [title,copy,action,target]=states[route]||states.dashboard;
-        const content=`<section class="card empty-state"><div><div class="empty-mark">＋</div><h2>${title}</h2><p>${copy}</p><a class="button primary" href="#${target}">${action}</a></div></section>`;
-        if(["landing","cfp","portal","publicAgenda","publicSession","publicSpeaker"].includes(route))return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>Marquee</a><a class="button small" href="#${routePath(route)}">Exit empty preview</a></header><main class="public-body wide">${content}</main></div>`;
-        return shell(`<div class="page">${pageHead(routeNames[route],"Fresh-install preview · every empty state points to the next useful action.")} ${content}</div>`);
+        // In the fresh-install walk the empty states *are* the walk, so every
+        // action has to be the genuine next step. The stock copy sent three of
+        // them to a screen that could not yet do anything — including one that
+        // pointed at itself.
+        const setupStates = {
+          landing:["Create your first event","A fresh Marquee install has no events yet. Create one from scratch, or import an in-flight program from Sessionize.","Create event","events/new"],
+          dashboard:["Your program starts here","Create the event record first — every form, portal, agenda time, and calendar invite is scoped to it.","Create event","events/new"],
+          settings:["Nothing to configure yet","Tracks, formats, rooms, and buildings all belong to an event. Create one and this screen fills in.","Create event","events/new"],
+          importer:["Create the event first","A Sessionize import needs somewhere to land. Create the event, then bring the export across.","Create event","events/new"],
+          apiDocs:["API ready for an event","Create an event to populate examples and issue an event-scoped token.","Create event","events/new"],
+          forms:["No call for speakers yet","Build an Abstract form for competitive submissions, or a Session form for guaranteed programming.","Create the call for speakers","",'id="setup-create-form"'],
+          evaluation:["No evaluation plan","Set the scorecard, the committee, and the review rounds before the first abstracts land.","Create evaluation plan","",'data-setup-complete="evaluation" data-setup-toast="Evaluation plan created · open intake next"']
+        };
+        const entry = (state.setup.active && (setupStates[route] || [ ...(states[route]||states.dashboard).slice(0,2), "Continue setup →", "dashboard" ])) || states[route] || states.dashboard;
+        const [title,copy,action,target,extra=""]=entry;
+        const cta = target ? `<a class="button primary" href="#${target}">${action}</a>` : `<button class="button primary" ${extra}>${action}</button>`;
+        const content=`<section class="card empty-state"><div><div class="empty-mark">＋</div><h2>${title}</h2><p>${copy}</p>${cta}</div></section>`;
+        if(["landing","cfp","portal","publicAgenda","publicSession","publicSpeaker"].includes(route))return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>Marquee</a><button class="button small" id="exit-fresh-install">Exit fresh install</button></header><main class="public-body wide">${content}</main></div>`;
+        return shell(`<div class="page">${pageHead(routeNames[route],"Fresh install · nothing here yet, and every action below is the real next step.")} ${content}</div>`);
       }
 
       // Room detail panel. Rendered at body level and positioned fixed so the
@@ -2404,14 +2666,20 @@
 
       function render() {
         state.route = currentRoute();
-        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
-        app.innerHTML = state.emptyInstall ? emptyStateView(state.route) : views[state.route]();
+        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
+        // During the fresh-install walk the dashboard is the setup checklist, and
+        // screens with genuinely no data render their empty state; everything else
+        // renders for real against the new event.
+        const showEmpty = showsEmptyState(state.route);
+        const view = showEmpty ? null : (state.setup.active && state.route === "dashboard" ? setupDashboardView : views[state.route]);
+        app.innerHTML = showEmpty ? emptyStateView(state.route) : view();
         modalRoot.innerHTML = "";
         hideRoomPanel(true); roomPanelPinned = false;
         bindCommon();
         bindRoomHeads();
-        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
-        if(!state.emptyInstall&&binder)binder();
+        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
+        // The setup dashboard has no binder of its own — bindCommon carries its links.
+        if(!showEmpty && binder && !(state.setup.active && state.route === "dashboard")) binder();
         window.scrollTo(0,0);
       }
 
