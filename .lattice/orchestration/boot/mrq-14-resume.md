@@ -2,6 +2,10 @@ FIRST ACTION, before anything else, run exactly:
 `test "$(pwd)" = "/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-14-uploads" || { echo "FATAL: wrong cwd — actual: $(pwd)"; exit 99; }`
 On failure HALT and report the actual pwd to the Orchestrator via c11 send — do not cd, do not improvise.
 
+## FIRST ACTIONS ON RESUME (you were cut off by a Kimi session cap)
+
+Your worktree still holds **uncommitted work from your last session — it is intact, do not discard it.** Before anything else: `git add -A && git commit -m "WIP from prior session"`, then `git fetch forgejo && git rebase forgejo/master` (master now carries **1507bff**, which closes the adversarial pass — contract docs moved under you), then `git push forgejo <your-branch>`. Keep pushing at every boundary from here: a session cap stops you where you stand, and only pushed work survives cleanly.
+
 Read `/Users/atin/Projects/Stage11/deployments/Marquee/.lattice/orchestration/boot/COMMON.md` and follow it — it is the binding delegator contract. Your ticket: **MRQ-14** (BUILDPLAN **M-13** — uploads: presign, verify, serve). Actor: `agent:delegator-mrq-14`. Worktree: `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-14-uploads`, branch `mrq-14-uploads`, cut clean off `forgejo/master`.
 
 ## You are RESUMING. Do not re-plan.

@@ -54,6 +54,16 @@ Bravo (78% used) is deliberately excluded: it is the pool this orchestrator sess
 
 **Parked-state integrity confirmed:** both remaining tickets' plans are on disk and committed (e9b29c2) — MRQ-8 at 288 lines, MRQ-14 at 118, each carrying its Plan-Review Cycle 1 Resolutions and the orchestrator rulings. The idle codex sessions were closed after that verification; **no re-planning is needed on any harness**, whichever is chosen.
 
+## Adversarial pass CLOSED (1507bff, pushed as part of 6ae2581)
+
+Full disposition: **8/8 BLOCKING · 22/22 FIX · 8/8 NOTE.** F-13 ruled by the operator (no reset cron — manual only). **The commit existed locally and had never been pushed; found and pushed during this tick** — a contract fix sitting unpushed on one machine is invisible to every delegator worktree.
+
+**N-7 is the live one and it was routed into MRQ-8's resume prompt.** `check:api` asserted single-source parity across served JSON, rendered docs, **and the CLI registry** — but the CLI is M-38 (Tier B rank 19), so as written every PR from Wave 0 onward would fail on a registry no ticket has built. The rule is now: CLI-registry half **activates once `cli/` exists, skipped-with-notice before then**; the served-JSON/rendered-docs half is live from Wave 0. Same shape as `trace:ac` scoping. MRQ-8 owns the route registry and OpenAPI assembly, so **MRQ-8 implements that activation rule** — `check:api` is still a stub today, so nothing is failing yet, but it would have bitten the moment MRQ-8 made it real.
+
+Also folded: AC-233's stale no-waiver sentence; SPEC §4.2's three non-`/api/v1` calendar/feed URLs named as a `check:api` **allowlist, not drift** (also routed to MRQ-8); the e2e split-do-not-delete rule; desktop-only admin SPA as an explicit non-goal; Airtable row-count refresh owner + "as of last_sync_at". No AC renumbered, added, or struck — next mint remains AC-254.
+
+**All four worktrees are on pre-1507bff commits.** Every resume boot file now opens with the same first actions: commit the intact uncommitted work, rebase onto `forgejo/master`, push immediately.
+
 ## 🛑 KIMI CANNOT FINISH THIS BUILD — arithmetic, 2026-08-10 18:47
 
 The 5-hour session went **0% → 99% in ~25 minutes** with four delegators. That is the duty cycle: ~25 minutes of four-wide work, then ~4.5 hours idle waiting for the roll — about **8% utilization**.
