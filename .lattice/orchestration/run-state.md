@@ -54,6 +54,14 @@ Bravo (78% used) is deliberately excluded: it is the pool this orchestrator sess
 
 **Parked-state integrity confirmed:** both remaining tickets' plans are on disk and committed (e9b29c2) — MRQ-8 at 288 lines, MRQ-14 at 118, each carrying its Plan-Review Cycle 1 Resolutions and the orchestrator rulings. The idle codex sessions were closed after that verification; **no re-planning is needed on any harness**, whichever is chosen.
 
+## Kimi window mechanics (learned 2026-08-10 18:40)
+
+Kimi enforces **two** windows and the tight one is the 5-hour session, not the weekly. Twenty minutes of four delegators spent **56% of the 5 h session but only 11% of the weekly**. So the run's rhythm is: work a session window, stall, wait for the roll (this one rolls 22:20 EDT), resume. Roughly 10 such windows exist before the deadline.
+
+Consequence, and the reason a directive went out immediately: a session cap stops an agent **where it stands**, so an unpushed branch is the only genuinely losable artifact. All four delegators are now instructed to commit at natural boundaries and push as soon as they have one commit worth keeping, rather than at ticket completion. Pushing early is free; being cut off unpushed is not.
+
+Reducing concurrency does NOT stretch a window — the cap is tokens, not agents — so N stays at 4–5 and we get more done per window by running wide.
+
 ## Master health (assembled-tree validation, 03:33)
 
 `npm ci && npm run pr-gate -- --ticket MRQ-1` run against **merged master 89241a5**: **PASS in 6.8 s.** This is the check no individual PR performs — each ticket validated its own branch, not the merged result. The gate independently reports **197 live in-scope ACs**, matching the count arithmetic corrected in `EVALUATION.md` at intake. `.gitignore` correctly excludes every artifact the gate emits (`ac-coverage.json`, `speed-report.json`, `artifacts/checks/`, `playwright-report/`, `test-results/`), so no build output can leak into the public repo.

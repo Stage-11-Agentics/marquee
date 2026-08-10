@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:101",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 3,
+  "comment_count": 4,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
@@ -23,8 +23,8 @@
     }
   ],
   "id": "task_01KZJHM831WTD0XSD2Q84NVJC7",
-  "last_event_id": "ev_01KZPWVYA9XSM490YJ3FNDHJTD",
-  "last_status_changed_at": "2026-08-09T06:43:56Z",
+  "last_event_id": "ev_01KZPX2W6SKN958EQT27YE6TN0",
+  "last_status_changed_at": "2026-08-10T22:35:53Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -46,10 +46,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-8",
-  "status": "planned",
+  "status": "in_progress",
   "tags": null,
   "title": "API core, list contract, and OpenAPI assembly",
   "type": "task",
-  "updated_at": "2026-08-10T22:32:06Z",
+  "updated_at": "2026-08-10T22:35:53Z",
   "urgency": null
 }

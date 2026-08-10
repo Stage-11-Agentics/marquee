@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:102",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 2,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
@@ -23,8 +23,8 @@
     }
   ],
   "id": "task_01KZJHM8NGV7SK9EVZTXVQWA5A",
-  "last_event_id": "ev_01KZPWWTKPWES1RA48WT7R4D1S",
-  "last_status_changed_at": "2026-08-09T06:53:22Z",
+  "last_event_id": "ev_01KZPX3X551V5S9TZ60P1539R0",
+  "last_status_changed_at": "2026-08-10T22:36:27Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -39,10 +39,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-14",
-  "status": "planned",
+  "status": "in_progress",
   "tags": null,
   "title": "Uploads: presign, verify, and serve",
   "type": "task",
-  "updated_at": "2026-08-10T22:32:35Z",
+  "updated_at": "2026-08-10T22:36:27Z",
   "urgency": null
 }
