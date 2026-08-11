@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:50:26Z",
+  "created_by": "agent:delegator-mrq-11",
+  "custom_fields": {},
+  "id": "art_01KZQBMYRJ0QK5BESC0J9SV6FD",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQBMYRJ0QK5BESC0J9SV6FD.md",
+    "size_bytes": 731
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS seeded Worker validation for cd25b18b206cf3d72c21330b296480ec5973a057",
+  "tags": [],
+  "title": "Runtime validation \u2014 cd25b18b206cf3d72c21330b296480ec5973a057",
+  "token_usage": null,
+  "type": "note"
+}

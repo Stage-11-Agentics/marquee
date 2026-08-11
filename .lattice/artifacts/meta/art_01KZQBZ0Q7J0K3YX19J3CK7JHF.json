@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:55:56Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZQBZ0Q7J0K3YX19J3CK7JHF",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQBZ0Q7J0K3YX19J3CK7JHF.md",
+    "size_bytes": 682
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged as PR #17 (squash). AC-246 GUARDRAIL HAND-REVIEWED and it is the right shape: a guessed out-of-scope submission ID returns 403 on BOTH the detail and /files surfaces, and the test asserts the r",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

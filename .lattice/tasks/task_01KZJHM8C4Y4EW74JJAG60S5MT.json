@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:142",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-10 \u2014 Wave 1 (\u00a74), walkthrough step 3\n\nScope (verbatim): Seven-stage pipeline card (every count clickable to the filtered list behind it), Scheduled/Published explanatory sub-labels, attention strip, wave planner, work-in-motion metrics, speaker-task preview. 5 s SWR poll for liveness.\n\nRecorded decision F-8: liveness is a **5 s poll**, not a push channel.\nAmendment 5 fold (AC-240): the Scheduled and Published stage cards carry clarifying sub-labels \u2014 \"placed on the working agenda\" / \"live on the public site\". The copy is exact and gate-checked.\nFelt checkpoint C2 runs against this surface: the operator opens it and names their next action without hunting. A report says what happened; a home says what to do.\n\nFile surface: `src/routes/dashboard.routes.ts`, `src/ui/dashboard/*`\n\nACs: AC-14 \u2013 AC-16, **AC-240**\nHours: 4\nWorkflow: inline-full\nShared files: none \u2014 module-local.\nDeps: M-08\nSpeed: AC-16 is an AC-sourced budget \u2014 dashboard full render p95 \u2264 1000 ms against the seed, measured by `check:speed` on deployed infra.\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T02:53:44Z",
   "evidence_refs": [
     {
       "id": "art_01KZQB4QZM9NANKJM6QA4QG7P5",
@@ -20,11 +20,51 @@
       "id": "art_01KZQBDJ59N8SEFRCJJ89JCXCT",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQBJ1EW09BSRNEYR7X5Y36H",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQBMYRJ0QK5BESC0J9SV6FD",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQBP1ZJH3FDMNNP8DKDR122",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQBQ0D4K3E7AVQHM82HB108",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQBRBHFBG7MXC4BYN8H0M3N",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQBTBAYAK02165YJT22DDYN",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQBV0HXAA0N6TXGY4MFVEYY",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQBV0HXAA0N6TXGY4MFVEYX",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8C4Y4EW74JJAG60S5MT",
-  "last_event_id": "ev_01KZQBE1K8AMT61YTEYZN7A34H",
-  "last_status_changed_at": "2026-08-11T02:46:39Z",
+  "last_event_id": "ev_01KZQBV0HXAA0N6TXGY4MFVEZ1",
+  "last_status_changed_at": "2026-08-11T02:53:44Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -36,13 +76,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 1,
+  "reopened_count": 2,
   "schema_version": 1,
   "short_id": "MRQ-11",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Program dashboard",
   "type": "task",
-  "updated_at": "2026-08-11T02:46:39Z",
+  "updated_at": "2026-08-11T02:53:44Z",
   "urgency": null
 }

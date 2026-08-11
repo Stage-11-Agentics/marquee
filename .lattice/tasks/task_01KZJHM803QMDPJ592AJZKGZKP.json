@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:130",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 3,
+  "comment_count": 4,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-05b \u2014 Wave 0 (\u00a73)\n\nScope (verbatim): **Public landing with both demo entries** and the live pipeline preview carrying **real counts from the seed** \u2014 \u00a75.1 has no loading state because the counts are server-rendered, and AC-2 requires both demo buttons to land on a populated screen. Split from M-05a (F-16) because the seed is M-04a/b, the demo login is M-03, and the first populated screen is M-08: built against M-01 alone, this ticket merges green against zeros and asserts AC-1/AC-2 on a page that cannot yet be true.\n\nFelt checkpoint C1 runs against this surface at CP-1: a stranger opens the URL cold and answers three questions (what is this, how do I get in, whose tool is it) inside 10 s with no help.\n\nFile surface: `src/routes/landing.route.tsx`\n\nACs: AC-1, AC-2, AC-4\nHours: 2\nWorkflow: fast-track (\u22642 h)\nShared files: none \u2014 module-local route file.\nDeps: M-03, M-04a, M-05a+M-06\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T03:02:31Z",
   "evidence_refs": [
     {
       "id": "art_01KZQ8NSWK5JZR9MQQNJ5TA6RT",
@@ -30,11 +30,26 @@
       "id": "ev_01KZQ9ZK8Q145MC32JEJHQTA32",
       "role": "validation",
       "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQC5550Y9EGDX3MFD2F1Z06",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQCB34PHBEWBMP77SN7X1P2",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQCB34PHBEWBMP77SN7X1P1",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM803QMDPJ592AJZKGZKP",
-  "last_event_id": "ev_01KZQ9ZK8Q145MC32JEJHQTA32",
-  "last_status_changed_at": "2026-08-11T02:12:05Z",
+  "last_event_id": "ev_01KZQCB34PHBEWBMP77SN7X1P5",
+  "last_status_changed_at": "2026-08-11T03:02:31Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -60,13 +75,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-7",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Public landing page with live pipeline preview",
   "type": "task",
-  "updated_at": "2026-08-11T02:21:17Z",
+  "updated_at": "2026-08-11T03:02:31Z",
   "urgency": null
 }

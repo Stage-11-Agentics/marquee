@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:48:50Z",
+  "created_by": "agent:delegator-mrq-11",
+  "custom_fields": {},
+  "id": "art_01KZQBJ1EW09BSRNEYR7X5Y36H",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQBJ1EW09BSRNEYR7X5Y36H.md",
+    "size_bytes": 758
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS self-review for cd25b18b206cf3d72c21330b296480ec5973a057",
+  "tags": [],
+  "title": "Self-review \u2014 cd25b18b206cf3d72c21330b296480ec5973a057",
+  "token_usage": null,
+  "type": "note"
+}

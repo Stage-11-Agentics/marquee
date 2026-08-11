@@ -10,10 +10,16 @@
   "custom_fields": {},
   "description": "BUILDPLAN M-57 \u00b7 ACs AC-255 \u2013 AC-257 \u00b7 SPEC Amendment 14 \u00b7 US-77.\n\nBinding prototype: prototypes/pipeline-v1.1/index.html at v1.7 (drive it \u2014 every surface here is built and working there). Design reasoning: sequence/venue-map-ux.md.\n\nBLOCKING SEED DEFECT THIS TICKET OWNS. scripts/seed/event.ts lines 151-152 seed Sheraton and the Workshop Annex at IDENTICAL coordinates (40.7625188, -73.9814528) with access_minutes 0 on both. MRQ-58's migration is correct and the seed is faithful to SPEC section 6 as written \u2014 and the consequence is that the Transit conflict class can never fire and the site map stacks two pins on one point. The feature would pass its tests and be inert in the demo. SPEC Amendment 14 supersedes section 6's 'without inventing a second real venue' clause for exactly this reason. Re-seed so at least two buildings are genuinely apart in space with a non-zero access time on one. Confirm the second venue's identity with the operator before inventing one.\n\nScope:\n- Third migration adding buildings.access_note TEXT. 0002 is merged and immutable; this is additive.\n- Move buildings AND rooms authoring to /settings/venues, beneath the site map their coordinates drive. Strip venue editors from /settings; leave a linking count. One shared writer behind both Save paths.\n- Move the photo-ID/security sentence off its room note onto the building's access_note. Entrance instructions belong to the building; rooms inherit.\n- Site map as a TILE MOSAIC, not a map library: plain <img> OSM rasters on a centre-clipped fixed-width plane, pins and walking lines drawn over. Fixed-aspect reserved box so arriving tiles never shift layout. Attribution visible. Tile failure degrades to pins over the graph-paper grid, never a blank box. No Leaflet, no CDN, no API key \u2014 the repo goes public.\n\nWatch for: a handler bound only to the settings route leaves '+ Add building' inert on /settings/venues. AC-256 exists to catch exactly that.",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQBXY3Y53MHR0Y03MVC0761",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZQAGW54K6AR105Y65EJNGBK",
-  "last_event_id": "ev_01KZQB6NV1Q0GN9G23S5J3P783",
-  "last_status_changed_at": "2026-08-11T02:42:38Z",
+  "last_event_id": "ev_01KZQBXY415HC5RSKPXX23KHNT",
+  "last_status_changed_at": "2026-08-11T02:49:32Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [
@@ -28,10 +34,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-62",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Venue geography \u2014 access_note, the Venues screen, and a seed that can conflict",
   "type": "task",
-  "updated_at": "2026-08-11T02:42:38Z",
+  "updated_at": "2026-08-11T02:55:20Z",
   "urgency": null
 }

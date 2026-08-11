@@ -1,0 +1,1 @@
+Merged as PR #19 (squash 0cd98f23). Browser smoke drove the real page: live 960/280/60/153/24/24 pipeline preview, and both organizer and speaker demo routes reached a populated /submissions. pr-gate PASS (18 files / 97 tests, merged AC trace uncovered=0). Secret scan clean. Merge took three attempts — Forgejo's async mergeability recompute after MRQ-17 landed, not a conflict.

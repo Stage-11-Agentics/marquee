@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T03:02:31Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZQCB34PHBEWBMP77SN7X1P1",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQCB34PHBEWBMP77SN7X1P1.md",
+    "size_bytes": 381
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged as PR #19 (squash 0cd98f23). Browser smoke drove the real page: live 960/280/60/153/24/24 pipeline preview, and both organizer and speaker demo routes reached a populated /submissions. pr-gate ",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

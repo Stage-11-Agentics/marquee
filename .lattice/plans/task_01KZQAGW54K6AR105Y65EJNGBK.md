@@ -1,15 +1,108 @@
-# MRQ-62: Venue geography — access_note, the Venues screen, and a seed that can conflict
+# MRQ-62 implementation plan
 
-BUILDPLAN M-57 · ACs AC-255 – AC-257 · SPEC Amendment 14 · US-77.
+## Binding decisions
 
-Binding prototype: prototypes/pipeline-v1.1/index.html at v1.7 (drive it — every surface here is built and working there). Design reasoning: sequence/venue-map-ux.md.
+- Keep `Sheraton New York Times Square, 811 7th Ave, New York, NY 10019` at
+  `40.7625188, -73.9814528` as the primary building.
+- Replace the same-address Workshop Annex with the real New York Marriott
+  Marquis at `1535 Broadway, New York, NY 10036`, using the verified
+  OSM/Nominatim coordinate `40.7585971, -73.9861935`. The repository walking
+  formula gives 9 minutes from the Sheraton; seed 3 minutes of building access
+  so the modeled total is 12 minutes. `Online` remains null/null and unpinned.
+- Do not edit `prototypes/pipeline-v1.1/index.html`; v1.7 is binding, but its
+  2025 building set conflicts with the operator ruling. Report that divergence
+  to the Orchestrator when the PR opens.
+- Keep building entrance/security instructions in `buildings.access_note` and
+  keep room notes for room-specific operational notes only. Preserve the
+  existing AV capability JSON shape and expose it in the venue editor.
 
-BLOCKING SEED DEFECT THIS TICKET OWNS. scripts/seed/event.ts lines 151-152 seed Sheraton and the Workshop Annex at IDENTICAL coordinates (40.7625188, -73.9814528) with access_minutes 0 on both. MRQ-58's migration is correct and the seed is faithful to SPEC section 6 as written — and the consequence is that the Transit conflict class can never fire and the site map stacks two pins on one point. The feature would pass its tests and be inert in the demo. SPEC Amendment 14 supersedes section 6's 'without inventing a second real venue' clause for exactly this reason. Re-seed so at least two buildings are genuinely apart in space with a non-zero access time on one. Confirm the second venue's identity with the operator before inventing one.
+## Implementation slices
 
-Scope:
-- Third migration adding buildings.access_note TEXT. 0002 is merged and immutable; this is additive.
-- Move buildings AND rooms authoring to /settings/venues, beneath the site map their coordinates drive. Strip venue editors from /settings; leave a linking count. One shared writer behind both Save paths.
-- Move the photo-ID/security sentence off its room note onto the building's access_note. Entrance instructions belong to the building; rooms inherit.
-- Site map as a TILE MOSAIC, not a map library: plain <img> OSM rasters on a centre-clipped fixed-width plane, pins and walking lines drawn over. Fixed-aspect reserved box so arriving tiles never shift layout. Attribution visible. Tile failure degrades to pins over the graph-paper grid, never a blank box. No Leaflet, no CDN, no API key — the repo goes public.
+1. **Schema and seed contract**
 
-Watch for: a handler bound only to the settings route leaves '+ Add building' inert on /settings/venues. AC-256 exists to catch exactly that.
+   - Add additive `migrations/0003_building_access_note.sql` and mirror the
+     nullable `access_note` field in `BuildingRow`.
+   - Update `scripts/seed/event.ts` to seed Sheraton, Marriott Marquis, and
+     unpinned Online. Rename the overflow building/room identifiers so the
+     public seed no longer calls a real second venue an Annex; use deterministic
+     IDs and verified address-derived coordinates.
+   - Seed AV tags and room notes in the existing JSON/text columns, with no
+     room note containing door, photo-ID, entrance, or security instructions.
+     Put the building access/security copy on `access_note`.
+   - Make the existing agenda seed place a shared participant in two different
+     physical buildings with an insufficient gap, so the seeded data itself has
+     a genuine Transit candidate rather than merely a non-zero column.
+
+2. **Measured geometry and seed proof**
+
+   - Add a small pure geometry/conflict module with the contract formula
+     `floor(haversine * 1.3 / 80)`, floored at 1, and explicit null/Online/same
+     building exclusions. Return a `Transit` conflict with walk, access,
+     needed, and available minutes.
+   - Replace the `check:seed` stub with a live check that builds the real seed
+     rows, resolves agenda rooms/buildings/participations, calls the same
+     detector, and fails unless at least one actual Transit conflict fires.
+     Also assert two distinct pinned buildings, a non-zero access value, and
+     Online null coordinates. Add AC-tagged node coverage for the detector and
+     its seeded result.
+
+3. **Venue API and shared writer**
+
+   - Add `src/routes/venues.routes.ts` (the `*.routes.ts` suffix is required)
+     with an authenticated event-scoped GET and one atomic venue-model save
+     endpoint. The save accepts the complete building/room model, validates
+     coordinate pairs, ownership, room-building references, AV arrays, and
+     non-negative access minutes, then applies deletions/upserts in one D1 batch.
+   - Put the mutation in a reusable venue writer module so both the Venues
+     screen and the Event Settings save path share one implementation/call
+     site. Keep API paths under `/api/v1/events/...`; generated manifest and
+     OpenAPI parity must discover the new module automatically.
+
+4. **UI surfaces**
+
+   - Add `/settings/venues` to the route table and render a real Venues screen:
+     fixed-height reserved map box, plain OSM raster `<img>` tiles on a
+     centre-clipped plane, SVG walking lines and minute labels, visible
+     attribution, graph-paper/pins fallback on tile failure, and no map
+     library/CDN/API key. Render building rows with name/address/coordinates,
+     access minutes/access note, add/remove, and rooms with name/capacity,
+     building, AV tags, notes, add/remove. Save and reload through the API.
+   - Render `/settings` as a settings summary with building/room counts and a
+     link to `/settings/venues`; do not place venue editor selectors there.
+     Keep venue persistence in the shared writer path for future details,
+     formats, and tracks work from MRQ-10.
+   - Use conference vocabulary in UI copy and render room displays as
+     `Room · Building` whenever the comparison is meaningful. Avoid reviving
+     the prototype’s 2025 venue names.
+
+5. **Acceptance artifacts and verification**
+
+   - Add `tests/ac-claims/MRQ-62.json` owning AC-252, AC-253, AC-255, AC-256,
+     and AC-257, with AC-259 exercised by the live seed check as required by
+     the operator ruling.
+   - Add route/API, migration, seed, geometry, shared-writer, and UI contract
+     tests. Run the full hermetic suite, `check:seed`, `check:api`, design/repo
+     checks as applicable, and a real local API/UI validation before opening
+     the PR. Record observed runtime proof separately from static test results.
+   - Self-review the exact branch diff, run `npm run pr-gate -- --ticket
+     MRQ-62`, commit logical slices, push `mrq-62-venue-map` to Forgejo, open a
+     PR against `master`, attach the PR reference, and stop at `pr_open` for
+     the Orchestrator to merge.
+
+## Non-goals
+
+- Do not edit contract documents or mint AC IDs.
+- Do not edit the binding prototype in this ticket.
+- Do not implement the downstream agenda/public arrival/ICS surfaces owned by
+  M-58/M-59; expose the stable venue data and geometry seam they consume.
+- Do not use a fabricated venue, coordinate, map provider SDK, CDN, or API key.
+
+## Verification commands
+
+```text
+npm test
+npm run check:seed
+npm run check:api
+npm run trace:ac -- --ticket MRQ-62
+npm run pr-gate -- --ticket MRQ-62
+```

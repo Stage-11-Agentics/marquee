@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:141",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-16 \u2014 Wave 1 (\u00a74), walkthrough step 7\n\nScope (verbatim): Plan, optional weighted scorecard, two rounds, committees, both assignment modes, per-reviewer progress, and explicit one-or-more reviewer track responsibilities editable by managers. One centralized intersection helper is exported for M-17 and audits.\n\nBinding: the centralized helper `src/lib/reviewer-scope.ts` is **the** authorization path. Every reviewer route \u2014 queue, record, file, export, evaluation-write \u2014 invokes it; A-9 scans for a route that does not.\nNon-goal (EVALUATION \u00a75): multi-round beyond two. Two ordered rounds and funnel promotion ship; the schema is round-aware from the first migration, so a third round is data, not a migration.\n\nFile surface: `src/routes/evaluation.routes.ts`, `src/lib/reviewer-scope.ts`, `src/ui/evaluation/*`\n\nACs: AC-53 \u2013 AC-58, AC-98, **AC-246**\nHours: 7\nWorkflow: sub-agent-full (\u22657 h)\nShared files: `src/lib/reviewer-scope.ts` \u2014 created here, **added to, never rewritten** by M-17 and the audits.\nDeps: M-08\nAudit that keys off this ticket: A-9 (reviewer event+track isolation), from CP-2\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T02:55:56Z",
   "evidence_refs": [
     {
       "id": "art_01KZQAGY8JV16HSY7T6CDJEBW9",
@@ -20,11 +20,46 @@
       "id": "art_01KZQBGFA9CDFR3CZGDFH1AG5G",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQBJBD9S6R80XG8M77SBMBF",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQBJBGBR8HEJTFM5CCZK21C",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQBR2VXSKQSDDQ75YNP8X80",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQBR2YX2RDGNJEREZERQ8R7",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQBR31R2DW2R147XJW92966",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZQBZ0Q7J0K3YX19J3CK7JHG",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQBZ0Q7J0K3YX19J3CK7JHF",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8YR9B5FJ394S7C1HBYF",
-  "last_event_id": "ev_01KZQBGKKAV7NFH0QXXHZPHSDV",
-  "last_status_changed_at": "2026-08-11T02:48:03Z",
+  "last_event_id": "ev_01KZQBZ0Q7J0K3YX19J3CK7JHK",
+  "last_status_changed_at": "2026-08-11T02:55:56Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -36,13 +71,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-17",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Evaluation plan, committees, and reviewer track scopes",
   "type": "task",
-  "updated_at": "2026-08-11T02:48:03Z",
+  "updated_at": "2026-08-11T02:55:56Z",
   "urgency": null
 }

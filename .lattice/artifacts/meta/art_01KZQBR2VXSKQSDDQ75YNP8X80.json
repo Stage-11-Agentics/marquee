@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:52:08Z",
+  "created_by": "agent:delegator-mrq-17",
+  "custom_fields": {},
+  "id": "art_01KZQBR2VXSKQSDDQ75YNP8X80",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQBR2VXSKQSDDQ75YNP8X80.md",
+    "size_bytes": 1391
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS on exact current rebased HEAD; findings none; suspended headless review not used.",
+  "tags": [],
+  "title": "MRQ-17 inline self-review d556a98",
+  "token_usage": null,
+  "type": "file"
+}
