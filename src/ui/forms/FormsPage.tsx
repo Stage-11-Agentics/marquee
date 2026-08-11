@@ -72,6 +72,7 @@ interface ListResponse {
 
 interface Props {
   eventId?: string;
+  search?: string;
 }
 
 const FIELD_TYPES: Array<{ value: FieldType; label: string }> = [
@@ -187,7 +188,7 @@ function Preview({ fields, answers, onAnswer }: { fields: FormField[]; answers: 
   </div>;
 }
 
-export function FormsPage({ eventId = "evt_aie-ny-2026" }: Props): JSX.Element {
+export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): JSX.Element {
   const [catalog, setCatalog] = useState<FormSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<FormDetail | null>(null);
@@ -201,6 +202,7 @@ export function FormsPage({ eventId = "evt_aie-ny-2026" }: Props): JSX.Element {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const requestedFormId = new URLSearchParams(search).get("form");
   const selectedField = form?.fields.find((field) => field.id === selectedFieldId) ?? null;
 
   const loadCatalog = async () => {
@@ -208,7 +210,8 @@ export function FormsPage({ eventId = "evt_aie-ny-2026" }: Props): JSX.Element {
     try {
       const result = await request<ListResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/forms?page=1&per_page=100&sort=name`);
       setCatalog(result.data);
-      setSelectedId((current) => current && result.data.some((item) => item.id === current) ? current : result.data[0]?.id ?? null);
+      const queryFormId = requestedFormId && result.data.some((item) => item.id === requestedFormId) ? requestedFormId : null;
+      setSelectedId((current) => queryFormId ?? (current && result.data.some((item) => item.id === current) ? current : result.data[0]?.id ?? null));
       setState("ready");
       setMessage("");
     } catch (error) {
@@ -231,7 +234,7 @@ export function FormsPage({ eventId = "evt_aie-ny-2026" }: Props): JSX.Element {
     }
   };
 
-  useEffect(() => { void loadCatalog(); }, [eventId]);
+  useEffect(() => { void loadCatalog(); }, [eventId, requestedFormId]);
   useEffect(() => { if (selectedId) void loadForm(selectedId); else setForm(null); }, [selectedId, eventId]);
   useEffect(() => {
     const condition = selectedField?.condition?.all[0];

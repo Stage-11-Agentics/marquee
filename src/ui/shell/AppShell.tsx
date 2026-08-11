@@ -7,6 +7,7 @@ import { matchRoute } from "./route-table";
 import { useBrowserRouter } from "./router";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { QuickSearch } from "./QuickSearch";
 import { CommsScreen } from "../comms/CommsScreen";
 import { DashboardPage } from "../dashboard/DashboardPage";
 import { EvaluationPage } from "../evaluation/EvaluationPage";
@@ -25,21 +26,31 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   const [location, navigate] = useBrowserRouter();
   const route = matchRoute(location.pathname, location.search);
   const [overlay, setOverlay] = useState<OverlayState | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const closeOverlay = useCallback(() => setOverlay(null), []);
+  const openSearch = useCallback(() => setSearchOpen(true), []);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
   const unavailable = useCallback((title: string, copy: string) => setOverlay({ kind: "modal", title, copy }), []);
 
   useEffect(() => {
+    const isNonAdminShell = location.pathname === "/portal" || location.pathname === "/reviewer";
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k" || event.key === "/") {
+      const isTextControl = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        if (isNonAdminShell) return;
         event.preventDefault();
-        unavailable("Global search", "Search becomes available when the conference data API lands.");
+        openSearch();
+        return;
+      }
+      if (event.key === "/" && !isTextControl && !isNonAdminShell) {
+        event.preventDefault();
+        openSearch();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [unavailable]);
+  }, [location.pathname, openSearch]);
 
   const routeName = route?.label ?? "Route not found";
   const isSubmissionsList = location.pathname === "/submissions";
@@ -56,7 +67,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
     <div class="app-shell">
       <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} />
       <main class="main">
-        <Topbar eventName={eventName} routeName={routeName} userInitials={userInitials} openSearch={() => unavailable("Global search", "Search becomes available when the conference data API lands.")} openUser={() => unavailable("Program lead", "Account preferences land with authentication and conference administration.")} />
+        <Topbar eventName={eventName} routeName={routeName} userInitials={userInitials} openSearch={openSearch} openUser={() => unavailable("Program lead", "Account preferences land with authentication and conference administration.")} />
         <div class="page">
           {isSubmissionsList
             ? <SubmissionsPage search={location.search} navigate={navigate} />
@@ -67,7 +78,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
             : isEvaluation ? <EvaluationPage />
             : route?.id === "venues" ? <VenuesPage />
             : route?.id === "settings" ? <EventSettings navigate={navigate} />
-            : isForms ? <FormsPage />
+            : isForms ? <FormsPage search={location.search} />
             : isAgenda ? <AgendaPage />
             : isOnboarding ? <OnboardingPage navigate={navigate} />
             : route?.id === "communications" ? <>
@@ -81,6 +92,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
       </main>
     </div>
     <OverlayHost state={overlay} onClose={closeOverlay} />
+    <QuickSearch key={searchOpen ? "open" : "closed"} eventId="evt_aie-ny-2026" open={searchOpen} onClose={closeSearch} navigate={navigate} />
     <ToastHost />
   </>;
 }

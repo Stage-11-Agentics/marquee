@@ -7,7 +7,7 @@ export interface OverlayState {
   copy: string;
 }
 
-function useDialogLifecycle(open: boolean, onClose: () => void) {
+export function useDialogLifecycle(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!open) return;

@@ -64,6 +64,47 @@ async function loadPage(page: Page, baseUrl: string, path: string, selector: str
   return performance.now() - startedAt;
 }
 
+async function quickSearchPaintSamples(page: Page, baseUrl: string): Promise<number[]> {
+  await loadPage(page, baseUrl, "/dashboard", ".dashboard-page");
+  const searchTerms = [
+    "agent",
+    "Casy",
+    "RAG",
+    "zzzz-no-match",
+    "Leadership",
+    "Marriott",
+    "Aïcha",
+    "session",
+    "Dhinkran",
+    "retrieval systms",
+  ];
+  const searchValues: number[] = [];
+  for (const term of searchTerms) {
+    const before = page.url();
+    await page.keyboard.press("/");
+    const input = page.locator("[data-search-input]");
+    await input.waitFor({ state: "visible", timeout: 5_000 });
+    await input.pressSequentially(term.slice(0, -1), { delay: 0 });
+    const startedAt = performance.now();
+    await input.pressSequentially(term.slice(-1), { delay: 0 });
+    await page.waitForFunction(
+      (expected) => {
+        const host = document.querySelector("[data-search-painted-query]");
+        return host?.getAttribute("data-search-painted-query") === expected
+          && host?.getAttribute("data-search-state") === "ready";
+      },
+      term,
+      { timeout: 15_000 },
+    );
+    searchValues.push(performance.now() - startedAt);
+    if (page.url() !== before) throw new Error(`global search navigated while typing ${term}`);
+    await page.keyboard.press("Escape");
+    await input.waitFor({ state: "hidden", timeout: 5_000 });
+  }
+  if (searchValues.length < SAMPLE_COUNTS.search) throw new Error("global search speed sample set is below ten queries");
+  return searchValues;
+}
+
 async function coldPublicPages(
   browser: Browser,
   baseUrl: string,
@@ -263,6 +304,10 @@ export async function runSpeedCheck({ gate = false } = {}): Promise<SpeedReport>
       samples["bulk-accept-long-task"] = { ...summarize([bulk.longestMainThreadTaskMs]), values: [rounded(bulk.longestMainThreadTaskMs)], method: "Chromium PerformanceObserver longtask during the same bulk operation", longTaskMs: rounded(bulk.longestMainThreadTaskMs) };
       methods["bulk-accept-long-task"] = "Chromium Long Tasks API; zero means no long task was observed in the local browser";
 
+      const searchValues = await quickSearchPaintSamples(adminPage, runtime.baseUrl);
+      recordSample(samples, measurements, "global-search-painted", searchValues, "Playwright keystroke-to-painted global search", "p95", ["Ten real browser queries include genuine seeded misspellings (Casy, Dhinkran, retrieval systms), a no-match, and a diacritic probe."]);
+      methods["global-search-painted"] = "For each of 10 queries, the timer starts immediately before the final keystroke and ends only when that final query is painted in data-search-painted-query with a ready result state; no input debounce is used.";
+
       await admin.close();
 
       const cfpValues = await coldPublicPages(browser, runtime.baseUrl, "/", "main", SAMPLE_COUNTS.cold);
@@ -272,15 +317,6 @@ export async function runSpeedCheck({ gate = false } = {}): Promise<SpeedReport>
       const agendaValues = await coldPublicPages(browser, runtime.baseUrl, "/agenda?event=aie-ny-2026", "main", SAMPLE_COUNTS.cold);
       recordSample(samples, measurements, "agenda-cold-interactive", agendaValues, "Playwright cold public /agenda render", "p95");
       methods["agenda-cold-interactive"] = "Playwright cold /agenda render to main";
-
-      const searchTerms = ["agent", "Casey", "RAG", "zzzz-no-match", "Leadership", "Marriott", "Aïcha", "session", "xq-19", "workshop"];
-      const searchValues: number[] = [];
-      for (const term of searchTerms) {
-        const result = await client.json<unknown>(`/api/v1/events/${EVENT}/submissions?q=${encodeURIComponent(term)}&per_page=20`);
-        searchValues.push(result.elapsedMs);
-      }
-      recordSample(samples, measurements, "global-search-painted", searchValues, "Authenticated submissions search API response", "p95", ["The current shell's global-search control is an explicit placeholder; this is the real server-filtered search path, not a browser paint claim."]);
-      methods["global-search-painted"] = "10 real q= queries through the submissions API; browser paint remains a named product follow-up";
 
       const agendaSwitchValues: number[] = [];
       const publicAgendaQueries = [

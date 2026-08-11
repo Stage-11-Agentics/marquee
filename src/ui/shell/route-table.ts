@@ -40,6 +40,13 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "ai-assist", path: "/evaluation/ai", label: "AI assist", icon: "", group: "utility" },
 ] as const;
 
+/** Admin pages share AppShell; portal, reviewer, and API-doc rows use separate contracts. */
+export function isAdminRoute(route: RouteDefinition): boolean {
+  return !route.external && route.id !== "reviewer" && route.id !== "api-docs";
+}
+
+export const adminRouteTable: readonly RouteDefinition[] = routeTable.filter(isAdminRoute);
+
 function pathPatternMatches(pattern: string, pathname: string): boolean {
   const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/:[^/]+/g, "[^/]+");
   return new RegExp(`^${escaped}/?$`).test(pathname);
