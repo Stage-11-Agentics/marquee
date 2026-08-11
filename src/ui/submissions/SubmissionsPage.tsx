@@ -9,6 +9,7 @@ import {
   submissionKindLabel,
   type SubmissionColumnId,
 } from "../../lib/submission-columns";
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, PageHeader } from "../shell/components";
 import { selectionCount } from "./selection";
 import "./submissions.css";
@@ -141,14 +142,6 @@ function viewConfigFromParams(params: URLSearchParams, columns: SubmissionColumn
   };
 }
 
-function errorMessage(body: unknown, fallback: string): string {
-  if (typeof body === "object" && body !== null && "error" in body) {
-    const error = (body as { error?: { message?: string } }).error;
-    if (error?.message) return error.message;
-  }
-  return fallback;
-}
-
 function Cell({ item, column, navigate }: { item: SubmissionListItem; column: SubmissionColumnId; navigate: (target: string) => void }): JSX.Element {
   if (column === "type") return <span class={`chip entity-chip ${item.kind}`}>{submissionKindLabel(item.kind)}</span>;
   if (column === "id") return <strong class="tabular">{item.id}</strong>;
@@ -232,12 +225,10 @@ export function SubmissionsPage({
     const controller = new AbortController();
     setViewsLoading(true);
     setViewsError("");
-    fetch(`/api/v1/events/${encodeURIComponent(eventId)}/views`, { signal: controller.signal })
-      .then(async (response) => {
-        const body = await response.json().catch(() => null) as unknown;
-        if (!response.ok) throw new Error(errorMessage(body, `Saved views could not be loaded (${response.status}).`));
-        return body as { data: SavedView[] };
-      })
+    apiFetch<{ data: SavedView[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/views`, {
+      signal: controller.signal,
+      route: "/api/v1/events/{eventId}/views",
+    })
       .then((body) => {
         setViews(body.data);
         setActiveViewId((current) => notifiedQueue
@@ -247,7 +238,7 @@ export function SubmissionsPage({
             : current === "drafts-needing-attention" || current === "decided-not-notified" ? "all-submissions" : current);
       })
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) setViewsError(error instanceof Error ? error.message : "Saved views could not be loaded.");
+        if (!controller.signal.aborted) setViewsError(errorSummary(error));
       })
       .finally(() => { if (!controller.signal.aborted) setViewsLoading(false); });
     return () => controller.abort();
@@ -267,15 +258,13 @@ export function SubmissionsPage({
       return;
     }
     const controller = new AbortController();
-    fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/summary`, { signal: controller.signal })
-      .then(async (response) => {
-        const body = await response.json().catch(() => null) as unknown;
-        if (!response.ok) throw new Error(errorMessage(body, `The notification summary could not be loaded (${response.status}).`));
-        return body as { total: number; sendable: number; no_valid_address: number };
-      })
+    apiFetch<{ total: number; sendable: number; no_valid_address: number }>(
+      `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/summary`,
+      { signal: controller.signal, route: "/api/v1/events/{eventId}/submissions/not-notified/summary" },
+    )
       .then(setNotifiedSummary)
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) setNotifyError(error instanceof Error ? error.message : "The notification summary could not be loaded.");
+        if (!controller.signal.aborted) setNotifyError(errorSummary(error));
       });
     return () => controller.abort();
   }, [eventId, notifiedQueue, reloadKey]);
@@ -315,18 +304,16 @@ export function SubmissionsPage({
       const viewUrl = existing
         ? `/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(existing.id)}`
         : `/api/v1/events/${encodeURIComponent(eventId)}/views`;
-      const response = await fetch(viewUrl, {
+      const view = await apiFetch<SavedView>(viewUrl, {
         method: existing ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: name.trim(), config: viewConfigFromParams(params, columns) }),
+        route: existing ? "/api/v1/events/{eventId}/views/{viewId}" : "/api/v1/events/{eventId}/views",
       });
-      const body = await response.json().catch(() => null) as unknown;
-      if (!response.ok) throw new Error(errorMessage(body, `The view could not be saved (${response.status}).`));
-      const view = body as SavedView;
       setViews((current) => [...current.filter((item) => item.id !== view.id), view]);
       setActiveViewId(view.id);
     } catch (error: unknown) {
-      setViewsError(error instanceof Error ? error.message : "The view could not be saved.");
+      setViewsError(errorSummary(error));
     } finally { setViewBusy(false); }
   };
 
@@ -335,17 +322,15 @@ export function SubmissionsPage({
     if (!name?.trim() || name.trim() === view.name) return;
     setViewBusy(true);
     try {
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, {
+      const updated = await apiFetch<SavedView>(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: name.trim() }),
+        route: "/api/v1/events/{eventId}/views/{viewId}",
       });
-      const body = await response.json().catch(() => null) as unknown;
-      if (!response.ok) throw new Error(errorMessage(body, `The view could not be renamed (${response.status}).`));
-      const updated = body as SavedView;
       setViews((current) => current.map((item) => item.id === updated.id ? updated : item));
     } catch (error: unknown) {
-      setViewsError(error instanceof Error ? error.message : "The view could not be renamed.");
+      setViewsError(errorSummary(error));
     } finally { setViewBusy(false); }
   };
 
@@ -353,13 +338,14 @@ export function SubmissionsPage({
     if (!window.confirm(`Delete “${view.name}”?`)) return;
     setViewBusy(true);
     try {
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, { method: "DELETE" });
-      const body = await response.json().catch(() => null) as unknown;
-      if (!response.ok) throw new Error(errorMessage(body, `The view could not be deleted (${response.status}).`));
+      await apiFetch(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, {
+        method: "DELETE",
+        route: "/api/v1/events/{eventId}/views/{viewId}",
+      });
       setViews((current) => current.filter((item) => item.id !== view.id));
       if (activeViewId === view.id) setActiveViewId("all-submissions");
     } catch (error: unknown) {
-      setViewsError(error instanceof Error ? error.message : "The view could not be deleted.");
+      setViewsError(errorSummary(error));
     } finally { setViewBusy(false); }
   };
 
@@ -389,11 +375,10 @@ export function SubmissionsPage({
     const apiQuery = new URLSearchParams(params);
     apiQuery.set("per_page", "50");
     setState({ kind: "loading" });
-    fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions?${apiQuery.toString()}`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`The list request failed (${response.status}).`);
-        return response.json() as Promise<ListEnvelope>;
-      })
+    apiFetch<ListEnvelope>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions?${apiQuery.toString()}`, {
+      signal: controller.signal,
+      route: "/api/v1/events/{eventId}/submissions",
+    })
       .then((envelope) => {
         setKnownTracks((current) => {
           const next = new Map(current);
@@ -404,7 +389,7 @@ export function SubmissionsPage({
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setState({ kind: "error", message: error instanceof Error ? error.message : "The list could not be loaded." });
+        setState({ kind: "error", message: errorSummary(error) });
       });
     return () => controller.abort();
   }, [eventId, search, reloadKey, initialEnvelope]);
@@ -439,9 +424,10 @@ export function SubmissionsPage({
       let totalPages = 1;
       for (let exportPage = 1; exportPage <= totalPages; exportPage += 1) {
         exportParams.set("page", String(exportPage));
-        const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions?${exportParams.toString()}`);
-        if (!response.ok) throw new Error(`Export failed (${response.status}).`);
-        const result = await response.json() as ListEnvelope;
+        const result = await apiFetch<ListEnvelope>(
+          `/api/v1/events/${encodeURIComponent(eventId)}/submissions?${exportParams.toString()}`,
+          { route: "/api/v1/events/{eventId}/submissions" },
+        );
         exported.push(...result.data);
         totalPages = result.total_pages;
       }
@@ -459,7 +445,7 @@ export function SubmissionsPage({
       link.click();
       URL.revokeObjectURL(url);
     } catch (error: unknown) {
-      setExportError(error instanceof Error ? error.message : "The export could not be created.");
+      setExportError(errorSummary(error));
     } finally {
       setExporting(false);
     }
@@ -470,14 +456,14 @@ export function SubmissionsPage({
     setNotifyMessage("");
     setNotifyError("");
     try {
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify`, { method: "POST" });
-      const body = await response.json().catch(() => null) as unknown;
-      if (!response.ok) throw new Error(errorMessage(body, `Notifications could not be queued (${response.status}).`));
-      const result = body as { queued: number; skipped_no_address: number };
+      const result = await apiFetch<{ queued: number; skipped_no_address: number }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify`,
+        { method: "POST", route: "/api/v1/events/{eventId}/submissions/not-notified/notify" },
+      );
       setNotifyMessage(`${result.queued.toLocaleString()} notification${result.queued === 1 ? "" : "s"} queued${result.skipped_no_address ? ` · ${result.skipped_no_address.toLocaleString()} need an address first` : ""}.`);
       setReloadKey((value) => value + 1);
     } catch (error: unknown) {
-      setNotifyError(error instanceof Error ? error.message : "Notifications could not be queued.");
+      setNotifyError(errorSummary(error));
     } finally {
       setNotifying(false);
     }

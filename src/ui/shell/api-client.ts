@@ -189,6 +189,16 @@ export function describeError(error: unknown): {
   };
 }
 
+/**
+ * One line for a screen that keeps its error state as a string rather than as a
+ * banner component. Always ends in the reference, because a message an operator
+ * cannot quote back is a message that costs somebody an afternoon.
+ */
+export function errorSummary(error: unknown): string {
+  const described = describeError(error);
+  return `${described.sentence} ${described.recovery} · ref ${described.reference}`;
+}
+
 function isOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }

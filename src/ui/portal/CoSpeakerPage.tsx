@@ -3,6 +3,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import type { SignedUpload } from "../../lib/r2/protocol";
+import { apiFetch } from "../shell/api-client";
 import { putFileToR2 } from "../upload/upload-client";
 import "./portal.css";
 
@@ -32,18 +33,12 @@ type CoSpeakerState = {
   };
 };
 
+/** The co-speaker surface's one API call, through the shared client. */
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
+  return apiFetch<T>(path, {
     ...init,
     headers: { ...(init.body ? { "content-type": "application/json" } : {}), ...(init.headers ?? {}) },
   });
-  const body = await response.json().catch(() => ({})) as { error?: { message?: string } };
-  if (!response.ok) {
-    const failure = new Error(body.error?.message ?? "The conference could not save this profile. Try again.") as ApiFailure;
-    failure.status = response.status;
-    throw failure;
-  }
-  return body as T;
 }
 
 function statusLabel(status: CoSpeakerState["participation"]["confirmation_status"]): string {

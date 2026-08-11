@@ -2,6 +2,7 @@ import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { SubmissionsPage } from "../submissions/SubmissionsPage";
 import { Button, EmptyState, PageHeader } from "./components";
+import { ErrorBoundary } from "./ErrorSurface";
 import { OverlayHost, ToastHost, type OverlayState } from "./OverlayHosts";
 import { matchRoute } from "./route-table";
 import { useBrowserRouter } from "./router";
@@ -129,6 +130,10 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
       <main class="main">
         <Topbar eventName={eventName} routeName={routeName} userInitials={userInitials} openSearch={openSearch} openUser={() => unavailable("Program lead", "Account preferences land with authentication and conference administration.")} />
         <div class="page">
+          {/* The shell's own boundary. Panels inside a screen carry their own,
+              but a route module that throws on its first render has none — and
+              without this the whole shell, navigation included, goes white. */}
+          <ErrorBoundary label={routeName}>
           {isSubmissionsList
             ? <SubmissionsPage search={location.search} navigate={navigate} />
             : isProgramBoard ? <ProgramBoardPage navigate={navigate} />
@@ -150,6 +155,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
             <PageHeader title={routeName} copy="The shared Flight Deck shell is installed. This route's product module will replace the honest empty state below." />
             <EmptyState title={route ? `${route.label} is ready for its module` : "This route is not installed"} copy={route ? "Navigation, layout, overlays, responsive behavior, and accessibility are live; no product data is being simulated." : "Return to Program home or choose a module from the shared navigation."} action={<Button variant="primary" onClick={() => navigate("/")}>Back to Program home</Button>} />
           </>}
+          </ErrorBoundary>
         </div>
       </main>
     </div>

@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
+import { apiFetch } from "../shell/api-client";
 import { putFileToR2, type UploadProgressHandlers } from "../upload/upload-client";
 import { formatBytes, validateClientUpload } from "../upload/upload-policy";
 import type { SignedUpload } from "../../lib/r2/protocol";
@@ -120,18 +121,17 @@ type PortalSnapshot = {
 
 type ApiFailure = Error & { status?: number };
 
+/**
+ * The speaker portal's one API call, through the shared client. A speaker who
+ * hits a failure is the person least equipped to debug it and least likely to
+ * be sitting next to an engineer, so the reference code and the plain sentence
+ * matter more here than anywhere else in the product.
+ */
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
+  return apiFetch<T>(path, {
     ...init,
     headers: { ...(init.body ? { "content-type": "application/json" } : {}), ...(init.headers ?? {}) },
   });
-  const body = await response.json().catch(() => ({})) as { error?: { message?: string } };
-  if (!response.ok) {
-    const failure = new Error(body?.error?.message ?? "The conference portal is unavailable") as ApiFailure;
-    failure.status = response.status;
-    throw failure;
-  }
-  return body as T;
 }
 
 function initials(name: string): string {
