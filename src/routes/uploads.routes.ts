@@ -235,7 +235,9 @@ async function handlePublicSign(context: Context<ApiEnv>) {
     if (localDirectUploads(env)) {
       return context.json({
         attachmentId,
-        putUrl: `${new URL(context.req.url).origin}/api/v1/local-uploads/${encodeURIComponent(attachmentId)}?token=${await localPutToken(env, attachmentId, r2Key)}`,
+        // Relative on purpose: under wrangler dev the worker sees its production
+        // route host in req.url, so an absolute URL would aim the PUT off-box.
+        putUrl: `/api/v1/local-uploads/${encodeURIComponent(attachmentId)}?token=${await localPutToken(env, attachmentId, r2Key)}`,
         requiredHeaders: { "content-type": contentType },
         expiresAt: nowMs + PRESIGN_EXPIRY_SECONDS * 1000,
         completionToken,
@@ -371,7 +373,9 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
     if (localDirectUploads(env)) {
       return context.json({
         attachmentId,
-        putUrl: `${new URL(context.req.url).origin}/api/v1/local-uploads/${encodeURIComponent(attachmentId)}?token=${await localPutToken(env, attachmentId, r2Key)}`,
+        // Relative on purpose: under wrangler dev the worker sees its production
+        // route host in req.url, so an absolute URL would aim the PUT off-box.
+        putUrl: `/api/v1/local-uploads/${encodeURIComponent(attachmentId)}?token=${await localPutToken(env, attachmentId, r2Key)}`,
         requiredHeaders: { "content-type": contentType },
         expiresAt: nowMs + PRESIGN_EXPIRY_SECONDS * 1000,
         completionToken,

@@ -407,10 +407,12 @@ test("local dev · LOCAL_DIRECT_UPLOADS=1 signs a worker PUT, stores locally, co
   expect(signResponse.status).toBe(200);
   const signed = (await signResponse.json()) as { attachmentId: string; completionToken: string; putUrl: string };
   expect(signed.putUrl).toContain("/api/v1/local-uploads/");
-  expect(new URL(signed.putUrl).origin).toBe("https://marquee.stage11.dev");
+  // Relative on purpose: wrangler dev reports the production route host in
+  // req.url, so an absolute URL would aim the browser PUT off-box.
+  expect(signed.putUrl.startsWith("/api/v1/local-uploads/")).toBe(true);
 
   const badPut = await app.fetch(
-    new Request(signed.putUrl.replace(/token=[^&]+/, "token=wrong"), {
+    new Request(`https://marquee.stage11.dev${signed.putUrl.replace(/token=[^&]+/, "token=wrong")}`, {
       method: "PUT",
       headers: { "content-type": "application/pdf" },
       body: pdfBytes,
@@ -421,7 +423,7 @@ test("local dev · LOCAL_DIRECT_UPLOADS=1 signs a worker PUT, stores locally, co
   expect(await env.MEDIA.head((await env.DB.prepare(`SELECT r2_key FROM attachments WHERE id = ?1`).bind(signed.attachmentId).first<{ r2_key: string }>())!.r2_key)).toBeNull();
 
   const put = await app.fetch(
-    new Request(signed.putUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: pdfBytes }),
+    new Request(`https://marquee.stage11.dev${signed.putUrl}`, { method: "PUT", headers: { "content-type": "application/pdf" }, body: pdfBytes }),
     LOCAL_ENV,
   );
   expect(put.status).toBe(200);
@@ -442,7 +444,7 @@ test("local dev · LOCAL_DIRECT_UPLOADS=1 signs a worker PUT, stores locally, co
   expect(appHostMedia.status).toBe(200);
 
   const flagOffPut = await app.fetch(
-    new Request(signed.putUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: pdfBytes }),
+    new Request(`https://marquee.stage11.dev${signed.putUrl}`, { method: "PUT", headers: { "content-type": "application/pdf" }, body: pdfBytes }),
     BASE_ENV,
   );
   expect(flagOffPut.status).toBe(404);
