@@ -100,7 +100,8 @@ export const WEBHOOK_EVENT_TYPES = [
 export const WEBHOOK_DELIVERY_STATUSES = ["queued", "delivered", "failed"] as const;
 export const MIRROR_OPERATIONS = ["upsert", "delete"] as const;
 export const IMPORT_OUTCOMES = ["created", "updated", "skipped", "failed"] as const;
-export const EMBED_KINDS = ["agenda", "speakers"] as const;
+export const EMBED_KINDS = ["agenda", "sessions", "speakers", "cfp"] as const;
+export const EMBED_LAYOUTS = ["cards", "list"] as const;
 export const AUDIT_ACTOR_KINDS = ["user", "api_token", "system", "airtable"] as const;
 
 export type EventStatus = (typeof EVENT_STATUSES)[number];
@@ -131,6 +132,7 @@ export type WebhookDeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
 export type MirrorOperation = (typeof MIRROR_OPERATIONS)[number];
 export type ImportOutcome = (typeof IMPORT_OUTCOMES)[number];
 export type EmbedKind = (typeof EMBED_KINDS)[number];
+export type EmbedLayout = (typeof EMBED_LAYOUTS)[number];
 export type AuditActorKind = (typeof AUDIT_ACTOR_KINDS)[number];
 
 export interface MutableRecord {

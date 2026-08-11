@@ -196,7 +196,7 @@ test("AC-87, AC-88, AC-90 · anonymous embed configuration emits a live snippet 
   expect(configBody).toContain("data-embed-preview");
   expect(configBody).toContain("Copy embed code");
   expect(configBody).toContain("Live preview");
-  expect(configBody).toContain("Speaker gallery");
+  expect(configBody).toContain('data-embed-kind="speakers"');
 
   const agenda = await request(`/embed/${EVENT_SLUG}-agenda?event=${EVENT_SLUG}&track=track-public&status=accepted&accent=%23ff00aa`);
   const agendaBody = await agenda.text();

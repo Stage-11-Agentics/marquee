@@ -407,3 +407,19 @@ CREATE TABLE webhook_deliveries (...);                       -- AC-241
 - **Submitter/speaker split** — *extra credit.* Named as a known limitation in `SPEC.md` §10 and enforced by new **gate 19b**, citing the already-specified AC-223/AC-224. Criteria drafted and held unminted; mint from AC-270 only if the if-capacity band opens.
 
 ---
+
+## Amendment 11 — public widgets widened and protected (2026-08-11, client-directed)
+
+*Folds `SPEC.md` Amendment 18 and `USER_STORIES.md` Amendment 18 (US-16 promoted to live in-scope; US-58 gains AC-273–AC-274). Binding prototype **v1.10** (`showEmbedModal()`), public agenda → `Get embed code`.*
+
+M-21 (embeds, merged under MRQ-22) shipped a two-kind dialog (`agenda|speakers`). This amendment turns it into four (`agenda|sessions|speakers|cfp`) on the same route surface, KV cache, and purge-on-publish path — no new milestone dependency beyond M-21 itself.
+
+| # | Ticket | ACs | Hrs | Deps |
+|---|---|---|---|---|
+| **M-64** | **Public widgets widened.** Embed dialog gains a four-format segment (equal flex widths) replacing the single kind select; Track select and a new Layout segment (`Cards\|List`) are always rendered, disabling — never disappearing — when inapplicable (Track for `cfp`; Layout for anything but `speakers`). New `sessions` kind: flat title/track/time row, same query/cache/purge path as `agenda`. `speakers` gains `layout` carried in the snippet URL. New `cfp` kind: renders the event's primary open form's deadline and formats plus a link to `/f/:slug`, flipping to closed from `closes_at` alone on the existing 30s cache TTL — no republish, no new job, no new queue. `embeds.kind` CHECK constraint widened (migration, additive rebuild — the table has zero writers in any environment, so nothing to migrate). | **AC-217, AC-218, AC-273, AC-274** | `src/routes/embed.route.tsx`, `src/ui/embeds/EmbedPage.tsx`, `src/lib/public-site.ts`, `migrations/0006_embed_widget_kinds.sql` | 5 | **M-21** |
+
+**Rank.** AC-217, AC-218, AC-273, and AC-274 are **Tier A**, joining AC-87–90 rather than landing in Tier B — the client ruling was "protect and widen," and Tier B stays cuttable-from-the-bottom (gate 19). Landing the widened half of the family there would leave exactly the part this amendment is about exposed to the cut it exists to end. All eight embed ACs (AC-87–90, AC-217–218, AC-273–274) are now grouped as one no-waiver unit.
+
+**Total: 5 agent-hours.**
+
+---

@@ -21,6 +21,7 @@ const publicQuery = z.object({
   q: z.string().trim().min(1).max(200).optional(),
   status: z.string().min(1).max(40).optional(),
   accent: z.string().regex(/^#[0-9a-f]{3,8}$/i).optional(),
+  layout: z.enum(["cards", "list"]).optional(),
 });
 
 const publicPayload = z.any();
@@ -118,7 +119,7 @@ const getPublicEmbed = defineApiRoute(
       eventSlug: query.event ?? query.event_slug,
     });
     if (!resolved) throw ApiError.notFound("public embed not found");
-    const filters = { track: query.track ?? null, status: query.status ?? null, accent: query.accent ?? null };
+    const filters = { track: query.track ?? null, status: query.status ?? null, accent: query.accent ?? null, layout: query.layout ?? null };
     const key = publicEmbedCacheKey(resolved.event.id, resolved.slug, filters);
     const cached = await readPublicEmbedCache(context.env.CACHE, key);
     if (cached) {

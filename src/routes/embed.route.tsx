@@ -2,6 +2,7 @@
 import { Hono } from "hono";
 import { renderToString } from "preact-render-to-string";
 
+import { EMBED_KINDS, type EmbedKind } from "../db/schema";
 import type { Env } from "../index";
 import {
   loadPublicEmbed,
@@ -30,7 +31,7 @@ function safeAccent(value: string | undefined): string | null {
 async function readEmbed(
   database: D1Database,
   cache: PublicEmbedCache | undefined,
-  request: { slug: string; eventSlug?: string | null; kind?: "agenda" | "speakers"; track?: string | null; status?: string | null; accent?: string | null },
+  request: { slug: string; eventSlug?: string | null; kind?: EmbedKind; track?: string | null; status?: string | null; accent?: string | null; layout?: string | null },
 ) {
   const resolved = await resolvePublicEmbed(database, request);
   if (!resolved) return null;
@@ -38,6 +39,7 @@ async function readEmbed(
     track: request.track ?? null,
     status: request.status ?? null,
     accent: safeAccent(request.accent ?? undefined),
+    layout: request.layout === "list" ? "list" : null,
   };
   const key = publicEmbedCacheKey(resolved.event.id, resolved.slug, filters);
   const cached = await readPublicEmbedCache(cache, key);
@@ -65,11 +67,12 @@ async function shellFor(context: { env: Env; req: { raw: Request } }): Promise<s
 
 embedRoutes.get("/embed/config", async (context) => {
   const query = context.req.query();
-  const kind = query.kind === "speakers" ? "speakers" : "agenda";
+  const kind: EmbedKind = EMBED_KINDS.includes(query.kind as EmbedKind) ? (query.kind as EmbedKind) : "agenda";
   const event = await loadPublicEvent(context.env.DB, query.event ?? query.event_slug);
   if (!event) return context.notFound();
   const track = query.track ?? "";
   const status = query.status ?? "";
+  const layout = query.layout === "list" ? "list" : "cards";
   const accent = safeAccent(query.accent) ?? event.accent ?? "#0b6a72";
   const resolved = await resolvePublicEmbed(context.env.DB, {
     slug: `${event.slug}-${kind}`,
@@ -77,9 +80,9 @@ embedRoutes.get("/embed/config", async (context) => {
     kind,
   });
   if (!resolved) return context.notFound();
-  const preview = await loadPublicEmbed(context.env.DB, resolved, { track, status, accent });
+  const preview = await loadPublicEmbed(context.env.DB, resolved, { track, status, accent, layout });
   const shell = await shellFor(context);
-  const markup = renderToString(<EmbedConfigPage event={event} tracks={preview.tracks} kind={kind} track={track} status={status} accent={accent} preview={preview} />);
+  const markup = renderToString(<EmbedConfigPage event={event} tracks={preview.tracks} kind={kind} track={track} status={status} layout={layout} accent={accent} preview={preview} />);
   return context.html(renderEmbedDocument(shell, markup, EMBED_CONFIG_SCRIPT));
 });
 
@@ -91,6 +94,7 @@ embedRoutes.get("/embed/:slug", async (context) => {
     track: query.track,
     status: query.status,
     accent: query.accent,
+    layout: query.layout,
   });
   if (!result) return context.notFound();
   context.header("Cache-Control", "public, max-age=30, s-maxage=30");
@@ -101,7 +105,8 @@ embedRoutes.get("/embed/:slug", async (context) => {
 // The prototype's copyable snippet used /{event}/{kind}/embed. Keep that URL
 // working while the canonical public contract remains /embed/{slug}.
 embedRoutes.get("/:eventSlug/:kind/embed", async (context) => {
-  const kind = context.req.param("kind") === "speakers" ? "speakers" : context.req.param("kind") === "agenda" ? "agenda" : null;
+  const kindParam = context.req.param("kind");
+  const kind: EmbedKind | null = EMBED_KINDS.includes(kindParam as EmbedKind) ? (kindParam as EmbedKind) : null;
   if (!kind) return context.notFound();
   const query = context.req.query();
   const result = await readEmbed(context.env.DB, context.env.CACHE, {
@@ -111,6 +116,7 @@ embedRoutes.get("/:eventSlug/:kind/embed", async (context) => {
     track: query.track,
     status: query.status,
     accent: query.accent,
+    layout: query.layout,
   });
   if (!result) return context.notFound();
   context.header("Cache-Control", "public, max-age=30, s-maxage=30");
