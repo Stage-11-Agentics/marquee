@@ -10,7 +10,7 @@ The hard 30-second limits remain untouched:
 - `scripts/checks/pr-gate.mjs` remains the source of the full-gate limit.
 - No test is skipped, deleted, weakened, or moved to change the clock.
 
-The worktree was rebased to the fetched `forgejo/master` at `246311f2a8642fff8de4e015256d97d144aa5811` before this plan. The branch cut point supplied by the orchestrator was `19f8f1d`; the intervening commit is the dispatch/board update only.
+The worktree was rebased to the fetched `forgejo/master` at `835967dedaa4f8552238c24d16f94493c43e15b6` before implementation. The branch cut point supplied by the orchestrator was `19f8f1d`; subsequent master merges changed the test counts, so the latest pre-implementation baseline below is authoritative for validation.
 
 ## Evidence gathered before implementation
 
@@ -24,13 +24,15 @@ The clean baseline on this worktree was:
 
 These measurements establish that the cost is the repeated setup around the roughly 1,000-line schema (993 lines across the four migration files), not a reason to remove the Worker runtime or serialize the suite. The Node-suite wall clock was 3.13s in this run versus the ticket's earlier 1.4s report; that variance is recorded rather than treated as a code change.
 
+After the master test additions landed, the same-tree pre-implementation control was 41 Vitest files / 210 tests with `npm test` runner `elapsedMs: 14401` and shell wall-clock `14.56s`; 40 native Node tests also passed. A first split implementation run was `15.61s` (runner `15446ms`) and a repeat was `16.59s` (`16397ms`)—negative sequential results. Running the Worker and Node Vitest projects concurrently produced a passing `14.18s` (`14024ms`) run, a modest `377ms` improvement over that control. Two simultaneous full `npm test` processes still timed out at `29.153s` and `29.314s`; pool caps of 8, 4, and 2 workers were also negative, with the best pair at `29.047s`/`29.071s`. The cap was removed. These stress results are retained as evidence, not presented as a pass.
+
 ## Chosen approach
 
 Keep Worker isolation for every integration test and the one unit test that explicitly provisions D1, but run Worker-free unit tests in a normal Vitest Node project. `vitest.config.ts` will include `tests/integration/**/*.test.ts` plus `tests/unit/r2/uploads-routes.test.ts`; a new `vitest.node.config.ts` will include the other unit files with the existing setup file. `scripts/checks/run-test.mjs` will run both Vitest configs before the existing native `tests/node` suite.
 
-This removes twelve unnecessary Miniflare boots without sharing a D1 database, changing an assertion, or moving a test file. `tests/integration/apply-migrations.ts` remains unchanged: the timing experiment showed that DDL batching would be a small optimization against the actual startup bottleneck and is not part of this implementation.
+This removes fourteen unnecessary Miniflare boots without sharing a D1 database, changing an assertion, or moving a test file. `tests/integration/apply-migrations.ts` remains unchanged: the timing experiment showed that DDL batching would be a small optimization against the actual startup bottleneck and is not part of this implementation.
 
-This is the smallest harness-only change that attacks the per-file Worker boot cost without sharing mutable databases across files. The success bar is named: repeated `npm test` and full `npm run pr-gate -- --ticket MRQ-70` runs must stay at or below 27s (at least 3s under the hard 30s limit), with the current 39 Vitest files / 204 tests still passing plus the existing 38 native Node tests. Do not consolidate integration files, move integration assertions to `tests/node`, or alter Worker isolation; those choices create avoidable conflicts with the six active test-file delegators.
+This is the smallest harness-only change that attacks the per-file Worker boot cost without sharing mutable databases across files. The success bar is named: repeated `npm test` and full `npm run pr-gate -- --ticket MRQ-70` runs must stay at or below 27s (at least 3s under the hard 30s limit), with the current 41 Vitest files / 210 tests still passing plus the existing 40 native Node tests. Do not consolidate integration files, move integration assertions to `tests/node`, or alter Worker isolation; those choices create avoidable conflicts with the six active test-file delegators.
 
 ## Implementation and proof steps
 
@@ -49,7 +51,7 @@ The completion report must include:
 
 - before/after `npm test` wall-clock and emitted elapsed values;
 - before/after full `npm run pr-gate -- --ticket MRQ-70` wall-clock;
-- the current 39 Vitest files / 204 tests and 38 native Node tests still passing (or an exact explanation if master changes the count before validation);
+- the current 41 Vitest files / 210 tests and 40 native Node tests still passing (or an exact explanation if master changes the count before validation);
 - the rejected `--fileParallelism=false` and `--isolate=false` experiments above;
 - the resulting `speed-report.json` latest harness entry and bounded pr-gate history;
 - explicit statement that MRQ-70 owns no AC directly and therefore has no claims file;
@@ -69,3 +71,5 @@ Do not raise either budget, weaken/delete tests, alter contract documents, mint 
 ## Implementation Measurement Update (AUTHORITATIVE)
 
 The required timing probe supersedes the initial batch hypothesis. The representative Worker file took 7.90s wall-clock while its schema apply took 238ms, so batching DDL would not cut the dominant per-file boot cost. The combined `--no-file-parallelism --no-isolate` experiment was also rejected: it took 17.76s but failed three suites with shared-schema contamination and skipped 17 tests. The safe measured win is the project split: a temporary Worker config ran 27 files / 148 tests in 13.67s, while a normal Node Vitest config ran 12 Worker-free unit files / 56 tests in 0.51s. No test files or assertions move; only the harness selects the runtime.
+
+The later current-master control is 41 files / 210 tests and 40 native tests. The split's sequential A/B was negative (`14.56s` control versus `15.61s` and `16.59s`), while concurrent launch of the two Vitest projects passed in `14.18s`; this modest but measured win is the selected runner behavior. A three-process experiment that also overlapped native Node tests caused a real public-form timeout and was rejected. Worker pool caps 8/4/2 did not get the concurrent pair under 30s and were removed.
