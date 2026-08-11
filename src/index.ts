@@ -11,6 +11,8 @@ import { processMailQueue, MAIL_MESSAGE_TYPE, runMailSchedule } from "./jobs/mai
 import type { Principal } from "./api/runtime";
 import type { ApiGrant } from "./api/grants";
 import { landingRoutes } from "./routes/landing.route";
+import { publicAgendaRoutes } from "./routes/public-agenda.route";
+import { embedRoutes } from "./routes/embed.route";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -98,6 +100,8 @@ app.get("/__validation/session-cookie", (context) => {
 });
 
 app.route("/", landingRoutes);
+app.route("/", publicAgendaRoutes);
+app.route("/", embedRoutes);
 // The API app is built from the generated route manifest. Assembly digests the
 // OpenAPI document, which is async, so it is memoized on first request rather
 // than awaited at module scope.
