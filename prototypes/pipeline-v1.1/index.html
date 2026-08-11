@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Marquee — Pipeline v1.6 prototype</title>
+  <title>Marquee — Pipeline v1.7 prototype</title>
   <style>
     /* ════════════════════════════════════════════════════════════════════
        MARQUEE v1.5 — FLIGHT DECK
@@ -641,6 +641,73 @@
     .rp-notes { margin:0; font-size:11px; line-height:1.5; color:var(--ink-soft); }
     .rp-empty { color:var(--muted); font-size:10.5px; font-style:italic; }
 
+    /* ── v1.7: venue map — tile mosaic, pins, walking lines ──────────────────
+       A map with no map library. OSM raster tiles are plain <img> positioned on
+       a fixed-width plane; pins and walking lines are drawn over it. The plane is
+       centred and clipped so the box is fluid but never reflows on tile arrival,
+       and when tiles fail the pins still read over the graph-paper grid. */
+    .mq-map { position:relative; overflow:hidden; border:1px solid var(--line-strong); border-radius:var(--radius); background:var(--sunk);
+              background-image:linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size:8px 8px; }
+    .mq-plane { position:absolute; top:0; left:50%; transform:translateX(-50%); height:100%; }
+    .mq-tile { position:absolute; width:256px; height:256px; filter:grayscale(1) contrast(.9) brightness(1.07); -webkit-user-drag:none; user-select:none; }
+    .mq-map.no-tiles .mq-tile { display:none; }
+    .mq-overlay { position:absolute; inset:0; pointer-events:none; overflow:visible; }
+    .mq-pin { position:absolute; width:11px; height:11px; margin:-6px 0 0 -6px; border-radius:50%; background:var(--accent); border:2px solid var(--panel); box-shadow:0 0 0 1px var(--accent); }
+    .mq-pin.muted { background:var(--muted); box-shadow:0 0 0 1px var(--muted); }
+    .mq-pin-label { position:absolute; transform:translate(-50%,7px); white-space:nowrap; font:600 9px/1.6 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+                    background:var(--panel); border:1px solid var(--line-strong); border-radius:2px; padding:0 4px; color:var(--ink); }
+    .mq-walk-line { stroke:var(--accent); stroke-width:1.5; stroke-dasharray:3 3; opacity:.8; }
+    .mq-walk-label { fill:var(--ink); font:600 9px var(--mono); paint-order:stroke; stroke:var(--panel); stroke-width:3px; }
+    .mq-attrib { position:absolute; right:3px; bottom:2px; z-index:2; font:400 8.5px/1.5 var(--mono); color:var(--muted); background:var(--panel); padding:0 3px; border-radius:2px; }
+    .mq-map-empty { position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:14px; color:var(--muted); font-size:10.5px; font-style:italic; }
+
+    /* Venue overview list */
+    .venue-item { display:grid; grid-template-columns:16px minmax(0,1fr) auto; gap:10px; align-items:baseline; padding:11px 0; border-bottom:1px solid var(--line); width:100%; text-align:left; background:none; border-left:0; border-right:0; border-top:0; cursor:pointer; }
+    .venue-item:last-child { border-bottom:0; }
+    .venue-item.active { background:var(--sunk); }
+    .venue-item .vi-num { font:600 9px/1.7 var(--mono); color:var(--muted); }
+    .venue-item strong { font-size:12px; font-weight:600; display:block; }
+    .venue-item .vi-sub { color:var(--muted); font-size:10.5px; line-height:1.45; display:block; margin-top:2px; }
+    .venue-item .vi-rooms { color:var(--ink-soft); font:400 10px/1.5 var(--mono); display:block; margin-top:4px; }
+    .venue-stat { text-align:right; white-space:nowrap; font:600 13px/1.2 var(--mono); }
+    .venue-stat span { display:block; font:400 9px/1.7 var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.1em; }
+
+    /* Speaker-portal location card — zoom 2, the instruction set */
+    .loc-line { display:grid; grid-template-columns:74px minmax(0,1fr); gap:10px; align-items:baseline; padding:6px 0; }
+    .loc-label { font:600 9px/1.7 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+    .loc-value { font-size:12px; line-height:1.5; }
+    .loc-leave { border:1px solid var(--accent); background:var(--accent-soft); border-radius:var(--radius); padding:9px 11px; font-size:12px; line-height:1.55; margin-top:4px; }
+    .loc-leave b { font-family:var(--mono); font-weight:600; }
+
+    /* Merge-field reference */
+    .merge-fields { display:flex; flex-wrap:wrap; gap:4px; }
+    .merge-chip { border:1px solid var(--line-strong); background:var(--sunk); border-radius:2px; font:400 9.5px/1.8 var(--mono); padding:0 5px; color:var(--ink-soft); cursor:pointer; }
+    .merge-chip:hover { border-color:var(--accent); color:var(--accent); }
+
+    /* Agenda building band — the grid encodes geography before any map does */
+    .bb-seg { font:600 9px/2 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); background:var(--sunk);
+              border-bottom:2px solid var(--accent); padding:0 8px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bb-seg.none { border-bottom-color:var(--line-strong); color:var(--muted); }
+    .bb-spacer { border-bottom:2px solid transparent; }
+
+    /* One building means nothing to compare, so the embedded map arrives folded */
+    .map-fold { margin-bottom:12px; }
+    .map-fold > summary { cursor:pointer; list-style:none; font:600 9px/2.4 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+    .map-fold > summary::-webkit-details-marker { display:none; }
+    .map-fold > summary::before { content:"▸ "; }
+    .map-fold[open] > summary::before { content:"▾ "; }
+    .map-fold > summary:hover { color:var(--accent); }
+
+    /* Building authoring: name/address on one line, coordinates below */
+    .building-block { padding:10px 0; border-bottom:1px solid var(--line); }
+    .building-block:last-child { border-bottom:0; }
+    .building-block .building-row { border-bottom:0; padding:0; }
+    .building-geo { display:grid; grid-template-columns:18px repeat(3, minmax(0,1fr)) minmax(0,2fr); gap:9px; align-items:end; margin-top:8px; }
+    .building-geo label { font:600 9px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:4px; }
+    .building-geo input { width:100%; min-width:0; height:28px; border:1px solid var(--line-strong); border-radius:var(--radius); padding:0 8px; background:var(--panel); font:400 11px var(--mono); }
+    .building-geo input:focus { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); outline:none; }
+    .building-geo .bg-note { font:400 10px/1.5 var(--mono); color:var(--muted); }
+
     /* Dark-canvas overrides: `.track-tile span` out-specifies `.chip`, so light
        chips inherited the canvas's muted text colour (measured 2.2-2.3:1).
        Inherited from v1.4; fixed here rather than carried into the contract. */
@@ -746,12 +813,13 @@
       // ten minutes changes the answer, so it belongs in the model rather than in
       // prose. A venue with no coordinates (the stream) is honest, not an edge case.
       const buildings = [
-        { id:"b1", name:"The Times Center",  address:"242 W 41st St, New York, NY 10036", lat:40.75600, lng:-73.98923, accessMinutes:0 },
-        { id:"b2", name:"Jay Suites",        address:"109 W 39th St, 2nd floor, New York, NY 10018", lat:40.75311, lng:-73.98569, accessMinutes:2 },
-        { id:"b3", name:"AWS JFK27",         address:"12 W 39th St, New York, NY 10018 · entrance on 39th St at 5th Ave, large gold doors", lat:40.75169, lng:-73.98278, accessMinutes:10 },
-        { id:"b4", name:"AIE YouTube",       address:"Online · streamed, no physical venue", lat:null, lng:null, accessMinutes:0 }
+        { id:"b1", name:"The Times Center",  address:"242 W 41st St, New York, NY 10036", lat:40.75600, lng:-73.98923, accessMinutes:0, accessNote:"Street entrance on 41st. Speakers check in at the stage-left desk." },
+        { id:"b2", name:"Jay Suites",        address:"109 W 39th St, 2nd floor, New York, NY 10018", lat:40.75311, lng:-73.98569, accessMinutes:2, accessNote:"Second floor — lifts are to the right of the 39th St lobby." },
+        { id:"b3", name:"AWS JFK27",         address:"12 W 39th St, New York, NY 10018", lat:40.75169, lng:-73.98278, accessMinutes:10, accessNote:"Photo ID required at the 39th St entrance — the large gold doors at 5th Ave. Allow ten minutes for building security." },
+        { id:"b4", name:"AIE YouTube",       address:"Online · streamed, no physical venue", lat:null, lng:null, accessMinutes:0, accessNote:"" }
       ];
       const AV_TAGS = ["Projector", "Confidence monitor", "Mics", "Livestream"];
+      const PORTAL_SPEAKER = "Amara van der Meer";
       const waveDates = ["Aug 15", "Sep 1", "Sep 15"];
       const formatRanges = { Workshop:"60–120", "Stage Talk":"15–20", Lightning:"5–10", Online:"5–55" };
       const submissionColumnDefs = [
@@ -795,6 +863,7 @@
         selectAllMatching: false,
         agendaView: "day",
         agendaDay: "Mon · Oct 12",
+        venueFocus: "",
         agendaBuilderDay: "All days",
         agendaTrack: "All tracks",
         agendaPoolSearch: "",
@@ -863,7 +932,7 @@
           "Mainstage. Confidence monitors downstage; the livestream feed powers the conference site.",
           "Breakout. Shares a wall with Empire West — avoid amplified sessions in both at once.",
           "Breakout. Livestream is not cabled; record locally and upload after the session.",
-          "Photo ID required at the 39th St entrance. Allow ten minutes for building security."
+          "Breakout. Hard stop at 17:30 — the building locks down for the evening."
         ],
         taskTemplates: [
           {id:1,title:"Confirm slot",kind:"Acknowledge",description:"Confirm participation for each accepted role.",due:7},
@@ -874,6 +943,7 @@
         commsTemplates: [
           {id:"acceptance",name:"Acceptance",subject:"You’re speaking at {{conference.name}}",body:"Hi {{speaker.first_name}},\n\nWe’re delighted to accept {{session.title}}. Open your portal to confirm and complete your tasks."},
           {id:"rejection",name:"Rejection",subject:"An update on {{session.title}}",body:"Hi {{speaker.first_name}},\n\nThank you for sharing {{session.title}}. We aren’t able to include it in this year’s program."},
+          {id:"logistics",name:"Where to be",subject:"{{conference.name}}: your room and arrival time",body:"Hi {{speaker.first_name}},\n\n{{session.title}} is in {{session.room}}, {{session.building}} — {{session.address}}.\n\n{{session.accessNote}}\n\nPlan to leave by {{session.leaveBy}}."},
           {id:"task-overdue",name:"Task overdue",subject:"AIE NYC: {{task.title}} is overdue",body:"Hi {{speaker.first_name}},\n\nPlease complete {{task.title}} in your speaker portal."}
         ],
         activeCommsTemplate: "acceptance",
@@ -1070,7 +1140,7 @@
         cfp: "Public CFP form", portal: "Speaker portal", evaluation: "Evaluation plan", reviewer: "Reviewer queue",
         submissions: "Abstracts", submissionDetail:"Submission record", submissionNew:"Create submission", eventNew:"Create conference",
         onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Conference site", comms:"Communications",
-        taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", apiTokens:"API tokens",
+        venues:"Venues", taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", apiTokens:"API tokens",
         apiDocs:"API documentation", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker"
       };
 
@@ -1094,16 +1164,33 @@
       function roomIndex(name) { return rooms.indexOf(name); }
       function buildingForRoom(name) { const i = roomIndex(name); return i < 0 ? null : buildingById(state.roomBuildings[i]); }
       function roomsInBuilding(id) { return state.roomBuildings.filter(b => b === id).length; }
-      // "Room · Building" — falls back to the bare room name when unassigned.
-      function roomLabel(name) { const b = buildingForRoom(name); return b ? `${name} · ${b.name}` : name; }
+      // "Room · Building" — but the suffix is disambiguation, not decoration. With
+      // one building there is nothing to disambiguate, so it comes off every row
+      // and the building is named once in the page header instead.
+      function roomLabel(name) { const b = buildingForRoom(name); return b && geoActive() ? `${name} · ${b.name}` : name; }
       function roomInfo(name) {
         const i = roomIndex(name); if (i < 0) return null;
         return { name, building: buildingForRoom(name), av: state.roomAV[i] || [], notes: (state.roomNotes[i] || "").trim(), capacity: state.roomCapacities[i] };
       }
       // Grid label for a room column/lane: one line, ellipsised, with the full
       // detail behind a hover/click panel so the header height never changes.
-      function roomHeadLabel(name) {
-        return `<button class="room-head" data-room-head="${esc(name)}" title="${esc(roomLabel(name))}"><span class="room-head-text">${esc(roomLabel(name))}</span><span class="room-head-info" aria-hidden="true">i</span></button>`;
+      // One cell per contiguous run of rooms sharing a building. With a single
+      // building there is no run to draw, so the band never appears.
+      function buildingBand() {
+        if (!geoActive()) return "";
+        const runs = [];
+        rooms.forEach(r => {
+          const b = buildingForRoom(r), id = b ? b.id : "", last = runs[runs.length-1];
+          if (last && last.id === id) last.n++; else runs.push({ id, n:1, name: b ? b.name : "Unassigned" });
+        });
+        return `<div class="bb-spacer"></div>` + runs.map(r=>`<div class="bb-seg ${r.id?"":"none"}" style="grid-column:span ${r.n}" title="${esc(r.name)}">${esc(r.name)}</div>`).join("");
+      }
+
+      // `bare` is for grids that already carry a building band overhead — naming
+      // the building twice in two stacked rows is noise, not reinforcement.
+      function roomHeadLabel(name, bare = false) {
+        const shown = bare ? name : roomLabel(name);
+        return `<button class="room-head" data-room-head="${esc(name)}" title="${esc(roomLabel(name))}"><span class="room-head-text">${esc(shown)}</span><span class="room-head-info" aria-hidden="true">i</span></button>`;
       }
 
       function sessionSlot(recordOrId) {
@@ -1160,7 +1247,7 @@
         if (/^submissions\/[^/]+$/.test(path)) { state.submissionRecordId = decodeURIComponent(path.split("/")[1]); return "submissionDetail"; }
         if (/^s\/[^/]+$/.test(path)) { state.publicRecordId = decodeURIComponent(path.split("/")[1]); return "publicSession"; }
         if (/^p\/[^/]+$/.test(path)) { state.publicPersonName = decodeURIComponent(path.slice(2)); return "publicSpeaker"; }
-        return ({"settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"apiTokens","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer"})[path] || path;
+        return ({"settings/venues":"venues","settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"apiTokens","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer"})[path] || path;
       }
 
       function currentRoute() {
@@ -1301,7 +1388,7 @@
       }
 
       function routePath(route) {
-        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"conferences/new",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
+        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"conferences/new",venues:"settings/venues",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
       }
 
       function pageHead(title, copy, actions = "") {
@@ -1571,10 +1658,46 @@
         return `<div class="wave-row"><div><strong style="font-size:12px">${name}</strong><div class="wave-date">${date}</div></div><div><div class="wave-bar"><i style="width:${Math.min(100, Math.round(count / target * 100))}%"></i></div><div class="wave-date">${count} accepted</div></div><strong class="tabular" style="text-align:right;font-size:11px">${target} target</strong></div>`;
       }
 
+      function settingsTabs(active) {
+        const tabs = [["settings","Conference"],["settings/venues","Venues"],["settings/tasks","Task templates"],["settings/airtable","Airtable"],["settings/api","API tokens"]];
+        return `<nav class="route-tabs">${tabs.map(([href,label])=>`<a class="button ${routeKey(href)===active?"active":""}" href="#${href}">${esc(label)}</a>`).join("")}</nav>`;
+      }
+
+      // The venue overview. With one building this is a single pin and a room
+      // list — reachable, never insisted upon. With several it is the only screen
+      // that shows the conference as a place rather than a schedule.
+      function venuesView() {
+        const day = state.agendaDay;
+        const sessionsToday = b => state.scheduled.filter(s=>s.kind!=="break" && s.day===day && buildingForRoom(s.room)?.id===b.id).length;
+        const seatsIn = b => rooms.reduce((n,r,i)=> state.roomBuildings[i]===b.id ? n + (state.roomCapacities[i]||0) : n, 0);
+        const roomNamesIn = b => rooms.filter((r,i)=>state.roomBuildings[i]===b.id);
+        const placed = buildings.filter(hasPin), remote = buildings.filter(b=>!hasPin(b));
+        const venueRow = b => `<button class="venue-item ${state.venueFocus===b.id?"active":""}" data-venue="${b.id}">
+            <span class="vi-num tabular">${buildings.indexOf(b)+1}</span>
+            <span><strong>${esc(b.name)}</strong><span class="vi-sub">${esc(b.address||"No address recorded")}</span>
+              <span class="vi-rooms">${roomNamesIn(b).length ? esc(roomNamesIn(b).join(" · ")) : "No rooms assigned"}</span>
+              ${b.accessNote?`<span class="vi-sub">${esc(b.accessNote)}</span>`:""}
+              ${hasPin(b)&&b.accessMinutes?`<span class="vi-rooms">Allow ${b.accessMinutes} min to get in</span>`:""}</span>
+            <span class="venue-stat tabular">${sessionsToday(b)}<span>${day.split(" · ")[0]}</span></span>
+          </button>`;
+        return shell(`<div class="page">
+          ${pageHead("Venues", "Every building in the conference, what runs there today, and how long it takes to walk between them.", `<a class="button" href="#settings">Conference settings</a><a class="button primary" href="#agenda">Open agenda</a>`)}
+          ${settingsTabs("venues")}
+          <section class="card"><div class="card-head"><div><h2>Site map</h2><span class="subtle">${geoActive()?"Dashed lines are walking time between buildings, on the street grid":"Pin a second building and walking times appear here"}</span></div><span class="chip">${placed.length} of ${buildings.length} pinned</span></div>
+            <div class="card-body">${venueMap(buildings,{width:1100,height:400,walk:geoActive(),focus:state.venueFocus})}</div></section>
+          <div class="grid-2" style="margin-top:14px">
+            <section class="card"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Sessions counted for ${esc(day)}</span></div><span class="chip">${placed.reduce((n,b)=>n+seatsIn(b),0).toLocaleString()} seats</span></div>
+              <div class="card-body">${placed.length?placed.map(venueRow).join(""):`<div class="rp-empty">No building has coordinates yet.</div>`}</div></section>
+            <section class="card"><div class="card-head"><div><h2>No physical location</h2><span class="subtle">Streamed and remote venues hold sessions but never a pin</span></div><span class="chip">${remote.length}</span></div>
+              <div class="card-body">${remote.length?remote.map(venueRow).join(""):`<div class="rp-empty">Every venue in this conference has a location.</div>`}</div></section>
+          </div>
+        </div>`);
+      }
+
       function settingsView() {
         return shell(`<div class="page">
           ${pageHead("Conference settings", "The conference record is inherited by forms, portals, agenda times, and calendar invites.", `<button class="button" id="preview-branding">Preview branding</button><button class="button primary" id="save-settings">Save conference settings</button>`)}
-          <nav class="route-tabs"><a class="button active" href="#settings">Conference</a><a class="button" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav>
+          ${settingsTabs("settings")}
           <div class="grid-2">
             <section class="card"><div class="card-head"><h2>Conference details</h2><span class="chip published"><span class="dot"></span> Published</span></div><div class="card-body stack">
               <div class="field"><label for="event-name">Conference name</label><input id="event-name" value="${esc(state.event.name)}"></div>
@@ -1587,7 +1710,7 @@
               ${formats.map((f,i) => `<div class="settings-row" data-format-index="${i}"><span class="drag-handle">⋮</span><input aria-label="Format name" data-format-name="${i}" value="${esc(f)}"><input aria-label="Allowed range" data-format-range="${i}" value="${esc(formatRanges[f]||"15–30")}"><label class="field" style="display:flex;align-items:center;gap:4px"><input aria-label="Default duration" data-format-duration="${i}" type="number" min="5" max="180" value="${formatDurations[f]}"><span class="subtle">min</span></label></div>`).join("")}
             </div></section>
             <section class="card"><div class="card-head"><div><h2>Tracks</h2><span class="subtle">Drag to reorder · edit names and colors in place</span></div><button class="button small" id="add-track">+ Add track</button></div><div class="card-body" id="track-settings">${tracks.map((t,i) => `<div class="settings-row" draggable="true" data-track-index="${i}"><button class="drag-button" aria-label="Drag ${esc(t.name)}">⋮⋮</button><input aria-label="Track name" data-track-name="${i}" value="${esc(t.name)}"><input aria-label="Track color" data-track-color="${i}" type="color" value="${t.color}"><span class="chip" style="border-left:3px solid ${t.color}">${i+1}</span></div>`).join("")}</div></section>
-            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Rooms belong to a building; the agenda and the conference site show both.</span></div><button class="button small" id="add-building">+ Add building</button></div><div class="card-body">${buildings.map((b,i) => `<div class="building-row"><span class="drag-handle">${i+1}</span><input aria-label="Building name" data-building-name="${b.id}" value="${esc(b.name)}"><input aria-label="Building address" data-building-address="${b.id}" value="${esc(b.address)}" placeholder="Street address, floor, entrance notes"><span class="building-rooms tabular">${roomsInBuilding(b.id)} ${roomsInBuilding(b.id)===1?"room":"rooms"}</span><button class="button small" data-remove-building="${b.id}" ${buildings.length<=1?"disabled":""}>Remove</button></div>`).join("")}</div></section>
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Rooms belong to a building; the agenda and the conference site show both.</span></div><div style="display:flex;gap:6px"><a class="button small" href="#settings/venues">Open venue map</a><button class="button small" id="add-building">+ Add building</button></div></div><div class="card-body"><details class="map-fold" ${geoActive()?"open":""}><summary>${geoActive()?"Site map":"Site map · one building"}</summary>${venueMap(buildings,{width:1100,height:220,walk:geoActive()})}</details>${buildings.map((b,i) => `<div class="building-block"><div class="building-row"><span class="drag-handle">${i+1}</span><input aria-label="Building name" data-building-name="${b.id}" value="${esc(b.name)}"><input aria-label="Building address" data-building-address="${b.id}" value="${esc(b.address)}" placeholder="Street address, floor, entrance notes"><span class="building-rooms tabular">${roomsInBuilding(b.id)} ${roomsInBuilding(b.id)===1?"room":"rooms"}</span><button class="button small" data-remove-building="${b.id}" ${buildings.length<=1?"disabled":""}>Remove</button></div><div class="building-geo"><span></span><div><label for="lat-${b.id}">Latitude</label><input id="lat-${b.id}" data-building-lat="${b.id}" value="${b.lat==null?"":b.lat}" placeholder="40.75600"></div><div><label for="lng-${b.id}">Longitude</label><input id="lng-${b.id}" data-building-lng="${b.id}" value="${b.lng==null?"":b.lng}" placeholder="-73.98923"></div><div><label for="acc-${b.id}">Minutes to get in</label><input id="acc-${b.id}" data-building-access="${b.id}" type="number" min="0" step="1" value="${b.accessMinutes||0}"></div><div><label for="note-${b.id}">Entrance note</label><input id="note-${b.id}" data-building-note="${b.id}" value="${esc(b.accessNote||"")}" placeholder="Doors, ID, lifts — shown to speakers"></div></div></div>`).join("")}</div></section>
             <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Rooms</h2><span class="subtle">Capacity, building, AV capability, and the notes an ops lead needs on the day</span></div><button class="button small" id="add-room">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="room-row"><div class="room-row-main"><span class="drag-handle">${i+1}</span><input aria-label="Room name" data-room-name="${i}" value="${esc(r)}"><input aria-label="Room capacity" data-room-capacity="${i}" type="number" min="1" step="1" value="${state.roomCapacities[i]}"><select aria-label="Building" data-room-building="${i}"><option value="">Unassigned</option>${buildings.map(b=>`<option value="${b.id}" ${state.roomBuildings[i]===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}</select><button class="button small" data-remove-room="${i}" ${rooms.length<=1?"disabled":""}>Remove</button></div><div class="room-row-meta"><span class="room-meta-label">AV</span><div class="av-tags">${AV_TAGS.map(tag=>`<button class="av-tag ${(state.roomAV[i]||[]).includes(tag)?"on":""}" data-room-av="${i}" data-av-tag="${esc(tag)}" aria-pressed="${(state.roomAV[i]||[]).includes(tag)?"true":"false"}">${esc(tag)}</button>`).join("")}</div></div><div class="room-row-meta"><span class="room-meta-label">Notes</span><input aria-label="Room notes" data-room-notes="${i}" value="${esc(state.roomNotes[i]||"")}" placeholder="Access, load-in, quirks — shown on the agenda and to speakers"></div></div>`).join("")}</div></section>
           </div>
         </div>`);
@@ -1662,6 +1785,7 @@
           <div class="portal-head"><div><div class="eyebrow">Welcome back</div><h1>Amara van der Meer</h1><span class="subtle">Your status, tasks, profile, and conference details in one place.</span></div><div class="portal-progress"><strong style="font-size:12px">${done} of ${state.tasks.length} tasks done</strong><div class="progress-track"><i style="width:${done/state.tasks.length*100}%"></i></div></div></div>
           ${portalSubmissionCard()}
           ${portalDecisionFeedback()}
+          ${portalLocationCard()}
           <div class="portal-grid">
             <section class="card"><div class="card-head"><div><h2>Your tasks</h2><span class="subtle">Complete the overdue item first</span></div><span class="chip overdue">1 overdue</span></div><div class="card-body" id="task-list">${state.tasks.map(taskRow).join("")}</div></section>
             <div class="stack">
@@ -1671,6 +1795,27 @@
           </div>
         </main></div>`;
       }
+      // The post-acceptance question nobody else answers: where do I go, when do
+      // I need to leave, and how do I get in. Text first; the map is the receipt.
+      function portalLocationCard() {
+        const slot = sessionSlot(state.portalRecordId); if (!slot) return "";
+        const info = roomInfo(slot.room), b = info && info.building;
+        const t = transitTo(slot, PORTAL_SPEAKER);
+        const directions = hasPin(b) ? `https://www.google.com/maps/search/?api=1&query=${b.lat},${b.lng}` : "";
+        let leave = "";
+        if (t && t.prev) leave = `Your previous session ends <b>${minutesToClock(clockToMinutes(t.prev.time)+t.prev.duration)}</b> at ${esc(t.from.name)} — <b>${t.walk} min walk</b>${t.access?`, plus <b>${t.access} min</b> at the door`:""}. Leave by <b>${t.leaveBy}</b>.`;
+        else if (t) leave = `<b>${t.walk} min walk</b> from ${esc(t.from.name)}${t.access?`, plus <b>${t.access} min</b> to get in`:""}. Be on your way by <b>${t.leaveBy}</b>.`;
+        else if (b && b.accessMinutes) leave = `Allow <b>${b.accessMinutes} min</b> to get through the door — arrive by <b>${minutesToClock(clockToMinutes(slot.time)-b.accessMinutes-5)}</b>.`;
+        return `<section class="card" style="margin-bottom:16px"><div class="card-head"><div><h2>Where you are speaking</h2><span class="subtle">${esc(slot.day)} · ${esc(slot.time)}</span></div>${directions?`<a class="button small" href="${directions}" target="_blank" rel="noreferrer">Directions ↗</a>`:""}</div>
+          <div class="card-body"><div class="grid-2" style="gap:18px;align-items:start"><div>
+            <div class="loc-line"><span class="loc-label">Room</span><span class="loc-value"><strong>${esc(slot.room)}</strong>${info&&info.capacity?` · ${info.capacity.toLocaleString()} seats`:""}</span></div>
+            <div class="loc-line"><span class="loc-label">Building</span><span class="loc-value">${b?`<strong>${esc(b.name)}</strong>${b.address?`<br><span class="subtle">${esc(b.address)}</span>`:""}`:`<span class="rp-empty">No building assigned yet</span>`}</span></div>
+            ${b&&b.accessNote?`<div class="loc-line"><span class="loc-label">Getting in</span><span class="loc-value">${esc(b.accessNote)}</span></div>`:""}
+            ${info&&info.notes?`<div class="loc-line"><span class="loc-label">Room notes</span><span class="loc-value">${esc(info.notes)}</span></div>`:""}
+            ${leave?`<div class="loc-leave">${leave}</div>`:""}
+          </div><div>${hasPin(b)?venueMap([b],{width:430,height:196,labels:false,zoom:16}):`<div class="mq-map" style="height:196px"><div class="mq-map-empty">This session has no physical location.</div></div>`}</div></div></div></section>`;
+      }
+
       function portalSubmissionCard() {
         const portalRecord=state.submissions.find(s=>s.id===state.portalRecordId), slot=sessionSlot(state.portalRecordId);
         if(state.portalEditing)return `<section class="status-hero"><div class="stack"><div class="eyebrow">${slot?"Scheduled":"Accepted"} · Wave 2 · Editing talk</div><div class="field"><label for="portal-talk-title">Talk title</label><input id="portal-talk-title" value="${esc(state.portalSessionTitle)}"></div><div class="field"><label for="portal-talk-description">Talk description</label><textarea id="portal-talk-description" style="min-height:110px">${esc(state.portalSessionDescription)}</textarea></div>${scheduleMeta(portalRecord)}<span class="field-note">Editing closes when the CFP closes on Sep 12. The organizer can re-open editing for this submission afterward.</span><div style="display:flex;gap:7px"><button class="button primary small" id="save-talk-edit">Save talk</button><button class="button small" id="cancel-talk-edit">Cancel</button></div></div><div><span class="chip review">CFP open</span><p class="subtle">Changes update the organizer record immediately and are stamped in its history.</p></div></section>`;
@@ -1944,19 +2089,39 @@
           <div class="route-tabs"><button class="button active" data-comms-anchor="templates">Templates</button><button class="button" data-comms-anchor="triggers">Triggers</button><button class="button" data-comms-anchor="outbox">Outbox · ${state.outbox.length}</button></div>
           <div class="comms-layout">
             <section class="card" id="templates"><div class="card-head"><h2>Templates</h2><span class="subtle">Merge fields render per recipient</span></div>${state.commsTemplates.map(t=>`<button class="list-button ${t.id===template.id?"active":""}" data-template-id="${t.id}"><span><strong>${esc(t.name)}</strong><small style="display:block;margin-top:4px">${esc(t.subject)}</small></span><span>→</span></button>`).join("")}</section>
-            <section class="card"><div class="card-head"><div><h2>${esc(template.name)}</h2><span class="subtle">Rendered preview uses Amara van der Meer</span></div><button class="button small" id="save-template">Save template</button></div><div class="card-body stack"><div class="field"><label>Subject</label><input id="template-subject" value="${esc(template.subject)}"></div><div class="field"><label>Message</label><textarea id="template-body" style="min-height:170px">${esc(template.body)}</textarea></div><div class="field"><label>Rendered preview</label><div class="message-preview" id="template-preview">${renderMergedTemplate(template)}</div></div></div></section>
+            <section class="card"><div class="card-head"><div><h2>${esc(template.name)}</h2><span class="subtle">Rendered preview uses Amara van der Meer</span></div><button class="button small" id="save-template">Save template</button></div><div class="card-body stack"><div class="field"><label>Subject</label><input id="template-subject" value="${esc(template.subject)}"></div><div class="field"><label>Message</label><textarea id="template-body" style="min-height:170px">${esc(template.body)}</textarea><div class="merge-fields" style="margin-top:7px">${MERGE_FIELDS.map(f=>`<button class="merge-chip" data-merge-field="${esc(f)}" title="Insert {{${esc(f)}}}">{{${esc(f)}}}</button>`).join("")}</div><span class="field-note">Click a field to insert it. Place fields resolve per recipient from the scheduled room.</span></div><div class="field"><label>Rendered preview</label><div class="message-preview" id="template-preview">${renderMergedTemplate(template)}</div></div></div></section>
             <section class="card" id="triggers"><div class="card-head"><div><h2>Automated triggers</h2><span class="subtle">Each can be paused without deleting its template</span></div><span class="chip published">7 configured</span></div><div class="card-body">${Object.entries(triggers).map(([key,label])=>`<div class="toggle-line"><span><strong style="font-size:11px">${esc(label)}</strong><small class="subtle" style="display:block;margin-top:3px">Uses ${esc(key==="closing"?"Submission-closing reminder":key[0].toUpperCase()+key.slice(1))}</small></span><button class="switch ${state.commsTriggers[key]?"on":""}" data-trigger="${key}" aria-label="Toggle ${esc(label)}" aria-pressed="${state.commsTriggers[key]}"></button></div>`).join("")}</div></section>
             <section class="card table-card" id="outbox"><div class="card-head"><div><h2>Outbox log</h2><span class="subtle">Demo-safe · no email leaves the prototype</span></div><span class="chip">Rendered bodies retained</span></div><div class="table-wrap" style="min-height:260px"><table><thead><tr><th>ID</th><th>Recipient</th><th>Template</th><th>Subject</th><th>Outcome</th><th></th></tr></thead><tbody>${state.outbox.map((m,i)=>`<tr><td>${m.id}</td><td>${esc(m.recipient)}</td><td>${esc(m.template)}</td><td>${esc(m.subject)}</td><td><span class="chip ${m.outcome==="Delivered"?"published":"overdue"}">${esc(m.outcome)}</span></td><td><button class="button small" data-preview-message="${i}">Preview</button></td></tr>`).join("")}</tbody></table></div></section>
           </div>
         </div>`);
       }
 
+      // Every merge field in one place, resolved against the real portal record so
+      // the preview shows what the speaker will actually read. Place fields carry
+      // the entrance and the leave-by — email is the surface speakers read most.
+      const MERGE_FIELDS = ["speaker.first_name","conference.name","session.title","task.title","session.room","session.building","session.address","session.accessNote","session.leaveBy"];
+      function mergeValues() {
+        const slot = sessionSlot(state.portalRecordId), info = slot ? roomInfo(slot.room) : null, b = info && info.building;
+        const t = slot ? transitTo(slot, PORTAL_SPEAKER) : null;
+        return {
+          "speaker.first_name": "Amara",
+          "conference.name": state.event.name || "AIE NYC 2026",
+          "session.title": state.portalSessionTitle,
+          "task.title": "Bio + headshot",
+          "session.room": slot ? slot.room : "—",
+          "session.building": b ? b.name : "—",
+          "session.address": (b && b.address) || "—",
+          "session.accessNote": (b && b.accessNote) || "—",
+          "session.leaveBy": t ? t.leaveBy : (slot ? slot.time : "—")
+        };
+      }
       function renderMergedTemplate(template) {
-        return esc(template.body).replace(/\n/g,"<br>").replace(/\{\{speaker\.first_name\}\}/g,"Amara").replace(/\{\{conference\.name\}\}/g,"AIE NYC 2026").replace(/\{\{session\.title\}\}/g,"Beyond the demo: reliable multi-agent systems").replace(/\{\{task\.title\}\}/g,"Bio + headshot");
+        const vals = mergeValues();
+        return esc(template.body).replace(/\n/g,"<br>").replace(/\{\{([a-z_]+\.[a-zA-Z_]+)\}\}/g, (m,k)=> k in vals ? esc(String(vals[k])) : m);
       }
 
       function taskTemplatesView() {
-        return shell(`<div class="page">${pageHead("Task templates", "Every accepted speaker receives the right acknowledgements, forms, and file requests without manual setup.", `<button class="button" data-route="settings">Conference settings</button><button class="button primary" id="add-task-template">+ Add task template</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Conference</a><a class="button active" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav><section class="card"><div class="card-head"><div><h2>Accepted-speaker task set</h2><span class="subtle">Drag to reorder · due dates are relative to acceptance</span></div><span class="chip">${state.taskTemplates.length} tasks</span></div><div class="card-body" id="task-template-list">${state.taskTemplates.map((t,i)=>`<div class="settings-row" draggable="true" data-task-template="${t.id}"><button class="drag-button">⋮⋮</button><div><input data-task-title="${t.id}" value="${esc(t.title)}"><div class="field-note">${esc(t.description)}</div></div><select data-task-kind="${t.id}">${["Acknowledge","Form","File request"].map(k=>`<option ${k===t.kind?"selected":""}>${k}</option>`).join("")}</select><label class="field" style="display:flex;align-items:center;gap:4px"><input data-task-due="${t.id}" type="number" min="0" value="${t.due}" style="width:62px"><span class="subtle">days</span></label></div>`).join("")}</div></section></div>`);
+        return shell(`<div class="page">${pageHead("Task templates", "Every accepted speaker receives the right acknowledgements, forms, and file requests without manual setup.", `<button class="button" data-route="settings">Conference settings</button><button class="button primary" id="add-task-template">+ Add task template</button>`)}${settingsTabs("taskTemplates")}<section class="card"><div class="card-head"><div><h2>Accepted-speaker task set</h2><span class="subtle">Drag to reorder · due dates are relative to acceptance</span></div><span class="chip">${state.taskTemplates.length} tasks</span></div><div class="card-body" id="task-template-list">${state.taskTemplates.map((t,i)=>`<div class="settings-row" draggable="true" data-task-template="${t.id}"><button class="drag-button">⋮⋮</button><div><input data-task-title="${t.id}" value="${esc(t.title)}"><div class="field-note">${esc(t.description)}</div></div><select data-task-kind="${t.id}">${["Acknowledge","Form","File request"].map(k=>`<option ${k===t.kind?"selected":""}>${k}</option>`).join("")}</select><label class="field" style="display:flex;align-items:center;gap:4px"><input data-task-due="${t.id}" type="number" min="0" value="${t.due}" style="width:62px"><span class="subtle">days</span></label></div>`).join("")}</div></section></div>`);
       }
 
       function importerView() {
@@ -1971,11 +2136,11 @@
       }
 
       function airtableView() {
-        return shell(`<div class="page">${pageHead("Airtable mirror", "D1 stays authoritative. The two-way mirror runs off the request path and makes its health visible.", `<a class="button" href="#settings">Conference settings</a><button class="button primary" id="sync-airtable">Sync now</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Conference</a><a class="button" href="#settings/tasks">Task templates</a><a class="button active" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav><div class="grid-2"><section class="card"><div class="card-head"><h2>AIE NYC 2026 base</h2><a class="button small" href="https://airtable.com/appAIE2026" target="_blank" rel="noreferrer">Open base ↗</a></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Marquee rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Airtable rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Last successful sync</span><div class="metric" style="font-size:16px">23 sec ago</div></div><div class="metric-box"><span class="eyebrow">Outbox depth</span><div class="metric">0</div></div></div><div class="message-preview" style="margin-top:14px"><strong>Webhook healthy · renews automatically</strong><br><span class="subtle">Expires Aug 14, 2026 · keepalive due in 5 days. You’ll see a warning here 48 hours before expiry.</span></div></div></section><section class="card"><div class="card-head"><h2>Live sync log</h2><span class="chip published">Healthy</span></div><div class="card-body"><div class="live-log" id="airtable-log">${state.airtableLog.map((line,i)=>`<div>${i===state.airtableLog.length-1?"<strong>✓</strong>":"·"} ${esc(line)}</div>`).join("")}</div></div></section></div></div>`);
+        return shell(`<div class="page">${pageHead("Airtable mirror", "D1 stays authoritative. The two-way mirror runs off the request path and makes its health visible.", `<a class="button" href="#settings">Conference settings</a><button class="button primary" id="sync-airtable">Sync now</button>`)}${settingsTabs("airtable")}<div class="grid-2"><section class="card"><div class="card-head"><h2>AIE NYC 2026 base</h2><a class="button small" href="https://airtable.com/appAIE2026" target="_blank" rel="noreferrer">Open base ↗</a></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Marquee rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Airtable rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Last successful sync</span><div class="metric" style="font-size:16px">23 sec ago</div></div><div class="metric-box"><span class="eyebrow">Outbox depth</span><div class="metric">0</div></div></div><div class="message-preview" style="margin-top:14px"><strong>Webhook healthy · renews automatically</strong><br><span class="subtle">Expires Aug 14, 2026 · keepalive due in 5 days. You’ll see a warning here 48 hours before expiry.</span></div></div></section><section class="card"><div class="card-head"><h2>Live sync log</h2><span class="chip published">Healthy</span></div><div class="card-body"><div class="live-log" id="airtable-log">${state.airtableLog.map((line,i)=>`<div>${i===state.airtableLog.length-1?"<strong>✓</strong>":"·"} ${esc(line)}</div>`).join("")}</div></div></section></div></div>`);
       }
 
       function apiTokensView() {
-        return shell(`<div class="page">${pageHead("API tokens", "Issue revocable credentials for agents, scripts, and integrations independently of browser sessions.", `<a class="button" href="#api/docs">Read API docs</a><button class="button primary" id="create-token">Create token</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Conference</a><a class="button" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button active" href="#settings/api">API tokens</a></nav><section class="card table-card"><div class="table-wrap" style="min-height:300px"><table><thead><tr><th>Name</th><th>Token</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>${state.apiTokens.map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td><code>${esc(t.prefix)}</code></td><td>${esc(t.created)}</td><td>${esc(t.lastUsed)}</td><td><button class="button small danger" data-revoke-token="${t.id}">Revoke</button></td></tr>`).join("")||`<tr><td colspan="5" style="height:180px;text-align:center"><strong>No API tokens</strong><div class="subtle">Create one for your first agent or integration.</div></td></tr>`}</tbody></table></div></section></div>`);
+        return shell(`<div class="page">${pageHead("API tokens", "Issue revocable credentials for agents, scripts, and integrations independently of browser sessions.", `<a class="button" href="#api/docs">Read API docs</a><button class="button primary" id="create-token">Create token</button>`)}${settingsTabs("apiTokens")}<section class="card table-card"><div class="table-wrap" style="min-height:300px"><table><thead><tr><th>Name</th><th>Token</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>${state.apiTokens.map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td><code>${esc(t.prefix)}</code></td><td>${esc(t.created)}</td><td>${esc(t.lastUsed)}</td><td><button class="button small danger" data-revoke-token="${t.id}">Revoke</button></td></tr>`).join("")||`<tr><td colspan="5" style="height:180px;text-align:center"><strong>No API tokens</strong><div class="subtle">Create one for your first agent or integration.</div></td></tr>`}</tbody></table></div></section></div>`);
       }
 
       function apiDocsView() {
@@ -2127,7 +2292,7 @@
         if (state.agendaView === "week") return renderWeekAgenda(visible);
         if (state.agendaView === "room") return renderRoomAgenda(visible);
         const times = ["09:00","10:00","11:00","13:30","14:30","15:30"];
-        return `<div class="agenda-grid"><div class="agenda-cell head time"></div>${rooms.map(r=>`<div class="agenda-cell head">${roomHeadLabel(r)}</div>`).join("")}${times.map(time=>`<div class="agenda-cell time">${time}</div>${rooms.map(room=>{const s=daySessions.find(x=>x.time===time&&x.room===room);return `<div class="agenda-cell drop-target" data-drop-time="${time}" data-drop-room="${room}">${s?sessionTile(s):""}</div>`}).join("")}`).join("")}</div>`;
+        return `<div class="agenda-grid">${buildingBand()}<div class="agenda-cell head time"></div>${rooms.map(r=>`<div class="agenda-cell head">${roomHeadLabel(r, geoActive())}</div>`).join("")}${times.map(time=>`<div class="agenda-cell time">${time}</div>${rooms.map(room=>{const s=daySessions.find(x=>x.time===time&&x.room===room);return `<div class="agenda-cell drop-target" data-drop-time="${time}" data-drop-room="${room}">${s?sessionTile(s):""}</div>`}).join("")}`).join("")}</div>`;
       }
 
       function renderWeekAgenda(items) {
@@ -2172,6 +2337,87 @@
         return walkMinutes(from, to) + (to.accessMinutes || 0);
       }
 
+      // ── v1.7: geography ──────────────────────────────────────────────────
+      // Zoom 2 — address, entrance, access time — is worth the same at one
+      // building as at four: a single hotel still has a door and a security desk.
+      // Zoom 1 — walk times, "leave by" — needs something to compare against, so
+      // it stays dark until a second pinned building exists.
+      function pinnedBuildings() { return buildings.filter(hasPin); }
+      function geoActive() { return pinnedBuildings().length >= 2; }
+      function primaryBuilding() { return pinnedBuildings()[0] || null; }
+      function clockToMinutes(v) { const [h,m]=String(v).split(":").map(Number); return h*60+m; }
+      function minutesToClock(m) { const t=((Math.round(m)%1440)+1440)%1440; return `${String(Math.floor(t/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`; }
+
+      // The origin for a "leave by" is the speaker's own previous session, not the
+      // main stage — that is the number they actually need. Falls back to the
+      // primary building when they have nothing earlier that day.
+      function previousSlotFor(slot, speaker) {
+        if (!slot || !speaker) return null;
+        return state.scheduled
+          .filter(s => s.kind!=="break" && s.id!==slot.id && s.day===slot.day
+                    && (s.speakers||[s.speaker]).includes(speaker)
+                    && clockToMinutes(s.time)+s.duration <= clockToMinutes(slot.time))
+          .sort((a,b)=>clockToMinutes(b.time)-clockToMinutes(a.time))[0] || null;
+      }
+      function transitTo(slot, speaker) {
+        if (!geoActive() || !slot) return null;
+        const to = buildingForRoom(slot.room); if (!hasPin(to)) return null;
+        const prev = previousSlotFor(slot, speaker);
+        const from = prev ? buildingForRoom(prev.room) : primaryBuilding();
+        if (!hasPin(from) || from.id === to.id) return null;
+        const walk = walkMinutes(from, to), access = to.accessMinutes || 0;
+        return { from, to, prev, walk, access, needed: walk + access, leaveBy: minutesToClock(clockToMinutes(slot.time) - walk - access) };
+      }
+
+      // A map with no map library. OSM raster tiles are positioned as plain
+      // images on a fixed-width plane; pins and walking lines are drawn over it.
+      // Nothing to initialise, nothing to lazy-load, no reflow when tiles land —
+      // and when they never land, the pins still tell the truth over the grid.
+      const TILE_PX = 256, tileURL = (z,x,y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+      function mercatorPx(lat, lng, z) {
+        const scale = TILE_PX * Math.pow(2, z), sin = Math.sin(lat * Math.PI/180);
+        return { x: (lng+180)/360*scale, y: (0.5 - Math.log((1+sin)/(1-sin))/(4*Math.PI))*scale };
+      }
+      function fitZoom(list, w, h) {
+        if (list.length < 2) return 16;
+        for (let z=17; z>=10; z--) {
+          const pts = list.map(b=>mercatorPx(b.lat,b.lng,z));
+          const dx = Math.max(...pts.map(p=>p.x)) - Math.min(...pts.map(p=>p.x));
+          const dy = Math.max(...pts.map(p=>p.y)) - Math.min(...pts.map(p=>p.y));
+          if (dx <= w-140 && dy <= h-60) return z;
+        }
+        return 10;
+      }
+      function venueMap(list, opts = {}) {
+        const w = opts.width || 900, h = opts.height || 260, labels = opts.labels !== false;
+        const pins = (list||[]).filter(hasPin);
+        if (!pins.length) return `<div class="mq-map" style="height:${h}px"><div class="mq-map-empty">No venue has a pin yet. Add coordinates in Conference settings and the map fills in.</div></div>`;
+        const z = opts.zoom || fitZoom(pins, w, h);
+        const pts = pins.map(b=>mercatorPx(b.lat,b.lng,z));
+        // Zoom is fitted to the design width; the tile plane is rendered wider and
+        // centre-clipped so a container that turns out broader than expected still
+        // shows map rather than bare grid at its edges.
+        const planeW = w + 512;
+        const left = (Math.min(...pts.map(p=>p.x)) + Math.max(...pts.map(p=>p.x)))/2 - planeW/2;
+        const top  = (Math.min(...pts.map(p=>p.y)) + Math.max(...pts.map(p=>p.y)))/2 - h/2;
+        let tiles = "";
+        for (let tx = Math.floor(left/TILE_PX); tx <= Math.floor((left+planeW)/TILE_PX); tx++)
+          for (let ty = Math.floor(top/TILE_PX); ty <= Math.floor((top+h)/TILE_PX); ty++)
+            tiles += `<img class="mq-tile" alt="" src="${tileURL(z,tx,ty)}" style="left:${Math.round(tx*TILE_PX-left)}px;top:${Math.round(ty*TILE_PX-top)}px" onerror="this.closest('.mq-map').classList.add('no-tiles')">`;
+        const at = pins.map((b,i)=>({ b, x: pts[i].x-left, y: pts[i].y-top }));
+        let lines = "";
+        if (opts.walk) for (let i=0;i<at.length;i++) for (let j=i+1;j<at.length;j++) {
+          const mins = walkMinutes(at[i].b, at[j].b);
+          lines += `<line class="mq-walk-line" x1="${at[i].x.toFixed(1)}" y1="${at[i].y.toFixed(1)}" x2="${at[j].x.toFixed(1)}" y2="${at[j].y.toFixed(1)}"></line>`
+                 + `<text class="mq-walk-label" x="${((at[i].x+at[j].x)/2).toFixed(1)}" y="${((at[i].y+at[j].y)/2-4).toFixed(1)}" text-anchor="middle">${mins} min</text>`;
+        }
+        const marks = at.map(p => `<i class="mq-pin${opts.focus && opts.focus !== p.b.id ? " muted" : ""}" style="left:${p.x.toFixed(1)}px;top:${p.y.toFixed(1)}px"></i>`
+          + (labels ? `<span class="mq-pin-label" style="left:${p.x.toFixed(1)}px;top:${p.y.toFixed(1)}px">${esc(p.b.name)}</span>` : "")).join("");
+        return `<div class="mq-map" style="height:${h}px"><div class="mq-plane" style="width:${planeW}px">${tiles}`
+             + `<svg class="mq-overlay" width="${planeW}" height="${h}">${lines}</svg><div class="mq-overlay">${marks}</div>`
+             + `</div><span class="mq-attrib">© OpenStreetMap contributors</span></div>`;
+      }
+
       function getAgendaConflicts() {
         const conflicts = [];
         const toMinutes = value => { const [h,m]=value.split(":").map(Number); return h*60+m; };
@@ -2198,8 +2444,8 @@
           if (gap >= needed) continue;
           const walk = walkMinutes(from, to), access = to.accessMinutes || 0;
           conflicts.push({
-            kind: "travel",
-            type: `Travel — ${walk} min walk to ${to.name}${access?`, plus ${access} min building security`:""}. ${shared} needs ${needed} min; has ${gap}.`,
+            kind: "transit",
+            type: `Transit — ${walk} min walk to ${to.name}${access?`, plus ${access} min building security`:""}. ${shared} needs ${needed} min; has ${gap}.`,
             a: first, b: second
           });
         }
@@ -2364,7 +2610,7 @@
           document.querySelectorAll("[data-format-name]").forEach((input,i)=>{const old=formats[i],name=input.value.trim()||old;formats[i]=name;formatRanges[name]=document.querySelector(`[data-format-range="${i}"]`).value;formatDurations[name]=Math.max(5,Number(document.querySelector(`[data-format-duration="${i}"]`).value)||20);if(name!==old){delete formatRanges[old];delete formatDurations[old];}});
           document.querySelectorAll("[data-track-name]").forEach((input,i)=>{tracks[i].name=input.value.trim()||tracks[i].name;tracks[i].color=document.querySelector(`[data-track-color="${i}"]`).value;});
           document.querySelectorAll("[data-room-name]").forEach((input,i)=>{rooms[i]=input.value.trim()||rooms[i];state.roomCapacities[i]=Math.max(1,Math.round(Number(document.querySelector(`[data-room-capacity="${i}"]`).value)||1));state.roomBuildings[i]=document.querySelector(`[data-room-building="${i}"]`).value||"";state.roomNotes[i]=document.querySelector(`[data-room-notes="${i}"]`).value.trim();});
-          document.querySelectorAll("[data-building-name]").forEach(input=>{const b=buildingById(input.dataset.buildingName);if(!b)return;b.name=input.value.trim()||b.name;b.address=document.querySelector(`[data-building-address="${b.id}"]`).value.trim();});
+          document.querySelectorAll("[data-building-name]").forEach(input=>{const b=buildingById(input.dataset.buildingName);if(!b)return;b.name=input.value.trim()||b.name;b.address=document.querySelector(`[data-building-address="${b.id}"]`).value.trim();const num=sel=>{const raw=document.querySelector(`[${sel}="${b.id}"]`)?.value.trim();const n=Number(raw);return raw===""||Number.isNaN(n)?null:n;};b.lat=num("data-building-lat");b.lng=num("data-building-lng");b.accessMinutes=Math.max(0,Math.round(num("data-building-access")||0));b.accessNote=(document.querySelector(`[data-building-note="${b.id}"]`)?.value||"").trim();});
           state.event = { ...state.event, name: document.getElementById("event-name").value, start: document.getElementById("event-start").value, end: document.getElementById("event-end").value, venue: document.getElementById("event-venue").value, timezone: document.getElementById("event-timezone").value };
           // The fresh-install walk is a sandbox: it must never persist its event
           // over the seeded demo, or the demo boots as somebody's test conference.
@@ -2375,7 +2621,7 @@
         document.getElementById("add-track")?.addEventListener("click",()=>{tracks.push({name:`New track ${tracks.length+1}`,color:"#64748b"});render();});
         document.getElementById("add-room")?.addEventListener("click",()=>{rooms.push(`New room ${rooms.length+1}`);state.roomCapacities.push(100);state.roomBuildings.push(buildings[0]?.id||"");state.roomAV.push([]);state.roomNotes.push("");render();});
         document.querySelectorAll("[data-remove-room]").forEach(b=>b.onclick=()=>{const i=Number(b.dataset.removeRoom);rooms.splice(i,1);state.roomCapacities.splice(i,1);state.roomBuildings.splice(i,1);state.roomAV.splice(i,1);state.roomNotes.splice(i,1);render();});
-        document.getElementById("add-building")?.addEventListener("click",()=>{buildings.push({id:`b${Date.now().toString(36)}`,name:`New building ${buildings.length+1}`,address:""});render();});
+        document.getElementById("add-building")?.addEventListener("click",()=>{buildings.push({id:`b${Date.now().toString(36)}`,name:`New building ${buildings.length+1}`,address:"",lat:null,lng:null,accessMinutes:0,accessNote:""});render();});
         document.querySelectorAll("[data-remove-building]").forEach(b=>b.onclick=()=>{
           const id=b.dataset.removeBuilding, orphaned=roomsInBuilding(id), name=buildingById(id)?.name||"Building";
           buildings.splice(buildings.findIndex(x=>x.id===id),1);
@@ -2461,7 +2707,18 @@
         document.getElementById("edit-talk")?.addEventListener("click",()=>{state.portalEditing=true;render();});
         document.getElementById("cancel-talk-edit")?.addEventListener("click",()=>{state.portalEditing=false;render();});
         document.getElementById("save-talk-edit")?.addEventListener("click",()=>{state.portalSessionTitle=document.getElementById("portal-talk-title").value.trim()||state.portalSessionTitle;state.portalSessionDescription=document.getElementById("portal-talk-description").value.trim()||state.portalSessionDescription;const record=state.submissions.find(s=>s.id===state.portalRecordId),slot=sessionSlot(state.portalRecordId);if(record){record.title=state.portalSessionTitle;record.description=state.portalSessionDescription;}if(slot){slot.title=state.portalSessionTitle;slot.description=state.portalSessionDescription;}state.portalEditing=false;toast("Talk updated · organizer record and history stamped just now");render();});
-        document.getElementById("download-invite")?.addEventListener("click",()=>downloadText("aie-nyc-session.ics",`BEGIN:VCALENDAR\nVERSION:2.0\nMETHOD:REQUEST\nBEGIN:VEVENT\nSUMMARY:${state.portalSessionTitle}\nDTSTART:20261013T140000Z\nDTEND:20261013T142000Z\nLOCATION:Empire East\nEND:VEVENT\nEND:VCALENDAR`,"text/calendar"));
+        document.getElementById("download-invite")?.addEventListener("click",()=>{
+          const slot=sessionSlot(state.portalRecordId), info=slot?roomInfo(slot.room):null, b=info&&info.building;
+          const icsEsc=v=>String(v).replace(/([,;\\])/g,"\\$1").replace(/\n/g," ");
+          const where=[slot?slot.room:"", b?b.name:"", b?b.address:""].filter(Boolean).join(", ");
+          downloadText("aie-nyc-session.ics",["BEGIN:VCALENDAR","VERSION:2.0","METHOD:REQUEST","BEGIN:VEVENT",
+            `SUMMARY:${icsEsc(state.portalSessionTitle)}`,"DTSTART:20261013T140000Z","DTEND:20261013T142000Z",
+            `LOCATION:${icsEsc(where||"Venue to be confirmed")}`,
+            ...(hasPin(b)?[`GEO:${b.lat};${b.lng}`]:[]),
+            ...(info&&info.notes?[`DESCRIPTION:${icsEsc(info.notes)}`]:[]),
+            "END:VEVENT","END:VCALENDAR"].join("\n"),"text/calendar");
+          toast("Calendar invite includes the address and map coordinates");
+        });
         document.getElementById("confirm-role")?.addEventListener("click",e=>{e.currentTarget.textContent="Role confirmed ✓";e.currentTarget.disabled=true;toast("Participation confirmed for this speaker role");});
         document.getElementById("decline-role")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Decline this speaker role?</h2><p>The program team will be notified; other roles and submissions are unchanged.</p></div><div class="modal-body field"><label>Optional note</label><textarea placeholder="Tell the program team what changed"></textarea></div><div class="modal-actions"><button class="button" id="cancel-decline">Keep role</button><button class="button danger" id="confirm-decline">Decline role</button></div></section></div>`;document.getElementById("cancel-decline").onclick=()=>modalRoot.innerHTML="";document.getElementById("confirm-decline").onclick=()=>{modalRoot.innerHTML="";toast("Role declined · program team notified");};});
         document.getElementById("edit-profile")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Edit speaker profile</h2><p>Public speaker surfaces update after save.</p></div><div class="modal-body stack"><div class="grid-2"><div class="field"><label>Title</label><input value="Director of Applied AI"></div><div class="field"><label>Company</label><input value="Capital One"></div></div><div class="field"><label>Biography</label><textarea>Amara builds evaluation and governance systems for AI teams operating in regulated environments.</textarea></div><div class="field"><label>Headshot</label><input type="file" accept="image/*"><div class="message-preview">Crop preview · square safe area · initials placeholder retained until save</div></div><div class="field"><label>Social link</label><input value="https://www.linkedin.com/in/amara-example"></div></div><div class="modal-actions"><button class="button" id="cancel-profile">Cancel</button><button class="button primary" id="save-profile">Save profile</button></div></section></div>`;document.getElementById("cancel-profile").onclick=()=>modalRoot.innerHTML="";document.getElementById("save-profile").onclick=()=>{modalRoot.innerHTML="";toast("Speaker profile saved · conference site updated");};});
@@ -2543,6 +2800,16 @@
 
       function bindComms() {
         document.querySelectorAll("[data-template-id]").forEach(b=>b.onclick=()=>{state.activeCommsTemplate=b.dataset.templateId;render();});
+        // Insert a merge field at the cursor, then re-render the preview live.
+        document.querySelectorAll("[data-merge-field]").forEach(b=>b.onclick=()=>{
+          const area=document.getElementById("template-body"); if(!area)return;
+          const token=`{{${b.dataset.mergeField}}}`, at=area.selectionStart ?? area.value.length;
+          area.value=area.value.slice(0,at)+token+area.value.slice(area.selectionEnd ?? at);
+          area.focus(); area.selectionStart=area.selectionEnd=at+token.length;
+          const preview=document.getElementById("template-preview");
+          if(preview) preview.innerHTML=renderMergedTemplate({body:area.value});
+        });
+        document.querySelectorAll("[data-venue]").forEach(b=>b.onclick=()=>{state.venueFocus=state.venueFocus===b.dataset.venue?"":b.dataset.venue;render();});
         document.querySelectorAll("[data-trigger]").forEach(b=>b.onclick=()=>{const key=b.dataset.trigger;state.commsTriggers[key]=!state.commsTriggers[key];render();});
         document.querySelectorAll("[data-comms-anchor]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.commsAnchor)?.scrollIntoView({behavior:"smooth"}));
         document.getElementById("save-template")?.addEventListener("click",()=>{const t=state.commsTemplates.find(x=>x.id===state.activeCommsTemplate);t.subject=document.getElementById("template-subject").value;t.body=document.getElementById("template-body").value;toast("Template saved · future triggers use this version");render();});
@@ -2650,6 +2917,7 @@
           agenda:["Nothing to schedule","Accept an Abstract or create a Session. Accepted-and-unplaced work appears in the pool automatically.","Add a Session","submissions/new"],
           publicAgenda:["The agenda is not published","Schedule and publish at least one Session before sharing the conference site.","Open organizer demo","agenda"],
           comms:["No communication templates","Create a template, then connect it to a lifecycle trigger.","Create a template","comms"],
+          venues:["No venues yet","Buildings and rooms belong to a conference. Create one and the site map fills in.","Create conference","conferences/new"],
           taskTemplates:["No speaker task templates","Add acknowledgements, forms, and file requests before the first acceptance.","Add task template","settings/tasks"],
           importer:["Import your active program","Upload Sessionize Sessions and Speakers exports to preserve undecided records and review history.","Start mocked import","import"],
           airtable:["Airtable is not connected","Connect a Team-plan base to start the off-request-path two-way mirror.","Connect Airtable","settings/airtable"],
@@ -2694,6 +2962,10 @@
         const el = roomPanel();
         el.innerHTML = `<div class="rp-head"><strong>${esc(info.name)}</strong><span class="rp-cap tabular">${info.capacity ? info.capacity.toLocaleString() + " seats" : "—"}</span></div>
           <div class="rp-building">${info.building ? `<strong>${esc(info.building.name)}</strong>${info.building.address ? `<span>${esc(info.building.address)}</span>` : ""}` : `<span class="rp-empty">No building assigned</span>`}</div>
+          ${hasPin(info.building) ? venueMap([info.building], {width:248, height:108, labels:false, zoom:16}) : ""}
+          ${geoActive() && hasPin(info.building) && primaryBuilding() && primaryBuilding().id !== info.building.id
+            ? `<div class="rp-section"><span class="rp-label">From ${esc(primaryBuilding().name)}</span><p class="rp-notes">${walkMinutes(primaryBuilding(), info.building)} min walk${info.building.accessMinutes?` · allow ${info.building.accessMinutes} min to get in`:""}</p></div>` : ""}
+          ${info.building && info.building.accessNote ? `<div class="rp-section"><span class="rp-label">Getting in</span><p class="rp-notes">${esc(info.building.accessNote)}</p></div>` : ""}
           <div class="rp-section"><span class="rp-label">AV</span>${info.av.length ? `<div class="rp-tags">${info.av.map(t => `<span class="rp-tag">${esc(t)}</span>`).join("")}</div>` : `<span class="rp-empty">No AV equipment recorded</span>`}</div>
           <div class="rp-section"><span class="rp-label">Notes</span>${info.notes ? `<p class="rp-notes">${esc(info.notes)}</p>` : `<span class="rp-empty">No notes</span>`}</div>`;
         el.hidden = false;
@@ -2723,7 +2995,7 @@
 
       function render() {
         state.route = currentRoute();
-        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
+        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
         // During the fresh-install walk the dashboard is the setup checklist, and
         // screens with genuinely no data render their empty state; everything else
         // renders for real against the new event.
