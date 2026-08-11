@@ -1,25 +1,45 @@
 {
   "assigned_to": "agent:delegator-mrq-4",
   "branch_links": [],
-  "c11_surface": "surface:104",
+  "c11_surface": "surface:117",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 1,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-04a \u2014 Wave 0 (\u00a73) \u26d4 ON THE CRITICAL PATH\n\nScope (verbatim): `scripts/seed/` skeleton from `sources/aie-summit-2025-program.json`: event, formats, tracks, rooms, waves, task templates, and the **60-session real accepted core** with its speakers and participations. Idempotent; `npm run seed`; `reset:demo` calls it. **Placeholder avatars only; no real emails; no real headshots.** Deliberately small so it does not sit on M-08's critical path.\n\nSplit rationale (adversarial B-5, \u00a73): M-04a carries only what M-08 needs, so the Wave 0 critical chain is M-01 (3) \u2192 M-02 (4) \u2192 M-04a (2) \u2192 M-08 (4) = **13 h, not 18**. **Do not re-fuse this with M-04b** \u2014 that merge was considered at mint and declined for exactly this reason.\n\nAmendment 4 fold: the seed carries swyx's named task templates \u2014 \"Hotel and Travel Reservations\" (form) + \"Presentation Upload\" (file request) leading every accepted speaker's list, plus the optional four across a subset (SPEC \u00a76).\nAmendment 11 fold (SPEC.md, post-BUILDPLAN-v1.4): seed the real **four buildings** of the 2025 program and attach every room to one (AC-252).\nTrap 16: set an explicit `User-Agent` on every stdlib HTTP call in seed/backfill scripts \u2014 `api.resend.com` 403s `Python-urllib`.\n\nFile surface: `scripts/seed/index.ts`, `scripts/seed/event.ts`, `scripts/seed/accepted-core.ts`, `src/lib/ids.ts`\n\nACs: AC-8 \u00b7 seed-side foundation for **AC-252** (Amendment 11)\nHours: 2\nWorkflow: fast-track (\u22642 h) \u2014 but it owns a flagged shared file and sits on the critical chain; treat the file rule as binding.\nShared files: `scripts/seed/index.ts` \u2014 M-04a OWNS it (\u00a77). Orchestration only; per-entity seeders are separate files it globs, so M-04b never edits it.\nDeps: M-02\nHuman precondition: Airtable demo base on Team or above **before** this seed runs (\u00a78 item 4, trap 6 \u2014 Free caps at 1,000 records and the seed is exactly 1,000)\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T00:49:03Z",
   "evidence_refs": [
     {
       "id": "art_01KZPXMF1AN2CFQJEW3TDY1QCH",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ4D0QDX3XJ99R72S2RVMS2",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ4DA2ZYKF1H3QR72A5HKFE",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ4EYWJ666EXSK3B6NKHV8V",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ4JPP50DBVNBYP22KT01C4",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM7Q3C3GVRFCGX2V0YMY1",
-  "last_event_id": "ev_01KZQ1368V4D5X56W9QZTK34TK",
-  "last_status_changed_at": "2026-08-10T22:39:35Z",
+  "last_event_id": "ev_01KZQ4PPRR20FWZHBWWX5EEK2A",
+  "last_status_changed_at": "2026-08-11T00:49:03Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +54,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-4",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Seed generator \u2014 spine",
   "type": "task",
-  "updated_at": "2026-08-10T23:45:58Z",
+  "updated_at": "2026-08-11T00:49:03Z",
   "urgency": null
 }
