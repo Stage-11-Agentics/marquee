@@ -1,7 +1,7 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
   "created_by": "agent:orchestrator-intake",
@@ -10,7 +10,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMBANA8WWRP0HECNZ2255",
-  "last_event_id": "ev_01KZJHMBAPZ1QP1TS2AH1EA78Y",
+  "last_event_id": "ev_01KZQK6HFNHKR8DNG21S5GYM9V",
   "last_status_changed_at": "2026-08-09T05:58:45Z",
   "linked_files": [],
   "priority": "medium",
@@ -22,6 +22,6 @@
   "tags": null,
   "title": "AC-coverage closure and public-repo assembly",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:45Z",
+  "updated_at": "2026-08-11T05:02:22Z",
   "urgency": null
 }

@@ -10,10 +10,26 @@
   "custom_fields": {},
   "description": "BUILDPLAN M-58 \u00b7 ACs AC-258, AC-259 \u00b7 SPEC Amendment 14 \u00b7 US-78.\n\nThird conflict class in getConflicts beside room overlap and speaker double-booking: two sessions sharing a speaker, in different pinned buildings, whose gap is smaller than walk + destination access_minutes.\n\nwalk = haversine(a,b) * 1.3 / 80 metres-per-minute, floored at 1 minute. The 1.3 is a street-grid detour allowance; claim no more precision than that. Warns, never blocks \u2014 same contract as every other conflict.\n\nMust flow into the existing dashboard count, conflicts drawer, and affected tiles through the ONE existing getConflicts call. A parallel path is a defect.\n\nMessage shape (from the prototype, verified): 'Transit \u2014 12 min walk to AWS JFK27, plus 10 min building security. Ifeoma Adeyemi needs 22 min; has 10.'\n\nNAMING IS BINDING: the class is Transit, never Travel. 'Travel and accommodation' is already a speaker task meaning flights and hotels, and both land on the same person. Rename across object kind, drawer, tile flag, dashboard label, API conflict type, and copy. AC-259 enforces it with a byte-scan.\n\nAlso: building band over the agenda room columns (one cell per contiguous run of rooms sharing a building \u2014 the grid encodes geography before any map does), and room headers drop the now-redundant building suffix.\n\nDepends on M-57's re-seed. Without it there is nothing to detect and this ticket cannot demonstrate itself.",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQKBSKG4ETAVEBQCBR0W6Z9",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQKCQEMQFYY6CGKZFY7WK0M",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQKEARBQVSRYT35RRHN7M3F",
+      "role": null,
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZQAGW864Y559SFNMMGFRQWQ",
-  "last_event_id": "ev_01KZQHGJKERSFA912QG734HXZP",
-  "last_status_changed_at": "2026-08-11T04:32:54Z",
+  "last_event_id": "ev_01KZQKEARBQVSRYT35RRHN7M3G",
+  "last_status_changed_at": "2026-08-11T05:05:27Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [
@@ -28,10 +44,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-63",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Transit conflicts \u2014 geography as a scheduling constraint",
   "type": "task",
-  "updated_at": "2026-08-11T04:32:54Z",
+  "updated_at": "2026-08-11T05:06:37Z",
   "urgency": null
 }

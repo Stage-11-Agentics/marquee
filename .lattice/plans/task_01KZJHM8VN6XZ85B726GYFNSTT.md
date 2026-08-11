@@ -22,7 +22,7 @@ Build the authenticated speaker portal for M-15 / walkthrough step 6. Render the
 
 ## Binding ownership
 
-- Owned ACs: AC-43–AC-52, AC-237, AC-240, and AC-233 unless implementation evidence forces the explicitly named cut-line decision.
+- Owned ACs: AC-43–AC-52, AC-237, and AC-233; exercise the portal slice of AC-240 because MRQ-11 is already its trace owner and duplicate ownership blocks the merged gate.
 - Not owned and must not be claimed in prose, code, or test names: AC-235/236 (M-52 decision feedback) and AC-152–154 (M-42 role confirm/decline).
 - Render the decision-feedback slot without implementing its behavior; leave the location/arrival-instructions slot to MRQ-64.
 - Keep organizer-facing noun as “conference”; preserve `/api/v1/events/...` wire paths.
@@ -33,7 +33,7 @@ Build the authenticated speaker portal for M-15 / walkthrough step 6. Render the
 2. Add the portal API in `src/routes/portal.routes.ts` so it is discovered by `_manifest.ts` and represented in OpenAPI. The authenticated `GET /api/v1/me/portal` response is scoped to a session principal with a `speaker` membership and an optional event query; it returns only that person's submissions, tasks, profile, schedule, feedback slot, and static handbook. Mutations are `POST /api/v1/me/tasks/{taskId}/complete`, `PATCH /api/v1/me/profile`, and `PATCH /api/v1/me/submissions/{submissionId}/talk`; the organizer control is `PATCH /api/v1/events/{eventId}/submissions/{submissionId}/talk-editing` behind `program:write`. Every handler repeats the person/event/submission ownership predicate. Tests include both 401/403 status assertions and body assertions proving a second speaker's identifiers and data are absent.
 3. Implement `src/ui/portal/*` as separate concern files: stable shell/status/task rendering, actual acknowledge/form/file task surfaces, profile/headshot editing, talk edit/history, decision-feedback slot renderer, and handbook. Reuse `isFieldApplicable()` plus `projectApplicableAnswers()` for conditional form projection/validation. Extend the existing authenticated MRQ-14 sign route only to add the already-modeled `person_headshot` owner; profile writes bind a ready, session-owned attachment. No alternate upload lifecycle or `always_live` write site is added.
 4. Preserve v1.9 geometry and honest states: reserved task rows, fixed-width actions, “—” placeholders, tabular numerals, long-name/title truncation, complete-state copy, loading/error/empty states, and the required `Room · Building` location shape without public `access_note` leakage.
-5. Add AC-tagged tests under `tests/` for each owned auto claim, including route manifest/OpenAPI parity and session isolation. AC-233 is included in this build with a static per-event Markdown projection and heading/link rendering test. Add `tests/ac-claims/MRQ-16.json` with only AC-43–AC-52, AC-233, AC-237, and AC-240; do not claim decision-feedback behavior or role confirmation/decline.
+5. Add AC-tagged tests under `tests/` for each owned auto claim, including route manifest/OpenAPI parity and session isolation. AC-233 is included in this build with a static per-event Markdown projection and heading/link rendering test. Add `tests/ac-claims/MRQ-16.json` with owned AC-43–AC-52, AC-233, AC-237 and exercised AC-240; do not claim decision-feedback behavior or role confirmation/decline.
 
 ## Verification and handoff
 

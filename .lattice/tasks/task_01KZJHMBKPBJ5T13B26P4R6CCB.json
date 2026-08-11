@@ -1,7 +1,7 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
@@ -10,7 +10,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMBKPBJ5T13B26P4R6CCB",
-  "last_event_id": "ev_01KZJHMJSDXKVJ0DF0TBZVE4CP",
+  "last_event_id": "ev_01KZQK6HJN461X2WQN85HWY30P",
   "last_status_changed_at": "2026-08-09T05:58:46Z",
   "linked_files": [],
   "priority": "medium",
@@ -30,6 +30,6 @@
   "tags": null,
   "title": "Audit \u2014 mail containment and demo-safe suppression",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:53Z",
+  "updated_at": "2026-08-11T05:02:22Z",
   "urgency": null
 }

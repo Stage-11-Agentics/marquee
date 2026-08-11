@@ -1,0 +1,8 @@
+HEAD: c48aad90fc4f676374f8a39770c89e9d3362e5c6
+Verdict: PASS
+Remote: forgejo/mrq-63-transit equals HEAD.
+Gate: npm run pr-gate -- --ticket MRQ-63 passed: worker types, client types, test types, production build, design contract, Vitest 32 files / 170 tests, Node 34 tests, and merged AC trace (live 212, testFiles 43, claims 20, uncovered 0, errors 0).
+Seed: npm run check:seed passed; Sheraton access 0, New York Marriott Marquis access 3, Online unpinned; exact Transit conflict emitted: Transit — 9 min walk to New York Marriott Marquis, plus 3 min building access. Needs 12 min; has 0.
+Static: required grep -rn Travel src/ scripts/ migrations/ hits only the legitimate Hotel and Travel Reservations speaker task in seed data; no conflict label or API copy.
+Live observed: local Vite app with seeded data in c11 browser surface:175. Dashboard loaded Conflicts 7 and retained Hotel and Travel Reservations. Agenda loaded header ⚠ 7 conflicts, contiguous Sheraton / Marriott / Online building band, and affected tiles marked ⚠ Transit. The conflicts drawer showed the exact helper message above alongside person and room conflicts. A placement POST returned 201 with a warning, confirming Transit warns and never blocks.
+Ownership: MRQ-62 owns geometry, seed existence, and helper/check:seed proof; MRQ-63 owns surfacing through the canonical agenda getConflicts result, dashboard count, drawer payload, and affected tiles.
