@@ -8,7 +8,7 @@ walk = haversine(a,b) * 1.3 / 80 metres-per-minute, floored at 1 minute. The 1.3
 
 Must flow into the existing dashboard count, conflicts drawer, and affected tiles through the ONE existing getConflicts call. A parallel path is a defect.
 
-Message shape (from the prototype, verified): 'Transit — 12 min walk to AWS JFK27, plus 10 min building security. Ifeoma Adeyemi needs 22 min; has 10.'
+Message shape (authoritative code): use the exact `message` emitted by `getTransitConflicts()` in `src/lib/venue-geometry.ts`; for the shipped fixture this is 'Transit — 9 min walk to New York Marriott Marquis, plus 3 min building access. Needs 12 min; has 0.' Do not reconstruct or duplicate this template; `speaker_id` remains a separate conflict field.
 
 NAMING IS BINDING: the class is Transit, never Travel. 'Travel and accommodation' is already a speaker task meaning flights and hotels, and both land on the same person. Rename across object kind, drawer, tile flag, dashboard label, API conflict type, and copy. AC-259 enforces it with a byte-scan.
 
@@ -37,3 +37,4 @@ Depends on M-57's re-seed. Without it there is nothing to detect and this ticket
 - `readAgendaSnapshot` is the authoritative agenda conflict read. The dashboard currently has no Conflicts metric; its fourth work-in-motion metric will be replaced with a live count from the shared agenda conflict reader and will link to `/agenda-builder`.
 - Prototype v1.9's day grid adds a fixed-height building band with contiguous room runs and uses bare room names beneath it. Other room surfaces retain their full `Room · Building` label until the later disclosure-fold ticket.
 - Baseline: targeted agenda/dashboard tests and the full hermetic test command passed before edits; the branch is rebased on `forgejo/master @ 07e01396f1a800a17afe0d6952dc0436c626bba5` and `npm ci` has completed.
+- Correction received 2026-08-11: `sequence/venue-map-ux.md` and `sequence/venue-map-brief.md` carry superseded venue examples. Their reasoning is historical only; code ground truth is `src/lib/venue-geometry.ts`, `scripts/seed/event.ts`, and prototype v1.9. The shipped set is Sheraton New York Times Square (access 0), New York Marriott Marquis (access 3), and unpinned Online.
