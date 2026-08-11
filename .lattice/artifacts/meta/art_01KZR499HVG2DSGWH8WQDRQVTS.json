@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:00:58Z",
+  "created_by": "agent:delegator-mrq-65",
+  "custom_fields": {},
+  "id": "art_01KZR499HVG2DSGWH8WQDRQVTS",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR499HVG2DSGWH8WQDRQVTS.md",
+    "size_bytes": 1908
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS review of exact implementation head 237553d7ba98f8e20cd96692aab7c53bbdecddca",
+  "tags": [],
+  "title": "MRQ-65 self-review",
+  "token_usage": null,
+  "type": "file"
+}

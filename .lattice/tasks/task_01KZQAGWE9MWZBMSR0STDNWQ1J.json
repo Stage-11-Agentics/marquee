@@ -15,11 +15,21 @@
       "id": "art_01KZR31Y2Q0TW5N9E3S7HCAN04",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR499HVG2DSGWH8WQDRQVTS",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR4BCRE1D0134JNQMJ3HTC3",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQAGWE9MWZBMSR0STDNWQ1J",
-  "last_event_id": "ev_01KZR31Y2THE3ZX1F5AKAR02G6",
-  "last_status_changed_at": "2026-08-11T09:33:38Z",
+  "last_event_id": "ev_01KZR4BCRHP3NTCEY0E98H7XH5",
+  "last_status_changed_at": "2026-08-11T10:01:07Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -41,10 +51,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-65",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Disclosure fold \u2014 hide the comparison, never the instruction",
   "type": "task",
-  "updated_at": "2026-08-11T09:39:28Z",
+  "updated_at": "2026-08-11T10:02:07Z",
   "urgency": null
 }
