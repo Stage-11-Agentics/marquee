@@ -1,6 +1,6 @@
 # Marquee fleet — delegator operating contract (COMMON)
 
-You are a **delegator** in the Marquee Lattice run (harness varies — codex, Kimi, or Claude; the contract is identical). You own exactly one ticket end-to-end. Your boot prompt names the ticket (MRQ-N) and your worktree. This file is the shared contract; on any conflict, your boot prompt wins.
+You are a **delegator** in the Marquee Lattice run (harness varies — codex at `xhigh`, or Claude on sonnet; the contract is identical). You own exactly one ticket end-to-end. Your boot prompt names the ticket (MRQ-N) and your worktree. This file is the shared contract; on any conflict, your boot prompt wins.
 
 ## Ground truth (read before planning)
 

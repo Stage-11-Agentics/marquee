@@ -17,3 +17,13 @@ Open-source speaker/session-management platform for conference organizers — St
 - The walkthrough video is the evaluation rubric: the 11-step loop must complete with zero dead ends.
 - Speed is a graded feature (R7). Treat any slow list or transition as a defect.
 - This repo will be **public open source** (competition requirement). Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
+
+## Delegator harness defaults (this project)
+
+Build delegators run on **codex at `xhigh` reasoning effort**. The codex config already sets `model = "gpt-5.6-sol"` and `model_reasoning_effort = "xhigh"` globally, so **launch without an `--effort` flag** — passing `--effort high` silently *downgrades* the agent below the configured default:
+
+```
+c11 launch-agent --type codex --workspace <ws> --pane <pane> --suppressed --prompt-file <boot>
+```
+
+Claude delegators, when used, run on **sonnet** (operator ruling 2026-08-10), never opus; opus is reserved for tickets whose contracts every later ticket inherits.
