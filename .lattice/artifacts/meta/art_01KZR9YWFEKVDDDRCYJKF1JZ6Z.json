@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:40:09Z",
+  "created_by": "agent:auditor-mrq-52",
+  "custom_fields": {},
+  "id": "art_01KZR9YWFEKVDDDRCYJKF1JZ6Z",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR9YWFEKVDDDRCYJKF1JZ6Z.md",
+    "size_bytes": 3937
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Rebased-head real Worker drives: 150 accept completion, 1,000 withdraw durability, assignment cap reproduction, 150-row import, empty-selection no-op, idempotency count, and final PR gate.",
+  "tags": [],
+  "title": "MRQ-52 validation exact head 6868fc4",
+  "token_usage": null,
+  "type": "file"
+}

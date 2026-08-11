@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:221",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": "medium",
   "created_at": "2026-08-11T03:59:53Z",
   "created_by": "agent:claude",
   "custom_fields": {},
   "description": "M-63. Owns AC-268 and AC-269. Depends on M-52 (decision rows) and M-11.\n\nZERO SCHEMA \u2014 fully derived from submission_decisions left-joined to outbox.\n\nTHE GAP: PHILOSOPHY 2 makes the status change BE the notification, which beats the incumbent. The honest corollary is that the automatic send has exactly THREE designed-in ways not to arrive, and all three are correct: (a) the Airtable mirror deliberately does not run the cascade (AC-226), (b) an outbox row sits queued/suppressed/failed, (c) the record carries no usable address so nothing could be queued. None had a screen.\n\nBUILD:\n1. Immutable built-in view 'Decided \u00b7 not notified' over the submissions list. The Notified column must state WHICH reason applies per record \u2014 'Changed in Airtable' / 'Not delivered' / 'No valid address'. 'Not notified' with no reason is just a second thing to worry about.\n2. Fourth attention-strip row on /dashboard carrying the count, linking into the view. At zero it STATES that every decision has reached its speaker \u2014 it must not disappear. A row that vanishes when healthy cannot be trusted when it appears.\n3. 'Notify N speakers' head action: writes a NEW outbox row against the EXISTING decision row and never rewrites the decision (assert decision, decided_at, decided_by_person_id and feedback_md byte-identical afterwards). No-address records are excluded from BOTH the action and its count, and the sentence says how many need an address first.\n\nBinding prototype: prototypes/pipeline-v1.1/index.html at v1.8. 2 agent-hours.",
-  "done_at": null,
+  "done_at": "2026-08-11T11:23:38Z",
   "evidence_refs": [
     {
       "id": "art_01KZR7T4CBDNWRFE6FTTG6Z2QM",
@@ -25,21 +25,36 @@
       "id": "art_01KZR8WMCRAKM02XWEDFBPASJ1",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR8YEKC3VET10H8TABJTJD9",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR90MQ5MFH8TT45VQXY79X2",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR90MQ5MFH8TT45VQXY79X1",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQFM4K9VR1EVHS8KRX03NAQ",
-  "last_event_id": "ev_01KZR8WMCVFFR5BSNMPP667MVP",
-  "last_status_changed_at": "2026-08-11T11:20:21Z",
+  "last_event_id": "ev_01KZR90MQ5MFH8TT45VQXY79X5",
+  "last_status_changed_at": "2026-08-11T11:23:38Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-68",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Decided \u00b7 not notified \u2014 the built-in view and the attention row",
   "type": "task",
-  "updated_at": "2026-08-11T11:21:26Z",
+  "updated_at": "2026-08-11T11:23:38Z",
   "urgency": null
 }

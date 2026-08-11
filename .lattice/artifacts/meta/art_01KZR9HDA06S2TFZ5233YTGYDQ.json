@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:32:47Z",
+  "created_by": "agent:auditor-mrq-52",
+  "custom_fields": {},
+  "id": "art_01KZR9HDA06S2TFZ5233YTGYDQ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR9HDA06S2TFZ5233YTGYDQ.md",
+    "size_bytes": 806
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: exact rebased diff manually reviewed after two code-review worker exits; fast-track fallback recorded.",
+  "tags": [],
+  "title": "MRQ-52 self-review fallback exact head 6868fc4",
+  "token_usage": null,
+  "type": "note"
+}

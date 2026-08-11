@@ -1,0 +1,1 @@
+PASS. Exact head 6868fc4 is based on forgejo/master 8cbe426 and changes only the audit guard plus claims manifest. The inventory classifies 14 map placeholder sites, including reviewer authorization and queueRows explicit 80-ID chunks; current non-map placeholder sweep is empty. npm test: 73/73, 14.903s, within 30s. trace:ac MRQ-52: pass, uncovered auto criteria 0.

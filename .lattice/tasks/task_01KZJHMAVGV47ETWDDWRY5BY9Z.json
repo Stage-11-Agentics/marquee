@@ -3,17 +3,53 @@
   "branch_links": [],
   "c11_surface": "surface:224",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-41 (rank 22, US-21) + M-43 (rank 24, US-18) \u2014 Wave 2 (\u00a75) \u00b7 MERGED at mint (4 h + 3 h = 7 h; identical dependency set {M-14}, same public-form module)\n\n**M-41 \u2014 Co-speaker** (4 h, ACs AC-149 \u2013 AC-151, dep M-14)\nScope (verbatim): max enforcement, notification, own-profile completion.\nAC-151: the co-speaker supplies bio and headshot via their link **without the abstract becoming editable**.\n\n**M-43 \u2014 Mobile submit pass** (3 h, ACs AC-155 \u2013 AC-157, dep M-14)\nScope (verbatim): mobile submit pass.\nAC-156's method: `scrollWidth \u2264 clientWidth` at every step; the on-screen keyboard is modelled as a 375\u00d7340 visual viewport and the focused field's box must stay inside it. Real-device confirmation at **C6**, which is the tiebreaker if the two disagree.\n\nACs (union): AC-149 \u2013 AC-151, AC-155 \u2013 AC-157\nHours: 7 (4 + 3)\nWorkflow: sub-agent-full (\u22657 h combined)\nShared files: none \u2014 module-local under `src/ui/public/form/*` (M-14's module; add files, do not rewrite).\nDeps: M-14\nNote: AC-155 \u2013 AC-157 are also claimed in M-14's AC list (the plan assigns the mobile pass its own ticket at rank 24). `trace:ac` needs one owner \u2014 **this ticket owns the mobile ACs**; M-14 owns the desktop path.\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-11T13:17:11Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZR9179W70ENGME9BM1DX9FH",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZRANK7RQ2W11SBYTRTZ7028",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZRAPB55YSCEH93V2FDCNBXS",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZRAPRKWF7235359EQ9BCJAA",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZRARKBN5D77YWHVPR1AN4MR",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZRFGJM696FA6ZD9RPPB4HJT",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZRFGJM696FA6ZD9RPPB4HJS",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHMAVGV47ETWDDWRY5BY9Z",
-  "last_event_id": "ev_01KZR8VWEA4YJZBJ7FRMZPFZHR",
-  "last_status_changed_at": "2026-08-11T11:21:02Z",
+  "last_event_id": "ev_01KZRFGJM7T35X9FXTEX7XETBF",
+  "last_status_changed_at": "2026-08-11T13:17:11Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -25,13 +61,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-37",
-  "status": "planned",
+  "status": "done",
   "tags": null,
   "title": "Co-speaker flow and the mobile submit pass",
   "type": "task",
-  "updated_at": "2026-08-11T11:21:02Z",
+  "updated_at": "2026-08-11T13:17:11Z",
   "urgency": null
 }

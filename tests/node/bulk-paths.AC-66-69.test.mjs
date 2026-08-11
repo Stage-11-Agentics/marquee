@@ -172,6 +172,13 @@ function nonMapPlaceholderSites(modules) {
 
 const EXPECTED_PLACEHOLDER_SITES = [
   {
+    file: "src/lib/reset-demo/demo-fixture.ts",
+    owner: "shippedDemoFixtureRows",
+    binding: null,
+    expression: 'columns.map(() => "?")',
+    classification: "one placeholder per COLUMN of a single-row INSERT; bounded by the table schema, not by any caller-supplied list, so it cannot approach D1's binding cap",
+  },
+  {
     file: "src/lib/reviewer-scope.ts",
     owner: "authorizeReviewerQueueScope",
     binding: "result",

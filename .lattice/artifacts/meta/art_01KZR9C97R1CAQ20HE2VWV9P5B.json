@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:29:59Z",
+  "created_by": "agent:auditor-mrq-52",
+  "custom_fields": {},
+  "id": "art_01KZR9C97R1CAQ20HE2VWV9P5B",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR9C97R1CAQ20HE2VWV9P5B.md",
+    "size_bytes": 367
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: rebased repo-wide placeholder inventory includes current queue chunk sites; full rebased suite and trace pass.",
+  "tags": [],
+  "title": "MRQ-52 self-review exact head 6868fc4",
+  "token_usage": null,
+  "type": "note"
+}

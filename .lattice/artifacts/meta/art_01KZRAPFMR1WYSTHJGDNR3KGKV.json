@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:53:02Z",
+  "created_by": "agent:delegator-mrq-72",
+  "custom_fields": {},
+  "id": "art_01KZRAPFMR1WYSTHJGDNR3KGKV",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZRAPFMR1WYSTHJGDNR3KGKV.md",
+    "size_bytes": 1764
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: dirty-state Worker queue reset restored exact shipped counts twice, preserved unrelated tenant/R2 rows, and kept both demo logins working.",
+  "tags": [],
+  "title": "MRQ-72 running reset validation",
+  "token_usage": null,
+  "type": "note"
+}

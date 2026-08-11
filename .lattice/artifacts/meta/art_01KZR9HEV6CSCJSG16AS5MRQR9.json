@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:32:49Z",
+  "created_by": "agent:delegator-mrq-67",
+  "custom_fields": {},
+  "id": "art_01KZR9HEV6CSCJSG16AS5MRQR9",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR9HEV6CSCJSG16AS5MRQR9.md",
+    "size_bytes": 1043
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Self-review passed; automatic reviewer exited because its session limit was reached.",
+  "tags": [],
+  "title": "Delegator exact-head self-review",
+  "token_usage": null,
+  "type": "note"
+}

@@ -3,27 +3,58 @@
   "branch_links": [],
   "c11_surface": "surface:223",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-11T11:05:41Z",
   "created_by": "agent:orchestrator",
   "custom_fields": {},
   "description": "WALKTHROUGH-CRITICAL. MRQ-53's reset drill audit found four defects and, per audit discipline, fixed none of them. Read its findings first: they carry file:line and reproductions.\n\nTwo of them together are a walkthrough dead end. A judge who makes a mess and presses Reset demo gets NOTHING (the button is dead), and if they reach reset another way they get a HOLLOW demo (restore writes a minimal fixture, not the shipped seed). Reset is the judge's undo button; its failure only shows after someone has already invested twenty minutes, which is the cruellest possible time to discover it.\n\nFOUR DEFECTS, in priority order:\n\n1. DEAD 'Reset demo' BUTTON. src/ui/shell/Sidebar.tsx renders it via unavailable(...) \u2014 a placeholder that never calls the reset endpoint. Wire it to the real endpoint, with an honest confirm (this is destructive), a pending state, and an honest result. Elements never jump: reserve the space so the label change does not move the sidebar.\n\n2. MINIMAL-FIXTURE RESTORE. Reset restores a minimal fixture rather than the shipped seed, so after reset the demo is hollow \u2014 no 1,000 submissions, no accepted core, no agenda. Restore must reproduce the seeded baseline a judge started from. Prove it by row COUNTS per table before and after, not by a 200.\n\n3. CROSS-TENANT WIPE. Reset wipes rows it does not own. Single-tenant today makes it survivable, not correct. Scope the wipe to the demo event/org and assert an unrelated tenant's rows are untouched \u2014 counts before and after, with a positive control that the demo rows DID go.\n\n4. R2 ORPHANS. Reset leaves uploaded objects behind. Either delete them under the demo prefix or document deliberately why not. An orphan store grows forever on a public deploy.\n\nCONSTRAINTS. WIPE_ORDER stays FK-safe and MRQ-53's merged guard (tests/node/reset-wipe-order.test.mjs) asserts it covers every table every migration defines \u2014 do not weaken it; extend WIPE_ORDER if you add tables. Reset must leave demo login working; a reset that restores data but breaks the demo persona is still a dead end. Reset twice in a row must be as clean as once. Do not add a migration; 0001-0004 are merged and immutable and MRQ-66 owns 0005.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-11T13:16:35Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZR9CKZG1YTBP8ZGBC3XMBRK",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZRANDFM7VAMJNFY2HAHWDRD",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZRAPFMR1WYSTHJGDNR3KGKV",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZRASVNT6M8VFER18HGJHGDF",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZRFFFNQK1VG0GXBC8WWDKW9",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZRFFFNQK1VG0GXBC8WWDKW8",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZR7ZSRBNY9J31VFRCXK3884",
-  "last_event_id": "ev_01KZR84J2C0J19X8W17WABE2YG",
-  "last_status_changed_at": "2026-08-11T11:08:17Z",
+  "last_event_id": "ev_01KZRFFFNQK1VG0GXBC8WWDKWC",
+  "last_status_changed_at": "2026-08-11T13:16:35Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-72",
-  "status": "in_planning",
+  "status": "done",
   "tags": null,
   "title": "Reset demo is broken end to end \u2014 dead button, minimal-fixture restore, cross-tenant wipe, R2 orphans",
   "type": "task",
-  "updated_at": "2026-08-11T11:08:17Z",
+  "updated_at": "2026-08-11T13:16:35Z",
   "urgency": null
 }

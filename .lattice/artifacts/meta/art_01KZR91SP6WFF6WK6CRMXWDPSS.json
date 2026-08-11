@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:24:15Z",
+  "created_by": "agent:delegator-mrq-66",
+  "custom_fields": {},
+  "id": "art_01KZR91SP6WFF6WK6CRMXWDPSS",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR91SP6WFF6WK6CRMXWDPSS.md",
+    "size_bytes": 729
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS on exact pushed HEAD d98d2f9; schema, targeted contract, full suite, and pr-gate evidence attached.",
+  "tags": [],
+  "title": "MRQ-66 validation",
+  "token_usage": null,
+  "type": "note"
+}
