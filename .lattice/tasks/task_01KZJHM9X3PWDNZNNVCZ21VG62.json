@@ -10,8 +10,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM9X3PWDNZNNVCZ21VG62",
-  "last_event_id": "ev_01KZJHMGHT34P9KHTCAM7419AF",
-  "last_status_changed_at": "2026-08-09T05:58:44Z",
+  "last_event_id": "ev_01KZR5YVR5VZFKPZGMV4N52RDX",
+  "last_status_changed_at": "2026-08-11T10:30:14Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -33,10 +33,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-27",
-  "status": "backlog",
+  "status": "cancelled",
   "tags": null,
   "title": "Airtable mirror \u2014 inbound",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:51Z",
+  "updated_at": "2026-08-11T10:30:14Z",
   "urgency": null
 }

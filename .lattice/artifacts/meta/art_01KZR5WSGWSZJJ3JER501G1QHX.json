@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:29:06Z",
+  "created_by": "agent:auditor-mrq-44",
+  "custom_fields": {},
+  "id": "art_01KZR5WSGWSZJJ3JER501G1QHX",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR5WSGWSZJJ3JER501G1QHX.md",
+    "size_bytes": 448
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Mandatory local gate passed at final HEAD 8ee281d",
+  "tags": [],
+  "title": "MRQ-44 final pr-gate",
+  "token_usage": null,
+  "type": "note"
+}

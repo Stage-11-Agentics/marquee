@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T10:28:36Z",
+  "created_by": "agent:delegator-mrq-42",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/57"
+  },
+  "id": "art_01KZR5VWFH4GVWDS0B46KKZMGZ",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Normal merge-based PR for reusable public assembly tooling and honest AC trace closure. PR #54 remains closed; orphan f4240644 is never merged.",
+  "tags": [],
+  "title": "Forgejo PR #57 (normal reusable branch)",
+  "token_usage": null,
+  "type": "reference"
+}

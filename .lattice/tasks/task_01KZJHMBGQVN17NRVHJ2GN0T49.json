@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:209",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
@@ -25,10 +25,30 @@
       "id": "art_01KZR5NSDEHNJWNRVHB25YDJM9",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR5SDSTAVH15XDXRSCV2VM8",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR5TCHW0P9Y17A80KTESC13",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR5WSGWSZJJ3JER501G1QHX",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR5Y4Q3ZJVSH0AV842BXY9T",
+      "role": null,
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMBGQVN17NRVHJ2GN0T49",
-  "last_event_id": "ev_01KZR5NSDG4RH1BPX23YFVX8TD",
+  "last_event_id": "ev_01KZR5Y4Q3ZJVSH0AV842BXY9V",
   "last_status_changed_at": "2026-08-11T10:24:14Z",
   "linked_files": [],
   "priority": "medium",
@@ -48,6 +68,6 @@
   "tags": null,
   "title": "Audit \u2014 PROTOTYPE badge absent from the product",
   "type": "task",
-  "updated_at": "2026-08-11T10:25:16Z",
+  "updated_at": "2026-08-11T10:29:50Z",
   "urgency": null
 }

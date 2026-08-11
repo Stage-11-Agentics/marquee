@@ -803,3 +803,15 @@ Amendment 11 gave a building a name, an address, and a position in a list. This 
 **Dropped, deliberately:** `submission.updated` (fires on every keystroke-level edit — noise that would swamp a consumer) and `person.updated` (profile edits are covered where they matter by `speaker.confirmed` and `speaker_task.completed`). Both remain available to a later amendment if a consumer asks; neither is worth a bonus event slot now.
 
 Delivery is unchanged: `HMAC-SHA256` over `id.timestamp.body`, retried with backoff on `WEBHOOK_QUEUE`, idempotent on delivery `id`.
+
+## Amendment 17 — the Airtable mirror is cut (operator ruling, 2026-08-11)
+
+**Cut, named explicitly as EVALUATION gate 19 requires:** MRQ-26 (mirror outbound), MRQ-27 (mirror inbound), MRQ-46 (mirror isolation audit), and MRQ-54 (inbound webhook spike). S-1 (Airtable base spike) is likewise not run.
+
+**Why.** The mirror was never built — no `src/jobs/mirror/` exists; only a route-table entry and schema stubs. Its dependent audit had nothing to audit, and the spike plus S-1 needed an operator-provided Airtable base that was never in hand. Five of the eleven remaining tickets were therefore blocked on a track that had not started, with the deploy still unshipped.
+
+**Nothing already published becomes false.** SPEC Amendment 4 and the README both present Airtable as *a deliberate engineering trade and an extension point*, never as a claim to the source-of-truth bonus — the explicit **API bonus (R53)** and Cloudflare carry that story instead. The README's extension-points table already names the mirror as an extension point rather than a shipped feature, and states D1 remains the source of truth.
+
+**What survives.** `mirror_state` schema, the `mirror:write` API token scope, and the documented extension point. A future implementer inherits a named seam rather than a half-built one.
+
+**What we forgo.** The two-way sync demo. A half-built mirror shown on camera would read worse than a clean, documented extension point — which is the trade this ruling makes deliberately.

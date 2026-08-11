@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-39",
   "branch_links": [],
+  "c11_surface": "surface:218",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMB1JN77G754W68R9NBCJ",
-  "last_event_id": "ev_01KZJHMJDT91DDD6MGPHW1P6TC",
-  "last_status_changed_at": "2026-08-09T05:58:45Z",
+  "last_event_id": "ev_01KZR5V4YRD3VA9Z9ECWGMJXM4",
+  "last_status_changed_at": "2026-08-11T10:28:12Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-39",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Mobile reviewer pass and optional AI first pass",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:53Z",
+  "updated_at": "2026-08-11T10:28:12Z",
   "urgency": null
 }

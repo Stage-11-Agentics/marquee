@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:auditor-mrq-52",
   "branch_links": [],
+  "c11_surface": "surface:217",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMC8GC8EY5R2D50NRXN45",
-  "last_event_id": "ev_01KZJHMKSBDVX3GTAV2TZJ5N47",
-  "last_status_changed_at": "2026-08-09T05:58:46Z",
+  "last_event_id": "ev_01KZR5V83GRHWJ9PE5D9YENH85",
+  "last_status_changed_at": "2026-08-11T10:28:15Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-52",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Audit \u2014 bulk-write path and chunking",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:54Z",
+  "updated_at": "2026-08-11T10:28:15Z",
   "urgency": null
 }
