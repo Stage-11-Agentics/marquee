@@ -41,8 +41,12 @@ If your implementation must diverge from `SPEC.md` (or any contract doc), implem
 
 ## Reviews (inline-full mode; skip for fast-track, self-review instead)
 
-- After planning: `(cd "$LATTICE_ROOT" && lattice plan-review MRQ-N --mode single --actor agent:delegator-mrq-N-plan-reviewer)`. Triage every finding into an amendment block appended to the plan file (`## Plan-Review Cycle K Resolutions (AUTHORITATIVE)`); never implement over untriaged findings. Restore your tab title after review calls.
-- After implementing: `(cd <worktree> && timeout 600 bash -c "LATTICE_SPAWN_BACKEND=headless lattice code-review MRQ-N --mode single --base forgejo/master --actor agent:delegator-mrq-N-reviewer")`. On RC 124 / empty diff / vacuous output: **own-reviewer fallback** — compute the diff yourself, write a standard-shape review (Verdict PASS / PASS-WITH-NITS / FAIL; findings with file:line), attach `--role review`, note the fallback in your completion comment.
+- **SINGLE reviews are allowed; TRINET (multi-agent) reviews are not** (operator ruling, 2026-08-11). A single headless reviewer via `claude -p` is fine and encouraged — fresh eyes catch what self-review does not. A tri-agent review is banned outright: it triples cost and wall-clock for the same finding set.
+- **Never call `lattice review-wait`.** Nothing background-answers it on this run, so it burns your whole window on a timeout. If you spawn a reviewer, spawn it synchronously and read its output.
+- Spawn form: `env -u CLAUDECODE claude -p "<review prompt>" --dangerously-skip-permissions`. `env -u CLAUDECODE` is required — you are a subprocess of a Claude Code session and inherit that var, which breaks the child. Always `--dangerously-skip-permissions`: nobody is watching to approve tool calls, so a bare `claude` stalls forever.
+- After planning: self-review your plan inline, or spawn one single reviewer. Triage every finding into an amendment block appended to the plan file (`## Plan-Review Cycle K Resolutions (AUTHORITATIVE)`); never implement over untriaged findings.
+- After implementing: either spawn one single reviewer over your diff, or review it yourself. Write a standard-shape review (Verdict PASS / PASS-WITH-NITS / FAIL; findings with `file:line`) and attach it with `--role review`. Review as an adversary would: what does this diff let a caller do that it should not?
+- **Timebox any spawned reviewer** (`timeout 600`) and fall back to reviewing it yourself on RC 124, an empty diff, or vacuous output. Note the fallback in your completion comment. A review that never returns must never block your PR.
 - Before bumping `pr_open`: a review artifact must exist that postdates this cycle's `→ review` transition, names the reviewed commit (== branch HEAD), and carries a PASS verdict. A dead or stale review does not count.
 
 
