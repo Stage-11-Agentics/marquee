@@ -134,9 +134,14 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     `).bind(eventId).all<{ id: string; name: string; count: number | null }>(),
     database.prepare(`
       SELECT wave.id, wave.name, wave.decision_on, wave.target_count, wave.sent_at,
-        COUNT(DISTINCT CASE WHEN submission.status = 'accepted' THEN submission.id END) AS accepted_count
+        COUNT(DISTINCT CASE WHEN ${submissionStatusPredicate("waved", {
+          submission: "submission",
+          agenda: "wave_agenda",
+          includeCancelledAt,
+        })} THEN submission.id END) AS accepted_count
       FROM waves wave
       LEFT JOIN submissions submission ON submission.event_id = wave.event_id AND submission.wave_id = wave.id
+      LEFT JOIN agenda_items wave_agenda ON wave_agenda.submission_id = submission.id AND wave_agenda.kind = 'session'
       WHERE wave.event_id = ?
       GROUP BY wave.id, wave.name, wave.decision_on, wave.target_count, wave.sent_at, wave.position
       ORDER BY wave.position ASC, wave.id ASC
@@ -157,7 +162,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       SELECT COUNT(DISTINCT s.id) AS count
       FROM submissions s
       LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
-      WHERE s.event_id = ? AND s.status = 'accepted' AND ai.id IS NULL
+      WHERE s.event_id = ? AND ${submissionStatusPredicate("accepted", { includeCancelledAt })}
     `).bind(eventId).first<{ count: number | null }>(),
     database.prepare(`
       SELECT person.name AS person_name, submission.id AS submission_id, submission.title AS submission_title,
@@ -215,7 +220,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     id: "overdue",
     label: "Tasks overdue",
     count: count(overdueResult?.count),
-    href: submissionsHref({ status: "onboarding", task: "overdue" }),
+    href: submissionsHref({ task: "overdue" }),
     note: "submissions with speaker work overdue",
   };
   const decidedNotNotified: DashboardCount = {
@@ -267,7 +272,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       ...row,
       overdue: row.due_at < now,
       href: row.due_at < now
-        ? submissionsHref({ status: "onboarding", task: "overdue" })
+        ? submissionsHref({ task: "overdue" })
         : submissionsHref({ status: "onboarding" }),
     })),
   };

@@ -4,7 +4,7 @@ import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
-import { hasSpeakerTaskCancellationColumn } from "./submissions.queries";
+import { hasSpeakerTaskCancellationColumn, submissionStatusPredicate } from "./submissions.queries";
 
 export interface LandingCounts {
   submitted: number;
@@ -57,6 +57,17 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
   const activeTaskClause = await hasSpeakerTaskCancellationColumn(db)
     ? " AND cancelled_at IS NULL"
     : "";
+  const stageCount = (status: "submitted" | "in_review" | "accepted" | "onboarding" | "scheduled" | "published"): string => `(SELECT COUNT(DISTINCT stage_submission.id)
+            FROM submissions stage_submission
+            LEFT JOIN agenda_items stage_agenda
+              ON stage_agenda.submission_id = stage_submission.id
+             AND stage_agenda.kind = 'session'
+           WHERE stage_submission.event_id = demo.id
+             AND ${submissionStatusPredicate(status, {
+               submission: "stage_submission",
+               agenda: "stage_agenda",
+               includeCancelledAt: Boolean(activeTaskClause),
+             })})`;
   const row = await db
     .prepare(
       `WITH demo AS (
@@ -68,24 +79,12 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
        )
        SELECT
          demo.name AS conference_name,
-         (SELECT COUNT(*)
-            FROM submissions
-           WHERE event_id = demo.id AND status <> 'draft') AS submitted_count,
-         (SELECT COUNT(*)
-            FROM submissions
-           WHERE event_id = demo.id AND status = 'in_review') AS in_review_count,
-         (SELECT COUNT(*)
-            FROM submissions
-           WHERE event_id = demo.id AND status = 'accepted') AS accepted_count,
-         (SELECT COUNT(DISTINCT person_id)
-            FROM speaker_tasks
-           WHERE event_id = demo.id AND status = 'open'${activeTaskClause}) AS onboarding_count,
-         (SELECT COUNT(*)
-            FROM agenda_items
-           WHERE event_id = demo.id AND kind = 'session') AS scheduled_count,
-         (SELECT COUNT(*)
-            FROM agenda_items
-           WHERE event_id = demo.id AND kind = 'session' AND is_published = 1) AS published_count,
+         ${stageCount("submitted")} AS submitted_count,
+         ${stageCount("in_review")} AS in_review_count,
+         ${stageCount("accepted")} AS accepted_count,
+         ${stageCount("onboarding")} AS onboarding_count,
+         ${stageCount("scheduled")} AS scheduled_count,
+         ${stageCount("published")} AS published_count,
          (SELECT COUNT(*)
             FROM submissions
            WHERE event_id = demo.id

@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import type { ListEnvelope } from "./list";
+import { submissionStatusPredicate } from "../routes/submissions.queries";
 import {
   executeListPage,
   orderClause,
@@ -17,6 +18,7 @@ export const BOARD_STAGES = [
   "onboarding",
   "scheduled",
   "published",
+  "declined",
 ] as const;
 
 export type BoardStage = (typeof BOARD_STAGES)[number];
@@ -29,6 +31,7 @@ export const BOARD_STAGE_LABELS: Record<BoardStage, string> = {
   onboarding: "Onboarding",
   scheduled: "Scheduled",
   published: "Published",
+  declined: "Declined / not advancing",
 };
 
 export const BOARD_STAGE_ENTRY_ACTIONS: Record<BoardStage, string> = {
@@ -39,6 +42,7 @@ export const BOARD_STAGE_ENTRY_ACTIONS: Record<BoardStage, string> = {
   onboarding: "Complete speaker tasks",
   scheduled: "Publish when ready",
   published: "Live on the public site",
+  declined: "Review the decision history",
 };
 
 export const BOARD_SORTS = {
@@ -138,22 +142,18 @@ LEFT JOIN buildings building ON building.id = room.building_id`;
 
 /**
  * The board is a projection of the record, so stage derivation is deliberately
- * read-only. A rejected or waitlisted record remains visible in Waved: the
- * board has no destructive terminal column of its own.
+ * read-only and uses the same predicates as dashboard/list reads. Terminal
+ * decisions have their own column; they are not a private meaning of Waved.
  */
 export const BOARD_STAGE_SQL = `CASE
-  WHEN ai.id IS NOT NULL AND ai.is_published = 1 THEN 'published'
-  WHEN ai.id IS NOT NULL THEN 'scheduled'
-  WHEN s.status = 'accepted' AND EXISTS (
-    SELECT 1 FROM speaker_tasks onboarding_task
-    WHERE onboarding_task.submission_id = s.id
-      AND onboarding_task.status = 'open'
-      AND onboarding_task.cancelled_at IS NULL
-  ) THEN 'onboarding'
-  WHEN s.status = 'accepted' THEN 'accepted'
-  WHEN s.status = 'in_review' THEN 'in_review'
-  WHEN s.status IN ('waitlisted', 'rejected', 'withdrawn') THEN 'waved'
-  ELSE 'submitted'
+  WHEN ${submissionStatusPredicate("published", { includeCancelledAt: true })} THEN 'published'
+  WHEN ${submissionStatusPredicate("scheduled", { includeCancelledAt: true })} THEN 'scheduled'
+  WHEN ${submissionStatusPredicate("onboarding", { includeCancelledAt: true })} THEN 'onboarding'
+  WHEN ${submissionStatusPredicate("waved", { includeCancelledAt: true })} THEN 'waved'
+  WHEN ${submissionStatusPredicate("accepted", { includeCancelledAt: true })} THEN 'accepted'
+  WHEN ${submissionStatusPredicate("in_review", { includeCancelledAt: true })} THEN 'in_review'
+  WHEN ${submissionStatusPredicate("submitted", { includeCancelledAt: true })} THEN 'submitted'
+  ELSE 'declined'
 END`;
 
 function filterParts(filters: BoardListFilters): QueryParts {

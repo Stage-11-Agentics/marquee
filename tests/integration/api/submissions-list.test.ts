@@ -42,10 +42,18 @@ async function buildFixture(): Promise<void> {
       revoked_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS formats (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS waves (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, sent_at INTEGER);
+    CREATE TABLE IF NOT EXISTS speaker_tasks (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL,
+      submission_id TEXT,
+      status TEXT NOT NULL,
+      cancelled_at INTEGER
+    );
     CREATE TABLE IF NOT EXISTS submissions (
       id TEXT PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL,
       title TEXT NOT NULL, status TEXT NOT NULL, format_id TEXT,
-      origin TEXT NOT NULL, submitted_at INTEGER, updated_at INTEGER NOT NULL,
+      wave_id TEXT, origin TEXT NOT NULL, submitted_at INTEGER, updated_at INTEGER NOT NULL,
       search_blob TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, org_id TEXT NOT NULL, name TEXT NOT NULL, company TEXT);
@@ -62,6 +70,8 @@ async function buildFixture(): Promise<void> {
     );
     DELETE FROM agenda_items; DELETE FROM evaluations; DELETE FROM submission_tracks;
     DELETE FROM tracks; DELETE FROM participations; DELETE FROM people;
+    DELETE FROM speaker_tasks;
+    DELETE FROM waves;
     DELETE FROM submissions; DELETE FROM formats; DELETE FROM rooms;
     DELETE FROM buildings; DELETE FROM events;
     INSERT INTO events VALUES ('${EVENT_ID}', 'America/New_York');

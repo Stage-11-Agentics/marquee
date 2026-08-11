@@ -246,7 +246,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
     const boardBeforeResponse = await request(`/api/v1/events/${EVENT_ID}/board?per_page=100`, {}, ownerCookie);
     expect(boardBeforeResponse.status).toBe(200);
     const boardBefore = await boardBeforeResponse.json<{ data: Array<{ id: string; stage: string }> }>();
-    expect(boardBefore.data.find((card) => card.id === REVIEW_SUBMISSION_ID)?.stage).toBe("onboarding");
+    expect(boardBefore.data.find((card) => card.id === REVIEW_SUBMISSION_ID)?.stage).toBe("waved");
 
     expect(await cancelTaskSet(env.DB, EVENT_ID, SUBMISSION_ID, NOW + 5_000)).toBe(1);
     expect(await cancelTaskSet(env.DB, EVENT_ID, REVIEW_SUBMISSION_ID, NOW + 5_000)).toBe(1);
@@ -300,12 +300,13 @@ describe.sequential("MRQ-16 speaker portal", () => {
     const submissionIds = submissions.data.map((item) => item.id);
     expect(submissionIds).not.toContain(SUBMISSION_ID);
     expect(submissionIds).not.toContain(REVIEW_SUBMISSION_ID);
-    expect(submissionIds).toEqual(expect.arrayContaining(["sub-portal-other", "sub-portal-public"]));
+    expect(submissionIds).toEqual(expect.arrayContaining(["sub-portal-other"]));
+    expect(submissionIds).not.toContain("sub-portal-public");
 
     const boardAfterResponse = await request(`/api/v1/events/${EVENT_ID}/board?per_page=100`, {}, ownerCookie);
     expect(boardAfterResponse.status).toBe(200);
     const boardAfter = await boardAfterResponse.json<{ data: Array<{ id: string; stage: string }> }>();
-    expect(boardAfter.data.find((card) => card.id === REVIEW_SUBMISSION_ID)?.stage).toBe("accepted");
+    expect(boardAfter.data.find((card) => card.id === REVIEW_SUBMISSION_ID)?.stage).toBe("waved");
   });
 
   test("AC-50 · profile editing persists title, company, bio, social links, and headshot reference for any speaker status", async () => {

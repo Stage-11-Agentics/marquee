@@ -411,8 +411,8 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       after_json: entry.after_json === null ? null : jsonValue(entry.after_json as string, null),
     })),
     actions: {
-      can_decide: ["submitted", "in_review", "accepted", "waitlisted"].includes(row.status),
-      can_schedule: row.kind === "session" && row.status === "accepted" && slot === null,
+      can_decide: ["submitted", "in_review", "accepted", "waved"].includes(row.stage),
+      can_schedule: row.kind === "session" && row.stage === "accepted" && slot === null,
       can_publish: slot !== null && !slot.is_published,
     },
   };

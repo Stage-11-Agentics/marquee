@@ -159,7 +159,7 @@ export async function runSeedApiChecks(runtime: LocalRuntime): Promise<SeedApiEv
     fetchAllSubmissions(client),
     client.json<{ buildings: Array<Record<string, any>>; rooms: Array<Record<string, any>> }>(`/api/v1/events/${DEMO_EVENT_ID}/venues`),
     client.json<{ sessions: Array<Record<string, any>>; formats: Array<Record<string, any>>; tracks: Array<Record<string, any>>; conflicts: Array<Record<string, any>> }>(`/api/v1/events/${DEMO_EVENT_ID}/agenda`),
-    client.json<{ task_preview: Array<Record<string, any>> }>(`/api/v1/events/${DEMO_EVENT_ID}/dashboard`),
+    client.json<{ pipeline: Array<{ id: string; count: number }>; task_preview: Array<Record<string, any>> }>(`/api/v1/events/${DEMO_EVENT_ID}/dashboard`),
     client.json<{ total: number; data: Array<Record<string, any>> }>(`/api/v1/events/${DEMO_EVENT_ID}/reviewer/queue`),
     client.json<{ data: Array<Record<string, any>> }>(`/api/v1/events/${DEMO_EVENT_ID}/forms?per_page=100`),
   ]);
@@ -171,7 +171,9 @@ export async function runSeedApiChecks(runtime: LocalRuntime): Promise<SeedApiEv
 
   assert.ok(rows.length >= 1_000, `public submissions API must expose the full seed, found ${rows.length}`);
   const acceptedResponse = await client.json<SubmissionListEnvelope>(`/api/v1/events/${DEMO_EVENT_ID}/submissions?status=accepted&per_page=1`);
-  assert.equal(acceptedResponse.body.total, 60, "public submissions API accepted count drifted");
+  const acceptedStage = dashboard.pipeline.find((stage: { id: string }) => stage.id === "accepted");
+  assert.ok(acceptedStage, "dashboard must expose the derived accepted stage");
+  assert.equal(acceptedResponse.body.total, acceptedStage.count, "public submissions API accepted stage drifted from dashboard");
   assert.ok(venues.buildings.length >= 3, "public venues API must expose the three seeded buildings");
   assert.ok(venues.rooms.length >= 10, "public venues API must expose the full room model");
   const pinnedBuildings = venues.buildings.filter((building) => building.lat !== null && building.lng !== null);
