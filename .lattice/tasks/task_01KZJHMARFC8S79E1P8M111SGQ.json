@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMARFC8S79E1P8M111SGQ",
-  "last_event_id": "ev_01KZQZASDSR4NCQ9RETM0FJ1AE",
-  "last_status_changed_at": "2026-08-11T08:34:24Z",
+  "last_event_id": "ev_01KZQZY4VKJTSR56FGC69VGCQB",
+  "last_status_changed_at": "2026-08-11T08:44:59Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-36",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "The marquee CLI and the shipped SKILL.md",
   "type": "task",
-  "updated_at": "2026-08-11T08:34:24Z",
+  "updated_at": "2026-08-11T08:44:59Z",
   "urgency": null
 }

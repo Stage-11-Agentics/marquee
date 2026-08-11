@@ -94,3 +94,12 @@ projection.
 Baseline observed before implementation: `npm test` passed 30 files / 173
 tests in 14.8s on the clean install; existing missing-secret warnings were
 non-fatal.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+**Verdict: PASS.** Self-review found no untriaged plan defect. The plan keeps
+the geometry formula in the existing helper, routes both comms preview and
+outbox through the master merge path, preserves the empty-selector no-op and
+calendar lifecycle, and makes the authenticated/public disclosure boundary a
+single positive-control test. The v1.7 wording conflict is explicitly resolved
+in favor of the v1.9 binding visual contract.

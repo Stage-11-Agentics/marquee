@@ -10,10 +10,16 @@
   "custom_fields": {},
   "description": "BUILDPLAN: M-37 \u2014 Tier B rank 18 (US-12), Wave 2 (\u00a75)\n\nScope (verbatim): track/format/vendor \u2192 plan/pool, stamped rule, any-carried-track match.\n\nAC-234 constraint (Tier A, multi-track): routing rules match if **any** carried track qualifies \u2014 never only the primary.\nAC-136: routing applies at submission time and the applied rule is **named on the submission record**.\n\nACs: AC-135 \u2013 AC-137, **AC-234**\nHours: 4\nWorkflow: inline-full\nShared files: none \u2014 module-local.\nDeps: M-16, M-14\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQZYCERTJ6AP2GDVDAPXVCT",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHMANFBSR9HBSE6ZSEFCF3",
-  "last_event_id": "ev_01KZQZB1V5P3GP49KDN42ZTZJJ",
-  "last_status_changed_at": "2026-08-11T08:34:33Z",
+  "last_event_id": "ev_01KZQZYCEVQF1NQEJJ9NBD9DXV",
+  "last_status_changed_at": "2026-08-11T08:41:26Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -35,10 +41,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-35",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Category routing",
   "type": "task",
-  "updated_at": "2026-08-11T08:34:33Z",
+  "updated_at": "2026-08-11T08:45:06Z",
   "urgency": null
 }

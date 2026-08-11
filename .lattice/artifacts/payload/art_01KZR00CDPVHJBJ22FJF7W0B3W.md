@@ -1,0 +1,35 @@
+# Plan Review: MRQ-43 — Audit: repo hygiene and full-history scan
+
+### 1. Verdict
+
+**PASS** — Plan is complete, feasible, and aligned. Implementation can proceed, with one framing correction the auditor should absorb (Issue 1) before treating any scan as gate evidence.
+
+### 2. Summary
+
+Reviewed the A-1 audit plan against the BUILDPLAN §5 audit-track scope, §8 items 12a/13, EVALUATION.md gates 15/16, and the actual checker implementation (`scripts/checks/check-repo.mjs`, `scripts/checks/repo-policy.mjs`). The plan is strong: it correctly distinguishes tip from history, treats the assembled-orphan ref as the real gate target, refuses to over-claim a gate when the MRQ-42 ref is absent, and keeps the audit out of the subject code. The one real concern is that step 7 conflates pushing the audit's own Forgejo branch with A-1's "pushed remote" scan — those are different remotes with different meanings, and the plan should say which scan carries which claim.
+
+### 3. Issues
+
+**[MAJOR] Evidence sequence, step 7 — "Scan the pushed remote" targets the wrong remote for gate semantics**
+Step 7 pushes the audit branch to Forgejo and then runs "the same complete scan against the pushed remote/ref (including all reachable history)." But A-1's second run (§8 item 13, backing gate 16) is defined against the **public GitHub remote after the orphan commit is pushed** — a remote that will not exist during this milestone run. Scanning `forgejo/<branch>`'s full history against the public-repo denylist will, by design, produce a wall of intentional matches: the working repo legitimately contains `run-state` files, `/Users/` paths, `C11_` identifiers, `sequence/`, and `.lattice/` throughout its history. That output is triage input for MRQ-42's exclusion list (which step 2 already produces), not gate evidence — and presenting it under the "same complete scan against the pushed remote" language invites a reader to mistake a milestone-run artifact for the push-gate run.
+**Recommendation:** Reframe step 7's remote scan explicitly: the Forgejo-branch scan is chain-of-custody verification of the audit branch only (SHAs match, no new material introduced by the audit itself). State plainly that A-1's second push-gate run is out of reach for this milestone execution and will occur at §8 item 13 against the public remote; record that as an open obligation in the findings artifact rather than as a completed scan.
+
+**[MINOR] Evidence sequence, step 1 — `npm run check:repo` requires explicit publish targets and the target choice determines the result's meaning**
+The checker throws immediately without `--repo` and `--ref` ("check:repo requires explicit --repo and --ref publish targets"), so "baseline the clean tree and run `npm run check:repo`" is underspecified. More substantively, the choice of ref decides what a failure means: run against the working repo's `HEAD`, the command **will** fail — intentionally, since the internal tree is full of sanctioned denylist matches — and that expected failure needs to be framed as triage input, not as a red gate. Step 2's independent scan largely covers this, but step 1 as written implies a bare invocation whose output has no clean interpretation.
+**Recommendation:** Name the invocation and target in the plan, e.g. `npm run check:repo -- --repo . --ref HEAD` for the milestone triage run, and pre-declare that a failing status on the internal tree is expected and what the triage will do with it. Reserve pass/fail language for runs against the assembled orphan ref (step 4).
+
+**[MINOR] Scope/step 5 — the optional `tests/node` guard sits in tension with "the audit produces an artifact, not a code change"**
+The task description says shared files are none and findings should become Lattice comments and follow-up tickets "rather than editing the subject code." Step 5 and the deliverables carve out an exception for a "trivially safe, independently verified guard." The plan bounds this well (verified recurrence only, run directly, output included), but any code in `scripts/checks/` or `tests/node` is exactly the kind of shared surface the "shared files: none" declaration exists to avoid colliding on — `repo-policy.mjs` is owned by the M-06/M-56 lineage.
+**Recommendation:** Default the guard to a follow-up ticket. Only land it in this branch if it touches no file another open ticket owns; otherwise file the ticket with the reproduction attached and keep this branch artifact-only.
+
+**[MINOR] Evidence sequence, step 7 — what the PR contains is unstated for an artifact-only ticket**
+The plan commits to `npm run pr-gate -- --ticket MRQ-43`, a branch push, and `pr_open` with a PR URL, but if the audit correctly produces no code change (and no guard is warranted), the branch may be empty relative to master. The plan should say what the PR will actually carry — the findings artifact, the exclusion enumeration for MRQ-42, or nothing but the audit record — so the reviewer of that PR knows what "reviewing it" means. Note also that anything committed must itself pass the plan's own step-6 rule that no audit artifact introduces public-repo material.
+**Recommendation:** State the intended branch contents (e.g., a durable findings document under a location MRQ-42 will exclude, such as `.lattice/` artifacts) or, if the fast-track workflow permits, state that the deliverable is the Lattice artifact and the PR is the workflow's completion vehicle for it.
+
+### 4. Positive Observations
+
+- **The plan correctly refuses the central failure mode of audits: claiming a gate that wasn't run.** Step 4's explicit branch — scan the MRQ-42 orphan ref if it exists, otherwise report the missing ref rather than claiming the gate passed — is exactly right, and it matches §8 item 12a's insistence that the public repo is *created*, never curated at the tip.
+- **Independent verification of the checker, not trust in it.** Step 2 inspects `check-repo.mjs` and then re-scans history with independent `git log --all` / `rev-list` tooling. This matters concretely: the checker's history coverage is real (`rev-list --objects` + full-patch log), but an auditor confirming that rather than assuming it is the point of the "auditor who did not write the code" ownership rule.
+- **`.lattice/` treated as an intentional current-repo exposure to be enumerated for MRQ-42's exclusion list** is the highest-leverage milestone-run output — it converts this run from a checkbox into direct input for the orphan assembly.
+- **Evidence discipline throughout**: `file:line` or history-object reproductions for every match, named commands and coverage for every clean claim, recorded SHAs for every scanned ref, and an adversarial self-review that includes checking the audit's own artifacts against the denylist. That last check is a subtle and real risk (an audit report quoting a `/Users/` path verbatim becomes a finding itself) and the plan caught it.
+- Correct AC posture: no `tests/ac-claims/MRQ-43.json`, since the ticket backs gates 15/16 rather than owning an `auto` AC.
