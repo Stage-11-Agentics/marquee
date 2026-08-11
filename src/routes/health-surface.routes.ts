@@ -9,6 +9,9 @@
 import { z } from "@hono/zod-openapi";
 
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { errorFields } from "../lib/observability/log";
+import { runDiagnostics } from "./telemetry.routes";
+import type { Env } from "../index";
 import {
   MIRROR_STUCK_ATTEMPTS,
   OWED_LEDGER_LIMIT,
@@ -428,34 +431,23 @@ export async function readDeliveryHealth(
   return deriveDeliveryHealth(facts, readInfrastructure(infrastructurePayload));
 }
 
-/** Where the platform files its own infrastructure report. Absent installs simply go unreported. */
-const DIAGNOSTICS_PATH = "/api/v1/telemetry/diagnostics";
-const DIAGNOSTICS_TIMEOUT_MS = 1_500;
-
 /**
- * The infrastructure verdicts (storage, files, background jobs) are owned by
- * the telemetry surface, not by this one. Read them if they are there; a miss,
- * a timeout, or an install that has no such surface leaves those rows honestly
- * marked "not reported yet" rather than guessing at green.
+ * The infrastructure verdicts — storage, files, background jobs — are owned by
+ * the telemetry surface, not by this one. They are read in process rather than
+ * over HTTP: a Worker cannot fetch its own route, and going out to the network
+ * to ask itself a question would be the wrong shape even if it could.
+ *
+ * A failure here is logged and then swallowed, so those rows read "not reported
+ * yet" instead of the screen failing whole over a report it can live without.
  */
-async function fetchInfrastructure(requestUrl: string, headers: Headers): Promise<unknown> {
+async function readPlatformReport(
+  env: unknown,
+  onFailure: (error: unknown) => void,
+): Promise<unknown> {
   try {
-    const url = new URL(requestUrl);
-    if (url.pathname === DIAGNOSTICS_PATH) return null;
-    url.pathname = DIAGNOSTICS_PATH;
-    url.search = "";
-    const forwarded = new Headers({ accept: "application/json" });
-    for (const header of ["cookie", "authorization"]) {
-      const value = headers.get(header);
-      if (value !== null) forwarded.set(header, value);
-    }
-    const response = await fetch(url.toString(), {
-      headers: forwarded,
-      signal: AbortSignal.timeout(DIAGNOSTICS_TIMEOUT_MS),
-    });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
+    return await runDiagnostics(env as Env);
+  } catch (error) {
+    onFailure(error);
     return null;
   }
 }
@@ -482,7 +474,16 @@ const getDeliveryHealth = defineApiRoute(
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
-    const infrastructure = await fetchInfrastructure(context.req.url, context.req.raw.headers);
+    const infrastructure = await readPlatformReport(
+      context.env,
+      // Swallowing this silently would hide exactly the kind of quiet failure
+      // this screen exists to expose, so it reaches the log even though the
+      // screen degrades gracefully without it.
+      (error) => context.get("logger")?.emit("worker_error", "warn", {
+        source: "delivery-health.diagnostics",
+        ...errorFields(error),
+      }),
+    );
     return context.json(await readDeliveryHealth(context.env.DB, eventId, Date.now(), infrastructure), 200);
   },
 );

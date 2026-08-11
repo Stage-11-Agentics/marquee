@@ -182,19 +182,46 @@ describe.sequential("MRQ-74 delivery health surface", () => {
     expect(snapshot.quota.remaining).toBe(100 - snapshot.quota.sent_today);
   });
 
-  test("CONTRACT · an infrastructure report, when one exists, decides the platform rows", async () => {
-    const reported = await readDeliveryHealth(env.DB, EVENT_ID, NOW, {
-      status: "degraded",
-      checks: { d1: { ok: true }, r2: { ok: false } },
-      crons: [{ cron: "0 * * * *", last_success_at: NOW - 12 * 3_600_000 }],
+  test("CONTRACT · the real telemetry report decides the platform rows", async () => {
+    // Not a fixture: this is the live diagnostics body, so the two surfaces
+    // cannot drift apart without this test noticing.
+    const probeResponse = await SELF.fetch(`${ORIGIN}/api/v1/telemetry/diagnostics`, {
+      headers: { authorization: `Bearer ${TOKEN}` },
     });
+    expect(probeResponse.status).toBe(200);
+    const diagnostics = await probeResponse.json<{
+      status: string;
+      probes: Array<{ name: string; ok: boolean }>;
+      crons: Array<{ cron: string; last_success_at: number; age_ms: number; stale: boolean }>;
+    }>();
+    expect(diagnostics.probes.map((probe) => probe.name)).toEqual(["d1", "kv", "r2", "queues"]);
+
+    const reported = await readDeliveryHealth(env.DB, EVENT_ID, NOW, diagnostics);
     expect(reported.infrastructure_reported).toBe(true);
+    // D1 answered — this test is talking to it — so that row is green from a
+    // real probe rather than an assumption.
     expect(reported.capabilities.find((row) => row.id === "storage")?.level).toBe("ok");
-    expect(reported.capabilities.find((row) => row.id === "uploads")?.level).toBe("alarm");
-    expect(reported.capabilities.find((row) => row.id === "scheduled")?.level).toBe("alarm");
+    // Every trigger reports a zero stamp on a store that has never run one:
+    // unknown, never a decade overdue.
+    expect(diagnostics.crons.every((cron) => cron.last_success_at === 0)).toBe(true);
+    expect(reported.capabilities.find((row) => row.id === "scheduled")?.level).toBe("unknown");
 
     const unreported = await readDeliveryHealth(env.DB, EVENT_ID, NOW);
     expect(unreported.infrastructure_reported).toBe(false);
     expect(unreported.capabilities.find((row) => row.id === "scheduled")?.level).toBe("unknown");
+    expect(unreported.capabilities.find((row) => row.id === "storage")?.level).toBe("unknown");
+  });
+
+  test("CONTRACT · a stopped hourly trigger reaches the screen as a red row that names what stopped", async () => {
+    const { recordCronHeartbeat, readCronHeartbeats } = await import("../../../src/lib/observability/heartbeat");
+    await recordCronHeartbeat(env.CACHE, "0 * * * *", NOW - 12 * 3_600_000);
+    const crons = await readCronHeartbeats(env.CACHE, NOW);
+    const reported = await readDeliveryHealth(env.DB, EVENT_ID, NOW, { status: "degraded", probes: [], crons });
+
+    const scheduled = reported.capabilities.find((row) => row.id === "scheduled");
+    expect(scheduled?.level).toBe("alarm");
+    expect(scheduled?.headline).toBe("Deadline reminders has not run in 12 hours.");
+    expect(scheduled?.detail).toContain("reminder emails before your form closes");
+    expect(JSON.stringify(scheduled)).not.toContain("* * *");
   });
 });

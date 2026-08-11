@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 import type {
   CapabilityStatus,
@@ -7,11 +7,16 @@ import type {
   HealthLevel,
   OwedMessage,
 } from "../../lib/delivery-health";
+import { apiFetch, backoffDelayMs } from "../shell/api-client";
 import { Button, PageHeader } from "../shell/components";
+import { ErrorBanner, ErrorBoundary } from "../shell/ErrorSurface";
 import "./health.css";
 
 /** Slower than the dashboard's five seconds: this screen is read, not scanned. */
 export const DELIVERY_HEALTH_REVALIDATE_MS = 10_000;
+
+/** The route template, for the log line and the diagnostic report. */
+const DELIVERY_HEALTH_ROUTE = "/api/v1/events/{eventId}/delivery-health";
 
 /** The capability list is a fixed shape, so the loading state has the same rows as the loaded one. */
 const CAPABILITY_PLACEHOLDERS = [
@@ -37,11 +42,15 @@ interface Props {
   navigate: (target: string) => void;
 }
 
-type LoadState =
-  | { kind: "loading"; snapshot: null }
-  | { kind: "ready"; snapshot: DeliveryHealthSnapshot }
-  | { kind: "stale"; snapshot: DeliveryHealthSnapshot }
-  | { kind: "error"; snapshot: null };
+interface LoadState {
+  /** Last good data. It stays on screen while a refresh is failing. */
+  snapshot: DeliveryHealthSnapshot | null;
+  /** When that data was read, so the reader is told how old it is. */
+  loadedAt: number | null;
+  /** The live failure, or null when the last refresh succeeded. */
+  error: unknown;
+  consecutiveFailures: number;
+}
 
 function formatNumber(value: number): string {
   return value.toLocaleString("en-US");
@@ -194,42 +203,46 @@ function TotalsStrip({ snapshot }: { snapshot: DeliveryHealthSnapshot }): JSX.El
 }
 
 export function DeliveryHealthPage({ eventId = "evt_aie-ny-2026", navigate }: Props): JSX.Element {
-  const [state, setState] = useState<LoadState>({ kind: "loading", snapshot: null });
-  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const [state, setState] = useState<LoadState>({ snapshot: null, loadedAt: null, error: null, consecutiveFailures: 0 });
   const [reloadKey, setReloadKey] = useState(0);
-  const snapshotRef = useRef<DeliveryHealthSnapshot | null>(null);
-
-  const load = useCallback(async (signal: AbortSignal) => {
-    try {
-      const response = await fetch(
-        `/api/v1/events/${encodeURIComponent(eventId)}/delivery-health`,
-        { signal, headers: { accept: "application/json" }, cache: "no-store" },
-      );
-      if (!response.ok) throw new Error("unavailable");
-      const snapshot = await response.json() as DeliveryHealthSnapshot;
-      if (signal.aborted) return;
-      snapshotRef.current = snapshot;
-      setState({ kind: "ready", snapshot });
-      setCheckedAt(Date.now());
-    } catch {
-      if (signal.aborted) return;
-      const previous = snapshotRef.current;
-      setState(previous === null ? { kind: "error", snapshot: null } : { kind: "stale", snapshot: previous });
-    }
-  }, [eventId]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
-    const interval = window.setInterval(() => { void load(controller.signal); }, DELIVERY_HEALTH_REVALIDATE_MS);
+    let timer = 0;
+    let failures = 0;
+
+    const load = async () => {
+      try {
+        const snapshot = await apiFetch<DeliveryHealthSnapshot>(
+          `/api/v1/events/${encodeURIComponent(eventId)}/delivery-health`,
+          { signal: controller.signal, headers: { accept: "application/json" }, cache: "no-store", route: DELIVERY_HEALTH_ROUTE },
+        );
+        if (controller.signal.aborted) return;
+        failures = 0;
+        setState({ snapshot, loadedAt: Date.now(), error: null, consecutiveFailures: 0 });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        failures += 1;
+        // Last-good data stays on screen; blanking a status screen because one
+        // refresh failed takes the information away exactly when it is wanted.
+        setState((current) => ({ ...current, error, consecutiveFailures: failures }));
+      }
+      if (controller.signal.aborted) return;
+      timer = window.setTimeout(() => { void load(); }, backoffDelayMs(failures, DELIVERY_HEALTH_REVALIDATE_MS));
+    };
+
+    void load();
     return () => {
       controller.abort();
-      window.clearInterval(interval);
+      window.clearTimeout(timer);
     };
-  }, [load, reloadKey]);
+  }, [eventId, reloadKey]);
 
-  const snapshot = state.kind === "ready" || state.kind === "stale" ? state.snapshot : null;
+  const { snapshot, error } = state;
   const summaryLevel: HealthLevel = snapshot?.summary.level ?? "unknown";
+  const checked = state.loadedAt === null
+    ? "checking…"
+    : error === null ? `checked ${formatClock(state.loadedAt)}` : `as of ${formatClock(state.loadedAt)} · retrying`;
 
   return <div class="health-page">
     <PageHeader
@@ -244,28 +257,31 @@ export function DeliveryHealthPage({ eventId = "evt_aie-ny-2026", navigate }: Pr
         <strong>{snapshot?.summary.headline ?? "Reading what the system has recorded."}</strong>
         <span>{snapshot?.summary.detail ?? "This takes a moment on a large conference."}</span>
       </div>
-      <span class="health-checked tabular">{state.kind === "error"
-        ? "not reachable"
-        : state.kind === "stale"
-          ? `as of ${checkedAt === null ? "earlier" : formatClock(checkedAt)} · retrying`
-          : checkedAt === null ? "checking…" : `checked ${formatClock(checkedAt)}`}</span>
+      <span class="health-checked tabular">{checked}</span>
     </section>
 
     {snapshot === null
-      ? <section class="card health-capabilities" aria-label="What the system can do right now" aria-busy={state.kind === "loading"}>
+      ? <section class="card health-capabilities" aria-label="What the system can do right now" aria-busy={error === null}>
         <CapabilitySkeleton />
       </section>
       : <>
-        <section class="card health-capabilities" aria-label="What the system can do right now">
-          {snapshot.capabilities.map((capability) => <CapabilityRow key={capability.id} capability={capability} navigate={navigate} />)}
-        </section>
-        <QuotaCard snapshot={snapshot} />
-        <TotalsStrip snapshot={snapshot} />
-        <LedgerCard snapshot={snapshot} navigate={navigate} />
+        {/* One boundary per panel: a card that throws becomes a card-shaped
+            apology, and the rest of the screen keeps telling the truth. */}
+        <ErrorBoundary label="The capability panel">
+          <section class="card health-capabilities" aria-label="What the system can do right now">
+            {snapshot.capabilities.map((capability) => <CapabilityRow key={capability.id} capability={capability} navigate={navigate} />)}
+          </section>
+        </ErrorBoundary>
+        <ErrorBoundary label="Today's send allowance"><QuotaCard snapshot={snapshot} /></ErrorBoundary>
+        <ErrorBoundary label="The message totals"><TotalsStrip snapshot={snapshot} /></ErrorBoundary>
+        <ErrorBoundary label="The delivery ledger"><LedgerCard snapshot={snapshot} navigate={navigate} /></ErrorBoundary>
       </>}
 
-    {state.kind === "error" && <p class="health-unreachable" role="status">
-      This screen could not reach your conference just now. It keeps trying on its own — nothing has been lost.
-    </p>}
+    {error !== null && <ErrorBanner
+      title={snapshot === null ? "Delivery health could not be read" : "Delivery health could not be refreshed"}
+      error={error}
+      route={DELIVERY_HEALTH_ROUTE}
+      onRetry={() => setReloadKey((value) => value + 1)}
+    />}
   </div>;
 }

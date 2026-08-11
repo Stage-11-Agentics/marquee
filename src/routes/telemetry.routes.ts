@@ -20,7 +20,7 @@ import { z } from "@hono/zod-openapi";
 
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { BUILD_INFO } from "../lib/observability/build-info";
-import { readCronHeartbeats } from "../lib/observability/heartbeat";
+import { readCronHeartbeats, type CronHeartbeat } from "../lib/observability/heartbeat";
 import { errorFields } from "../lib/observability/log";
 import type { Env } from "../index";
 
@@ -158,6 +158,69 @@ async function probe(name: string, run: () => Promise<string | undefined>): Prom
   }
 }
 
+/**
+ * Run every probe and return the report this endpoint serves.
+ *
+ * Exported because the report has a second, in-process reader: the organizer's
+ * delivery-health screen turns these verdicts into plain sentences. A Worker
+ * cannot fetch its own route, so that surface calls this directly rather than
+ * over HTTP — one implementation, one shape, no second definition to drift.
+ */
+export interface DiagnosticsReport {
+  status: "ok" | "degraded";
+  build: { sha: string; built_at: string };
+  migration: string;
+  probes: Probe[];
+  crons: CronHeartbeat[];
+  checked_at: string;
+}
+
+export async function runDiagnostics(env: Env): Promise<DiagnosticsReport> {
+  const probes: Probe[] = await Promise.all([
+    probe("d1", async () => {
+      const row = await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
+      if (row?.ok !== 1) throw new Error("D1 did not answer a trivial select");
+      return undefined;
+    }),
+    probe("kv", async () => {
+      await env.CACHE.get("observability:probe");
+      return undefined;
+    }),
+    probe("r2", async () => {
+      await env.MEDIA.head("observability/probe");
+      return undefined;
+    }),
+    probe("queues", async () => {
+      const missing = (["MAIL_QUEUE", "MIRROR_QUEUE", "OPERATIONS_QUEUE", "WEBHOOK_QUEUE"] as const)
+        .filter((binding) => typeof env[binding]?.send !== "function");
+      if (missing.length > 0) throw new Error(`missing queue bindings: ${missing.join(", ")}`);
+      return "4 bindings present";
+    }),
+  ]);
+
+  const migration = await env.DB.prepare(
+    "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1",
+  )
+    .first<{ name: string }>()
+    .then((row) => row?.name ?? "unknown")
+    .catch(() => "unknown");
+
+  const crons = await readCronHeartbeats(env.CACHE).catch(() => []);
+  // A trigger that ran before and has now gone quiet is a real fault and
+  // belongs in the verdict. A trigger that has never run is reported but not
+  // counted: on a fresh deployment that is every trigger, and a verdict that
+  // is always degraded is a verdict nobody reads.
+  const stoppedCron = crons.some((each) => each.last_success_at > 0 && each.stale);
+  return {
+    status: probes.every((each) => each.ok) && !stoppedCron ? "ok" : "degraded",
+    build: { sha: BUILD_INFO.sha, built_at: BUILD_INFO.built_at },
+    migration,
+    probes,
+    crons,
+    checked_at: new Date().toISOString(),
+  };
+}
+
 const getDiagnostics = defineApiRoute(
   {
     method: "get",
@@ -180,60 +243,14 @@ const getDiagnostics = defineApiRoute(
   async (context) => {
     // The API core's bindings are a subset of the Worker's; the probe is the
     // one place that legitimately needs the wider set.
-    const env = context.env as unknown as Env;
-    const probes: Probe[] = await Promise.all([
-      probe("d1", async () => {
-        const row = await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
-        if (row?.ok !== 1) throw new Error("D1 did not answer a trivial select");
-        return undefined;
-      }),
-      probe("kv", async () => {
-        await env.CACHE.get("observability:probe");
-        return undefined;
-      }),
-      probe("r2", async () => {
-        await env.MEDIA.head("observability/probe");
-        return undefined;
-      }),
-      probe("queues", async () => {
-        const missing = (["MAIL_QUEUE", "MIRROR_QUEUE", "OPERATIONS_QUEUE", "WEBHOOK_QUEUE"] as const)
-          .filter((binding) => typeof env[binding]?.send !== "function");
-        if (missing.length > 0) throw new Error(`missing queue bindings: ${missing.join(", ")}`);
-        return "4 bindings present";
-      }),
-    ]);
-
-    const migration = await env.DB.prepare(
-      "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1",
-    )
-      .first<{ name: string }>()
-      .then((row) => row?.name ?? "unknown")
-      .catch(() => "unknown");
-
-    const crons = await readCronHeartbeats(env.CACHE).catch(() => []);
-    // A trigger that ran before and has now gone quiet is a real fault and
-    // belongs in the verdict. A trigger that has never run is reported but not
-    // counted: on a fresh deployment that is every trigger, and a verdict that
-    // is always degraded is a verdict nobody reads.
-    const stoppedCron = crons.some((each) => each.last_success_at > 0 && each.stale);
-    const status = probes.every((each) => each.ok) && !stoppedCron ? "ok" : "degraded";
-    context.get("logger")?.emit("diagnostics", status === "ok" ? "info" : "warn", {
-      verdict: status,
-      duration_ms: probes.reduce((total, each) => total + each.duration_ms, 0),
-      failing: probes.filter((each) => !each.ok).map((each) => each.name).join(",") || undefined,
+    const report = await runDiagnostics(context.env as unknown as Env);
+    context.get("logger")?.emit("diagnostics", report.status === "ok" ? "info" : "warn", {
+      verdict: report.status,
+      duration_ms: report.probes.reduce((total, each) => total + each.duration_ms, 0),
+      failing: report.probes.filter((each) => !each.ok).map((each) => each.name).join(",") || undefined,
     });
     context.header("Cache-Control", "no-store");
-    return context.json(
-      {
-        status,
-        build: { sha: BUILD_INFO.sha, built_at: BUILD_INFO.built_at },
-        migration,
-        probes,
-        crons,
-        checked_at: new Date().toISOString(),
-      },
-      200,
-    );
+    return context.json(report, 200);
   },
 );
 

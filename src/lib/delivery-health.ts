@@ -129,7 +129,10 @@ export interface WebhookFacts {
 
 export interface CronFact {
   id: string;
+  /** null when the trigger has never run — reported, but not counted as broken. */
   last_success_at: number | null;
+  /** Age measured where the heartbeat was read, which avoids reasoning across two clocks. */
+  age_ms: number | null;
 }
 
 export interface InfrastructureFacts {
@@ -451,7 +454,8 @@ function scheduledCapability(infrastructure: InfrastructureFacts, now: number): 
     .map((cron) => ({ cron, meta: cronMeta(cron.id) }))
     .map(({ cron, meta }) => {
       if (cron.last_success_at === null) return { meta, level: "unknown" as HealthLevel, age: 0 };
-      const age = now - cron.last_success_at;
+      // Prefer the age the reporter measured; two clocks are one too many.
+      const age = cron.age_ms ?? now - cron.last_success_at;
       const level: HealthLevel = age > meta.interval_ms * 3 ? "alarm" : age > meta.interval_ms * 1.5 ? "warn" : "ok";
       return { meta, level, age };
     })
@@ -715,18 +719,28 @@ export function readInfrastructure(payload: unknown): InfrastructureFacts {
   if (payload === null || typeof payload !== "object") return empty;
   const source = payload as Record<string, unknown>;
   const checks = pickRecord(source, ["checks", "components", "bindings", "resources"]);
+  const probes = readProbes(source);
   const overallRaw = typeof source.status === "string" ? source.status : null;
   return {
     reported: true,
     overall: overallRaw === "ok" || overallRaw === "degraded" ? overallRaw : null,
     components: {
-      storage: componentHealth(checks, ["d1", "database", "db", "storage"]),
-      files: componentHealth(checks, ["r2", "media", "files", "bucket"]),
-      cache: componentHealth(checks, ["kv", "cache"]),
-      queues: componentHealth(checks, ["queues", "queue"]),
+      storage: componentHealth(checks, ["d1", "database", "db", "storage"], probes),
+      files: componentHealth(checks, ["r2", "media", "files", "bucket"], probes),
+      cache: componentHealth(checks, ["kv", "cache"], probes),
+      queues: componentHealth(checks, ["queues", "queue"], probes),
     },
     crons: readCrons(source),
   };
+}
+
+/** The probe list as the telemetry surface reports it: one named verdict per binding. */
+function readProbes(source: Record<string, unknown>): Record<string, unknown>[] {
+  const list = [source.probes, source.checks, source.components].find((value) => Array.isArray(value));
+  if (!Array.isArray(list)) return [];
+  return list.filter((entry): entry is Record<string, unknown> =>
+    entry !== null && typeof entry === "object" && typeof (entry as Record<string, unknown>).name === "string",
+  );
 }
 
 function pickRecord(source: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
@@ -737,8 +751,14 @@ function pickRecord(source: Record<string, unknown>, keys: readonly string[]): R
   return source;
 }
 
-function componentHealth(checks: Record<string, unknown>, keys: readonly string[]): boolean | null {
+function componentHealth(
+  checks: Record<string, unknown>,
+  keys: readonly string[],
+  probes: readonly Record<string, unknown>[],
+): boolean | null {
   for (const key of keys) {
+    const probe = probes.find((entry) => entry.name === key);
+    if (probe && typeof probe.ok === "boolean") return probe.ok;
     const value = checks[key];
     if (value === undefined) continue;
     if (typeof value === "boolean") return value;
@@ -776,7 +796,10 @@ function readCrons(source: Record<string, unknown>): CronFact[] {
     if (typeof id !== "string") return [];
     const lastSuccess = [row.last_success_at, row.lastSuccessAt, row.last_success, row.last_run_at]
       .find((value) => typeof value === "number");
-    return [{ id, last_success_at: typeof lastSuccess === "number" ? lastSuccess : null }];
+    // A trigger that has never run reports zero. That is "never", not "in 1970".
+    const stamped = typeof lastSuccess === "number" && lastSuccess > 0 ? lastSuccess : null;
+    const age = typeof row.age_ms === "number" ? row.age_ms : null;
+    return [{ id, last_success_at: stamped, age_ms: stamped === null ? null : age }];
   });
 }
 

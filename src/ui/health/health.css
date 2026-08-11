@@ -88,11 +88,11 @@
 .health-ledger-clear { color: var(--ink-soft); font-size: 12px; line-height: 1.55; margin: 0; min-height: 40px; padding: 18px; }
 .health-ledger-foot { border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; margin: 0; min-height: 38px; padding: 12px 18px; }
 
-.health-unreachable { background: var(--warning-soft); border: 1px solid #e3cda2; border-left: 3px solid var(--warn); border-radius: var(--radius); color: var(--ink-soft); font-size: 11.5px; margin: 0; min-height: 42px; padding: 12px 14px; }
-
 @media (max-width: 1000px) {
+  /* The wide table scrolls inside its own card. The min-width belongs to the
+     rows, never to the box that scrolls them, or the card grows instead. */
+  .health-ledger-body { overflow-x: auto; }
   .health-owed-head, .health-owed-row { grid-template-columns: 86px 160px minmax(240px, 1fr) 92px 62px; min-width: 720px; }
-  .health-owed-list, .health-owed-head { overflow-x: auto; }
 }
 
 @media (max-width: 760px) {

@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useCallback, useState } from "preact/hooks";
 
+import { ErrorBoundary } from "../shell/ErrorSurface";
 import { OverlayHost, ToastHost, type OverlayState } from "../shell/OverlayHosts";
 import { QuickSearch } from "../shell/QuickSearch";
 import { Sidebar } from "../shell/Sidebar";
@@ -60,7 +61,11 @@ export function DeliveryHealthShell({
           openUser={() => unavailable("Program lead", "Account preferences land with authentication and conference administration.")}
         />
         <div class="page">
-          <DeliveryHealthPage eventId={eventId} navigate={navigate} />
+          {/* The shell's own boundary, as the admin shell keeps: a screen that
+              throws on its first render must not take navigation down with it. */}
+          <ErrorBoundary label={route?.label ?? "Delivery health"}>
+            <DeliveryHealthPage eventId={eventId} navigate={navigate} />
+          </ErrorBoundary>
         </div>
       </main>
     </div>

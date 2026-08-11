@@ -199,7 +199,7 @@ describe("MRQ-74 · capability verdicts", () => {
         webhooks: { endpoints: 2, failed: 3, retrying: 1 },
         calendar: { invites_total: 8, invites_unsent: 3, invite_sends_failed: 2 },
       }),
-      readInfrastructure({ status: "degraded", checks: { d1: { ok: false }, r2: { ok: false } }, crons: [{ cron: "0 * * * *", last_success_at: NOW - 9 * HOUR }] }),
+      readInfrastructure({ status: "degraded", probes: [{ name: "d1", ok: false, duration_ms: 1 }, { name: "r2", ok: false, duration_ms: 1 }], crons: [{ cron: "0 * * * *", last_success_at: NOW - 9 * HOUR, age_ms: 9 * HOUR, stale: true }] }),
     ).capabilities.map((row) => row.id);
     expect(broken).toEqual(healthy);
     expect(healthy).toEqual(["storage", "submissions", "email", "calendar", "uploads", "mirror", "webhooks", "scheduled"]);
@@ -283,28 +283,37 @@ describe("MRQ-74 · capability verdicts", () => {
 
 describe("MRQ-74 · scheduled jobs and the infrastructure report", () => {
   function scheduled(crons: unknown): { level: string; headline: string; detail: string } {
-    const snapshot = deriveDeliveryHealth(facts(), readInfrastructure({ status: "ok", checks: { d1: "ok" }, crons }));
+    const snapshot = deriveDeliveryHealth(facts(), readInfrastructure({ status: "ok", probes: [{ name: "d1", ok: true, duration_ms: 1 }], crons }));
     const row = snapshot.capabilities.find((capability) => capability.id === "scheduled");
     return { level: row?.level ?? "", headline: row?.headline ?? "", detail: row?.detail ?? "" };
   }
 
+  // The rows are shaped exactly as the telemetry surface reports them:
+  // { cron, last_success_at, age_ms, stale }, with a zero stamp meaning never.
   test("CONTRACT · an hourly job that ran within the hour is fine", () => {
-    expect(scheduled([{ cron: "0 * * * *", last_success_at: NOW - 20 * 60_000 }]).level).toBe("ok");
+    expect(scheduled([{ cron: "0 * * * *", last_success_at: NOW - 20 * 60_000, age_ms: 20 * 60_000, stale: false }]).level).toBe("ok");
   });
 
   test("CONTRACT · an hourly job two hours late is amber", () => {
-    expect(scheduled([{ cron: "0 * * * *", last_success_at: NOW - 2 * HOUR }]).level).toBe("warn");
+    expect(scheduled([{ cron: "0 * * * *", last_success_at: NOW - 2 * HOUR, age_ms: 2 * HOUR, stale: true }]).level).toBe("warn");
   });
 
   test("CONTRACT · an hourly job that has not run all day is red and says what stopped", () => {
-    const row = scheduled([{ cron: "0 * * * *", last_success_at: NOW - 10 * HOUR }]);
+    const row = scheduled([{ cron: "0 * * * *", last_success_at: NOW - 10 * HOUR, age_ms: 10 * HOUR, stale: true }]);
     expect(row.level).toBe("alarm");
     expect(row.headline).toBe("Deadline reminders has not run in 10 hours.");
     expect(row.detail).toContain("reminder emails before your form closes");
   });
 
-  test("CONTRACT · a job that has never checked in is unknown, not broken", () => {
-    expect(scheduled([{ cron: "0 * * * *", last_success_at: null }]).level).toBe("unknown");
+  test("CONTRACT · a trigger that has never run is unknown, not a decade overdue", () => {
+    // The reporter writes a zero stamp for "never". Read as a timestamp it is
+    // 1970, which would paint a fresh deployment red on its first screen.
+    expect(scheduled([{ cron: "0 * * * *", last_success_at: 0, age_ms: 0, stale: true }]).level).toBe("unknown");
+  });
+
+  test("CONTRACT · the age the reporter measured is preferred over subtracting two clocks", () => {
+    const row = scheduled([{ cron: "0 * * * *", last_success_at: NOW - 30 * HOUR, age_ms: 20 * 60_000, stale: false }]);
+    expect(row.level).toBe("ok");
   });
 
   test("CONTRACT · no report at all leaves the platform rows honestly unknown rather than green", () => {
@@ -314,17 +323,36 @@ describe("MRQ-74 · scheduled jobs and the infrastructure report", () => {
     expect(snapshot.capabilities.find((row) => row.id === "storage")?.level).toBe("unknown");
   });
 
+  test("CONTRACT · the probe list the telemetry surface actually returns is read as named verdicts", () => {
+    const reported = readInfrastructure({
+      status: "degraded",
+      build: { sha: "abc1234", built_at: "2026-08-11T00:00:00.000Z" },
+      migration: "0005_task_cancellation_webhooks.sql",
+      probes: [
+        { name: "d1", ok: true, duration_ms: 2 },
+        { name: "kv", ok: true, duration_ms: 1 },
+        { name: "r2", ok: false, duration_ms: 40, detail: "the bucket refused the request" },
+        { name: "queues", ok: true, duration_ms: 0, detail: "4 bindings present" },
+      ],
+      crons: [{ cron: "0 * * * *", last_success_at: 0, age_ms: 0, stale: true }],
+      checked_at: "2026-08-11T18:00:00.000Z",
+    });
+    expect(reported.overall).toBe("degraded");
+    expect(reported.components).toEqual({ storage: true, files: false, cache: true, queues: true });
+    expect(reported.crons).toEqual([{ id: "0 * * * *", last_success_at: null, age_ms: null }]);
+  });
+
   test("CONTRACT · the report is read defensively across the shapes it plausibly takes", () => {
     expect(readInfrastructure({ status: "ok", checks: { d1: { ok: true }, r2: "degraded", kv: true, queues: { bound: false } } }).components)
       .toEqual({ storage: true, files: false, cache: true, queues: false });
     expect(readInfrastructure({ components: { database: { latency_ms: 4 }, media: { status: "healthy" } } }).components.storage).toBe(true);
-    expect(readInfrastructure({ cron_heartbeats: [{ id: "0 * * * *", lastSuccessAt: NOW }] }).crons).toEqual([{ id: "0 * * * *", last_success_at: NOW }]);
+    expect(readInfrastructure({ cron_heartbeats: [{ id: "0 * * * *", lastSuccessAt: NOW }] }).crons).toEqual([{ id: "0 * * * *", last_success_at: NOW, age_ms: null }]);
     expect(readInfrastructure({ nothing: "recognised" }).components).toEqual({ storage: null, files: null, cache: null, queues: null });
     expect(readInfrastructure("not an object").reported).toBe(false);
   });
 
   test("CONTRACT · unreachable storage is the loudest thing on the screen", () => {
-    const snapshot = deriveDeliveryHealth(facts(), readInfrastructure({ status: "degraded", checks: { d1: { ok: false } } }));
+    const snapshot = deriveDeliveryHealth(facts(), readInfrastructure({ status: "degraded", probes: [{ name: "d1", ok: false, duration_ms: 5 }] }));
     expect(snapshot.summary.level).toBe("alarm");
     expect(snapshot.capabilities[0].id).toBe("storage");
     expect(snapshot.capabilities[0].level).toBe("alarm");
@@ -348,7 +376,7 @@ describe("MRQ-74 · nothing technical reaches the organizer", () => {
         mirror: { configured: true, pending: 9, stuck: 4, last_sync_at: NOW - HOUR, has_error: true },
         webhooks: { endpoints: 1, failed: 2, retrying: 1 },
       }),
-      readInfrastructure({ status: "degraded", checks: { d1: { ok: true }, r2: { ok: false } }, crons: [{ cron: "30 4 * * *", last_success_at: NOW - 5 * DAY }] }),
+      readInfrastructure({ status: "degraded", probes: [{ name: "d1", ok: true, duration_ms: 1 }, { name: "r2", ok: false, duration_ms: 9 }], crons: [{ cron: "30 4 * * *", last_success_at: NOW - 5 * DAY, age_ms: 5 * DAY, stale: true }] }),
     );
     const prose = everyString({
       summary: snapshot.summary,
