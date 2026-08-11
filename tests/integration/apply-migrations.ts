@@ -55,9 +55,9 @@ export async function applyMigrations(): Promise<void> {
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'organizations'",
   ).first();
   if (alreadyApplied) {
-    for (const table of WIPE_ORDER) {
-      await env.DB.prepare(`DELETE FROM ${table}`).run();
-    }
+    await env.DB.batch(
+      WIPE_ORDER.map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+    );
     return;
   }
   for (const statement of [

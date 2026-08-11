@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,6 +43,45 @@ export async function writeReport(filename, result) {
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
   return outputPath;
+}
+
+/** Merge a harness wall-clock measurement without erasing speed entries. */
+export async function recordSpeedHarness(name, measurement) {
+  const outputPath = resolve(REPOSITORY_ROOT, "speed-report.json");
+  let current = {};
+  try {
+    current = JSON.parse(await readFile(outputPath, "utf8"));
+  } catch {
+    // pr-gate may be the first command to write the report in a clean tree.
+  }
+  const next = {
+    ...current,
+    harness: {
+      ...(current.harness ?? {}),
+      [name]: measurement,
+    },
+  };
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  return outputPath;
+}
+
+/** Start a fresh speed report while retaining the same-run seed measurement. */
+export async function writeSpeedReport(result) {
+  const outputPath = resolve(REPOSITORY_ROOT, "speed-report.json");
+  let current = {};
+  try {
+    current = JSON.parse(await readFile(outputPath, "utf8"));
+  } catch {
+    // A speed check can be the first check command in a clean worktree.
+  }
+  return writeReport("speed-report.json", {
+    ...result,
+    harness: {
+      ...(current.harness?.check_seed ? { check_seed: current.harness.check_seed } : {}),
+      ...(result.harness ?? {}),
+    },
+  });
 }
 
 export async function runStub({ command, owner, reason, replacement }) {

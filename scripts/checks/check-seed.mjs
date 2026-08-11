@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 
 import { buildSeedRows } from "../seed/index.ts";
 import { getTransitConflicts } from "../../src/lib/venue-geometry.ts";
-import { emit, writeReport } from "./lib/command.mjs";
+import { emit, recordSpeedHarness, writeReport } from "./lib/command.mjs";
+import { runSeedApiChecks, withLocalRuntime } from "./seed.ts";
 
+const startedAt = performance.now();
 const rows = await buildSeedRows();
 const table = (name) => rows.filter((row) => row.table === name).map((row) => row.row);
 const buildings = table("buildings");
@@ -36,12 +38,33 @@ assert.equal(online.lng, null, "Online must remain unpinned");
 assert.ok(conflicts.length > 0, "seed must produce a live Transit conflict");
 assert.ok(conflicts.some((conflict) => conflict.kind === "transit"), "live seed conflict must be Transit");
 
+const apiEvidence = await withLocalRuntime((runtime) => runSeedApiChecks(runtime));
+const elapsedMs = Math.round(performance.now() - startedAt);
+const budgetMs = 30_000;
+
 const result = {
   command: "check:seed",
-  status: "pass",
+  status: elapsedMs <= budgetMs ? "pass" : "fail",
+  elapsedMs,
+  budgetMs,
+  environment: {
+    kind: "local-wrangler-dev",
+    runtime: "wrangler dev/miniflare",
+    deployed: false,
+    seed: "scripts/seed/index.ts",
+  },
   buildings: buildings.map(({ id, name, address, lat, lng, access_minutes }) => ({ id, name, address, lat, lng, access_minutes })),
   pinned_buildings: pinned.length,
   transit_conflicts: conflicts,
+  api: apiEvidence,
 };
 const report = await writeReport("artifacts/checks/seed.json", result);
+await recordSpeedHarness("check_seed", {
+  observedMs: elapsedMs,
+  budgetMs,
+  verdict: result.status,
+  source: "local check:seed wall clock",
+  environment: "local worktree; not deployed evidence",
+});
 emit({ ...result, report });
+if (result.status === "fail") process.exitCode = 1;
