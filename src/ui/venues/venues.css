@@ -1,0 +1,42 @@
+.venues-page { display: grid; gap: 16px; }
+.venue-message { align-items: center; border: 1px solid var(--line-strong); border-radius: var(--radius); display: flex; gap: 10px; justify-content: space-between; padding: 10px 13px; font: 400 11.5px/1.4 var(--mono); }
+.venue-message.error { background: var(--danger-soft); color: var(--danger); }
+.venue-message.success { background: var(--success-soft); color: #0c6b41; }
+.venue-loading { min-height: 150px; padding: 50px; text-align: center; }
+.venue-map-card .card-body { padding: 0; }
+.venue-map-shell { background-color: var(--panel); background-image: linear-gradient(var(--graph) 1px, transparent 1px), linear-gradient(90deg, var(--graph) 1px, transparent 1px); background-size: 8px 8px; border-top: 1px solid var(--line-strong); overflow: hidden; position: relative; }
+.venue-map-plane { left: 50%; position: absolute; top: 0; transform: translateX(-50%); }
+.venue-map-tile { height: 256px; object-fit: cover; position: absolute; width: 256px; }
+.venue-map-shell.tiles-failed .venue-map-tile { opacity: .08; }
+.venue-map-overlay, .venue-map-pins { inset: 0; overflow: visible; pointer-events: none; position: absolute; }
+.venue-map-walk-line { stroke: var(--accent); stroke-dasharray: 6 5; stroke-width: 2; }
+.venue-map-walk-label-bg { fill: var(--panel); stroke: var(--accent); }
+.venue-map-walk-label { fill: var(--accent-dark); font: 600 10px var(--mono); }
+.venue-map-pin-wrap { display: block; position: absolute; transform: translate(-50%, -100%); white-space: nowrap; }
+.venue-map-pin { background: var(--accent); border: 3px solid var(--panel); border-radius: 50% 50% 50% 0; box-shadow: 0 1px 4px rgba(16,24,32,.28); display: block; height: 17px; transform: rotate(-45deg); width: 17px; }
+.venue-map-pin-label { background: var(--panel); border: 1px solid var(--line-strong); border-radius: 2px; color: var(--ink); display: block; font: 600 10px/1.2 var(--mono); margin: 4px 0 0 20px; padding: 3px 5px; }
+.venue-map-attribution { background: rgba(255,255,255,.9); bottom: 7px; color: var(--muted); font: 400 9px/1 var(--mono); padding: 3px 5px; position: absolute; right: 7px; }
+.venue-map-fallback { background: var(--panel); border: 1px solid var(--warning); bottom: 7px; color: var(--warning); font: 400 9px/1.2 var(--mono); left: 7px; padding: 4px 6px; position: absolute; }
+.venue-map-empty { align-items: center; color: var(--muted); display: grid; font: 400 11.5px/1.5 var(--mono); height: 100%; padding: 24px; place-items: center; text-align: center; }
+.venues-editor-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.venue-list { display: grid; gap: 14px; }
+.building-editor, .room-editor { border: 1px solid var(--line); border-radius: var(--radius); padding: 13px; }
+.venue-row-heading { align-items: center; display: flex; gap: 8px; margin-bottom: 12px; }
+.venue-row-heading strong { font: 600 12px/1.3 var(--mono); overflow: hidden; text-overflow: ellipsis; }
+.venue-row-heading .subtle { margin-left: auto; }
+.drag-handle { color: var(--muted); font: 600 10px/1 var(--mono); min-width: 16px; }
+.venue-fields { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.venue-field { display: grid; gap: 5px; }
+.venue-field > span { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.venue-field input, .venue-field select, .venue-field textarea { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font-size: 12px; min-height: 32px; outline: 0; padding: 7px 8px; width: 100%; }
+.venue-field input:focus, .venue-field select:focus, .venue-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.span-2 { grid-column: 1 / -1; }
+.av-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.av-tag { background: var(--panel); border: 1px solid var(--line-strong); border-radius: 2px; color: var(--muted); font: 500 10px/1.2 var(--mono); padding: 5px 7px; }
+.av-tag.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.settings-page { display: grid; gap: 16px; }
+.settings-venue-link { align-items: center; display: flex; justify-content: space-between; padding: 18px; }
+.settings-venue-link h2 { font-size: 17px; margin: 5px 0; }
+.settings-venue-link p { margin: 0; }
+@media (max-width: 900px) { .venues-editor-grid { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .venue-fields { grid-template-columns: 1fr; } .settings-venue-link { align-items: flex-start; flex-direction: column; gap: 14px; } }

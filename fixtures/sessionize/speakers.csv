@@ -1,0 +1,4 @@
+Speaker ID,Name,Email,Job Title,Company,Bio,Photo URL
+speaker-ada,Ada Lovelace,ada@example.test,Program architect,Analytical Engines,"Builds reliable conference programs.",https://cdn.example.test/ada.jpg
+speaker-grace,Grace Hopper,grace@example.test,Compiler pioneer,US Navy,"Makes complex systems legible.",https://cdn.example.test/grace.png
+speaker-reviewer,Review Lead,reviewer@example.test,Reviewer,Conference Committee,"Reviews imported sessions.",

@@ -1,0 +1,614 @@
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  MARQUEE — SKIN C · "FLIGHT DECK"
+  Thesis: the ops person's cockpit in daylight — a hairline instrument grid,
+  monospaced figures and micro-labels, zero shadow and zero ornament, so every
+  number reads like a gauge and the whole panel can be scanned in one pass.
+
+  TOKEN BLOCK — lifts straight into tokens.css
+  ------------------------------------------------------------------------------
+  :root {
+    --bg:            #eaeef2;   /* cool panel ground                          */
+    --surface:       #ffffff;   /* instrument face                            */
+    --surface-sunk:  #f4f7f9;   /* recessed cell                              */
+    --graph:         #e3e9ee;   /* 8px graph-paper grid line                  */
+
+    --ink:           #101820;   /* primary text               17.9:1 on face  */
+    --ink-soft:      #2c3a46;   /* secondary                  11.7:1 on face  */
+    --muted:         #57646f;   /* metadata / micro-labels     6.1:1 on face  */
+    --rule:          #c8d2da;   /* hairline                                   */
+    --rule-soft:     #dde4ea;
+
+    --accent:        #0b6a72;   /* instrument teal             6.3:1 on face  */
+    --accent-ink:    #084f55;   /* accent text on wash         8.0:1 on wash  */
+    --accent-wash:   #e2f0f1;
+
+    --ok:            #0f7a4a;   /* 5.4:1 on face */
+    --warn:          #8a5c00;   /* 5.8:1 on face */
+    --alarm:         #b02a1f;   /* 6.6:1 on face */
+    --alarm-wash:    #fbe9e7;
+
+    --track-fin:#635bff; --track-agents:#db4c3f; --track-evals:#0d9488;
+    --track-infra:#d97706; --track-open:#2563eb; --track-rag:#9333ea;
+    --track-sec:#0f766e;
+
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    /* every figure is mono + tabular-nums; every micro-label is mono uppercase */
+
+    --radius:  3px;             /* machined, not rounded                      */
+    --hair:    1px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+    --shadow:  none;            /* depth is expressed as rules, never as blur */
+  }
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marquee — Skin C · Flight Deck</title>
+<style>
+  :root {
+    --bg:#eaeef2; --surface:#ffffff; --surface-sunk:#f4f7f9; --graph:#e3e9ee;
+    --ink:#101820; --ink-soft:#2c3a46; --muted:#57646f;
+    --rule:#c8d2da; --rule-soft:#dde4ea;
+    --accent:#0b6a72; --accent-ink:#084f55; --accent-wash:#e2f0f1;
+    --ok:#0f7a4a; --warn:#8a5c00; --alarm:#b02a1f; --alarm-wash:#fbe9e7;
+    --track-fin:#635bff; --track-agents:#db4c3f; --track-evals:#0d9488;
+    --track-infra:#d97706; --track-open:#2563eb; --track-rag:#9333ea; --track-sec:#0f766e;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --radius:3px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; }
+  body { margin:0; min-width:320px; }
+  button,input { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  a { color:inherit; text-decoration:none; }
+  .num { font-family:var(--mono); font-variant-numeric:tabular-nums lining-nums; font-feature-settings:"tnum" 1; }
+  .microlabel {
+    font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted);
+  }
+
+  /* ── Prototype badge ─────────────────────────────────────────────────── */
+  .prototype-badge {
+    position:fixed; z-index:1000; right:12px; top:12px;
+    background:var(--ink); color:#dff2f3; border:1px solid var(--accent);
+    padding:6px 10px; border-radius:var(--radius);
+    font:600 10px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+    pointer-events:none;
+  }
+
+  /* ── Shell ───────────────────────────────────────────────────────────── */
+  .app { display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh; }
+
+  .sidebar {
+    background:var(--surface); border-right:1px solid var(--rule); padding:var(--s4) var(--s3) var(--s3);
+    display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .brand { display:flex; align-items:center; gap:10px; padding:var(--s1) var(--s2) var(--s4);
+    border-bottom:1px solid var(--rule-soft); margin-bottom:var(--s3); }
+  .brand-mark {
+    width:26px; height:26px; flex:0 0 26px; display:grid; place-items:center;
+    border:1px solid var(--accent); border-radius:var(--radius);
+    background:var(--accent-wash); color:var(--accent-ink);
+    font:600 13px/1 var(--mono);
+  }
+  .brand-name { font:600 13px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase; }
+
+  .event-switcher {
+    display:grid; grid-template-columns:auto 1fr; align-items:baseline; gap:var(--s2);
+    margin:0 var(--s1) var(--s4); padding:var(--s2) 10px;
+    border:1px solid var(--rule); border-radius:var(--radius); background:var(--surface-sunk);
+    transition:border-color 110ms, background 110ms;
+  }
+  .event-switcher:hover { border-color:var(--accent); background:var(--accent-wash); }
+  .event-switcher small { font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); }
+  .event-switcher strong { font:600 12.5px/1.2 var(--mono); letter-spacing:-.01em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .nav-label { font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); margin:var(--s4) 10px var(--s2);
+    padding-bottom:var(--s1); border-bottom:1px solid var(--rule-soft); }
+  .nav { display:grid; }
+  .nav a {
+    min-height:30px; padding:6px 10px 6px 8px; display:grid; grid-template-columns:18px 1fr;
+    align-items:center; gap:9px; font-size:12.5px; color:var(--ink-soft);
+    border-left:2px solid transparent; border-radius:0 var(--radius) var(--radius) 0;
+    transition:background 110ms, color 110ms, border-color 110ms;
+  }
+  .nav a:hover { background:var(--surface-sunk); color:var(--ink); }
+  .nav a.active { background:var(--accent-wash); color:var(--accent-ink); border-left-color:var(--accent); font-weight:600; }
+  .nav-icon { font-family:var(--mono); font-size:11px; text-align:center; color:var(--muted);
+    font-variant-numeric:tabular-nums; }
+  .nav a.active .nav-icon { color:var(--accent); }
+
+  .sidebar-foot { margin-top:auto; padding-top:var(--s4); border-top:1px solid var(--rule-soft); display:grid; }
+  .sidebar-foot button {
+    text-align:left; padding:7px 10px; background:none; border:0; border-radius:var(--radius);
+    color:var(--muted); font:400 11.5px/1.2 var(--mono); transition:background 110ms, color 110ms;
+  }
+  .sidebar-foot button:hover { background:var(--surface-sunk); color:var(--ink); }
+
+  /* ── Topbar ──────────────────────────────────────────────────────────── */
+  .main { display:flex; flex-direction:column; min-width:0; }
+  .topbar {
+    display:flex; align-items:center; gap:var(--s4);
+    padding:0 212px 0 var(--s5); height:52px; background:var(--surface);
+    border-bottom:1px solid var(--rule); position:sticky; top:0; z-index:20;
+  }
+  .breadcrumbs { font:400 11.5px/1 var(--mono); color:var(--muted); white-space:nowrap; letter-spacing:.02em; }
+  .breadcrumbs strong { color:var(--ink); font-weight:600; }
+  .global-search {
+    flex:1; max-width:540px; display:flex; align-items:center; gap:var(--s2);
+    border:1px solid var(--rule); border-radius:var(--radius); padding:0 10px; height:30px;
+    background:var(--surface-sunk); transition:border-color 110ms, background 110ms;
+  }
+  .global-search:hover { border-color:var(--accent); background:var(--surface); }
+  .global-search input { flex:1; border:0; background:none; outline:none;
+    font:400 12px/1 var(--mono); letter-spacing:-.01em; }
+  .global-search input::placeholder { color:#7b8894; }
+  .search-glyph { color:var(--muted); font-size:13px; }
+  .shortcut { font:600 9.5px/1 var(--mono); color:var(--muted); letter-spacing:.06em;
+    border:1px solid var(--rule); border-radius:2px; padding:3px 5px; background:var(--surface); }
+  .top-user {
+    width:28px; height:28px; flex:0 0 28px; display:grid; place-items:center; border-radius:var(--radius);
+    border:1px solid var(--rule); background:var(--surface-sunk);
+    font:600 10.5px/1 var(--mono); letter-spacing:.06em; color:var(--ink-soft);
+  }
+
+  /* ── Page ────────────────────────────────────────────────────────────── */
+  .page { padding:var(--s5) var(--s5) var(--s7); max-width:1400px; width:100%; }
+  .page-head { display:flex; align-items:flex-end; justify-content:space-between; gap:var(--s5);
+    margin-bottom:var(--s4); }
+  .page-head h1 { margin:0 0 6px; font:600 21px/1.2 var(--sans); letter-spacing:-.018em; }
+  .page-head p { margin:0; max-width:74ch; font-size:12.5px; line-height:1.55; color:var(--ink-soft);
+    font-variant-numeric:tabular-nums; }
+  .head-actions { display:flex; gap:var(--s2); flex:0 0 auto; }
+
+  .button {
+    height:30px; min-width:130px; padding:0 var(--s3); border:1px solid var(--rule);
+    background:var(--surface); color:var(--ink-soft); border-radius:var(--radius);
+    font:600 10.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    transition:background 110ms, color 110ms, border-color 110ms;
+  }
+  .button:hover { background:var(--accent-wash); border-color:var(--accent); color:var(--accent-ink); }
+  .button.primary { background:var(--accent); border-color:var(--accent); color:#ffffff; }
+  .button.primary:hover { background:#095b62; border-color:#095b62; color:#ffffff; }
+  .button.small { height:26px; min-width:118px; padding:0 10px; font-size:9.5px; }
+
+  /* ── Pipeline: instrument strip ──────────────────────────────────────── */
+  .instrument {
+    background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    margin-bottom:var(--s3); overflow-x:auto; overflow-y:hidden;
+    background-image:
+      linear-gradient(var(--graph) 1px, transparent 1px),
+      linear-gradient(90deg, var(--graph) 1px, transparent 1px);
+    background-size:8px 8px, 8px 8px;
+  }
+  .instrument-inner { min-width:780px; }
+  .rulers { display:flex; height:9px; border-bottom:1px solid var(--rule); background:var(--surface-sunk); }
+  .rulers i { flex:1; border-right:1px solid var(--rule-soft); position:relative; }
+  .rulers i:last-child { border-right:0; }
+  .rulers i::after { content:""; position:absolute; left:0; bottom:0; width:100%; height:3px;
+    background:var(--tick, var(--rule)); }
+  .pipeline { display:grid; grid-template-columns:repeat(7,1fr); }
+  .pipeline-stage {
+    text-align:left; background:rgba(255,255,255,.72); border:0; border-right:1px solid var(--rule-soft);
+    padding:var(--s3) var(--s3) 10px; display:grid; align-content:start; gap:6px; min-height:128px;
+    transition:background 110ms;
+  }
+  .pipeline-stage:last-child { border-right:0; }
+  .pipeline-stage:hover { background:var(--accent-wash); }
+  .pipeline-name { font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); }
+  .pipeline-count { font:400 clamp(27px,2.4vw,34px)/1 var(--mono); letter-spacing:-.05em;
+    font-variant-numeric:tabular-nums lining-nums; }
+  .gauge { height:3px; background:var(--rule-soft); border-radius:0; overflow:hidden; }
+  .gauge i { display:block; height:100%; background:var(--accent); }
+  .pipeline-delta { font-family:var(--mono); font-size:10.5px; line-height:1.4; color:var(--accent-ink);
+    font-variant-numeric:tabular-nums; }
+  .pipeline-meaning { font-size:10px; line-height:1.4; color:var(--muted); }
+
+  /* ── Attention strip ─────────────────────────────────────────────────── */
+  .attention-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s2); margin-bottom:var(--s4); }
+  .attention-item {
+    text-align:left; background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    padding:10px var(--s3) 10px 10px; display:grid; grid-template-columns:3px 1fr; gap:10px;
+    min-height:58px; align-items:center; transition:background 110ms, border-color 110ms;
+  }
+  .attention-item .bar { align-self:stretch; background:var(--warn); border-radius:1px; }
+  .attention-item:hover { background:var(--accent-wash); border-color:var(--accent); }
+  .attention-item .txt { display:grid; gap:4px; min-width:0; }
+  .attention-item strong { font:600 13.5px/1.2 var(--mono); letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums lining-nums; }
+  .attention-item span { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  /* ── Cards ───────────────────────────────────────────────────────────── */
+  .dashboard-grid { display:grid; align-items:start; grid-template-columns:1fr 1fr; gap:var(--s3); }
+  .card { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius); }
+  .card-wide { grid-column:1 / -1; }
+  .card-head {
+    display:flex; align-items:flex-start; justify-content:space-between; gap:var(--s4);
+    padding:10px var(--s4); background:var(--surface-sunk); border-bottom:1px solid var(--rule);
+  }
+  .card-head h2 { margin:0 0 3px; font:600 11px/1.2 var(--mono); letter-spacing:.14em; text-transform:uppercase; }
+  .card-head .subtle { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .card-body { padding:var(--s3) var(--s4) var(--s4); }
+
+  /* Wave planner */
+  .wave-list { display:grid; }
+  .wave-row {
+    display:grid; grid-template-columns:150px minmax(0,1fr) 90px; align-items:center;
+    gap:var(--s4); padding:10px var(--s1); min-height:56px; border-bottom:1px solid var(--rule-soft);
+  }
+  .wave-row:last-child { border-bottom:0; }
+  .wave-name { font:600 11.5px/1.2 var(--mono); letter-spacing:.06em; text-transform:uppercase; }
+  .wave-date { font-size:11px; color:var(--muted); margin-top:4px; font-variant-numeric:tabular-nums; }
+  .wave-bar { height:8px; background:var(--surface-sunk); border:1px solid var(--rule); overflow:hidden;
+    position:relative; }
+  .wave-bar::after {
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background-image:linear-gradient(90deg, rgba(255,255,255,.85) 1px, transparent 1px);
+    background-size:10% 100%;
+  }
+  .wave-bar i { display:block; height:100%; background:var(--accent); }
+  .wave-target { text-align:right; font:600 10.5px/1 var(--mono); letter-spacing:.06em;
+    font-variant-numeric:tabular-nums; text-transform:uppercase; }
+
+  /* Work in motion */
+  .metric-grid { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--rule);
+    border:1px solid var(--rule); }
+  .metric-box { text-align:left; background:var(--surface); border:0; padding:10px var(--s3);
+    display:grid; gap:3px; min-height:84px; align-content:center; transition:background 110ms; }
+  .metric-box:hover { background:var(--accent-wash); }
+  .eyebrow { font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); }
+  .metric { font:400 27px/1.05 var(--mono); letter-spacing:-.045em;
+    font-variant-numeric:tabular-nums lining-nums; }
+  .metric.alarm { color:var(--alarm); }
+  .metric-box .subtle { font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .divider { height:1px; background:var(--rule-soft); margin:var(--s4) 0 var(--s3); }
+  .chip-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip {
+    display:inline-flex; align-items:center; height:24px; padding:0 9px;
+    border:1px solid var(--rule); border-radius:2px; background:var(--surface-sunk);
+    font:400 11px/1 var(--mono); color:var(--ink-soft); font-variant-numeric:tabular-nums;
+    letter-spacing:-.01em; transition:background 110ms, border-color 110ms, color 110ms;
+  }
+  button.chip:hover { background:var(--accent-wash); border-color:var(--accent); color:var(--accent-ink); }
+  .chip.overdue { background:var(--alarm-wash); border-color:#e6b8b2; color:#8f2118; font-weight:600; }
+
+  /* Speaker task dashboard */
+  .task-list { display:grid; }
+  .task-row {
+    width:100%; text-align:left; background:var(--surface); border:0;
+    border-bottom:1px solid var(--rule-soft);
+    display:grid; grid-template-columns:184px minmax(0,1fr) 176px 116px; align-items:center;
+    gap:var(--s4); padding:10px var(--s1); min-height:54px; transition:background 110ms;
+  }
+  .task-row:last-child { border-bottom:0; }
+  .task-row:hover { background:var(--surface-sunk); }
+  .task-row .who { font-size:12.5px; font-weight:600; }
+  .task-title { min-width:0; }
+  .task-title .t { display:block; font-size:12.5px; color:var(--ink-soft);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .slot-meta { display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:nowrap; min-width:0; }
+  .slot-meta > span:first-child { font-family:var(--mono); font-size:10px; color:var(--muted);
+    font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .slot-pill { flex:0 0 auto; white-space:nowrap; border:1px solid var(--rule); border-radius:2px; padding:1px 6px;
+    font:600 9px/1.5 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+    background:var(--surface-sunk); }
+  .task-what { font-size:11.5px; color:var(--muted); }
+  .task-when { justify-self:start; }
+
+  /* Empty-state preview link */
+  .empty-preview {
+    position:fixed; left:12px; bottom:12px; z-index:900;
+    background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    padding:6px 10px; font:600 9.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-soft); transition:background 110ms, color 110ms, border-color 110ms;
+  }
+  .empty-preview:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  @media (max-width:1240px) { .dashboard-grid { grid-template-columns:1fr; } }
+  @media (max-width:1080px) { .attention-strip { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="prototype-badge">Prototype · Mock data</div>
+
+<div class="app">
+  <!-- ═══ Sidebar ════════════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <a class="brand" href="#dashboard">
+      <span class="brand-mark">M</span>
+      <span class="brand-name">Marquee</span>
+    </a>
+
+    <a class="event-switcher" href="#settings">
+      <small>Event</small>
+      <strong>AIE NYC 2026</strong>
+    </a>
+
+    <nav class="nav" aria-label="Program home">
+      <a class="active" href="#dashboard"><span class="nav-icon">⌂</span><span>Program home</span></a>
+      <a href="#board"><span class="nav-icon">▥</span><span>Program board</span></a>
+    </nav>
+
+    <div class="nav-label">Pipeline</div>
+    <nav class="nav" aria-label="Program lifecycle">
+      <a href="#submissions"><span class="nav-icon">1</span><span>Submitted</span></a>
+      <a href="#submissions"><span class="nav-icon">2</span><span>In review</span></a>
+      <a href="#submissions"><span class="nav-icon">3</span><span>Waved</span></a>
+      <a href="#submissions"><span class="nav-icon">4</span><span>Accepted</span></a>
+      <a href="#onboarding"><span class="nav-icon">5</span><span>Onboarding</span></a>
+      <a href="#submissions"><span class="nav-icon">6</span><span>Scheduled</span></a>
+      <a href="#submissions"><span class="nav-icon">7</span><span>Published</span></a>
+    </nav>
+
+    <div class="nav-label">Modules</div>
+    <nav class="nav" aria-label="Modules">
+      <a href="#forms"><span class="nav-icon">□</span><span>CFP forms</span></a>
+      <a href="#evaluation"><span class="nav-icon">◇</span><span>Evaluation plan</span></a>
+      <a href="#reviewer"><span class="nav-icon">✓</span><span>Review queue</span></a>
+      <a href="#agenda"><span class="nav-icon">▦</span><span>Agenda</span></a>
+      <a href="#comms"><span class="nav-icon">✉</span><span>Communications</span></a>
+      <a href="#portal"><span class="nav-icon">○</span><span>Speaker portal</span></a>
+      <a href="#publicAgenda"><span class="nav-icon">↗</span><span>Event site</span></a>
+      <a href="#settings"><span class="nav-icon">⚙</span><span>Event settings</span></a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button type="button">⌘ API &amp; CLI</button>
+      <button type="button">↻ Reset demo</button>
+    </div>
+  </aside>
+
+  <!-- ═══ Main ═══════════════════════════════════════════════════════════ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="breadcrumbs">AIE NYC 2026&nbsp; / &nbsp;<strong>Program pipeline</strong></div>
+      <div class="global-search">
+        <span class="search-glyph" aria-hidden="true">⌕</span>
+        <input aria-label="Search everything" autocomplete="off" placeholder="Search abstracts, speakers, sessions…" readonly>
+        <span class="shortcut">⌘K</span>
+      </div>
+      <div class="top-user" title="Maya Chen · Program lead">MC</div>
+    </header>
+
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <h1>Program pipeline</h1>
+          <p>Wave 2 closes Friday — 184 abstracts still need review in Agents. Every count opens the work behind it.</p>
+        </div>
+        <div class="head-actions">
+          <button class="button" type="button">Event settings</button>
+          <button class="button primary" type="button">Work the pipeline →</button>
+        </div>
+      </div>
+
+      <!-- Pipeline instrument strip -->
+      <section class="instrument" aria-label="Program pipeline stages">
+       <div class="instrument-inner">
+        <div class="rulers" aria-hidden="true">
+          <i style="--tick:var(--track-fin)"></i>
+          <i style="--tick:var(--track-agents)"></i>
+          <i style="--tick:var(--track-infra)"></i>
+          <i style="--tick:var(--track-evals)"></i>
+          <i style="--tick:var(--track-open)"></i>
+          <i style="--tick:var(--track-rag)"></i>
+          <i style="--tick:var(--track-sec)"></i>
+        </div>
+        <div class="pipeline">
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Submitted</span>
+            <strong class="pipeline-count">350</strong>
+            <span class="gauge" aria-hidden="true"><i style="width:100%"></i></span>
+            <span class="pipeline-delta">+41 this week →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">In Review</span>
+            <strong class="pipeline-count">90</strong>
+            <span class="gauge" aria-hidden="true"><i style="width:26%"></i></span>
+            <span class="pipeline-delta">62% assigned →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Waved</span>
+            <strong class="pipeline-count">126</strong>
+            <span class="gauge" aria-hidden="true"><i style="width:36%"></i></span>
+            <span class="pipeline-delta">2 of 3 waves →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Accepted</span>
+            <strong class="pipeline-count">190</strong>
+            <span class="gauge" aria-hidden="true"><i style="width:54%"></i></span>
+            <span class="pipeline-delta">18.3% of all →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Onboarding</span>
+            <strong class="pipeline-count">103</strong>
+            <span class="gauge" aria-hidden="true"><i style="width:29%"></i></span>
+            <span class="pipeline-delta">owe tasks · 38 at risk →</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Scheduled</span>
+            <strong class="pipeline-count">32</strong>
+            <span class="gauge" aria-hidden="true"><i style="width:9%"></i></span>
+            <span class="pipeline-delta">158 still unplaced →</span>
+            <span class="pipeline-meaning">placed on the working agenda</span>
+          </button>
+          <button class="pipeline-stage" type="button">
+            <span class="pipeline-name">Published</span>
+            <strong class="pipeline-count">26</strong>
+            <span class="gauge" aria-hidden="true"><i style="width:7%"></i></span>
+            <span class="pipeline-delta">7 live conflicts →</span>
+            <span class="pipeline-meaning">live on the public site</span>
+          </button>
+        </div>
+       </div>
+      </section>
+
+      <!-- Attention strip -->
+      <div class="attention-strip">
+        <button class="attention-item" type="button">
+          <span class="bar" aria-hidden="true"></span>
+          <span class="txt">
+            <strong>Wave 2 in 6 days</strong>
+            <span>63 accepted · 60 target · open planner</span>
+          </span>
+        </button>
+        <button class="attention-item" type="button">
+          <span class="bar" aria-hidden="true"></span>
+          <span class="txt">
+            <strong>184 unreviewed in Agents</strong>
+            <span>90 in review · 94 waiting for assignment</span>
+          </span>
+        </button>
+        <button class="attention-item" type="button">
+          <span class="bar" aria-hidden="true" style="background:var(--alarm)"></span>
+          <span class="txt">
+            <strong>103 speakers overdue</strong>
+            <span>Headshots, agreements, and travel · open chase board</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- Cards -->
+      <div class="dashboard-grid">
+        <section class="card" id="wave-planner">
+          <div class="card-head">
+            <div>
+              <h2>Wave planner</h2>
+              <span class="subtle">Accept while the CFP stays open</span>
+            </div>
+            <button class="button small" type="button">Plan next wave</button>
+          </div>
+          <div class="card-body">
+            <div class="wave-list">
+              <div class="wave-row">
+                <div><div class="wave-name">Wave 1</div><div class="wave-date">Aug 15 · sent</div></div>
+                <div>
+                  <div class="wave-bar"><i style="width:100%"></i></div>
+                  <div class="wave-date">63 accepted</div>
+                </div>
+                <strong class="wave-target">48 target</strong>
+              </div>
+              <div class="wave-row">
+                <div><div class="wave-name">Wave 2</div><div class="wave-date">Sep 1 · closes in 6 days</div></div>
+                <div>
+                  <div class="wave-bar"><i style="width:100%"></i></div>
+                  <div class="wave-date">63 accepted</div>
+                </div>
+                <strong class="wave-target">60 target</strong>
+              </div>
+              <div class="wave-row">
+                <div><div class="wave-name">Wave 3</div><div class="wave-date">Sep 15 · planned</div></div>
+                <div>
+                  <div class="wave-bar"><i style="width:100%"></i></div>
+                  <div class="wave-date">64 accepted</div>
+                </div>
+                <strong class="wave-target">50 target</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>Work in motion</h2>
+              <span class="subtle">Updated just now</span>
+            </div>
+            <button class="button small" type="button">Export</button>
+          </div>
+          <div class="card-body">
+            <div class="metric-grid">
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Reviews done</span>
+                <div class="metric">1,842</div>
+                <span class="subtle">of 2,130</span>
+              </button>
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Tasks overdue</span>
+                <div class="metric">157</div>
+                <span class="subtle">across 103 speakers</span>
+              </button>
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Unscheduled</span>
+                <div class="metric">158</div>
+                <span class="subtle">accepted sessions</span>
+              </button>
+              <button class="metric-box" type="button">
+                <span class="eyebrow">Conflicts</span>
+                <div class="metric alarm">7</div>
+                <span class="subtle">10 affected Sessions · live</span>
+              </button>
+            </div>
+            <div class="divider"></div>
+            <div class="eyebrow" style="margin-bottom:9px">Review pressure by track</div>
+            <div class="chip-row">
+              <button class="chip" type="button">Agents · 184</button>
+              <button class="chip" type="button">Evals · 46</button>
+              <button class="chip" type="button">Infra · 41</button>
+              <button class="chip" type="button">Security · 49</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card card-wide">
+          <div class="card-head">
+            <div>
+              <h2>Speaker task dashboard</h2>
+              <span class="subtle">157 overdue tasks across 103 accepted speakers · changes update live</span>
+            </div>
+            <button class="button small" type="button">Open onboarding</button>
+          </div>
+          <div class="card-body" style="padding-top:4px;padding-bottom:4px">
+            <div class="task-list">
+              <button class="task-row" type="button">
+                <span class="who">Amara van der Meer</span>
+                <span class="task-title">
+                  <span class="t">Beyond the demo: reliable multi-agent systems</span>
+                  <span class="slot-meta"><span>Tue · Oct 13 · 09:00 · Empire West</span><span class="slot-pill">Not yet public</span></span>
+                </span>
+                <span class="task-what">Speaker agreement</span>
+                <span class="chip overdue task-when">4 days overdue</span>
+              </button>
+              <button class="task-row" type="button">
+                <span class="who">João García Márquez</span>
+                <span class="task-title"><span class="t">Operating low-latency inference platforms</span></span>
+                <span class="task-what">High-resolution headshot</span>
+                <span class="chip overdue task-when">2 days overdue</span>
+              </button>
+              <button class="task-row" type="button">
+                <span class="who">Oluwaseun O'Connell-Singh</span>
+                <span class="task-title"><span class="t">AI governance without gridlock</span></span>
+                <span class="task-what">Travel and accommodation</span>
+                <span class="chip task-when">Due today</span>
+              </button>
+              <button class="task-row" type="button">
+                <span class="who">Mei-Ling de la Fontaine</span>
+                <span class="task-title"><span class="t">Secure tool-using agents in regulated teams</span></span>
+                <span class="task-what">Final slides</span>
+                <span class="chip task-when">Due Oct 5</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<a class="empty-preview" href="#dashboard?empty=1">Preview empty state</a>
+</body>
+</html>

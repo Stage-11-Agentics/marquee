@@ -1,0 +1,5 @@
+{
+  "ticket": "MRQ-34",
+  "owns": ["AC-247"],
+  "exercises": ["AC-134", "AC-248", "AC-249"]
+}

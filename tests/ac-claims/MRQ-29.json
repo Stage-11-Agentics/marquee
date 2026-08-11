@@ -1,0 +1,9 @@
+{
+  "ticket": "MRQ-29",
+  "owns": ["AC-101", "AC-102", "AC-103", "AC-104"],
+  "exercises": [],
+  "notes": [
+    "The shared AppShell overlay owns the admin-route affordance and keyboard path; the API is event-scoped and form-admin scoped.",
+    "AC-103 is measured by the real Playwright keystroke-to-painted speed flow with ten queries, including seeded misspellings; local values are run evidence, not deployed proof."
+  ]
+}

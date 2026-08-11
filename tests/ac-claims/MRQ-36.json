@@ -1,0 +1,9 @@
+{
+  "ticket": "MRQ-36",
+  "owns": ["AC-138", "AC-139", "AC-140", "AC-141", "AC-142", "AC-143", "AC-144"],
+  "exercises": ["AC-250"],
+  "notes": [
+    "AC-145 is the contract's oracle criterion and remains pending the clean-agent check:skill-agent run with a model credential and a running instance.",
+    "The CLI and SKILL share cli/registry.mjs; cli/api-registry.json is generated from the served OpenAPI document and checked by npm run check:api."
+  ]
+}

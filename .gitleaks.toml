@@ -1,0 +1,10 @@
+title = "Marquee secret policy"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "marquee-cloudflare-token"
+description = "Cloudflare API token-like assignment"
+regex = '''(?i)(cloudflare[_-]?(?:api[_-]?)?token)\s*[:=]\s*["']?[A-Za-z0-9_-]{20,}'''
+keywords = ["cloudflare", "token"]

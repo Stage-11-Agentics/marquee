@@ -1,0 +1,5 @@
+Session ID,Title,Description,Status,Track,Format,Speaker Emails,Reviewer Email,Score,Reviewer Comment,Custom Fields
+sess-trust-101,"Designing for trust in a conference import","A practical session about reversible data operations.",undecided,Platform,Talk,"ada@example.test;grace@example.test",reviewer@example.test,4.5,"Clear and useful for organizers.","{""Level"":""Intermediate"",""Recording"":""Yes""}"
+sess-trust-102,"The small conference operations playbook","How a small team keeps a program coherent.",accepted,Operations,Workshop,ada@example.test,,3.5,"Needs a tighter opening.","{""Level"":""Introductory""}"
+sess-trust-104,"A rejected session remains auditable","A deliberate rejected outcome for fixture coverage.",rejected,Operations,Talk,grace@example.test,,,,
+,"Malformed row without an external reference","This row must be reported as failed, not inserted.",submitted,Platform,Talk,ada@example.test,,,,

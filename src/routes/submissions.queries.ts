@@ -1,0 +1,456 @@
+import { z } from "@hono/zod-openapi";
+
+import type { ListEnvelope } from "../api/list";
+import type {
+  SubmissionListItem,
+  SubmissionSpeakerListItem,
+  SubmissionTrackListItem,
+} from "../api/submissions";
+import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
+import {
+  executeListPage,
+  orderClause,
+  parsePagination,
+  resolveSort,
+  type SortRegistry,
+} from "../api/pagination";
+
+export const SUBMISSION_SORTS = {
+  newest: { column: "s.submitted_at", direction: "desc" },
+  updated: { column: "s.updated_at", direction: "desc" },
+  title: { column: "s.title COLLATE NOCASE", direction: "asc" },
+  score: { column: "score", direction: "desc" },
+} as const satisfies SortRegistry;
+
+export const SUBMISSION_STATUS_FILTERS = [
+  "draft",
+  "submitted",
+  "in_review",
+  "accepted",
+  "waitlisted",
+  "rejected",
+  "withdrawn",
+  "waved",
+  "unreviewed",
+  "onboarding",
+  "scheduled",
+  "published",
+] as const;
+
+/** The filter-only arm shared by list reads and server-side bulk selection. */
+export const submissionFilterSchema = z.object({
+  kind: z.enum(["abstract", "session"]).optional(),
+  status: z.enum(SUBMISSION_STATUS_FILTERS).optional(),
+  track: z.string().min(1).max(100).optional(),
+  format: z.string().min(1).max(100).optional(),
+  wave: z.string().min(1).max(100).optional(),
+  task: z.enum(["overdue"]).optional(),
+  placement: z.enum(["unplaced"]).optional(),
+  q: z.string().trim().min(1).max(200).optional(),
+});
+
+export type SubmissionFilter = z.infer<typeof submissionFilterSchema>;
+
+export type SubmissionStatusFilter = (typeof SUBMISSION_STATUS_FILTERS)[number];
+export type SubmissionTaskFilter = "overdue";
+export type SubmissionPlacementFilter = "unplaced";
+
+export function submissionTaskPredicate(
+  task: "open" | SubmissionTaskFilter,
+  submission = "s",
+  includeCancelledAt = false,
+): string {
+  return `EXISTS (
+    SELECT 1 FROM speaker_tasks filtered_task
+    WHERE filtered_task.event_id = ${submission}.event_id
+      AND filtered_task.submission_id = ${submission}.id
+      AND filtered_task.status = 'open'
+      ${includeCancelledAt ? "AND filtered_task.cancelled_at IS NULL" : ""}
+      ${task === "overdue" ? "AND filtered_task.due_at < ?" : ""}
+  )`;
+}
+
+export async function hasSpeakerTaskCancellationColumn(database: D1Database): Promise<boolean> {
+  const row = await database
+    .prepare("SELECT 1 AS present FROM pragma_table_info('speaker_tasks') WHERE name = 'cancelled_at'")
+    .first<{ present: number }>();
+  return row?.present === 1;
+}
+
+/**
+ * One status vocabulary powers list filtering and dashboard instruments. A
+ * dashboard tile therefore cannot count a different set than its destination.
+ */
+export function submissionStatusPredicate(
+  status: SubmissionStatusFilter,
+  aliases: { submission?: string; agenda?: string; includeCancelledAt?: boolean } = {},
+): string {
+  const submission = aliases.submission ?? "s";
+  const agenda = aliases.agenda ?? "ai";
+  if (status === "scheduled") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 0`;
+  if (status === "published") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 1`;
+  if (status === "waved") return `${submission}.wave_id IS NOT NULL AND ${submission}.status = 'accepted'`;
+  if (status === "unreviewed") return `${submission}.status IN ('submitted', 'in_review')`;
+  if (status === "onboarding") return submissionTaskPredicate("open", submission, aliases.includeCancelledAt);
+  return `${submission}.status = '${status}'`;
+}
+
+export interface SubmissionListFilters {
+  eventId: string;
+  page?: number;
+  per_page?: number;
+  q?: string;
+  sort?: keyof typeof SUBMISSION_SORTS;
+  kind?: "abstract" | "session";
+  status?: SubmissionStatusFilter;
+  track?: string;
+  format?: string;
+  wave?: string;
+  task?: SubmissionTaskFilter;
+  placement?: SubmissionPlacementFilter;
+}
+
+interface SubmissionQueryRow {
+  id: string;
+  kind: "abstract" | "session";
+  title: string;
+  stored_status: Exclude<SubmissionListItem["status"], "scheduled" | "published">;
+  format_id: string | null;
+  format: string | null;
+  speakers_json: string;
+  tracks_json: string;
+  score: number | null;
+  submitted_at: number | null;
+  updated_at: number;
+  origin: SubmissionListItem["origin"];
+  starts_at: number | null;
+  duration_min: number | null;
+  room: string | null;
+  building: string | null;
+  timezone: string;
+  agenda_published: number | null;
+  form_id?: string | null;
+  last_saved_at?: number | null;
+  submitter_id?: string | null;
+  submitter_name?: string | null;
+  submitter_email?: string | null;
+}
+
+interface DraftFieldRow extends FormFieldConditionInput {
+  form_id: string;
+  key: string;
+  label: string;
+  required: number;
+}
+
+interface DraftAnswerRow {
+  submission_id: string;
+  key: string;
+  value_text: string | null;
+  value_json: string | null;
+}
+
+interface QueryParts {
+  where: string;
+  bindings: unknown[];
+}
+
+function filterParts(filters: SubmissionListFilters, includeCancelledAt = false): QueryParts {
+  const clauses = ["s.event_id = ?"];
+  const bindings: unknown[] = [filters.eventId];
+
+  if (filters.kind) {
+    clauses.push("s.kind = ?");
+    bindings.push(filters.kind);
+  }
+  if (filters.status) clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt }));
+  if (filters.track) {
+    clauses.push(`EXISTS (
+      SELECT 1 FROM submission_tracks filter_st
+      WHERE filter_st.submission_id = s.id AND filter_st.track_id = ?
+    )`);
+    bindings.push(filters.track);
+  }
+  if (filters.format) {
+    clauses.push("s.format_id = ?");
+    bindings.push(filters.format);
+  }
+  if (filters.wave) {
+    clauses.push("s.wave_id = ?");
+    bindings.push(filters.wave);
+  }
+  if (filters.task) {
+    clauses.push(submissionTaskPredicate(filters.task, "s", includeCancelledAt));
+    if (filters.task === "overdue") bindings.push(Date.now());
+  }
+  if (filters.placement === "unplaced") clauses.push("ai.id IS NULL");
+  if (filters.q) {
+    const query = `%${filters.q.toLocaleLowerCase()}%`;
+    clauses.push(`(
+      lower(s.id) LIKE ? OR lower(s.title) LIKE ? OR lower(s.search_blob) LIKE ?
+      OR EXISTS (
+        SELECT 1 FROM participations search_par
+        JOIN people search_person ON search_person.id = search_par.person_id
+        WHERE search_par.submission_id = s.id
+          AND (lower(search_person.name) LIKE ? OR lower(coalesce(search_person.company, '')) LIKE ?)
+      )
+      OR EXISTS (
+        SELECT 1 FROM submission_tracks search_st
+        JOIN tracks search_track ON search_track.id = search_st.track_id
+        WHERE search_st.submission_id = s.id AND lower(search_track.name) LIKE ?
+      )
+    )`);
+    bindings.push(query, query, query, query, query, query);
+  }
+  return { where: clauses.join(" AND "), bindings };
+}
+
+const FROM = `FROM submissions s
+JOIN events event ON event.id = s.event_id
+LEFT JOIN formats format ON format.id = s.format_id
+LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
+LEFT JOIN rooms room ON room.id = ai.room_id
+LEFT JOIN buildings building ON building.id = room.building_id`;
+
+function parseJsonArray<T>(value: string): T[] {
+  const parsed: unknown = JSON.parse(value);
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
+}
+
+function toItem(row: SubmissionQueryRow): SubmissionListItem {
+  const status = row.starts_at === null
+    ? row.stored_status
+    : row.agenda_published === 1
+      ? "published"
+      : "scheduled";
+  return {
+    id: row.id,
+    kind: row.kind,
+    title: row.title,
+    status,
+    format_id: row.format_id,
+    format: row.format,
+    speakers: parseJsonArray<SubmissionSpeakerListItem>(row.speakers_json),
+    tracks: parseJsonArray<SubmissionTrackListItem>(row.tracks_json).map((track) => ({
+      ...track,
+      is_primary: Boolean(track.is_primary),
+    })),
+    score: row.score === null ? null : Number(row.score),
+    submitted_at: row.submitted_at,
+    last_saved_at: row.last_saved_at ?? null,
+    updated_at: row.updated_at,
+    origin: row.origin,
+    missing_fields: [],
+    submitter: row.submitter_id && row.submitter_name && row.submitter_email
+      ? { id: row.submitter_id, name: row.submitter_name, email: row.submitter_email }
+      : null,
+    slot: row.starts_at === null || row.duration_min === null || row.room === null || row.building === null
+      ? null
+      : {
+          starts_at: row.starts_at,
+          duration_min: row.duration_min,
+          room: row.room,
+          building: row.building,
+          timezone: row.timezone,
+          is_published: row.agenda_published === 1,
+        },
+  };
+}
+
+const ITEM_SELECT = `
+  s.id,
+  s.kind,
+  s.title,
+  s.status AS stored_status,
+  s.format_id,
+  format.name AS format,
+  COALESCE((
+    SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company))
+    FROM (
+      SELECT speaker.id, speaker.name, speaker.company
+      FROM participations par
+      JOIN people speaker ON speaker.id = par.person_id
+      WHERE par.submission_id = s.id
+      ORDER BY par.position ASC, par.id ASC
+    ) ordered
+  ), '[]') AS speakers_json,
+  COALESCE((
+    SELECT json_group_array(json_object(
+      'id', ordered.id,
+      'name', ordered.name,
+      'color', ordered.color,
+      'is_primary', ordered.is_primary
+    ))
+    FROM (
+      SELECT carried.id, carried.name, carried.color, st.is_primary
+      FROM submission_tracks st
+      JOIN tracks carried ON carried.id = st.track_id
+      WHERE st.submission_id = s.id
+      ORDER BY st.is_primary DESC, carried.position ASC, carried.id ASC
+    ) ordered
+  ), '[]') AS tracks_json,
+  (SELECT ROUND(AVG(evaluation.score), 2) FROM evaluations evaluation WHERE evaluation.submission_id = s.id) AS score,
+  s.submitted_at,
+  s.updated_at,
+  s.origin,
+  ai.starts_at,
+  ai.duration_min,
+  room.name AS room,
+  building.name AS building,
+  event.timezone,
+  ai.is_published AS agenda_published`;
+
+async function hasColumns(database: D1Database, table: string, required: readonly string[]): Promise<boolean> {
+  const result = await database.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+  const columns = new Set(result.results.map((column) => column.name));
+  return required.every((column) => columns.has(column));
+}
+
+function answerValue(row: DraftAnswerRow): unknown {
+  if (row.value_json !== null) {
+    try {
+      return JSON.parse(row.value_json) as unknown;
+    } catch {
+      return row.value_text;
+    }
+  }
+  return row.value_text;
+}
+
+function answerPresent(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+/**
+ * Derive the attention fields for drafts from the form schema and answers.
+ * Applicability is intentionally delegated to the one shared evaluator; the
+ * queue must never turn every required field into a missing field.
+ */
+async function addDraftMetadata(
+  database: D1Database,
+  rows: SubmissionQueryRow[],
+): Promise<SubmissionListItem[]> {
+  const items = rows.map(toItem);
+  const draftRows = rows.filter((row) => row.form_id);
+  if (draftRows.length === 0) return items;
+
+  const formIds = [...new Set(draftRows.map((row) => row.form_id).filter((id): id is string => Boolean(id)))];
+  const submissionIds = draftRows.map((row) => row.id);
+  const formPlaceholders = formIds.map(() => "?").join(",");
+  const submissionPlaceholders = submissionIds.map(() => "?").join(",");
+  const [fields, answers] = await Promise.all([
+    database.prepare(`
+      SELECT form_id, key, label, required, condition
+      FROM form_fields
+      WHERE form_id IN (${formPlaceholders})
+      ORDER BY position ASC, id ASC
+    `).bind(...formIds).all<DraftFieldRow>(),
+    database.prepare(`
+      SELECT answer.submission_id, field.key, answer.value_text, answer.value_json
+      FROM submission_answers answer
+      JOIN form_fields field ON field.id = answer.field_id
+      WHERE answer.submission_id IN (${submissionPlaceholders})
+      ORDER BY answer.updated_at ASC, answer.id ASC
+    `).bind(...submissionIds).all<DraftAnswerRow>(),
+  ]);
+  const fieldsByForm = new Map<string, DraftFieldRow[]>();
+  for (const field of fields.results) {
+    const current = fieldsByForm.get(field.form_id) ?? [];
+    current.push(field);
+    fieldsByForm.set(field.form_id, current);
+  }
+  const answersBySubmission = new Map<string, Record<string, unknown>>();
+  for (const answer of answers.results) {
+    const current = answersBySubmission.get(answer.submission_id) ?? {};
+    current[answer.key] = answerValue(answer);
+    answersBySubmission.set(answer.submission_id, current);
+  }
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  for (const row of draftRows) {
+    const item = itemById.get(row.id);
+    if (!item || !row.form_id) continue;
+    const answerMap = answersBySubmission.get(row.id) ?? {};
+    const missing = (fieldsByForm.get(row.form_id) ?? [])
+      .filter((field) => field.required === 1 && isFieldApplicable(field, answerMap) && !answerPresent(answerMap[field.key]))
+      .map((field) => field.label);
+    item.missing_fields = missing;
+    item.last_saved_at = row.last_saved_at ?? null;
+    item.submitter = row.submitter_id && row.submitter_name && row.submitter_email
+      ? { id: row.submitter_id, name: row.submitter_name, email: row.submitter_email }
+      : null;
+  }
+  return items;
+}
+
+async function listDraftsNeedingAttention(
+  database: D1Database,
+  filters: SubmissionListFilters,
+): Promise<ListEnvelope<SubmissionListItem>> {
+  const page = parsePagination(filters);
+  const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "updated");
+  const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
+  const { where, bindings } = filterParts(filters);
+  const rows = await database.prepare(`
+    SELECT ${ITEM_SELECT},
+      s.form_id,
+      s.last_saved_at,
+      submitter.id AS submitter_id,
+      submitter.name AS submitter_name,
+      submitter.email AS submitter_email
+    ${FROM}
+    JOIN people submitter ON submitter.id = s.submitter_person_id
+    WHERE ${where}
+    ORDER BY ${stableOrder}
+  `).bind(...bindings).all<SubmissionQueryRow>();
+  const items = (await addDraftMetadata(database, rows.results)).filter((item) => item.missing_fields.length > 0);
+  const total = items.length;
+  const totalPages = total === 0 ? 0 : Math.ceil(total / page.perPage);
+  return {
+    data: items.slice(page.offset, page.offset + page.limit),
+    page: page.page,
+    per_page: page.perPage,
+    total,
+    total_pages: totalPages,
+  };
+}
+
+export async function listSubmissions(
+  database: D1Database,
+  filters: SubmissionListFilters,
+): Promise<ListEnvelope<SubmissionListItem>> {
+  if (filters.status === "draft" && await hasColumns(database, "submissions", ["form_id", "last_saved_at", "submitter_person_id"])) {
+    return listDraftsNeedingAttention(database, filters);
+  }
+  const page = parsePagination(filters);
+  const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "newest");
+  // The shared helper deliberately emits the canonical `id ASC` tie-break.
+  // This query joins several id-bearing tables, so qualify that fixed suffix.
+  const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
+  const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
+  const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
+  const data = database.prepare(`
+    SELECT ${ITEM_SELECT}
+    ${FROM}
+    WHERE ${where}
+    ORDER BY ${stableOrder}
+    LIMIT ? OFFSET ?
+  `).bind(...bindings, page.limit, page.offset);
+  const envelope = await executeListPage<SubmissionQueryRow>({ count, data, page });
+  return { ...envelope, data: envelope.data.map(toItem) };
+}
+
+/** Resolve a filter-wide selector without applying the list page or sort. */
+export async function selectSubmissionIds(
+  database: D1Database,
+  filters: SubmissionFilter & { eventId: string },
+): Promise<string[]> {
+  const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
+  const result = await database
+    .prepare(`SELECT DISTINCT s.id ${FROM} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC`)
+    .bind(...bindings)
+    .all<{ id: string }>();
+  return result.results.map((row) => row.id);
+}

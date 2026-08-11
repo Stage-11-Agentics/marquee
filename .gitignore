@@ -1,0 +1,15 @@
+.DS_Store
+node_modules/
+.claude/
+.env
+.env.*
+!.env.example
+.dev.vars
+dist/
+.wrangler/
+*.log
+artifacts/checks/
+ac-coverage.json
+speed-report.json
+playwright-report/
+test-results/

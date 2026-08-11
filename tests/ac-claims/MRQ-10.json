@@ -1,0 +1,12 @@
+{
+  "ticket": "MRQ-10",
+  "owns": ["AC-5", "AC-6", "AC-7", "AC-9", "AC-10", "AC-11", "AC-12", "AC-13"],
+  "exercises": ["AC-8"],
+  "handoff": {
+    "MRQ-62": ["AC-252", "AC-253", "AC-256", "AC-257", "AC-258", "AC-259", "AC-260", "AC-261", "AC-262", "AC-263"]
+  },
+  "notes": [
+    "Buildings and rooms authoring is deliberately excluded from MRQ-10. MRQ-62 owns the /settings/venues surface, shared venue writer, geography, and all Amendment 14 venue behavior.",
+    "The /settings handoff is a full-row Venues and rooms card with a live loadVenueModel count and Open Venues link; no venue editor is present here."
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "ticket": "MRQ-23",
+  "owns": [],
+  "exercises": ["AC-3", "AC-16", "AC-36", "AC-62", "AC-69", "AC-85", "AC-89", "AC-103"],
+  "notes": [
+    "MRQ-5 owns AC-3; this ticket adds the public check:seed API proof and its B-3 reachability assertion.",
+    "The speed entries keep the signed AC source labels. Local Wrangler values are evidence for this run, not deployed Cloudflare measurements; MRQ-57 owns the deployment checklist."
+  ]
+}

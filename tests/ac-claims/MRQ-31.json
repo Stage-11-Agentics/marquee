@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-31",
+  "owns": ["AC-110", "AC-111", "AC-112", "AC-113"],
+  "exercises": ["AC-110", "AC-111", "AC-112", "AC-113"],
+  "notes": "AC-109 is op-assist and remains uncovered-pending-operator: one real Sessionize export with sessions, speakers, and evaluation results is required to verify fixture column names and status vocabulary."
+}

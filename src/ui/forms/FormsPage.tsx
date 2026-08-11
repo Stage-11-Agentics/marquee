@@ -1,0 +1,355 @@
+import type { JSX } from "preact";
+import { useEffect, useMemo, useState } from "preact/hooks";
+
+import { fieldPreviewProjection, isFieldApplicable, type FormAnswerValue, type FormCondition } from "../../lib/form-conditions";
+import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "../shell/components";
+import "./forms.css";
+
+type FormKind = "abstract" | "session";
+type FormStatus = "draft" | "open" | "closed";
+type FieldType = "short_text" | "long_text" | "single_select" | "multi_select" | "url" | "email" | "file" | "number";
+
+interface FormSummary {
+  id: string;
+  event_id: string;
+  name: string;
+  slug: string;
+  kind: FormKind;
+  status: FormStatus;
+  opens_at: number | null;
+  closes_at: number | null;
+  welcome_md: string;
+  per_submitter_limit: number;
+  min_speakers: number;
+  max_speakers: number;
+  max_sponsors: number;
+  response_count: number;
+  visibility: "public" | "private";
+  public_url: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+interface FormField {
+  id: string;
+  form_id: string;
+  key: string;
+  label: string;
+  help_text: string | null;
+  type: FieldType;
+  required: boolean;
+  position: number;
+  config: Record<string, unknown>;
+  condition: FormCondition | null;
+  created_at: number;
+  updated_at: number;
+}
+
+interface FormAdmin {
+  id: string;
+  person_id: string;
+  name: string;
+  email: string;
+}
+
+interface FormDetail extends FormSummary {
+  reminder_offset_hours: number | null;
+  thankyou_template_key: string | null;
+  admin_notify_person_ids: string[];
+  turnstile_required: boolean;
+  fields: FormField[];
+  admins: FormAdmin[];
+  preview_fields: Array<{ key: string; label: string; type: string; position: number; required: boolean; condition: FormCondition | null }>;
+}
+
+interface ListResponse {
+  data: FormSummary[];
+  page: number;
+  per_page: number;
+  total: number;
+  total_pages: number;
+}
+
+interface Props {
+  eventId?: string;
+  search?: string;
+}
+
+const FIELD_TYPES: Array<{ value: FieldType; label: string }> = [
+  { value: "short_text", label: "Short text" },
+  { value: "long_text", label: "Long text" },
+  { value: "single_select", label: "Single select" },
+  { value: "multi_select", label: "Multi select" },
+  { value: "url", label: "URL" },
+  { value: "email", label: "Email" },
+  { value: "file", label: "File upload" },
+  { value: "number", label: "Number" },
+];
+
+const STEP_NAMES = ["Type & basics", "Welcome", "Form fields", "Participants", "Rules & routing", "Messages", "Publish"];
+
+function fieldTypeLabel(type: string): string {
+  return FIELD_TYPES.find((item) => item.value === type)?.label ?? type;
+}
+
+export function conditionSummary(condition: FormCondition | null): string {
+  const clauses = condition?.all ?? [];
+  if (!clauses.length) return "";
+  return clauses.map((clause) => `${clause.fieldKey} ${clause.op.replaceAll("_", " ")} ${String(clause.value ?? "answered")}`).join(" · ");
+}
+
+function apiMessage(body: unknown, fallback: string): string {
+  if (typeof body === "object" && body !== null && "error" in body) {
+    const error = (body as { error?: { message?: string } }).error;
+    if (error?.message) return error.message;
+  }
+  return fallback;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...(init?.headers ?? {}) },
+  });
+  const body = await response.json().catch(() => null) as unknown;
+  if (!response.ok) throw new Error(apiMessage(body, `The form request failed (${response.status}).`));
+  return body as T;
+}
+
+function formStatusTone(status: FormStatus): "success" | "warning" | "alarm" | "" {
+  if (status === "open") return "success";
+  if (status === "closed") return "warning";
+  return "";
+}
+
+function initialPreviewAnswers(fields: FormField[]): Record<string, FormAnswerValue> {
+  const result: Record<string, FormAnswerValue> = {};
+  for (const field of fields) {
+    const options = Array.isArray(field.config.options) ? field.config.options : [];
+    const defaultValue = field.config.default;
+    if (defaultValue !== undefined && (typeof defaultValue === "string" || typeof defaultValue === "number" || typeof defaultValue === "boolean")) {
+      result[field.key] = defaultValue;
+    } else if (field.type === "single_select" && options.length > 0 && (typeof options[0] === "string" || typeof options[0] === "number")) {
+      result[field.key] = options[0] as string | number;
+    }
+  }
+  return result;
+}
+
+function selectOptions(field: FormField): string[] {
+  return Array.isArray(field.config.options) ? field.config.options.filter((option): option is string => typeof option === "string") : [];
+}
+
+function FieldValidationEditor({ field, onConfig }: { field: FormField; onConfig: (key: string, value: unknown) => void }): JSX.Element {
+  const numberInput = (key: string, label: string) => <div class="field"><label>{label}</label><input type="number" value={typeof field.config[key] === "number" ? String(field.config[key]) : ""} onInput={(event) => { const raw = (event.currentTarget as HTMLInputElement).value; onConfig(key, raw === "" ? undefined : Number(raw)); }} /></div>;
+  const hasTextRules = field.type === "short_text" || field.type === "long_text" || field.type === "email" || field.type === "url";
+  const hasOptions = field.type === "single_select" || field.type === "multi_select";
+  const hasFileRules = field.type === "file";
+  return <div class="forms-validation-box">
+    <div class="forms-validation-heading"><strong>Field validation</strong><span>Applied only when this field is visible.</span></div>
+    {hasTextRules && <div class="grid-2">{numberInput("minLength", "Minimum characters")}{numberInput("maxLength", "Maximum characters")}</div>}
+    {field.type === "number" && <div class="grid-2">{numberInput("min", "Minimum value")}{numberInput("max", "Maximum value")}</div>}
+    {hasOptions && <div class="field"><label>Options · comma separated</label><input value={selectOptions(field).join(", ")} onInput={(event) => onConfig("options", (event.currentTarget as HTMLInputElement).value.split(",").map((item) => item.trim()).filter(Boolean))} /></div>}
+    {field.type === "multi_select" && <div class="grid-2">{numberInput("minItems", "Minimum choices")}{numberInput("maxItems", "Maximum choices")}</div>}
+    {hasFileRules && <><div class="field"><label>Accepted content types · comma separated</label><input value={Array.isArray(field.config.accept) ? field.config.accept.filter((item): item is string => typeof item === "string").join(", ") : ""} onInput={(event) => onConfig("accept", (event.currentTarget as HTMLInputElement).value.split(",").map((item) => item.trim()).filter(Boolean))} /></div>{numberInput("maxBytes", "Maximum bytes")}</>}
+    {hasTextRules && <div class="field"><label>Pattern · optional regular expression</label><input value={typeof field.config.pattern === "string" ? field.config.pattern : ""} onInput={(event) => onConfig("pattern", (event.currentTarget as HTMLInputElement).value || undefined)} placeholder="^[A-Z]" /></div>}
+  </div>;
+}
+
+function PreviewControl({ field, value, onChange }: { field: FormField; value: FormAnswerValue | undefined; onChange: (value: FormAnswerValue) => void }): JSX.Element {
+  if (field.type === "long_text") return <textarea class="forms-preview-input" aria-label={field.label} value={typeof value === "string" ? value : ""} onInput={(event) => onChange((event.currentTarget as HTMLTextAreaElement).value)} />;
+  if (field.type === "single_select") return <select class="forms-preview-input" aria-label={field.label} value={typeof value === "string" ? value : ""} onChange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}><option value="">Choose an option</option>{selectOptions(field).map((option) => <option key={option} value={option}>{option}</option>)}</select>;
+  if (field.type === "multi_select") return <div class="forms-preview-options">{selectOptions(field).map((option) => <label key={option}><input type="checkbox" checked={Array.isArray(value) && value.includes(option)} onChange={(event) => { const current = Array.isArray(value) ? value.filter((item): item is FormAnswerValue => item !== option) : []; onChange((event.currentTarget as HTMLInputElement).checked ? [...current, option] : current); }} /> {option}</label>)}</div>;
+  if (field.type === "file") return <input class="forms-preview-input" aria-label={field.label} type="file" />;
+  return <input class="forms-preview-input" aria-label={field.label} type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "url" ? "url" : "text"} value={typeof value === "string" || typeof value === "number" ? String(value) : ""} onInput={(event) => onChange((event.currentTarget as HTMLInputElement).value)} />;
+}
+
+function Preview({ fields, answers, onAnswer }: { fields: FormField[]; answers: Record<string, FormAnswerValue>; onAnswer: (key: string, value: FormAnswerValue) => void }): JSX.Element {
+  const ordered = [...fields].sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
+  const conditionalTriggers = ordered.filter((field) => ordered.some((candidate) => candidate.condition?.all.some((clause) => clause.fieldKey === field.key)));
+  const visible = ordered.filter((field) => isFieldApplicable(field, answers));
+  return <div class="forms-preview-window">
+    <div class="forms-preview-top" aria-hidden="true"><i /><i /><i /><span>public / f / preview</span></div>
+    <div class="forms-preview-body">
+      <span class="eyebrow">Call for speakers</span>
+      <h3>Share your work with the conference.</h3>
+      <p>Fields update from the same schema that powers the public form.</p>
+      {conditionalTriggers.length > 0 && <div class="forms-preview-answer-bar"><span class="eyebrow">Preview answers</span>{conditionalTriggers.map((field) => <label key={field.key}>{field.label}<PreviewControl field={field} value={answers[field.key]} onChange={(value) => onAnswer(field.key, value)} /></label>)}</div>}
+      <div class="forms-preview-fields" aria-label="Live form preview">
+        {visible.map((field) => <div class="forms-preview-field" key={field.id} data-preview-field={field.key} data-field-label={field.label} data-field-type={field.type} data-field-position={field.position} data-field-required={field.required ? "true" : "false"}>
+          <label>{field.label}{field.required ? <span aria-hidden="true"> *</span> : null}</label>
+          {field.help_text && <small>{field.help_text}</small>}
+          <PreviewControl field={field} value={answers[field.key]} onChange={(value) => onAnswer(field.key, value)} />
+        </div>)}
+        {visible.length === 0 && <span class="subtle">No fields yet — add one in the editor.</span>}
+      </div>
+      <div class="forms-preview-footer"><span>Draft saved locally · just now</span><Button small variant="primary">Submit abstract</Button></div>
+    </div>
+  </div>;
+}
+
+export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): JSX.Element {
+  const [catalog, setCatalog] = useState<FormSummary[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormDetail | null>(null);
+  const [step, setStep] = useState(2);
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [previewAnswers, setPreviewAnswers] = useState<Record<string, FormAnswerValue>>({});
+  const [newFieldType, setNewFieldType] = useState<FieldType>("short_text");
+  const [conditionTrigger, setConditionTrigger] = useState("");
+  const [conditionValue, setConditionValue] = useState("Yes");
+  const [adminPersonId, setAdminPersonId] = useState("");
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const requestedFormId = new URLSearchParams(search).get("form");
+  const selectedField = form?.fields.find((field) => field.id === selectedFieldId) ?? null;
+
+  const loadCatalog = async () => {
+    setState("loading");
+    try {
+      const result = await request<ListResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/forms?page=1&per_page=100&sort=name`);
+      setCatalog(result.data);
+      const queryFormId = requestedFormId && result.data.some((item) => item.id === requestedFormId) ? requestedFormId : null;
+      setSelectedId((current) => queryFormId ?? (current && result.data.some((item) => item.id === current) ? current : result.data[0]?.id ?? null));
+      setState("ready");
+      setMessage("");
+    } catch (error) {
+      setState("error");
+      setMessage(error instanceof Error ? error.message : "The conference forms could not be loaded.");
+    }
+  };
+
+  const loadForm = async (id: string) => {
+    try {
+      const detail = await request<FormDetail>(`/api/v1/events/${encodeURIComponent(eventId)}/forms/${encodeURIComponent(id)}`);
+      setForm(detail);
+      setSelectedFieldId((current) => current && detail.fields.some((field) => field.id === current) ? current : detail.fields[0]?.id ?? null);
+      setPreviewAnswers(initialPreviewAnswers(detail.fields));
+      setConditionTrigger("");
+      setAdminPersonId("");
+      setMessage("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "This form could not be loaded.");
+    }
+  };
+
+  useEffect(() => { void loadCatalog(); }, [eventId, requestedFormId]);
+  useEffect(() => { if (selectedId) void loadForm(selectedId); else setForm(null); }, [selectedId, eventId]);
+  useEffect(() => {
+    const condition = selectedField?.condition?.all[0];
+    setConditionTrigger(condition?.fieldKey ?? "");
+    setConditionValue(String(condition?.value ?? "Yes"));
+  }, [selectedFieldId, selectedField?.condition]);
+
+  const mutate = async (key: string, action: () => Promise<void>) => {
+    setBusy(key);
+    try { await action(); } catch (error) { setMessage(error instanceof Error ? error.message : "The form could not be saved."); } finally { setBusy(null); }
+  };
+
+  const saveForm = () => {
+    if (!form) return;
+    void mutate("form", async () => {
+      const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}`, { method: "PATCH", body: JSON.stringify({
+        name: form.name, slug: form.slug, kind: form.kind, welcome_md: form.welcome_md, per_submitter_limit: form.per_submitter_limit,
+        min_speakers: form.min_speakers, max_speakers: form.max_speakers, max_sponsors: form.max_sponsors,
+        closes_at: form.closes_at, reminder_offset_hours: form.reminder_offset_hours, thankyou_template_key: form.thankyou_template_key,
+      }) });
+      setForm(updated); await loadCatalog();
+    });
+  };
+
+  const addForm = () => {
+    const suffix = Date.now().toString(36);
+    void mutate("new", async () => {
+      const created = await request<FormDetail>(`/api/v1/events/${eventId}/forms`, { method: "POST", body: JSON.stringify({ name: `New conference form ${catalog.length + 1}`, slug: `conference-form-${suffix}`, kind: "abstract" }) });
+      setSelectedId(created.id); setForm(created); await loadCatalog();
+    });
+  };
+
+  const duplicateForm = () => {
+    if (!form) return;
+    void mutate("duplicate", async () => { const copy = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}/duplicate`, { method: "POST" }); setSelectedId(copy.id); setForm(copy); await loadCatalog(); });
+  };
+
+  const setLifecycle = (next: "publish" | "close" | "reopen") => {
+    if (!form) return;
+    void mutate(next, async () => { const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}/${next}`, { method: "POST" }); setForm(updated); await loadCatalog(); });
+  };
+
+  const addField = () => {
+    if (!form) return;
+    const key = `field_${Date.now().toString(36)}`;
+    void mutate("field", async () => { const created = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields`, { method: "POST", body: JSON.stringify({ key, label: "New question", type: newFieldType, required: false, config: newFieldType.includes("select") ? { options: ["Yes", "No"] } : {} }) }); setForm((current) => current ? { ...current, fields: [...current.fields, created] } : current); setSelectedFieldId(created.id); });
+  };
+
+  const saveField = () => {
+    if (!form || !selectedField) return;
+    void mutate("field", async () => {
+      const condition = conditionTrigger ? { all: [{ fieldKey: conditionTrigger, op: "equals", value: conditionValue }] } : null;
+      const updated = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields/${selectedField.id}`, { method: "PATCH", body: JSON.stringify({ key: selectedField.key, label: selectedField.label, help_text: selectedField.help_text, type: selectedField.type, required: selectedField.required, config: selectedField.config, condition }) });
+      setForm((current) => current ? { ...current, fields: current.fields.map((field) => field.id === updated.id ? updated : field) } : current);
+    });
+  };
+
+  const deleteField = () => {
+    if (!form || !selectedField) return;
+    void mutate("field", async () => { await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/forms/${form.id}/fields/${selectedField.id}`, { method: "DELETE" }); setForm((current) => current ? { ...current, fields: current.fields.filter((field) => field.id !== selectedField.id) } : current); setSelectedFieldId(form.fields.find((field) => field.id !== selectedField.id)?.id ?? null); });
+  };
+
+  const moveField = (direction: -1 | 1) => {
+    if (!form || !selectedField) return;
+    const fields = [...form.fields].sort((left, right) => left.position - right.position);
+    const from = fields.findIndex((field) => field.id === selectedField.id);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= fields.length) return;
+    [fields[from], fields[to]] = [fields[to], fields[from]];
+    void mutate("field", async () => { const result = await request<{ data: FormField[] }>(`/api/v1/events/${eventId}/forms/${form.id}/fields/reorder`, { method: "PATCH", body: JSON.stringify({ field_ids: fields.map((field) => field.id) }) }); setForm((current) => current ? { ...current, fields: result.data } : current); });
+  };
+
+  const setFieldValue = (key: keyof FormField, value: unknown) => { setForm((current) => current && selectedField ? { ...current, fields: current.fields.map((field) => field.id === selectedField.id ? { ...field, [key]: value } : field) } : current); };
+  const setFieldConfig = (key: string, value: unknown) => { setForm((current) => current && selectedField ? { ...current, fields: current.fields.map((field) => { if (field.id !== selectedField.id) return field; const config = { ...field.config }; if (value === undefined || value === "") delete config[key]; else config[key] = value; return { ...field, config }; }) } : current); };
+  const addAdmin = () => {
+    if (!form || !adminPersonId.trim()) return;
+    void mutate("admin", async () => { const admin = await request<FormAdmin>(`/api/v1/events/${eventId}/forms/${form.id}/admins`, { method: "POST", body: JSON.stringify({ person_id: adminPersonId.trim() }) }); setForm((current) => current ? { ...current, admins: [...current.admins, admin] } : current); setAdminPersonId(""); });
+  };
+  const removeAdmin = (personId: string) => {
+    if (!form) return;
+    void mutate("admin", async () => { await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/forms/${form.id}/admins/${personId}`, { method: "DELETE" }); setForm((current) => current ? { ...current, admins: current.admins.filter((admin) => admin.person_id !== personId) } : current); });
+  };
+  const projection = useMemo(() => form ? fieldPreviewProjection(form.fields) : [], [form?.fields]);
+
+  if (state === "loading") return <div class="forms-page"><PageHeader title="CFP forms" copy="Reading the conference form catalog and its builder contract." /><div class="forms-loading" aria-busy="true"><span>Loading conference forms</span><strong>—</strong><span>Reading D1</span></div></div>;
+  if (state === "error") return <div class="forms-page"><PageHeader title="CFP forms" copy="The form catalog is event-scoped and authoring access is protected." actions={<Button onClick={() => void loadCatalog()}>Retry</Button>} /><div class="forms-error" role="alert"><strong>Forms could not be loaded</strong><span>{message}</span></div></div>;
+  if (!form) return <div class="forms-page"><PageHeader title="CFP forms" copy="Build the conference intake once; the public form follows its schema." actions={<Button variant="primary" onClick={addForm} disabled={busy !== null}>+ New form</Button>} />{catalog.length === 0 ? <EmptyState title="Your conference has no forms yet" copy="Create the first Abstract or Session form to start collecting the program." action={<Button variant="primary" onClick={addForm}>+ New form</Button>} /> : <section class="forms-catalog">{catalog.map((item) => <button key={item.id} class="forms-catalog-card" onClick={() => setSelectedId(item.id)}><Chip tone={formStatusTone(item.status)}>{item.status}</Chip><strong>{item.name}</strong><span>{item.kind === "abstract" ? "Abstracts" : "Sessions"} · {item.visibility}</span><small>{item.response_count.toLocaleString()} responses</small></button>)}</section>}</div>;
+
+  return <div class="forms-page">
+    <PageHeader title="CFP forms" copy={`${catalog.length} conference form${catalog.length === 1 ? "" : "s"} · each audience, field list, rules, and response state stays isolated.`} actions={<><Button onClick={duplicateForm} disabled={busy !== null}>Duplicate</Button><Button onClick={addForm} disabled={busy !== null}>+ New form</Button>{form.status === "open" ? <Button variant="primary" onClick={() => setLifecycle("close")} disabled={busy !== null}>Close form</Button> : <Button variant="primary" onClick={() => setLifecycle(form.status === "closed" ? "reopen" : "publish")} disabled={busy !== null}>{form.status === "closed" ? "Reopen form" : "Publish changes"}</Button>}</>} />
+    <section class="forms-catalog" aria-label="Conference forms">{catalog.map((item) => <button key={item.id} class={`forms-catalog-card ${item.id === form.id ? "active" : ""}`} onClick={() => setSelectedId(item.id)}><Chip tone={formStatusTone(item.status)}>{item.status}</Chip><strong>{item.name}</strong><span>{item.kind === "abstract" ? "Abstracts" : "Sessions"} · {item.visibility}</span><small>{item.response_count.toLocaleString()} responses · {item.public_url ?? "private until published"}</small></button>)}</section>
+    {message && <div class="forms-error" role="status"><strong>Form update needs attention</strong><span>{message}</span></div>}
+    <div class="forms-builder">
+      <aside class="card forms-steps" aria-label="Form builder steps">
+        <CardHeader title="Build steps" />
+        <CardBody><div class="forms-step-list">{STEP_NAMES.map((name, index) => <button key={name} class={step === index ? "active" : ""} onClick={() => setStep(index)}><span>{index + 1}</span>{name}</button>)}</div><div class="divider" /><div class="field"><label>Collects</label><div class="segment forms-target"><button class={form.kind === "abstract" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "abstract" })}>Abstracts</button><button class={form.kind === "session" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "session" })}>Sessions</button></div><span class="field-note">{form.status === "draft" ? form.kind === "abstract" ? "Enters the evaluation pipeline." : "Bypasses evaluation; ready for agenda." : "Target locked after the conference form opened."}</span></div><div class="divider" /><div class="field"><label>Close date</label><input type="datetime-local" value={form.closes_at ? new Date(form.closes_at).toISOString().slice(0, 16) : ""} onInput={(event) => setForm({ ...form, closes_at: (event.currentTarget as HTMLInputElement).value ? new Date((event.currentTarget as HTMLInputElement).value).getTime() : null })} /></div><div class="field"><label>Submissions per person</label><input type="number" min="1" max="100" value={form.per_submitter_limit} onInput={(event) => setForm({ ...form, per_submitter_limit: Number((event.currentTarget as HTMLInputElement).value) || 1 })} /></div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>{busy === "form" ? "Saving…" : "Save form"}</Button></CardBody>
+      </aside>
+      <section class="card forms-editor" aria-label="Form editor">
+        <CardHeader title={STEP_NAMES[step] ?? "Form fields"}><Chip tone={formStatusTone(form.status)}>{form.status}</Chip></CardHeader>
+        <CardBody>{step === 2 ? <>
+          <div class="forms-editor-intro"><div><strong>Fields in public order</strong><span>Drag is optional; the arrows are keyboard-safe and persist the same order.</span></div><div class="forms-add-field"><select value={newFieldType} onChange={(event) => setNewFieldType((event.currentTarget as HTMLSelectElement).value as FieldType)} aria-label="New field type">{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><Button small onClick={addField} disabled={busy !== null}>＋ Add a field</Button></div></div>
+          <div class="forms-field-list">{[...form.fields].sort((left, right) => left.position - right.position).map((field, index) => { const summary = field.condition ? conditionSummary(field.condition) : ""; return <button key={field.id} class={`forms-field-row ${field.id === selectedFieldId ? "active" : ""}`} data-builder-field={field.key} onClick={() => setSelectedFieldId(field.id)}><span class="forms-drag-handle" aria-hidden="true">⋮⋮</span><span class="forms-field-order">{String(index + 1).padStart(2, "0")}</span><span class="forms-field-copy"><strong data-field-label={field.label}>{field.label}{field.required ? " *" : ""}</strong><small data-condition-summary={summary}>{fieldTypeLabel(field.type)} · {field.required ? "Required" : "Optional"}{summary ? ` · When ${summary}` : ""}</small></span><span class="forms-field-actions"><span class="chip">{field.type}</span><span class="forms-arrow" aria-hidden="true">→</span></span></button>; })}</div>
+          {selectedField && <div class="forms-field-editor"><div class="forms-editor-heading"><div><span class="eyebrow">Editing field</span><h3>{selectedField.label}</h3></div><div class="forms-reorder-actions"><Button small onClick={() => moveField(-1)}>↑</Button><Button small onClick={() => moveField(1)}>↓</Button><Button small variant="danger" onClick={deleteField}>Delete</Button></div></div><div class="grid-2"><div class="field"><label>Field key</label><input value={selectedField.key} onInput={(event) => setFieldValue("key", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Field type</label><select value={selectedField.type} onChange={(event) => setFieldValue("type", (event.currentTarget as HTMLSelectElement).value)}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div></div><div class="field"><label>Label</label><input value={selectedField.label} onInput={(event) => setFieldValue("label", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Help text</label><textarea value={selectedField.help_text ?? ""} onInput={(event) => setFieldValue("help_text", (event.currentTarget as HTMLTextAreaElement).value)} /></div><label class="forms-check"><input type="checkbox" checked={selectedField.required} onChange={(event) => setFieldValue("required", (event.currentTarget as HTMLInputElement).checked)} /> Required when this field applies</label><FieldValidationEditor field={selectedField} onConfig={setFieldConfig} /><div class="forms-condition-box"><div><strong>Conditional visibility</strong><span>Persisted as <code>{"{ all: [{ fieldKey, op, value }] }"}</code>; hidden values are never written.</span></div><div class="grid-2"><div class="field"><label>Show when this field</label><select value={conditionTrigger} onChange={(event) => setConditionTrigger((event.currentTarget as HTMLSelectElement).value)}><option value="">Always show</option>{form.fields.filter((field) => field.id !== selectedField.id).map((field) => <option key={field.id} value={field.key}>{field.label}</option>)}</select></div><div class="field"><label>Equals</label><input value={conditionValue} onInput={(event) => setConditionValue((event.currentTarget as HTMLInputElement).value)} disabled={!conditionTrigger} /></div></div></div><Button variant="primary" onClick={saveField} disabled={busy !== null}>{busy === "field" ? "Saving…" : "Save field"}</Button></div>}
+        </> : <StepPanel step={step} form={form} setForm={setForm} saveForm={saveForm} setLifecycle={setLifecycle} busy={busy} adminPersonId={adminPersonId} setAdminPersonId={setAdminPersonId} addAdmin={addAdmin} removeAdmin={removeAdmin} />}</CardBody>
+      </section>
+      <section class="card forms-preview-card" aria-label="Live preview"><CardHeader title="Live preview"><Chip>Same field schema</Chip></CardHeader><div class="forms-preview-reservation"><span>Reserved preview column</span><small>Fields change inside this frame; the editor stays put.</small></div><Preview fields={form.fields} answers={previewAnswers} onAnswer={(key, value) => setPreviewAnswers((current) => ({ ...current, [key]: value }))} /><div class="forms-projection" aria-label="Preview projection"><span class="eyebrow">Deep-equal projection</span><code>{JSON.stringify(projection.map((field) => ({ label: field.label, type: field.type, position: field.position, required: field.required })))}</code></div></section>
+    </div>
+  </div>;
+}
+
+function StepPanel({ step, form, setForm, saveForm, setLifecycle, busy, adminPersonId, setAdminPersonId, addAdmin, removeAdmin }: { step: number; form: FormDetail; setForm: (form: FormDetail) => void; saveForm: () => void; setLifecycle: (next: "publish" | "close" | "reopen") => void; busy: string | null; adminPersonId: string; setAdminPersonId: (value: string) => void; addAdmin: () => void; removeAdmin: (personId: string) => void }): JSX.Element {
+  if (step === 0) return <div class="forms-step-panel"><p class="subtle">Choose the intake target and make the public identity legible before opening the conference form.</p><div class="field"><label>Form name</label><input value={form.name} onInput={(event) => setForm({ ...form, name: (event.currentTarget as HTMLInputElement).value })} /></div><div class="field"><label>Public slug</label><input value={form.slug} onInput={(event) => setForm({ ...form, slug: (event.currentTarget as HTMLInputElement).value })} /></div><div class="forms-lock-note">{form.status === "draft" ? "This target can still be changed while the form is unpublished." : "Target locked after opening. Reopening preserves this URL and its responses."}</div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>Save Type & basics</Button></div>;
+  if (step === 1) return <div class="forms-step-panel"><p class="subtle">Welcome copy appears above the first field on the public form.</p><div class="field"><label>Welcome copy</label><textarea rows={7} value={form.welcome_md} onInput={(event) => setForm({ ...form, welcome_md: (event.currentTarget as HTMLTextAreaElement).value })} /></div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>Save welcome</Button></div>;
+  if (step === 3) return <div class="forms-step-panel"><p class="subtle">Speaker and sponsor limits are stated before the first add-person control.</p><div class="grid-2"><div class="field"><label>Minimum speakers</label><input type="number" min="0" value={form.min_speakers} onInput={(event) => setForm({ ...form, min_speakers: Number((event.currentTarget as HTMLInputElement).value) || 0 })} /></div><div class="field"><label>Maximum speakers</label><input type="number" min="0" value={form.max_speakers} onInput={(event) => setForm({ ...form, max_speakers: Number((event.currentTarget as HTMLInputElement).value) || 0 })} /></div></div><div class="field"><label>Maximum sponsors</label><input type="number" min="0" value={form.max_sponsors} onInput={(event) => setForm({ ...form, max_sponsors: Number((event.currentTarget as HTMLInputElement).value) || 0 })} /></div><div class="forms-limit-note">{form.min_speakers}–{form.max_speakers} speakers · up to {form.max_sponsors} sponsor{form.max_sponsors === 1 ? "" : "s"}</div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>Save participants</Button></div>;
+  if (step === 4) return <div class="forms-step-panel"><p class="subtle">Conditions are schema-driven. Routing rules can consume the same field keys and answers at submission time.</p><div class="forms-rule-row"><strong>Vendor content</strong><span>When the vendor answer is Yes → workshop review</span><Chip>Schema rule</Chip></div><div class="forms-rule-row"><strong>Tracks</strong><span>One or more tracks; first selected remains primary for the agenda.</span><Chip>AC-234</Chip></div></div>;
+  if (step === 5) return <div class="forms-step-panel"><p class="subtle">Messages and named administrators are part of the form, not a conference-wide default.</p><div class="field"><label>Thank-you template key</label><input value={form.thankyou_template_key ?? ""} placeholder="submission_confirmation" onInput={(event) => setForm({ ...form, thankyou_template_key: (event.currentTarget as HTMLInputElement).value || null })} /></div><div class="field"><label>Reminder offset hours</label><input type="number" min="0" value={form.reminder_offset_hours ?? ""} onInput={(event) => { const value = (event.currentTarget as HTMLInputElement).value; setForm({ ...form, reminder_offset_hours: value === "" ? null : Number(value) }); }} /></div><div class="forms-admin-list"><span class="eyebrow">Form administrators</span>{form.admins.length ? form.admins.map((admin) => <div key={admin.id}><strong>{admin.name}</strong><span>{admin.email}</span><Button small variant="ghost" onClick={() => removeAdmin(admin.person_id)} disabled={busy !== null}>Remove</Button></div>) : <span class="subtle">No explicit form administrators. Program staff retain access.</span>}<div class="forms-admin-add"><input value={adminPersonId} placeholder="person_id" aria-label="Administrator person ID" onInput={(event) => setAdminPersonId((event.currentTarget as HTMLInputElement).value)} /><Button small onClick={addAdmin} disabled={busy !== null || !adminPersonId.trim()}>Add admin</Button></div></div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>Save messages</Button></div>;
+  return <div class="forms-step-panel"><div class="forms-publish-summary"><span class="eyebrow">Publication state</span><strong>{form.status === "open" ? "Open and public" : form.status === "closed" ? "Closed, URL preserved" : "Unpublished draft"}</strong><span>{form.response_count.toLocaleString()} responses · {form.fields.length} fields · {form.kind === "abstract" ? "Enters evaluation" : "Ready for agenda"}</span></div><div class="forms-state-buttons"><Button onClick={() => setLifecycle("close")} disabled={busy !== null || form.status !== "open"}>Close</Button><Button onClick={() => setLifecycle("reopen")} disabled={busy !== null || form.status !== "closed"}>Reopen</Button><Button variant="primary" onClick={() => setLifecycle("publish")} disabled={busy !== null || form.status === "open"}>Publish</Button></div></div>;
+}
