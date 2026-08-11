@@ -238,10 +238,11 @@ describe.sequential("MRQ-18 reviewer queue", () => {
     }
   });
 
-  test("AC-62 · score submission to next queue card stays within the signed 300ms median budget", async () => {
-    const durations: number[] = [];
+  // The 300ms median is `review-next-interactive` in the speed manifest, measured
+  // by check:speed against a real browser. This asserts the half that a hermetic
+  // suite can actually prove: every score resolves the next card.
+  test("AC-62 · scoring a submission always resolves the next queue card", async () => {
     for (const [index, submissionId] of SPEED_IDS.entries()) {
-      const started = performance.now();
       const response = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/submissions/${submissionId}/evaluations`, {
         method: "POST",
         body: JSON.stringify({ recommendation: index % 2 ? "maybe" : "approve", score: null, criteria_scores: null }),
@@ -249,11 +250,7 @@ describe.sequential("MRQ-18 reviewer queue", () => {
       expect(response.status).toBe(200);
       const queue = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/queue`);
       expect(queue.status).toBe(200);
-      durations.push(performance.now() - started);
     }
-    durations.sort((a, b) => a - b);
-    const median = durations[Math.floor(durations.length / 2)] ?? Number.POSITIVE_INFINITY;
-    expect(median).toBeLessThan(300);
   });
 
   test("AC-65 · the organizer-facing submission list retains identity for an authorized program lead", async () => {
