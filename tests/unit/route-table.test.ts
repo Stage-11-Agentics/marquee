@@ -23,3 +23,13 @@ test("AC-106 · API tokens and the sidebar API docs link resolve as real routes"
   expect(matchRoute("/settings/api")?.id).toBe("api-tokens");
   expect(matchRoute("/api/docs")?.id).toBe("api-docs");
 });
+
+test("CONTRACT · the table installs no route for a module this product does not have", () => {
+  // The Airtable mirror was cancelled and the AI first pass was never built.
+  // An installed route claims a module exists; these two claimed one and had none.
+  expect(matchRoute("/settings/airtable")).toBeUndefined();
+  expect(matchRoute("/evaluation/ai")).toBeUndefined();
+  // Task templates stays: the onboarding tasks behind it are real and shipped,
+  // so its empty state describes an unbuilt screen rather than an absent feature.
+  expect(matchRoute("/settings/tasks")?.id).toBe("task-templates");
+});
