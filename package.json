@@ -9,7 +9,7 @@
     "e2e": "node scripts/checks/run-e2e.mjs",
     "check:speed": "node scripts/checks/check-speed.mjs",
     "check:seed": "node scripts/checks/stub-command.mjs check:seed MRQ-14 \"seed and public API are not implemented\"",
-    "check:api": "node scripts/checks/stub-command.mjs check:api MRQ-9 \"route registry, OpenAPI, and full-loop trace are not implemented\"",
+    "check:api": "node scripts/checks/check-api.mjs",
     "check:repo": "node scripts/checks/check-repo.mjs",
     "check:readme": "node scripts/checks/stub-command.mjs check:readme MRQ-57 \"self-host deploy sequence is not implemented\"",
     "trace:ac": "node scripts/checks/trace-ac.mjs",
@@ -25,15 +25,18 @@
     "node": ">=22.18.0"
   },
   "dependencies": {
+    "@hono/zod-openapi": "^1.5.2",
     "hono": "^4.13.1",
     "preact": "^10.29.8",
-    "preact-render-to-string": "^6.7.0"
+    "preact-render-to-string": "^6.7.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.51.1",
     "@cloudflare/vitest-pool-workers": "^0.20.3",
     "@cloudflare/workers-types": "^5.20260809.1",
     "@playwright/test": "^1.62.1",
+    "@scalar/openapi-parser": "^0.28.12",
     "@types/node": "^26.2.0",
     "typescript": "^7.0.2",
     "typescript-ast": "npm:typescript@^5.9.3",

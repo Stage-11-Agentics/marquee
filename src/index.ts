@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 
+import { createApiRouter } from "./api/router";
 import { setSessionCookie } from "./lib/cookies";
+import { apiManifest } from "./routes/_manifest";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -79,11 +81,18 @@ app.get("/__validation/session-cookie", (context) => {
   return context.json({ cookie: "mq_session", status: "set" });
 });
 
-app.all("/api/*", (context) => {
-  return context.json(
-    { error: { code: "not_found", message: "API route not found" } },
-    404,
-  );
+// The API app is built from the generated route manifest. Assembly digests the
+// OpenAPI document, which is async, so it is memoized on first request rather
+// than awaited at module scope.
+let apiApp: Promise<Awaited<ReturnType<typeof createApiRouter>>> | undefined;
+
+app.all("/api/*", async (context) => {
+  apiApp ??= createApiRouter(apiManifest);
+  const { app: api } = await apiApp;
+  // Unmatched `/api/*` falls through to the API app's own not-found handler,
+  // so a miss returns the one error envelope with its request id like every
+  // other failure — there is no second 404 shape.
+  return api.fetch(context.req.raw, context.env, context.executionCtx);
 });
 
 app.all("*", (context) => context.env.ASSETS.fetch(context.req.raw));
