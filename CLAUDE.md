@@ -18,6 +18,26 @@ Open-source speaker/session-management platform for conference organizers — St
 - Speed is a graded feature (R7). Treat any slow list or transition as a defect.
 - This repo will be **public open source** (competition requirement). Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
 
+## Source control: GitHub is canonical for Marquee (operator ruling, 2026-08-11)
+
+**`Stage-11-Agentics/marquee` on GitHub — private — is the single home for this project.**
+A collaborator works through it, so it is where the work has to live.
+
+- Remote is **`github`**; branch is **`main`**. There is no `origin`.
+- **The Forgejo repo is retired. Do not push to it, fetch from it, or re-add it as a remote.**
+  The `forgejo` remote has been removed from the checkout deliberately, so a stale command
+  fails loudly instead of silently writing to a repo nobody reads. Two forges is how `main`
+  drifts, and this project now has one.
+- This is a deliberate exception to the Stage 11 default that Forgejo is canonical, recorded
+  there too.
+- PRs via `gh pr create --repo Stage-11-Agentics/marquee --base main`. No token handling —
+  `gh` is already authenticated.
+- **Private stays private.** The competition needs a *public* repo, and that is a separate,
+  curated artifact: the orphan branch `mrq-42-assembly` (tip `f4240644`), which carries the
+  app tree without `sequence/` internals, `OPERATOR-PRECONDITIONS.md`, or the `.lattice`
+  board. **Never push `main` to a public repo, and never merge the orphan into `main`** — it
+  would delete everything the orphan omits, including the whole board.
+
 ## Delegator harness defaults (this project)
 
 **Model routing by kind of work** (operator directive, 2026-08-10):

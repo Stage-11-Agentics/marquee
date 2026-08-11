@@ -37,8 +37,8 @@ sitting dead while the board says it is working. That check stays (2b).
    `Selected model is at capacity` refusal.
 2. **Blockers.** `needs_human` flags, `blocked` status, raised c11 flags, and open PRs —
    especially `mergeable: false` or a `pr_open` that survives two watchdog ticks untouched.
-   On `mergeable: false`, check ancestry (`git merge-base --is-ancestor forgejo/master
-   forgejo/<branch>`) before assuming the async-recompute case: a false there means a real
+   On `mergeable: false`, check ancestry (`git merge-base --is-ancestor github/main
+   github/<branch>`) before assuming the async-recompute case: a false there means a real
    rebase is owed, and polling would wait forever.
 2b. **Model-at-capacity refusal, every tick (operator directive 2026-08-10).** Read every
    delegator surface for `Selected model is at capacity`, and for its signature — the boot
@@ -58,7 +58,7 @@ sitting dead while the board says it is working. That check stays (2b).
 5. **Rate.** Done-count delta per hour against tickets remaining and hours to deadline. State
    it as a range; a single short delta on a coarse counter is how this run produced two wrong
    capacity calls (Kimi "10%", Bravo "75 minutes"). Measure over a longer baseline.
-6. **Repo health.** Local `master` == `forgejo/master` (contract commits have stranded
+6. **Repo health.** Local `master` == `github/main` (contract commits have stranded
    unpushed twice this run, invisible to every worktree), branch work pushed rather than
    living only on this machine, no orphan branches.
 

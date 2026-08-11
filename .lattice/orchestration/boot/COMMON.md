@@ -27,13 +27,13 @@ Vocabulary: `backlog → in_planning → planned → in_progress → review → 
 
 ## Git discipline
 
-- Remote is **`forgejo`** (never `origin`), base branch **`master`**. At every phase boundary: `git fetch forgejo` and record "working against forgejo/master @ <sha>"; rebase before editing.
+- Remote is **`github`** (never `origin`), base branch **`main`**. At every phase boundary: `git fetch github` and record "working against github/main @ <sha>"; rebase before editing. **GitHub is the only remote for this project** — the Forgejo repo is retired and must not be pushed to, fetched from, or re-added (operator ruling 2026-08-11).
 - Pre-commit guard before EVERY commit: `test "$(git rev-parse --show-toplevel)" = "<your-abs-worktree>"` — never commit from any other cwd, never `cd` into the root repo to commit or push.
 - **`.lattice/**` conflicts are never yours to judge — always take upstream.** Event logs, task JSON, and plan files there are orchestrator-owned; lattice writes them continuously and the orchestrator commits them every tick, so they conflict on essentially every rebase. Resolve mechanically and move on: `git checkout --ours -- .lattice/ ; git add -A .lattice/ ; GIT_EDITOR=true git rebase --continue` (`--skip` if the step goes empty). Losing a board-state line costs nothing — lattice regenerates it. Spending your context reading them costs a great deal.
-- **Commit and push your PLAN as your first commit, before you write a line of code.** This is the rule that actually protects you, because the failure is never "I refused to push" — it is "I had not committed anything yet." `git add -A && git commit -m "<TICKET> plan" && git push forgejo <branch>` the moment your plan file is written. That creates the remote ref, and every later push is a cheap increment onto it. Repeatedly on this run, delegators reached 85–95% context with ten-plus modified files and **zero** commits; each was one crash from losing hours.
-- **Push your branch as soon as it has its first commit, and after every meaningful commit after that. Do not wait for the PR.** `git push forgejo <branch>` costs nothing and is the only thing standing between your work and a crash, a compaction, or a bad rebase. On 2026-08-11 four branches carrying real work existed nowhere but one laptop. Collaborators cannot see what is not on the remote, and neither can any recovery.
-- Push verification: after `git push forgejo <branch>`, run `git fetch forgejo && test "$(git rev-parse HEAD)" = "$(git rev-parse forgejo/<branch>)"`; re-push until equal.
-- **If your branch was cut off another ticket's branch (a "stacked" ticket — your boot prompt says so), its parent is squash-merged into master and is therefore NOT an ancestor of your branch.** A plain `git rebase forgejo/master` will try to replay the parent's commits again and produce phantom conflicts. Rebase with the explicit cut point instead: `git rebase --onto forgejo/master <parent-tip-sha> <your-branch>`, then `git push --force-with-lease`, then wait ~15 s before expecting the forge to report your PR mergeable — Forgejo recomputes asynchronously and reports stale state in the meantime. Your PR body names its anchor: "stacked on MRQ-N — merge that first; this rebases."
+- **Commit and push your PLAN as your first commit, before you write a line of code.** This is the rule that actually protects you, because the failure is never "I refused to push" — it is "I had not committed anything yet." `git add -A && git commit -m "<TICKET> plan" && git push github <branch>` the moment your plan file is written. That creates the remote ref, and every later push is a cheap increment onto it. Repeatedly on this run, delegators reached 85–95% context with ten-plus modified files and **zero** commits; each was one crash from losing hours.
+- **Push your branch as soon as it has its first commit, and after every meaningful commit after that. Do not wait for the PR.** `git push github <branch>` costs nothing and is the only thing standing between your work and a crash, a compaction, or a bad rebase. On 2026-08-11 four branches carrying real work existed nowhere but one laptop. Collaborators cannot see what is not on the remote, and neither can any recovery.
+- Push verification: after `git push github <branch>`, run `git fetch github && test "$(git rev-parse HEAD)" = "$(git rev-parse github/<branch>)"`; re-push until equal.
+- **If your branch was cut off another ticket's branch (a "stacked" ticket — your boot prompt says so), its parent is squash-merged into main and is therefore NOT an ancestor of your branch.** A plain `git rebase github/main` will try to replay the parent's commits again and produce phantom conflicts. Rebase with the explicit cut point instead: `git rebase --onto github/main <parent-tip-sha> <your-branch>`, then `git push --force-with-lease`, then wait ~15 s before expecting GitHub to report your PR mergeable — mergeability is recomputed asynchronously and reads stale in the meantime. Your PR body names its anchor: "stacked on MRQ-N — merge that first; this rebases."
 
 ## Contract conflicts are the Orchestrator's to resolve, not yours
 
@@ -56,10 +56,10 @@ If your implementation must diverge from `SPEC.md` (or any contract doc), implem
 Worktrees are cut at a point in time and their `node_modules` goes stale the moment another ticket's lockfile lands. A stale install fails as **"cannot find module X"**, which reads exactly like a broken master — it is not. Before you trust a red test after a rebase:
 
 ```
-git fetch forgejo && git rebase forgejo/master && npm ci
+git fetch github && git rebase github/main && npm ci
 ```
 
-**Never `npm install --no-save` to get past it.** It papers over the stale install, leaves your tree disagreeing with the committed lockfile, and hides a genuine dependency problem until someone else hits it. (2026-08-10: MRQ-9 reported master as broken because `aws4fetch` "was missing from package.json"; it was present and master passed the full gate in 14.5s on a clean install — the worktree's `node_modules` simply predated MRQ-14's merge.)
+**Never `npm install --no-save` to get past it.** It papers over the stale install, leaves your tree disagreeing with the committed lockfile, and hides a genuine dependency problem until someone else hits it. (2026-08-10: MRQ-9 reported main as broken because `aws4fetch` "was missing from package.json"; it was present and main passed the full gate in 14.5s on a clean install — the worktree's `node_modules` simply predated MRQ-14's merge.)
 
 If you believe master is genuinely broken, say so to the orchestrator with the exact command and output before working around it. Master being broken blocks the whole fleet, so it is worth ten seconds of confirmation.
 
@@ -71,13 +71,13 @@ API route modules are named **`*.routes.ts`** under `src/routes/`. `src/routes/_
 
 ## Before you open a PR: the local gate
 
-Private Forgejo has **no CI runner** — nothing runs your tests after you push, so a broken PR looks identical to a green one. The gate is therefore local and **mandatory**:
+The local gate is **mandatory** — run it before you open the PR rather than relying on CI:
 
 ```
 npm run pr-gate -- --ticket MRQ-N
 ```
 
-Run it from your worktree before you open the PR, and paste its result into your completion comment. A red gate means you do not open the PR. (Merged in MRQ-6; also documented in the README. There is a GitHub Actions fast-gate in the repo, but it only activates on the public GitHub push — it does not run on Forgejo, so it will never catch anything for you during this run.)
+Run it from your worktree before you open the PR, and paste its result into your completion comment. A red gate means you do not open the PR. (Merged in MRQ-6; also documented in the README. A GitHub Actions fast-gate exists in the repo and now that GitHub is the canonical remote it does run on push — treat it as a second opinion, never as a substitute for the local gate, which is faster and catches the same failures before you spend a PR on them.)
 
 Keep the default test suite hermetic and under 30 seconds — it is the whole fleet's inner-loop clock. Slow integration or end-to-end work belongs in a separately-invoked suite, never the default.
 
@@ -85,10 +85,11 @@ Keep the default test suite hermetic and under 30 seconds — it is the whole fl
 
 Bump `in_validation`, then exercise the change for real — `wrangler dev` + curl, the c11 embedded browser for UI (load the c11-browser skill), actual command runs for CLI. Attach evidence with `--role validation` (or a one-line justified N/A). Test names carry their AC IDs (`trace:ac` contract).
 
-## PR (Forgejo)
+## PR (GitHub)
 
-Token: `security find-internet-password -s "forgejo.stage11.ai" -w` — capture into a shell variable, **never echo, log, or commit it**. Create the PR via API:
-`curl -s -X POST https://forgejo.stage11.ai/api/v1/repos/atin/marquee/pulls -H "Authorization: token $TOK" -H "Content-Type: application/json" -d '{"head":"<branch>","base":"master","title":"...","body":"..."}'`.
+Use the `gh` CLI — it is already authenticated, so there is no token to handle, echo, or leak:
+`gh pr create --repo Stage-11-Agentics/marquee --base main --head <branch> --title "..." --body "..."`.
+(The private Forgejo repo is retired as of 2026-08-11 — do not create PRs there.)
 Body cites the ticket (MRQ-N), its M-number(s), and AC IDs. Then attach the PR URL (`lattice attach MRQ-N --type reference ...`) and bump `pr_open` — as parallel steps, then stop.
 
 ## Public-repo hygiene (HARD)
