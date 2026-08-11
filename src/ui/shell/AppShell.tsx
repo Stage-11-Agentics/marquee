@@ -1,5 +1,6 @@
 import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
+import { SubmissionsPage } from "../submissions/SubmissionsPage";
 import { EmptyState, PageHeader } from "./components";
 import { OverlayHost, ToastHost, type OverlayState } from "./OverlayHosts";
 import { matchRoute } from "./route-table";
@@ -28,14 +29,16 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   }, [unavailable]);
 
   const routeName = route?.label ?? "Route not found";
+  const isSubmissionsList = location.pathname === "/submissions";
   return <>
     <div class="app-shell">
       <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} />
       <main class="main">
         <Topbar eventName={eventName} routeName={routeName} userInitials={userInitials} openSearch={() => unavailable("Global search", "Search becomes available when the event data API lands.")} openUser={() => unavailable("Program lead", "Account preferences land with authentication and event administration.")} />
         <div class="page">
-          <PageHeader title={routeName} copy="The shared Flight Deck shell is installed. This route's product module will replace the honest empty state below." />
-          <EmptyState title={route ? `${route.label} is ready for its module` : "This route is not installed"} copy={route ? "Navigation, layout, overlays, responsive behavior, and accessibility are live; no product data is being simulated." : "Return to Program home or choose a module from the shared navigation."} />
+          {isSubmissionsList
+            ? <SubmissionsPage search={location.search} navigate={navigate} />
+            : <><PageHeader title={routeName} copy="The shared Flight Deck shell is installed. This route's product module will replace the honest empty state below." /><EmptyState title={route ? `${route.label} is ready for its module` : "This route is not installed"} copy={route ? "Navigation, layout, overlays, responsive behavior, and accessibility are live; no product data is being simulated." : "Return to Program home or choose a module from the shared navigation."} /></>}
         </div>
       </main>
     </div>
