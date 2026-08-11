@@ -58,7 +58,7 @@ test("AC-2 · POST /api/v1/auth/demo 200s and sets a session cookie when demo_mo
 
 test("CONTRACT · demo session cookie has the complete narrow security policy", async () => {
   await seedDemoFixture();
-  const response = await app.request("/api/v1/auth/demo", {
+  const response = await app.request("https://marquee.example/api/v1/auth/demo", {
     method: "POST",
     body: JSON.stringify({ role: "speaker" }),
     headers: { "content-type": "application/json" },
@@ -69,6 +69,39 @@ test("CONTRACT · demo session cookie has the complete narrow security policy", 
   expect(setCookie).toMatch(/SameSite=Lax/i);
   expect(setCookie).toMatch(/Path=\//i);
   expect(setCookie).not.toMatch(/Domain=/i);
+});
+
+// Safari and WKWebView refuse a Secure cookie on an http:// origin, so the
+// plain-HTTP local recipe needs this opt-out or the UI 401s after a 200 login.
+// The flag ships only in .dev.vars.example, never in a deployed Worker.
+test("CONTRACT · INSECURE_LOCAL_COOKIES=1 omits Secure so the local HTTP recipe keeps its session", async () => {
+  await seedDemoFixture();
+  const response = await app.request("https://marquee.example/api/v1/auth/demo", {
+    method: "POST",
+    body: JSON.stringify({ role: "speaker" }),
+    headers: { "content-type": "application/json" },
+  }, { ...env, INSECURE_LOCAL_COOKIES: "1" });
+  const setCookie = response.headers.get("set-cookie") ?? "";
+  expect(setCookie).toMatch(/mq_session=/);
+  expect(setCookie).toMatch(/HttpOnly/i);
+  expect(setCookie).toMatch(/SameSite=Lax/i);
+  expect(setCookie).not.toMatch(/Secure/i);
+});
+
+// Exactly "1" opts out; every other value keeps Secure. Written as one test over
+// the table rather than `test.each`, because the AC tracer reads the first
+// argument of any `test(...)` call as a title and `test.each([...])` puts the
+// table there — a static-analysis limitation, not a reason to weaken the check.
+test("CONTRACT · session cookie stays Secure for every INSECURE_LOCAL_COOKIES value but 1", async () => {
+  await seedDemoFixture();
+  for (const flag of [undefined, "0", "true", ""]) {
+    const response = await app.request("https://marquee.example/api/v1/auth/demo", {
+      method: "POST",
+      body: JSON.stringify({ role: "speaker" }),
+      headers: { "content-type": "application/json" },
+    }, { ...env, INSECURE_LOCAL_COOKIES: flag });
+    expect(response.headers.get("set-cookie") ?? "", `flag=${String(flag)}`).toMatch(/Secure/i);
+  }
 });
 
 test("CONTRACT · magic-link request enqueues an outbox row and returns the on-screen link only in demo mode", async () => {

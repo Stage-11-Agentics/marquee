@@ -1,3 +1,7 @@
+# Note: the plain-HTTP local recipe also needs `--var INSECURE_LOCAL_COOKIES:1`
+# on the `wrangler dev` command (see README). It cannot live in this file — the
+# build only forwards keys declared in wrangler.jsonc's required-secrets list.
+
 # Cloudflare's published always-pass Turnstile keys for local testing only.
 # Never deploy these values to production.
 TURNSTILE_SITE_KEY=1x00000000000000000000AA
