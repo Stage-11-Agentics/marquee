@@ -20,7 +20,7 @@ import { SESSION_COOKIE_NAME } from "../lib/cookies";
 import { uploadError } from "../lib/r2/errors";
 import { objectKeyFor, publicMediaUrl } from "../lib/r2/keys";
 import { extensionOf, parseUploadOwnerConfig, policyFor, sanitizeFilename, validateDeclared } from "../lib/r2/policy";
-import { presignPut, type R2SigningConfig } from "../lib/r2/presign";
+import { PRESIGN_EXPIRY_SECONDS, presignPut, type R2SigningConfig } from "../lib/r2/presign";
 import type { UploadOwnerConfig } from "../lib/r2/protocol";
 import { checkUploadRateLimits, rateLimitHeaders } from "../lib/r2/rate-limit";
 import { isMediaHost, serveMediaObject } from "../lib/r2/serve";
@@ -39,6 +39,24 @@ export interface UploadsEnv {
   MEDIA_PUBLIC_ORIGIN: string;
   UPLOAD_TOKEN_SECRET: string;
   UPLOAD_RATE_LIMIT_SECRET: string;
+  LOCAL_DIRECT_UPLOADS?: string;
+}
+
+/**
+ * A local run cannot PUT to the real R2 S3 endpoint — the signer's
+ * credentials there are deliberately fake (MRQ-14), so every browser upload
+ * dies on the wire and a required file field can never be answered. With
+ * LOCAL_DIRECT_UPLOADS=1 the sign routes hand back a worker-served PUT URL
+ * instead and the worker writes the bytes to the local R2 binding; the
+ * complete → verify flow then runs unchanged. Production never sets the
+ * flag: presigning is untouched and the direct-put door 404s.
+ */
+function localDirectUploads(env: UploadsEnv): boolean {
+  return env.LOCAL_DIRECT_UPLOADS === "1";
+}
+
+function localPutToken(env: UploadsEnv, attachmentId: string, r2Key: string): Promise<string> {
+  return hmacHex(env.UPLOAD_TOKEN_SECRET, `local-put:${attachmentId}:${r2Key}`);
 }
 
 async function hmacHex(secret: string, value: string): Promise<string> {
@@ -213,8 +231,18 @@ async function handlePublicSign(context: Context<ApiEnv>) {
   });
 
   try {
-    const presigned = await presignPut(signingConfig(env), { key: r2Key, contentType, nowMs });
     const completionToken = await hmacHex(env.UPLOAD_TOKEN_SECRET, `${attachmentId}:draft_file:${draftId}`);
+    if (localDirectUploads(env)) {
+      return context.json({
+        attachmentId,
+        putUrl: `${new URL(context.req.url).origin}/api/v1/local-uploads/${encodeURIComponent(attachmentId)}?token=${await localPutToken(env, attachmentId, r2Key)}`,
+        requiredHeaders: { "content-type": contentType },
+        expiresAt: nowMs + PRESIGN_EXPIRY_SECONDS * 1000,
+        completionToken,
+        maxBytes: policy.maxBytes,
+      });
+    }
+    const presigned = await presignPut(signingConfig(env), { key: r2Key, contentType, nowMs });
     return context.json({
       attachmentId,
       putUrl: presigned.url,
@@ -339,8 +367,18 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
   });
 
   try {
-    const presigned = await presignPut(signingConfig(env), { key: r2Key, contentType, nowMs });
     const completionToken = await hmacHex(env.UPLOAD_TOKEN_SECRET, `${attachmentId}:${ownerType}:${ownerId}`);
+    if (localDirectUploads(env)) {
+      return context.json({
+        attachmentId,
+        putUrl: `${new URL(context.req.url).origin}/api/v1/local-uploads/${encodeURIComponent(attachmentId)}?token=${await localPutToken(env, attachmentId, r2Key)}`,
+        requiredHeaders: { "content-type": contentType },
+        expiresAt: nowMs + PRESIGN_EXPIRY_SECONDS * 1000,
+        completionToken,
+        maxBytes: policy.maxBytes,
+      });
+    }
+    const presigned = await presignPut(signingConfig(env), { key: r2Key, contentType, nowMs });
     return context.json({
       attachmentId,
       putUrl: presigned.url,
@@ -416,20 +454,62 @@ async function handleComplete(context: Context<ApiEnv>) {
   return context.json({
     attachmentId: row.id,
     status: "ready",
-    url: publicMediaUrl(env.MEDIA_PUBLIC_ORIGIN, { status: "ready", r2_key: row.r2_key }),
+    url: localDirectUploads(env)
+      ? `/api/v1/media/${row.r2_key.split("/").map(encodeURIComponent).join("/")}`
+      : publicMediaUrl(env.MEDIA_PUBLIC_ORIGIN, { status: "ready", r2_key: row.r2_key }),
     contentType: row.content_type,
     sizeBytes: row.size_bytes,
   });
 }
 
 /**
+ * The local-development PUT door: accepts the bytes a presigned S3 PUT
+ * would have carried and writes them to the local R2 binding, keyed by a
+ * purpose-tagged HMAC minted at sign time. 404 when LOCAL_DIRECT_UPLOADS
+ * is off, so production behavior is identical with or without the route.
+ */
+async function handleLocalDirectPut(context: Context<ApiEnv>) {
+  const env = uploadsEnv(context);
+  if (!localDirectUploads(env)) return context.notFound();
+
+  const attachmentId = context.req.param("id");
+  const row = await env.DB.prepare(
+    `SELECT id, r2_key, content_type, size_bytes, status FROM attachments WHERE id = ?1`,
+  )
+    .bind(attachmentId)
+    .first<{ id: string; r2_key: string; content_type: string; size_bytes: number; status: string }>();
+  if (!row || row.status !== "pending") {
+    return uploadError(context, "not_found", "attachment is not awaiting bytes");
+  }
+
+  const expected = await localPutToken(env, row.id, row.r2_key);
+  if ((context.req.query("token") ?? "") !== expected) {
+    return uploadError(context, "forbidden", "put token mismatch");
+  }
+  const declaredType = (context.req.header("content-type") ?? "").toLowerCase();
+  if (declaredType !== row.content_type.toLowerCase()) {
+    return uploadError(context, "invalid_request", "content-type differs from the signed declaration");
+  }
+  const body = await context.req.arrayBuffer();
+  if (body.byteLength !== row.size_bytes) {
+    return uploadError(context, "invalid_request", "byte count differs from the signed declaration");
+  }
+
+  await env.MEDIA.put(row.r2_key, body, { httpMetadata: { contentType: row.content_type } });
+  context.header("Cache-Control", "no-store");
+  return context.json({ ok: true as const });
+}
+
+/**
  * Media GET is accepted only on `MEDIA_PUBLIC_ORIGIN` (origin isolation);
  * the same path on the app host must 404, never fall through to SPA assets.
+ * Local direct-upload mode relaxes this: there is no separate media origin
+ * on 127.0.0.1, so the app host serves its own verified objects.
  */
 async function handleMedia(context: Context<ApiEnv>) {
   const env = uploadsEnv(context);
   const url = new URL(context.req.url);
-  if (!isMediaHost(url.hostname, env.MEDIA_PUBLIC_ORIGIN)) {
+  if (!isMediaHost(url.hostname, env.MEDIA_PUBLIC_ORIGIN) && !localDirectUploads(env)) {
     return context.notFound();
   }
 
@@ -622,6 +702,32 @@ const completeTaskUpload = defineApiRoute(
   handleComplete as never,
 );
 
+const localDirectPut = defineApiRoute(
+  {
+    method: "put",
+    path: "/api/v1/local-uploads/{id}",
+    operationId: "localDirectPut",
+    summary: "Accept upload bytes directly (local development only)",
+    description:
+      "With LOCAL_DIRECT_UPLOADS=1 the sign routes point here instead of a presigned S3 PUT and the worker stores the declared bytes in the local R2 binding. Without the flag this route is 404 — production presigning is unaffected.",
+    tags: ["Uploads"],
+    request: { params: idParamsSchema },
+    policy: {
+      auth: { kind: "public" },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      200: {
+        content: { "application/json": { schema: z.object({ ok: z.literal(true) }) } },
+        description: "The bytes were stored in the local binding.",
+      },
+      ...uploadErrorResponses,
+    },
+  },
+  handleLocalDirectPut as never,
+);
+
 const serveMedia = defineApiRoute(
   {
     method: "get",
@@ -657,5 +763,6 @@ export const apiRoutes = [
   signTaskUpload,
   completePublicUpload,
   completeTaskUpload,
+  localDirectPut,
   serveMedia,
 ];

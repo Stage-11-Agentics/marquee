@@ -22,3 +22,9 @@ LOG_LEVEL=info
 # CLIENT_TELEMETRY: set to 0 and the browser error beacon records nothing,
 # enforced at the endpoint rather than trusted to the client. Default on.
 CLIENT_TELEMETRY=1
+
+# Local direct uploads: presigned S3 PUTs cannot succeed against the fake
+# local credentials above, so flip this on for local/demo runs — the worker
+# accepts the PUT itself and writes to the local R2 binding. Never set in
+# production.
+LOCAL_DIRECT_UPLOADS=1

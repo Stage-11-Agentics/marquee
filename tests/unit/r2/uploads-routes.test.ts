@@ -386,3 +386,66 @@ test("AC-232 · per-submission upload cap returns 429 without touching the objec
   }
   expect(lastStatus).toBe(429);
 });
+
+test("local dev · LOCAL_DIRECT_UPLOADS=1 signs a worker PUT, stores locally, completes, and serves on the app host", async () => {
+  await seedOrgEventDraft({ draftId: "sub-local", resumeToken: "tok-local", eventId: "evt1" });
+  stubTurnstile(true);
+  const LOCAL_ENV = { ...BASE_ENV, LOCAL_DIRECT_UPLOADS: "1" };
+  const pdfBytes = new TextEncoder().encode("%PDF-1.4\nreal enough for the sniffer\n");
+  const signResponse = await app.fetch(
+    signRequest({
+      draftId: "sub-local",
+      resumeToken: "tok-local",
+      fieldKey: "deck",
+      turnstileToken: "valid-local",
+      filename: "deck.pdf",
+      contentType: "application/pdf",
+      sizeBytes: pdfBytes.byteLength,
+    }),
+    LOCAL_ENV,
+  );
+  expect(signResponse.status).toBe(200);
+  const signed = (await signResponse.json()) as { attachmentId: string; completionToken: string; putUrl: string };
+  expect(signed.putUrl).toContain("/api/v1/local-uploads/");
+  expect(new URL(signed.putUrl).origin).toBe("https://marquee.stage11.dev");
+
+  const badPut = await app.fetch(
+    new Request(signed.putUrl.replace(/token=[^&]+/, "token=wrong"), {
+      method: "PUT",
+      headers: { "content-type": "application/pdf" },
+      body: pdfBytes,
+    }),
+    LOCAL_ENV,
+  );
+  expect(badPut.status).toBe(403);
+  expect(await env.MEDIA.head((await env.DB.prepare(`SELECT r2_key FROM attachments WHERE id = ?1`).bind(signed.attachmentId).first<{ r2_key: string }>())!.r2_key)).toBeNull();
+
+  const put = await app.fetch(
+    new Request(signed.putUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: pdfBytes }),
+    LOCAL_ENV,
+  );
+  expect(put.status).toBe(200);
+
+  const completeResponse = await app.fetch(
+    new Request(`https://marquee.stage11.dev/api/v1/public/uploads/${signed.attachmentId}/complete`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ completionToken: signed.completionToken }),
+    }),
+    LOCAL_ENV,
+  );
+  expect(completeResponse.status).toBe(200);
+  const completed = (await completeResponse.json()) as { url: string };
+  expect(completed.url.startsWith("/api/v1/media/")).toBe(true);
+
+  const appHostMedia = await app.fetch(new Request(`https://marquee.stage11.dev${completed.url}`), LOCAL_ENV);
+  expect(appHostMedia.status).toBe(200);
+
+  const flagOffPut = await app.fetch(
+    new Request(signed.putUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: pdfBytes }),
+    BASE_ENV,
+  );
+  expect(flagOffPut.status).toBe(404);
+  const flagOffMedia = await app.fetch(new Request(`https://marquee.stage11.dev${completed.url}`), BASE_ENV);
+  expect(flagOffMedia.status).toBe(404);
+});

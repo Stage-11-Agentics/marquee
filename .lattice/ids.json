@@ -2,6 +2,7 @@
   "map": {
     "KYS-1": "task_01KZS6GPG033QCGBZRR5P7SK49",
     "KYS-2": "task_01KZS6M8RBVBB4D33H88XZ4B80",
+    "KYS-3": "task_01KZSG0GFVPAG46QPTEJEH6PB9",
     "MRQ-1": "task_01KZJHM7DR1ZNHVKGXET5EKWYF",
     "MRQ-10": "task_01KZJHM89295VKTYA5KWTSRZYA",
     "MRQ-11": "task_01KZJHM8C4Y4EW74JJAG60S5MT",
@@ -76,7 +77,7 @@
     "MRQ-9": "task_01KZJHM862JR0BCFKFPFRZTWYW"
   },
   "next_seqs": {
-    "KYS": 3,
+    "KYS": 4,
     "MRQ": 73
   },
   "schema_version": 2
