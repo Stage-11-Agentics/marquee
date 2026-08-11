@@ -411,9 +411,17 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       after_json: entry.after_json === null ? null : jsonValue(entry.after_json as string, null),
     })),
     actions: {
-      can_decide: ["submitted", "in_review", "accepted", "waved"].includes(row.stage),
+      // `declined` covers waitlisted, rejected, and withdrawn. All three stay
+      // decidable: Maybe is a holding state the organizer resolves later, and
+      // re-acceptance is already supported as an idempotent reconciliation, so
+      // the record must keep a way back.
+      can_decide: ["submitted", "in_review", "accepted", "waved", "declined"].includes(row.stage),
       can_schedule: row.kind === "session" && row.stage === "accepted" && slot === null,
-      can_publish: slot !== null && !slot.is_published,
+      // Publishing is gated on the STORED status, not the derived stage: a
+      // reversal leaves the agenda row in place, so a withdrawn record still
+      // derives to `scheduled` and a stage test would happily publish it to
+      // the public site.
+      can_publish: slot !== null && !slot.is_published && row.status === "accepted",
     },
   };
 }
@@ -758,6 +766,13 @@ const publishSubmission = defineApiRoute(
     await eventFor(context.env.DB, eventId);
     const slot = await context.env.DB.prepare("SELECT id FROM agenda_items WHERE submission_id = ? AND event_id = ? AND kind = 'session'").bind(submissionId, eventId).first<{ id: string }>();
     if (!slot) throw ApiError.conflict("schedule the Session before publishing it");
+    // A reversal leaves the agenda row behind, so the presence of a slot does
+    // not mean the talk is still accepted. Without this the public site can be
+    // handed a withdrawn or rejected speaker's name, title, time, and room.
+    const current = await context.env.DB.prepare("SELECT status FROM submissions WHERE id = ? AND event_id = ?").bind(submissionId, eventId).first<{ status: string }>();
+    if (current?.status !== "accepted") {
+      throw ApiError.conflict("this Session is not accepted, so it cannot be published");
+    }
     const actor = await actorFor(context);
     const now = Date.now();
     await context.env.DB.batch([
