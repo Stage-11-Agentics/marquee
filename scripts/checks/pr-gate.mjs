@@ -20,7 +20,10 @@ const checks = [
 ];
 
 const startedAt = performance.now();
-const PR_GATE_BUDGET_MS = 45_000; // 30s suite budget plus production build and three typechecks, outside the inner-loop clock.
+// The 45s suite budget plus the production build and three typechecks. This is
+// the merge gate, not the inner-loop clock, so it buys headroom for a machine
+// running several agents' builds at once rather than failing on contention.
+const PR_GATE_BUDGET_MS = 120_000;
 for (const [name, binary, commandArgs] of checks) {
   process.stdout.write(`\n[pr-gate] ${name}\n`);
   const code = await new Promise((resolveExit, reject) => {
