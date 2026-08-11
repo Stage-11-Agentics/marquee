@@ -195,7 +195,13 @@ Bands in the shape of the gap analysis's Decided-scope gate, so the argument is 
 
 ---
 
-## Part 4 — open questions
+## Part 4 — questions, and how they were ruled
+
+**All three ruled by Atin, 2026-08-10.** Q1: keep two branches, relabelled. Q2: restore. Q3: hold unminted. Q4 (the sitemap drift) fixed in passing. The reasoning below is kept because the *why* is what a builder needs; the rulings are folded into `SPEC.md` Amendment 15, `USER_STORIES.md` Amendment 15, and `BUILDPLAN.md` Amendment 10.
+
+**Ruled on Q2, better than proposed.** The dossier originally implied two code paths — restore on re-accept, assign fresh on first accept, with a "skip templates already represented" guard on the second. That guard rots. It ships instead as **one idempotent `reconcileTaskSet`**: for each template, restore the row if it exists, create it if it does not. First acceptance, re-acceptance after a reversal, and acceptance after the template set changed are then the same operation, running it twice is a no-op, and `completed_at` is never in the write set — so finished homework survives by construction rather than by a builder remembering. AC-266 asserts the single call site by enumeration, not by behaviour alone.
+
+
 
 **Q1 — what does the reversal dialog's second branch mean?** Once `cancelled_at` is a tombstone, "Retain for records" is what cancelling already does. Either it means **keep chasing this person anyway** — real when they still moderate another session — in which case relabel to *Cancel open tasks* / **Keep tasks active**, with a sublabel naming who keeps getting chased; or the two options collapse and the dialog should offer one. Recommend: **relabel and keep two**, because "keep chasing" is a genuine case and a dialog that enumerates consequences shouldn't offer a no-op.
 
