@@ -122,4 +122,18 @@ describe.sequential("MRQ-20 agenda API", () => {
     const body = await response.json<{ rooms: Array<{ av_capabilities: string[]; notes: string }> }>();
     expect(body.rooms[0]).toMatchObject({ av_capabilities: ["HDMI", "Recording"], notes: "Load-in uses the side door." });
   });
+
+  test("AC-75 + AC-79 · a conflicting placement persists and remains warning-only", async () => {
+    const placed = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/items`, {
+      method: "POST",
+      body: JSON.stringify({ submission_id: "sub-agenda-waitlisted", starts_at: NOW, room_id: "room-agenda" }),
+    });
+    expect(placed.status).toBe(201);
+
+    const response = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
+    expect(response.status).toBe(200);
+    const body = await response.json<{ sessions: Array<{ submission_id: string }>; conflicts: Array<{ kind: string }> }>();
+    expect(body.sessions.some((session) => session.submission_id === "sub-agenda-waitlisted")).toBe(true);
+    expect(body.conflicts.some((conflict) => conflict.kind === "room")).toBe(true);
+  });
 });

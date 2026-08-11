@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import type { ComponentChildren, JSX } from "preact";
 
 export function Button({ variant = "", small = false, class: className = "", ...props }: JSX.HTMLAttributes<HTMLButtonElement> & { disabled?: boolean; type?: "button" | "submit" | "reset"; variant?: "" | "primary" | "danger" | "ghost"; small?: boolean }): JSX.Element {

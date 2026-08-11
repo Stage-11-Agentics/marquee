@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import type { ComponentChildren, JSX } from "preact";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
@@ -11,11 +12,11 @@ import type {
 } from "../../api/agenda";
 import { AGENDA_VIEWS, durationIsAllowed, viewNames } from "../../api/agenda";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
+import { localParts, sessionDay, sessionTime, TIME_SLOTS, TrackBoard } from "./track-board";
 import "./agenda.css";
 
 const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const DAY_MS = 86_400_000;
-const TIME_SLOTS = Array.from({ length: 12 }, (_, index) => `${String(index + 9).padStart(2, "0")}:00`);
 
 interface Props {
   eventId?: string;
@@ -36,7 +37,7 @@ type DragPayload =
   | { kind: "session"; id: string };
 
 function apiMessage(response: Response, fallback: string): Promise<string> {
-  return response.json().then((body: { error?: { message?: string } }) => body.error?.message ?? fallback).catch(() => fallback);
+  return response.json().then((body) => (body as { error?: { message?: string } }).error?.message ?? fallback).catch(() => fallback);
 }
 
 function dateAtNoon(value: string): Date {
@@ -60,23 +61,6 @@ function dayOptions(snapshot: AgendaSnapshot): DayOption[] {
   return options;
 }
 
-function localParts(timestamp: number, timezone: string): { day: string; time: string } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(timestamp));
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  return {
-    day: `${values.get("year")}-${values.get("month")}-${values.get("day")}`,
-    time: `${values.get("hour")}:${values.get("minute")}`,
-  };
-}
-
 /** Convert a conference-local wall-clock value into an instant without using the browser's zone. */
 export function zonedStart(date: string, time: string, timezone: string): number {
   const [year, month, day] = date.split("-").map(Number);
@@ -95,14 +79,6 @@ export function zonedStart(date: string, time: string, timezone: string): number
     candidate += target - renderedTarget;
   }
   return candidate;
-}
-
-function sessionDay(session: AgendaSession, timezone: string): string {
-  return localParts(session.starts_at, timezone).day;
-}
-
-function sessionTime(session: AgendaSession, timezone: string): string {
-  return localParts(session.starts_at, timezone).time;
 }
 
 function speakerLine(session: AgendaSession): string {
@@ -173,7 +149,7 @@ function TrackChips({ session }: { session: AgendaSession }): JSX.Element {
   </span>;
 }
 
-function SessionTile({
+export function SessionTile({
   snapshot,
   session,
   onDragStart,
@@ -201,7 +177,9 @@ function SessionTile({
     <span class="agenda-tile-meta">{session.kind === "break" ? `${session.duration_min} min reservation` : `${session.format ?? "Session"} · ${speakerLine(session)}`}</span>
     <span class="agenda-tile-location">{session.room} · {session.building}</span>
     {session.kind !== "break" && <TrackChips session={session} />}
-    {hasConflict && <span class="agenda-conflict-flag" title="This placement needs attention">⚠ {conflicts.get(session.id) ?? "Conflict"}</span>}
+    <span class={`agenda-conflict-flag${hasConflict ? "" : " is-placeholder"}`} aria-hidden={!hasConflict} title={hasConflict ? "This placement needs attention" : undefined}>
+      ⚠ {conflicts.get(session.id) ?? "Conflict"}
+    </span>
     {session.kind !== "break" && <span class="agenda-tile-actions">
       <button type="button" aria-label={`Shorten ${session.title}`} disabled={Boolean(format && !durationIsAllowed(session.duration_min - 5, format))} onClick={(event) => { event.stopPropagation(); onResize(session, -5); }}>−</button>
       <span class="tabular">{session.duration_min}m</span>
@@ -398,39 +376,6 @@ function RoomBoard({
   </div>;
 }
 
-function TrackBoard({
-  snapshot,
-  sessions,
-  days,
-  onDrop,
-  onDragStart,
-  onResize,
-  onRoomOpen,
-  conflicts,
-}: {
-  snapshot: AgendaSnapshot;
-  sessions: AgendaSession[];
-  days: DayOption[];
-  onDrop: (event: DragEvent, day: string, time: string, roomId: string, trackId?: string) => void;
-  onDragStart: (payload: DragPayload, event: DragEvent) => void;
-  onResize: (session: AgendaSession, delta: number) => void;
-  onRoomOpen: (roomId: string) => void;
-  conflicts: ConflictMarkers;
-}): JSX.Element {
-  const fallbackRoom = snapshot.rooms[0];
-  return <div class="agenda-track-board">
-    {snapshot.tracks.map((track) => <section class="agenda-track-lane" key={track.id} style={{ borderTopColor: track.color }}>
-      <header><span class="agenda-track-dot" style={{ backgroundColor: track.color }} /><strong>{track.name}</strong><span class="subtle tabular">{sessions.filter((session) => session.track_id === track.id).length} scheduled</span></header>
-      {days.map((day) => <div class="agenda-track-day" key={day.value}>
-        <div class="agenda-day-label">{day.label}</div>
-        <div class="agenda-track-slots">{TIME_SLOTS.map((time) => <DropCell key={`${day.value}-${time}`} class="agenda-track-slot" onDrop={(event) => { if (fallbackRoom) onDrop(event, day.value, time, fallbackRoom.id, track.id); }}>
-          {sessions.filter((session) => session.track_id === track.id && sessionDay(session, snapshot.event.timezone) === day.value && sessionTime(session, snapshot.event.timezone) === time).map((session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={onRoomOpen} conflicts={conflicts} />)}
-        </DropCell>)}</div>
-      </div>)}
-    </section>)}
-  </div>;
-}
-
 function RoomPanel({ room, onClose }: { room: AgendaRoom; onClose: () => void }): JSX.Element {
   return <aside class="agenda-room-panel" role="dialog" aria-label={`${room.label} details`}>
     <header><div><span class="eyebrow">Room details</span><h2>{room.label}</h2></div><button type="button" aria-label="Close room details" onClick={onClose}>×</button></header>
@@ -443,12 +388,12 @@ function RoomPanel({ room, onClose }: { room: AgendaRoom; onClose: () => void })
   </aside>;
 }
 
-function ConflictPanel({ conflicts, sessions, onClose }: { conflicts: AgendaConflict[]; sessions: AgendaSession[]; onClose: () => void }): JSX.Element {
+export function ConflictPanel({ conflicts, sessions, onClose, onJump }: { conflicts: AgendaConflict[]; sessions: AgendaSession[]; onClose: () => void; onJump: (sessionId: string) => void }): JSX.Element {
   const titleFor = (id: string) => sessions.find((session) => session.id === id)?.title ?? id;
   return <aside class="agenda-conflict-panel" role="dialog" aria-label="Agenda conflicts">
     <header><div><span class="eyebrow">Live detection</span><h2>Agenda conflicts · <span class="tabular">{conflicts.length}</span></h2></div><button type="button" aria-label="Close conflicts" onClick={onClose}>×</button></header>
     <div class="agenda-conflict-list">{conflicts.length ? conflicts.map((conflict, index) => <section key={`${conflict.session_ids.join("-")}-${index}`}>
-      <span class="agenda-conflict-icon">!</span><div><strong>{conflict.message}</strong><span>{titleFor(conflict.session_ids[0])} ↔ {titleFor(conflict.session_ids[1])}</span></div>
+      <span class="agenda-conflict-icon">!</span><div><strong>{conflict.message}</strong><span>{titleFor(conflict.session_ids[0])} ↔ {titleFor(conflict.session_ids[1])}</span><button type="button" class="agenda-conflict-jump" data-conflict-jump={conflict.session_ids[0]} onClick={() => onJump(conflict.session_ids[0])}>Jump to Session</button></div>
     </section>) : <EmptyState title="No conflicts" copy="The schedule is clear for the current placements." />}</div>
   </aside>;
 }
@@ -628,11 +573,30 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
   const visibleSessions = sessionsFor(snapshot, selectedDay, track);
   const conflicts = conflictMarkers(snapshot.conflicts);
   const activeRoom = roomPanelId ? roomFor(snapshot, roomPanelId) : undefined;
+  const jumpToSession = (sessionId: string) => {
+    const target = snapshot.sessions.find((session) => session.id === sessionId);
+    if (!target) return;
+    setView("track");
+    setTrack("");
+    setDay(sessionDay(target, snapshot.event.timezone));
+    setConflictsOpen(false);
+    window.requestAnimationFrame(() => {
+      const tile = [...(boardRef.current?.querySelectorAll<HTMLElement>("[data-session-id]") ?? [])]
+        .find((candidate) => candidate.dataset.sessionId === sessionId);
+      tile?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+    });
+  };
   const renderBoard = () => {
     if (view === "list") return <AgendaList snapshot={snapshot} sessions={visibleSessions} conflicts={conflicts} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} />;
     if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />;
     if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />;
-    if (view === "track") return <TrackBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />;
+    if (view === "track") return <TrackBoard
+      snapshot={snapshot}
+      sessions={sessionsFor(snapshot, "all", track)}
+      days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)}
+      onDrop={onDrop}
+      renderTile={(session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />}
+    />;
     const dayForBoard = selectedDay === "all" ? days[0]?.value ?? selectedDay : selectedDay;
     return <DayBoard snapshot={snapshot} sessions={sessionsFor(snapshot, dayForBoard, track)} day={dayForBoard} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />;
   };
@@ -652,7 +616,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
       <section class="card agenda-board" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
     </div>
     {activeRoom && <RoomPanel room={activeRoom} onClose={() => setRoomPanelId(null)} />}
-    {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} onClose={() => setConflictsOpen(false)} />}
+    {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} onClose={() => setConflictsOpen(false)} onJump={jumpToSession} />}
   </div>;
 }
 

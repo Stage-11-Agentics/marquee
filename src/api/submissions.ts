@@ -19,10 +19,19 @@ export interface SubmissionTrackListItem {
   is_primary: boolean;
 }
 
+export type SubmissionParticipationRole =
+  | "speaker"
+  | "co_speaker"
+  | "moderator"
+  | "chairperson"
+  | "submitter"
+  | "sponsor_contact";
+
 export interface SubmissionSpeakerListItem {
   id: string;
   name: string;
   company: string | null;
+  role?: SubmissionParticipationRole;
 }
 
 export interface SubmissionSubmitterListItem {

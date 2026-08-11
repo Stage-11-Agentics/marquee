@@ -18,6 +18,7 @@ import {
   type AgendaTrack,
   type SchedulableStatus,
 } from "../api/agenda";
+import { conflictParticipants, dedupeParticipants, sharedConflictParticipants } from "../lib/conflicts";
 import { getTransitConflicts, type TransitAgendaItem } from "../lib/venue-geometry";
 import type { SubmissionSpeakerListItem, SubmissionTrackListItem } from "../api/submissions";
 
@@ -132,7 +133,7 @@ function parseTracks(value: string): SubmissionTrackListItem[] {
 }
 
 function parseSpeakers(value: string): SubmissionSpeakerListItem[] {
-  return parseJsonArray<SubmissionSpeakerListItem>(value);
+  return dedupeParticipants(parseJsonArray<SubmissionSpeakerListItem>(value));
 }
 
 function toRoom(row: RoomQueryRow): AgendaRoom {
@@ -203,14 +204,6 @@ function toPoolItem(row: PoolQueryRow): AgendaPoolItem {
   };
 }
 
-function sharedSpeakers(
-  left: AgendaSession,
-  right: AgendaSession,
-): SubmissionSpeakerListItem[] {
-  const rightIds = new Set(right.speakers.map((speaker) => speaker.id));
-  return left.speakers.filter((speaker) => rightIds.has(speaker.id));
-}
-
 function overlaps(left: AgendaSession, right: AgendaSession): boolean {
   return left.starts_at < right.starts_at + right.duration_min * 60_000
     && right.starts_at < left.starts_at + left.duration_min * 60_000;
@@ -226,7 +219,7 @@ function transitInputs(
     starts_at: session.starts_at,
     duration_min: session.duration_min,
     building_id: roomMap.get(session.room_id)?.building.id ?? null,
-    person_ids: session.speakers.map((speaker) => speaker.id),
+    person_ids: conflictParticipants(session.speakers).map((participant) => participant.id),
   }));
   return {
     items,
@@ -256,7 +249,7 @@ export function getConflicts(
     for (let next = index + 1; next < sessions.length; next += 1) {
       const right = sessions[next]!;
       if (left.kind === "break" && right.kind === "break") continue;
-      const sharedPeople = sharedSpeakers(left, right);
+      const sharedPeople = sharedConflictParticipants(left.speakers, right.speakers);
       const shared = sharedPeople[0] ?? null;
       if (overlaps(left, right)) {
         if (left.room_id === right.room_id) {
@@ -367,9 +360,9 @@ async function readTracks(database: D1Database, eventId: string): Promise<Agenda
 }
 
 const SPEAKERS_JSON = `COALESCE((
-  SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company))
+  SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company, 'role', ordered.role))
   FROM (
-    SELECT person.id, person.name, person.company
+    SELECT person.id, person.name, person.company, participation.role
     FROM participations participation
     JOIN people person ON person.id = participation.person_id
     WHERE participation.submission_id = submission.id
