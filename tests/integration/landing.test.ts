@@ -54,12 +54,16 @@ test("AC-1, AC-2 · the SSR landing exposes both reachable demo entries and live
   // access to the submission list.
   expect(html).toContain("/portal?demo=speaker");
   expect(html).not.toContain("/submissions?demo=speaker");
+  // The public CFP door is for a signed-out visitor: it must open the public
+  // form, not the organizer register behind a sign-in.
+  expect(html).toContain('href="/f/cfp"');
 });
 
 test("AC-4 · the landing render has crawlable destinations and no placeholder copy", async () => {
   const html = renderLandingDocument(SHELL, await loadLandingData(env.DB));
   expect(html).toContain("https://github.com/Stage-11-Agentics/marquee");
-  expect(html).toContain('href="/submissions"');
+  expect(html).toContain('href="/submissions?demo=organizer"');
+  expect(html).toContain('href="/f/cfp"');
   expect(html).not.toMatch(/lorem|TODO|placeholder|coming soon|Tab \d/i);
   expect(html).not.toContain("No data");
 });
