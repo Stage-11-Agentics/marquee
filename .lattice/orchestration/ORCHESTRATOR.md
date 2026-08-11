@@ -30,7 +30,7 @@ git -C "$wt" merge-base --is-ancestor "$r" "$l"  # local ahead — push it yours
 3. **A PASS review naming HEAD** — or an identical tree/patch-id if the branch was rebased after review.
 4. Merge, **capture the HTTP code**, then **re-GET and confirm `.merged == true`**.
 5. **Only then**: `lattice status <id> pr_open` → `lattice complete` → close surface → delete branch locally **and** on Forgejo.
-6. `npm ci && npm run pr-gate -- --ticket <last>` on master. A red master blocks the whole fleet.
+6. `npm ci && npm run pr-gate -- --ticket <last>` on master. A red master blocks the whole fleet. **Let `npm ci` settle before gating** — gating immediately after it has produced a spurious "hermetic fast suite" failure three times, each of which passed on a straight re-run. If a post-merge gate fails, run `npm test` alone first: if it passes, the gate failure was the install churn, not the merge.
 
 **Never chain cleanup to the merge call.** On 2026-08-10 a chained command completed MRQ-17 and deleted its branch on a merge that returned 405 and never happened. Recovery: commits survive in the object store — `git push forgejo <sha>:refs/heads/<branch>`, open a fresh PR, merge properly.
 
