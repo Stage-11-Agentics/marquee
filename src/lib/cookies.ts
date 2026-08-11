@@ -29,7 +29,7 @@ const SESSION_COOKIE_OPTIONS = Object.freeze({
  * INSECURE_LOCAL_COOKIES:1`), so it lives in the operator's terminal rather
  * than in committed config. wrangler.jsonc pins the deployed default to "0".
  */
-function sessionCookieOptions(context: Context): typeof SESSION_COOKIE_OPTIONS {
+function sessionCookieOptions(context: Context): Omit<typeof SESSION_COOKIE_OPTIONS, "secure"> & { secure: boolean } {
   const env = context.env as { INSECURE_LOCAL_COOKIES?: string } | undefined;
   return { ...SESSION_COOKIE_OPTIONS, secure: env?.INSECURE_LOCAL_COOKIES !== "1" };
 }
