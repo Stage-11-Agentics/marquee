@@ -1,0 +1,23 @@
+.submission-detail { display: grid; gap: 1.25rem; }
+.submission-detail-back { display: flex; align-items: center; gap: .75rem; }
+.reversal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.reversal-grid-wide { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.reversal-fact-list, .reversal-rows { display: grid; gap: .7rem; }
+.reversal-fact-list span, .reversal-fact-list strong { display: block; }
+.reversal-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--line, #e6e1d8); padding-top: .7rem; }
+.reversal-row:first-child { border-top: 0; padding-top: 0; }
+.reversal-row strong, .reversal-row small { display: block; }
+.reversal-row small { color: var(--muted, #6d6b67); margin-top: .2rem; }
+.reversal-row-state { color: var(--muted, #6d6b67); font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+.reversal-result { display: flex; gap: .6rem; align-items: baseline; border-left: 3px solid var(--accent, #db4c3f); padding: .75rem 1rem; background: color-mix(in srgb, var(--accent, #db4c3f) 8%, transparent); }
+.reversal-loading { padding: 3rem 0; color: var(--muted, #6d6b67); }
+.reversal-modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 1.5rem; background: rgb(24 23 21 / 45%); }
+.reversal-modal { width: min(100%, 34rem); display: grid; gap: 1rem; padding: 1.5rem; background: var(--paper, #fffdf8); border: 1px solid var(--line, #e6e1d8); box-shadow: 0 1.5rem 4rem rgb(24 23 21 / 25%); }
+.reversal-modal-head { display: flex; justify-content: space-between; gap: 1rem; }
+.reversal-modal h2 { margin: .25rem 0 0; }
+.reversal-modal label { display: grid; gap: .35rem; font-weight: 600; }
+.reversal-modal select { width: 100%; padding: .65rem .7rem; border: 1px solid var(--line, #e6e1d8); background: white; font: inherit; }
+.reversal-close { border: 0; background: transparent; font-size: 1.5rem; cursor: pointer; align-self: start; }
+.reversal-modal-actions { display: flex; justify-content: flex-end; gap: .6rem; padding-top: .5rem; }
+@media (max-width: 900px) { .reversal-grid-wide { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .reversal-grid { grid-template-columns: 1fr; } .reversal-row { align-items: flex-start; flex-direction: column; } }

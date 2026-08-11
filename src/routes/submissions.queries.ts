@@ -57,14 +57,23 @@ export type SubmissionPlacementFilter = "unplaced";
 export function submissionTaskPredicate(
   task: "open" | SubmissionTaskFilter,
   submission = "s",
+  includeCancelledAt = false,
 ): string {
   return `EXISTS (
     SELECT 1 FROM speaker_tasks filtered_task
     WHERE filtered_task.event_id = ${submission}.event_id
       AND filtered_task.submission_id = ${submission}.id
       AND filtered_task.status = 'open'
+      ${includeCancelledAt ? "AND filtered_task.cancelled_at IS NULL" : ""}
       ${task === "overdue" ? "AND filtered_task.due_at < ?" : ""}
   )`;
+}
+
+export async function hasSpeakerTaskCancellationColumn(database: D1Database): Promise<boolean> {
+  const row = await database
+    .prepare("SELECT 1 AS present FROM pragma_table_info('speaker_tasks') WHERE name = 'cancelled_at'")
+    .first<{ present: number }>();
+  return row?.present === 1;
 }
 
 /**
@@ -73,7 +82,7 @@ export function submissionTaskPredicate(
  */
 export function submissionStatusPredicate(
   status: SubmissionStatusFilter,
-  aliases: { submission?: string; agenda?: string } = {},
+  aliases: { submission?: string; agenda?: string; includeCancelledAt?: boolean } = {},
 ): string {
   const submission = aliases.submission ?? "s";
   const agenda = aliases.agenda ?? "ai";
@@ -81,7 +90,7 @@ export function submissionStatusPredicate(
   if (status === "published") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 1`;
   if (status === "waved") return `${submission}.wave_id IS NOT NULL AND ${submission}.status = 'accepted'`;
   if (status === "unreviewed") return `${submission}.status IN ('submitted', 'in_review')`;
-  if (status === "onboarding") return submissionTaskPredicate("open", submission);
+  if (status === "onboarding") return submissionTaskPredicate("open", submission, aliases.includeCancelledAt);
   return `${submission}.status = '${status}'`;
 }
 
@@ -126,7 +135,7 @@ interface QueryParts {
   bindings: unknown[];
 }
 
-function filterParts(filters: SubmissionListFilters): QueryParts {
+function filterParts(filters: SubmissionListFilters, includeCancelledAt = false): QueryParts {
   const clauses = ["s.event_id = ?"];
   const bindings: unknown[] = [filters.eventId];
 
@@ -134,7 +143,7 @@ function filterParts(filters: SubmissionListFilters): QueryParts {
     clauses.push("s.kind = ?");
     bindings.push(filters.kind);
   }
-  if (filters.status) clauses.push(submissionStatusPredicate(filters.status));
+  if (filters.status) clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt }));
   if (filters.track) {
     clauses.push(`EXISTS (
       SELECT 1 FROM submission_tracks filter_st
@@ -151,7 +160,7 @@ function filterParts(filters: SubmissionListFilters): QueryParts {
     bindings.push(filters.wave);
   }
   if (filters.task) {
-    clauses.push(submissionTaskPredicate(filters.task));
+    clauses.push(submissionTaskPredicate(filters.task, "s", includeCancelledAt));
     if (filters.task === "overdue") bindings.push(Date.now());
   }
   if (filters.placement === "unplaced") clauses.push("ai.id IS NULL");
@@ -233,7 +242,7 @@ export async function listSubmissions(
   // The shared helper deliberately emits the canonical `id ASC` tie-break.
   // This query joins several id-bearing tables, so qualify that fixed suffix.
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
-  const { where, bindings } = filterParts(filters);
+  const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
   const data = database.prepare(`
     SELECT
@@ -292,7 +301,7 @@ export async function selectSubmissionIds(
   database: D1Database,
   filters: SubmissionFilter & { eventId: string },
 ): Promise<string[]> {
-  const { where, bindings } = filterParts(filters);
+  const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
   const result = await database
     .prepare(`SELECT DISTINCT s.id ${FROM} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC`)
     .bind(...bindings)

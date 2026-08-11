@@ -308,6 +308,7 @@ export interface EmailTemplateRow extends MutableRecord {
 }
 
 export interface OutboxRow extends MutableRecord {
+  entity_id: Id | null;
   error: string | null;
   event_id: Id;
   html: string;
@@ -508,6 +509,7 @@ export interface TaskTemplateRow extends MutableRecord {
 
 export interface SpeakerTaskRow extends MutableRecord {
   attachment_id: Id | null;
+  cancelled_at: EpochMilliseconds | null;
   completed_at: EpochMilliseconds | null;
   description: string;
   due_at: EpochMilliseconds;

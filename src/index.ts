@@ -14,6 +14,7 @@ import { landingRoutes } from "./routes/landing.route";
 import { publicFormRoutes } from "./routes/public-form.route";
 import { publicAgendaRoutes } from "./routes/public-agenda.route";
 import { embedRoutes } from "./routes/embed.route";
+import { calendarRoutes } from "./routes/calendar.route";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -104,6 +105,7 @@ app.route("/", landingRoutes);
 app.route("/", publicFormRoutes);
 app.route("/", publicAgendaRoutes);
 app.route("/", embedRoutes);
+app.route("/", calendarRoutes);
 // The API app is built from the generated route manifest. Assembly digests the
 // OpenAPI document, which is async, so it is memoized on first request rather
 // than awaited at module scope.

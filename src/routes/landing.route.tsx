@@ -3,6 +3,7 @@ import type { JSX } from "preact";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { hasSpeakerTaskCancellationColumn } from "./submissions.queries";
 
 export interface LandingCounts {
   submitted: number;
@@ -52,6 +53,9 @@ interface LandingRow {
  * organizer will see after entering the demo.
  */
 export async function loadLandingData(db: D1Database): Promise<LandingData> {
+  const activeTaskClause = await hasSpeakerTaskCancellationColumn(db)
+    ? " AND cancelled_at IS NULL"
+    : "";
   const row = await db
     .prepare(
       `WITH demo AS (
@@ -74,7 +78,7 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
            WHERE event_id = demo.id AND status = 'accepted') AS accepted_count,
          (SELECT COUNT(DISTINCT person_id)
             FROM speaker_tasks
-           WHERE event_id = demo.id AND status = 'open') AS onboarding_count,
+           WHERE event_id = demo.id AND status = 'open'${activeTaskClause}) AS onboarding_count,
          (SELECT COUNT(*)
             FROM agenda_items
            WHERE event_id = demo.id AND kind = 'session') AS scheduled_count,
@@ -92,7 +96,7 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
              )) AS review_pressure_count,
          (SELECT COUNT(DISTINCT person_id)
             FROM speaker_tasks
-           WHERE event_id = demo.id AND status = 'open' AND due_at < demo.updated_at) AS overdue_speakers_count,
+           WHERE event_id = demo.id AND status = 'open' AND due_at < demo.updated_at${activeTaskClause}) AS overdue_speakers_count,
          (SELECT name FROM tracks
            WHERE event_id = demo.id AND lower(name) = 'agents'
            ORDER BY position ASC LIMIT 1) AS review_track

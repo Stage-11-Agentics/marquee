@@ -10,6 +10,7 @@ import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import { findTemplate, MAIL_TEMPLATE_KEYS } from "../jobs/mail/templates";
 import { mergeTemplate, renderMail, type MergeData } from "../jobs/mail/render";
 import type { OutboxRow } from "../db/schema";
+import { hasSpeakerTaskCancellationColumn } from "./submissions.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const templateParams = eventParams.extend({ templateId: z.string().min(1) });
@@ -116,6 +117,7 @@ async function recipientsFor(
   eventId: string,
   selector: { status?: string; track_id?: string; format_id?: string; task_state?: "open" | "done" },
 ): Promise<RecipientRow[]> {
+  const includeCancelledAt = await hasSpeakerTaskCancellationColumn(db);
   const where = ["s.event_id = ?"];
   const bindings: (string | number)[] = [eventId];
   if (selector.status) {
@@ -131,9 +133,16 @@ async function recipientsFor(
     bindings.push(selector.format_id);
   }
   if (selector.task_state) {
-    where.push("EXISTS (SELECT 1 FROM speaker_tasks stf WHERE stf.submission_id = s.id AND stf.status = ?)");
+    where.push(`EXISTS (
+      SELECT 1 FROM speaker_tasks stf
+      WHERE stf.submission_id = s.id AND stf.status = ?
+      ${includeCancelledAt && selector.task_state === "open" ? "AND stf.cancelled_at IS NULL" : ""}
+    )`);
     bindings.push(selector.task_state);
   }
+  const activeTaskJoin = includeCancelledAt && selector.task_state === "open"
+    ? " AND st.cancelled_at IS NULL"
+    : "";
   const result = await db
     .prepare(
       `SELECT DISTINCT p.id AS person_id, s.id AS submission_id, p.email, p.name,
@@ -144,7 +153,7 @@ async function recipientsFor(
        JOIN people p ON p.id = part.person_id
        LEFT JOIN agenda_items ai ON ai.submission_id = s.id
        LEFT JOIN rooms r ON r.id = ai.room_id
-       LEFT JOIN speaker_tasks st ON st.person_id = p.id AND st.submission_id = s.id
+       LEFT JOIN speaker_tasks st ON st.person_id = p.id AND st.submission_id = s.id${activeTaskJoin}
        WHERE ${where.join(" AND ")}
        ORDER BY p.name COLLATE NOCASE, s.title COLLATE NOCASE`,
     )

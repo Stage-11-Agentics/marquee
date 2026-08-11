@@ -8,6 +8,7 @@ import {
 } from "../api/dashboard";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import {
+  hasSpeakerTaskCancellationColumn,
   submissionStatusPredicate,
   submissionTaskPredicate,
 } from "./submissions.queries";
@@ -72,9 +73,9 @@ function count(value: unknown): number {
   return Number(value ?? 0);
 }
 
-function dashboardStageSql(): string {
+function dashboardStageSql(includeCancelledAt: boolean): string {
   return DASHBOARD_STAGE_IDS.map(
-    (stage) => `COUNT(DISTINCT CASE WHEN ${submissionStatusPredicate(stage)} THEN s.id END) AS ${stage}`,
+    (stage) => `COUNT(DISTINCT CASE WHEN ${submissionStatusPredicate(stage, { includeCancelledAt })} THEN s.id END) AS ${stage}`,
   ).join(",\n");
 }
 
@@ -91,9 +92,10 @@ async function readDashboardConflicts(database: D1Database, eventId: string) {
 }
 
 async function readDashboard(database: D1Database, eventId: string, now: number): Promise<DashboardSnapshot> {
+  const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
   const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts] = await Promise.all([
     database.prepare(`
-      SELECT ${dashboardStageSql()}
+      SELECT ${dashboardStageSql(includeCancelledAt)}
       FROM submissions s
       LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
       WHERE s.event_id = ?
@@ -136,7 +138,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     database.prepare(`
       SELECT COUNT(DISTINCT s.id) AS count
       FROM submissions s
-      WHERE s.event_id = ? AND ${submissionTaskPredicate("overdue")}
+      WHERE s.event_id = ? AND ${submissionTaskPredicate("overdue", "s", includeCancelledAt)}
     `).bind(eventId, now).first<{ count: number | null }>(),
     database.prepare(`
       SELECT COUNT(DISTINCT s.id) AS count
@@ -150,7 +152,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       FROM speaker_tasks task
       JOIN people person ON person.id = task.person_id
       JOIN submissions submission ON submission.id = task.submission_id
-      WHERE task.event_id = ? AND task.status = 'open'
+      WHERE task.event_id = ? AND task.status = 'open'${includeCancelledAt ? " AND task.cancelled_at IS NULL" : ""}
       ORDER BY CASE WHEN task.due_at < ? THEN 0 ELSE 1 END, task.due_at ASC, task.id ASC
       LIMIT 4
     `).bind(eventId, now).all<{

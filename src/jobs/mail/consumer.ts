@@ -29,8 +29,8 @@ interface ResendEmail {
   subject: string;
   html: string;
   text: string;
-  headers: { "Idempotency-Key": string };
-  attachments?: Array<{ filename: string; content: string }>;
+  headers: Record<string, string>;
+  attachments?: Array<{ filename: string; content: string; content_type: string }>;
 }
 
 function encodeBase64(value: string): string {
@@ -41,19 +41,24 @@ function encodeBase64(value: string): string {
 }
 
 function emailPayload(row: OutboxRow): ResendEmail {
+  const method = row.ics_body?.match(/^METHOD:(REQUEST|CANCEL)(?:\r?\n|$)/m)?.[1] ?? "REQUEST";
   return {
     from: MAIL_FROM,
     to: [row.to_email],
     subject: row.subject,
     html: row.html,
     text: row.text,
-    headers: { "Idempotency-Key": row.idempotency_key },
+    headers: {
+      "Content-Class": "urn:content-classes:calendarmessage",
+      "Idempotency-Key": row.idempotency_key,
+    },
     ...(row.ics_body
       ? {
           attachments: [
             {
               filename: `${row.ics_uid ?? row.id}.ics`,
               content: encodeBase64(row.ics_body),
+              content_type: `text/calendar; charset=utf-8; method=${method}`,
             },
           ],
         }

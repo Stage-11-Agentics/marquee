@@ -78,17 +78,18 @@ async function insertOutbox(
     await input.db
       .prepare(
         `INSERT INTO outbox
-          (id, event_id, template_key, person_id, to_email, subject, html, text,
+          (id, event_id, template_key, entity_id, person_id, to_email, subject, html, text,
            ics_uid, ics_body, status${policySql}, suppressed_reason,
            idempotency_key, provider_message_id, error, scheduled_for, sent_at,
            created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued'${policyValue}, NULL,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued'${policyValue}, NULL,
            ?, NULL, NULL, ?, NULL, ?, ?)`,
       )
       .bind(
         id,
         input.eventId,
         input.templateKey,
+        input.entityId,
         input.personId ?? null,
         input.toEmail,
         rendered.subject,

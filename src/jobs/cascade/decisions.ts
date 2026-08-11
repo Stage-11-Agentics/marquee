@@ -3,6 +3,7 @@ import type { D1Database, Queue } from "@cloudflare/workers-types";
 import { runBulkByIds } from "../../api/bulk";
 import { newUlid } from "../../api/ids";
 import type { Decision, Id } from "../../db/schema";
+import { cancelCalendarInvites } from "../calendar/invites";
 import { enqueueMailMessage } from "../mail/consumer";
 import { enqueueTrigger } from "../mail/triggers";
 
@@ -57,6 +58,32 @@ export interface BulkDecisionResult {
   outboxEnqueued: number;
 }
 
+export type AcceptanceReversalChoice = "cancel" | "retain";
+
+export interface AcceptanceReversalInput {
+  calendar: AcceptanceReversalChoice;
+  db: D1Database;
+  emails: AcceptanceReversalChoice;
+  eventId: Id;
+  actor: DecisionActor;
+  outcome: "withdrawn" | "rejected";
+  queue: Queue<unknown>;
+  submissionId: Id;
+  tasks: AcceptanceReversalChoice;
+  now?: number;
+  origin?: string;
+}
+
+export interface AcceptanceReversalResult {
+  calendarCancelled: number;
+  emailsCancelled: number;
+  id: Id;
+  outcome: "succeeded" | "failed";
+  resultingStatus: "withdrawn" | "rejected" | null;
+  tasksCancelled: number;
+  error?: string;
+}
+
 interface SubmissionContext {
   id: Id;
   event_id: Id;
@@ -69,6 +96,9 @@ interface SubmissionContext {
 }
 
 interface TaskCandidate {
+  existing_cancelled_at: number | null;
+  existing_status: "open" | "done" | null;
+  task_id: Id | null;
   template_id: Id;
   submission_id: Id;
   person_id: Id;
@@ -235,7 +265,7 @@ async function writeAudit(
     .run();
 }
 
-async function assignAcceptanceTasks(
+export async function reconcileTaskSet(
   db: D1Database,
   eventId: Id,
   submissionIds: readonly Id[],
@@ -248,6 +278,8 @@ async function assignAcceptanceTasks(
     .prepare(
       `SELECT DISTINCT tt.id AS template_id, s.id AS submission_id, p.id AS person_id,
               tt.name AS title, tt.kind, tt.description,
+              existing.id AS task_id, existing.status AS existing_status,
+              existing.cancelled_at AS existing_cancelled_at,
               COALESCE(tt.due_at, ? + (tt.due_offset_days * 86400000)) AS due_at
        FROM task_templates tt
        JOIN submissions s ON s.event_id = tt.event_id
@@ -255,48 +287,58 @@ async function assignAcceptanceTasks(
          ON part.submission_id = s.id
         AND part.role IN ('speaker', 'submitter')
        JOIN people p ON p.id = part.person_id
+       LEFT JOIN speaker_tasks existing
+         ON existing.template_id = tt.id
+        AND existing.submission_id = s.id
+        AND existing.person_id = p.id
        WHERE tt.event_id = ?
          AND tt.auto_assign = 1
          AND s.status = 'accepted'
          AND s.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-         AND NOT EXISTS (
-           SELECT 1 FROM speaker_tasks existing
-           WHERE existing.template_id = tt.id
-             AND existing.submission_id = s.id
-             AND existing.person_id = p.id
-         )
        ORDER BY s.id ASC, tt.position ASC, p.id ASC`,
     )
     .bind(now, eventId, idsJson)
     .all<TaskCandidate>();
 
-  if (candidates.results.length === 0) return counts;
-  await db.batch(
-    candidates.results.map((candidate) =>
-      db
-        .prepare(
-          `INSERT INTO speaker_tasks
-            (id, event_id, person_id, submission_id, template_id, title, kind,
-             description, due_at, status, completed_at, response_json, attachment_id,
-             last_write_source, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?)`,
-        )
-        .bind(
-          newUlid(now),
-          eventId,
-          candidate.person_id,
-          candidate.submission_id,
-          candidate.template_id,
-          candidate.title,
-          candidate.kind,
-          candidate.description,
-          candidate.due_at,
-          now,
-          now,
-        ),
-    ),
-  );
   for (const candidate of candidates.results) {
+    if (candidate.task_id) {
+      if (candidate.existing_status === "open" && candidate.existing_cancelled_at !== null) {
+        const restored = await db
+          .prepare(
+            `UPDATE speaker_tasks
+             SET cancelled_at = NULL, updated_at = ?, last_write_source = 'marquee'
+             WHERE id = ? AND status = 'open' AND cancelled_at IS NOT NULL`,
+          )
+          .bind(now, candidate.task_id)
+          .run();
+        if (Number(restored?.meta?.changes ?? 0) > 0) {
+          counts.set(candidate.submission_id, (counts.get(candidate.submission_id) ?? 0) + 1);
+        }
+      }
+      continue;
+    }
+    await db
+      .prepare(
+        `INSERT INTO speaker_tasks
+          (id, event_id, person_id, submission_id, template_id, title, kind,
+           description, due_at, status, completed_at, response_json, attachment_id,
+           last_write_source, cancelled_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)`,
+      )
+      .bind(
+        newUlid(now),
+        eventId,
+        candidate.person_id,
+        candidate.submission_id,
+        candidate.template_id,
+        candidate.title,
+        candidate.kind,
+        candidate.description,
+        candidate.due_at,
+        now,
+        now,
+      )
+      .run();
     counts.set(candidate.submission_id, (counts.get(candidate.submission_id) ?? 0) + 1);
   }
   return counts;
@@ -349,9 +391,11 @@ async function updateSubmissionStatus(
     waveId?: Id | null;
     preserveWave: boolean;
     decision: boolean;
+    stampAttribution?: boolean;
   },
 ): Promise<number> {
   if (input.ids.length === 0) return 0;
+  const stampAttribution = input.decision || input.stampAttribution === true;
   const updateWave = input.preserveWave
     ? input.waveId === undefined
       ? "wave_id = wave_id"
@@ -362,7 +406,7 @@ async function updateSubmissionStatus(
     input.now,
     "marquee",
   ];
-  if (input.decision) {
+  if (stampAttribution) {
     bindings.push(input.now, input.actor.personId);
   }
   if (input.preserveWave && input.waveId !== undefined) bindings.push(input.waveId);
@@ -374,7 +418,7 @@ async function updateSubmissionStatus(
          SET status = ?,
              updated_at = ?,
              last_write_source = ?,
-             ${input.decision ? "decided_at = ?, decided_by_person_id = ?," : ""}
+             ${stampAttribution ? "decided_at = ?, decided_by_person_id = ?," : ""}
              ${updateWave}
          WHERE event_id = ?
            AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
@@ -424,6 +468,177 @@ async function insertDecisions(
         ),
     ),
   );
+}
+
+export async function cancelTaskSet(
+  db: D1Database,
+  eventId: Id,
+  submissionId: Id,
+  now: number,
+): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE speaker_tasks
+       SET cancelled_at = ?, updated_at = ?, last_write_source = 'marquee'
+       WHERE event_id = ?
+         AND submission_id = ?
+         AND status = 'open'
+         AND cancelled_at IS NULL`,
+    )
+    .bind(now, now, eventId, submissionId)
+    .run();
+  return Number(result?.meta?.changes ?? 0);
+}
+
+export async function suppressQueuedSubmissionEmails(
+  db: D1Database,
+  eventId: Id,
+  submissionId: Id,
+  now: number,
+): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE outbox
+       SET status = 'suppressed', suppressed_reason = 'acceptance_reversed', updated_at = ?
+       WHERE event_id = ?
+         AND entity_id = ?
+         AND ics_body IS NULL
+         AND status = 'queued'`,
+    )
+    .bind(now, eventId, submissionId)
+    .run();
+  return Number(result?.meta?.changes ?? 0);
+}
+
+function reversalFailure(id: Id, error: string): AcceptanceReversalResult {
+  return {
+    id,
+    outcome: "failed",
+    resultingStatus: null,
+    tasksCancelled: 0,
+    emailsCancelled: 0,
+    calendarCancelled: 0,
+    error,
+  };
+}
+
+/**
+ * Reverse an accepted submission through the same record-owned cascade. The
+ * three choices are persisted as row-level effects; no branch merely toggles
+ * a UI flag. Calendar cancellation runs before the agenda row is removed so
+ * the shared UID/SEQUENCE invite lifecycle remains available to the builder.
+ */
+export async function writeAcceptanceReversal(
+  input: AcceptanceReversalInput,
+): Promise<AcceptanceReversalResult> {
+  const now = input.now ?? Date.now();
+  const submission = await loadSubmission(input.db, input.eventId, input.submissionId);
+  if (!submission) return reversalFailure(input.submissionId, "submission not found");
+  if (submission.status !== "accepted") {
+    return reversalFailure(submission.id, `submission is ${submission.status}; only accepted submissions can be reversed`);
+  }
+
+  const changed = await updateSubmissionStatus(input.db, {
+    eventId: input.eventId,
+    ids: [submission.id],
+    targetStatus: input.outcome,
+    actor: input.actor,
+    now,
+    preserveWave: false,
+    decision: false,
+    stampAttribution: true,
+  });
+  if (changed !== 1) return reversalFailure(submission.id, "submission changed during reversal; retry the confirmed action");
+
+  const tasksCancelled = input.tasks === "cancel"
+    ? await cancelTaskSet(input.db, input.eventId, submission.id, now)
+    : 0;
+  const emailsCancelled = input.emails === "cancel"
+    ? await suppressQueuedSubmissionEmails(input.db, input.eventId, submission.id, now)
+    : 0;
+  const calendarDeliveries = input.calendar === "cancel"
+    ? await cancelCalendarInvites({
+      db: input.db,
+      eventId: input.eventId,
+      origin: input.origin,
+      queue: input.queue,
+      submissionId: submission.id,
+      now,
+    })
+    : [];
+
+  await input.db
+    .prepare("DELETE FROM agenda_items WHERE event_id = ? AND submission_id = ?")
+    .bind(input.eventId, submission.id)
+    .run();
+
+  if (input.outcome === "rejected") {
+    await insertDecisions(input.db, input.eventId, [{
+      id: newUlid(now),
+      submissionId: submission.id,
+      decision: "deny",
+      status: "rejected",
+      feedbackMd: null,
+      actor: input.actor,
+      decidedAt: now,
+      outboxId: null,
+    }]);
+  }
+
+  const effects = {
+    tasks: input.tasks,
+    emails: input.emails,
+    calendar: input.calendar,
+    tasks_cancelled: tasksCancelled,
+    emails_cancelled: emailsCancelled,
+    calendar_cancelled: calendarDeliveries.length,
+  };
+  await writeAudit(input.db, {
+    eventId: input.eventId,
+    actor: input.actor,
+    action: "submission.acceptance_reversed",
+    entityType: "submission",
+    entityId: submission.id,
+    before: { status: submission.status },
+    after: { status: input.outcome, ...effects },
+    now,
+  });
+  await writeAudit(input.db, {
+    eventId: input.eventId,
+    actor: input.actor,
+    action: `submission.tasks_${input.tasks === "cancel" ? "cancelled" : "retained"}`,
+    entityType: "submission",
+    entityId: submission.id,
+    after: { choice: input.tasks, rows: tasksCancelled },
+    now,
+  });
+  await writeAudit(input.db, {
+    eventId: input.eventId,
+    actor: input.actor,
+    action: `submission.emails_${input.emails === "cancel" ? "cancelled" : "retained"}`,
+    entityType: "submission",
+    entityId: submission.id,
+    after: { choice: input.emails, rows: emailsCancelled },
+    now,
+  });
+  await writeAudit(input.db, {
+    eventId: input.eventId,
+    actor: input.actor,
+    action: `submission.calendar_${input.calendar === "cancel" ? "cancelled" : "retained"}`,
+    entityType: "submission",
+    entityId: submission.id,
+    after: { choice: input.calendar, rows: calendarDeliveries.length },
+    now,
+  });
+
+  return {
+    id: submission.id,
+    outcome: "succeeded",
+    resultingStatus: input.outcome,
+    tasksCancelled,
+    emailsCancelled,
+    calendarCancelled: calendarDeliveries.length,
+  };
 }
 
 function failureResult(id: Id, error: string): SubmissionDecisionResult {
@@ -489,7 +704,7 @@ export async function writeSubmissionDecision(
       now,
     });
   const taskCounts = target.status === "accepted"
-    ? await assignAcceptanceTasks(input.db, input.eventId, [submission.id], now)
+    ? await reconcileTaskSet(input.db, input.eventId, [submission.id], now)
     : new Map<Id, number>();
   const decisionId = newUlid(now);
   await insertDecisions(input.db, input.eventId, [{
@@ -631,7 +846,7 @@ export async function writeBulkSubmissionDecisions(
   }
 
   await insertDecisions(input.db, input.eventId, transitions);
-  const taskCounts = await assignAcceptanceTasks(input.db, input.eventId, acceptedIds, now);
+  const taskCounts = await reconcileTaskSet(input.db, input.eventId, acceptedIds, now);
   for (const submission of eligible) {
     const transition = transitions.find((item) => item.submissionId === submission.id);
     if (!target) continue;
