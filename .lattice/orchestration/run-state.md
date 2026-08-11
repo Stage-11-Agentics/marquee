@@ -125,6 +125,16 @@ MRQ-3 flagged that AC-214 has no `EVALUATION.md` §2 row despite BUILDPLAN citin
 
 MRQ-8 flagged at merge that `9e8b425`'s **event → conference** rename never reached the wire: SPEC §4.2/§9 still say `/api/v1/events/...`. **Ruled deliberate and written into SPEC (bd511ee): UI copy and app routes say "conference"; the HTTP API, OpenAPI, CLI, and the `event_id` column keep "event".** Renaming the wire now would invalidate the freshly-merged route manifest, OpenAPI assembly, and `check:api` parity, and would create a three-way UI/API/DB mismatch strictly worse than the current two-way one — for zero judge-visible gain. The blemish (a judge opening `/api/docs` sees "events") is recorded in the amendment as a known accepted divergence rather than hidden.
 
+## 🟥 Venue-map fold + a green-tests-dead-feature defect (2026-08-10 22:30)
+
+The map-design surface landed the venue-map contract fold (05af33c): **SPEC Amendment 14, USER_STORIES Amendment 14 (US-77–79, AC-255–263), EVALUATION §2.3 extended to AC-263 (206 live in-scope, 261 through AC-263), BUILDPLAN Amendment 9 (M-57–60, 17 h), and tickets MRQ-62–65** wired onto merged MRQ-58.
+
+**The defect it found is the important part, and its root cause is mine.** `scripts/seed/event.ts:151-152` seeds Sheraton and the Workshop Annex at **identical coordinates** (40.7625188, -73.9814528) with `access_minutes 0` on both. That traces directly to my own Amendment 11 ruling, which defined the Annex as the Sheraton's *lower conference level* — internally coherent, and precisely why travel time is zero **by construction**. Consequence: the Transit conflict class can never fire in the shipped product and the site map stacks two pins on one point. **It passes every unit test and is inert in the demo — the exact "green tests, dead feature" failure the project's own guidance warns about.** MRQ-58's migration is correct; the seed was faithful to SPEC §6 as written.
+
+**Operator ruling (asked, because the prototype is the binding design contract):** keep the 2026 Sheraton story and give the second venue a **real, verifiable Midtown address ~8–12 minutes away** — not the 2025 building set (geographically real but chronologically wrong, and it pairs Sheraton-native room names with 2025 buildings), and not a cut of the feature. MRQ-62 owns it, must **not invent a venue**, must derive coordinates from a real address or stop, and must make **AC-259 observe a live Transit conflict** rather than a merely non-zero column. Prototype v1.7 must be brought into agreement.
+
+**Collision ruled:** MRQ-10 was live and overlapping — AC-256 moves buildings *and* rooms authoring onto `/settings/venues`. **MRQ-10 does not build venue editors and does not absorb the move**; it ships details/formats/tracks with a link through, and **AC-252/AC-253 transfer to MRQ-62**. Building them on `/settings` only to have MRQ-62 move them is pure waste plus a guaranteed same-file conflict.
+
 ## Contract drift caught at this tick (20:50)
 
 - **Local master had diverged from the remote with three unpushed commits** — the fleet-switch record, the `event` → `conference` rename (9e8b425), and the venue-map commit (13d37eb). Contract and copy changes that exist on one machine are invisible to every worktree; rebased and pushed (38baff5). **This is the second time an unpushed contract commit was found this run.**
