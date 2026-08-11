@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T08:25:51Z",
+  "created_by": "agent:delegator-mrq-30",
+  "custom_fields": {},
+  "id": "art_01KZQYV4J5PFH7P3C6YT1KATSP",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQYV4J5PFH7P3C6YT1KATSP.md",
+    "size_bytes": 1264
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: final exact-head review after current-master rebase and QuickSearch compatibility fix.",
+  "tags": [],
+  "title": "MRQ-30 final self-review at cefa262",
+  "token_usage": null,
+  "type": "note"
+}

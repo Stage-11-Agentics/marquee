@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:192",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 2,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
   "created_by": "agent:orchestrator-intake",
@@ -25,10 +25,15 @@
       "id": "art_01KZQYMEBZ39TFAMY1EBB6JAST",
       "role": null,
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQYV4J5PFH7P3C6YT1KATSP",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMA68VG0MQV5469WSS0HJ",
-  "last_event_id": "ev_01KZQYNAVSG42PFVYB4ZZE6DY6",
+  "last_event_id": "ev_01KZQYVW4S1XQ0CTPAPNVFW0S6",
   "last_status_changed_at": "2026-08-11T08:22:16Z",
   "linked_files": [],
   "priority": "medium",
@@ -55,6 +60,6 @@
   "tags": null,
   "title": "API surface completion and signed outbound webhooks",
   "type": "task",
-  "updated_at": "2026-08-11T08:22:41Z",
+  "updated_at": "2026-08-11T08:26:16Z",
   "urgency": null
 }

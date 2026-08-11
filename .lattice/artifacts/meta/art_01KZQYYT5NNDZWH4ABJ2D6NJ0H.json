@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T08:27:52Z",
+  "created_by": "agent:delegator-mrq-31",
+  "custom_fields": {},
+  "id": "art_01KZQYYT5NNDZWH4ABJ2D6NJ0H",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQYYT5NNDZWH4ABJ2D6NJ0H.md",
+    "size_bytes": 1134
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at exact rebased head 2946fe1; pr-gate passed and remote branch verified.",
+  "tags": [],
+  "title": "MRQ-31 post-rebase review 2946fe1",
+  "token_usage": null,
+  "type": "note"
+}

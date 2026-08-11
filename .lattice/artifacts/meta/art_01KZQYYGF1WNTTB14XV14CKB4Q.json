@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T08:27:42Z",
+  "created_by": "agent:delegator-mrq-38",
+  "custom_fields": {},
+  "id": "art_01KZQYYGF1WNTTB14XV14CKB4Q",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQYYGF1WNTTB14XV14CKB4Q.md",
+    "size_bytes": 1172
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Fresh exact-head review after MRQ-24 merge: master seam adopted, person-only identity restored, final gate PASS.",
+  "tags": [],
+  "title": "MRQ-38 fresh review 4d5f38b",
+  "token_usage": null,
+  "type": "note"
+}

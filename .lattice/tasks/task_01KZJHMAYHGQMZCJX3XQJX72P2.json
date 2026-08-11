@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:189",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-42 (rank 23, US-37) + M-52 (rank 9, US-74) \u2014 Wave 2 (\u00a75) \u00b7 MERGED at mint (3 h + 3 h = 6 h; both are the speaker-response surface written across `src/ui/portal/*` and the submission record \u2014 the two tickets the portal ticket (M-15) deliberately did **not** own)\n\n**M-42 \u2014 Confirm / decline** (3 h, ACs AC-152 \u2013 AC-154, dep M-15)\nScope (verbatim): visible to lead, per role, decline notifies/flags agenda.\nAC-153: a person holding two roles on one submission confirms each independently; one response does not settle the other.\n\n**M-52 \u2014 Decision feedback + email from record/review** (3 h, ACs AC-235/AC-236, deps M-11/M-15/M-17/M-32)\nScope (verbatim): **sole owner of AC-235/236 end to end** \u2014 the `submission_decisions` write, the render-once into the outbox, the portal display from that same row, and the record log. M-15 renders the slot and M-18 calls the write; neither claims the IDs. One-off templated email logged on the record.\nAC-235's headline assertion: bulk-accept 3 records \u2192 3 `submission_decisions` rows exist and all 3 portals render from them. **The demo's headline action must not use a second render path.**\n\nACs (union): AC-152 \u2013 AC-154, **AC-235, AC-236**\nHours: 6 (3 + 3)\nWorkflow: inline-full\nShared files: `src/ui/portal/*` is shared with M-15 \u2014 **one file per concern**; M-15 rendered the slots, this ticket fills them. Do not restructure M-15's files.\nDeps: M-15, M-11, M-17, M-32+M-53\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T08:29:33Z",
   "evidence_refs": [
     {
       "id": "art_01KZQR5C69J1A8BQVXYKQ67TP2",
@@ -40,11 +40,26 @@
       "id": "art_01KZQWPBESMCEHGR19HJ76H4GX",
       "role": null,
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQYYGF1WNTTB14XV14CKB4Q",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQZ1WM3YZSAGFE8RF4V2D40",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQZ1WM3YZSAGFE8RF4V2D3Z",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMAYHGQMZCJX3XQJX72P2",
-  "last_event_id": "ev_01KZQWPH68N1ESGY8ZG6P42P1Q",
-  "last_status_changed_at": "2026-08-11T07:48:23Z",
+  "last_event_id": "ev_01KZQZ1WM3YZSAGFE8RF4V2D43",
+  "last_status_changed_at": "2026-08-11T08:29:33Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -77,13 +92,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-38",
-  "status": "pr_open",
+  "status": "done",
   "tags": null,
   "title": "Role confirm/decline and decision feedback",
   "type": "task",
-  "updated_at": "2026-08-11T07:48:23Z",
+  "updated_at": "2026-08-11T08:29:33Z",
   "urgency": null
 }
