@@ -38,6 +38,8 @@ export interface ApiRoutePolicy {
 export type ApiRouteDefinition = Omit<RouteConfig, "security"> & {
   operationId: string;
   policy: ApiRoutePolicy;
+  /** Optional Hono-only matcher for an opaque hierarchical path parameter. */
+  runtimePath?: string;
 };
 
 /**
@@ -53,6 +55,8 @@ export interface ApiRouteEntry {
   method: RouteConfig["method"];
   /** OpenAPI-style path, e.g. `/api/v1/events/{eventId}/people`. */
   path: string;
+  /** Optional runtime matcher when the documented parameter spans path segments. */
+  runtimePath?: string;
   operationId: string;
   /** The object handed to `OpenAPIHono.openapi` — the same source the document is generated from. */
   route: RouteConfig;
@@ -105,11 +109,12 @@ export function defineApiRoute<const Definition extends ApiRouteDefinition>(
   definition: Definition,
   handler: RouteHandler<Definition, ApiEnv>,
 ): ApiRouteEntry {
-  const { policy, ...config } = definition;
+  const { policy, runtimePath, ...config } = definition;
   const route = createRoute({ ...config, security: securityFor(policy.auth) });
   return {
     method: route.method,
     path: route.path,
+    runtimePath,
     operationId: definition.operationId,
     route: route as RouteConfig,
     handler: handler as unknown as RegisteredHandler,

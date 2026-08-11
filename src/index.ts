@@ -4,7 +4,6 @@ import { createApiRouter } from "./api/router";
 import { setSessionCookie } from "./lib/cookies";
 import { runUploadOrphanSweep } from "./lib/r2/orphan-sweep";
 import { apiManifest } from "./routes/_manifest";
-import { uploadsRoutes } from "./routes/uploads.direct";
 import { authMiddleware } from "./lib/auth/auth-middleware";
 import { createCredentialResolver } from "./lib/auth/credential-resolver";
 import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/reset-consumer";
@@ -99,15 +98,6 @@ app.get("/__validation/session-cookie", (context) => {
   return context.json({ cookie: "mq_session", status: "set" });
 });
 
-// MRQ-14's upload routes and MRQ-3's auth/admin-ops routes are both mounted
-// ahead of the generated API router rather than joined to its glob manifest
-// (deviate-with-flag on both — see PR bodies: MRQ-8/M-07 merged mid-
-// implementation and reconciling either onto its declarative route-registry
-// convention was not done in this pass; MRQ-59 tracks porting MRQ-14's
-// version back, and MRQ-3's PR asks the Orchestrator whether it folds into
-// the same follow-up). Hono matches in registration order, so unmatched
-// paths still fall through to the manifest router below.
-app.route("/", uploadsRoutes);
 // The generated API app has its own credential-resolver adapter. These
 // mounted Hono route groups still use MRQ-3's context middleware directly.
 app.use("/api/v1/auth/*", authMiddleware);
@@ -128,7 +118,10 @@ app.all("/api/*", async (context) => {
   // Unmatched `/api/*` falls through to the API app's own not-found handler,
   // so a miss returns the one error envelope with its request id like every
   // other failure — there is no second 404 shape.
-  return api.fetch(context.req.raw, context.env, context.executionCtx);
+  // The nested API app does not use ExecutionContext. Omitting the optional
+  // third argument also keeps direct in-process `app.fetch` probes equivalent
+  // to Worker requests, where no execution context is supplied.
+  return api.fetch(context.req.raw, context.env);
 });
 
 app.all("*", (context) => context.env.ASSETS.fetch(context.req.raw));

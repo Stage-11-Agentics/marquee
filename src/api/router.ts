@@ -213,10 +213,18 @@ export async function createApiRouter(
   registerApiComponents(app);
 
   for (const entry of entries) {
-    app.use(toRoutingPath(entry.path), routeMiddleware(entry.policy, runtime));
+    const routingPath = entry.runtimePath ?? toRoutingPath(entry.path);
+    app.use(routingPath, routeMiddleware(entry.policy, runtime));
     // 6/7 — the handler runs inside the pipeline; `route` and `handler` are the
     // one object the document is generated from, so parity is structural.
     app.openapi(entry.route as never, entry.handler as never);
+    // OpenAPI path parameters match one segment in Hono. Media object keys are
+    // intentionally hierarchical (`uploads/{event}/{owner}/{attachment}`), so
+    // that route supplies a wildcard runtime matcher while retaining the
+    // standards-shaped `{key}` path in the generated document.
+    if (entry.runtimePath) {
+      app.on([entry.method], entry.runtimePath, entry.handler as never);
+    }
   }
 
   const document = await assembleApiDocument(app, entries);

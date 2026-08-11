@@ -1,8 +1,9 @@
 /**
- * Local error envelope for the upload routes, shaped to match SPEC §4.2's
- * pinned `{error:{code,message}, request_id}` contract. Scoped to this
- * module until M-07's route factory (MRQ-8, unmerged as of this ticket)
- * lands a shared helper — deviate-with-flag, not a new competing standard.
+ * Upload-specific error envelope, shaped to match SPEC §4.2's pinned
+ * `{error:{code,message}, request_id}` contract. The handlers retain their
+ * stable guardrail codes while using the shared request id when they run
+ * through the generated API router. The fallback id keeps direct unit probes
+ * equivalent to Worker requests.
  */
 
 import type { Context } from "hono";
@@ -35,8 +36,9 @@ export function uploadError(
   if (extraHeaders) {
     for (const [name, value] of Object.entries(extraHeaders)) context.header(name, value);
   }
+  const requestId = context.get("requestId") as string | undefined;
   return context.json(
-    { error: { code, message }, request_id: crypto.randomUUID() },
+    { error: { code, message }, request_id: requestId ?? crypto.randomUUID() },
     STATUS_BY_CODE[code] as 400 | 401 | 403 | 404 | 409 | 429,
   );
 }

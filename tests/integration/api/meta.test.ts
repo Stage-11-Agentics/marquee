@@ -32,6 +32,17 @@ test("AC-106 · the document advertises both auth schemes and the shared error e
   expect(document.components.schemas).toHaveProperty("ApiErrorEnvelope");
   expect(Object.keys(document.paths)).toContain("/api/openapi.json");
   expect(Object.keys(document.paths)).toContain("/api/docs");
+  expect(Object.keys(document.paths)).toEqual(
+    expect.arrayContaining([
+      "/api/v1/public/uploads/sign",
+      "/api/v1/public/uploads/{id}/complete",
+      "/api/v1/me/uploads/sign",
+      "/api/v1/me/uploads/{id}/complete",
+      "/api/v1/media/{key}",
+    ]),
+  );
+  expect(document.paths["/api/v1/public/uploads/sign"].post.operationId).toBe("signPublicUpload");
+  expect(document.paths["/api/v1/me/uploads/sign"].post.operationId).toBe("signTaskUpload");
 });
 
 test("AC-106 · the ETag digests the exact bytes served, so a caller can verify the document", async () => {

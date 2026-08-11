@@ -1,18 +1,20 @@
 /**
  * Upload routes: public (Turnstile-gated) and authenticated presign/complete,
- * plus host-gated media serving. Named `.direct.ts` (not `.routes.ts`) so the
- * M-07 manifest glob (`src/routes/_manifest.ts`) skips it — MRQ-8 merged
- * mid-implementation and these handlers were not ported to its declarative
- * `defineApiRoute`/Zod/policy contract in this pass (deviate-with-flag, see
- * PR body). Mounted directly ahead of the manifest router in `src/index.ts`.
- * Likewise there is no merged auth module (MRQ-3): the authenticated branch
- * below does its own minimal session lookup against `auth_sessions` and is
- * expected to be reconciled with MRQ-3's principal resolution later.
+ * plus host-gated media serving. Every operation is registered through the
+ * generated route manifest so the served OpenAPI document cannot omit an
+ * upload path.
+ *
+ * The authenticated branch keeps MRQ-14's route-local session and ownership
+ * lookup as a second, route-specific guardrail after the shared API credential
+ * policy has admitted the request.
  */
 
-import { Hono, type Context } from "hono";
+import { z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 
+import type { ApiEnv } from "../api/runtime";
+import { defineApiRoute, jsonResponse } from "../api/route";
 import { SESSION_COOKIE_NAME } from "../lib/cookies";
 import { uploadError } from "../lib/r2/errors";
 import { objectKeyFor, publicMediaUrl } from "../lib/r2/keys";
@@ -96,15 +98,17 @@ async function insertPendingAttachment(db: D1Database, row: PendingInsert): Prom
     .run();
 }
 
-export const uploadsRoutes = new Hono<{ Bindings: UploadsEnv }>();
+function uploadsEnv(context: Context<ApiEnv>): UploadsEnv {
+  return context.env as unknown as UploadsEnv;
+}
 
 /**
  * Public presign: a stranger can originate this write, so every side effect
  * (row insert, signer call, KV consumption) sits behind Turnstile and scope
  * verification — AC-231's core guardrail.
  */
-uploadsRoutes.post("/api/v1/public/uploads/sign", async (context) => {
-  const env = context.env;
+async function handlePublicSign(context: Context<ApiEnv>) {
+  const env = uploadsEnv(context);
   const body = await context.req.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return uploadError(context, "invalid_request", "malformed JSON body");
@@ -206,15 +210,15 @@ uploadsRoutes.post("/api/v1/public/uploads/sign", async (context) => {
     await env.DB.prepare(`DELETE FROM attachments WHERE id = ?1`).bind(attachmentId).run();
     return uploadError(context, "invalid_request", `signing failed: ${(error as Error).message}`);
   }
-});
+}
 
 /**
  * Authenticated (speaker) presign for a self-owned task upload. Minimal
  * local session check — no Turnstile (resolution 3), fails closed on a
  * missing/expired session or a task that does not belong to the caller.
  */
-uploadsRoutes.post("/api/v1/me/uploads/sign", async (context) => {
-  const env = context.env;
+async function handleAuthenticatedSign(context: Context<ApiEnv>) {
+  const env = uploadsEnv(context);
   const sessionId = getCookie(context, SESSION_COOKIE_NAME);
   if (!sessionId) return uploadError(context, "unauthorized", "no session");
 
@@ -287,10 +291,10 @@ uploadsRoutes.post("/api/v1/me/uploads/sign", async (context) => {
     await env.DB.prepare(`DELETE FROM attachments WHERE id = ?1`).bind(attachmentId).run();
     return uploadError(context, "invalid_request", `signing failed: ${(error as Error).message}`);
   }
-});
+}
 
-async function handleComplete(context: Context<{ Bindings: UploadsEnv }>) {
-  const env = context.env;
+async function handleComplete(context: Context<ApiEnv>) {
+  const env = uploadsEnv(context);
   const attachmentId = context.req.param("id");
   const body = (await context.req.json().catch(() => ({}))) as Record<string, unknown>;
   const completionToken = typeof body.completionToken === "string" ? body.completionToken : undefined;
@@ -341,15 +345,12 @@ async function handleComplete(context: Context<{ Bindings: UploadsEnv }>) {
   });
 }
 
-uploadsRoutes.post("/api/v1/public/uploads/:id/complete", handleComplete);
-uploadsRoutes.post("/api/v1/me/uploads/:id/complete", handleComplete);
-
 /**
  * Media GET is accepted only on `MEDIA_PUBLIC_ORIGIN` (origin isolation);
  * the same path on the app host must 404, never fall through to SPA assets.
  */
-uploadsRoutes.get("/api/v1/media/*", async (context) => {
-  const env = context.env;
+async function handleMedia(context: Context<ApiEnv>) {
+  const env = uploadsEnv(context);
   const url = new URL(context.req.url);
   if (!isMediaHost(url.hostname, env.MEDIA_PUBLIC_ORIGIN)) {
     return context.notFound();
@@ -363,4 +364,221 @@ uploadsRoutes.get("/api/v1/media/*", async (context) => {
     .first<{ status: "pending" | "ready"; r2_etag: string | null; content_type: string; filename: string }>();
 
   return serveMediaObject(env.MEDIA, key, row);
-});
+}
+
+const uploadErrorEnvelopeSchema = z
+  .object({
+    error: z.object({
+      code: z.enum([
+        "turnstile_failed",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "invalid_request",
+        "rate_limited",
+        "conflict",
+      ]),
+      message: z.string(),
+    }),
+    request_id: z.string(),
+  })
+  .openapi("UploadErrorEnvelope");
+
+const uploadErrorResponses = {
+  400: jsonResponse(uploadErrorEnvelopeSchema, "Malformed upload request."),
+  401: jsonResponse(uploadErrorEnvelopeSchema, "Missing or invalid session."),
+  403: jsonResponse(uploadErrorEnvelopeSchema, "Upload authorization failed."),
+  404: jsonResponse(uploadErrorEnvelopeSchema, "Upload attachment or draft not found."),
+  409: jsonResponse(uploadErrorEnvelopeSchema, "Uploaded bytes failed verification."),
+  429: jsonResponse(uploadErrorEnvelopeSchema, "Upload rate limit exceeded."),
+};
+
+const publicSignRequestSchema = z
+  .object({
+    draftId: z.string(),
+    resumeToken: z.string(),
+    fieldKey: z.string(),
+    turnstileToken: z.string().optional(),
+    filename: z.string(),
+    contentType: z.string(),
+    sizeBytes: z.number(),
+  })
+  .openapi("PublicUploadSignRequest");
+
+const taskSignRequestSchema = z
+  .object({
+    ownerType: z.literal("task_upload"),
+    ownerId: z.string(),
+    filename: z.string(),
+    contentType: z.string(),
+    sizeBytes: z.number(),
+  })
+  .openapi("TaskUploadSignRequest");
+
+const completeRequestSchema = z
+  .object({ completionToken: z.string() })
+  .openapi("UploadCompleteRequest");
+
+const uploadPresignResponseSchema = z
+  .object({
+    attachmentId: z.string(),
+    putUrl: z.string(),
+    requiredHeaders: z.record(z.string(), z.string()),
+    expiresAt: z.number(),
+    completionToken: z.string(),
+    maxBytes: z.number(),
+  })
+  .openapi("UploadPresignResponse");
+
+const uploadCompleteResponseSchema = z
+  .object({
+    attachmentId: z.string(),
+    status: z.literal("ready"),
+    url: z.string(),
+    contentType: z.string(),
+    sizeBytes: z.number(),
+  })
+  .openapi("UploadCompleteResponse");
+
+const idParamsSchema = z.object({ id: z.string() });
+const mediaParamsSchema = z.object({ key: z.string() });
+
+const signPublicUpload = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/public/uploads/sign",
+    operationId: "signPublicUpload",
+    summary: "Create a public upload presign",
+    description:
+      "Validates the draft resume token and Turnstile authorization before creating a pending attachment and presigned R2 PUT.",
+    tags: ["Uploads"],
+    request: {
+      body: { content: { "application/json": { schema: publicSignRequestSchema } } },
+    },
+    policy: {
+      auth: { kind: "public" },
+      rateLimit: { bucket: "write", keying: "ip_submission" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(uploadPresignResponseSchema, "A presigned R2 PUT and completion token."),
+      ...uploadErrorResponses,
+    },
+  },
+  handlePublicSign as never,
+);
+
+const signTaskUpload = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/me/uploads/sign",
+    operationId: "signTaskUpload",
+    summary: "Create an authenticated task-upload presign",
+    description:
+      "Creates a presigned R2 PUT only for a task owned by the authenticated speaker session.",
+    tags: ["Uploads"],
+    request: {
+      body: { content: { "application/json": { schema: taskSignRequestSchema } } },
+    },
+    policy: {
+      auth: { kind: "authenticated" },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(uploadPresignResponseSchema, "A presigned R2 PUT and completion token."),
+      ...uploadErrorResponses,
+    },
+  },
+  handleAuthenticatedSign as never,
+);
+
+const completePublicUpload = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/public/uploads/{id}/complete",
+    operationId: "completePublicUpload",
+    summary: "Verify and complete a public upload",
+    description:
+      "HEAD-verifies the uploaded R2 object, checks its size and magic bytes, deletes contradictory bytes, and marks the attachment ready.",
+    tags: ["Uploads"],
+    request: {
+      params: idParamsSchema,
+      body: { content: { "application/json": { schema: completeRequestSchema } } },
+    },
+    policy: {
+      auth: { kind: "public" },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(uploadCompleteResponseSchema, "The verified ready attachment."),
+      ...uploadErrorResponses,
+    },
+  },
+  handleComplete as never,
+);
+
+const completeTaskUpload = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/me/uploads/{id}/complete",
+    operationId: "completeTaskUpload",
+    summary: "Verify and complete an authenticated task upload",
+    description:
+      "HEAD-verifies and completes an authenticated task attachment using its completion token.",
+    tags: ["Uploads"],
+    request: {
+      params: idParamsSchema,
+      body: { content: { "application/json": { schema: completeRequestSchema } } },
+    },
+    policy: {
+      auth: { kind: "public" },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(uploadCompleteResponseSchema, "The verified ready attachment."),
+      ...uploadErrorResponses,
+    },
+  },
+  handleComplete as never,
+);
+
+const serveMedia = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/media/{key}",
+    runtimePath: "/api/v1/media/*",
+    operationId: "serveMedia",
+    summary: "Serve a verified upload",
+    description:
+      "Serves a ready upload only from the configured separate media origin, as an attachment with nosniff protection.",
+    tags: ["Uploads"],
+    request: { params: mediaParamsSchema },
+    policy: {
+      auth: { kind: "public" },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: {
+        content: { "application/octet-stream": { schema: z.any() } },
+        description: "The verified upload bytes.",
+      },
+      404: {
+        content: { "text/plain": { schema: z.string() } },
+        description: "The origin, attachment, or object is not available.",
+      },
+    },
+  },
+  handleMedia as never,
+);
+
+export const apiRoutes = [
+  signPublicUpload,
+  signTaskUpload,
+  completePublicUpload,
+  completeTaskUpload,
+  serveMedia,
+];
