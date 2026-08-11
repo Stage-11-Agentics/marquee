@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:08:04Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZQ5SGPPCEVEGQ5Y1PSS4ND0",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ5SGPPCEVEGQ5Y1PSS4ND0.md",
+    "size_bytes": 701
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged as PR #7 (squash c4e34037). Verified: head 3595308 != base, mergeable, secret/privacy scan clean, review+validation artifacts both naming HEAD. check:api is genuinely real \u2014 the N-7 activation ",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

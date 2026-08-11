@@ -28,7 +28,7 @@
 
 | Ticket | Surface | Model | Note |
 |---|---|---|---|
-| MRQ-8 (M-07) | surface:118 | **opus** | API core — everything inherits its contracts, so it gets the strongest model. Carries the N-7 activation rule. |
+| ~~MRQ-8 (M-07)~~ | closed | **done** | **MERGED** PR #7 (c4e34037). `check:api` is real with the N-7 activation rule; AC-105/106/108 tested. **MRQ-9 unblocked.** |
 | MRQ-3 (M-03) | surface:119 | sonnet | Auth/demo entry. Guardrail: demo login must 403 outside `demo_mode`. Hand review. |
 | MRQ-14 (M-13) | surface:120 | sonnet | Uploads. Guardrail: AC-231 presign fails closed. Hand review. |
 
@@ -75,6 +75,10 @@ Bravo sat at **84–85% across four readings between 20:57 and 21:04**, and it d
 **Deliberate call: N was NOT filled to 5.** With a hard wall this close, three tickets finished and merged are worth more than five tickets left half-done — a partial branch at the wall is unmergeable and its work is only recoverable by a future session re-reading it. All three delegators were instead told to cut scope to *mergeable*, run the gate as soon as the core path works, and keep pushing. The one thing explicitly not cuttable: the guardrail proofs (demo login 403s outside `demo_mode`; presign fails closed).
 
 All three inherited-WIP commits are **pushed and verified** against their remote branches, so the wall can only cost in-flight polish, never landed work.
+
+## SPEC Amendment 13 — the rename stops at the wire (21:12)
+
+MRQ-8 flagged at merge that `9e8b425`'s **event → conference** rename never reached the wire: SPEC §4.2/§9 still say `/api/v1/events/...`. **Ruled deliberate and written into SPEC (bd511ee): UI copy and app routes say "conference"; the HTTP API, OpenAPI, CLI, and the `event_id` column keep "event".** Renaming the wire now would invalidate the freshly-merged route manifest, OpenAPI assembly, and `check:api` parity, and would create a three-way UI/API/DB mismatch strictly worse than the current two-way one — for zero judge-visible gain. The blemish (a judge opening `/api/docs` sees "events") is recorded in the amendment as a known accepted divergence rather than hidden.
 
 ## Contract drift caught at this tick (20:50)
 

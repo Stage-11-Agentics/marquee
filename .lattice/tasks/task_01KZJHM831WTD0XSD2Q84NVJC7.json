@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:101",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 6,
+  "comment_count": 9,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-07 \u2014 Wave 0 (\u00a73)\n\nScope (verbatim): Hono router with a generated route manifest (glob, never a hand-edited list), error envelope, list contract (`page/per_page/q/sort/filters` \u2192 `{data,page,per_page,total}`), pagination helper, **bulk selector type (ids *or* filter)**, `json_each` chunking helper, OpenAPI assembly from route definitions, `/api/openapi.json`, `/api/docs`. **The chunking helper's default pattern is S-3's verdict** \u2014 M-07 must not pick one before the spike answers (trap 11).\n\nAmendment 6 fold (+3 h, already inside the estimate): `GET /events` discovery, people reads, file lifecycle, scoped tokens (AC-242 UI is M-29's) \u2014 plus the pinned semantics: pagination, `ETag`/`If-Match` optimistic concurrency, one error envelope, standard rate-limit headers, durable bulk `operation_id` results, OpenAPI as the single source for docs/CLI/SKILL.\n\u00a77 rule this ticket institutionalizes: **registration by glob, never by a hand-edited list.** `src/routes/_manifest.ts` is generated at build from `import.meta.glob`; no agent ever edits a central registry to add a route, and the OpenAPI document is assembled from route definitions, never hand-written.\n\nFile surface: `src/api/*`, `src/routes/_manifest.ts` (generated)\n\nACs: AC-105, AC-106, AC-108\nHours: 4\nWorkflow: inline-full\nShared files: none by ownership \u2014 but `src/routes/_manifest.ts` is **generated**, never hand-edited, and that rule is this ticket's to enforce for the whole fleet.\nDeps: M-02, S-3 (the chunking-pattern verdict \u2014 do not pick a pattern before the spike returns)\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T01:08:04Z",
   "evidence_refs": [
     {
       "id": "art_01KZJM16YMF9MMAAM9CMTTMZFX",
@@ -20,11 +20,36 @@
       "id": "art_01KZJMHH0ASDJXV8RENKYD51ER",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQ5NK7Q9P9KDTM68C3R1QRD",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZQ5PF21HHYSARH9Y3X6VCQM",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQ5QSZDB0KBETTBSF6ER9Q1",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQ5SGPPCEVEGQ5Y1PSS4ND1",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQ5SGPPCEVEGQ5Y1PSS4ND0",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM831WTD0XSD2Q84NVJC7",
-  "last_event_id": "ev_01KZQ5030VWY5QNXXWX7Y954Z6",
-  "last_status_changed_at": "2026-08-10T22:35:53Z",
+  "last_event_id": "ev_01KZQ5SGPPCEVEGQ5Y1PSS4ND4",
+  "last_status_changed_at": "2026-08-11T01:08:04Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -43,13 +68,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-8",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "API core, list contract, and OpenAPI assembly",
   "type": "task",
-  "updated_at": "2026-08-11T00:54:11Z",
+  "updated_at": "2026-08-11T01:08:04Z",
   "urgency": null
 }
