@@ -1,0 +1,5 @@
+Verdict: PASS — exact HEAD 6c911c9035cf33c656086e13e0f6780f0ca13d9d is clean and implements the MRQ-35 plan.
+
+Observed proof: focused Worker integration test passed (2 tests); npm test passed (175 tests, 12.9s); tsc passed; check:api passed (119 operations); merged trace:ac passed (212 live, 0 uncovered).
+
+Review findings: public submission selects the first enabled ordered rule and stamps applied_rule_id; format, vendor, and any carried track match are covered. Committee routing stages only a draft shell and candidate tracks, calls reviewerCanBeAssignedToSubmission for every committee member before writing round_assignments or mail, and on refusal deletes the staged shell/restores prior tracks and removes only an unreferenced newly-created person. The integration guard asserts 422, no committee/reviewer ID in the body, unchanged round_assignments/submissions/people/outbox counts, and a positive scoped queue assignment. The record query joins the event-owned rule name and the UI renders a stable routing-rule cell. No findings.

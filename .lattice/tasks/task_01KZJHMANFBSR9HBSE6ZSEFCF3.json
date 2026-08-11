@@ -3,23 +3,53 @@
   "branch_links": [],
   "c11_surface": "surface:195",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-37 \u2014 Tier B rank 18 (US-12), Wave 2 (\u00a75)\n\nScope (verbatim): track/format/vendor \u2192 plan/pool, stamped rule, any-carried-track match.\n\nAC-234 constraint (Tier A, multi-track): routing rules match if **any** carried track qualifies \u2014 never only the primary.\nAC-136: routing applies at submission time and the applied rule is **named on the submission record**.\n\nACs: AC-135 \u2013 AC-137, **AC-234**\nHours: 4\nWorkflow: inline-full\nShared files: none \u2014 module-local.\nDeps: M-16, M-14\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T09:11:46Z",
   "evidence_refs": [
     {
       "id": "art_01KZQZYCERTJ6AP2GDVDAPXVCT",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR17E0M7HQZQRT6627QD9S0",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR180CQ0N7E1Q134DC0J436",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR18K54HTJZTJ0104BYK4H3",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR19T9ZVJQER6FV25F5NE1D",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR1F69RY2MPVYV38ZTVC6VR",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR1F69RY2MPVYV38ZTVC6VQ",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMANFBSR9HBSE6ZSEFCF3",
-  "last_event_id": "ev_01KZR0X6RTERDXA884HMBW2K5M",
-  "last_status_changed_at": "2026-08-11T09:01:56Z",
+  "last_event_id": "ev_01KZR1F69RY2MPVYV38ZTVC6VV",
+  "last_status_changed_at": "2026-08-11T09:11:46Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -38,13 +68,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-35",
-  "status": "review",
+  "status": "done",
   "tags": null,
   "title": "Category routing",
   "type": "task",
-  "updated_at": "2026-08-11T09:01:56Z",
+  "updated_at": "2026-08-11T09:11:46Z",
   "urgency": null
 }

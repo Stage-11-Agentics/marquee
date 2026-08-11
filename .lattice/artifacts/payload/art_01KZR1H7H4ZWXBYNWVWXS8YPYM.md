@@ -1,0 +1,1 @@
+N/A — audit-only ticket; no product runtime was changed. Validation is the observed full-history check: HEAD and forgejo/mrq-43-audit-repo both resolved to 96a0679697a6b953e74a70d933e7e04d88d2fb49 and both returned fullHistory=true with exit 1. The assembled-orphan validation remains pending MRQ-42, and gitleaks remains an operator prerequisite.

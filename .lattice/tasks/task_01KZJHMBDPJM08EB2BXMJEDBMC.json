@@ -20,21 +20,36 @@
       "id": "art_01KZR0RYXKKT8A923Y5JTJB84B",
       "role": null,
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR1E91892F31EYBQVZZ3275",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR1G6XKZ6VYREAHSK4CZVB5",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR1H7H4ZWXBYNWVWXS8YPYM",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMBDPJM08EB2BXMJEDBMC",
-  "last_event_id": "ev_01KZR0RYXQFFMQXZK15ZSFTZRG",
-  "last_status_changed_at": "2026-08-11T08:44:41Z",
+  "last_event_id": "ev_01KZR1H7H61YG78WFKYQJHS5S6",
+  "last_status_changed_at": "2026-08-11T09:12:24Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-43",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Audit \u2014 repo hygiene and full-history scan",
   "type": "task",
-  "updated_at": "2026-08-11T08:59:37Z",
+  "updated_at": "2026-08-11T09:12:53Z",
   "urgency": null
 }

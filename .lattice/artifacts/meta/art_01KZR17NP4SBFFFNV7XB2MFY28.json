@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T09:07:39Z",
+  "created_by": "agent:auditor-mrq-45",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/45"
+  },
+  "id": "art_01KZR17NP4SBFFFNV7XB2MFY28",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open against master: mail containment audit at exact HEAD e997ef8",
+  "tags": [],
+  "title": "MRQ-45 pull request",
+  "token_usage": null,
+  "type": "reference"
+}

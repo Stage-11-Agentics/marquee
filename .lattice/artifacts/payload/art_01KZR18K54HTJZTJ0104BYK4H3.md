@@ -1,0 +1,5 @@
+Verdict: PASS — validated exact HEAD 6c911c9035cf33c656086e13e0f6780f0ca13d9d through the real Worker integration surface.
+
+Focused flow: tests/integration/api/category-routing.AC-135-137-234.test.ts passed 2/2. The refusal returned 422 without committee/reviewer IDs and left round_assignments, submissions, people, and outbox counts unchanged; the positive vendor route wrote the workshop committee pool row, appeared in the scoped reviewer queue, and returned the named rule on the organizer record.
+
+Gate: npm run pr-gate -- --ticket MRQ-35 => {"command":"pr-gate","ticket":"MRQ-35","status":"pass","elapsedMs":15291,"budgetMs":45000}. This included worker/client/test types, production build, design contract, npm test (175/175; 12.5s), and merged trace:ac (212 live, 0 uncovered). No browser surface is required for this API-only ticket.

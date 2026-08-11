@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:196",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 2,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: A-3 \u2014 audit track (\u00a75). **Owned by an auditor who did not write the code.**\n\nScope (verbatim): Mail containment \u2014 no module imports Resend but the consumer; **exactly two `send_policy='always_live'` write sites**; all seven triggers + bulk suppressed under demo mode.\nStarts when (verbatim): **From CP-2** (M-11 landed).\n\nThe two legal `always_live` write sites (B-8): the public-form confirmation for an address typed in that request, and the `smoke:mail`/`smoke:ics` harness. A third is a finding, not a judgement call.\nThis is guardrail G3, and trap 3 (Resend Free = 100 sends/day) is why it exists.\n\nACs: \u2014 (protects AC-38's live path and every demo-safe assertion)\nHours: 2\nWorkflow: fast-track\nShared files: none \u2014 audit artifact only.\nDeps: M-11\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T09:10:32Z",
   "evidence_refs": [
     {
       "id": "art_01KZR04E9R7Z40V7JA0AGQY1FS",
@@ -25,11 +25,46 @@
       "id": "art_01KZR0WA6961AYBT73XP5ZG2TG",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR151K2D3NDV3VY75YEHVSS",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR16GAV99849XVRHFEP34JF",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR17NP4SBFFFNV7XB2MFY28",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR1CC7QF7HY5KDXY41GAQ3G",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR1CQC0F23YB9T234YBQJ4Q",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR1CXTFNX60Z16ZHX2650CW",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR1CXTFNX60Z16ZHX2650CV",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMBKPBJ5T13B26P4R6CCB",
-  "last_event_id": "ev_01KZR0XYXXKR8ZJ11PMJDSGT71",
-  "last_status_changed_at": "2026-08-11T09:02:20Z",
+  "last_event_id": "ev_01KZR1CXTGJQMQH38GFDZQV6DK",
+  "last_status_changed_at": "2026-08-11T09:10:32Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -41,13 +76,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 1,
+  "reopened_count": 2,
   "schema_version": 1,
   "short_id": "MRQ-45",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Audit \u2014 mail containment and demo-safe suppression",
   "type": "task",
-  "updated_at": "2026-08-11T09:02:21Z",
+  "updated_at": "2026-08-11T09:10:32Z",
   "urgency": null
 }

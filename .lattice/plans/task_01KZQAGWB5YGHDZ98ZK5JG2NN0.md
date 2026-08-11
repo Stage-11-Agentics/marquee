@@ -2,7 +2,7 @@
 
 Status: planning
 Ticket: BUILDPLAN M-59 · AC-260–AC-262 · SPEC Amendment 14 · US-79
-Base: `forgejo/master` @ `2e72254f2f954c4f9d27d5d1d7a98cc3b0cf5c27`
+Base: `forgejo/master` @ `24973bb966b049b41d8e4a081f744f3878ed18d6`
 
 ## Authority and boundaries
 

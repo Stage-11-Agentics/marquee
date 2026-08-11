@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T09:08:50Z",
+  "created_by": "agent:delegator-mrq-35",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/46"
+  },
+  "id": "art_01KZR19T9ZVJQER6FV25F5NE1D",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open Forgejo pull request against master for commit 6c911c9.",
+  "tags": [],
+  "title": "MRQ-35 pull request",
+  "token_usage": null,
+  "type": "reference"
+}

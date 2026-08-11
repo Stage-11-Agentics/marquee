@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:05:43Z",
+  "created_by": "agent:delegator-mrq-40b",
+  "custom_fields": {},
+  "id": "art_01KZR143WYHNHXVERAJD6VGKF2",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR143WYHNHXVERAJD6VGKF2.md",
+    "size_bytes": 830
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: focused README tests, hygiene checks, and mandatory pr-gate all passed at exact head.",
+  "tags": [],
+  "title": "MRQ-40 public README correction validation @ 19a777f",
+  "token_usage": null,
+  "type": "note"
+}

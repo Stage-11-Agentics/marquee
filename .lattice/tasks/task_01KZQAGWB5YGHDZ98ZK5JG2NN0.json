@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:193",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": "medium",
   "created_at": "2026-08-11T02:30:44Z",
   "created_by": "agent:claude",
@@ -15,11 +15,26 @@
       "id": "art_01KZQZYWQ2G6K84NX3ECKPJ2QM",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR190N7C4DDMJWH2E3KV0FR",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR1F0NPY37XJ826E5KCGZPQ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZR1JKSZQ4GYA4KTM7H4QPBX",
+      "role": "review",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZQAGWB5YGHDZ98ZK5JG2NN0",
-  "last_event_id": "ev_01KZR0WC0VG929BQ928H13RXE3",
-  "last_status_changed_at": "2026-08-11T09:01:29Z",
+  "last_event_id": "ev_01KZR1JKSZQ4GYA4KTM7H4QPBX",
+  "last_status_changed_at": "2026-08-11T09:11:44Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [
@@ -34,10 +49,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-64",
-  "status": "review",
+  "status": "in_validation",
   "tags": null,
   "title": "Arrival instructions \u2014 portal location card, place merge fields, ICS GEO",
   "type": "task",
-  "updated_at": "2026-08-11T09:01:29Z",
+  "updated_at": "2026-08-11T09:13:38Z",
   "urgency": null
 }

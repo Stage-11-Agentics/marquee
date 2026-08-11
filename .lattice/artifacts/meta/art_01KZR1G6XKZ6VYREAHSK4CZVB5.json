@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:12:19Z",
+  "created_by": "agent:auditor-mrq-43",
+  "custom_fields": {},
+  "id": "art_01KZR1G6XKZ6VYREAHSK4CZVB5",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR1G6XKZ6VYREAHSK4CZVB5.md",
+    "size_bytes": 2247
+  },
+  "schema_version": 1,
+  "sensitive": true,
+  "summary": "PASS on audit evidence and guard; explicitly not a public-history or gitleaks clean verdict.",
+  "tags": [],
+  "title": "MRQ-43 self-review @ 96a0679",
+  "token_usage": null,
+  "type": "file"
+}

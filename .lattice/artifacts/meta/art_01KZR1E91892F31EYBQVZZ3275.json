@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:11:16Z",
+  "created_by": "agent:auditor-mrq-43",
+  "custom_fields": {},
+  "id": "art_01KZR1E91892F31EYBQVZZ3275",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR1E91892F31EYBQVZZ3275.md",
+    "size_bytes": 12581
+  },
+  "schema_version": 1,
+  "sensitive": true,
+  "summary": "Final orphan-assembly exclusions, file:line reproductions, full-history coverage, pushed-ref result, and gitleaks prerequisite.",
+  "tags": [],
+  "title": "MRQ-43 public-history audit checklist @ 96a0679",
+  "token_usage": null,
+  "type": "file"
+}
