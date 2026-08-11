@@ -134,7 +134,10 @@ export async function selectCommsAudienceSubmissionIds(
   db: D1Database,
   filters: SubmissionFilter & { eventId: Id },
 ): Promise<Id[]> {
-  return selectSubmissionIds(db, filters);
+  // MRQ-8 audience status filters are stored decision-status selectors. They
+  // intentionally include accepted speakers who still have onboarding work;
+  // the pipeline list uses the derived, mutually exclusive stage vocabulary.
+  return selectSubmissionIds(db, filters, { statusSemantics: "stored" });
 }
 
 /**

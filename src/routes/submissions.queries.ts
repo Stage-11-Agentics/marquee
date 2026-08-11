@@ -58,6 +58,7 @@ export type SubmissionFilter = z.infer<typeof submissionFilterSchema>;
 export type SubmissionStatusFilter = (typeof SUBMISSION_STATUS_FILTERS)[number];
 export type SubmissionTaskFilter = "overdue";
 export type SubmissionPlacementFilter = "unplaced";
+export type SubmissionStatusSemantics = "derived" | "stored";
 
 export function submissionTaskPredicate(
   task: "open" | SubmissionTaskFilter,
@@ -200,7 +201,11 @@ interface QueryParts {
   bindings: unknown[];
 }
 
-function filterParts(filters: SubmissionListFilters, includeCancelledAt = false): QueryParts {
+function filterParts(
+  filters: SubmissionListFilters,
+  includeCancelledAt = false,
+  statusSemantics: SubmissionStatusSemantics = "derived",
+): QueryParts {
   const clauses = ["s.event_id = ?"];
   const bindings: unknown[] = [filters.eventId];
 
@@ -209,7 +214,14 @@ function filterParts(filters: SubmissionListFilters, includeCancelledAt = false)
     bindings.push(filters.kind);
   }
   if (filters.status === "not_notified") clauses.push(NOTIFICATION_GAP_PREDICATE);
-  else if (filters.status) clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt }));
+  else if (filters.status) {
+    if (statusSemantics === "stored") {
+      clauses.push("s.status = ?");
+      bindings.push(filters.status);
+    } else {
+      clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt }));
+    }
+  }
   if (filters.track) {
     clauses.push(`EXISTS (
       SELECT 1 FROM submission_tracks filter_st
@@ -692,8 +704,13 @@ function countValue(value: unknown): number {
 export async function selectSubmissionIds(
   database: D1Database,
   filters: SubmissionFilter & { eventId: string },
+  options: { statusSemantics?: SubmissionStatusSemantics } = {},
 ): Promise<string[]> {
-  const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
+  const { where, bindings } = filterParts(
+    filters,
+    await hasSpeakerTaskCancellationColumn(database),
+    options.statusSemantics,
+  );
   const source = filters.status === "not_notified" ? NOTIFICATION_FROM : FROM;
   const result = await database
     .prepare(`SELECT DISTINCT s.id ${source} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC`)
