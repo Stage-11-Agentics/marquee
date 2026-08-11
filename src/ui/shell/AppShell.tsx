@@ -13,6 +13,7 @@ import { EvaluationPage } from "../evaluation/EvaluationPage";
 import { EventSettings } from "../settings/EventSettings";
 import { VenuesPage } from "../venues/VenuesPage";
 import { FormsPage } from "../forms/FormsPage";
+import { AgendaPage } from "../agenda/AgendaPage";
 
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
@@ -27,7 +28,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k" || event.key === "/") {
         event.preventDefault();
-        unavailable("Global search", "Search becomes available when the event data API lands.");
+        unavailable("Global search", "Search becomes available when the conference data API lands.");
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -38,11 +39,12 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   const isSubmissionsList = location.pathname === "/submissions";
   const isEvaluation = location.pathname === "/evaluation";
   const isForms = location.pathname === "/forms";
+  const isAgenda = location.pathname === "/agenda-builder";
   return <>
     <div class="app-shell">
       <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} />
       <main class="main">
-        <Topbar eventName={eventName} routeName={routeName} userInitials={userInitials} openSearch={() => unavailable("Global search", "Search becomes available when the event data API lands.")} openUser={() => unavailable("Program lead", "Account preferences land with authentication and event administration.")} />
+        <Topbar eventName={eventName} routeName={routeName} userInitials={userInitials} openSearch={() => unavailable("Global search", "Search becomes available when the conference data API lands.")} openUser={() => unavailable("Program lead", "Account preferences land with authentication and conference administration.")} />
         <div class="page">
           {isSubmissionsList
             ? <SubmissionsPage search={location.search} navigate={navigate} />
@@ -51,6 +53,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
             : route?.id === "venues" ? <VenuesPage />
             : route?.id === "settings" ? <EventSettings navigate={navigate} />
             : isForms ? <FormsPage />
+            : isAgenda ? <AgendaPage />
             : route?.id === "communications" ? <>
             <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />
             <CommsScreen />

@@ -25,7 +25,7 @@ for (const contract of [
 ]) {
   if (!contract[1].test(contract[0])) findings.push(contract[2]);
 }
-for (const label of ["Program home", "Program board", "Submitted", "In review", "Waved", "Accepted", "Onboarding", "Scheduled", "Published", "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Communications", "Speaker portal", "Event site", "Event settings"]) {
+for (const label of ["Program home", "Program board", "Submitted", "In review", "Waved", "Accepted", "Onboarding", "Scheduled", "Published", "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Communications", "Speaker portal", "Conference site", "Conference settings"]) {
   if (!routes.includes(`label: "${label}"`)) findings.push(`route table missing ${label}`);
 }
 for (const [path, content] of sourceFiles) {
