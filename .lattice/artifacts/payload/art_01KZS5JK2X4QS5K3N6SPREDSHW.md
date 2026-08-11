@@ -1,0 +1,1 @@
+Verdict: PASS. Exact HEAD reviewed: bb731b4 after adding the required tests/ac-claims/MRQ-78.json manifest and pushing it. The manifest owns no new automatic criteria and records AC-242 as exercised by the positive/refusal/scope/revocation tests. The implementation diff remains within MRQ-78 scope, and git diff --check passes.

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T19:53:16Z",
+  "created_by": "agent:delegator-mrq-77",
+  "custom_fields": {},
+  "id": "art_01KZS65TFM2GZ4EXED5QYR85AJ",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZS65TFM2GZ4EXED5QYR85AJ.png",
+    "size_bytes": 500264
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "before-evaluation.png",
+  "token_usage": null,
+  "type": "file"
+}

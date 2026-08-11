@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": "low",
+  "created_at": "2026-08-11T20:49:26Z",
+  "created_by": "agent:claude",
+  "custom_fields": {},
+  "description": "The Sessionize importer drops track and format values it doesn't recognize and says nothing about it. The row reports success, the categorization is gone. Evidence: `sequence/UX-SWEEP-FINDINGS-PASSB.md` (Flow 5), verified end to end through the same authenticated API the wizard calls.\n\n## What was seen\n\nImported `fixtures/sessionize/sessions.csv`, whose rows carry `Track: Platform` and `Format: Talk`. This event's configured taxonomy uses different names \u2014 tracks Agents / Security / Infra, formats Lightning / Workshop / Online. The sessions imported as `created` with `\"tracks\": []` and `\"format\": null`, and the row's own `reason` text mentioned only the fields that did map.\n\nAn operator importing a real Sessionize export whose taxonomy doesn't exactly match their Marquee configuration \u2014 which is the normal case, not the edge case \u2014 loses every track and format assignment with no signal that anything was incomplete.\n\n## Root cause\n\n`src/lib/sessionize-import.ts:638-639` resolves both by exact, case-insensitive name:\n\n```\nconst track = row.track.trim() ? await db.prepare(\"SELECT id FROM tracks WHERE event_id = ? AND lower(name) = lower(?)\")... : null;\nconst format = row.format.trim() ? await db.prepare(\"SELECT id FROM formats WHERE event_id = ? AND lower(name) = lower(?)\")... : null;\n```\n\nA miss yields `null`, and lines 654-655 fall back to `current?.format_id ?? null` / `current?.primary_track_id ?? null`. Nothing anywhere records that a non-empty source value failed to resolve. The distinction that is lost is **\"the CSV said nothing\"** versus **\"the CSV said `Platform` and we don't have a track by that name\"** \u2014 the second is worth telling someone about, and the code cannot currently tell them apart downstream.\n\n## Scope\n\nSurface the miss in the row's own `reason`, the same way the malformed-row case already reports its failure clearly.\n\nThis is deliberately small and the seam already exists. `reason` is composed at `sessionize-import.ts:735` as a `.filter(Boolean).join(\"; \")` over an array \u2014 an unmatched-taxonomy note is one more entry in it:\n\n```\nconst reason = [\n  status.note,\n  actualChanged ? \"session, relationships, scores, or custom fields reconciled\" : \"same external_ref and values already present\",\n  evaluation ? \"evaluation result imported\" : null,\n].filter(Boolean).join(\"; \");\n```\n\nName the actual unmatched value \u2014 `track \"Platform\" not recognized, left unset` beats a generic warning, because the operator's next move is to either create that track or fix the export, and both need the name.\n\n**No new UI is required.** `src/ui/import/SessionizeImportPage.tsx:149` already renders a **Reason** column in the Row detail table (`{row.reason ?? \"\u2014\"}`), so anything added here surfaces immediately.\n\nConsider whether the outcome chip should stay `created` when a row imported incompletely. `created` with a caveat in the reason is defensible and is the smaller change; a distinct partial state is not \u2014 do not invent a new outcome value for this.\n\nOut of scope: fuzzy or alias matching of taxonomy names, and any mapping UI that would let an operator reconcile the two vocabularies during the wizard. Both are real product ideas and neither is this ticket \u2014 the defect here is silence, not the matching strategy. If the work suggests one, note it in the PR rather than growing this.\n\n## Constraints\n\n- DESIGN.md / Flight Deck tokens; `check:design` stays green. The reason text is organizer-facing copy \u2014 plain language, no field names or SQL, matching the voice of the existing reason strings.\n- No new D1 table and no migration.\n- Do not change the resolution behaviour itself. A row that today imports with an unset track must still import; this ticket adds the explanation, not a new failure mode. Turning a silent drop into a hard row failure would break the importer's duplicate-safety story, which Pass B verified holds (`created: 0, skipped: 6` on a genuine re-import).\n- If you touch an API route, `npx vite build && node cli/generate-api-registry.mjs` \u2014 `check:api` asserts exact registry parity.\n- Test titles must begin `AC-<n> \u00b7 ` or `CONTRACT \u00b7 ` or `trace:ac` fails.\n\n## Verification\n\n1. Unit or integration test over the import path: a row whose track/format names do not exist in the event's taxonomy imports successfully **and** carries the unmatched value in its `reason`. Assert the complementary case too \u2014 a row with genuinely empty track/format columns must NOT produce the warning, or the message becomes noise on every blank field.\n2. Re-import the same export and confirm the reason still reads correctly on the `skipped` path, not only on `created`.\n3. **Real-artifact smoke.** Own Worker on a free port, full seed, real browser. Run `fixtures/sessionize/sessions.csv` through `/import` end to end and read the Row detail table \u2014 the warning must be legible to someone who does not know the schema. Pass B verified this flow at API level only; the wizard's own UI (column-mapping screen, live preview, click-through) has **never been driven in a browser**, so do this one through the actual wizard and screenshot the results table.\n\n## Delivery\n\nOwn git worktree, branch `mrq-84-import-unmatched-taxonomy`, cut off current `github/main`. PR via `gh pr create --repo Stage-11-Agentics/marquee --base main`.\n\n## File ownership\n\nOWNS: `src/lib/sessionize-import.ts`, `src/ui/import/*` if the reason needs presentation work, its own tests.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZS9CNE1J9E3X653YFFTEZAK",
+  "last_event_id": "ev_01KZS9D15R5JYD74GWPPVJP7EZ",
+  "last_status_changed_at": "2026-08-11T20:49:26Z",
+  "linked_files": [],
+  "priority": "low",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-11T20:49:38Z",
+      "created_by": "agent:claude",
+      "note": null,
+      "target_task_id": "task_01KZS7AG41SGXPBJWM0AR8TVAK",
+      "type": "related_to"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-84",
+  "status": "backlog",
+  "tags": null,
+  "title": "Sessionize importer silently drops unrecognized tracks and formats",
+  "type": "bug",
+  "updated_at": "2026-08-11T20:49:38Z",
+  "urgency": null
+}

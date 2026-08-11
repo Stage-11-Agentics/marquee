@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T19:53:17Z",
+  "created_by": "agent:delegator-mrq-77",
+  "custom_fields": {},
+  "id": "art_01KZS65VKVMHT39F7WWC4QZPCK",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZS65VKVMHT39F7WWC4QZPCK.png",
+    "size_bytes": 395093
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "after-evaluation-900.png",
+  "token_usage": null,
+  "type": "file"
+}
