@@ -605,6 +605,38 @@ async function evaluationRound(db: D1Database, eventId: string, now: number): Pr
   return { planId, roundId };
 }
 
+interface TaxonomyResolution {
+  /** The raw value from the export, already trimmed. Empty means the column said nothing. */
+  name: string;
+  matched: boolean;
+  /** What the row actually ends up carrying, after the fall back to the current value. */
+  resolvedId: string | null;
+}
+
+/**
+ * Tracks and formats resolve by exact, case-insensitive name. A real Sessionize
+ * export whose taxonomy does not match the event's configuration is the normal
+ * case, not the edge case, and a miss used to be silent: the row reported
+ * success and the categorization was simply gone.
+ *
+ * The distinction worth reporting is "the CSV said nothing" versus "the CSV said
+ * `Platform` and this event has no track by that name". Only the second is
+ * noted, or the message becomes noise on every blank column. The value is named
+ * because the operator's next move — create that track, or fix the export —
+ * needs the name.
+ */
+export function unmatchedTaxonomyNotes(fields: { track: TaxonomyResolution; format: TaxonomyResolution }): string[] {
+  return (["track", "format"] as const).flatMap((kind) => {
+    const field = fields[kind];
+    if (!field.name || field.matched) return [];
+    // An unmatched name falls back to whatever the record already carried, so a
+    // re-import over a row categorized inside Marquee keeps its value rather
+    // than clearing it. Saying "left unset" there would be untrue.
+    const effect = field.resolvedId === null ? "left unset" : "existing value kept";
+    return [`${kind} "${field.name}" not recognized, ${effect}`];
+  });
+}
+
 async function importSession(
   db: D1Database,
   event: EventRow,
@@ -635,8 +667,10 @@ async function importSession(
   }
   if (speakers.length === 0) throw new Error("at least one speaker email or name must match the speakers export");
   const submitter = speakers[0]!;
-  const track = row.track.trim() ? await db.prepare("SELECT id FROM tracks WHERE event_id = ? AND lower(name) = lower(?)").bind(event.id, row.track.trim()).first<{ id: string }>() : null;
-  const format = row.format.trim() ? await db.prepare("SELECT id FROM formats WHERE event_id = ? AND lower(name) = lower(?)").bind(event.id, row.format.trim()).first<{ id: string }>() : null;
+  const trackName = row.track.trim();
+  const formatName = row.format.trim();
+  const track = trackName ? await db.prepare("SELECT id FROM tracks WHERE event_id = ? AND lower(name) = lower(?)").bind(event.id, trackName).first<{ id: string }>() : null;
+  const format = formatName ? await db.prepare("SELECT id FROM formats WHERE event_id = ? AND lower(name) = lower(?)").bind(event.id, formatName).first<{ id: string }>() : null;
   const customFields = parseJsonObject(row.custom_fields);
   let formId = current?.form_id ?? null;
   let fields = new Map<string, string>();
@@ -736,6 +770,10 @@ async function importSession(
     status.note,
     actualChanged ? "session, relationships, scores, or custom fields reconciled" : "same external_ref and values already present",
     evaluation ? "evaluation result imported" : null,
+    ...unmatchedTaxonomyNotes({
+      track: { name: trackName, matched: track !== null, resolvedId: next.trackId },
+      format: { name: formatName, matched: format !== null, resolvedId: next.formatId },
+    }),
   ].filter(Boolean).join("; ");
   await saveImportRow(db, {
     importId, rowIndex, entity: "session", outcome, reason: reason || null, targetId: currentAfter?.id ?? id, before,
