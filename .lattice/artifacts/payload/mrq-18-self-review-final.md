@@ -1,6 +1,6 @@
 # MRQ-18 inline self-review (final rebased head)
 
-Reviewed commit: 312afb8a770bc5f33c8b4a9a1890060a9831f981
+Reviewed commit: 16ec7fdbe4b7ddf48de9a9f43f769209e7a7e2a9
 Base: forgejo/master @ f83de445392700f8721bcdbccb3b30c345856e00
 Verdict: PASS
 Review mode: inline self-review; headless code review is suspended by the ticket directive.
@@ -13,6 +13,7 @@ Scope checked:
 - Blind detail projection excludes identity-bearing form keys in SQL, returns no identity object while anonymized, and exposes only safe file metadata. Out-of-scope failures use the generic 403 body without resource metadata.
 - Approve/Maybe/Deny persists nullable score and criteria values, records reviewer actor/time, maps to a decision proposal, and leaves submission lifecycle unchanged.
 - The reviewer page uses only reviewer-scoped APIs, has no admin shell, preserves queue item/index on detail close, supports keyboard recommendation/score/save interactions, and guards focused controls from the global save handler.
+- The final keyboard fix includes score state in the key-handler effect dependencies, so a keyboard-selected 1–5 score is the value submitted by Enter.
 - Existing evaluation/admin routes and guardrail tests remain intact; the committee event-boundary predicate is tightened without introducing a second authorization path.
 - No contract documents, migrations, secrets, or unrelated paths changed.
 
