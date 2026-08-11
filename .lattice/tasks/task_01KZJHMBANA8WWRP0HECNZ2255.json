@@ -15,21 +15,31 @@
       "id": "art_01KZR2MYKY6D83S22FV4RH9BH3",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR3Y1JENV5HT1KYHQ0X9PM3",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR41VQ2PDER5R9GGC8QJQYB",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMBANA8WWRP0HECNZ2255",
-  "last_event_id": "ev_01KZR2MYM1YHYY7QHNCGBQ7W5K",
-  "last_status_changed_at": "2026-08-11T09:29:23Z",
+  "last_event_id": "ev_01KZR41VQ409ZW20EVFBK82T27",
+  "last_status_changed_at": "2026-08-11T09:55:02Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-42",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "AC-coverage closure and public-repo assembly",
   "type": "task",
-  "updated_at": "2026-08-11T09:32:23Z",
+  "updated_at": "2026-08-11T09:56:55Z",
   "urgency": null
 }

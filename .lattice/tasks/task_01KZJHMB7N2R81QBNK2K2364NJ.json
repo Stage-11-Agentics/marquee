@@ -25,21 +25,26 @@
       "id": "art_01KZR3TA6RVPWRJEEMQ73ZFKNZ",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR4552PA9RW3D948A1QDSEK",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMB7N2R81QBNK2K2364NJ",
-  "last_event_id": "ev_01KZR3THM2W08ZAGRH17QA3C0R",
-  "last_status_changed_at": "2026-08-11T09:52:55Z",
+  "last_event_id": "ev_01KZR45APDC838551DV8M58JYY",
+  "last_status_changed_at": "2026-08-11T09:58:48Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 2,
   "schema_version": 1,
   "short_id": "MRQ-41",
   "status": "in_validation",
   "tags": null,
   "title": "Empty-state pass and craft sweep",
   "type": "task",
-  "updated_at": "2026-08-11T09:52:55Z",
+  "updated_at": "2026-08-11T09:58:48Z",
   "urgency": null
 }

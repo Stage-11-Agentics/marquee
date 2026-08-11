@@ -54,3 +54,13 @@ The ticket description names AC-161, but `tests/ac-claims/MRQ-40.json` already o
 ### Phase stop / handoff
 
 After this plan is committed and pushed as the first commit: move MRQ-41 to `planned`, then `in_progress`; implement in small commits; move through `review` and `in_validation` with review and validation evidence; run the mandatory gate; push; open the Forgejo PR against `master`; attach the PR reference; bump only to terminal `pr_open`; and send the final one-line state to the Orchestrator at workspace:9 / surface:60.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+- **Accepted and fixed — `src/ui/comms/CommsScreen.tsx` empty-vs-outage copy.** A failed templates/outbox read must not fall through to fresh-install empty copy; the implementation will keep the panels neutral while the shared error banner offers Retry.
+- **Accepted as non-blocking — `src/ui/agenda/AgendaPage.tsx` internal navigation.** The fresh agenda action currently uses a full-page navigation because the page has no SPA `navigate` prop. Threading that prop would be a structural shell change; the action is functional and remains outside this surgical sweep.
+- **Accepted as supporting-test limitation — `tests/node/empty-state.AC-161.test.mjs` marker locality.** The inventory test is intentionally a cheap contract check; it does not replace the rendered route walkthrough, which is the authoritative validation for branch-local placement and layout.
+
+## Reset 2026-08-11 by agent:delegator-mrq-41
+
+## Reset 2026-08-11 by agent:delegator-mrq-41
