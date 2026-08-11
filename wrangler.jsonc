@@ -48,45 +48,41 @@
     "not_found_handling": "single-page-application"
   },
 
-  // TODO-OPERATOR: create the production D1 database and replace both values.
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "replace-me-db",
-      "database_id": "REPLACE_ME-DB"
+      "database_name": "marquee",
+      "database_id": "8ad46a12-7f35-46bf-a843-39ccb427d7e0"
     }
   ],
 
-  // TODO-OPERATOR: create the production R2 buckets and replace both names.
   "r2_buckets": [
     {
       "binding": "MEDIA",
-      "bucket_name": "replace-me-media",
-      "preview_bucket_name": "replace-me-media-preview"
+      "bucket_name": "marquee-media",
+      "preview_bucket_name": "marquee-media-preview"
     }
   ],
 
-  // TODO-OPERATOR: create the production KV namespace and replace the ID.
   "kv_namespaces": [
     {
       "binding": "CACHE",
-      "id": "REPLACE_ME-CACHE"
+      "id": "f08eaa9df4b046c39bc1a6dba52f944b"
     }
   ],
 
-  // TODO-OPERATOR: create all four production queues and replace every queue name.
   "queues": {
     "producers": [
-      { "binding": "MAIL_QUEUE", "queue": "replace-me-mail-queue" },
-      { "binding": "MIRROR_QUEUE", "queue": "replace-me-mirror-queue" },
-      { "binding": "OPERATIONS_QUEUE", "queue": "replace-me-operations-queue" },
-      { "binding": "WEBHOOK_QUEUE", "queue": "replace-me-webhook-queue" }
+      { "binding": "MAIL_QUEUE", "queue": "marquee-mail" },
+      { "binding": "MIRROR_QUEUE", "queue": "marquee-mirror" },
+      { "binding": "OPERATIONS_QUEUE", "queue": "marquee-operations" },
+      { "binding": "WEBHOOK_QUEUE", "queue": "marquee-webhook" }
     ],
     "consumers": [
-      { "queue": "replace-me-mail-queue", "max_batch_size": 10 },
-      { "queue": "replace-me-mirror-queue", "max_batch_size": 10 },
-      { "queue": "replace-me-operations-queue", "max_batch_size": 10 },
-      { "queue": "replace-me-webhook-queue", "max_batch_size": 10 }
+      { "queue": "marquee-mail", "max_batch_size": 10 },
+      { "queue": "marquee-mirror", "max_batch_size": 10 },
+      { "queue": "marquee-operations", "max_batch_size": 10 },
+      { "queue": "marquee-webhook", "max_batch_size": 10 }
     ]
   },
 
@@ -98,10 +94,12 @@
     ]
   },
 
-  // TODO-OPERATOR (MRQ-57): replace with the real account/bucket/media host.
   "vars": {
-    "R2_ACCOUNT_ID": "replace-me-account-id",
-    "R2_BUCKET_NAME": "replace-me-media",
+    // R2_ACCOUNT_ID is deliberately NOT here. It identifies the Cloudflare
+    // account and this repository is public, so it is a Wrangler secret and
+    // reaches the Worker through `env` exactly as a var would. Local dev
+    // supplies it from the ignored `.dev.vars`.
+    "R2_BUCKET_NAME": "marquee-media",
     "MEDIA_PUBLIC_ORIGIN": "media.marquee.stage11.dev",
 
     // Observability levers, declared so they are visible rather than folklore.
@@ -124,6 +122,7 @@
       "TURNSTILE_SITE_KEY",
       "TURNSTILE_SECRET_KEY",
       "RESEND_API_KEY",
+      "R2_ACCOUNT_ID",
       "R2_ACCESS_KEY_ID",
       "R2_SECRET_ACCESS_KEY",
       "UPLOAD_TOKEN_SECRET",
