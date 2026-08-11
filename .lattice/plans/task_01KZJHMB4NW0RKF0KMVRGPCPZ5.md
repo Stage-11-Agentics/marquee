@@ -102,3 +102,5 @@ manifest, and plain-Node-only test boundary are all explicitly planned. No
 contract-doc or shared-file edit is authorized. The auto plan-review was
 started but exited without an artifact, so this is the documented fallback;
 there are no untriaged findings.
+
+## Reset 2026-08-11 by agent:delegator-mrq-40b

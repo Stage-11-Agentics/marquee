@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:01:27Z",
+  "created_by": "agent:auditor-mrq-45",
+  "custom_fields": {},
+  "id": "art_01KZR0WA6961AYBT73XP5ZG2TG",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR0WA6961AYBT73XP5ZG2TG.md",
+    "size_bytes": 1030
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at exact validation HEAD a364d72; deterministic matrix and source scan observed.",
+  "tags": [],
+  "title": "MRQ-45 validation",
+  "token_usage": null,
+  "type": "note"
+}

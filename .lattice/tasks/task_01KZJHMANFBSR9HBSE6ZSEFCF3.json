@@ -18,8 +18,8 @@
     }
   ],
   "id": "task_01KZJHMANFBSR9HBSE6ZSEFCF3",
-  "last_event_id": "ev_01KZQZYCEVQF1NQEJJ9NBD9DXV",
-  "last_status_changed_at": "2026-08-11T08:41:26Z",
+  "last_event_id": "ev_01KZR0X6RTERDXA884HMBW2K5M",
+  "last_status_changed_at": "2026-08-11T09:01:56Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -41,10 +41,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-35",
-  "status": "in_progress",
+  "status": "review",
   "tags": null,
   "title": "Category routing",
   "type": "task",
-  "updated_at": "2026-08-11T08:45:06Z",
+  "updated_at": "2026-08-11T09:01:56Z",
   "urgency": null
 }

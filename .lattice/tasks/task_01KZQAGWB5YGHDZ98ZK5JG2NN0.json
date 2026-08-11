@@ -18,8 +18,8 @@
     }
   ],
   "id": "task_01KZQAGWB5YGHDZ98ZK5JG2NN0",
-  "last_event_id": "ev_01KZQZYWQ32807CV15KKX9SF3M",
-  "last_status_changed_at": "2026-08-11T08:43:19Z",
+  "last_event_id": "ev_01KZR0WC0VG929BQ928H13RXE3",
+  "last_status_changed_at": "2026-08-11T09:01:29Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [
@@ -34,10 +34,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-64",
-  "status": "in_progress",
+  "status": "review",
   "tags": null,
   "title": "Arrival instructions \u2014 portal location card, place merge fields, ICS GEO",
   "type": "task",
-  "updated_at": "2026-08-11T08:45:23Z",
+  "updated_at": "2026-08-11T09:01:29Z",
   "urgency": null
 }

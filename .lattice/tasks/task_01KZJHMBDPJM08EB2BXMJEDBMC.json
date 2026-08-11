@@ -15,10 +15,15 @@
       "id": "art_01KZR00CDPVHJBJ22FJF7W0B3W",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR0RYXKKT8A923Y5JTJB84B",
+      "role": null,
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMBDPJM08EB2BXMJEDBMC",
-  "last_event_id": "ev_01KZR00CDRTM6CBADGERCMY66V",
+  "last_event_id": "ev_01KZR0RYXQFFMQXZK15ZSFTZRG",
   "last_status_changed_at": "2026-08-11T08:44:41Z",
   "linked_files": [],
   "priority": "medium",
@@ -30,6 +35,6 @@
   "tags": null,
   "title": "Audit \u2014 repo hygiene and full-history scan",
   "type": "task",
-  "updated_at": "2026-08-11T08:46:12Z",
+  "updated_at": "2026-08-11T08:59:37Z",
   "urgency": null
 }

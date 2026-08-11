@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:00:50Z",
+  "created_by": "agent:auditor-mrq-45",
+  "custom_fields": {},
+  "id": "art_01KZR0V63MZXC5NAP70D3R402Y",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR0V63MZXC5NAP70D3R402Y.md",
+    "size_bytes": 1128
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at exact audit HEAD a364d72; no findings.",
+  "tags": [],
+  "title": "MRQ-45 self-review",
+  "token_usage": null,
+  "type": "note"
+}
