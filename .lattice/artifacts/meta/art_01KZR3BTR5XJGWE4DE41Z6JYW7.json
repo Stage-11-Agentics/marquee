@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:44:53Z",
+  "created_by": "agent:delegator-mrq-49",
+  "custom_fields": {},
+  "id": "art_01KZR3BTR5XJGWE4DE41Z6JYW7",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR3BTR5XJGWE4DE41Z6JYW7.md",
+    "size_bytes": 3752
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-49 final runtime validation 3116d40",
+  "token_usage": null,
+  "type": "note"
+}

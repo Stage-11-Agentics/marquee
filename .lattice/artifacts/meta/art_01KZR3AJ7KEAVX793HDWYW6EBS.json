@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:44:11Z",
+  "created_by": "agent:delegator-mrq-49",
+  "custom_fields": {},
+  "id": "art_01KZR3AJ7KEAVX793HDWYW6EBS",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR3AJ7KEAVX793HDWYW6EBS.md",
+    "size_bytes": 849
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-49 final self-review 3116d40",
+  "token_usage": null,
+  "type": "note"
+}

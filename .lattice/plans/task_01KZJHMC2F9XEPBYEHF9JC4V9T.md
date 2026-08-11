@@ -20,6 +20,12 @@ The export is a first-class surface: `GET /api/v1/events/{eventId}/rounds/{round
 
 5. Self-review the changed test/guard and evidence for dead-feature coverage: confirm every route is discovered from the manifest, every route response/export is actually requested, all error bodies are scanned, the CSV bytes are scanned independently of JSON, and the fixture contains submitter/speaker/org/company/email/bio/headshot sentinels. Run the targeted audit, `npm test`, `npm run trace:ac -- --ticket MRQ-50`, and the required `npm run pr-gate -- --ticket MRQ-50`. Commit and push each meaningful change; open the Forgejo PR only after the gate and validation evidence are recorded, then stop at `pr_open`.
 
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+- Verdict: PASS after inline adversarial review. The runtime test derives the Reviewer surface from `apiManifest` tags, covers all eight current operations, exercises both anonymized rounds, scans CSV/body/header bytes, and probes representative error/concealment responses.
+- The machine guard is deliberately separate from the Worker test: it parses every `src/` TypeScript/TSX module with the TypeScript AST, fails on a changed Reviewer route inventory, and verifies the sole identity query call remains in the `round.anonymized ? null : ...` branch.
+- No product-code remediation is authorized by this ticket. Any byte hit will be triaged to the owning production file/line with the exact request and returned string; no untriaged plan-review finding remains.
+
 ## Non-goals
 
 - No production identity-query or view-layer fix in this audit ticket.
