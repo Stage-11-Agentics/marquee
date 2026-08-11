@@ -175,7 +175,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
           </p>
           <div class="hero-actions">
             <a class="button primary" href="/submissions?demo=organizer" data-demo-role="organizer">Enter as organizer →</a>
-            <a class="button" href="/submissions?demo=speaker" data-demo-role="speaker">Enter as speaker</a>
+            <a class="button" href="/portal?demo=speaker" data-demo-role="speaker">Enter as speaker</a>
             <a class="button ghost" href="/submissions">View public CFP</a>
           </div>
           <div class="hero-note">No signup. Both demos open populated AIE NYC 2026 workspaces.</div>

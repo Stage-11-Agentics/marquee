@@ -49,7 +49,11 @@ test("AC-1, AC-2 · the SSR landing exposes both reachable demo entries and live
   expect(html).toContain(">3</strong>");
   expect(html).toContain(">1</strong>");
   expect(html).toContain("/submissions?demo=organizer");
-  expect(html).toContain("/submissions?demo=speaker");
+  // The speaker demo must land in the Speaker Portal. Sending it to the
+  // organizer register is a 403 dead end: the speaker persona has no read
+  // access to the submission list.
+  expect(html).toContain("/portal?demo=speaker");
+  expect(html).not.toContain("/submissions?demo=speaker");
 });
 
 test("AC-4 · the landing render has crawlable destinations and no placeholder copy", async () => {

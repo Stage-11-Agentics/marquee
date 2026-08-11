@@ -101,8 +101,18 @@ npx wrangler dev \
   --local \
   --persist-to .wrangler/marquee-local \
   --local-protocol http \
-  --port 8787
+  --port 8787 \
+  --var INSECURE_LOCAL_COOKIES:1
 ```
+
+`--var INSECURE_LOCAL_COOKIES:1` drops `Secure` from the session cookie for this
+run. Safari and WKWebView refuse a Secure cookie on an `http://` origin — they
+do not grant localhost the trustworthy-origin exception that curl and Chrome do
+— so without it the demo login returns 200 and then every request 401s, in the
+browser only. It has to be a flag on the command rather than a `.dev.vars`
+entry: `wrangler dev` rewrites the inbound URL, Host and Origin to the
+`custom_domain` route, so the Worker has no way to detect that it is local.
+Never set it on a deployed Worker; wrangler.jsonc pins the deployed default off.
 
 Wrangler dev is local-only here. It is not evidence that a production
 Cloudflare account, paid-plan CPU limit, custom domain, R2 origin, or real
@@ -130,6 +140,11 @@ uses the seeded organizer persona. The third proves that the authenticated
 list contains more than zero records; it is not a test against a hard-coded
 HTML count.
 
+These are API checks, and passing them does not prove the UI works. curl keeps
+cookies that a browser would reject, so it can sail through a session bug that
+leaves every page 401ing. Open <http://127.0.0.1:8787/>, click **Enter as
+organizer**, and confirm the register loads before believing the install.
+
 ### 5. One-shot clean-checkout smoke
 
 For a no-human-input local proof, run this after `npx vite build`. It uses a
@@ -154,7 +169,8 @@ npx wrangler dev \
   --local \
   --persist-to "$state_dir" \
   --local-protocol http \
-  --port 8787 >"$state_dir/wrangler.log" 2>&1 &
+  --port 8787 \
+  --var INSECURE_LOCAL_COOKIES:1 >"$state_dir/wrangler.log" 2>&1 &
 worker_pid="$!"
 
 ready=""

@@ -58,7 +58,7 @@ test("AC-2 · POST /api/v1/auth/demo 200s and sets a session cookie when demo_mo
 
 test("CONTRACT · demo session cookie has the complete narrow security policy", async () => {
   await seedDemoFixture();
-  const response = await app.request("/api/v1/auth/demo", {
+  const response = await app.request("https://marquee.example/api/v1/auth/demo", {
     method: "POST",
     body: JSON.stringify({ role: "speaker" }),
     headers: { "content-type": "application/json" },
@@ -70,6 +70,36 @@ test("CONTRACT · demo session cookie has the complete narrow security policy", 
   expect(setCookie).toMatch(/Path=\//i);
   expect(setCookie).not.toMatch(/Domain=/i);
 });
+
+// Safari and WKWebView refuse a Secure cookie on an http:// origin, so the
+// plain-HTTP local recipe needs this opt-out or the UI 401s after a 200 login.
+// The flag ships only in .dev.vars.example, never in a deployed Worker.
+test("CONTRACT · INSECURE_LOCAL_COOKIES=1 omits Secure so the local HTTP recipe keeps its session", async () => {
+  await seedDemoFixture();
+  const response = await app.request("https://marquee.example/api/v1/auth/demo", {
+    method: "POST",
+    body: JSON.stringify({ role: "speaker" }),
+    headers: { "content-type": "application/json" },
+  }, { ...env, INSECURE_LOCAL_COOKIES: "1" });
+  const setCookie = response.headers.get("set-cookie") ?? "";
+  expect(setCookie).toMatch(/mq_session=/);
+  expect(setCookie).toMatch(/HttpOnly/i);
+  expect(setCookie).toMatch(/SameSite=Lax/i);
+  expect(setCookie).not.toMatch(/Secure/i);
+});
+
+test.each([undefined, "0", "true", ""])(
+  "CONTRACT · session cookie stays Secure when INSECURE_LOCAL_COOKIES is %o",
+  async (flag) => {
+    await seedDemoFixture();
+    const response = await app.request("https://marquee.example/api/v1/auth/demo", {
+      method: "POST",
+      body: JSON.stringify({ role: "speaker" }),
+      headers: { "content-type": "application/json" },
+    }, { ...env, INSECURE_LOCAL_COOKIES: flag });
+    expect(response.headers.get("set-cookie") ?? "").toMatch(/Secure/i);
+  },
+);
 
 test("CONTRACT · magic-link request enqueues an outbox row and returns the on-screen link only in demo mode", async () => {
   await seedDemoFixture();
