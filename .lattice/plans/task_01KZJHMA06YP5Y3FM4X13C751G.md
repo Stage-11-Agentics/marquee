@@ -18,7 +18,7 @@ Non-goal (EVALUATION §5): multi-round beyond two — parallel mode, per-round a
 Cut-line note: M-46 sits at **rank 27**, second from the bottom of the band. If the capacity calculation cuts it, the merged ticket ships its M-27 half and gate 19 must name US-71 with AC-163 – AC-166 and the reason.
 ## Ground truth and boundary
 
-- Work against `forgejo/master` at `62b874873655b34d5f6aa24dfa20874c0c79551a`; the requested clean branch tip `8a39b4b` was one commit behind after the fleet dispatch commit, so the worktree was rebased and `npm ci` was run before trusting tests.
+- The initial plan was written against `62b874873655b34d5f6aa24dfa20874c0c79551a`; Forgejo has since advanced. At the implementation boundary, fetch and rebase onto the then-current `forgejo/master` (currently `b3672e3f13e4db7d91faa7466e9d8e87815a6abb`), then run `npm ci` before trusting tests. The requested clean branch tip `8a39b4b` was one commit behind after the fleet dispatch commit.
 - MRQ-17 already owns AC-98 in `tests/ac-claims/MRQ-17.json`; MRQ-28 will exercise AC-98 and own AC-99, AC-100, and AC-163 through AC-166. The MRQ-28 test names will still carry every ticket AC so `trace:ac` sees the complete union without duplicate owners.
 - The existing first-migration schema is sufficient: `evaluation_rounds`, `round_assignments`, `evaluations`, `comparisons`, and `round_promotions` are already round-aware. Do not edit contract docs or `migrations/0001_init.sql`.
 
@@ -60,3 +60,9 @@ Extend the merged evaluation/reviewer/record module so a program lead can run ex
 
 - After implementation: self-review the exact branch diff and run the focused evaluation integration tests, `npm test`, `npm run check:api`, `npm run trace:ac -- --scope=merged --ticket=MRQ-28`, and `npm run pr-gate -- --ticket MRQ-28`.
 - During `in_validation`, exercise the built API path against a running Worker/fixture for promotion, comparison, mode round-trip, record output, and round-2 scope rejection; attach the validation evidence. Before `pr_open`, attach a PASS review artifact naming the exact branch HEAD, push, create the Forgejo PR against `master`, attach its URL, and stop at `pr_open` for the Orchestrator.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+- **Base drift (minor):** accepted. Re-fetch and rebase immediately before implementation, record the exact current `forgejo/master` SHA in the implementation commit/comment, and run `npm ci` after that rebase. Repeat the same boundary check before validation/PR if master advances.
+- **Round invariant (minor):** clarified. The new round PATCH changes only settings (`mode`, name, anonymity, target, and open/close timestamps); it validates the owning round's existing position and plan relationship but never changes `position` or adds/removes rounds. Existing creation behavior remains the two-round feature boundary; no new schema-level third-round prohibition is introduced.
+- **Legacy promotion selector (minor):** clarified. The old `{submission_ids: []}` shape is retained only as a compatibility no-op: preview reports zero selected/promoted and apply returns the existing validation conflict/422, with no writes. Only a non-empty typed `selector: {ids: [...]}` or `selector: {filter: {...}}` is normalized through MRQ-19's selector helper and can promote records. Add an explicit test so an empty legacy selection never broadens to “all.”

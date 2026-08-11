@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:179",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-19b \u2014 Wave 1 (\u00a74)\n\nScope (verbatim): True swimlane per track (own lane box per track, day bands, slot columns), conflict computation over rooms **and every participation role**, tile flags, conflicts drawer with jump-to, warn-never-block.\n\nAC-81 is structural, not cosmetic: lane container count equals track count, each lane has its own bounding box, every session's box sits inside its own track's lane. **Colour overlay alone fails.**\nAC-77 is parameterized over all four participation roles \u2014 speaker, co-speaker, moderator, chairperson.\nFelt checkpoint C5 runs here on deployed infra: place ten sessions with a trackpad and with a mouse; no perceptible lag, no snap-back, no ghost offset.\n\nFile surface: `src/ui/agenda/track-board.tsx`, `src/lib/conflicts.ts`\n\nACs: AC-75 \u2013 AC-79, AC-81\nHours: 5\nWorkflow: inline-full\nShared files: none \u2014 `src/lib/conflicts.ts` is a new specific-name helper (\u00a77).\nDeps: M-19a\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T06:06:12Z",
   "evidence_refs": [
     {
       "id": "art_01KZQMFDK4CY1PEES6182EHKAP",
@@ -30,11 +30,26 @@
       "id": "art_01KZQPM6BQ4X3VA5AM0S6BYRGV",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQPQVE321FP5G0X0WTH0SZ7",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQPVD900EDS93RNPN6B9GGY",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQPVD900EDS93RNPN6B9GGX",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM9AXPD25H69HA8SS04ZS",
-  "last_event_id": "ev_01KZQPM6BTR5XZBBEGKWD17JM1",
-  "last_status_changed_at": "2026-08-11T06:01:24Z",
+  "last_event_id": "ev_01KZQPVD900EDS93RNPN6B9GH1",
+  "last_status_changed_at": "2026-08-11T06:06:12Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -46,13 +61,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 1,
+  "reopened_count": 2,
   "schema_version": 1,
   "short_id": "MRQ-21",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Agenda: track swimlane and conflicts",
   "type": "task",
-  "updated_at": "2026-08-11T06:02:15Z",
+  "updated_at": "2026-08-11T06:06:12Z",
   "urgency": null
 }

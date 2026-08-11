@@ -3,17 +3,23 @@
   "branch_links": [],
   "c11_surface": "surface:186",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-28 \u2014 Tier B rank 5 (US-67), Wave 2 (\u00a75)\n\nScope (verbatim): affordance on every admin route, `/` and \u2318K with no navigation, one labelled result list across submissions/speakers/sessions/forms, fuzzy on name and title, <200 ms.\n\nAC-101 iterates **every** admin route in the route manifest \u2014 the affordance must be in M-05a's shell, not bolted onto individual screens.\n\nACs: AC-101 \u2013 AC-104\nHours: 4\nWorkflow: inline-full\nShared files: the search affordance lives in the shell topbar (M-05a's `src/ui/shell/*`) \u2014 additive only; do not restyle the shell.\nDeps: M-10\nSpeed: AC-103 is an AC-sourced budget \u2014 keystroke \u2192 results painted p95 \u2264 200 ms over \u226510 queries including misspellings.\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQPR6MEQDQWG26FJD1W1FYC",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHMA377D1W31X8NY6Q8FPB",
-  "last_event_id": "ev_01KZQPJ57EJ0QJWNG63D8D1VXT",
-  "last_status_changed_at": "2026-08-11T06:01:09Z",
+  "last_event_id": "ev_01KZQPXG7CDJM9GT27KT3X4YGF",
+  "last_status_changed_at": "2026-08-11T06:07:00Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +34,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-29",
-  "status": "planned",
+  "status": "in_progress",
   "tags": null,
   "title": "Quick search",
   "type": "task",
-  "updated_at": "2026-08-11T06:01:09Z",
+  "updated_at": "2026-08-11T06:07:20Z",
   "urgency": null
 }

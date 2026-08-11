@@ -26,21 +26,22 @@ These measurements establish that the cost is the repeated setup around the roug
 
 ## Chosen approach
 
-Keep one Miniflare/D1 isolate per test file and keep all existing file-level isolation semantics. In `tests/integration/apply-migrations.ts`, retain the current ordered `splitStatements()` parser and the existing `alreadyApplied`/`WIPE_ORDER` branch, but execute the ordered schema statements with bounded `env.DB.batch()` calls instead of one `prepare().run()` RPC per statement. The batch size must stay below D1's statement-count limit (use a named conservative constant and chunk in migration order); later migrations and trigger bodies must remain ordered exactly as today.
+Keep Worker isolation for every integration test and the one unit test that explicitly provisions D1, but run Worker-free unit tests in a normal Vitest Node project. `vitest.config.ts` will include `tests/integration/**/*.test.ts` plus `tests/unit/r2/uploads-routes.test.ts`; a new `vitest.node.config.ts` will include the other unit files with the existing setup file. `scripts/checks/run-test.mjs` will run both Vitest configs before the existing native `tests/node` suite.
 
-This is the smallest harness-only change that attacks the per-file schema cost without sharing mutable databases across files. The success bar is named: repeated `npm test` and full `npm run pr-gate -- --ticket MRQ-70` runs must stay at or below 27s (at least 3s under the hard 30s limit), with all 38 files / 201 tests passing. Do not consolidate integration files, move assertions to `tests/node`, or alter Vitest isolation unless a measured follow-up proves it safe and necessary; those choices create avoidable conflicts with the six active test-file delegators.
+This removes twelve unnecessary Miniflare boots without sharing a D1 database, changing an assertion, or moving a test file. `tests/integration/apply-migrations.ts` remains unchanged: the timing experiment showed that DDL batching would be a small optimization against the actual startup bottleneck and is not part of this implementation.
+
+This is the smallest harness-only change that attacks the per-file Worker boot cost without sharing mutable databases across files. The success bar is named: repeated `npm test` and full `npm run pr-gate -- --ticket MRQ-70` runs must stay at or below 27s (at least 3s under the hard 30s limit), with the current 39 Vitest files / 204 tests still passing plus the existing 38 native Node tests. Do not consolidate integration files, move integration assertions to `tests/node`, or alter Worker isolation; those choices create avoidable conflicts with the six active test-file delegators.
 
 ## Implementation and proof steps
 
 1. After this plan is committed and pushed, move MRQ-70 through `planned` and `in_progress`, refreshing the c11 title/description at the phase boundary.
-2. Before committing to the implementation, add temporary local-only timing around `applyMigrations()` and run a representative integration file to separate schema-apply time from Worker startup. Remove the instrumentation before the implementation commit and record the measured split in the completion evidence.
-3. Verify first that Miniflare's local D1 accepts ordered `CREATE TABLE` / `CREATE INDEX` / `CREATE TRIGGER` statements in `batch()` chunks. A failed chunk may leave a partial schema in that file's isolate; that is acceptable only because the test run fails loudly and a fresh isolate is used on the next run. Keep the existing per-file isolation and fail-fast behavior.
-4. Implement the bounded D1 batching in `tests/integration/apply-migrations.ts` only unless measurement proves a narrowly scoped runner/config adjustment is required. Keep migration order, trigger parsing, wipe-on-repeat behavior, and the exported `env` unchanged.
-5. Run type checks relevant to the helper and the full existing `npm test`; compare repeated before/after wall clocks and test/file counts. Re-run any candidate Vitest pool setting separately and report a plainly labeled negative result when it does not help.
-6. Extend `recordSpeedHarness` in `scripts/checks/lib/command.mjs` (and its caller only if needed) so `harness.pr_gate` preserves the latest measurement plus a small bounded `history` array with timestamp/commit context; preserve the existing latest-value fields and the 30s budget. This is the required trend, not a single overwritten observation.
-7. Perform self-review and the required Lattice review artifact against the exact branch HEAD. The review must confirm that no guardrail assertions changed and that no AC claim file was fabricated.
-8. Enter validation and run the actual local gate: `npm run pr-gate -- --ticket MRQ-70`. Record its complete result, including the `pr-gate` wall-clock, in the Lattice completion evidence and c11 update.
-9. Push the committed implementation, open a Forgejo PR against `master`, attach the PR reference, bump the ticket to terminal `pr_open`, and stop for the Orchestrator to merge.
+2. Record the temporary profiling evidence already gathered: a representative integration file took 7.90s wall-clock while `applyMigrations()` took 238ms; `--no-file-parallelism --no-isolate` took 17.76s but failed three suites (36 passed, 17 skipped) through shared-schema, foreign-key, duplicate-table, and missing-secret failures.
+3. Implement the harness split in `vitest.config.ts`, new `vitest.node.config.ts`, `scripts/checks/run-test.mjs`, and `tsconfig.test.json`. Keep the Worker config's integration and D1-dependent unit coverage unchanged; the Node config must exclude only `tests/unit/r2/uploads-routes.test.ts`.
+4. Run type checks and the full existing `npm test`; compare repeated before/after wall clocks and test/file counts. Re-run any candidate Vitest pool setting separately and report a plainly labeled negative result when it does not help.
+5. Extend `recordSpeedHarness` in `scripts/checks/lib/command.mjs` (and its caller only if needed) so `harness.pr_gate` preserves the latest measurement plus a small bounded `history` array with timestamp/commit context; preserve the existing latest-value fields and the 30s budget. This is the required trend, not a single overwritten observation.
+6. Perform self-review and the required Lattice review artifact against the exact branch HEAD. The review must confirm that no guardrail assertions changed and that no AC claim file was fabricated.
+7. Enter validation and run the actual local gate: `npm run pr-gate -- --ticket MRQ-70`. Record its complete result, including the `pr-gate` wall-clock, in the Lattice completion evidence and c11 update.
+8. Push the committed implementation, open a Forgejo PR against `master`, attach the PR reference, bump the ticket to terminal `pr_open`, and stop for the Orchestrator to merge.
 
 ## Acceptance evidence
 
@@ -48,7 +49,7 @@ The completion report must include:
 
 - before/after `npm test` wall-clock and emitted elapsed values;
 - before/after full `npm run pr-gate -- --ticket MRQ-70` wall-clock;
-- 38 test files and 201 tests still passing (or an exact explanation if master changes the count before validation);
+- the current 39 Vitest files / 204 tests and 38 native Node tests still passing (or an exact explanation if master changes the count before validation);
 - the rejected `--fileParallelism=false` and `--isolate=false` experiments above;
 - the resulting `speed-report.json` latest harness entry and bounded pr-gate history;
 - explicit statement that MRQ-70 owns no AC directly and therefore has no claims file;
@@ -64,3 +65,7 @@ Do not raise either budget, weaken/delete tests, alter contract documents, mint 
 - **FAIL / MAJOR — batching win unquantified:** Accepted. Step 2 now requires temporary local-only timing of a representative `applyMigrations()` call, removed before the implementation commit, and the plan now names a 3-second-under-budget success bar for both `npm test` and full pr-gate.
 - **FAIL / MINOR — DDL batch semantics unnamed:** Accepted. Step 3 explicitly verifies Miniflare D1 DDL batching, preserves statement/trigger order, and documents that a failed chunk may leave only a disposable partial schema in the failed isolate.
 - **FAIL / MINOR — factual drift:** Accepted. The plan now identifies the four migration files as 993 total lines and records the measured 3.13s Node-suite result as run variance against the ticket's earlier 1.4s figure.
+
+## Implementation Measurement Update (AUTHORITATIVE)
+
+The required timing probe supersedes the initial batch hypothesis. The representative Worker file took 7.90s wall-clock while its schema apply took 238ms, so batching DDL would not cut the dominant per-file boot cost. The combined `--no-file-parallelism --no-isolate` experiment was also rejected: it took 17.76s but failed three suites with shared-schema contamination and skipped 17 tests. The safe measured win is the project split: a temporary Worker config ran 27 files / 148 tests in 13.67s, while a normal Node Vitest config ran 12 Worker-free unit files / 56 tests in 0.51s. No test files or assertions move; only the harness selects the runtime.

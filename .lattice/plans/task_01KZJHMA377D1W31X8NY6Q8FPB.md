@@ -54,3 +54,10 @@ Speed: AC-103 is an AC-sourced budget — keystroke → results painted p95 ≤ 
 ## Plan review
 
 After this plan is committed and pushed, run the required single plan review. Triage every finding here under an authoritative `## Plan-Review Cycle K Resolutions (AUTHORITATIVE)` block before moving to implementation.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+- **Speaker landing handoff — accept/document:** keep the contract-correct `/onboarding?person=<id>` href and assert it in the API test. Before validation, check MRQ-24; if its chase board is merged, include a live Speaker selection. If it remains unmerged, record in the validation/completion evidence that the canonical href is shipped while the target screen is a documented MRQ-24 handoff, not silently claim a live Speaker record landing.
+- **Speed terms — accept/amend:** audit the seed data while implementing and use at least two genuine misspellings of seeded names or titles in the ten-or-more browser samples, alongside a no-match and diacritic probe. Reuse one of those misspellings in the AC-104 fixture and assert that it returns the seeded result.
+- **AC-101 route coverage — accept/amend:** the Node contract test will import/read the frontend route table and enumerate its entries, filter only admin routes mounted by `AppShell` (exclude `external` portal/event-site entries and utility/API-doc routes that do not render an admin screen), and assert the single shared QuickSearch mount covers every remaining route. The exclusion is explicit because those rows use separate/non-admin contracts.
+- **Debounce — accept/amend:** do not debounce input; issue an abortable request for each non-empty query and ignore stale responses. The speed harness starts timing immediately after the final keystroke for each term and waits for the result host to paint that exact query.
