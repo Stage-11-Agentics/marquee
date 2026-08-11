@@ -188,10 +188,12 @@ function LedgerCard({ snapshot, navigate }: { snapshot: DeliveryHealthSnapshot; 
 
 function TotalsStrip({ snapshot }: { snapshot: DeliveryHealthSnapshot }): JSX.Element {
   const totals = [
-    { id: "delivered", label: "Delivered", value: snapshot.totals.delivered, note: "reached the person" },
+    // "Sent", not "Delivered": the mail provider tells us it accepted these, and
+    // nothing tells us they landed. The note says so rather than implying more.
+    { id: "sent", label: "Sent", value: snapshot.totals.sent, note: "handed to your mail provider" },
     { id: "waiting", label: "Waiting", value: snapshot.totals.waiting, note: "written, on its way" },
     { id: "held", label: "Held back", value: snapshot.totals.held_back, note: snapshot.demo_mode ? "demo mode is on" : "stopped before sending" },
-    { id: "undelivered", label: "Undelivered", value: snapshot.totals.undelivered, note: "came back to us" },
+    { id: "undelivered", label: "Not sent", value: snapshot.totals.undelivered, note: "never left the building" },
   ];
   return <section class="card instrument health-totals" aria-label="Every message this conference has written">
     {totals.map((total) => <div class="health-total" key={total.id}>
