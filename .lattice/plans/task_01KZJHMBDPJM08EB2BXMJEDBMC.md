@@ -39,8 +39,10 @@ Plan: filled in by delegator's plan phase
 ### Evidence sequence
 
 1. Record the exact worktree, branch, `HEAD`, and fetched `forgejo/master`
-   SHA. Baseline the clean tree and run `npm run check:repo`; preserve the
-   command and complete output for triage.
+   SHA. Baseline the clean tree and run
+   `npm run check:repo -- --repo . --ref <publish-ref>`; preserve the command
+   and complete output for triage. The bare command intentionally fails closed
+   because it has no publish target; it is not itself an audit finding.
 2. Inspect the repository's checker implementation and its test coverage so
    the audit does not mistake tip-only checks for history coverage. Independently
    scan the current tree and full reachable history with path/object listings,
@@ -78,3 +80,19 @@ Plan: filled in by delegator's plan phase
   fixes in this audit branch unless a trivially safe, independently verified
   guard is required to prevent recurrence.
 - No `auto` AC claims file for MRQ-43.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+- The bare `npm run check:repo` exit 1 is correct fail-closed behavior. Do not
+  file it as a defect; only explicit publish refs are auditable.
+- The 95/100 findings on the working `HEAD` are expected contents of the
+  private working repository. Do not clean the tip. Deliver the exact path and
+  pattern checklist to MRQ-42 for orphan assembly instead.
+- `gitleaks` is unavailable on this machine and `check-repo.mjs` records
+  `gitleaks-unavailable` after skipping execution. The Marquee ruleset covers
+  denied paths/content and its own patterns, but it is not a substitute for a
+  general secret detector; treat gitleaks as an operator prerequisite and do
+  not install it in this ticket.
+- The orphan ref is not present yet. Do not claim the assembled-history gate
+  passed; record the exact missing-ref state and rerun once MRQ-42 publishes a
+  candidate.
