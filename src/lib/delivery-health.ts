@@ -14,7 +14,12 @@
  *   2. Amber and red are earned. A screen read by an anxious person during a
  *      decision wave has to be trusted, so an expected state (demo mode holding
  *      mail back exactly as configured) stays green and says so plainly.
+ *
+ *   3. A successful send means the message was accepted by the mail provider,
+ *      not that it arrived. Nothing on this screen says "delivered" about a
+ *      message past that point, because nothing here knows.
  */
+import { classifySendFailure } from "./mail-failure";
 
 /** Resend's free tier. A hard ceiling, not a cushion — a wave that exceeds it silently strands speakers. */
 export const DAILY_SEND_LIMIT = 100;
@@ -47,7 +52,10 @@ export type OwedState =
   | "waiting_too_long"
   | "held_back_demo"
   | "held_back"
+  /** The send failed for a reason that lives on this speaker's address. */
   | "undelivered"
+  /** The send failed for a reason that has nothing to do with this speaker. */
+  | "send_blocked"
   | "no_address"
   | "changed_elsewhere";
 
@@ -61,6 +69,12 @@ export interface OwedFact {
   outbox_created_at: number | null;
   suppressed_reason: string | null;
   has_error: boolean;
+  /**
+   * The provider's own words for why the send failed. Never rendered — it is
+   * classified into an organizer sentence by `classifySendFailure`. Absent on a
+   * fact gathered before this was carried, which reads as an unknown failure.
+   */
+  error_text?: string | null;
   has_valid_address: boolean;
   changed_elsewhere: boolean;
 }
@@ -176,9 +190,15 @@ export interface OwedReasonCount {
 }
 
 export interface DeliveryTotals {
-  delivered: number;
+  /**
+   * Accepted by the mail provider. Deliberately not named `delivered`: whether
+   * these arrived is reported over a provider webhook Marquee does not receive,
+   * so the honest ceiling on this number is "handed over", not "landed".
+   */
+  sent: number;
   waiting: number;
   held_back: number;
+  /** Never handed over at all — the sends that failed. */
   undelivered: number;
 }
 
@@ -217,12 +237,13 @@ const LEVEL_RANK: Record<HealthLevel, number> = { ok: 0, unknown: 1, warn: 2, al
 const STATE_RANK: Record<OwedState, number> = {
   undelivered: 0,
   no_address: 1,
-  held_back: 2,
-  never_prepared: 3,
-  changed_elsewhere: 4,
-  waiting_too_long: 5,
-  held_back_demo: 6,
-  waiting: 7,
+  send_blocked: 2,
+  held_back: 3,
+  never_prepared: 4,
+  changed_elsewhere: 5,
+  waiting_too_long: 6,
+  held_back_demo: 7,
+  waiting: 8,
 };
 
 function plural(count: number, one: string, many: string): string {
@@ -265,11 +286,14 @@ interface OwedVerdict {
 export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: boolean }): OwedVerdict {
   const { now, demoMode } = options;
   if (fact.outbox_status === "failed" || (fact.outbox_status === null && fact.has_error)) {
+    // The provider's text says which of these it was; the organizer never sees
+    // that text, only the sentence it maps to and the action that follows.
+    const failure = classifySendFailure(fact.error_text);
     return {
-      state: "undelivered",
+      state: failure.scope === "conference" ? "send_blocked" : "undelivered",
       level: "alarm",
-      reason: "The message came back undelivered.",
-      what_to_do: "Check the address on the record, then send the decision again.",
+      reason: failure.reason,
+      what_to_do: failure.what_to_do,
     };
   }
   if (!fact.has_valid_address) {
@@ -360,14 +384,24 @@ export function deriveOwed(
 
 /** The distinct reasons people are waiting, worst first — the shape of the debt in one line. */
 export function summarizeOwedReasons(rows: readonly OwedMessage[]): OwedReasonCount[] {
-  const byState = new Map<OwedState, OwedReasonCount>();
+  // Keyed on the sentence, not just the state: one state can carry several
+  // distinct reasons (a rejected address and a suppressed one are both
+  // `undelivered`), and collapsing them would print one of them over the other.
+  const byReason = new Map<string, OwedReasonCount>();
   for (const row of rows) {
-    const existing = byState.get(row.state);
+    const key = `${row.state}|${row.reason}`;
+    const existing = byReason.get(key);
     if (existing) existing.count += 1;
-    else byState.set(row.state, { state: row.state, level: row.level, reason: row.reason, count: 1 });
+    else byReason.set(key, { state: row.state, level: row.level, reason: row.reason, count: 1 });
   }
-  return [...byState.values()].sort((left, right) =>
-    LEVEL_RANK[right.level] - LEVEL_RANK[left.level] || STATE_RANK[left.state] - STATE_RANK[right.state],
+  return [...byReason.values()].sort((left, right) =>
+    LEVEL_RANK[right.level] - LEVEL_RANK[left.level]
+    || STATE_RANK[left.state] - STATE_RANK[right.state]
+    // Two reasons can share a state, so the order needs a tiebreak of its own:
+    // the bigger group first, then alphabetical so the list never reshuffles
+    // between two loads that found the same thing.
+    || right.count - left.count
+    || left.reason.localeCompare(right.reason),
   );
 }
 
@@ -543,8 +577,11 @@ function emailCapability(facts: DeliveryHealthFacts): CapabilityStatus {
     return {
       ...base,
       level: "alarm",
-      headline: `${count(facts.outbox.failed)} ${plural(facts.outbox.failed, "message", "messages")} came back undelivered.`,
-      detail: "Those people were never told. Work the ledger below — each row opens the record it belongs to.",
+      // "Could not be sent", never "came back": these are messages that never
+      // left. What came back after a successful send is not something this
+      // screen is told.
+      headline: `${count(facts.outbox.failed)} ${plural(facts.outbox.failed, "message", "messages")} could not be sent.`,
+      detail: "Those people were never told. Work the ledger below — each row names the reason and opens the record it belongs to.",
     };
   }
   if (owedAlarms > 0) {
@@ -575,7 +612,7 @@ function emailCapability(facts: DeliveryHealthFacts): CapabilityStatus {
     ...base,
     level: "ok",
     headline: "Email is reaching your speakers.",
-    detail: `${count(facts.outbox.sent_last_7_days)} ${plural(facts.outbox.sent_last_7_days, "message", "messages")} delivered in the last seven days · ${count(facts.outbox.queued)} waiting.`,
+    detail: `${count(facts.outbox.sent_last_7_days)} ${plural(facts.outbox.sent_last_7_days, "message", "messages")} sent in the last seven days · ${count(facts.outbox.queued)} waiting.`,
   };
 }
 
@@ -828,7 +865,7 @@ function summarize(
     level: "ok",
     headline: "Everyone who has been decided has been told.",
     detail: waiting === 0
-      ? `${count(facts.outbox.sent_last_7_days)} ${plural(facts.outbox.sent_last_7_days, "message", "messages")} delivered in the last seven days. Nothing is stuck.`
+      ? `${count(facts.outbox.sent_last_7_days)} ${plural(facts.outbox.sent_last_7_days, "message", "messages")} sent in the last seven days. Nothing is stuck.`
       : `${count(waiting)} ${plural(waiting, "message is", "messages are")} in flight and nothing is stuck.`,
   };
 }
@@ -865,7 +902,7 @@ export function deriveDeliveryHealth(
     capabilities,
     quota,
     totals: {
-      delivered: facts.outbox.sent,
+      sent: facts.outbox.sent,
       waiting: facts.outbox.queued,
       held_back: facts.outbox.suppressed,
       undelivered: facts.outbox.failed,

@@ -19,7 +19,7 @@ interface HealthSnapshot {
   summary: { level: string; headline: string; detail: string };
   capabilities: Array<{ id: string; label: string; level: string; headline: string; detail: string; href: string | null }>;
   quota: { sent_today: number; waiting: number; daily_limit: number; remaining: number; level: string; headline: string; detail: string };
-  totals: { delivered: number; waiting: number; held_back: number; undelivered: number };
+  totals: { sent: number; waiting: number; held_back: number; undelivered: number };
   owed: Array<{ submission_id: string; person_name: string; state: string; level: string; reason: string; what_to_do: string; href: string }>;
   owed_total: number;
   owed_urgent: number;
@@ -151,7 +151,7 @@ describe.sequential("MRQ-74 delivery health surface", () => {
   test("CONTRACT · a decision that reached its speaker never appears as owed", async () => {
     const snapshot = await (await health({ authorization: `Bearer ${TOKEN}` })).json<HealthSnapshot>();
     expect(snapshot.owed.some((row) => row.submission_id === "sub-mrq74-told")).toBe(false);
-    expect(snapshot.totals).toEqual({ delivered: 2, waiting: 0, held_back: 0, undelivered: 1 });
+    expect(snapshot.totals).toEqual({ sent: 2, waiting: 0, held_back: 0, undelivered: 1 });
   });
 
   test("CONTRACT · the ledger is scoped to one conference, at the door and in the query", async () => {
@@ -161,7 +161,7 @@ describe.sequential("MRQ-74 delivery health surface", () => {
 
     const other = await readDeliveryHealth(env.DB, OTHER_EVENT_ID, NOW);
     expect(other.owed.map((row) => row.submission_id)).toEqual(["sub-mrq74-other"]);
-    expect(other.totals.delivered).toBe(0);
+    expect(other.totals.sent).toBe(0);
     expect(other.owed_total).toBe(1);
   });
 
@@ -223,5 +223,34 @@ describe.sequential("MRQ-74 delivery health surface", () => {
     expect(scheduled?.headline).toBe("Deadline reminders has not run in 12 hours.");
     expect(scheduled?.detail).toContain("reminder emails before your form closes");
     expect(JSON.stringify(scheduled)).not.toContain("* * *");
+  });
+
+  test("CONTRACT · the failure's own words decide which action the row offers", async () => {
+    // The whole wiring in one pass: the provider's text is read out of the
+    // store, classified, and reaches the screen as an action — with the raw
+    // text still never leaving the store.
+    const rejected = await readDeliveryHealth(env.DB, EVENT_ID, NOW);
+    const rejectedRow = rejected.owed.find((row) => row.submission_id === "sub-mrq74-bounced");
+    expect(rejectedRow?.state).toBe("undelivered");
+    expect(rejectedRow?.what_to_do).toMatch(/Correct the address on this speaker's record/);
+
+    // Same speaker, same failed send, a cause that is not theirs: the row must
+    // stop pointing at their address and point at the conference instead.
+    await env.DB
+      .prepare("UPDATE outbox SET error = ? WHERE id = 'outbox-mrq74-bounced'")
+      .bind("You have reached your daily sending quota")
+      .run();
+    try {
+      const blocked = await readDeliveryHealth(env.DB, EVENT_ID, NOW);
+      const blockedRow = blocked.owed.find((row) => row.submission_id === "sub-mrq74-bounced");
+      expect(blockedRow?.state).toBe("send_blocked");
+      expect(blockedRow?.level).toBe("alarm");
+      expect(blockedRow?.what_to_do).toMatch(/^Nothing is wrong with this address\./);
+      expect(JSON.stringify(blocked)).not.toContain("daily sending quota");
+    } finally {
+      await env.DB
+        .prepare("UPDATE outbox SET error = 'the address was rejected' WHERE id = 'outbox-mrq74-bounced'")
+        .run();
+    }
   });
 });

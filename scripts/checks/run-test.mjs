@@ -26,7 +26,6 @@ const BUDGET_MS = 45_000;
 const HARD_LIMIT_MS = 240_000;
 const startedAt = performance.now();
 const vitestEntry = resolve(REPOSITORY_ROOT, "node_modules/vitest/vitest.mjs");
-const vitestConfigs = ["vitest.config.ts", "vitest.node.config.ts"];
 let timedOut = false;
 const testEnvironment = {
   ...process.env,
@@ -61,9 +60,11 @@ async function runSteps(argumentSets) {
   return codes.find((code) => code !== 0) ?? 0;
 }
 
-let exitCode = await runSteps(
-  vitestConfigs.map((config) => [vitestEntry, "run", "--config", config]),
-);
+// One Vitest run covering both projects. Two runs each sized their own worker
+// pool to the whole machine, so the suite competed with itself for cores before
+// any other agent's build entered the picture; vitest.config.ts now declares
+// both projects so a single scheduler owns the whole budget.
+let exitCode = await runSteps([[vitestEntry, "run"]]);
 if (exitCode === 0 && !timedOut) {
   const nodeTestRoot = resolve(REPOSITORY_ROOT, "tests/node");
   const nodeTests = (await readdir(nodeTestRoot, { recursive: true }))

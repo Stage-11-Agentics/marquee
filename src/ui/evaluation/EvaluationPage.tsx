@@ -234,6 +234,19 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
 
   const criteriaTotal = useMemo(() => criteria.reduce((sum, item) => sum + Number(item.weight_pct || 0), 0), [criteria]);
 
+  const renderRoundCard = (round: Round | undefined, index: number): JSX.Element => round ? (
+    <div class="round-card" key={round.id}>
+      <span class="eyebrow">Round {index + 1}</span><strong>{round.name}</strong>
+      <label class="round-setting"><span>Mode</span><select aria-label={`Round ${index + 1} mode`} value={round.mode} onChange={(event) => void updateRound(round, { mode: (event.currentTarget as HTMLSelectElement).value })}><option value="scorecard">Scorecard</option><option value="comparison">Comparison</option></select></label>
+      <span class="subtle">{round.target_reviews_per_submission} reviews per submission · {round.mode === "comparison" ? `${round.progress.comparisons} comparisons` : `${round.progress.evaluations} scorecards`}</span>
+      <div class="progress-track"><i style={{ width: `${percent(round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations, Math.max(1, round.progress.assigned_submissions * round.target_reviews_per_submission))}%` }} /></div>
+      <div class="wave-date"><span class="tabular">{round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations}</span> complete · <span class="tabular">{Math.max(0, round.progress.assigned_submissions * round.target_reviews_per_submission - (round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations))}</span> remaining</div>
+      <div class="round-meta"><span>{round.anonymized ? "Anonymous review" : "Identity visible"}</span><span>{formatDate(round.closes_at)}</span></div>
+    </div>
+  ) : (
+    <div class="round-card round-empty" key={`empty-${index}`}><span class="eyebrow">Round {index + 1}</span><strong>Not configured</strong><span class="subtle">Add the next ordered round from the plan controls.</span></div>
+  );
+
   if (loading) return <div class="evaluation-loading instrument"><span class="eyebrow">Evaluation plan</span><strong>Loading conference review machinery…</strong><span class="subtle">Reading rounds, committees, and reviewer coverage.</span></div>;
   if (error && !plan) return <EmptyState title="Evaluation data unavailable" copy={error} action={<Button variant="primary" onClick={() => void load()}>Try again</Button>} />;
   if (!plan) return <EmptyState title="No evaluation plan" copy="Set the scorecard, committee, and two review rounds before assigning abstracts." action={<Button variant="primary" onClick={() => setDialog("plan")}>Create evaluation plan</Button>} />;
@@ -254,15 +267,9 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         <CardBody>
           <div class="evaluation-plan-heading"><div><span class="eyebrow">{plan.name}</span><h2>{plan.instructions}</h2></div><Button small onClick={() => setDialog("scorecard")}>Edit scorecard</Button></div>
           <div class="round-flow">
-            {[firstRound, secondRound].map((round, index) => round ? <div class="round-card" key={round.id}>
-              <span class="eyebrow">Round {index + 1}</span><strong>{round.name}</strong>
-              <label class="round-setting"><span>Mode</span><select aria-label={`Round ${index + 1} mode`} value={round.mode} onChange={(event) => void updateRound(round, { mode: (event.currentTarget as HTMLSelectElement).value })}><option value="scorecard">Scorecard</option><option value="comparison">Comparison</option></select></label>
-              <span class="subtle">{round.target_reviews_per_submission} reviews per submission · {round.mode === "comparison" ? `${round.progress.comparisons} comparisons` : `${round.progress.evaluations} scorecards`}</span>
-              <div class="progress-track"><i style={{ width: `${percent(round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations, Math.max(1, round.progress.assigned_submissions * round.target_reviews_per_submission))}%` }} /></div>
-              <div class="wave-date"><span class="tabular">{round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations}</span> complete · <span class="tabular">{Math.max(0, round.progress.assigned_submissions * round.target_reviews_per_submission - (round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations))}</span> remaining</div>
-              <div class="round-meta"><span>{round.anonymized ? "Anonymous review" : "Identity visible"}</span><span>{formatDate(round.closes_at)}</span></div>
-            </div> : <div class="round-card round-empty" key={`empty-${index}`}><span class="eyebrow">Round {index + 1}</span><strong>Not configured</strong><span class="subtle">Add the next ordered round from the plan controls.</span></div>)}
+            {renderRoundCard(firstRound, 0)}
             <div class="round-arrow" aria-hidden="true">→</div>
+            {renderRoundCard(secondRound, 1)}
           </div>
           <div class="divider" />
           <div class="scorecard-line"><div><strong>Scorecard</strong><span>{(firstRound?.criteria ?? []).map((item) => `${item.name} ${item.weight_pct}%`).join(" · ") || "No numeric criteria · recommendation only"}</span></div><Button small onClick={() => setDialog("scorecard")}>Edit scorecard</Button></div>
