@@ -1,5 +1,6 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
+import { apiFetch, errorSummary } from "../shell/api-client";
 import "./comms.css";
 
 interface Template {
@@ -93,22 +94,15 @@ const MERGE_FIELDS = [
   "task.title",
 ] as const;
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
+async function request<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
+  return apiFetch<T>(path, {
     ...init,
     headers: {
       ...(init.body ? { "content-type": "application/json" } : {}),
       ...(init.headers ?? {}),
     },
+    route,
   });
-  const body = await response.json().catch(() => null) as unknown;
-  if (!response.ok) {
-    const message = typeof body === "object" && body !== null && "error" in body
-      ? (body as { error?: { message?: string } }).error?.message
-      : undefined;
-    throw new Error(message ?? `Communications request failed (${response.status})`);
-  }
-  return body as T;
 }
 
 function isTrigger(template: Template): boolean {
@@ -171,8 +165,8 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
     setTemplatesLoading(true);
     setMessagesLoading(true);
     Promise.all([
-      request<{ data: Template[] }>(`/api/v1/events/${eventId}/templates`),
-      request<{ data: Message[] }>(`/api/v1/events/${eventId}/outbox`),
+      request<{ data: Template[] }>(`/api/v1/events/${eventId}/templates`, "/api/v1/events/{eventId}/templates"),
+      request<{ data: Message[] }>(`/api/v1/events/${eventId}/outbox`, "/api/v1/events/{eventId}/outbox"),
     ])
       .then(([templateResult, messageResult]) => {
         if (cancelled) return;
@@ -183,7 +177,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
         }
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : "Communications is unavailable");
+        if (!cancelled) setError(errorSummary(reason));
       })
       .finally(() => {
         if (cancelled) return;
@@ -202,10 +196,10 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
   useEffect(() => {
     let cancelled = false;
     setAudienceLoading(true);
-    request<AudienceResult>(audiencePath(eventId, filters))
+    request<AudienceResult>(audiencePath(eventId, filters), "/api/v1/events/{eventId}/comms/audience")
       .then((result) => { if (!cancelled) setAudience(result); })
       .catch((reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : "The audience could not be loaded");
+        if (!cancelled) setError(errorSummary(reason));
       })
       .finally(() => { if (!cancelled) setAudienceLoading(false); });
     return () => { cancelled = true; };
@@ -223,7 +217,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
     const previewPayload = mode === "template" && !templateDirty
       ? { person_id: selectedRecipient.person_id, submission_id: selectedRecipient.submission_id, template_key: selectedKey }
       : { person_id: selectedRecipient.person_id, submission_id: selectedRecipient.submission_id, subject, body };
-    request<Preview>(`/api/v1/events/${eventId}/comms/preview`, {
+    request<Preview>(`/api/v1/events/${eventId}/comms/preview`, "/api/v1/events/{eventId}/comms/preview", {
       method: "POST",
       body: JSON.stringify(previewPayload),
     })
@@ -231,7 +225,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
       .catch((reason: unknown) => {
         if (!cancelled) {
           setPreview(null);
-          setPreviewError(reason instanceof Error ? reason.message : "Preview unavailable");
+          setPreviewError(errorSummary(reason));
         }
       })
       .finally(() => { if (!cancelled) setPreviewLoading(false); });
@@ -242,14 +236,14 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
     if (!activeTemplate) return;
     setBusy(`save:${activeTemplate.id}`);
     try {
-      const saved = await request<Template>(`/api/v1/events/${eventId}/templates/${activeTemplate.id}`, {
+      const saved = await request<Template>(`/api/v1/events/${eventId}/templates/${activeTemplate.id}`, "/api/v1/events/{eventId}/templates/{templateId}", {
         method: "PATCH",
         body: JSON.stringify({ subject, body_md: body }),
       });
       setTemplates((current) => current.map((template) => template.id === activeTemplate.id ? { ...template, ...saved } : template));
       setError(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The template could not be saved");
+      setError(errorSummary(reason));
     } finally {
       setBusy(null);
     }
@@ -258,21 +252,21 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
   async function toggleTemplate(template: Template): Promise<void> {
     setBusy(`toggle:${template.id}`);
     try {
-      const saved = await request<Template>(`/api/v1/events/${eventId}/templates/${template.id}`, {
+      const saved = await request<Template>(`/api/v1/events/${eventId}/templates/${template.id}`, "/api/v1/events/{eventId}/templates/{templateId}", {
         method: "PATCH",
         body: JSON.stringify({ enabled: template.enabled !== 1 }),
       });
       setTemplates((current) => current.map((item) => item.id === template.id ? { ...item, ...saved } : item));
       setError(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The template toggle could not be saved");
+      setError(errorSummary(reason));
     } finally {
       setBusy(null);
     }
   }
 
   async function refreshMessages(): Promise<void> {
-    const result = await request<{ data: Message[] }>(`/api/v1/events/${eventId}/outbox`);
+    const result = await request<{ data: Message[] }>(`/api/v1/events/${eventId}/outbox`, "/api/v1/events/{eventId}/outbox");
     setMessages(result.data);
   }
 
@@ -283,7 +277,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
       const payload = mode === "template"
         ? { selector, template_key: selectedKey }
         : { selector, subject, body };
-      const result = await request<SendResult>(`/api/v1/events/${eventId}/comms/send`, {
+      const result = await request<SendResult>(`/api/v1/events/${eventId}/comms/send`, "/api/v1/events/{eventId}/comms/send", {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -291,7 +285,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
       await refreshMessages();
       setError(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The message could not be queued");
+      setError(errorSummary(reason));
     } finally {
       setBusy(null);
     }

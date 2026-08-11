@@ -1,10 +1,12 @@
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, PageHeader } from "../shell/components";
 import "./record.css";
 
 const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
+const SUBMISSIONS_ROUTE = "/api/v1/events/{eventId}/submissions";
 
 interface Props {
   eventId?: string;
@@ -27,7 +29,7 @@ export function CreateSubmissionPage({ eventId = DEFAULT_EVENT_ID, navigate }: P
     setState("saving");
     setError("");
     try {
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions`, {
+      const record = await apiFetch<{ id: string }>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -39,16 +41,12 @@ export function CreateSubmissionPage({ eventId = DEFAULT_EVENT_ID, navigate }: P
           format_id: formatId.trim() || undefined,
           bypass_evaluation: kind === "session" ? bypass : false,
         }),
+        route: SUBMISSIONS_ROUTE,
       });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
-        throw new Error(payload?.error?.message ?? `The record could not be created (${response.status}).`);
-      }
-      const record = await response.json() as { id: string };
       navigate(`/submissions/${record.id}`);
     } catch (caught: unknown) {
       setState("error");
-      setError(caught instanceof Error ? caught.message : "The record could not be created.");
+      setError(errorSummary(caught));
     }
   };
 

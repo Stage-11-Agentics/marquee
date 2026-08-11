@@ -2,6 +2,7 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
 import type { BoardCard, BoardColumn, BoardFacets, BoardListEnvelope, BoardStage } from "../../api/board";
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, EmptyState, PageHeader } from "../shell/components";
 import "./board.css";
 
@@ -78,9 +79,7 @@ async function readBoard(eventId: string, filters: FilterState, signal: AbortSig
   let first: BoardListEnvelope | null = null;
   while (true) {
     query.set("page", String(page));
-    const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/board?${query.toString()}`, { signal });
-    if (!response.ok) throw new Error(`The program board request failed (${response.status}).`);
-    const result = await response.json() as BoardListEnvelope;
+    const result = await apiFetch<BoardListEnvelope>(`/api/v1/events/${encodeURIComponent(eventId)}/board?${query.toString()}`, { signal, route: "/api/v1/events/{eventId}/board" });
     first ??= result;
     cards.push(...result.data);
     if (page >= result.total_pages || result.data.length === 0) break;
@@ -100,7 +99,7 @@ export function ProgramBoardPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props
     readBoard(eventId, filters, controller.signal)
       .then(setState)
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) setState({ kind: "error", message: error instanceof Error ? error.message : "The program board could not be loaded." });
+        if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error) });
       });
     return () => controller.abort();
   }, [eventId, filterIdentity]);

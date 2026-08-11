@@ -6,11 +6,12 @@
  * organizer) and the throttle (an unthrottled beacon on a five-second poll is
  * a self-inflicted denial of service).
  */
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { ERROR_STATUS_CODES } from "../../src/api/errors";
 import {
   API_ERROR_CODES,
+  apiFetch,
   backoffDelayMs,
   ERROR_TREATMENTS,
   MarqueeApiError,
@@ -178,6 +179,45 @@ describe("route templates leaving the browser", () => {
     expect(routeTemplate("/submissions/sub_01JQZ8XK2M3N4P5Q6R7S8T")).toBe("/submissions/{id}");
     expect(routeTemplate("/dashboard")).toBe("/dashboard");
     expect(routeTemplate("/")).toBe("/");
+  });
+});
+
+describe("shared fetch client", () => {
+  test("CONTRACT · an API envelope keeps its reference details and route template", async () => {
+    const requestId = "8f2a4c90-5f0b-4b1e-9d2a-9b1d2f0a1c2d";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      error: { code: "unprocessable", message: "Add the requested details", details: { issues: [{ fieldKey: "title", message: "Title is required" }] } },
+      request_id: requestId,
+    }), { status: 422, headers: { "content-type": "application/json" } })));
+    try {
+      const failure = await apiFetch("/api/v1/events/evt_test/submissions/sub_test", {
+        method: "POST",
+        route: "/api/v1/events/{eventId}/submissions/{submissionId}",
+      }).catch((error: unknown) => error);
+      expect(failure).toMatchObject({
+        code: "unprocessable",
+        requestId,
+        details: { issues: [{ fieldKey: "title", message: "Title is required" }] },
+        route: "/api/v1/events/{eventId}/submissions/{submissionId}",
+      });
+      expect((failure as MarqueeApiError).reference).toBe("8f2a4c");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("CONTRACT · a successful empty mutation response resolves without parsing JSON", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(apiFetch<undefined>("/api/v1/events/evt_test/agenda/items/item_test", {
+        method: "DELETE",
+        route: "/api/v1/events/{eventId}/agenda/items/{itemId}",
+      })).resolves.toBeUndefined();
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

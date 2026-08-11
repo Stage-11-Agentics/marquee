@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useMemo, useState } from "preact/hooks";
 
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader } from "../shell/components";
 import "./sessionize-import.css";
 
@@ -30,11 +31,8 @@ const SPEAKER_LABELS: Record<string, string> = {
   email: "Email", title: "Title", company: "Company", bio: "Bio", headshot_url: "Headshot URL", custom_fields: "Custom fields",
 };
 
-async function jsonRequest<T>(path: string, init: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
-  const body = await response.json().catch(() => ({})) as T & { error?: { message?: string } };
-  if (!response.ok) throw new Error(body.error?.message ?? `The import request failed (${response.status}).`);
-  return body;
+async function jsonRequest<T>(path: string, route: string, init: RequestInit): Promise<T> {
+  return apiFetch<T>(path, { ...init, route });
 }
 
 function MappingPanel({ title, preview, mapping, labels, onChange }: {
@@ -91,12 +89,12 @@ export function SessionizeImportPage({ eventId = "evt_aie-ny-2026" }: { eventId?
     if (!sessionsFile || !speakersFile) return;
     setBusy(true); setError(null);
     try {
-      const result = await jsonRequest<ImportSummary>(`/api/v1/events/${encodeURIComponent(eventId)}/imports`, {
+      const result = await jsonRequest<ImportSummary>(`/api/v1/events/${encodeURIComponent(eventId)}/imports`, "/api/v1/events/{eventId}/imports", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ source: "sessionize", sessions_csv: await sessionsFile.text(), speakers_csv: await speakersFile.text() }),
       });
       setCurrent(result); setMapping(result.mapping); setStep("mapping");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "The export could not be uploaded."); }
+    } catch (reason) { setError(errorSummary(reason)); }
     finally { setBusy(false); }
   };
 
@@ -104,11 +102,11 @@ export function SessionizeImportPage({ eventId = "evt_aie-ny-2026" }: { eventId?
     if (!current || !mapping) return false;
     setBusy(true); setError(null);
     try {
-      const result = await jsonRequest<ImportSummary>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${current.id}/mapping`, {
+      const result = await jsonRequest<ImportSummary>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${current.id}/mapping`, "/api/v1/events/{eventId}/imports/{importId}/mapping", {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(mapping),
       });
       setCurrent(result); setMapping(result.mapping); return true;
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "The mapping could not be saved."); return false; }
+    } catch (reason) { setError(errorSummary(reason)); return false; }
     finally { setBusy(false); }
   };
 
@@ -116,9 +114,9 @@ export function SessionizeImportPage({ eventId = "evt_aie-ny-2026" }: { eventId?
     if (!current) return;
     setBusy(true); setError(null);
     try {
-      const result = await jsonRequest<{ import: ImportSummary; counts: Counts; rows: ImportRow[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${current.id}/run`, { method: "POST" });
+      const result = await jsonRequest<{ import: ImportSummary; counts: Counts; rows: ImportRow[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${current.id}/run`, "/api/v1/events/{eventId}/imports/{importId}/run", { method: "POST" });
       setCurrent(result.import); setCounts(result.counts); setRows(result.rows); setStep("results");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "The import could not be run."); }
+    } catch (reason) { setError(errorSummary(reason)); }
     finally { setBusy(false); }
   };
 
@@ -126,9 +124,9 @@ export function SessionizeImportPage({ eventId = "evt_aie-ny-2026" }: { eventId?
     if (!current || !window.confirm("Undo this import? Only this import's rows will be reversed; the manifest stays available for audit.")) return;
     setBusy(true); setError(null);
     try {
-      await jsonRequest<{ undone: number; retained_manifest: true }>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${current.id}/undo`, { method: "POST" });
+      await jsonRequest<{ undone: number; retained_manifest: true }>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${current.id}/undo`, "/api/v1/events/{eventId}/imports/{importId}/undo", { method: "POST" });
       setCounts(null); setRows([]); setCurrent({ ...current, status: "undone" });
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "The import could not be undone."); }
+    } catch (reason) { setError(errorSummary(reason)); }
     finally { setBusy(false); }
   };
 

@@ -10,7 +10,7 @@ test("CONTRACT · Reset demo is a real queued action with honest pending state a
   const sidebar = await readFile(resolve(root, "src/ui/shell/Sidebar.tsx"), "utf8");
   const styles = await readFile(resolve(root, "src/styles/components.css"), "utf8");
 
-  assert.match(appShell, /fetch\(["']\/api\/v1\/admin\/reset-demo["']/);
+  assert.match(appShell, /apiFetch<ResetResponse>\(["']\/api\/v1\/admin\/reset-demo["']/);
   assert.match(appShell, /window\.confirm\(/);
   assert.match(appShell, /reset-demo\/.*encodeURIComponent/);
   assert.match(appShell, /Resetting demo/);

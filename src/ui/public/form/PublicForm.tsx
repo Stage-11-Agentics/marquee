@@ -3,14 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { isFieldApplicable, projectApplicableAnswers } from "../../../lib/form-conditions";
 import { putFileToR2 } from "../../upload/upload-client";
+import { apiFetch, errorSummary, MarqueeApiError } from "../../shell/api-client";
 import type { PublicFormField, PublicFormState } from "../../../routes/public-form.types";
 
 interface PublicFormProps {
   initial: PublicFormState;
-}
-
-interface ApiErrorPayload {
-  error?: { message?: string; details?: { issues?: Array<{ fieldKey?: string; message?: string }> } };
 }
 
 function optionsFor(field: PublicFormField): string[] {
@@ -46,20 +43,30 @@ function publicIssueMessage(issue: { message: string }): string {
   return "Add the requested detail, then try again.";
 }
 
-function errorMessageFor(response: Response, payload: ApiErrorPayload | null): string {
-  const issues = payload?.error?.details?.issues ?? [];
-  if (issues.length > 0) return issues[0]?.message ?? "Add the requested detail, then try again.";
-  if (response.status === 403 && payload?.error?.message?.toLowerCase().includes("resume")) return "Use the resume link from your email, then try again; your answers are still here.";
-  if (response.status === 403) return "We could not verify the security check. Complete it, then choose Submit again; your answers are still here.";
-  if (response.status === 429) return "This form needs a short pause before another try. Wait a moment, then choose Submit again; your draft is saved.";
-  if (response.status >= 500) return "The conference could not save this submission. Your answers are saved here; try Submit again in a moment.";
-  if (response.status === 409) return "The conference cannot accept this submission right now. Keep your answers here, then try again after following the message above.";
-  if (response.status === 404) return "This conference form is no longer available. Return to the conference page and choose the form again.";
-  return "We could not save this change. Your answers are still here; check the details and try again.";
+function publicErrorMessage(error: unknown): string {
+  if (!(error instanceof MarqueeApiError)) return errorSummary(error);
+  const message = error.message.toLowerCase();
+  let sentence: string;
+  if (error.status === 403 && message.includes("resume")) sentence = "Use the resume link from your email, then try again; your answers are still here.";
+  else if (error.status === 403) sentence = "We could not verify the security check. Complete it, then choose Submit again; your answers are still here.";
+  else if (error.status === 429) sentence = "This form needs a short pause before another try. Wait a moment, then choose Submit again; your draft is saved.";
+  else if (error.status >= 500) sentence = "The conference could not save this submission. Your answers are saved here; try Submit again in a moment.";
+  else if (error.status === 409) sentence = "The conference cannot accept this submission right now. Keep your answers here, then try again after following the message above.";
+  else if (error.status === 404) sentence = "This conference form is no longer available. Return to the conference page and choose the form again.";
+  else return errorSummary(error);
+  return `${sentence} · ref ${error.reference}`;
 }
 
-async function readPayload(response: Response): Promise<ApiErrorPayload | PublicFormState | null> {
-  try { return await response.json() as ApiErrorPayload | PublicFormState; } catch { return null; }
+function publicValidationIssues(error: unknown): Array<{ fieldKey?: string; message?: string }> {
+  if (!(error instanceof MarqueeApiError) || typeof error.details !== "object" || error.details === null) return [];
+  const issues = (error.details as { issues?: unknown }).issues;
+  if (!Array.isArray(issues)) return [];
+  return issues.filter((issue): issue is { fieldKey?: string; message?: string } => {
+    if (typeof issue !== "object" || issue === null) return false;
+    const candidate = issue as { fieldKey?: unknown; message?: unknown };
+    return (candidate.fieldKey === undefined || typeof candidate.fieldKey === "string")
+      && (candidate.message === undefined || typeof candidate.message === "string");
+  });
 }
 
 export function PublicForm({ initial }: PublicFormProps) {
@@ -173,25 +180,21 @@ export function PublicForm({ initial }: PublicFormProps) {
     }
     setBusy(true);
     try {
-      const response = await fetch(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts`, {
+      const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ answers, email, turnstileToken: turnstileToken || undefined }),
+        route: "/api/v1/public/forms/{slug}/drafts",
       });
-      const payload = await readPayload(response);
-      if (!response.ok || !payload || !("state" in payload)) {
-        resetTurnstile();
-        setPageError(errorMessageFor(response, payload && "error" in payload ? payload : null));
-        return null;
-      }
+      if (!payload || !("state" in payload)) throw new Error("The draft response was unreadable.");
       setState(payload);
       setAnswers(payload.answers);
       setDirty(false);
       resetTurnstile();
       return payload;
-    } catch {
+    } catch (error: unknown) {
       resetTurnstile();
-      setPageError("The conference could not save this draft. Your answers are still here; try again in a moment.");
+      setPageError(publicErrorMessage(error));
       return null;
     } finally { setBusy(false); }
   }
@@ -199,20 +202,17 @@ export function PublicForm({ initial }: PublicFormProps) {
   async function autosave() {
     if (!state.resume_token || !state.draft_id || busy) return;
     try {
-      const response = await fetch(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts/${encodeURIComponent(state.resume_token)}`, {
+      const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts/${encodeURIComponent(state.resume_token)}`, {
         method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }),
+        route: "/api/v1/public/forms/{slug}/drafts/{token}",
       });
-      const payload = await readPayload(response);
-      if (!response.ok || !payload || !("state" in payload)) {
-        setTurnstileToken("");
-        setPageError(errorMessageFor(response, payload && "error" in payload ? payload : null));
-        return;
-      }
+      if (!payload || !("state" in payload)) throw new Error("The autosave response was unreadable.");
       setState(payload);
       setAnswers(payload.answers);
       setDirty(false);
-    } catch {
-      setPageError("The conference could not save this draft. Your answers are still here; try again in a moment.");
+    } catch (error: unknown) {
+      setTurnstileToken("");
+      setPageError(publicErrorMessage(error));
     }
   }
 
@@ -229,26 +229,22 @@ export function PublicForm({ initial }: PublicFormProps) {
     }
     setBusy(true);
     try {
-      const signResponse = await fetch("/api/v1/public/uploads/sign", {
+      const signed = await apiFetch<{ attachmentId?: string; completionToken?: string; putUrl?: string; requiredHeaders?: Record<string, string> }>("/api/v1/public/uploads/sign", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ draftId: draftState.draft_id, resumeToken: draftState.resume_token, fieldKey: field.key, turnstileToken: turnstileToken || undefined, filename: file.name, contentType: file.type || "application/octet-stream", sizeBytes: file.size }),
+        route: "/api/v1/public/uploads/sign",
       });
-      const signed = await signResponse.json() as { attachmentId?: string; completionToken?: string; putUrl?: string; requiredHeaders?: Record<string, string> };
-      if (!signResponse.ok || !signed.attachmentId || !signed.completionToken || !signed.putUrl) {
-        resetTurnstile();
-        setPageError(errorMessageFor(signResponse, signed as ApiErrorPayload));
-        return;
-      }
+      if (!signed.attachmentId || !signed.completionToken || !signed.putUrl) throw new Error("The upload sign response was unreadable.");
       await putFileToR2({ putUrl: signed.putUrl, requiredHeaders: signed.requiredHeaders ?? {}, expiresAt: Date.now() + 60_000, completionToken: signed.completionToken, attachmentId: signed.attachmentId, maxBytes: Number.MAX_SAFE_INTEGER }, file).promise;
-      const complete = await fetch(`/api/v1/public/uploads/${encodeURIComponent(signed.attachmentId)}/complete`, {
+      await apiFetch<{ url?: string }>(`/api/v1/public/uploads/${encodeURIComponent(signed.attachmentId)}/complete`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ completionToken: signed.completionToken }),
+        route: "/api/v1/public/uploads/{id}/complete",
       });
-      if (!complete.ok) { resetTurnstile(); setPageError("The conference could not finish that upload. Keep the file selected and try again."); return; }
       resetTurnstile();
       setAnswer(field.key, { attachmentId: signed.attachmentId, filename: file.name, contentType: file.type, sizeBytes: file.size });
-    } catch {
+    } catch (error: unknown) {
       resetTurnstile();
-      setPageError("The conference could not finish that upload. Keep the file selected and try again.");
+      setPageError(publicErrorMessage(error));
     } finally { setBusy(false); }
   }
 
@@ -261,29 +257,25 @@ export function PublicForm({ initial }: PublicFormProps) {
     }
     setBusy(true);
     try {
-      const response = await fetch(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/submissions`, {
+      const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/submissions`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ answers, resumeToken: state.resume_token ?? undefined, turnstileToken: turnstileToken || undefined }),
+        route: "/api/v1/public/forms/{slug}/submissions",
       });
-      const payload = await readPayload(response);
-      if (!response.ok || !payload || !("state" in payload)) {
-        resetTurnstile();
-        const issues = payload && "error" in payload ? payload.error?.details?.issues ?? [] : [];
-        if (issues.length) {
-          const next: Record<string, string> = {};
-          for (const issue of issues) if (issue.fieldKey && issue.message) next[issue.fieldKey] = issue.message;
-          setErrors(next);
-        }
-        setPageError(errorMessageFor(response, payload && "error" in payload ? payload : null));
-        return;
-      }
+      if (!payload || !("state" in payload)) throw new Error("The submission response was unreadable.");
       setState(payload);
       setAnswers(payload.answers);
       setDirty(false);
       resetTurnstile();
-    } catch {
+    } catch (error: unknown) {
       resetTurnstile();
-      setPageError("The conference could not save this submission. Your answers are saved here; try Submit again in a moment.");
+      const issues = publicValidationIssues(error);
+      if (issues.length) {
+        const next: Record<string, string> = {};
+        for (const issue of issues) if (issue.fieldKey && issue.message) next[issue.fieldKey] = issue.message;
+        setErrors(next);
+      }
+      setPageError(publicErrorMessage(error));
     } finally { setBusy(false); }
   }
 

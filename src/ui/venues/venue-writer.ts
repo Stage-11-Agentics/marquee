@@ -1,27 +1,20 @@
 import type { VenueModel } from "../../lib/venues";
+import { apiFetch } from "../shell/api-client";
 
 export const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 
-async function venueResponse(response: Response): Promise<VenueModel> {
-  const body = await response.json().catch(() => null) as { error?: { message?: string } } | VenueModel | null;
-  if (!response.ok) {
-    const message = body && "error" in body ? body.error?.message : undefined;
-    throw new Error(message || `Venue save failed (${response.status})`);
-  }
-  return body as VenueModel;
-}
+const VENUE_ROUTE = "/api/v1/events/{eventId}/venues";
 
 export async function loadVenueModel(eventId = DEFAULT_EVENT_ID): Promise<VenueModel> {
-  const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/venues`);
-  return venueResponse(response);
+  return apiFetch<VenueModel>(`/api/v1/events/${encodeURIComponent(eventId)}/venues`, { route: VENUE_ROUTE });
 }
 
 /** One client writer shared by every venue-capable save surface. */
 export async function saveVenueModel(model: VenueModel, eventId = DEFAULT_EVENT_ID): Promise<VenueModel> {
-  const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/venues`, {
+  return apiFetch<VenueModel>(`/api/v1/events/${encodeURIComponent(eventId)}/venues`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(model),
+    route: VENUE_ROUTE,
   });
-  return venueResponse(response);
 }

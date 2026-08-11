@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip } from "../shell/components";
 import "./reversal.css";
 
@@ -18,6 +19,7 @@ interface Result {
 }
 
 interface Props { eventId: string; submissionId: string; onReversed?: () => void; }
+const REVERSAL_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/reversal";
 type Choice = "cancel" | "retain";
 type Choices = { tasks: Choice; emails: Choice; calendar: Choice; outcome: "withdrawn" | "rejected" };
 
@@ -38,12 +40,10 @@ export function AcceptanceReversalPanel({ eventId, submissionId, onReversed }: P
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/reversal`);
-      if (!response.ok) throw new Error(`Preview failed (${response.status})`);
-      const payload = await response.json() as { data: Preview };
+      const payload = await apiFetch<{ data: Preview }>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/reversal`, { route: REVERSAL_ROUTE });
       setPreview(payload.data);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The reversal preview could not be loaded.");
+      setError(errorSummary(reason));
     }
   }, [eventId, submissionId]);
 
@@ -53,19 +53,19 @@ export function AcceptanceReversalPanel({ eventId, submissionId, onReversed }: P
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/reversal`, {
+      const payload = await apiFetch<{ data?: Result; preview?: Preview }>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/reversal`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(choices),
+        route: REVERSAL_ROUTE,
       });
-      const payload = await response.json() as { data?: Result; preview?: Preview; error?: { message?: string } };
-      if (!response.ok || !payload.data || !payload.preview) throw new Error(payload.error?.message ?? `Reversal failed (${response.status})`);
+      if (!payload.data || !payload.preview) throw new Error("The reversal response was unreadable.");
       setResult(payload.data);
       setPreview(payload.preview);
       setOpen(false);
       onReversed?.();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The reversal could not be applied.");
+      setError(errorSummary(reason));
     } finally {
       setBusy(false);
     }
