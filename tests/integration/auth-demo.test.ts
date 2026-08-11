@@ -88,18 +88,21 @@ test("CONTRACT · INSECURE_LOCAL_COOKIES=1 omits Secure so the local HTTP recipe
   expect(setCookie).not.toMatch(/Secure/i);
 });
 
-test.each([undefined, "0", "true", ""])(
-  "CONTRACT · session cookie stays Secure when INSECURE_LOCAL_COOKIES is %o",
-  async (flag) => {
-    await seedDemoFixture();
+// Exactly "1" opts out; every other value keeps Secure. Written as one test over
+// the table rather than `test.each`, because the AC tracer reads the first
+// argument of any `test(...)` call as a title and `test.each([...])` puts the
+// table there — a static-analysis limitation, not a reason to weaken the check.
+test("CONTRACT · session cookie stays Secure for every INSECURE_LOCAL_COOKIES value but 1", async () => {
+  await seedDemoFixture();
+  for (const flag of [undefined, "0", "true", ""]) {
     const response = await app.request("https://marquee.example/api/v1/auth/demo", {
       method: "POST",
       body: JSON.stringify({ role: "speaker" }),
       headers: { "content-type": "application/json" },
     }, { ...env, INSECURE_LOCAL_COOKIES: flag });
-    expect(response.headers.get("set-cookie") ?? "").toMatch(/Secure/i);
-  },
-);
+    expect(response.headers.get("set-cookie") ?? "", `flag=${String(flag)}`).toMatch(/Secure/i);
+  }
+});
 
 test("CONTRACT · magic-link request enqueues an outbox row and returns the on-screen link only in demo mode", async () => {
   await seedDemoFixture();
