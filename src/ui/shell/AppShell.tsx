@@ -15,6 +15,9 @@ import { VenuesPage } from "../venues/VenuesPage";
 import { FormsPage } from "../forms/FormsPage";
 import { AgendaPage } from "../agenda/AgendaPage";
 import { ReviewerPage } from "../review/ReviewerPage";
+import { ProgramBoardPage } from "../board/ProgramBoardPage";
+import { CreateSubmissionPage } from "../submissions/CreateSubmissionPage";
+import { SubmissionRecordPage } from "../submissions/SubmissionRecordPage";
 
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
@@ -38,6 +41,9 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
 
   const routeName = route?.label ?? "Route not found";
   const isSubmissionsList = location.pathname === "/submissions";
+  const isProgramBoard = location.pathname === "/board";
+  const isSubmissionNew = location.pathname === "/submissions/new";
+  const isSubmissionRecord = location.pathname.startsWith("/submissions/") && !isSubmissionNew;
   const isEvaluation = location.pathname === "/evaluation";
   const isForms = location.pathname === "/forms";
   const isAgenda = location.pathname === "/agenda-builder";
@@ -50,6 +56,9 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
         <div class="page">
           {isSubmissionsList
             ? <SubmissionsPage search={location.search} navigate={navigate} />
+            : isProgramBoard ? <ProgramBoardPage navigate={navigate} />
+            : isSubmissionNew ? <CreateSubmissionPage navigate={navigate} />
+            : isSubmissionRecord ? <SubmissionRecordPage submissionId={decodeURIComponent(location.pathname.slice("/submissions/".length))} navigate={navigate} />
             : route?.id === "dashboard" ? <DashboardPage navigate={navigate} />
             : isEvaluation ? <EvaluationPage />
             : route?.id === "venues" ? <VenuesPage />

@@ -4,6 +4,7 @@ import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse, type ApiRouteEntry } from "../api/route";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
+import { reviewerCanBeAssignedToSubmission } from "../lib/reviewer-scope";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const planParams = eventParams.extend({ planId: z.string().min(1) });
@@ -47,13 +48,19 @@ const criteriaInput = z.object({ criteria: z.array(criterionInput).min(1) });
 const committeeInput = z.object({ name: z.string().trim().min(1).max(160) });
 const memberInput = z.object({ person_id: z.string().min(1), role: z.string().trim().min(1).max(80).default("reviewer") });
 const scopeInput = z.object({ track_ids: z.array(z.string().min(1)).min(1) });
-const assignmentsInput = z.object({
+const distributionAssignmentsInput = z.object({
   committee_id: z.string().min(1),
   mode: assignmentMode,
   reviewer_person_ids: z.array(z.string().min(1)).min(1).optional(),
   submission_ids: z.array(z.string().min(1)).min(1).optional(),
   reviewers_per_submission: z.number().int().positive().max(100).optional(),
 });
+const directAssignmentInput = z.object({
+  submission_id: z.string().min(1),
+  reviewer_person_id: z.string().min(1),
+});
+const assignmentsInput = z.union([distributionAssignmentsInput, directAssignmentInput]);
+const assignmentListQuery = z.object({ submission_id: z.string().min(1).optional() });
 const promoteInput = z.object({
   preview: z.boolean().default(true),
   submission_ids: z.array(z.string().min(1)).default([]),
@@ -574,7 +581,7 @@ const distributeAssignments = defineApiRoute(
     tags: ["Evaluation"],
     request: { params: roundParams, body: { content: { "application/json": { schema: assignmentsInput } } } },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
-    responses: { 200: ok, ...errors },
+    responses: { 200: ok, 201: ok, ...errors },
   },
   async (context) => {
     const { eventId, roundId } = context.req.valid("param");
@@ -583,6 +590,34 @@ const distributeAssignments = defineApiRoute(
     const plan = await planForEvent(context.env.DB, eventId, round.plan_id);
     if (plan.status !== "open") throw ApiError.conflict("reviewers can only be assigned to an open evaluation plan");
     const body = context.req.valid("json");
+    if ("reviewer_person_id" in body) {
+      const submission = await context.env.DB.prepare(
+        "SELECT id FROM submissions WHERE id = ? AND event_id = ?",
+      ).bind(body.submission_id, eventId).first<{ id: string }>();
+      if (!submission) throw ApiError.notFound("submission not found");
+      const reviewer = await context.env.DB.prepare(`
+        SELECT person.id
+        FROM people person
+        JOIN memberships membership ON membership.person_id = person.id
+        WHERE person.id = ? AND membership.event_id = ? AND membership.role = 'reviewer'
+      `).bind(body.reviewer_person_id, eventId).first<{ id: string }>();
+      if (!reviewer) throw ApiError.unprocessable("reviewer is not a member of this conference", "reviewer_person_id");
+      if (!await reviewerCanBeAssignedToSubmission(context.env.DB, eventId, body.reviewer_person_id, body.submission_id)) {
+        throw ApiError.unprocessable("reviewer is outside the submission's track scope", "reviewer_person_id");
+      }
+      const existing = await context.env.DB.prepare(
+        "SELECT id FROM round_assignments WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?",
+      ).bind(roundId, body.submission_id, body.reviewer_person_id).first<{ id: string }>();
+      if (existing) return context.json({ id: existing.id, round_id: roundId, submission_id: body.submission_id, reviewer_person_id: body.reviewer_person_id, status: "assigned", created: false }, 200);
+      const now = Date.now();
+      const id = crypto.randomUUID();
+      await context.env.DB.prepare(
+        `INSERT INTO round_assignments
+          (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, 'assigned', ?, ?)`,
+      ).bind(id, roundId, body.submission_id, body.reviewer_person_id, now, now).run();
+      return context.json({ id, round_id: roundId, submission_id: body.submission_id, reviewer_person_id: body.reviewer_person_id, status: "assigned", created: true }, 201);
+    }
     await committeeForEvent(context.env.DB, eventId, body.committee_id);
     const committeeReviewers = await reviewersForCommittee(context.env.DB, body.committee_id);
     const reviewers = body.reviewer_person_ids
@@ -608,6 +643,75 @@ const distributeAssignments = defineApiRoute(
     ).bind(crypto.randomUUID(), roundId, submissionId, reviewerId, now, now));
     if (statements.length) await context.env.DB.batch(statements);
     return context.json({ mode: body.mode, requested: pairs.length, assignments: pairs.length, reviewers: reviewers.map((reviewer) => reviewer.id), submissions: submissions.length }, 200);
+  },
+);
+
+const listRoundAssignments = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/rounds/{roundId}/assignments",
+    operationId: "listRoundAssignments",
+    summary: "List current reviewers for a round",
+    tags: ["Evaluation"],
+    request: { params: roundParams, query: assignmentListQuery },
+    policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, roundId } = context.req.valid("param");
+    requireProgram(context, eventId, false);
+    await roundForEvent(context.env.DB, eventId, roundId);
+    const { submission_id: submissionId } = context.req.valid("query");
+    const clauses = ["assignment.round_id = ?"];
+    const bindings: unknown[] = [roundId];
+    if (submissionId) {
+      clauses.push("assignment.submission_id = ?");
+      bindings.push(submissionId);
+    }
+    const rows = await context.env.DB.prepare(`
+      SELECT assignment.id, assignment.round_id, assignment.submission_id,
+        assignment.reviewer_person_id, assignment.committee_id, assignment.status,
+        person.name AS reviewer_name, person.company AS reviewer_company,
+        (SELECT COUNT(*) FROM round_assignments covered
+         WHERE covered.round_id = assignment.round_id
+           AND covered.reviewer_person_id = assignment.reviewer_person_id) AS assigned_count,
+        (SELECT COUNT(*) FROM evaluations evaluation
+         WHERE evaluation.round_id = assignment.round_id
+           AND evaluation.reviewer_person_id = assignment.reviewer_person_id) AS reviewed_count
+      FROM round_assignments assignment
+      LEFT JOIN people person ON person.id = assignment.reviewer_person_id
+      WHERE ${clauses.join(" AND ")}
+      ORDER BY assignment.submission_id, reviewer_name COLLATE NOCASE, assignment.id
+    `).bind(...bindings).all<Record<string, string | number | null>>();
+    return context.json({ data: rows.results.map((row) => ({
+      ...row,
+      assigned_count: Number(row.assigned_count ?? 0),
+      reviewed_count: Number(row.reviewed_count ?? 0),
+    })) }, 200);
+  },
+);
+
+const removeRoundAssignment = defineApiRoute(
+  {
+    method: "delete",
+    path: "/api/v1/events/{eventId}/rounds/{roundId}/assignments/{assignmentId}",
+    operationId: "removeRoundAssignment",
+    summary: "Remove a reviewer from a round",
+    tags: ["Evaluation"],
+    request: { params: roundParams.extend({ assignmentId: z.string().min(1) }) },
+    policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, roundId, assignmentId } = context.req.valid("param");
+    requireProgram(context, eventId, true);
+    await roundForEvent(context.env.DB, eventId, roundId);
+    const assignment = await context.env.DB.prepare(
+      "SELECT id, submission_id, reviewer_person_id FROM round_assignments WHERE id = ? AND round_id = ?",
+    ).bind(assignmentId, roundId).first<{ id: string; submission_id: string; reviewer_person_id: string | null }>();
+    if (!assignment) throw ApiError.notFound("round assignment not found");
+    await context.env.DB.prepare("DELETE FROM round_assignments WHERE id = ?").bind(assignmentId).run();
+    return context.json({ removed: true, id: assignment.id, submission_id: assignment.submission_id, reviewer_person_id: assignment.reviewer_person_id }, 200);
   },
 );
 
@@ -663,5 +767,7 @@ export const apiRoutes = [
   getReviewerScopes,
   replaceReviewerScopes,
   distributeAssignments,
+  listRoundAssignments,
+  removeRoundAssignment,
   promoteRound,
 ];

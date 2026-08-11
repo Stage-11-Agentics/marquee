@@ -22,6 +22,44 @@ export interface AuthorizedReviewerScope {
   submissionId: string;
 }
 
+/**
+ * Validate a program-admin assignment before writing it. This is intentionally
+ * separate from `authorizeReviewerScope`: the latter requires an existing
+ * assignment, while this guard is the pre-write half of the same invariant.
+ */
+export async function reviewerCanBeAssignedToSubmission(
+  db: D1Database,
+  eventId: string,
+  reviewerPersonId: string,
+  submissionId: string,
+): Promise<boolean> {
+  const row = await db.prepare(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM submissions submission
+      WHERE submission.id = ?
+        AND submission.event_id = ?
+        AND EXISTS (
+          SELECT 1
+          FROM memberships reviewer_membership
+          WHERE reviewer_membership.event_id = submission.event_id
+            AND reviewer_membership.person_id = ?
+            AND reviewer_membership.role = 'reviewer'
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM submission_tracks carried
+          JOIN reviewer_track_scopes scope
+            ON scope.event_id = submission.event_id
+           AND scope.person_id = ?
+           AND scope.track_id = carried.track_id
+          WHERE carried.submission_id = submission.id
+        )
+    ) AS allowed
+  `).bind(submissionId, eventId, reviewerPersonId, reviewerPersonId).first<AllowedRow>();
+  return row?.allowed === 1;
+}
+
 interface AllowedRow {
   allowed: number;
 }

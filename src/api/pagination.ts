@@ -5,6 +5,8 @@
  * registry constants. Every order appends the ULID `id` as the stable
  * secondary key (Amendment 7), unless `id` is already the unique sort.
  */
+import type { D1PreparedStatement } from "@cloudflare/workers-types";
+
 import { ApiError } from "./errors";
 import { LIST_DEFAULTS, type ListEnvelope } from "./list";
 
