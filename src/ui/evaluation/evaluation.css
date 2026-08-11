@@ -1,0 +1,70 @@
+.evaluation-layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .65fr); }
+.evaluation-plan-card, .committee-card { grid-column: 1 / -1; }
+.evaluation-plan-heading { align-items: start; display: flex; gap: 16px; justify-content: space-between; }
+.evaluation-plan-heading h2 { font-size: 15px; font-weight: 500; line-height: 1.45; margin: 6px 0 0; max-width: 760px; }
+.round-flow { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); margin-top: 18px; }
+.round-card { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 158px; padding: 15px; }
+.round-card strong { display: block; font-size: 13px; margin: 6px 0 9px; }
+.round-empty { border-style: dashed; display: grid; min-height: 158px; place-content: center; text-align: center; }
+.round-empty strong { margin-bottom: 5px; }
+.round-arrow { color: var(--accent); font: 400 21px/1 var(--mono); text-align: center; }
+.progress-track { background: var(--sunk); border: 1px solid var(--line); height: 7px; margin: 15px 0 7px; overflow: hidden; }
+.progress-track i { background: var(--accent); display: block; height: 100%; min-width: 2px; }
+.wave-date { color: var(--muted); font-size: 10.5px; }
+.round-meta { border-top: 1px solid var(--line); color: var(--muted); display: flex; font: 10px/1 var(--mono); justify-content: space-between; margin-top: 13px; padding-top: 8px; }
+.scorecard-line { align-items: center; display: flex; gap: 14px; justify-content: space-between; }
+.scorecard-line strong, .scorecard-line span { display: block; }
+.scorecard-line strong { font: 600 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.scorecard-line span { color: var(--muted); font-size: 11px; margin-top: 4px; }
+.evaluation-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.evaluation-metrics .metric { font-size: 26px; margin-top: 9px; }
+.spark { align-items: end; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; gap: 5px; height: 58px; margin-top: 18px; padding: 8px 10px 0; }
+.spark i { background: var(--accent); display: block; flex: 1; min-height: 4px; opacity: .78; }
+.committee-intro { color: var(--muted); display: flex; font: 10px/1.3 var(--mono); gap: 20px; justify-content: space-between; margin-bottom: 12px; }
+.committee-list { display: grid; gap: 0; }
+.committee-person { align-items: center; border-top: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 28px minmax(0, 1fr) 80px; min-height: 55px; }
+.mini-avatar { align-items: center; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: 2px; display: grid; font: 600 9px/1 var(--mono); height: 26px; justify-content: center; width: 26px; }
+.committee-person strong { display: block; font: 600 11px/1.2 var(--mono); }
+.scope-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.full-width { justify-content: flex-start; margin-top: 12px; width: 100%; }
+.card-actions { display: flex; gap: 6px; }
+.promotion-card p { color: var(--ink-soft); font-size: 12px; line-height: 1.6; margin: 0 0 16px; }
+.promotion-preview { background: var(--sunk); border: 1px solid var(--line); display: grid; gap: 7px; padding: 13px; }
+.promotion-preview strong { font: 600 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.promotion-preview span { color: var(--muted); font-size: 11px; }
+.evaluation-loading { display: grid; gap: 8px; min-height: 240px; padding: 48px; place-content: center; text-align: center; }
+.evaluation-loading strong { font-size: 15px; }
+.evaluation-alert { align-items: center; border: 1px solid; border-radius: var(--radius); display: flex; font: 11px/1.4 var(--mono); justify-content: space-between; margin: -7px 0 16px; padding: 9px 12px; }
+.evaluation-alert.success { background: var(--success-soft); border-color: #b6dcc7; color: #0c6b41; }
+.evaluation-alert.alarm { background: var(--danger-soft); border-color: #e6b8b2; color: #8f2118; }
+.evaluation-alert button { background: none; border: 0; color: inherit; font-size: 17px; line-height: 1; }
+.inline-empty { color: var(--muted); font-size: 12px; padding: 10px 0; }
+.eval-dialog-backdrop { align-items: center; background: rgba(16, 24, 32, .46); display: grid; inset: 0; padding: 18px; place-items: center; position: fixed; z-index: 600; }
+.eval-dialog { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); max-height: calc(100vh - 36px); max-width: 620px; overflow: auto; width: 100%; }
+.eval-dialog > header { border-bottom: 1px solid var(--line); padding: 18px 20px 12px; }
+.eval-dialog > header h2 { font-size: 16px; margin: 6px 0 0; }
+.eval-dialog-body { display: grid; gap: 15px; padding: 16px 20px 20px; }
+.eval-dialog > footer { background: var(--sunk); border-top: 1px solid var(--line-strong); display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px; }
+.criterion-editor { display: grid; gap: 7px; }
+.criterion-row { align-items: center; display: grid; gap: 7px; grid-template-columns: 22px minmax(0, 1fr) 76px 16px; }
+.criterion-row input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 34px; padding: 7px 9px; width: 100%; }
+.criterion-total { align-items: baseline; border-top: 1px solid var(--line); display: flex; gap: 10px; padding-top: 10px; }
+.criterion-total strong { font: 600 16px/1 var(--mono); }
+.criterion-total small { color: var(--muted); font-size: 10px; }
+.criterion-total.valid strong { color: var(--success); }
+.criterion-total.invalid strong { color: var(--danger); }
+.message-preview { background: var(--sunk); border: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.55; padding: 10px 12px; }
+
+@media (max-width: 900px) {
+  .evaluation-layout { grid-template-columns: 1fr; }
+  .evaluation-plan-card, .committee-card { grid-column: auto; }
+}
+
+@media (max-width: 600px) {
+  .round-flow { grid-template-columns: 1fr; }
+  .round-arrow { transform: rotate(90deg); }
+  .evaluation-plan-heading, .scorecard-line { align-items: flex-start; flex-direction: column; }
+  .committee-intro { display: grid; gap: 5px; }
+  .committee-person { grid-template-columns: 28px minmax(0, 1fr); padding: 8px 0; }
+  .committee-person > .tabular { grid-column: 2; }
+}

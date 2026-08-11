@@ -9,6 +9,7 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { CommsScreen } from "../comms/CommsScreen";
 import { DashboardPage } from "../dashboard/DashboardPage";
+import { EvaluationPage } from "../evaluation/EvaluationPage";
 
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
@@ -32,6 +33,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
 
   const routeName = route?.label ?? "Route not found";
   const isSubmissionsList = location.pathname === "/submissions";
+  const isEvaluation = location.pathname === "/evaluation";
   return <>
     <div class="app-shell">
       <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} />
@@ -41,6 +43,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
           {isSubmissionsList
             ? <SubmissionsPage search={location.search} navigate={navigate} />
             : route?.id === "dashboard" ? <DashboardPage navigate={navigate} />
+            : isEvaluation ? <EvaluationPage />
             : route?.id === "communications" ? <>
             <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />
             <CommsScreen />

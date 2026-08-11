@@ -1,6 +1,6 @@
 import type { ComponentChildren, JSX } from "preact";
 
-export function Button({ variant = "", small = false, class: className = "", ...props }: JSX.HTMLAttributes<HTMLButtonElement> & { variant?: "" | "primary" | "danger" | "ghost"; small?: boolean }): JSX.Element {
+export function Button({ variant = "", small = false, class: className = "", ...props }: JSX.HTMLAttributes<HTMLButtonElement> & { disabled?: boolean; type?: "button" | "submit" | "reset"; variant?: "" | "primary" | "danger" | "ghost"; small?: boolean }): JSX.Element {
   return <button {...props} class={`button ${variant} ${small ? "small" : ""} ${className}`.trim()} />;
 }
 
