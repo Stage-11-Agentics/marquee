@@ -91,3 +91,14 @@ account work still owned by MRQ-57.
   `in_progress` for implementation, `review` with a PASS review artifact,
   `in_validation` with local clean-checkout evidence (or an explicit N/A for
   the unavailable remote gate), and `pr_open` only after the PR is opened.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+**Verdict: PASS.** Inline self-review performed against MRQ-40's ticket,
+`EVALUATION.md` AC-160–AC-162, the current Wrangler/seed scripts, and the
+public-repo hygiene contract. The local path, hosted-account boundary,
+demo-mode shutdown, fixture-backed import wording, real module seams, claims
+manifest, and plain-Node-only test boundary are all explicitly planned. No
+contract-doc or shared-file edit is authorized. The auto plan-review was
+started but exited without an artifact, so this is the documented fallback;
+there are no untriaged findings.

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T07:27:57Z",
+  "created_by": "agent:delegator-mrq-38",
+  "custom_fields": {},
+  "id": "art_01KZQVH35MQFWSZ8N4QC0KXYQX",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQVH35MQFWSZ8N4QC0KXYQX.md",
+    "size_bytes": 1843
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS self-review; automated reviewer timed out without an artifact",
+  "tags": [],
+  "title": "MRQ-38 self-review d390608",
+  "token_usage": null,
+  "type": "note"
+}

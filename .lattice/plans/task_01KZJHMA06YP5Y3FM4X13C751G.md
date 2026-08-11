@@ -68,3 +68,5 @@ Extend the merged evaluation/reviewer/record module so a program lead can run ex
 - **Legacy promotion selector (minor):** clarified. The old `{submission_ids: []}` shape is retained only as a compatibility no-op: preview reports zero selected/promoted and apply returns the existing validation conflict/422, with no writes. Only a non-empty typed `selector: {ids: [...]}` or `selector: {filter: {...}}` is normalized through MRQ-19's selector helper and can promote records. Add an explicit test so an empty legacy selection never broadens to “all.”
 
 ## Reset 2026-08-11 by agent:delegator-mrq-28
+
+## Reset 2026-08-11 by agent:delegator-mrq-28

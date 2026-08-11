@@ -15,10 +15,15 @@
       "id": "art_01KZQPGZJ8CGH900GVD0D5096E",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQVH38SQ6DBQ2TC71TBETN2",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM9M28PY96JTQYFJFTFHM",
-  "last_event_id": "ev_01KZQTV52GR2WS88MC7T95DGXA",
+  "last_event_id": "ev_01KZQVH38T64BXEGB3CQZK79DB",
   "last_status_changed_at": "2026-08-11T07:15:58Z",
   "linked_files": [],
   "priority": "medium",
@@ -52,6 +57,6 @@
   "tags": null,
   "title": "Chase board and slide upload",
   "type": "task",
-  "updated_at": "2026-08-11T07:15:58Z",
+  "updated_at": "2026-08-11T07:27:57Z",
   "urgency": null
 }

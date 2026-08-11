@@ -73,3 +73,16 @@ Review artifact: `art_01KZQPGZJ8CGH900GVD0D5096E` (single-agent plan review, 202
 5. **MINOR — query module placement:** Resolved by moving the planned projection module to `src/routes/onboarding.queries.ts`, beside `onboarding.routes.ts`, matching the repository's existing route-query convention.
 
 All findings are triaged and resolved; implementation may proceed against this amended plan.
+
+## Plan-Review Cycle 2 Resolutions (AUTHORITATIVE)
+
+Review artifact: `art_01KZQVH38SQ6DBQ2TC71TBETN2` (single-agent implementation review, 2026-08-11).
+
+1. **MAJOR — severity ordering:** Resolved by defining row severity as the maximum whole days overdue among owed tasks only (`open AND cancelled_at IS NULL`), with risk-task count as the next comparator and name/id as the stable tie-break. Done, upcoming, cancelled, and unassigned cells contribute zero. Add an AC-92 ordering test covering overdue magnitude, risk tie-breaks, and non-owed work.
+2. **MAJOR — exact selected recipients:** Resolved additively with optional `recipient_pairs: [{ person_id, submission_id }]` on `ReminderSelector`, where `submission_id` may be null for a roster-only speaker. The board sends these pairs instead of independent person/submission unions; `recipientsFor` preserves all existing selector fields and returns only exact pairs. Add an AC-93 co-speaker test asserting one outbox row per selected pair.
+3. **MINOR — filtered empty state:** Resolved by distinguishing an active filter/search/task/track no-match from a genuinely clear board; only the latter says “Nothing outstanding”.
+4. **MINOR — demo-safe banner:** Resolved by adding the binding “Demo-safe outbox · no email will be delivered” banner to the compose drawer.
+5. **MINOR — effective upload accepts:** Resolved by deriving the portal's client-facing accepted extensions from the shared `policyFor` rules, so the picker and authenticated sign path cannot advertise divergent formats.
+6. **MINOR — prototype fidelity:** Resolved by making the four metric tiles actionable, restoring the exact head copy, `N shown · M selected`, wave/session metadata, and the colored Track column. These remain presentation-only; no new lifecycle writer is introduced.
+
+All Cycle-2 findings are triaged above; implementation may proceed against this amended plan.
