@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:18:22Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZR1V8Z061Q1Y3KSRDRN8FD2",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR1V8Z061Q1Y3KSRDRN8FD2.md",
+    "size_bytes": 30
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "art_01KZR1PHTKMXQ4N4NKXXH6FH24",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

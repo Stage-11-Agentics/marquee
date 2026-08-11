@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:15:47Z",
+  "created_by": "agent:auditor-mrq-43",
+  "custom_fields": {},
+  "id": "art_01KZR1PHTKMXQ4N4NKXXH6FH24",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR1PHTKMXQ4N4NKXXH6FH24.md",
+    "size_bytes": 2397
+  },
+  "schema_version": 1,
+  "sensitive": true,
+  "summary": "PASS on final audit evidence and guard after rebase; explicitly not a public-history or gitleaks clean verdict.",
+  "tags": [],
+  "title": "MRQ-43 self-review @ be49a4f",
+  "token_usage": null,
+  "type": "file"
+}

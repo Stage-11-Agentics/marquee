@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:auditor-mrq-47",
   "branch_links": [],
+  "c11_surface": "surface:202",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMBSMK6CGGRJBQ45MGQGD",
-  "last_event_id": "ev_01KZJHMJX8JAW6A2551PQ4PZGD",
-  "last_status_changed_at": "2026-08-09T05:58:46Z",
+  "last_event_id": "ev_01KZR1VTEQ2BSPEMEDNZXHMMFX",
+  "last_status_changed_at": "2026-08-11T09:18:40Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-47",
-  "status": "backlog",
+  "status": "planned",
   "tags": null,
   "title": "Audit \u2014 cookie scope and session issuance",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:53Z",
+  "updated_at": "2026-08-11T09:18:40Z",
   "urgency": null
 }

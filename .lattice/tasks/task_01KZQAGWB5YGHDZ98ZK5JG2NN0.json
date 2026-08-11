@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:193",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 2,
+  "comment_count": 5,
   "complexity": "medium",
   "created_at": "2026-08-11T02:30:44Z",
   "created_by": "agent:claude",
@@ -30,10 +30,30 @@
       "id": "ev_01KZR1JKSZQ4GYA4KTM7H4QPBX",
       "role": "review",
       "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZR1RJFZ8HN71HES09HKG3HX",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZR1T6YGXMWV83CG4JZT8YG8",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZR1TQ2E4R90973PEDRCC7KW",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR1W1269V4D9TV0YA2W48YQ",
+      "role": null,
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQAGWB5YGHDZ98ZK5JG2NN0",
-  "last_event_id": "ev_01KZR1JKSZQ4GYA4KTM7H4QPBX",
+  "last_event_id": "ev_01KZR1W1269V4D9TV0YA2W48YR",
   "last_status_changed_at": "2026-08-11T09:11:44Z",
   "linked_files": [],
   "priority": "high",
@@ -53,6 +73,6 @@
   "tags": null,
   "title": "Arrival instructions \u2014 portal location card, place merge fields, ICS GEO",
   "type": "task",
-  "updated_at": "2026-08-11T09:13:38Z",
+  "updated_at": "2026-08-11T09:18:46Z",
   "urgency": null
 }

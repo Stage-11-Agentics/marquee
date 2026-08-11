@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:197",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: A-1 \u2014 audit track (\u00a75). **Owned by an auditor who did not write the code.**\n\nScope (verbatim): Repo hygiene \u2014 secret scan, `Atin/` and internal paths, third-party denylist, full history.\nStarts when (verbatim): At every milestone; **twice at the push** (assembled orphan history, then the pushed remote).\n\nMethod: `npm run check:repo` over **the full history of the tree being published**, not the tip \u2014 gitleaks + the Marquee ruleset + PROTOTYPE-badge absence in `src/` + README lint + `Atin/`/Stage-11 path scan + the third-party-content denylist (`sources/`, `*.pdf`, `competitor-*`, `AGENT-BRIEF-*`, `run-state`, `C11_`, `surface:`, `workspace:`, `/Users/`).\n**A-1's second run is a hard gate on the push** (\u00a78 item 13), not a formality. Backs gate 16.\n\nACs: \u2014 (backs gates 15 and 16)\nHours: 2\nWorkflow: fast-track\nShared files: none \u2014 the audit produces an artifact, not a code change. File findings as Lattice comments/artifacts and open follow-up tickets rather than editing the subject code.\nDeps: none \u2014 its start is a milestone, not a ticket (\"at every milestone\")\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T09:18:22Z",
   "evidence_refs": [
     {
       "id": "art_01KZR00CDPVHJBJ22FJF7W0B3W",
@@ -35,21 +35,51 @@
       "id": "art_01KZR1H7H4ZWXBYNWVWXS8YPYM",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR1P0MS8QQGZYSREFW1TNVS",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR1PHTKMXQ4N4NKXXH6FH24",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR1PR8J4JQ5P6SMMABCGP18",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR1RBXQJYWAV0DHK1VHG9JJ",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR1V8Z061Q1Y3KSRDRN8FD3",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR1V8Z061Q1Y3KSRDRN8FD2",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMBDPJM08EB2BXMJEDBMC",
-  "last_event_id": "ev_01KZR1H7H61YG78WFKYQJHS5S6",
-  "last_status_changed_at": "2026-08-11T09:12:24Z",
+  "last_event_id": "ev_01KZR1V8Z061Q1Y3KSRDRN8FD6",
+  "last_status_changed_at": "2026-08-11T09:18:22Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-43",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Audit \u2014 repo hygiene and full-history scan",
   "type": "task",
-  "updated_at": "2026-08-11T09:12:53Z",
+  "updated_at": "2026-08-11T09:18:22Z",
   "urgency": null
 }
