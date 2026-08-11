@@ -57,3 +57,5 @@ Plan: filled in by delegator's plan phase
 - MRQ-52 owns no automatic AC. The claim manifest will state that explicitly and only list ACs actually exercised by the evidence.
 
 ## Reset 2026-08-11 by agent:auditor-mrq-52
+
+## Reset 2026-08-11 by agent:auditor-mrq-52

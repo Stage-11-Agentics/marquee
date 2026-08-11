@@ -33,18 +33,18 @@
     }
   ],
   "id": "task_01KZQFM4DCPZRAV30ZVPECSTWH",
-  "last_event_id": "ev_01KZR8G6Q78F86FVCP59SG0J09",
-  "last_status_changed_at": "2026-08-11T11:14:39Z",
+  "last_event_id": "ev_01KZR8HHC2J6QG3ERXEE8PG92B",
+  "last_status_changed_at": "2026-08-11T11:15:23Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 2,
   "schema_version": 1,
   "short_id": "MRQ-66",
-  "status": "in_progress",
+  "status": "review",
   "tags": null,
   "title": "Migration 0003 \u2014 speaker_tasks.cancelled_at and the webhook tables",
   "type": "task",
-  "updated_at": "2026-08-11T11:14:39Z",
+  "updated_at": "2026-08-11T11:15:23Z",
   "urgency": null
 }

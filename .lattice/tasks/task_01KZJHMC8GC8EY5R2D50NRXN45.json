@@ -30,11 +30,21 @@
       "id": "art_01KZR88YXC02CHJPAZEAAQBHN6",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR8JSJRXBFH1MBP7HWQDQD8",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR8Q019HWMGPGF5GM1PJHE3",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMC8GC8EY5R2D50NRXN45",
-  "last_event_id": "ev_01KZR893CC5JVV04RVZMWR1WJ7",
-  "last_status_changed_at": "2026-08-11T11:10:46Z",
+  "last_event_id": "ev_01KZR8Q2TCNAZD4W8GEGG6MJYP",
+  "last_status_changed_at": "2026-08-11T11:18:24Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -46,13 +56,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 1,
+  "reopened_count": 2,
   "schema_version": 1,
   "short_id": "MRQ-52",
   "status": "review",
   "tags": null,
   "title": "Audit \u2014 bulk-write path and chunking",
   "type": "task",
-  "updated_at": "2026-08-11T11:10:46Z",
+  "updated_at": "2026-08-11T11:18:24Z",
   "urgency": null
 }

@@ -16,4 +16,27 @@ Workflow: sub-agent-full (≥7 h combined)
 Shared files: none — module-local under `src/ui/public/form/*` (M-14's module; add files, do not rewrite).
 Deps: M-14
 Note: AC-155 – AC-157 are also claimed in M-14's AC list (the plan assigns the mobile pass its own ticket at rank 24). `trace:ac` needs one owner — **this ticket owns the mobile ACs**; M-14 owns the desktop path.
-Plan: filled in by delegator's plan phase
+## Plan
+
+### Scope and binding decisions
+
+- Actor: `agent:delegator-mrq-37`; worktree branch: `mrq-37-cospeaker`; base refreshed to `forgejo/master` at `8ba82bd3d87547464bb181acc297542a0438a3bf`.
+- Implement the six owned automatic ACs: AC-149–AC-151 (co-speaker max, notification, and profile completion) and AC-155–AC-157 (375px public CFP form, keyboard-safe layout, and draft resume).
+- The ticket JSON, `CLAUDE.md`, `BUILDPLAN.md`, and `sequence/USER_STORIES.md` bind these criteria to M-41 + M-43. The dispatch brief labels the work “M-39 + M-41”; that label contradicts the repository contract, so this plan follows the binding AC ownership and records the discrepancy for the Orchestrator. No M-39 clean-agent work will be added.
+- Do not edit contract documents, add a migration, create an alternate authority path, or change the generated route manifest. Reuse `participations`, the existing auth middleware, `cospeaker_profile` magic-link purpose, R2 upload protocol, form condition projection, one decisions writer, and existing outbox/render seams.
+
+### Implementation
+
+1. Trace the existing public form, speaker portal, magic-link, upload, and membership seams at the rebased master head. Keep participant records as `participations` rows and make the co-speaker’s authorization an exact `(person, submission, participation)` grant.
+2. Complete the co-speaker invitation flow in the public-form and portal route modules: enforce the configured participant maximum server-side and in the form UI; enqueue one useful invitation containing who added the person, the conference/submission context, and a single-use profile-completion link; make retries idempotent and keep the invitation inside the existing mail outbox/render/merge-data contract.
+3. Add or tighten the co-speaker profile surface so a link holder can read and update only their own profile fields (bio and ready headshot) for the exact participation/submission. Reuse the existing per-role confirm/decline behavior; do not let the profile path update the submission abstract/title or expose another submission. Preserve cookie/bearer org filtering through `auth-middleware.ts` rather than adding divergent checks.
+4. Add adversarial integration coverage for isolation: a positive request reaches the invited submission, a request for a different submission is refused with the invariant response body containing neither the other ID nor title, and participation/related row counts are identical before and after the refused request. Include a positive control and cover the credential forms relevant to the shared middleware. Verify profile updates change only the person/profile attachment state and leave the abstract unchanged.
+5. Make the existing `src/ui/public/form/*` usable at 375px without rebuilding the form: reserve a stable validation-message slot under each field, preserve the submit row/button position when errors appear, prevent horizontal overflow at every form step, keep focused controls visible in the 375×340 keyboard viewport, and provide actionable empty/loading/error copy. Preserve conditional projection so hidden answers are neither required nor persisted and preserve single-use Turnstile/presign behavior. Add/update node/UI contract tests and the AC-157 resume assertion.
+6. Declare ownership in `tests/ac-claims/MRQ-37.json` (`owns`: AC-149–AC-151 and AC-155–AC-157; `exercises`: only criteria directly exercised, otherwise an explicit empty array) and add tests with literal AC titles so `trace:ac` has one owner for the mobile criteria.
+
+### Verification and handoff
+
+- Baseline recorded before implementation: Vitest 35 files / 191 tests passed; the existing Node phase exceeded its 30-second hermetic budget and reported `check-repo.test.mjs` pending at 29.01s.
+- Run targeted node and integration tests for co-speaker isolation, mail, public projection, mobile layout, and portal profile behavior; then run `npm test` and investigate any timeout or regression rather than masking it.
+- Enter `in_validation` and exercise the real local API flow with a running Worker plus curl/TestClient; use a rendered 375px browser check if the local preview is available, recording focused-field and `scrollWidth` evidence. If a real-device C6 check is unavailable to this agent, record that as operator-only follow-up rather than claiming it.
+- Self-review the final diff adversarially, attach a PASS review artifact naming the exact branch HEAD, run `npm run pr-gate -- --ticket MRQ-37`, paste its result into the Lattice completion comment, push `forgejo/mrq-37-cospeaker`, open the Forgejo PR against `master`, attach its URL, and finish at `pr_open`.

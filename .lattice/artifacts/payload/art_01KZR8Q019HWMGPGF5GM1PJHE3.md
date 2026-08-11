@@ -1,0 +1,1 @@
+PASS. Exact head 5213ab7 is pushed on mrq-52-audit-bulk. The AST inventory now accepts string-literal-like map callbacks, rejects unclassified fill/repeat placeholder expansions, uses one identity sort key, and rejects duplicate expected identities. npm test: 67/67, 20.36s, within 30s. trace:ac MRQ-52: pass, uncovered auto criteria 0.

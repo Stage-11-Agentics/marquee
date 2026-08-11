@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:20:02Z",
+  "created_by": "agent:delegator-mrq-68",
+  "custom_fields": {},
+  "id": "art_01KZR8T2AKA791GYXKPEF5A28N",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR8T2AKA791GYXKPEF5A28N.md",
+    "size_bytes": 1109
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at reviewed commit 55a6297; no findings.",
+  "tags": [],
+  "title": "MRQ-68 implementation review",
+  "token_usage": null,
+  "type": "file"
+}
