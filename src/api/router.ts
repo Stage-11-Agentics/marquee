@@ -158,6 +158,28 @@ export function toRoutingPath(path: string): string {
 }
 
 /**
+ * Hono's linear route table needs static children before parameter siblings.
+ * The generated manifest is sorted by operation signature for reproducible
+ * OpenAPI and registry output, which can otherwise put `/reorder` behind
+ * `/{fieldId}` and dispatch the static route as a field lookup.
+ */
+function routeSpecificity(path: string): [number, number, number] {
+  const segments = path.split("/").filter(Boolean);
+  const staticSegments = segments.filter((segment) => !/^\{[^}]+\}$/.test(segment)).length;
+  const parameterSegments = segments.length - staticSegments;
+  return [staticSegments, -parameterSegments, segments.length];
+}
+
+function compareRouteSpecificity(left: ApiRouteEntry, right: ApiRouteEntry): number {
+  const leftScore = routeSpecificity(left.path);
+  const rightScore = routeSpecificity(right.path);
+  for (let index = 0; index < leftScore.length; index += 1) {
+    if (leftScore[index] !== rightScore[index]) return rightScore[index] - leftScore[index];
+  }
+  return `${left.method} ${left.path} ${left.operationId}`.localeCompare(`${right.method} ${right.path} ${right.operationId}`);
+}
+
+/**
  * Build the API app from a route table. `entries` comes from the generated
  * manifest in production; tests pass a fixture table to the same function, so
  * the pipeline under test is the shipped pipeline.
@@ -212,7 +234,9 @@ export async function createApiRouter(
 
   registerApiComponents(app);
 
-  for (const entry of entries) {
+  // Keep `entries` untouched for document/registry parity; only route
+  // registration gets the specificity ordering required by the runtime.
+  for (const entry of [...entries].sort(compareRouteSpecificity)) {
     const routingPath = entry.runtimePath ?? toRoutingPath(entry.path);
     app.use(routingPath, routeMiddleware(entry.policy, runtime));
     // 6/7 — the handler runs inside the pipeline; `route` and `handler` are the

@@ -250,6 +250,51 @@ export function run(ctx: SeedContext): void {
     updated_at: now,
   });
 
+  // M-12's baseline CFP. These are ordinary schema fields; the public form
+  // and every later draft/submission consumer read the same ordered rows.
+  const cfpFields: Array<{
+    key: string;
+    label: string;
+    help_text: string | null;
+    type: string;
+    required: number;
+    config: Record<string, unknown>;
+    condition: Record<string, unknown> | null;
+  }> = [
+    { key: "title", label: "Session title", help_text: "Make the promise to attendees clear.", type: "short_text", required: 1, config: { minLength: 8, maxLength: 120 }, condition: null },
+    { key: "abstract", label: "Abstract", help_text: "What will you cover, and why does it matter now?", type: "long_text", required: 1, config: { minLength: 40, maxLength: 1200 }, condition: null },
+    { key: "audience_outcome", label: "What will attendees be able to do after your session?", help_text: "Name one concrete outcome for the audience.", type: "long_text", required: 1, config: { minLength: 20, maxLength: 500 }, condition: null },
+    { key: "format", label: "Format", help_text: "Choose the format you want to present.", type: "single_select", required: 1, config: { options: ["Stage Talk", "Workshop", "Lightning", "Online"] }, condition: null },
+    { key: "tracks", label: "Tracks", help_text: "Choose one or more. The first selected track is primary for agenda placement.", type: "multi_select", required: 1, config: { options: ["AI in Financial Services", "Agents", "Evals", "Infra", "Open Models", "RAG/Retrieval", "Security", "Leadership"], minItems: 1 }, condition: null },
+    { key: "speaker_name", label: "Primary speaker name", help_text: null, type: "short_text", required: 1, config: {}, condition: null },
+    { key: "speaker_email", label: "Primary speaker email", help_text: null, type: "email", required: 1, config: {}, condition: null },
+    { key: "speaker_role", label: "Primary speaker role", help_text: null, type: "short_text", required: 1, config: {}, condition: null },
+    { key: "speaker_company", label: "Primary speaker company", help_text: null, type: "short_text", required: 1, config: {}, condition: null },
+    { key: "biography", label: "Biography", help_text: "A short speaker bio for reviewers and the event site.", type: "long_text", required: 1, config: { minLength: 20, maxLength: 1200 }, condition: null },
+    { key: "headshot", label: "Headshot", help_text: "JPG or PNG · crop preview appears before submission.", type: "file", required: 1, config: { accept: ["image/jpeg", "image/png"], maxBytes: 5_242_880 }, condition: null },
+    { key: "co_speaker_name", label: "Co-speaker name", help_text: null, type: "short_text", required: 0, config: {}, condition: null },
+    { key: "co_speaker_email", label: "Co-speaker email", help_text: null, type: "email", required: 0, config: {}, condition: null },
+    { key: "supporting_file", label: "Supporting material", help_text: "Optional deck, paper, diagram, or sample bundle.", type: "file", required: 0, config: { accept: ["application/pdf", "image/png", "image/jpeg", "application/zip"], maxBytes: 10_485_760 }, condition: null },
+    { key: "vendor_content", label: "Does the session substantially discuss a product or service?", help_text: null, type: "single_select", required: 1, config: { options: ["No", "Yes"], default: "No" }, condition: null },
+    { key: "vendor_product", label: "Which product or service?", help_text: "This conditional answer routes the proposal to workshop review.", type: "short_text", required: 1, config: { minLength: 2, maxLength: 200 }, condition: { all: [{ fieldKey: "vendor_content", op: "equals", value: "Yes" }] } },
+  ];
+  for (const [position, field] of cfpFields.entries()) {
+    ctx.add("form_fields", {
+      id: seedId("fld", `cfp-${field.key}`),
+      form_id: FORM_IDS.cfp,
+      key: field.key,
+      label: field.label,
+      help_text: field.help_text,
+      type: field.type,
+      required: field.required,
+      position,
+      config: JSON.stringify(field.config),
+      condition: field.condition ? JSON.stringify(field.condition) : null,
+      created_at: now,
+      updated_at: now,
+    });
+  }
+
   // "Hotel and Travel Reservations" is a form task, so the schema requires a
   // backing form. forms.kind has no task-form value (flagged SPEC/schema
   // gap); 'session' is the non-competitive intake kind and the least-wrong.

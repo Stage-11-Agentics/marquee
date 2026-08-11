@@ -236,24 +236,6 @@ export function run(ctx: SeedContext): void {
   seedCodeRoster(ctx);
   const takenEmails = new Set(table(ctx, "people").map((person) => String(person.email)));
 
-  // A concrete required response gives the built-in Drafts queue something
-  // currently applicable to report as missing. Later form-builder work can
-  // extend this schema without changing the deterministic seed contract.
-  ctx.add("form_fields", {
-    id: seedId("fld", "cfp-audience-outcome"),
-    form_id: FORM_IDS.cfp,
-    key: "audience_outcome",
-    label: "What will attendees be able to do after your session?",
-    help_text: "Name one concrete outcome for the audience.",
-    type: "long_text",
-    required: 1,
-    position: 0,
-    config: JSON.stringify({ minLength: 20, maxLength: 500 }),
-    condition: null,
-    created_at: ctx.now,
-    updated_at: ctx.now,
-  });
-
   for (let index = 0; index < POOL_SIZE; index += 1) {
     const number = String(index + 1).padStart(4, "0");
     const name = `${GIVEN_NAMES[index % GIVEN_NAMES.length]} ${FAMILY_NAMES[Math.floor(index / GIVEN_NAMES.length)]}`;
