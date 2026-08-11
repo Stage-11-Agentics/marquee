@@ -460,6 +460,13 @@
     .task-toggle { width: 24px; height: 24px; border-radius: 2px; border: 1px solid var(--line-strong); background: var(--panel); color: white; }
     .task-row.done .task-toggle { background: var(--success); border-color: var(--success); }
     .task-row.done .task-title { text-decoration: line-through; color: var(--muted); }
+    /* Cancelled is a third outcome, not a variant of done: the work stopped
+       mattering, nobody did it, and completed work is never restyled by it. */
+    .task-row.cancelled .task-toggle { background: var(--sunk); border-style: dashed; color: var(--muted); }
+    .task-row.cancelled .task-title { color: var(--muted); }
+    .cancelled-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line-strong); }
+    .cancelled-block > .eyebrow { display: block; margin-bottom: 3px; }
+    .cancelled-reason { color: var(--muted); font-size: 10.5px; line-height: 1.5; margin: 0 0 4px; }
     .task-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
     .task-meta { color: var(--muted); font-size: 10.5px; }
     .profile-block { text-align: center; padding: 8px 0 14px; }
@@ -568,6 +575,7 @@
     .task-state.overdue { background: var(--warning-soft); border-color: #e3cda2; color: var(--warning); }
     .task-state.risk { background: var(--danger-soft); border-color: #e6b8b2; color: #8f2118; }
     .task-state.upcoming { background: var(--sunk); border-color: var(--line-strong); color: var(--muted); }
+    .task-state.cancelled { background: transparent; border-color: var(--line-strong); border-style: dashed; color: var(--muted); }
     .drawer-backdrop { position: fixed; inset: 0; z-index: 500; background: rgba(16,24,32,.46); }
     .drawer { position: fixed; z-index: 510; top: 0; right: 0; width: min(500px,96vw); height: 100vh; overflow: auto; background: var(--panel); border-left: 1px solid var(--line-strong); box-shadow: none; }
     .drawer-head { position: sticky; top: 0; z-index: 2; min-height: 68px; padding: 14px 18px; border-bottom: 1px solid var(--line-strong); background: var(--sunk); display: flex; justify-content: space-between; align-items: center; gap: 14px; }
@@ -1794,9 +1802,13 @@
       function pipelineStage(name, count, note, filter, route = "submissions", meaning = "") {
         return `<button class="pipeline-stage" data-pipeline-filter="${esc(filter)}" data-pipeline-route="${route}"><span class="pipeline-name">${esc(name)}</span><strong class="pipeline-count">${count.toLocaleString()}</strong><span class="pipeline-delta">${esc(note)} →</span>${meaning?`<span class="pipeline-meaning">${esc(meaning)}</span>`:""}</button>`;
       }
+      // "Still owes something" means a task that is neither done nor cancelled.
+      // Every count on the chase board goes through this predicate, so a
+      // cancelled task cannot make a speaker look behind on work nobody wants.
+      function owesTask(s) { return s !== "done" && s !== "cancelled"; }
       function onboardingCounts() {
         return {
-          incomplete:onboardingSpeakers.filter(p=>p.statuses.some(s=>s!=="done")).length,
+          incomplete:onboardingSpeakers.filter(p=>p.statuses.some(owesTask)).length,
           overdue:onboardingSpeakers.filter(p=>p.statuses.includes("overdue")||p.statuses.includes("risk")).length,
           overdueTasks:onboardingSpeakers.reduce((n,p)=>n+p.statuses.filter(s=>s==="overdue"||s==="risk").length,0),
           risk:onboardingSpeakers.filter(p=>p.statuses.includes("risk")).length
@@ -1930,15 +1942,23 @@
         return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)}</a><button class="button small" data-cfp-state="resumed">Resume draft</button></header><main class="public-body"><section class="public-card" id="cfp-card">${content}</section></main></div>`;
       }
 
+      // A cancelled task is neither open nor done. It keeps completed_at — work
+      // already finished stays finished — and drops out of every count, every
+      // chase, and every reminder. `live` is the set that still owes something.
+      function liveTasks() { return state.tasks.filter(t => !t.cancelledAt); }
+      function cancelledTasks() { return state.tasks.filter(t => t.cancelledAt); }
+
       function portalView() {
-        const done = state.tasks.filter(t => t.done).length;
+        const live = liveTasks(), cancelled = cancelledTasks();
+        const done = live.filter(t => t.done).length;
+        const overdue = live.filter(t => t.overdue && !t.done).length;
         return `<div class="public-shell">${state.impersonating?`<div class="impersonation-bar"><span>Viewing the portal as <strong>Amara van der Meer</strong> — organizer session unchanged</span><span style="flex:1"></span><button class="button small" id="back-to-admin">← Back to Admin Mode</button></div>`:""}<header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)} · Speaker portal</a><a class="button small" href="#landing">Sign out</a></header><main class="public-body wide">
-          <div class="portal-head"><div><div class="eyebrow">Welcome back</div><h1>Amara van der Meer</h1><span class="subtle">Your status, tasks, profile, and conference details in one place.</span></div><div class="portal-progress"><strong style="font-size:12px">${done} of ${state.tasks.length} tasks done</strong><div class="progress-track"><i style="width:${done/state.tasks.length*100}%"></i></div></div></div>
+          <div class="portal-head"><div><div class="eyebrow">Welcome back</div><h1>Amara van der Meer</h1><span class="subtle">Your status, tasks, profile, and conference details in one place.</span></div><div class="portal-progress"><strong style="font-size:12px">${done} of ${live.length} tasks done</strong><div class="progress-track"><i style="width:${live.length?done/live.length*100:100}%"></i></div></div></div>
           ${portalSubmissionCard()}
           ${portalDecisionFeedback()}
           ${portalLocationCard()}
           <div class="portal-grid">
-            <section class="card"><div class="card-head"><div><h2>Your tasks</h2><span class="subtle">Complete the overdue item first</span></div><span class="chip overdue">1 overdue</span></div><div class="card-body" id="task-list">${state.tasks.map(taskRow).join("")}</div></section>
+            <section class="card"><div class="card-head"><div><h2>Your tasks</h2><span class="subtle">${overdue?"Complete the overdue item first":live.length?"Nothing overdue right now":"Nothing outstanding"}</span></div><span class="chip ${overdue?"overdue":""}">${overdue} overdue</span></div><div class="card-body" id="task-list">${live.length?live.map(taskRow).join(""):`<p class="subtle" style="margin:0">You have no outstanding tasks.</p>`}${cancelled.length?`<div class="cancelled-block"><span class="eyebrow">Cancelled · ${cancelled.length}</span><p class="cancelled-reason">${esc(state.taskCancellation?.reason||"These are no longer needed.")} You do not need to do anything with them, and anything you already finished stays finished.</p>${cancelled.map(taskRow).join("")}</div>`:""}</div></section>
             <div class="stack">
               <section class="card"><div class="card-head"><h2>Speaker profile</h2><button class="button small" id="edit-profile">Edit</button></div><div class="card-body"><div class="profile-block"><div class="avatar">AV</div><strong>Amara van der Meer</strong><div class="subtle" style="margin-top:4px">she/her · Director of Applied AI · Capital One</div></div><p class="subtle" style="line-height:1.55">Amara builds evaluation and governance systems for AI teams operating in regulated environments.</p><div class="subtle" style="margin-top:9px;display:flex;gap:11px"><span>in LinkedIn</span><span>𝕏 @amara_vdm</span><span>↗ amara.dev</span></div></div></section>
               <section class="card"><div class="card-head"><h2>Speaker handbook</h2><span class="chip">Handbook page</span></div><div class="card-body"><button class="button ghost" style="width:100%;justify-content:space-between" data-handbook="venue"><span>Venue, arrival, and green room</span><span>→</span></button><button class="button ghost" style="width:100%;justify-content:space-between" data-handbook="av"><span>Presentation and A/V guidance</span><span>→</span></button></div></section>
@@ -1973,7 +1993,10 @@
         return `<section class="status-hero"><div><div class="eyebrow">${slot?"Scheduled":"Accepted"} · Wave 2</div><h2>${esc(state.portalSessionTitle)}</h2><p>${esc(state.portalSessionDescription)}</p><p class="subtle">Stage Talk</p>${scheduleMeta(portalRecord)}<div style="display:flex;gap:7px;margin-top:12px"><button class="button primary small" id="confirm-role">Confirm this role</button><button class="button small danger" id="decline-role">Decline</button><button class="button small" id="edit-talk">Edit title & description</button></div><span class="field-note" style="display:block;margin-top:9px">Editing closes when the CFP closes on Sep 12.</span></div><button class="button" id="download-invite">Add to calendar</button></section>`;
       }
       function portalDecisionFeedback() { const feedback=state.decisionFeedback[state.portalRecordId];return feedback?`<section class="message-preview" style="margin-bottom:16px"><strong>Program feedback · ${esc(feedback.decision)}</strong><br>${esc(feedback.note||"No additional note was included.")}<br><span class="subtle">${esc(feedback.time)} · this is the same feedback rendered in your decision email</span></section>`:""; }
-      function taskRow(t) { return `<div class="task-row ${t.done ? "done" : ""}" data-task-row="${t.id}"><span class="task-toggle" aria-hidden="true">${t.done ? "✓" : ""}</span><div><div class="task-title">${esc(t.title)}</div><div class="task-meta">${esc(t.kind)} · ${esc(t.due)} · ${t.kind==="Form"?"opens required fields":t.kind==="File request"?"opens secure upload":"opens acknowledgment"}</div></div><button class="button small ${t.overdue&&!t.done?"danger":""}" data-task="${t.id}">${t.done?"Update":"Complete"}</button></div>`; }
+      function taskRow(t) {
+        if (t.cancelledAt) return `<div class="task-row cancelled" data-task-row="${t.id}"><span class="task-toggle" aria-hidden="true">${t.done?"✓":"–"}</span><div><div class="task-title">${esc(t.title)}</div><div class="task-meta">${esc(t.kind)} · cancelled ${esc(t.cancelledAt)}${t.done?" · your completed work is kept":""}</div></div><span class="chip">Cancelled</span></div>`;
+        return `<div class="task-row ${t.done ? "done" : ""}" data-task-row="${t.id}"><span class="task-toggle" aria-hidden="true">${t.done ? "✓" : ""}</span><div><div class="task-title">${esc(t.title)}</div><div class="task-meta">${esc(t.kind)} · ${esc(t.due)} · ${t.kind==="Form"?"opens required fields":t.kind==="File request"?"opens secure upload":"opens acknowledgment"}</div></div><button class="button small ${t.overdue&&!t.done?"danger":""}" data-task="${t.id}">${t.done?"Update":"Complete"}</button></div>`;
+      }
 
       function showPortalTask(id) {
         const task=state.tasks.find(item=>item.id===Number(id)); if(!task)return;
@@ -2324,7 +2347,7 @@
 
       function onboardingFilterCount(filter) {
         if (filter === "all") return onboardingSpeakers.length;
-        if (filter === "incomplete") return onboardingSpeakers.filter(p=>p.statuses.some(s=>s!=="done")).length;
+        if (filter === "incomplete") return onboardingSpeakers.filter(p=>p.statuses.some(owesTask)).length;
         if (filter === "overdue") return onboardingSpeakers.filter(p=>p.statuses.includes("overdue")||p.statuses.includes("risk")).length;
         return onboardingSpeakers.filter(p=>p.statuses.includes("risk")).length;
       }
@@ -2332,19 +2355,19 @@
       function filteredOnboardingSpeakers() {
         return onboardingSpeakers.filter(p=>{
           const statusOk = state.onboardingFilter === "all" ||
-            (state.onboardingFilter === "incomplete" && p.statuses.some(s=>s!=="done")) ||
+            (state.onboardingFilter === "incomplete" && p.statuses.some(owesTask)) ||
             (state.onboardingFilter === "overdue" && (p.statuses.includes("overdue")||p.statuses.includes("risk"))) ||
             (state.onboardingFilter === "risk" && p.statuses.includes("risk"));
           const taskIndex = onboardingTaskDefs.findIndex(t=>t.key===state.onboardingTask);
-          const taskOk = taskIndex < 0 || p.statuses[taskIndex] !== "done";
+          const taskOk = taskIndex < 0 || owesTask(p.statuses[taskIndex]);
           const trackOk = state.onboardingTrack === "All tracks" || p.sessions.some(s=>(s.tracks||[s.track]).includes(state.onboardingTrack));
           return statusOk && taskOk && trackOk;
         }).sort((a,b)=>onboardingSeverity(b)-onboardingSeverity(a)||a.name.localeCompare(b.name));
       }
 
       function onboardingTaskState(status) {
-        const glyph = status === "done" ? "✓" : status === "risk" ? "×" : status === "overdue" ? "!" : "·";
-        return `<span class="task-state ${status}" title="${status}">${glyph}</span>`;
+        const glyph = status === "done" ? "✓" : status === "risk" ? "×" : status === "overdue" ? "!" : status === "cancelled" ? "–" : "·";
+        return `<span class="task-state ${status}" title="${status === "cancelled" ? "cancelled — no longer needed" : status}">${glyph}</span>`;
       }
 
       function onboardingView() {
