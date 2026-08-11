@@ -276,7 +276,7 @@ export function run(ctx: SeedContext): void {
     { key: "co_speaker_email", label: "Co-speaker email", help_text: null, type: "email", required: 0, config: {}, condition: null },
     { key: "supporting_file", label: "Supporting material", help_text: "Optional deck, paper, diagram, or sample bundle.", type: "file", required: 0, config: { accept: ["application/pdf", "image/png", "image/jpeg", "application/zip"], maxBytes: 10_485_760 }, condition: null },
     { key: "vendor_content", label: "Does the session substantially discuss a product or service?", help_text: null, type: "single_select", required: 1, config: { options: ["No", "Yes"], default: "No" }, condition: null },
-    { key: "vendor_product", label: "Which product or service?", help_text: "This conditional answer routes the proposal to workshop review.", type: "short_text", required: 1, config: { minLength: 2, maxLength: 200 }, condition: { all: [{ fieldKey: "vendor_content", op: "equals", value: "Yes" }] } },
+    { key: "vendor_product", label: "Which product or service?", help_text: "This conditional answer routes the abstract to workshop review.", type: "short_text", required: 1, config: { minLength: 2, maxLength: 200 }, condition: { all: [{ fieldKey: "vendor_content", op: "equals", value: "Yes" }] } },
   ];
   for (const [position, field] of cfpFields.entries()) {
     ctx.add("form_fields", {

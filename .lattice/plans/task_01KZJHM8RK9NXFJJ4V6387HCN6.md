@@ -162,4 +162,7 @@ Speed: AC-36 is an AC-sourced budget — public CFP form cold load → interacti
   AC-132/AC-133, and does not own AC-231 (MRQ-14 owns that gate). Headless
   reviews are suspended; the final review artifact will name the exact HEAD.
 
-## Reset 2026-08-11 by agent:delegator-mrq-15
+## Rebased 2026-08-11 by agent:delegator-mrq-15
+
+- The branch was rebased onto the current `forgejo/master` audit commit
+  `ad1d047`; the original worktree cut was `394b632`.
