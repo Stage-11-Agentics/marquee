@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:25:19Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZQ6S3RBTDGSMSBX2KK6SW0H",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ6S3RBTDGSMSBX2KK6SW0H.md",
+    "size_bytes": 585
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged as PR #8 (squash a8792123). GUARDRAILS HAND-REVIEWED: AC-2 asserts 403 with no set-cookie when demo_mode=0, 200 with session cookie when demo_mode=1, speaker role 403s. AC-214 enforced at three",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

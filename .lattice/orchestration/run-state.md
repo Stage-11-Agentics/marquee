@@ -29,7 +29,7 @@
 | Ticket | Surface | Model | Note |
 |---|---|---|---|
 | ~~MRQ-8 (M-07)~~ | closed | **done** | **MERGED** PR #7 (c4e34037). `check:api` is real with the N-7 activation rule; AC-105/106/108 tested. **MRQ-9 unblocked.** |
-| MRQ-3 (M-03) | surface:119 | sonnet | **PR #8 open**, rebasing onto post-MRQ-8 master (union conflict in `src/index.ts` + `package.json`). Guardrail test **read and verified by the orchestrator**. |
+| ~~MRQ-3 (M-03)~~ | closed | **done** | **MERGED** PR #8 (a8792123). AC-214 enforced at three layers incl. a schema CHECK. Master re-gated green (10.2 s). |
 | ~~MRQ-14 (M-13)~~ | closed | **done** | **MERGED** PR #9 (13c0780a). Guardrail hand-reviewed: AC-231 asserts 403 **and zero side effects** across four fail-closed cases. Follow-up **MRQ-59**. |
 | MRQ-5 (M-04b) | surface:121 | **codex** | Seed pool + evaluation. Carries **B-3 (BLOCKING)**: reviewer membership, track scopes, round-1 assignments, or walkthrough step 8 has no entry. |
 | MRQ-9 (M-08) | surface:122 | **codex** | Submissions list — the first screen a judge drives. Builds on MRQ-8's list contract. |
@@ -87,6 +87,16 @@ Bravo sat at **84–85% across four readings between 20:57 and 21:04**, and it d
 **Deliberate call: N was NOT filled to 5.** With a hard wall this close, three tickets finished and merged are worth more than five tickets left half-done — a partial branch at the wall is unmergeable and its work is only recoverable by a future session re-reading it. All three delegators were instead told to cut scope to *mergeable*, run the gate as soon as the core path works, and keep pushing. The one thing explicitly not cuttable: the guardrail proofs (demo login 403s outside `demo_mode`; presign fails closed).
 
 All three inherited-WIP commits are **pushed and verified** against their remote branches, so the wall can only cost in-flight polish, never landed work.
+
+## 🔒 MRQ-60 — the auth hole that must close before the public deploy (21:40)
+
+MRQ-3 merged real auth; MRQ-8 merged the API runtime; **they are not wired together.** `src/api/runtime.ts` expects M-03 to supply a `CredentialResolver`, and MRQ-3 deferred it as genuine follow-up rather than rush it. The live consequence surfaced immediately: MRQ-9's `GET /events/:id/submissions` is **temporarily public**, though SPEC scopes it to authenticated admins.
+
+On the private Forgejo deploy that is survivable. **On the public site it is an unauthenticated endpoint serving every submission in the conference, including unpublished and rejected ones** — the exact class of leak AC-214 exists to prevent, arriving through a different door.
+
+**MRQ-60** raised and **MRQ-57 (the real deploy) now depends on it**, so the hole cannot reach the public site. MRQ-9 was told to mark the route `TODO(MRQ-60)` and write its test to assert the *current* behaviour loudly, so that MRQ-60 re-gating it makes that test fail and forces the flip. A quiet temporary hole is how a leak ships.
+
+Also ratified from MRQ-9: the merged spine seeds 60 Abstracts and **0 Sessions** while AC-23 needs both. MRQ-9 correctly refused to edit another ticket's seed and proves both with its own 1,000-row D1 test; the seed gap itself was routed to **MRQ-5**, which owns the pool.
 
 ## Master verified green after the MRQ-14 merge (21:34)
 

@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:119",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 1,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-03 \u2014 Wave 0 (\u00a73) \u00b7 also delivers Tier B rank 3 (US-73)\n\nScope (verbatim): Magic links (256-bit random, hash stored, single-use, 15-min TTL), session cookie middleware, bearer-token middleware, scope resolution from `memberships`, **one-click organizer/speaker demo login \u2014 `POST /api/v1/auth/demo` 403s and sets no cookie unless the target event's `demo_mode = 1`** (SPEC \u00a74.1, guardrail G6/A-5), on-screen magic link in demo mode, **auth mail (`magic_link_login`, `draft_resume`, `task_link`) enqueues an `outbox` row and never calls Resend directly \u2014 the queue consumer is the only sender (G3/A-3)**, `POST /admin/reset-demo` + product button + `npm run reset:demo` (idempotent, safe mid-judging, never partially-reset \u2014 **US-73 ranks in Tier B but is built here**, because the demo logins need it from the first deploy). **The route enqueues the reseed to a Queue and returns a job id the button polls**, and the reseed writes with `suppress_mirror` so it does not re-queue the entire Airtable base, enqueuing **one** reconcile job at the end (\u00a73.9/\u00a74.1).\n\nFile surface: `src/routes/auth.routes.ts`, `src/lib/auth/*`, `src/routes/admin-ops.routes.ts`\n\nACs: AC-1, AC-2, AC-107, AC-214, **AC-230**\nHours: 4\nWorkflow: inline-full\nShared files: none \u2014 module-local (\u00a77 keyword-safe naming: no `utils.ts`, no bare `index.ts`, no `helpers.ts`). The `reset:demo` script name is registered by M-06, not here.\nDeps: M-02\nAudits that key off this ticket: A-5 (cookie scope + session issuance), A-11 (reset drill)\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T01:25:19Z",
   "evidence_refs": [
     {
       "id": "art_01KZPXGYP7KCSYTE7XTGMWS590",
@@ -35,11 +35,26 @@
       "id": "art_01KZQ6BW5KPK6WTAXHB62RR8YW",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQ6PG6PZNSM063G4AWVAHKS",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZQ6S3RBTDGSMSBX2KK6SW0J",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQ6S3RBTDGSMSBX2KK6SW0H",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM7KZXSA88SPKANC2G0H1",
-  "last_event_id": "ev_01KZQ6BW5P4KVBQY40DRZV1WZX",
-  "last_status_changed_at": "2026-08-11T01:10:47Z",
+  "last_event_id": "ev_01KZQ6S3RBTDGSMSBX2KK6SW0N",
+  "last_status_changed_at": "2026-08-11T01:25:19Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -51,13 +66,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-3",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Auth, demo entry, and reset-demo",
   "type": "task",
-  "updated_at": "2026-08-11T01:18:06Z",
+  "updated_at": "2026-08-11T01:25:19Z",
   "urgency": null
 }
