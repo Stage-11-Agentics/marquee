@@ -166,6 +166,73 @@ test("AC-107 · bearer auth works without a cookie and is event-restricted", asy
   expect(handlerCalls).toBe(1);
 });
 
+test("CONTRACT · cookie and bearer credentials agree on effective grant intersection", async () => {
+  const router = await makeRouter();
+  const reviewerSession = await createSession(env.DB, {
+    personId: "per_reviewer",
+    userAgent: "mrq-47-reviewer-cookie",
+  });
+
+  const reviewerCookie = await request(router, EVENT_A, {
+    cookie: `mq_session=${reviewerSession.id}`,
+  });
+  expect(reviewerCookie.status).toBe(403);
+  expect(await expectNoSubmissionLeak(reviewerCookie)).toContain("forbidden");
+
+  const reviewerSecret = `mq_${mintToken()}`;
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO api_tokens
+     (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+     VALUES ('tok_mrq47_reviewer', 'org_1', ?, 'Reviewer token', ?, ?, ?, 'per_reviewer', ?, ?)`,
+  )
+    .bind(
+      EVENT_A,
+      await sha256Hex(reviewerSecret),
+      reviewerSecret.slice(0, 7),
+      JSON.stringify({ permissions: ["program:read"], event_ids: [EVENT_A] }),
+      now,
+      now,
+    )
+    .run();
+
+  const reviewerBearer = await request(router, EVENT_A, {
+    authorization: `Bearer ${reviewerSecret}`,
+  });
+  expect(reviewerBearer.status).toBe(403);
+  expect(await expectNoSubmissionLeak(reviewerBearer)).toContain("forbidden");
+
+  const ownerSession = await createSession(env.DB, {
+    personId: "per_owner",
+    userAgent: "mrq-47-owner-cookie",
+  });
+  const ownerCookie = await request(router, EVENT_A, {
+    cookie: `mq_session=${ownerSession.id}`,
+  });
+  expect(ownerCookie.status).toBe(200);
+
+  const ownerSecret = `mq_${mintToken()}`;
+  await env.DB.prepare(
+    `INSERT INTO api_tokens
+     (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+     VALUES ('tok_mrq47_owner', 'org_1', ?, 'Owner token', ?, ?, ?, 'per_owner', ?, ?)`,
+  )
+    .bind(
+      EVENT_A,
+      await sha256Hex(ownerSecret),
+      ownerSecret.slice(0, 7),
+      JSON.stringify({ permissions: ["program:read"], event_ids: [EVENT_A] }),
+      now,
+      now,
+    )
+    .run();
+  const ownerBearer = await request(router, EVENT_A, {
+    authorization: `Bearer ${ownerSecret}`,
+  });
+  expect(ownerBearer.status).toBe(200);
+  expect(handlerCalls).toBe(2);
+});
+
 test("CONTRACT · an event-A reviewer cannot read event-B submissions", async () => {
   const session = await createSession(env.DB, {
     personId: "per_reviewer",

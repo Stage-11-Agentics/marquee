@@ -208,3 +208,13 @@ test("AC-87, AC-88, AC-90 · anonymous embed configuration emits a live snippet 
   expect(payload.sessions.map((session) => session.title)).toEqual([PUBLIC_TITLE]);
   expect(payload.speakers.map((speaker) => speaker.name)).toEqual(["Public Speaker"]);
 });
+
+test("CONTRACT · the server-rendered embed remains anonymous with an invalid session cookie", async () => {
+  const response = await request(`/embed/${EVENT_SLUG}-agenda?event=${EVENT_SLUG}`, {
+    headers: { cookie: "mq_session=expired-or-tampered" },
+  });
+  const body = await response.text();
+  expect(response.status).toBe(200);
+  expect(body).toContain(PUBLIC_TITLE);
+  expect(body).not.toContain(PRIVATE_TITLE);
+});
