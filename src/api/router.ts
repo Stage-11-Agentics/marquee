@@ -30,7 +30,11 @@ import { assembleApiDocument, registerApiComponents, type ApiDocumentBundle } fr
 import { allowAllRateLimiter, enforceRateLimit } from "./rate-limit";
 import type { ApiRouteEntry, ApiRoutePolicy } from "./route";
 import type { ApiEnv, ApiRuntime, Principal } from "./runtime";
-import { roleForEvent } from "../lib/auth/scope-resolution";
+import {
+  membershipAllowsGrant,
+  roleForEvent,
+  tokenHasGrant,
+} from "../lib/auth/scope-resolution";
 import type { MembershipRole } from "../db/schema";
 
 function envelopeResponse(context: Context<ApiEnv>, error: ApiError): Response {
@@ -63,64 +67,18 @@ function authorize(
   }
 }
 
-const MINIMUM_ROLE_BY_GRANT: Record<ApiGrant, MembershipRole[]> = {
-  "program:read": ["ops", "program_lead", "owner"],
-  "program:write": ["program_lead", "owner"],
-  "review:write": ["reviewer", "ops", "program_lead", "owner"],
-  "speaker:write": ["speaker", "reviewer", "ops", "program_lead", "owner"],
-  "agenda:write": ["program_lead", "owner"],
-  "comms:send": ["ops", "program_lead", "owner"],
-  "mirror:write": ["owner"],
-};
-
-const LEGACY_ROLE_GRANTS: Record<MembershipRole, readonly ApiGrant[]> = {
-  speaker: ["speaker:write"],
-  reviewer: ["review:write", "speaker:write"],
-  ops: ["program:read", "review:write", "speaker:write", "comms:send"],
-  program_lead: [
-    "program:read",
-    "program:write",
-    "review:write",
-    "speaker:write",
-    "agenda:write",
-    "comms:send",
-  ],
-  owner: [
-    "program:read",
-    "program:write",
-    "review:write",
-    "speaker:write",
-    "agenda:write",
-    "comms:send",
-    "mirror:write",
-  ],
-};
-
 function principalHasGrant(
   principal: Exclude<Principal, { kind: "anonymous" }>,
   grant: ApiGrant,
   eventId: string | undefined,
 ): boolean {
   if (principal.kind === "token") {
-    if (
-      eventId !== undefined &&
-      (principal.eventId !== null
-        ? principal.eventId !== eventId
-        : principal.eventIds.length > 0 && !principal.eventIds.includes(eventId))
-    ) {
-      return false;
-    }
-    if (principal.grants.includes(grant)) return true;
-    return principal.permissions.some(
-      (permission) =>
-        permission in LEGACY_ROLE_GRANTS &&
-        LEGACY_ROLE_GRANTS[permission as MembershipRole].includes(grant),
-    );
+    return eventId !== undefined && tokenHasGrant(principal, grant, eventId);
   }
 
   if (eventId === undefined) return false;
   const role = roleForEvent(principal.memberships, eventId);
-  return role !== null && MINIMUM_ROLE_BY_GRANT[grant].includes(role);
+  return role !== null && membershipAllowsGrant(role, grant);
 }
 
 function routeMiddleware(
@@ -238,7 +196,10 @@ export async function createApiRouter(
   // registration gets the specificity ordering required by the runtime.
   for (const entry of [...entries].sort(compareRouteSpecificity)) {
     const routingPath = entry.runtimePath ?? toRoutingPath(entry.path);
-    app.use(routingPath, routeMiddleware(entry.policy, runtime));
+    // Middleware must be method-scoped: GET/POST pairs such as /org/tokens
+    // intentionally carry different rate policies and must not run each
+    // other's authorization pipeline.
+    app.on([entry.method.toUpperCase()], routingPath, routeMiddleware(entry.policy, runtime));
     // 6/7 — the handler runs inside the pipeline; `route` and `handler` are the
     // one object the document is generated from, so parity is structural.
     app.openapi(entry.route as never, entry.handler as never);

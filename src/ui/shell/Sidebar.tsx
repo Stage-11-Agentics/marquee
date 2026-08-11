@@ -15,7 +15,7 @@ export function Sidebar({ activeId, eventName, navigate, unavailable }: { active
     <div class="nav-label">Modules</div>
     <Nav label="Program modules" routes={routesFor("modules")} activeId={activeId} navigate={navigate} />
     <div class="sidebar-foot">
-      <button onClick={() => unavailable("API & CLI", "API documentation and command-line access land with the API core.")}>⌘ API & CLI</button>
+      <a href="/api/docs">⌘ API &amp; CLI</a>
       <button onClick={() => unavailable("Reset demo", "The reset endpoint lands with the seeded demo lifecycle.")}>↻ Reset demo</button>
     </div>
   </aside>;

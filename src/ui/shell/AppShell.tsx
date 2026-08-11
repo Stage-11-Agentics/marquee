@@ -12,6 +12,7 @@ import { CommsScreen } from "../comms/CommsScreen";
 import { DashboardPage } from "../dashboard/DashboardPage";
 import { EvaluationPage } from "../evaluation/EvaluationPage";
 import { EventSettings } from "../settings/EventSettings";
+import { ApiTokensPage } from "../settings/ApiTokensPage";
 import { VenuesPage } from "../venues/VenuesPage";
 import { FormsPage } from "../forms/FormsPage";
 import { AgendaPage } from "../agenda/AgendaPage";
@@ -63,6 +64,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   const isAgenda = location.pathname === "/agenda-builder";
   const isOnboarding = location.pathname === "/onboarding";
   const isImport = location.pathname === "/import";
+  const isApiTokens = location.pathname === "/settings/api";
   if (location.pathname === "/portal") return <PortalPage />;
   if (location.pathname === "/reviewer") return <ReviewerPage />;
   return <>
@@ -79,6 +81,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
             : route?.id === "dashboard" ? <DashboardPage navigate={navigate} />
             : isEvaluation ? <EvaluationPage />
             : route?.id === "venues" ? <VenuesPage />
+            : isApiTokens ? <ApiTokensPage navigate={navigate} />
             : route?.id === "settings" ? <EventSettings navigate={navigate} />
             : isForms ? <FormsPage search={location.search} />
             : isAgenda ? <AgendaPage />

@@ -4,7 +4,7 @@ import type { ApiRouteEntry } from "../api/route";
 import { createListQuerySchema, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { ApiError } from "../api/errors";
-import { authHasRole } from "../lib/auth/scope-resolution";
+import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { listCommsAudience, type CommsRecipientRow } from "../jobs/mail/audience";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
@@ -156,11 +156,8 @@ function requireComms(context: Parameters<NonNullable<ApiRouteEntry["handler"]>>
     if (!authHasRole(auth, "ops", eventId)) throw ApiError.forbidden("communications requires an ops role");
     return;
   }
-  const eventAllowed = auth.eventId === null
-    ? (auth.eventIds.length === 0 || auth.eventIds.includes(eventId))
-    : auth.eventId === eventId;
   const required: "comms:send" | "program:read" = write ? "comms:send" : "program:read";
-  if (!eventAllowed || (!auth.permissions.includes(required) && !auth.grants.includes(required))) {
+  if (!tokenHasGrant(auth, required, eventId)) {
     throw ApiError.forbidden(`communications requires ${required}`);
   }
 }

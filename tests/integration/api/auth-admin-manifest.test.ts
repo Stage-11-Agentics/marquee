@@ -9,6 +9,9 @@ const EXPECTED_OPERATIONS = [
   ["get", "/api/v1/auth/me"],
   ["post", "/api/v1/admin/reset-demo"],
   ["get", "/api/v1/admin/reset-demo/{jobId}"],
+  ["get", "/api/v1/org/tokens"],
+  ["post", "/api/v1/org/tokens"],
+  ["delete", "/api/v1/org/tokens/{tokenId}"],
 ] as const;
 
 test("AC-105 · auth and admin operations are present in the served OpenAPI manifest", async () => {

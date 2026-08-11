@@ -11,8 +11,35 @@ const ROLE_RANK: Record<MembershipRole, number> = {
   owner: 5,
 };
 
+const GRANTS_BY_ROLE: Record<MembershipRole, readonly ApiGrant[]> = {
+  speaker: ["speaker:write"],
+  reviewer: ["review:write", "speaker:write"],
+  ops: ["program:read", "review:write", "speaker:write", "comms:send"],
+  program_lead: [
+    "program:read",
+    "program:write",
+    "review:write",
+    "speaker:write",
+    "agenda:write",
+    "comms:send",
+  ],
+  owner: [
+    "program:read",
+    "program:write",
+    "review:write",
+    "speaker:write",
+    "agenda:write",
+    "comms:send",
+    "mirror:write",
+  ],
+};
+
 export function roleRank(role: MembershipRole): number {
   return ROLE_RANK[role];
+}
+
+export function membershipAllowsGrant(role: MembershipRole, grant: ApiGrant): boolean {
+  return GRANTS_BY_ROLE[role].includes(grant);
 }
 
 /**
@@ -56,11 +83,6 @@ export function authHasRole(
     const role = roleForEvent(auth.memberships, eventId);
     return role !== null && ROLE_RANK[role] >= ROLE_RANK[required];
   }
-  const eventGranted =
-    auth.eventId === null
-      ? auth.eventIds.length === 0 || auth.eventIds.includes(eventId)
-      : auth.eventId === eventId;
-  if (!eventGranted) return false;
   const minimumGrantByRole: Record<MembershipRole, ApiGrant> = {
     speaker: "speaker:write",
     reviewer: "review:write",
@@ -68,13 +90,26 @@ export function authHasRole(
     program_lead: "program:write",
     owner: "program:write",
   };
-  const rolePermission = auth.permissions.find(
-    (permission): permission is MembershipRole => permission in ROLE_RANK,
-  );
+  const role = roleForEvent(auth.memberships, eventId) ?? (auth.legacyRole && tokenEventAllowed(auth, eventId) ? auth.legacyRole : null);
   return (
-    (rolePermission !== undefined && ROLE_RANK[rolePermission] >= ROLE_RANK[required]) ||
-    auth.grants.includes(minimumGrantByRole[required])
+    role !== null &&
+    ROLE_RANK[role] >= ROLE_RANK[required] &&
+    tokenHasGrant(auth, minimumGrantByRole[required], eventId)
   );
+}
+
+export function tokenEventAllowed(auth: ApiTokenAuth, eventId: Id): boolean {
+  if (auth.organizationEventIds !== undefined && !auth.organizationEventIds.includes(eventId)) return false;
+  return auth.eventId === null
+    ? auth.eventIds.length === 0 || auth.eventIds.includes(eventId)
+    : auth.eventId === eventId;
+}
+
+/** Token authority is the requested grant intersected with issuer membership and event restriction. */
+export function tokenHasGrant(auth: ApiTokenAuth, grant: ApiGrant, eventId: Id): boolean {
+  if (!tokenEventAllowed(auth, eventId) || !auth.grants.includes(grant)) return false;
+  const role = roleForEvent(auth.memberships, eventId) ?? (auth.legacyRole && tokenEventAllowed(auth, eventId) ? auth.legacyRole : null);
+  return role !== null && membershipAllowsGrant(role, grant);
 }
 
 export async function loadMemberships(
@@ -84,6 +119,18 @@ export async function loadMemberships(
   const result = await db
     .prepare("SELECT * FROM memberships WHERE person_id = ?")
     .bind(personId)
+    .all<MembershipRow>();
+  return result.results;
+}
+
+export async function loadMembershipsForOrg(
+  db: D1Database,
+  personId: Id,
+  orgId: Id,
+): Promise<MembershipRow[]> {
+  const result = await db
+    .prepare("SELECT * FROM memberships WHERE person_id = ? AND org_id = ?")
+    .bind(personId, orgId)
     .all<MembershipRow>();
   return result.results;
 }

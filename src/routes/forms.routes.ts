@@ -7,7 +7,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { FormFieldRow, FormRow } from "../db/schema";
 import { getAuth } from "../lib/auth/auth-middleware";
-import { authHasRole, roleForEvent } from "../lib/auth/scope-resolution";
+import { authHasRole, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { parseFormCondition } from "../lib/form-conditions";
 import {
   FORM_SORTS,
@@ -213,7 +213,7 @@ async function requireFormAccess(
   }
 
   const required = write ? "program:write" : "program:read";
-  if (auth.permissions.includes(required) || auth.grants.includes(required)) return;
+  if (tokenHasGrant(auth, required, eventId)) return;
   throw ApiError.forbidden(`form access requires ${required}`);
 }
 

@@ -6,7 +6,7 @@
  */
 import type { Context, Env as HonoEnv } from "hono";
 
-import type { MembershipRow } from "../db/schema";
+import type { MembershipRole, MembershipRow } from "../db/schema";
 import type { ApiGrant } from "./grants";
 import type { ApiDocumentBundle } from "./openapi";
 import type { AuthContext } from "../lib/auth/scope-resolution";
@@ -33,6 +33,12 @@ export type Principal =
       grants: readonly ApiGrant[];
       /** An empty list means the token has no plural event restriction. */
       eventIds: readonly string[];
+      /** Resolver-loaded event boundary for this organization; absent only on legacy fixtures. */
+      organizationEventIds?: readonly string[];
+      /** Issuer memberships are loaded by the canonical credential resolver. */
+      memberships: readonly MembershipRow[];
+      /** Only populated for older isolated fixtures whose token table predates created_by. */
+      legacyRole?: MembershipRole;
     };
 
 export interface CredentialResolver {

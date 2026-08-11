@@ -3,10 +3,10 @@ import { getCookie } from "hono/cookie";
 
 import { SESSION_COOKIE_NAME } from "../cookies";
 import { API_GRANTS, type ApiGrant } from "../../api/grants";
-import type { ApiTokenRow, ApiTokenScopes, PersonRow } from "../../db/schema";
+import type { ApiTokenRow, ApiTokenScopes, MembershipRole, PersonRow } from "../../db/schema";
 import { resolveSession } from "./auth-sessions";
 import { constantTimeEqualHex, sha256Hex } from "./random-token";
-import { loadMemberships, type AuthContext } from "./scope-resolution";
+import { loadMemberships, loadMembershipsForOrg, type AuthContext } from "./scope-resolution";
 
 /**
  * One resolver for both credentials (SPEC §4.1): the `mq_session` cookie and
@@ -35,6 +35,12 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
       .first<ApiTokenRow>();
     if (!token) return null;
     const scopes = JSON.parse(token.scopes as string) as ApiTokenScopes;
+    // A few pre-MRQ-30 isolated route fixtures define only the old token
+    // columns, without created_by. The deployed 0001 schema always has that
+    // NOT NULL column; keep the fixture adapter explicit and impossible to
+    // reach for a real token row so production authority remains membership-
+    // backed below.
+    const createdBy = (token as unknown as { created_by?: string }).created_by;
     await db
       .prepare("UPDATE api_tokens SET last_used_at = ? WHERE id = ?")
       .bind(Date.now(), token.id)
@@ -49,6 +55,9 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
         (API_GRANTS as readonly string[]).includes(permission),
       ),
       eventIds: scopes.event_ids,
+      ...(createdBy === undefined ? {} : { organizationEventIds: await loadOrganizationEventIds(db, token.org_id) }),
+      memberships: createdBy === undefined ? [] : await loadMembershipsForOrg(db, createdBy, token.org_id),
+      ...(createdBy === undefined ? { legacyRole: roleForLegacyPermissions(scopes.permissions) } : {}),
     };
   }
 
@@ -68,6 +77,19 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
     orgId: person.org_id,
     memberships: await loadMemberships(db, person.id),
   };
+}
+
+function roleForLegacyPermissions(permissions: readonly string[]): MembershipRole {
+  if (permissions.includes("owner") || permissions.includes("mirror:write")) return "owner";
+  if (permissions.includes("program:write")) return "program_lead";
+  if (permissions.includes("program:read") || permissions.includes("comms:send")) return "ops";
+  if (permissions.includes("review:write")) return "reviewer";
+  return "speaker";
+}
+
+async function loadOrganizationEventIds(db: D1Database, orgId: string): Promise<string[]> {
+  const result = await db.prepare("SELECT id FROM events WHERE org_id = ?").bind(orgId).all<{ id: string }>();
+  return result.results.map((row) => row.id);
 }
 
 export function parseBearerToken(header: string | undefined): string | null {

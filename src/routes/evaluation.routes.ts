@@ -4,7 +4,7 @@ import { BULK_ID_LIMIT, bulkSelectorWireSchema, normalizeBulkSelector, runBulkBy
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse, type ApiRouteEntry } from "../api/route";
 import { getAuth } from "../lib/auth/auth-middleware";
-import { authHasRole } from "../lib/auth/scope-resolution";
+import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { comparisonWinCounts, validateComparisonRanking } from "../lib/evaluation-comparisons";
 import { reviewerCanBeAssignedToSubmission } from "../lib/reviewer-scope";
 import { selectSubmissionIds, submissionFilterSchema } from "./submissions.queries";
@@ -146,11 +146,8 @@ function requireProgram(
     }
     return;
   }
-  const eventAllowed = auth.eventId === null
-    ? (auth.eventIds.length === 0 || auth.eventIds.includes(eventId))
-    : auth.eventId === eventId;
   const grant = write ? "program:write" : "program:read";
-  if (!eventAllowed || (!auth.grants.includes(grant) && !auth.permissions.includes(grant))) {
+  if (!tokenHasGrant(auth, grant, eventId)) {
     throw ApiError.forbidden(`evaluation management requires ${grant}`);
   }
 }
