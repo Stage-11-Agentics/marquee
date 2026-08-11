@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "0B35D9AA-3B7F-4E94-A2D8-577798AB4AF6",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 2,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
@@ -48,7 +48,7 @@
     }
   ],
   "id": "task_01KZJHMC2F9XEPBYEHF9JC4V9T",
-  "last_event_id": "ev_01KZR4JHAE4453GXK7NA3TXV08",
+  "last_event_id": "ev_01KZR7V4GMNTXZCNBKW7EHA6QW",
   "last_status_changed_at": "2026-08-11T10:06:01Z",
   "linked_files": [],
   "priority": "medium",
@@ -68,6 +68,6 @@
   "tags": null,
   "title": "Audit \u2014 reviewer anonymity byte-scan",
   "type": "task",
-  "updated_at": "2026-08-11T10:06:01Z",
+  "updated_at": "2026-08-11T11:03:09Z",
   "urgency": null
 }

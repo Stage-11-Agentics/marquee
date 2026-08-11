@@ -15,18 +15,23 @@
       "id": "art_01KZR6W2MJWSJ0WG5M7J7RC4FD",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR826H3T72K7P2XFPJS0KWR",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQMFC33HA1XBRX0S5PXY093",
-  "last_event_id": "ev_01KZR6W2MK4QAPC6985PXC01YY",
-  "last_status_changed_at": "2026-08-11T10:42:46Z",
+  "last_event_id": "ev_01KZR82DMR6XQAPEVFHCNF6929",
+  "last_status_changed_at": "2026-08-11T11:07:07Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-69",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": [
     "audit",
     "seed",
@@ -36,6 +41,6 @@
   ],
   "title": "Audit remediation \u2014 make the seed exercise the product, wire the applicability guard, and collapse the reviewer-queue query",
   "type": "task",
-  "updated_at": "2026-08-11T10:46:11Z",
+  "updated_at": "2026-08-11T11:07:07Z",
   "urgency": null
 }

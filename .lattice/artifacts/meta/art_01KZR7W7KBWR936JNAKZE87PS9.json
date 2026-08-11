@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T11:03:45Z",
+  "created_by": "agent:auditor-mrq-53",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/61"
+  },
+  "id": "art_01KZR7W7KBWR936JNAKZE87PS9",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open PR against master at the validated rebased HEAD.",
+  "tags": [],
+  "title": "MRQ-53 Forgejo PR",
+  "token_usage": null,
+  "type": "reference"
+}

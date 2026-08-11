@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:07:00Z",
+  "created_by": "agent:delegator-mrq-69",
+  "custom_fields": {},
+  "id": "art_01KZR826H3T72K7P2XFPJS0KWR",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR826H3T72K7P2XFPJS0KWR.md",
+    "size_bytes": 1048
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at exact branch head d6d6b8f",
+  "tags": [],
+  "title": "MRQ-69 exact-head implementation review",
+  "token_usage": null,
+  "type": "note"
+}

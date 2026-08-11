@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:172",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 4,
+  "comment_count": 5,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
   "created_by": "agent:orchestrator-intake",
@@ -43,7 +43,7 @@
     }
   ],
   "id": "task_01KZJHM9H26W9KK121VAJR8G8X",
-  "last_event_id": "ev_01KZQMQKCDWEB7HVQ2C4CSJVKT",
+  "last_event_id": "ev_01KZR7V4G6YD2X6WGWYXEQJ8K1",
   "last_status_changed_at": "2026-08-11T05:29:10Z",
   "linked_files": [],
   "priority": "medium",
@@ -63,6 +63,6 @@
   "tags": null,
   "title": "Seed and speed check suites",
   "type": "task",
-  "updated_at": "2026-08-11T05:29:10Z",
+  "updated_at": "2026-08-11T11:03:09Z",
   "urgency": null
 }
