@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-65",
   "branch_links": [],
+  "c11_surface": "surface:204",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": "medium",
   "created_at": "2026-08-11T02:30:44Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZQAGWE9MWZBMSR0STDNWQ1J",
-  "last_event_id": "ev_01KZQAHKSTHTREQXNBFSG4EJCZ",
-  "last_status_changed_at": "2026-08-11T02:30:44Z",
+  "last_event_id": "ev_01KZR24KGC9M0HVS62DXZ21GJN",
+  "last_status_changed_at": "2026-08-11T09:23:27Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -33,10 +35,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-65",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Disclosure fold \u2014 hide the comparison, never the instruction",
   "type": "task",
-  "updated_at": "2026-08-11T02:31:08Z",
+  "updated_at": "2026-08-11T09:23:27Z",
   "urgency": null
 }

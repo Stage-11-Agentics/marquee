@@ -3,23 +3,53 @@
   "branch_links": [],
   "c11_surface": "surface:194",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-38 (rank 19, US-69) + M-39 (rank 20, US-70) \u2014 Wave 2 (\u00a75) \u00b7 MERGED at mint (5 h + 4 h = 9 h; M-39 depends only on M-38, same `cli/` + `SKILL.md` surface, and **both back the same gate**)\n\n\ud83d\udd12 **GATE-BACKING \u2014 NEVER IN THE CUT BAND.** Both halves back `EVALUATION.md` gate 12 (`check:skill-agent`). A gate is unconditional; this ticket is built ahead of the band, out of rank order, and may not appear in gate 19's cut list at any pressure.\n\n**M-38 \u2014 `marquee` CLI** (5 h, ACs AC-138 \u2013 AC-141, AC-250 CLI half, dep M-29)\nScope (verbatim): six commands, clean JSON stdout, token/url targeting, complete help; `remind --filter (--template <key> | --subject <s> --body <b>)` against M-35's `POST /comms/send`.\nRegistry (SPEC \u00a74.3): `event seed|show`, `submissions list|show`, `submissions accept|reject --filter`, `tasks list --overdue`, `remind --filter (\u2026)`, `agenda export`. Every command takes `--json` (parseable stdout, **logs to stderr**, AC-139), `--url`, `--token` (AC-140). `--help` enumerates the registry exactly (AC-141).\n\n**M-39 \u2014 `SKILL.md` + clean-agent oracle** (4 h, ACs AC-142 \u2013 AC-145, dep M-38)\nScope (verbatim): workflow headings, commands resolve, vocabulary, API-only operation.\nAC-142 headings: seed, triage, chase, agenda, publish. AC-144: the seven product terms present; the banned-synonym list (proposal, talk submission, CFP entry, panel review) absent.\n\nACs (union): AC-138 \u2013 AC-145, **AC-250** (CLI half)\nHours: 9 (5 + 4)\nWorkflow: sub-agent-full (\u22657 h combined)\nShared files: `cli/` and `SKILL.md` are this ticket's; both **derive from the one route registry** \u2014 no hand-maintained command list.\nDeps: M-29+M-54 (the token/docs half is what this rides on \u2014 see that ticket's sequencing note)\nOracle: AC-145 is settled by `oracle: check:skill-agent` \u2014 a clean headless agent given **only** `SKILL.md`, a base URL, and an API token completes seed \u2192 triage \u2192 accept \u2192 schedule, asserted over the API. Requires a model credential in CI (\u00a78 item 9).\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T09:28:26Z",
   "evidence_refs": [
     {
       "id": "art_01KZR02DQ14BD0VDEWGMYTQ19V",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR23Y8GVW9NN2KNERBX30AD",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR27GCM54QKG8W81GS5KNQX",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR2AVAD3PRXK4DZEJ0HAGKB",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR2CMQ5R8TKF0ZBDH9Z0YFV",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR2DQHZ9M8YEYF9YGTZ9H53",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR2DQHZ9M8YEYF9YGTZ9H52",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMARFC8S79E1P8M111SGQ",
-  "last_event_id": "ev_01KZR2046JKTJQ6RSXGMFHSHT9",
-  "last_status_changed_at": "2026-08-11T09:21:01Z",
+  "last_event_id": "ev_01KZR2DQHZ9M8YEYF9YGTZ9H56",
+  "last_status_changed_at": "2026-08-11T09:28:26Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -31,13 +61,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-36",
-  "status": "review",
+  "status": "done",
   "tags": null,
   "title": "The marquee CLI and the shipped SKILL.md",
   "type": "task",
-  "updated_at": "2026-08-11T09:21:01Z",
+  "updated_at": "2026-08-11T09:28:26Z",
   "urgency": null
 }

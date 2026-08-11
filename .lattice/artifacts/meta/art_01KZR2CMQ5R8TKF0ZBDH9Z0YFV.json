@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T09:27:51Z",
+  "created_by": "agent:lattice-auto-review",
+  "custom_fields": {},
+  "id": "art_01KZR2CMQ5R8TKF0ZBDH9Z0YFV",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR2CMQ5R8TKF0ZBDH9Z0YFV.md",
+    "size_bytes": 8503
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "code-review (review)",
+  "token_usage": null,
+  "type": "file"
+}
