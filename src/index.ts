@@ -10,6 +10,9 @@ import { createCredentialResolver } from "./lib/auth/credential-resolver";
 import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/reset-consumer";
 import { adminOpsRoutes, RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.endpoints";
 import { authRoutes } from "./routes/auth.endpoints";
+import { processMailQueue, MAIL_MESSAGE_TYPE, runMailSchedule } from "./jobs/mail/consumer";
+import type { Principal } from "./api/runtime";
+import type { ApiGrant } from "./api/grants";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -17,6 +20,7 @@ export interface Env {
   DB: D1Database;
   LOCAL_VALIDATION_TOKEN?: string;
   MAIL_QUEUE: Queue<unknown>;
+  RESEND_API_KEY?: string;
   MEDIA: R2Bucket;
   MIRROR_QUEUE: Queue<unknown>;
   OPERATIONS_QUEUE: Queue<unknown>;
@@ -132,8 +136,12 @@ app.all("*", (context) => context.env.ASSETS.fetch(context.req.raw));
 const worker: ExportedHandler<Env> = {
   fetch: app.fetch,
   async queue(batch, env, _context): Promise<void> {
+    if (batch.messages.some((message) => (message.body as { type?: string })?.type === MAIL_MESSAGE_TYPE)) {
+      await processMailQueue(batch, env);
+    }
     for (const message of batch.messages) {
       const body = message.body as { type?: string; job_id?: string };
+      if (body?.type === MAIL_MESSAGE_TYPE) continue;
       if (body?.type === RESET_DEMO_MESSAGE_TYPE && body.job_id) {
         try {
           await runResetJob(env, body.job_id);
@@ -155,7 +163,9 @@ const worker: ExportedHandler<Env> = {
     }
   },
   async scheduled(controller, env, _context): Promise<void> {
-    if (controller.cron === "30 4 * * *") {
+    if (controller.cron === "0 * * * *") {
+      await runMailSchedule(env.DB, env.MAIL_QUEUE, Date.now());
+    } else if (controller.cron === "30 4 * * *") {
       await runUploadOrphanSweep(env.DB, env.MEDIA, Date.now());
     }
   },

@@ -7,6 +7,7 @@ import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail
 import { getAuth, unauthorized } from "../lib/auth/auth-middleware";
 import { consumeMagicLink, mintMagicLink } from "../lib/auth/magic-links";
 import { createSession, revokeSession, SESSION_TTL_MS } from "../lib/auth/auth-sessions";
+import { enqueueMailMessage } from "../jobs/mail/consumer";
 
 const DEMO_ROLE_TO_MEMBERSHIP: Record<string, MembershipRole> = {
   organizer: "owner",
@@ -106,13 +107,15 @@ authRoutes.post("/magic-link", async (context) => {
       const url = new URL(context.req.url);
       const absoluteLink = `${url.origin}/api/v1/auth/exchange?token=${link.token}`;
       const mail = renderMagicLinkLoginMail(absoluteLink);
-      await enqueueAuthMail(context.env.DB, {
+      const outboxId = await enqueueAuthMail(context.env.DB, {
         eventId: event.id,
         personId: person.id,
+        entityId: link.id,
         toEmail: person.email,
         templateKey: "magic_link_login",
         ...mail,
       });
+      await enqueueMailMessage(context.env.MAIL_QUEUE, outboxId);
       if (event.demo_mode === 1) onScreenLink = absoluteLink;
     }
   }

@@ -7,6 +7,7 @@ import { matchRoute } from "./route-table";
 import { useBrowserRouter } from "./router";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { CommsScreen } from "../comms/CommsScreen";
 
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
@@ -38,7 +39,13 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
         <div class="page">
           {isSubmissionsList
             ? <SubmissionsPage search={location.search} navigate={navigate} />
-            : <><PageHeader title={routeName} copy="The shared Flight Deck shell is installed. This route's product module will replace the honest empty state below." /><EmptyState title={route ? `${route.label} is ready for its module` : "This route is not installed"} copy={route ? "Navigation, layout, overlays, responsive behavior, and accessibility are live; no product data is being simulated." : "Return to Program home or choose a module from the shared navigation."} /></>}
+            : route?.id === "communications" ? <>
+            <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />
+            <CommsScreen />
+          </> : <>
+            <PageHeader title={routeName} copy="The shared Flight Deck shell is installed. This route's product module will replace the honest empty state below." />
+            <EmptyState title={route ? `${route.label} is ready for its module` : "This route is not installed"} copy={route ? "Navigation, layout, overlays, responsive behavior, and accessibility are live; no product data is being simulated." : "Return to Program home or choose a module from the shared navigation."} />
+          </>}
         </div>
       </main>
     </div>

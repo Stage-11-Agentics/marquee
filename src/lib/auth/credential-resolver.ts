@@ -17,8 +17,11 @@ export function createCredentialResolver(): CredentialResolver {
   return {
     async resolve(context: Context<ApiEnv>): Promise<Principal> {
       const attempted = hasCredential(context);
-      const principal = await resolveAuth(context);
-      if (principal) return principal;
+      const auth = await resolveAuth(context);
+      if (auth) {
+        context.set("auth", auth);
+        return auth;
+      }
       if (attempted) throw ApiError.unauthenticated();
       return { kind: "anonymous" };
     },

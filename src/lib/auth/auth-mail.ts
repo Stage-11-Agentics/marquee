@@ -1,4 +1,5 @@
 import type { Id } from "../../db/schema";
+import { enqueueOutbox } from "../../jobs/mail/outbox";
 
 export const AUTH_TEMPLATE_KEYS = ["magic_link_login", "draft_resume", "task_link"] as const;
 export type AuthTemplateKey = (typeof AUTH_TEMPLATE_KEYS)[number];
@@ -20,33 +21,24 @@ export async function enqueueAuthMail(
     subject: string;
     text: string;
     html: string;
+    entityId?: Id;
     now?: number;
   },
 ): Promise<Id> {
   const now = input.now ?? Date.now();
-  const id = crypto.randomUUID();
-  await db
-    .prepare(
-      `INSERT INTO outbox
-        (id, event_id, template_key, person_id, to_email, subject, html, text,
-         status, send_policy, idempotency_key, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', 'demo_safe', ?, ?, ?)`,
-    )
-    .bind(
-      id,
-      input.eventId,
-      input.templateKey,
-      input.personId,
-      input.toEmail,
-      input.subject,
-      input.html,
-      input.text,
-      `auth:${input.templateKey}:${id}`,
-      now,
-      now,
-    )
-    .run();
-  return id;
+  const queued = await enqueueOutbox({
+    db,
+    eventId: input.eventId,
+    templateKey: input.templateKey,
+    entityId: input.entityId ?? `${input.templateKey}:${input.personId}:${now}`,
+    personId: input.personId,
+    toEmail: input.toEmail,
+    subject: input.subject,
+    html: input.html,
+    text: input.text,
+    now,
+  });
+  return queued.id;
 }
 
 export function renderMagicLinkLoginMail(link: string): { subject: string; text: string; html: string } {
