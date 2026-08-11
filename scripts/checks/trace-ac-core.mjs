@@ -16,9 +16,17 @@ export function parseEvaluationContract(markdown) {
   return criteria;
 }
 
+/**
+ * Resolve the declaring name of a call so `test(...)`, `test.skip(...)`, and
+ * `it.only(...)` are all recognised while `/re/.test(x)` and `value.it(...)`
+ * are not. Reading the property name instead of the object would count every
+ * RegExp `.test()` as a test declaration with a non-literal title.
+ */
 function callName(expression) {
   if (ts.isIdentifier(expression)) return expression.text;
-  if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+  if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)) {
+    return expression.expression.text;
+  }
   return undefined;
 }
 
