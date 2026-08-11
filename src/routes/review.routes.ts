@@ -3,6 +3,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { Principal } from "../api/runtime";
+import { validateComparisonRanking } from "../lib/evaluation-comparisons";
 import {
   authorizeReviewerScope,
   reviewerPersonIdForEvent,
@@ -19,6 +20,11 @@ const evaluationInput = z.object({
   criteria_scores: z.record(z.string(), z.number().min(0)).nullable().optional(),
   recommendation,
   score: z.number().nullable().optional(),
+});
+
+const comparisonInput = z.object({
+  ranking: z.array(z.union([z.string().min(1), z.array(z.string().min(1)).min(1)])).min(1),
+  submission_ids: z.array(z.string().min(1)).length(3),
 });
 
 const ok = jsonResponse(z.unknown(), "Reviewer response");
@@ -143,6 +149,38 @@ async function assignedSubmissionIds(
   return result.results.map((row) => row.submission_id);
 }
 
+async function comparisonCandidateIds(
+  db: D1Database,
+  eventId: string,
+  roundId: string,
+  personId: string,
+): Promise<string[]> {
+  const result = await db.prepare(`
+    SELECT DISTINCT assignment.submission_id
+    FROM round_assignments assignment
+    JOIN submissions submission ON submission.id = assignment.submission_id
+    LEFT JOIN committee_members member
+      ON member.committee_id = assignment.committee_id AND member.person_id = ?
+    LEFT JOIN committees committee ON committee.id = assignment.committee_id
+    WHERE assignment.round_id = ?
+      AND submission.event_id = ?
+      AND assignment.status IN ('assigned', 'complete')
+      AND (assignment.reviewer_person_id = ? OR (member.person_id IS NOT NULL AND committee.event_id = ?))
+      AND NOT EXISTS (
+        SELECT 1
+        FROM comparisons comparison
+        WHERE comparison.round_id = ?
+          AND comparison.reviewer_person_id = ?
+          AND EXISTS (
+            SELECT 1 FROM json_each(comparison.submission_ids) candidate
+            WHERE CAST(candidate.value AS TEXT) = assignment.submission_id
+          )
+      )
+    ORDER BY submission.updated_at DESC, submission.id
+  `).bind(personId, roundId, eventId, personId, eventId, roundId, personId).all<{ submission_id: string }>();
+  return result.results.map((row) => row.submission_id);
+}
+
 /**
  * The queue is a materialized view of the shared authorization helper. The
  * candidate query is only an efficient pre-filter; every returned ID still
@@ -186,16 +224,33 @@ async function reviewerTrackScopes(db: D1Database, eventId: string, personId: st
   return result.results;
 }
 
-async function activeRoundForEvent(db: D1Database, eventId: string): Promise<RoundRow> {
-  const round = await db.prepare(`
+async function activeRoundForEvent(db: D1Database, eventId: string, principal: Principal): Promise<RoundRow> {
+  const rounds = await db.prepare(`
     SELECT round.id, round.plan_id, plan.name AS plan_name, round.position, round.name, round.mode,
       round.anonymized, round.target_reviews_per_submission, round.opens_at, round.closes_at
     FROM evaluation_rounds round
     JOIN evaluation_plans plan ON plan.id = round.plan_id
     WHERE plan.event_id = ? AND plan.status = 'open'
     ORDER BY plan.updated_at DESC, round.position, round.id
-    LIMIT 1
-  `).bind(eventId).first<RoundRow>();
+  `).bind(eventId).all<RoundRow>();
+  const personId = reviewerPersonIdForEvent(principal, eventId);
+  if (personId !== null) {
+    for (const round of rounds.results) {
+      const candidates = round.mode === "comparison"
+        ? await comparisonCandidateIds(db, eventId, round.id, personId)
+        : await assignedSubmissionIds(db, eventId, round.id, personId);
+      for (const submissionId of candidates) {
+        try {
+          await authorizeReviewerScope({ db, principal, eventId, roundId: round.id, submissionId, operation: "queue" });
+          return round;
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 403) continue;
+          throw error;
+        }
+      }
+    }
+  }
+  const round = rounds.results[0];
   if (!round) throw ApiError.notFound("review round not found");
   return round;
 }
@@ -379,7 +434,7 @@ async function reviewerQueuePayload(
     plan: { id: round.plan_id, name: round.plan_name },
     position: data.length ? 1 : 0,
     remaining: data.length,
-    round: { anonymized: Boolean(round.anonymized), id: round.id, name: round.name },
+    round: { anonymized: Boolean(round.anonymized), id: round.id, mode: round.mode, name: round.name },
     scopes: personId ? await reviewerTrackScopes(db, eventId, personId) : [],
     total: data.length,
   };
@@ -418,8 +473,127 @@ const reviewerContextQueueRoute = defineApiRoute(
   async (context) => {
     const { eventId } = context.req.valid("param");
     const principal = context.get("principal");
-    const round = await activeRoundForEvent(context.env.DB, eventId);
+    const round = await activeRoundForEvent(context.env.DB, eventId, principal);
     return context.json(await reviewerQueuePayload(context.env.DB, principal, eventId, round), 200);
+  },
+);
+
+async function comparisonQueuePayload(
+  db: D1Database,
+  principal: Principal,
+  eventId: string,
+  round: RoundRow,
+): Promise<Record<string, unknown>> {
+  const personId = reviewerPersonIdForEvent(principal, eventId);
+  if (personId === null) throw ApiError.forbidden("reviewer resource is outside your authorized tracks");
+  const candidates = await comparisonCandidateIds(db, eventId, round.id, personId);
+  const data: Array<Record<string, unknown>> = [];
+  let eligibleCount = 0;
+  for (const submissionId of candidates) {
+    try {
+      await authorizeReviewerScope({ db, principal, eventId, roundId: round.id, submissionId, operation: "queue" });
+    } catch (error) {
+      // A scope edit can leave a stale assignment behind. It is not a queue
+      // item and must not prevent other authorized comparison cards loading.
+      if (error instanceof ApiError && error.status === 403) continue;
+      throw error;
+    }
+    eligibleCount += 1;
+    if (data.length === 3) continue;
+    const row = await queueRow(db, eventId, submissionId);
+    if (row) data.push({ ...row, tracks: parseJsonArray(row.tracks), queue_id: row.id, position: data.length + 1 });
+  }
+  return {
+    data,
+    eligible_count: eligibleCount,
+    plan: { id: round.plan_id, name: round.plan_name },
+    round: { anonymized: Boolean(round.anonymized), id: round.id, mode: round.mode, name: round.name, position: round.position },
+    scopes: await reviewerTrackScopes(db, eventId, personId),
+  };
+}
+
+const reviewerComparisonQueueRoute = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/rounds/{roundId}/comparisons/next",
+    operationId: "getReviewerComparisonQueue",
+    summary: "Read the next authorized three-card comparison",
+    tags: ["Reviewer"],
+    request: { params: roundParams },
+    policy: { auth: { kind: "grants", grants: ["review:write"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, roundId } = context.req.valid("param");
+    const round = await roundForEvent(context.env.DB, eventId, roundId);
+    if (round.mode !== "comparison") throw ApiError.conflict("this round is configured for scorecard review");
+    return context.json(await comparisonQueuePayload(context.env.DB, context.get("principal"), eventId, round), 200);
+  },
+);
+
+const writeComparisonRoute = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/rounds/{roundId}/comparisons",
+    operationId: "writeReviewerComparison",
+    summary: "Save an authorized three-submission comparison",
+    tags: ["Reviewer"],
+    request: { params: roundParams, body: { content: { "application/json": { schema: comparisonInput } } } },
+    policy: { auth: { kind: "grants", grants: ["review:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 201: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, roundId } = context.req.valid("param");
+    const round = await roundForEvent(context.env.DB, eventId, roundId);
+    if (round.mode !== "comparison") throw ApiError.conflict("this round is configured for scorecard review");
+    const body = context.req.valid("json");
+    if (new Set(body.submission_ids).size !== 3) throw ApiError.unprocessable("a comparison needs three distinct submissions", "submission_ids");
+    const ranking = validateComparisonRanking(body.submission_ids, body.ranking);
+    if (!ranking) throw ApiError.unprocessable("ranking must cover the three submissions exactly; ties are allowed", "ranking");
+    const principal = context.get("principal");
+    const authorizations = [];
+    for (const submissionId of body.submission_ids) {
+      // This is intentionally before the insert: a scope failure cannot leave
+      // a partial comparison or reveal which card was outside the reviewer set.
+      authorizations.push(await authorizeReviewerScope({ db: context.env.DB, principal, eventId, roundId, submissionId, operation: "comparison-write" }));
+    }
+    const reviewerPersonId = authorizations[0]!.personId;
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    // Each saved comparison is independent evidence. Reviewers may compare
+    // the same three cards again after another assignment batch; the chair
+    // aggregate intentionally counts every recorded comparison.
+    await context.env.DB.prepare(`
+      INSERT INTO comparisons
+        (id, round_id, reviewer_person_id, submission_ids, ranking, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, roundId, reviewerPersonId, JSON.stringify(body.submission_ids), JSON.stringify(ranking), now, now).run();
+    await context.env.DB.prepare(`
+      UPDATE round_assignments
+      SET status = 'complete', updated_at = ?
+      WHERE round_id = ?
+        AND submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+        AND (
+          reviewer_person_id = ?
+          OR EXISTS (
+            SELECT 1 FROM committee_members member
+            JOIN committees committee ON committee.id = member.committee_id
+            JOIN evaluation_rounds assigned_round ON assigned_round.id = round_assignments.round_id
+            JOIN evaluation_plans assigned_plan ON assigned_plan.id = assigned_round.plan_id
+            WHERE member.committee_id = round_assignments.committee_id
+              AND member.person_id = ?
+              AND committee.event_id = assigned_plan.event_id
+          )
+        )
+    `).bind(now, roundId, JSON.stringify(body.submission_ids), reviewerPersonId, reviewerPersonId).run();
+    return context.json({
+      id,
+      ranking,
+      reviewer_person_id: reviewerPersonId,
+      round_id: roundId,
+      submission_ids: body.submission_ids,
+      saved_at: now,
+    }, 201);
   },
 );
 
@@ -585,6 +759,8 @@ const writeEvaluationRoute = defineApiRoute(
 export const apiRoutes = [
   reviewerContextQueueRoute,
   reviewerQueueRoute,
+  reviewerComparisonQueueRoute,
+  writeComparisonRoute,
   reviewerRecordRoute,
   reviewerFilesRoute,
   reviewerExportRoute,

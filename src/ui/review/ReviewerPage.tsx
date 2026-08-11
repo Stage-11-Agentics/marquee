@@ -23,20 +23,22 @@ interface QueueItem {
 }
 
 interface QueueEnvelope {
-  current_id: string | null;
-  current_index: number | null;
+  current_id?: string | null;
+  current_index?: number | null;
   data: QueueItem[];
+  eligible_count?: number;
   plan: { id: string; name: string };
-  position: number;
-  remaining: number;
-  round: { anonymized: boolean; id: string; name: string };
+  position?: number;
+  remaining?: number;
+  round: { anonymized: boolean; id: string; mode: "scorecard" | "comparison"; name: string; position?: number };
   scopes: Scope[];
-  total: number;
+  total?: number;
 }
 
 interface ReviewerRound {
   anonymized: boolean;
   id: string;
+  mode: "scorecard" | "comparison";
   name: string;
   position: number;
 }
@@ -160,9 +162,11 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [roundName, setRoundName] = useState("Initial review");
+  const [roundMode, setRoundMode] = useState<"scorecard" | "comparison">("scorecard");
   const [blindMode, setBlindMode] = useState(true);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, ReviewState>>({});
+  const [comparisonRanks, setComparisonRanks] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -177,18 +181,29 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     setLoading(true);
     setError(null);
     try {
-      const queueResponse = await api<QueueEnvelope>(`/api/v1/events/${eventId}/reviewer/queue`);
+      const initialQueue = await api<QueueEnvelope>(`/api/v1/events/${eventId}/reviewer/queue`);
+      const queueResponse = initialQueue.round.mode === "comparison"
+        ? await api<QueueEnvelope>(`/api/v1/events/${eventId}/rounds/${initialQueue.round.id}/comparisons/next`)
+        : initialQueue;
       setPlan({
         id: queueResponse.plan.id,
         name: queueResponse.plan.name,
-        rounds: [{ ...queueResponse.round, position: 0 }],
+        rounds: [{ ...queueResponse.round, position: queueResponse.round.position ?? 0 }],
       });
       setRoundId(queueResponse.round.id);
       setRoundName(queueResponse.round.name || "Initial review");
+      setRoundMode(queueResponse.round.mode);
       setBlindMode(queueResponse.round.anonymized);
       setScopes(queueResponse.scopes);
       setQueue(queueResponse.data);
       setCurrentId(queueResponse.current_id ?? queueResponse.data[0]?.id ?? null);
+      if (queueResponse.round.mode === "comparison") {
+        setComparisonRanks((previous) => {
+          const next = { ...previous };
+          for (const [index, item] of queueResponse.data.slice(0, 3).entries()) next[item.id] ??= index + 1;
+          return next;
+        });
+      }
       setDrafts((previous) => {
         const next = { ...previous };
         for (const item of queueResponse.data) next[item.id] ??= { ...EMPTY_REVIEW };
@@ -220,14 +235,14 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     setDrafts((previous) => ({ ...previous, [current.id]: { ...(previous[current.id] ?? EMPTY_REVIEW), ...patch } }));
   };
 
-  const openDetail = async (): Promise<void> => {
-    if (!current || !roundId) return;
+  const openDetailFor = async (submissionId: string): Promise<void> => {
+    if (!roundId) return;
     cardRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : cardRef.current;
     setDetailOpen(true);
     setDetailLoading(true);
     setDetail(null);
     try {
-      const response = await api<SubmissionDetail>(`/api/v1/events/${eventId}/rounds/${roundId}/submissions/${current.id}`);
+      const response = await api<SubmissionDetail>(`/api/v1/events/${eventId}/rounds/${roundId}/submissions/${submissionId}`);
       setDetail(response);
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "The full submission is unavailable");
@@ -235,6 +250,10 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const openDetail = async (): Promise<void> => {
+    if (current) await openDetailFor(current.id);
   };
 
   const closeDetail = (): void => {
@@ -269,6 +288,29 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     }
   };
 
+  const saveComparison = async (): Promise<void> => {
+    if (!roundId || queue.length < 3 || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const submissionIds = queue.slice(0, 3).map((item) => item.id);
+      const comparisonRankFor = (id: string, index: number): number => comparisonRanks[id] ?? index + 1;
+      const ranking = [1, 2, 3]
+        .map((rank) => submissionIds.filter((id, index) => comparisonRankFor(id, index) === rank))
+        .filter((group) => group.length > 0);
+      await api(`/api/v1/events/${eventId}/rounds/${roundId}/comparisons`, {
+        method: "POST",
+        body: JSON.stringify({ ranking, submission_ids: submissionIds }),
+      });
+      setNotice("Comparison saved · next three submissions ready");
+      await load();
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Comparison could not be saved");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (!detailOpen) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -288,7 +330,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (detailOpen || saving || !current) return;
+      if (detailOpen || saving || !current || roundMode === "comparison") return;
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if (target?.tagName === "BUTTON" || target?.closest("[role=\"button\"]")) return;
@@ -307,7 +349,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [current, currentReview.recommendation, currentReview.score, detailOpen, saving]);
+  }, [current, currentReview.recommendation, currentReview.score, detailOpen, roundMode, saving]);
 
   if (loading) return <main class="reviewer-surface instrument" aria-busy="true"><div class="reviewer-loading"><span class="eyebrow">Reviewer queue</span><strong>Loading the conference queue…</strong><span class="subtle">Applying your track responsibility before any submission fields load.</span></div></main>;
   if (error && !plan) return <main class="reviewer-surface"><div class="reviewer-frame"><EmptyState title="Reviewer queue unavailable" copy={error} action={<Button variant="primary" onClick={() => void load()}>Try again</Button>} /></div></main>;
@@ -317,10 +359,10 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     <div class="reviewer-frame">
       <header class="reviewer-topline">
         <div class="reviewer-brand"><span class="brand-mark" aria-hidden="true">M</span><span>Marquee</span><span class="reviewer-slash">/</span><strong>Reviewer</strong></div>
-        <div class="reviewer-top-meta"><span class="chip">{roundName}</span><span class="chip success">{blindMode ? "Anonymous review" : "Identity visible"}</span><button type="button" class="reviewer-exit" onClick={exitQueue}>Exit queue</button></div>
+        <div class="reviewer-top-meta"><span class="chip">{roundName}</span><span class="chip">{roundMode === "comparison" ? "Comparison mode" : "Scorecard mode"}</span><span class="chip success">{blindMode ? "Anonymous review" : "Identity visible"}</span><button type="button" class="reviewer-exit" onClick={exitQueue}>Exit queue</button></div>
       </header>
       <header class="reviewer-heading">
-        <div><span class="eyebrow">{plan.name}</span><h1>Reviewer queue</h1><p><span class="tabular">{queue.length ? currentIndex + 1 : 0}</span> of <span class="tabular">{queue.length}</span> in your authorized tracks · <span class="tabular">{Math.max(0, queue.length - currentIndex - 1)}</span> remaining</p></div>
+        <div><span class="eyebrow">{plan.name}</span><h1>{roundMode === "comparison" ? "Comparison queue" : "Reviewer queue"}</h1><p>{roundMode === "comparison" ? <><span class="tabular">{Math.min(3, queue.length)}</span> submissions loaded · rank ties are allowed</> : <><span class="tabular">{queue.length ? currentIndex + 1 : 0}</span> of <span class="tabular">{queue.length}</span> in your authorized tracks · <span class="tabular">{Math.max(0, queue.length - currentIndex - 1)}</span> remaining</>}</p></div>
         <button type="button" class="reviewer-refresh" onClick={() => void load()} disabled={loading}>Refresh queue</button>
       </header>
       {error && <div class="reviewer-alert alarm" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="Dismiss error">×</button></div>}
@@ -329,7 +371,18 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
         <div><span class="eyebrow">Your responsibility</span><div class="scope-row">{scopes.length ? scopes.map((scope) => <Chip key={scope.id}><span class="scope-dot" style={{ background: scope.color }} />{scope.name}</Chip>) : <span class="subtle">No track scope is assigned.</span>}</div></div>
         <p>A submission appears when any carried track intersects your scope. Record, file, export, and review access use the same rule.</p>
       </section>
-      {!current ? <section class="reviewer-empty instrument"><span class="empty-mark" aria-hidden="true">✓</span><h2>Queue clear</h2><p>There are no unreviewed submissions in your authorized tracks.</p><button type="button" class="button" onClick={() => void load()}>Check again</button></section> : <div class="reviewer-layout" data-queue-id={current.queue_id} data-queue-index={currentIndex}>
+      {!current ? <section class="reviewer-empty instrument"><span class="empty-mark" aria-hidden="true">✓</span><h2>{roundMode === "comparison" ? "Comparison queue clear" : "Queue clear"}</h2><p>{roundMode === "comparison" ? "There are not three authorized submissions waiting for comparison." : "There are no unreviewed submissions in your authorized tracks."}</p><button type="button" class="button" onClick={() => void load()}>Check again</button></section> : roundMode === "comparison" ? <div class="comparison-board" data-comparison-round={roundId}>
+        {queue.slice(0, 3).map((item, index) => <article class="card comparison-card" key={item.id}>
+          <CardBody>
+            <div class="review-card-chips"><span class="chip">Card {index + 1}</span><span class="chip">{item.format ?? "Abstract"}</span><span class="chip tabular">{item.id}</span></div>
+            <h2>{item.title}</h2>
+            <p class="review-abstract">{item.abstract ?? "No abstract was submitted."}</p>
+            <button type="button" class="button small comparison-open" onClick={() => void openDetailFor(item.id)}>Open full submission</button>
+            <label class="comparison-rank"><span>Rank</span><select aria-label={`Rank ${item.title}`} value={comparisonRanks[item.id] ?? index + 1} onChange={(event) => setComparisonRanks({ ...comparisonRanks, [item.id]: Number((event.currentTarget as HTMLSelectElement).value) })}><option value="1">1 · strongest</option><option value="2">2 · middle</option><option value="3">3 · third</option></select></label>
+          </CardBody>
+        </article>)}
+        <Card class="comparison-save-card"><div class="card-head"><div><h2>Rank these three</h2><span class="subtle">Choose the same rank to record a tie.</span></div></div><CardBody><button type="button" class="button primary reviewer-save" disabled={queue.length < 3 || saving} onClick={() => void saveComparison()}>{saving ? "Saving…" : "Save comparison & next →"}</button><p class="review-shortcuts">Every card is authorized independently before evidence is stored.</p></CardBody></Card>
+      </div> : <div class="reviewer-layout" data-queue-id={current.queue_id} data-queue-index={currentIndex}>
         <article ref={(element) => { cardRef.current = element; }} class="card review-submission-card" role="button" tabIndex={0} aria-label={`Open full submission ${current.id}`} onClick={() => void openDetail()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void openDetail(); } }}>
           <CardBody>
             <div class="review-card-chips"><span class="chip">{current.format ?? "Abstract"}</span>{current.tracks.map((track, index) => <span class="chip" key={track.id} style={{ borderLeft: `3px solid ${track.color}` }}>{track.name}{index === 0 ? " · Primary" : ""}</span>)}<span class="chip tabular">{current.id}</span></div>
@@ -346,7 +399,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
           <div class="card-head"><div><h2>Your recommendation</h2><span class="subtle">Primary path · no numeric score required</span></div><span class="review-key-hint">A / M / D</span></div>
           <CardBody>
             <div class="decision-buttons" role="group" aria-label="Recommendation">
-              {(["approve", "maybe", "deny"] as const).map((value) => <button type="button" class={`decision-button ${currentReview.recommendation === value ? "active" : ""}`} aria-pressed={currentReview.recommendation === value} onClick={() => updateReview({ recommendation: value })}>{recommendationLabel(value)}</button>)}
+              {["approve", "maybe", "deny"].map((value) => <button type="button" class={`decision-button ${currentReview.recommendation === value ? "active" : ""}`} aria-pressed={currentReview.recommendation === value} onClick={() => updateReview({ recommendation: value as ReviewState["recommendation"] })}>{recommendationLabel(value as ReviewState["recommendation"])}</button>)}
             </div>
             <div class="review-choice"><strong>{recommendationLabel(currentReview.recommendation)}</strong><span>{currentReview.recommendation ? `${recommendationLabel(currentReview.recommendation)} saves a proposal; only a program lead changes lifecycle status.` : "Approve, Maybe, and Deny are independent of the optional scorecard."}</span></div>
             <div class="divider" />

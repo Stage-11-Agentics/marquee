@@ -3,7 +3,7 @@ import type { Principal } from "../api/runtime";
 import { roleForEvent } from "./auth/scope-resolution";
 
 /** The resource operation is recorded in the call site for auditability. */
-export type ReviewerScopeOperation = "queue" | "record" | "file" | "export" | "evaluation-write";
+export type ReviewerScopeOperation = "queue" | "record" | "file" | "export" | "evaluation-write" | "comparison-write";
 
 export interface ReviewerScopeRequest {
   db: D1Database;

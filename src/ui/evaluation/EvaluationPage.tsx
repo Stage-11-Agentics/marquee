@@ -24,10 +24,12 @@ interface Round {
   position: number;
   progress: {
     assigned_submissions: number;
+    comparisons: number;
     evaluations: number;
     reviewed_submissions: number;
     submission_count: number;
   };
+  promotions: Array<{ submission_id: string; title: string }>;
   target_reviews_per_submission: number;
 }
 
@@ -98,7 +100,12 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [committeeName, setCommitteeName] = useState("Program reviewers");
   const [assignmentMode, setAssignmentMode] = useState<"everyone" | "n_per_submission">("n_per_submission");
+  const [assignmentRoundId, setAssignmentRoundId] = useState<string | null>(null);
   const [reviewerTarget, setReviewerTarget] = useState(3);
+  const [promotionStatus, setPromotionStatus] = useState("in_review");
+  const [promotionQuery, setPromotionQuery] = useState("");
+  const [promotionResult, setPromotionResult] = useState<{ already_promoted: number; assignments: number; promoted: number; selected: number } | null>(null);
+  const [promotionApplying, setPromotionApplying] = useState(false);
 
   const firstRound = plan?.rounds[0];
   const secondRound = plan?.rounds[1];
@@ -183,30 +190,48 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
 
   const distribute = async (event: Event): Promise<void> => {
     event.preventDefault();
-    if (!firstRound || !committee) return;
+    const targetRound = plan?.rounds.find((round) => round.id === (assignmentRoundId ?? firstRound?.id));
+    if (!targetRound || !committee) return;
     try {
-      await api(`/api/v1/events/${eventId}/rounds/${firstRound.id}/assignments`, {
+      await api(`/api/v1/events/${eventId}/rounds/${targetRound.id}/assignments`, {
         method: "POST",
         body: JSON.stringify({ committee_id: committee.id, mode: assignmentMode, reviewers_per_submission: reviewerTarget }),
       });
       setDialog(null);
-      setNotice("Assignments recalculated · completed reviews were preserved");
+      setNotice(`${targetRound.name} assignments recalculated · completed reviews were preserved`);
       await load();
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Assignments could not be distributed");
     }
   };
 
-  const promotionPreview = async (): Promise<void> => {
-    if (!firstRound || !secondRound) return;
+  const updateRound = async (round: Round, patch: Record<string, unknown>): Promise<void> => {
     try {
-      const response = await api<{ assignments: number; promoted: number }>(`/api/v1/events/${eventId}/rounds/${firstRound.id}/promote`, {
-        method: "POST",
-        body: JSON.stringify({ preview: true, submission_ids: [] }),
-      });
-      setNotice(`${response.promoted} submissions ready · ${response.assignments} committee assignments`);
+      await api(`/api/v1/events/${eventId}/rounds/${round.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+      setNotice(`${round.name} settings saved · recorded evidence preserved`);
+      await load();
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Promotion preview is unavailable");
+      setError(reason instanceof Error ? reason.message : "Round settings could not be saved");
+    }
+  };
+
+  const runPromotion = async (preview: boolean): Promise<void> => {
+    if (!firstRound || !secondRound) return;
+    setPromotionApplying(!preview);
+    try {
+      const filter: Record<string, string> = { status: promotionStatus };
+      if (promotionQuery.trim()) filter.q = promotionQuery.trim();
+      const response = await api<{ already_promoted: number; assignments: number; promoted: number; selected: number }>(`/api/v1/events/${eventId}/rounds/${firstRound.id}/promote`, {
+        method: "POST",
+        body: JSON.stringify({ preview, selector: { filter } }),
+      });
+      setPromotionResult(response);
+      setNotice(preview ? `${response.promoted} submissions ready · ${response.assignments} committee assignments` : `${response.promoted} submissions promoted to ${secondRound.name}`);
+      if (!preview) await load();
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : preview ? "Promotion preview is unavailable" : "Promotion could not be applied");
+    } finally {
+      setPromotionApplying(false);
     }
   };
 
@@ -219,7 +244,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   return <>
     <PageHeader title="Evaluation plan" copy="A two-round funnel turns submitted abstracts into a focused committee decision without order-dependent setup." actions={<>
       <Button onClick={() => void load()}>Refresh</Button>
-      <Button onClick={() => setDialog("assignment")}>Distribute assignments</Button>
+      <Button onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Distribute assignments</Button>
       <Button variant="primary" onClick={() => setDialog("plan")}>+ New evaluation plan</Button>
     </>} />
     {error && <div class="evaluation-alert alarm" role="alert">{error}</div>}
@@ -234,9 +259,10 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
           <div class="round-flow">
             {[firstRound, secondRound].map((round, index) => round ? <div class="round-card" key={round.id}>
               <span class="eyebrow">Round {index + 1}</span><strong>{round.name}</strong>
-              <span class="subtle">{round.mode === "scorecard" ? "Scorecard" : "Comparison"} · {round.target_reviews_per_submission} reviews per submission</span>
-              <div class="progress-track"><i style={{ width: `${percent(round.progress.evaluations, Math.max(1, round.progress.assigned_submissions * round.target_reviews_per_submission))}%` }} /></div>
-              <div class="wave-date"><span class="tabular">{round.progress.evaluations}</span> complete · <span class="tabular">{Math.max(0, round.progress.assigned_submissions * round.target_reviews_per_submission - round.progress.evaluations)}</span> remaining</div>
+              <label class="round-setting"><span>Mode</span><select aria-label={`Round ${index + 1} mode`} value={round.mode} onChange={(event) => void updateRound(round, { mode: (event.currentTarget as HTMLSelectElement).value })}><option value="scorecard">Scorecard</option><option value="comparison">Comparison</option></select></label>
+              <span class="subtle">{round.target_reviews_per_submission} reviews per submission · {round.mode === "comparison" ? `${round.progress.comparisons} comparisons` : `${round.progress.evaluations} scorecards`}</span>
+              <div class="progress-track"><i style={{ width: `${percent(round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations, Math.max(1, round.progress.assigned_submissions * round.target_reviews_per_submission))}%` }} /></div>
+              <div class="wave-date"><span class="tabular">{round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations}</span> complete · <span class="tabular">{Math.max(0, round.progress.assigned_submissions * round.target_reviews_per_submission - (round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations))}</span> remaining</div>
               <div class="round-meta"><span>{round.anonymized ? "Anonymous review" : "Identity visible"}</span><span>{formatDate(round.closes_at)}</span></div>
             </div> : <div class="round-card round-empty" key={`empty-${index}`}><span class="eyebrow">Round {index + 1}</span><strong>Not configured</strong><span class="subtle">Add the next ordered round from the plan controls.</span></div>)}
             <div class="round-arrow" aria-hidden="true">→</div>
@@ -255,18 +281,18 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         </div><div class="spark" aria-label="Score distribution"><i style="height:35%" /><i style="height:52%" /><i style="height:39%" /><i style="height:71%" /><i style="height:67%" /><i style="height:81%" /><i style="height:74%" /><i style="height:92%" /><i style="height:83%" /><i style="height:96%" /></div></CardBody>
       </Card>
       <Card class="committee-card">
-        <CardHeader title="Program committee"><div class="card-actions"><Button small onClick={() => setDialog("committee")}>Manage</Button><Button small onClick={() => setDialog("assignment")}>Edit assignments</Button></div></CardHeader>
+        <CardHeader title="Program committee"><div class="card-actions"><Button small onClick={() => setDialog("committee")}>Manage</Button><Button small onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Edit assignments</Button></div></CardHeader>
         <CardBody>{committee ? <><div class="committee-intro"><span>{committee.members.length} reviewers · explicit track responsibility</span><span>{firstRound?.target_reviews_per_submission ?? 0} reviews per abstract</span></div><div class="committee-list">{committee.members.map((member) => <div class="committee-person" key={member.id}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div></div><span class="tabular subtle">{member.progress} / {firstRound?.progress.assigned_submissions ?? 0}</span></div>)}</div><Button class="full-width ghost" onClick={() => setDialog("committee")}>View all {committee.members.length} reviewers →</Button></> : <div class="inline-empty">No committee yet. Create one before distributing reviews.</div>}</CardBody>
       </Card>
       <Card class="promotion-card">
         <CardHeader title="Round promotion"><Chip>Funnel</Chip></CardHeader>
-        <CardBody><p>Round 1 review remains separate from the Committee decision round. Preview a filtered promotion set before creating any round-two records.</p><Button variant="primary" onClick={() => { setDialog("promotion"); void promotionPreview(); }}>Preview promotions</Button></CardBody>
+        <CardBody><p>Round 1 review remains separate from the Committee decision round. Preview a filtered promotion set before creating any round-two records.</p><Button variant="primary" onClick={() => { setDialog("promotion"); void runPromotion(true); }}>Preview promotions</Button>{secondRound?.promotions.length ? <span class="subtle promotion-count">{secondRound.promotions.length} submission{secondRound.promotions.length === 1 ? "" : "s"} already promoted</span> : null}</CardBody>
       </Card>
     </div>
     {dialog === "plan" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={plan ? async (event) => { event.preventDefault(); try { const updated = await api<Plan>(`/api/v1/events/${eventId}/plans/${plan.id}`, { method: "PATCH", body: JSON.stringify({ name: planName, instructions }) }); setPlan(updated); setDialog(null); setNotice("Evaluation plan updated"); } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : "Plan could not be saved"); } } : savePlan}><header><span class="eyebrow">Evaluation plan</span><h2>{plan ? "Edit plan" : "New evaluation plan"}</h2></header><div class="eval-dialog-body"><label class="field">Name<input value={planName} onInput={(event) => setPlanName((event.currentTarget as HTMLInputElement).value)} /></label><label class="field">Instructions<textarea rows={4} value={instructions} onInput={(event) => setInstructions((event.currentTarget as HTMLTextAreaElement).value)} /></label><div class="message-preview">Two ordered rounds ship together: Initial screen → Committee decision. Numeric scoring remains optional for reviewers.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save plan</Button></footer></form></div>}
     {dialog === "scorecard" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={saveScorecard}><header><span class="eyebrow">Round 1 · Initial screen</span><h2>Edit optional scorecard</h2></header><div class="eval-dialog-body"><div class="criterion-editor">{criteria.map((criterion, index) => <div class="criterion-row" key={criterion.id}><span class="tabular">{index + 1}</span><input aria-label={`Criterion ${index + 1} name`} value={criterion.name} onInput={(event) => setCriteria(criteria.map((item) => item.id === criterion.id ? { ...item, name: (event.currentTarget as HTMLInputElement).value } : item))} /><input aria-label={`Criterion ${index + 1} weight`} type="number" min="0" max="100" value={criterion.weight_pct} onInput={(event) => setCriteria(criteria.map((item) => item.id === criterion.id ? { ...item, weight_pct: Number((event.currentTarget as HTMLInputElement).value) } : item))} /><span>%</span></div>)}</div><div class={`criterion-total ${criteriaTotal === 100 ? "valid" : "invalid"}`}><span>Total</span><strong>{criteriaTotal}%</strong><small>{criteriaTotal === 100 ? "Valid weighted rubric" : "Criteria must total exactly 100%"}</small></div><div class="message-preview">Approve, Maybe, and Deny remain available without numeric scores. Comments are always free text.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={criteriaTotal !== 100}>Save scorecard</Button></footer></form></div>}
     {dialog === "committee" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={createCommittee}><header><span class="eyebrow">Program committee</span><h2>Manage committee</h2></header><div class="eval-dialog-body"><label class="field">Committee name<input value={committeeName} onInput={(event) => setCommitteeName((event.currentTarget as HTMLInputElement).value)} /></label><div class="message-preview">Reviewer rows carry explicit track responsibilities. Scope changes recalculate queue membership without replacing completed reviews.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save committee</Button></footer></form></div>}
-    {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round 1 · Initial screen</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label><div class="message-preview">The first load is seeded with organizer-unreviewed work. Re-running distribution is idempotent and never replaces a completed review.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!committee}>Distribute</Button></footer></form></div>}
-    {dialog === "promotion" && <div class="eval-dialog-backdrop" role="presentation"><div class="eval-dialog"><header><span class="eyebrow">Round promotion</span><h2>Preview the next funnel</h2></header><div class="eval-dialog-body"><div class="promotion-preview"><strong>Filtered promotion set</strong><span>Use the submission list to narrow Round 1 before applying promotion.</span><div><span class="tabular">{firstRound?.progress.reviewed_submissions ?? 0}</span> reviewed · <span class="tabular">{secondRound?.progress.assigned_submissions ?? 0}</span> already in Committee decision</div></div></div><footer><Button onClick={() => setDialog(null)}>Done</Button></footer></div></div>}
+    {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round assignments</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Round<select value={assignmentRoundId ?? firstRound?.id ?? ""} onChange={(event) => setAssignmentRoundId((event.currentTarget as HTMLSelectElement).value)}>{plan.rounds.map((round) => <option key={round.id} value={round.id}>{round.position + 1} · {round.name}</option>)}</select></label><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label><div class="message-preview">Assignments belong to the selected round. Re-running distribution is idempotent and never replaces completed review or comparison evidence.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!committee}>Distribute</Button></footer></form></div>}
+    {dialog === "promotion" && <div class="eval-dialog-backdrop" role="presentation"><div class="eval-dialog"><header><span class="eyebrow">Round promotion</span><h2>Preview the next funnel</h2></header><div class="eval-dialog-body"><div class="promotion-preview"><strong>Filtered promotion set</strong><span>Use the same typed filter as the conference submission list. Empty legacy selections never promote records.</span><label class="field">Status<select value={promotionStatus} onChange={(event) => { setPromotionStatus((event.currentTarget as HTMLSelectElement).value); setPromotionResult(null); }}><option value="in_review">In review</option><option value="submitted">Submitted</option><option value="accepted">Accepted</option><option value="waitlisted">Waitlisted</option></select></label><label class="field">Search<input value={promotionQuery} placeholder="Title, track, or speaker" onInput={(event) => { setPromotionQuery((event.currentTarget as HTMLInputElement).value); setPromotionResult(null); }} /></label>{promotionResult && <div class="promotion-result"><span><strong>{promotionResult.selected}</strong> selected</span><span><strong>{promotionResult.promoted}</strong> ready to promote</span><span><strong>{promotionResult.already_promoted}</strong> already in Round 2</span></div>}</div></div><footer><Button type="button" onClick={() => { setDialog(null); setPromotionResult(null); }}>Done</Button><Button type="button" onClick={() => void runPromotion(true)} disabled={promotionApplying}>Refresh preview</Button><Button type="button" variant="primary" onClick={() => void runPromotion(false)} disabled={promotionApplying || !promotionResult?.promoted}>{promotionApplying ? "Applying…" : "Promote selected"}</Button></footer></div></div>}
   </>;
 }

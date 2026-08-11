@@ -199,7 +199,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
   `).bind(eventId, submissionId).first<BaseRecordRow>();
   if (!row) throw ApiError.notFound("submission not found");
 
-  const [participants, answers, tracks, decisions, evaluations, history, rounds, reviewerOptions] = await Promise.all([
+  const [participants, answers, tracks, decisions, evaluations, comparisons, history, rounds, reviewerOptions] = await Promise.all([
     db.prepare(`
       SELECT participation.id, participation.person_id, person.name, person.email, person.company,
         person.title, participation.role, participation.position, participation.confirmation_status,
@@ -237,10 +237,26 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
         evaluation.score, evaluation.comment, evaluation.criteria_scores, evaluation.updated_at
       FROM evaluations evaluation
       JOIN evaluation_rounds round ON round.id = evaluation.round_id
+      JOIN evaluation_plans plan ON plan.id = round.plan_id
       JOIN people person ON person.id = evaluation.reviewer_person_id
-      WHERE evaluation.submission_id = ?
+      WHERE plan.event_id = ? AND evaluation.submission_id = ?
       ORDER BY round.position, evaluation.updated_at DESC, evaluation.id
-    `).bind(submissionId).all<Record<string, unknown>>(),
+    `).bind(eventId, submissionId).all<Record<string, unknown>>(),
+    db.prepare(`
+      SELECT comparison.id, comparison.round_id, round.name AS round_name, round.position,
+        round.mode, comparison.reviewer_person_id, person.name AS reviewer_name,
+        comparison.submission_ids, comparison.ranking, comparison.created_at, comparison.updated_at
+      FROM comparisons comparison
+      JOIN evaluation_rounds round ON round.id = comparison.round_id
+      JOIN evaluation_plans plan ON plan.id = round.plan_id
+      JOIN people person ON person.id = comparison.reviewer_person_id
+      WHERE plan.event_id = ?
+        AND EXISTS (
+          SELECT 1 FROM json_each(comparison.submission_ids) candidate
+          WHERE CAST(candidate.value AS TEXT) = ?
+        )
+      ORDER BY round.position, comparison.updated_at DESC, comparison.id
+    `).bind(eventId, submissionId).all<Record<string, unknown>>(),
     db.prepare(`
       SELECT id, action, actor_kind, actor_person_id, entity_type, entity_id, after_json, created_at
       FROM audit_log
@@ -248,7 +264,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       ORDER BY created_at DESC, id DESC
     `).bind(eventId, submissionId).all<Record<string, unknown>>(),
     db.prepare(`
-      SELECT round.id, round.name, round.position, round.target_reviews_per_submission,
+      SELECT round.id, round.name, round.position, round.mode, round.target_reviews_per_submission,
         plan.id AS plan_id, plan.name AS plan_name, plan.status AS plan_status,
         assignment.id AS assignment_id, assignment.reviewer_person_id,
         assignment.committee_id, assignment.status AS assignment_status,
@@ -284,8 +300,11 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       plan_id: item.plan_id,
       plan_name: item.plan_name,
       plan_status: item.plan_status,
+      mode: item.mode,
       target_reviews_per_submission: Number(item.target_reviews_per_submission),
       reviewers: [],
+      evaluations: [],
+      comparisons: [],
     };
     if (item.assignment_id !== null) {
       (current.reviewers as Array<Record<string, unknown>>).push({
@@ -302,6 +321,25 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       });
     }
     roundMap.set(String(item.id), current);
+  }
+
+  const evaluationEvidence: Array<Record<string, unknown>> = evaluations.results.map((evaluation) => ({
+    ...evaluation,
+    criteria_scores: evaluation.criteria_scores === null ? null : jsonValue(evaluation.criteria_scores as string, null),
+  }));
+  for (const evaluation of evaluationEvidence) {
+    const round = roundMap.get(String(evaluation.round_id));
+    if (round) (round.evaluations as Array<Record<string, unknown>>).push(evaluation);
+  }
+
+  const comparisonEvidence: Array<Record<string, unknown>> = comparisons.results.map((comparison) => ({
+    ...comparison,
+    ranking: jsonValue(comparison.ranking as string, []),
+    submission_ids: jsonValue(comparison.submission_ids as string, []),
+  }));
+  for (const comparison of comparisonEvidence) {
+    const round = roundMap.get(String(comparison.round_id));
+    if (round) (round.comparisons as Array<Record<string, unknown>>).push(comparison);
   }
 
   const normalizedAnswers = answers.results.map((answer) => ({
@@ -342,10 +380,8 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
     participants: participants.results,
     answers: normalizedAnswers,
     decisions: decisions.results,
-    evaluations: evaluations.results.map((evaluation) => ({
-      ...evaluation,
-      criteria_scores: evaluation.criteria_scores === null ? null : jsonValue(evaluation.criteria_scores as string, null),
-    })),
+    evaluations: evaluationEvidence,
+    comparisons: comparisonEvidence,
     routing: row.applied_rule_id === null ? null : { rule_id: row.applied_rule_id },
     evaluation: {
       rounds: [...roundMap.values()],

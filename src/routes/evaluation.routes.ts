@@ -1,10 +1,13 @@
 import { z } from "@hono/zod-openapi";
 
+import { BULK_ID_LIMIT, bulkSelectorWireSchema, normalizeBulkSelector, runBulkByIds } from "../api/bulk";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse, type ApiRouteEntry } from "../api/route";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
+import { comparisonWinCounts, validateComparisonRanking } from "../lib/evaluation-comparisons";
 import { reviewerCanBeAssignedToSubmission } from "../lib/reviewer-scope";
+import { selectSubmissionIds, submissionFilterSchema } from "./submissions.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const planParams = eventParams.extend({ planId: z.string().min(1) });
@@ -34,6 +37,16 @@ const roundInput = z.object({
   target_reviews_per_submission: z.number().int().positive().default(3),
 });
 
+/** Round PATCH deliberately omits position and criteria: evidence survives settings edits. */
+const roundPatch = z.object({
+  anonymized: z.boolean().optional(),
+  closes_at: z.number().int().nullable().optional(),
+  mode: roundMode.optional(),
+  name: z.string().trim().min(1).max(160).optional(),
+  opens_at: z.number().int().nullable().optional(),
+  target_reviews_per_submission: z.number().int().positive().optional(),
+}).strict();
+
 const planInput = z.object({
   instructions: z.string().max(50_000).default(""),
   name: z.string().trim().min(1).max(200),
@@ -61,10 +74,13 @@ const directAssignmentInput = z.object({
 });
 const assignmentsInput = z.union([distributionAssignmentsInput, directAssignmentInput]);
 const assignmentListQuery = z.object({ submission_id: z.string().min(1).optional() });
+const promotionSelector = bulkSelectorWireSchema(submissionFilterSchema, z.string().min(1));
 const promoteInput = z.object({
   preview: z.boolean().default(true),
-  submission_ids: z.array(z.string().min(1)).default([]),
-});
+  selector: promotionSelector.optional(),
+  /** Legacy input is retained only to return a safe no-op for `{}`/`[]`. */
+  submission_ids: z.array(z.string().min(1)).max(BULK_ID_LIMIT).optional(),
+}).strict();
 
 const listQuery = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -207,8 +223,9 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
   ).bind(plan.id).all<RoundRow>();
   const rounds = [];
   for (const round of roundsResult.results) {
-    const criteria = await criteriaForRound(db, round.id);
-    const progress = await db.prepare(`
+    const [criteria, progress, comparisonCount, promotions] = await Promise.all([
+      criteriaForRound(db, round.id),
+      db.prepare(`
       SELECT
         COUNT(DISTINCT assignment.submission_id) AS assigned_submissions,
         COUNT(DISTINCT evaluation.submission_id) AS reviewed_submissions,
@@ -218,7 +235,16 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
       LEFT JOIN evaluations evaluation
         ON evaluation.round_id = assignment.round_id AND evaluation.submission_id = assignment.submission_id
       WHERE assignment.round_id = ?
-    `).bind(eventId, round.id).first<Record<string, number>>();
+      `).bind(eventId, round.id).first<Record<string, number>>(),
+      db.prepare("SELECT COUNT(*) AS count FROM comparisons WHERE round_id = ?").bind(round.id).first<{ count: number }>(),
+      db.prepare(`
+        SELECT promotion.submission_id, submission.title
+        FROM round_promotions promotion
+        JOIN submissions submission ON submission.id = promotion.submission_id AND submission.event_id = ?
+        WHERE promotion.to_round_id = ?
+        ORDER BY submission.updated_at DESC, submission.id
+      `).bind(eventId, round.id).all<{ submission_id: string; title: string }>(),
+    ]);
     rounds.push({
       ...round,
       anonymized: Boolean(round.anonymized),
@@ -228,7 +254,9 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
         evaluations: Number(progress?.evaluations ?? 0),
         reviewed_submissions: Number(progress?.reviewed_submissions ?? 0),
         submission_count: Number(progress?.submission_count ?? 0),
+        comparisons: Number(comparisonCount?.count ?? 0),
       },
+      promotions: promotions.results,
     });
   }
 
@@ -427,6 +455,52 @@ const addRound = defineApiRoute(
     ).bind(criterion.id ?? crypto.randomUUID(), roundId, criterion.name, criterion.weight_pct, criterion.position, now, now));
     try { await context.env.DB.batch(statements); } catch { throw ApiError.conflict("that evaluation round position is already in use"); }
     return context.json(await planDetail(context.env.DB, eventId, planId), 201);
+  },
+);
+
+const updateRound = defineApiRoute(
+  {
+    method: "patch",
+    path: "/api/v1/events/{eventId}/rounds/{roundId}",
+    operationId: "updateEvaluationRound",
+    summary: "Edit an evaluation round's settings",
+    description: "Update mode and other round settings without changing its ordered position or recorded evidence.",
+    tags: ["Evaluation"],
+    request: { params: roundParams, body: { content: { "application/json": { schema: roundPatch } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, roundId } = context.req.valid("param");
+    requireProgram(context, eventId, true);
+    const current = await roundForEvent(context.env.DB, eventId, roundId);
+    const body = context.req.valid("json");
+    const opensAt = body.opens_at === undefined ? current.opens_at : body.opens_at;
+    const closesAt = body.closes_at === undefined ? current.closes_at : body.closes_at;
+    if (opensAt !== null && closesAt !== null && opensAt !== undefined && closesAt !== undefined && opensAt > closesAt) {
+      throw ApiError.unprocessable("a round cannot close before it opens", "closes_at");
+    }
+    const updates: string[] = [];
+    const values: Array<string | number | null> = [];
+    if (body.name !== undefined) { updates.push("name = ?"); values.push(body.name); }
+    if (body.mode !== undefined) { updates.push("mode = ?"); values.push(body.mode); }
+    if (body.anonymized !== undefined) { updates.push("anonymized = ?"); values.push(body.anonymized ? 1 : 0); }
+    if (body.target_reviews_per_submission !== undefined) {
+      updates.push("target_reviews_per_submission = ?");
+      values.push(body.target_reviews_per_submission);
+    }
+    if (body.opens_at !== undefined) { updates.push("opens_at = ?"); values.push(body.opens_at); }
+    if (body.closes_at !== undefined) { updates.push("closes_at = ?"); values.push(body.closes_at); }
+    updates.push("updated_at = ?");
+    values.push(Date.now(), roundId, eventId);
+    await context.env.DB.prepare(`
+      UPDATE evaluation_rounds
+      SET ${updates.join(", ")}
+      WHERE id = ? AND plan_id = (
+        SELECT plan.id FROM evaluation_plans plan WHERE plan.id = evaluation_rounds.plan_id AND plan.event_id = ?
+      )
+    `).bind(...values).run();
+    return context.json({ round: await roundForEvent(context.env.DB, eventId, roundId), evidence_preserved: true }, 200);
   },
 );
 
@@ -637,6 +711,22 @@ const distributeAssignments = defineApiRoute(
         : Array.from({ length: target }, (_, offset) => reviewers[(submissionIndex + offset) % reviewers.length]!);
       for (const reviewer of chosen) pairs.push([submission.id, reviewer.id]);
     }
+    // Committee distribution is a bulk write, so validate every pair before
+    // constructing any statement. A bad second-round pair must leave zero
+    // assignment rows behind, just like the direct assignment path.
+    const invalidPair = (await Promise.all(
+      pairs.map(async ([submissionId, reviewerId]) => ({
+        allowed: await reviewerCanBeAssignedToSubmission(context.env.DB, eventId, reviewerId, submissionId),
+        reviewerId,
+        submissionId,
+      })),
+    )).find((pair) => !pair.allowed);
+    if (invalidPair) {
+      throw ApiError.unprocessable("reviewer is outside the submission's track scope", "reviewer_person_ids", {
+        reviewer_person_id: invalidPair.reviewerId,
+        submission_id: invalidPair.submissionId,
+      });
+    }
     const now = Date.now();
     const statements = pairs.map(([submissionId, reviewerId]) => context.env.DB.prepare(
       "INSERT OR IGNORE INTO round_assignments (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, 'assigned', ?, ?)",
@@ -737,21 +827,173 @@ const promoteRound = defineApiRoute(
     `).bind(sourceRound.plan_id, sourceRound.position + 1).first<{ id: string }>();
     if (!nextRound) throw ApiError.conflict("the first round must exist before promotion can be planned");
     const body = context.req.valid("json");
-    const rows = body.submission_ids.length === 0
-      ? await context.env.DB.prepare("SELECT id FROM submissions WHERE event_id = ? AND status = 'in_review' ORDER BY updated_at, id").bind(eventId).all<{ id: string }>()
-      : await context.env.DB.prepare(`SELECT id FROM submissions WHERE event_id = ? AND id IN (${body.submission_ids.map(() => "?").join(", ")})`).bind(eventId, ...body.submission_ids).all<{ id: string }>();
-    if (body.submission_ids.length > 0 && rows.results.length !== new Set(body.submission_ids).size) throw ApiError.notFound("one or more promotion records are not in this conference");
-    if (!body.preview && rows.results.length === 0) throw ApiError.unprocessable("promotion requires at least one filtered submission", "submission_ids");
-    if (body.preview) return context.json({ preview: true, promoted: rows.results.length, assignments: rows.results.length * sourceRound.target_reviews_per_submission, from_round_id: roundId, to_round_id: nextRound.id }, 200);
+    if (body.selector !== undefined && body.submission_ids !== undefined) {
+      throw ApiError.badRequest("promotion accepts one typed selector", "selector");
+    }
+
+    // `{ submission_ids: [] }` was the pre-selector UI payload. Keep its
+    // preview harmless and make apply explicit, never reinterpret it as
+    // "select all". Every actual promotion now travels through the shared
+    // ids-or-filter selector contract.
+    if (body.submission_ids !== undefined) {
+      if (!body.submission_ids.length) {
+        if (!body.preview) throw ApiError.unprocessable("promotion requires a typed filtered submission selector", "selector");
+        return context.json({
+          already_promoted: 0,
+          assignments: 0,
+          from_round_id: roundId,
+          preview: true,
+          promoted: 0,
+          selected: 0,
+          to_round_id: nextRound.id,
+        }, 200);
+      }
+      throw ApiError.badRequest("promotion requires a typed selector", "selector");
+    }
+
+    if (body.selector === undefined) {
+      if (!body.preview) throw ApiError.unprocessable("promotion requires a typed filtered submission selector", "selector");
+      return context.json({
+        already_promoted: 0,
+        assignments: 0,
+        from_round_id: roundId,
+        preview: true,
+        promoted: 0,
+        selected: 0,
+        to_round_id: nextRound.id,
+      }, 200);
+    }
+
+    const selector = normalizeBulkSelector(body.selector, (id) => id.length > 0);
+    const selectedIds = selector.kind === "filter"
+      ? await selectSubmissionIds(context.env.DB, { eventId, ...(selector.filter as z.infer<typeof submissionFilterSchema>) })
+      : [...new Set(selector.ids)];
+    const rows = selectedIds.length === 0
+      ? []
+      : (await context.env.DB.prepare(`
+        SELECT id
+        FROM submissions
+        WHERE event_id = ?
+          AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+      `).bind(eventId, JSON.stringify(selectedIds)).all<{ id: string }>()).results;
+    if (rows.length !== selectedIds.length) throw ApiError.notFound("one or more promotion records are not in this conference");
+
+    const existing = rows.length === 0
+      ? []
+      : (await context.env.DB.prepare(`
+        SELECT submission_id
+        FROM round_promotions
+        WHERE from_round_id = ? AND to_round_id = ?
+          AND submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+      `).bind(roundId, nextRound.id, JSON.stringify(selectedIds)).all<{ submission_id: string }>()).results.map((row) => row.submission_id);
+    const existingIds = new Set(existing);
+    const promotableIds = rows.map((row) => row.id).filter((id) => !existingIds.has(id));
+    if (!body.preview && promotableIds.length === 0) throw ApiError.unprocessable("promotion requires at least one new filtered submission", "selector");
+    if (body.preview) return context.json({
+      already_promoted: existing.length,
+      assignments: promotableIds.length * sourceRound.target_reviews_per_submission,
+      from_round_id: roundId,
+      preview: true,
+      promoted: promotableIds.length,
+      selected: rows.length,
+      to_round_id: nextRound.id,
+    }, 200);
+
     const principal = context.get("principal");
     const promotedBy = principal.kind === "session" ? principal.personId : "system";
     if (promotedBy === "system") throw ApiError.forbidden("a session is required to apply promotions");
     const now = Date.now();
-    const statements = rows.results.map((row) => context.env.DB.prepare(
-      "INSERT OR IGNORE INTO round_promotions (id, from_round_id, to_round_id, submission_id, promoted_at, promoted_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ).bind(crypto.randomUUID(), roundId, nextRound.id, row.id, now, promotedBy, now, now));
-    await context.env.DB.batch(statements);
-    return context.json({ preview: false, promoted: rows.results.length, from_round_id: roundId, to_round_id: nextRound.id }, 200);
+    const result = await runBulkByIds(promotableIds, (idsJson) => context.env.DB.prepare(`
+      INSERT OR IGNORE INTO round_promotions
+        (id, from_round_id, to_round_id, submission_id, promoted_at, promoted_by, created_at, updated_at)
+      SELECT lower(hex(randomblob(16))), ?, ?, submission.id, ?, ?, ?, ?
+      FROM submissions submission
+      WHERE submission.event_id = ?
+        AND submission.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+    `).bind(roundId, nextRound.id, now, promotedBy, now, now, eventId, idsJson));
+    const promoted = Number(result?.meta.changes ?? 0);
+    return context.json({
+      already_promoted: existing.length,
+      assignments: promoted * sourceRound.target_reviews_per_submission,
+      from_round_id: roundId,
+      preview: false,
+      promoted,
+      selected: selectedIds.length,
+      to_round_id: nextRound.id,
+    }, 200);
+  },
+);
+
+const listRoundComparisons = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/rounds/{roundId}/comparisons",
+    operationId: "listRoundComparisonAggregate",
+    summary: "Read comparison evidence and its chair aggregate",
+    tags: ["Evaluation"],
+    request: { params: roundParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, roundId } = context.req.valid("param");
+    requireProgram(context, eventId, false);
+    const round = await roundForEvent(context.env.DB, eventId, roundId);
+    const rows = await context.env.DB.prepare(`
+      SELECT comparison.id, comparison.reviewer_person_id, comparison.submission_ids,
+        comparison.ranking, comparison.created_at, comparison.updated_at
+      FROM comparisons comparison
+      JOIN evaluation_rounds round ON round.id = comparison.round_id
+      JOIN evaluation_plans plan ON plan.id = round.plan_id
+      WHERE comparison.round_id = ? AND plan.event_id = ?
+      ORDER BY comparison.created_at, comparison.id
+    `).bind(roundId, eventId).all<{
+      created_at: number;
+      id: string;
+      ranking: string;
+      reviewer_person_id: string;
+      submission_ids: string;
+      updated_at: number;
+    }>();
+    const evidence = rows.results.flatMap((row) => {
+      try {
+        const submissionIds = JSON.parse(row.submission_ids) as unknown;
+        const ranking = JSON.parse(row.ranking) as unknown;
+        const validRanking = validateComparisonRanking(Array.isArray(submissionIds) ? submissionIds as string[] : [], ranking);
+        return validRanking
+          ? [{ id: row.id, reviewer_person_id: row.reviewer_person_id, submissionIds: submissionIds as string[], submission_ids: submissionIds as string[], ranking: validRanking, created_at: row.created_at, updated_at: row.updated_at }]
+          : [];
+      } catch {
+        return [];
+      }
+    });
+    const submissionIds = [...new Set(evidence.flatMap((comparison) => comparison.submissionIds))];
+    const titles = submissionIds.length === 0
+      ? new Map<string, string>()
+      : new Map((await context.env.DB.prepare(`
+        SELECT id, title FROM submissions
+        WHERE event_id = ? AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+    `).bind(eventId, JSON.stringify(submissionIds)).all<{ id: string; title: string }>()).results.map((row) => [row.id, row.title]));
+    const wins = comparisonWinCounts(evidence);
+    const comparisons = evidence.map(({ submissionIds: internalSubmissionIds, ...comparison }) => ({
+      ...comparison,
+      submission_ids: internalSubmissionIds,
+    }));
+    let previousWins: number | null = null;
+    let previousRank = 0;
+    const aggregate = submissionIds
+      .map((id) => ({ id, title: titles.get(id) ?? "", wins: wins.get(id) ?? 0 }))
+      .sort((left, right) => right.wins - left.wins || left.title.localeCompare(right.title) || left.id.localeCompare(right.id))
+      .map((item, index) => {
+        if (previousWins !== item.wins) previousRank = index + 1;
+        previousWins = item.wins;
+        return { ...item, rank: previousRank, win_count: item.wins };
+      });
+    return context.json({
+      aggregate,
+      comparisons,
+      round: { id: round.id, mode: round.mode, name: round.name, position: round.position },
+    }, 200);
   },
 );
 
@@ -761,6 +1003,7 @@ export const apiRoutes = [
   getPlan,
   updatePlan,
   addRound,
+  updateRound,
   replaceCriteria,
   createCommittee,
   addCommitteeReviewer,
@@ -770,4 +1013,5 @@ export const apiRoutes = [
   listRoundAssignments,
   removeRoundAssignment,
   promoteRound,
+  listRoundComparisons,
 ];

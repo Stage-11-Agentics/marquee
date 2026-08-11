@@ -5,6 +5,9 @@
 .round-flow { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); margin-top: 18px; }
 .round-card { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 158px; padding: 15px; }
 .round-card strong { display: block; font-size: 13px; margin: 6px 0 9px; }
+.round-setting { align-items: center; display: flex; gap: 8px; margin: 8px 0; }
+.round-setting span { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.round-setting select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); font-size: 11px; padding: 5px 7px; }
 .round-empty { border-style: dashed; display: grid; min-height: 158px; place-content: center; text-align: center; }
 .round-empty strong { margin-bottom: 5px; }
 .round-arrow { color: var(--accent); font: 400 21px/1 var(--mono); text-align: center; }
@@ -29,9 +32,14 @@
 .full-width { justify-content: flex-start; margin-top: 12px; width: 100%; }
 .card-actions { display: flex; gap: 6px; }
 .promotion-card p { color: var(--ink-soft); font-size: 12px; line-height: 1.6; margin: 0 0 16px; }
+.promotion-count { display: block; margin-top: 10px; }
 .promotion-preview { background: var(--sunk); border: 1px solid var(--line); display: grid; gap: 7px; padding: 13px; }
 .promotion-preview strong { font: 600 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .promotion-preview span { color: var(--muted); font-size: 11px; }
+.promotion-preview .field { color: var(--ink-soft); display: grid; gap: 5px; margin-top: 6px; }
+.promotion-preview .field select, .promotion-preview .field input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 32px; padding: 6px 8px; }
+.promotion-result { border-top: 1px solid var(--line); display: grid; gap: 4px; margin-top: 6px; padding-top: 9px; }
+.promotion-result span { color: var(--muted); }
 .evaluation-loading { display: grid; gap: 8px; min-height: 240px; padding: 48px; place-content: center; text-align: center; }
 .evaluation-loading strong { font-size: 15px; }
 .evaluation-alert { align-items: center; border: 1px solid; border-radius: var(--radius); display: flex; font: 11px/1.4 var(--mono); justify-content: space-between; margin: -7px 0 16px; padding: 9px 12px; }

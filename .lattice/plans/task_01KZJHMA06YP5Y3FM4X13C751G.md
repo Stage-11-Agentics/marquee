@@ -19,6 +19,7 @@ Cut-line note: M-46 sits at **rank 27**, second from the bottom of the band. If 
 ## Ground truth and boundary
 
 - The initial plan was written against `62b874873655b34d5f6aa24dfa20874c0c79551a`; Forgejo advanced during planning. At the implementation boundary, the branch is based on current `forgejo/master` at `c2293f1`; after any further rebase, run `npm ci` before trusting tests. The requested clean branch tip `8a39b4b` was one commit behind after the fleet dispatch commit.
+- The plan boundary is a dedicated commit immediately before the MRQ-28 implementation commit on the delegator branch.
 - MRQ-17 already owns AC-98 in `tests/ac-claims/MRQ-17.json`; MRQ-28 will exercise AC-98 and own AC-99, AC-100, and AC-163 through AC-166. The MRQ-28 test names will still carry every ticket AC so `trace:ac` sees the complete union without duplicate owners.
 - The existing first-migration schema is sufficient: `evaluation_rounds`, `round_assignments`, `evaluations`, `comparisons`, and `round_promotions` are already round-aware. Do not edit contract docs or `migrations/0001_init.sql`.
 
