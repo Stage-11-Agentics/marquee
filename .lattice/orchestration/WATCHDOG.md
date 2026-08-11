@@ -62,6 +62,42 @@ sitting dead while the board says it is working. That check stays (2b).
    unpushed twice this run, invisible to every worktree), branch work pushed rather than
    living only on this machine, no orphan branches.
 
+## A send is an interrupt. Price it that way.
+
+Learned the hard way, 2026-08-11. An audit produced a BLOCKING finding; the watchdog sent it
+to the orchestrator flagged urgent, mid-merge-cycle. The orchestrator did not triage it — it
+**executed** it, diverting into a long tool-heavy turn. Three PRs arrived and sat unmerged
+behind it, and the turn then wedged holding a tool call.
+
+- **Findings go in as a `lattice comment` on the ticket they belong to**, which the
+  orchestrator reads on its own schedule. Not a send.
+- **A send is reserved for a stall or an armed hazard**, as the role boundary already said.
+  A BLOCKING severity label describes the *finding*, not the *urgency of delivery* — a defect
+  that has been latent for thirty hours does not need to interrupt a merge in flight.
+- **Never send twice in quick succession.** The second queues behind the first and is read
+  after the damage the first caused. A correction that arrives late is worse than no
+  correction, because it arrives after the action it was meant to prevent.
+- Prefer sending when the orchestrator is between turns, and keep it to a few lines.
+
+## Frozen cost counter: the full ladder before calling it either way
+
+A frozen cost counter is the canonical stall tell **and** the canonical false alarm. Walk the
+whole ladder, cheapest first, before reporting or acting:
+
+1. **Is the turn timer moving?** Timer advancing + tokens static = a tool call in flight, not
+   a dead session. Judge by the spinner line, never by the bare `❯` prompt — the input box
+   renders below the working indicator, so a shallow `tail` makes a busy agent look idle.
+2. **Is a shell command genuinely hung?** `ps -eo pid,etime,command | grep 'c11 send'`, and
+   `timeout 8 c11 tree` for socket health. A live long-running command is background work, not
+   a stall.
+3. **Sample the cost twice, minutes apart.** One reading proves nothing.
+4. **Queued-but-unconsumed messages after a turn ends** is the strong signal: the turn died
+   holding something.
+5. Recovery, in order: `send-key enter` (non-destructive) → `send-key escape` (interrupts the
+   wedged tool call; this is what actually worked) → only then a `send`. **Escape before send:**
+   a send can replace a buffer holding a delegator's completion evidence, and destroying a PR
+   report to save thirty seconds is a bad trade.
+
 ## Reading the board without lying about it
 
 `lattice list` is a snapshot taken against a board the orchestrator rewrites continuously. It
