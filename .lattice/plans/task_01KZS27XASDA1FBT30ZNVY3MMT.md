@@ -39,9 +39,10 @@ behind that stage.
 - `accepted` is an accepted, not-yet-scheduled/published submission that is not
   in the derived Onboarding or pending-Waved sets.
 - `onboarding` is an accepted, not-yet-scheduled/published submission with at
-  least one open, non-cancelled speaker task. Its count is submissions, matching
-  the submissions-list destination; speaker/person totals stay named as such on
-  the chase surface.
+  least one open, non-cancelled speaker task and no pending wave. A pending-wave
+  row is Waved even if it also has open work, keeping the forward stages
+  mutually exclusive. Its count is submissions, matching the submissions-list
+  destination; speaker/person totals stay named as such on the chase surface.
 - `scheduled` and `published` are agenda-derived and mutually exclusive.
 - Rejected, waitlisted, and withdrawn rows are terminal `declined` records for
   the board. They must not be counted or labelled Waved. This is the one
