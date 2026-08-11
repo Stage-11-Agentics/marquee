@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:166",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 3,
+  "comment_count": 5,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
   "created_by": "agent:orchestrator-intake",
@@ -20,10 +20,20 @@
       "id": "ev_01KZQK4538Q3GQ95PG9CY16RJM",
       "role": "review",
       "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZQKM5NZVS9E4MCMNQM10Z6B",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZQKMR7CQD8NC0VASFX7TVS1",
+      "role": "validation",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZJHM9Q27F5F60RPPN93V9X5",
-  "last_event_id": "ev_01KZQK5WRKG8CGAM06KN7DTFXB",
+  "last_event_id": "ev_01KZQKMR7CQD8NC0VASFX7TVS1",
   "last_status_changed_at": "2026-08-11T05:02:01Z",
   "linked_files": [],
   "priority": "medium",
@@ -57,6 +67,6 @@
   "tags": null,
   "title": "Calendar invites and the un-accept cascade",
   "type": "task",
-  "updated_at": "2026-08-11T05:02:01Z",
+  "updated_at": "2026-08-11T05:10:08Z",
   "urgency": null
 }
