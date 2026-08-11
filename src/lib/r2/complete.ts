@@ -7,7 +7,7 @@
  */
 
 import { policyFor, type UploadPolicy } from "./policy";
-import { matchesExpectedKind, readPngDimensions, SNIFF_HEAD_BYTES } from "./sniff";
+import { matchesExpectedKind, readImageDimensions, SNIFF_HEAD_BYTES } from "./sniff";
 
 export interface AttachmentPendingRow {
   id: string;
@@ -62,8 +62,8 @@ export async function verifyAndComplete(
     return { ok: false, reason: "type_mismatch" };
   }
 
-  if (policy?.minImageDimension && (rule.kind === "png")) {
-    const dimensions = readPngDimensions(sample);
+  if (policy?.minImageDimension && (rule.kind === "jpeg" || rule.kind === "png" || rule.kind === "webp")) {
+    const dimensions = readImageDimensions(sample, rule.kind);
     if (!dimensions || dimensions.width < policy.minImageDimension || dimensions.height < policy.minImageDimension) {
       await media.delete(row.r2_key);
       return { ok: false, reason: "dimension_too_small" };

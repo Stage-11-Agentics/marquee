@@ -39,11 +39,7 @@ function isWebp(bytes: Uint8Array): boolean {
   return riff && webp;
 }
 
-/**
- * PNG dimensions live at a fixed offset in the mandatory first IHDR chunk.
- * JPEG/WebP dimension extraction is not implemented in this window (tracked
- * gap — AC-52's full crop/undersize proof is owned by MRQ-16).
- */
+/** PNG dimensions live at a fixed offset in the mandatory first IHDR chunk. */
 export function readPngDimensions(bytes: Uint8Array): { width: number; height: number } | null {
   if (!startsWith(bytes, PNG_SIGNATURE) || bytes.length < 24) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -51,6 +47,70 @@ export function readPngDimensions(bytes: Uint8Array): { width: number; height: n
   const height = view.getUint32(20, false);
   if (width <= 0 || height <= 0) return null;
   return { width, height };
+}
+
+function readJpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  if (!startsWith(bytes, JPEG_SIGNATURE)) return null;
+  let offset = 2;
+  while (offset + 3 < bytes.length) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+    if (offset >= bytes.length) return null;
+    const marker = bytes[offset++];
+    if (marker === 0xd8 || marker === 0xd9) continue;
+    if (marker === 0xda) return null;
+    if (marker >= 0xd0 && marker <= 0xd7) continue;
+    if (offset + 1 >= bytes.length) return null;
+    const length = (bytes[offset] << 8) | bytes[offset + 1];
+    if (length < 2 || offset + length > bytes.length) return null;
+    const isStartOfFrame =
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf);
+    if (isStartOfFrame && length >= 7) {
+      const height = (bytes[offset + 3] << 8) | bytes[offset + 4];
+      const width = (bytes[offset + 5] << 8) | bytes[offset + 6];
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+    offset += length;
+  }
+  return null;
+}
+
+function readWebpDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  if (!isWebp(bytes) || bytes.length < 30) return null;
+  const chunk = String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]);
+  if (chunk === "VP8X") {
+    const width = 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16);
+    const height = 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16);
+    return { width, height };
+  }
+  if (chunk === "VP8 ") {
+    if (bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return null;
+    const width = (bytes[26] | (bytes[27] << 8)) & 0x3fff;
+    const height = (bytes[28] | (bytes[29] << 8)) & 0x3fff;
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+  if (chunk === "VP8L" && bytes[20] === 0x2f && bytes.length >= 25) {
+    const bits = bytes[21] | (bytes[22] << 8) | (bytes[23] << 16) | (bytes[24] << 24);
+    const width = (bits & 0x3fff) + 1;
+    const height = ((bits >>> 14) & 0x3fff) + 1;
+    return { width, height };
+  }
+  return null;
+}
+
+export function readImageDimensions(
+  bytes: Uint8Array,
+  kind: Extract<SniffKind, "jpeg" | "png" | "webp">,
+): { width: number; height: number } | null {
+  if (kind === "png") return readPngDimensions(bytes);
+  if (kind === "jpeg") return readJpegDimensions(bytes);
+  return readWebpDimensions(bytes);
 }
 
 /**

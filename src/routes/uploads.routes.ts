@@ -6,7 +6,8 @@
  *
  * The authenticated branch keeps MRQ-14's route-local session and ownership
  * lookup as a second, route-specific guardrail after the shared API credential
- * policy has admitted the request.
+ * policy has admitted the request. MRQ-16 adds person_headshot to this same
+ * path; it does not create a second upload lifecycle.
  */
 
 import { z } from "@hono/zod-openapi";
@@ -237,37 +238,50 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
   }
   const { ownerType, ownerId, filename, contentType, sizeBytes } = body as Record<string, unknown>;
   if (
-    ownerType !== "task_upload" ||
+    (ownerType !== "task_upload" && ownerType !== "person_headshot") ||
     typeof ownerId !== "string" ||
     typeof filename !== "string" ||
     typeof contentType !== "string" ||
     typeof sizeBytes !== "number"
   ) {
-    return uploadError(context, "invalid_request", "only task_upload is supported on this route in this window");
+    return uploadError(context, "invalid_request", "only task_upload and person_headshot are supported on this route");
   }
 
-  const task = await env.DB.prepare(
-    `SELECT id, event_id, person_id FROM speaker_tasks WHERE id = ?1`,
-  )
-    .bind(ownerId)
-    .first<{ id: string; event_id: string; person_id: string }>();
-  if (!task || task.person_id !== session.person_id) {
-    return uploadError(context, "forbidden", "task does not belong to the authenticated principal");
+  let eventId: string | null = null;
+  if (ownerType === "task_upload") {
+    const task = await env.DB.prepare(
+      `SELECT id, event_id, person_id FROM speaker_tasks WHERE id = ?1`,
+    )
+      .bind(ownerId)
+      .first<{ id: string; event_id: string; person_id: string }>();
+    if (!task || task.person_id !== session.person_id) {
+      return uploadError(context, "forbidden", "task does not belong to the authenticated principal");
+    }
+    eventId = task.event_id;
+  } else {
+    if (ownerId !== session.person_id) {
+      return uploadError(context, "forbidden", "headshot does not belong to the authenticated principal");
+    }
+    const membership = await env.DB.prepare(
+      `SELECT event_id FROM memberships WHERE person_id = ? AND role = 'speaker' AND event_id IS NOT NULL ORDER BY event_id LIMIT 1`,
+    ).bind(session.person_id).first<{ event_id: string }>();
+    if (!membership) return uploadError(context, "forbidden", "speaker membership is required for a headshot upload");
+    eventId = membership.event_id;
   }
 
-  const policy = policyFor("task_upload");
+  const policy = policyFor(ownerType);
   if (!policy) return uploadError(context, "invalid_request", "owner type not presignable");
   const decision = validateDeclared(policy, { filename, contentType, sizeBytes });
   if (!decision.ok) return uploadError(context, "invalid_request", `rejected: ${decision.violation}`);
 
   const attachmentId = crypto.randomUUID();
   const nowMs = Date.now();
-  const r2Key = objectKeyFor({ eventId: task.event_id, ownerType: "task_upload", attachmentId, extension: extensionOf(filename) });
+  const r2Key = objectKeyFor({ eventId, ownerType, attachmentId, extension: extensionOf(filename) });
 
   await insertPendingAttachment(env.DB, {
     id: attachmentId,
-    eventId: task.event_id,
-    ownerType: "task_upload",
+    eventId,
+    ownerType,
     ownerId,
     filename: sanitizeFilename(filename),
     contentType,
@@ -278,7 +292,7 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
 
   try {
     const presigned = await presignPut(signingConfig(env), { key: r2Key, contentType, nowMs });
-    const completionToken = await hmacHex(env.UPLOAD_TOKEN_SECRET, `${attachmentId}:task_upload:${ownerId}`);
+    const completionToken = await hmacHex(env.UPLOAD_TOKEN_SECRET, `${attachmentId}:${ownerType}:${ownerId}`);
     return context.json({
       attachmentId,
       putUrl: presigned.url,
@@ -405,15 +419,15 @@ const publicSignRequestSchema = z
   })
   .openapi("PublicUploadSignRequest");
 
-const taskSignRequestSchema = z
+const authenticatedSignRequestSchema = z
   .object({
-    ownerType: z.literal("task_upload"),
+    ownerType: z.enum(["task_upload", "person_headshot"]),
     ownerId: z.string(),
     filename: z.string(),
     contentType: z.string(),
     sizeBytes: z.number(),
   })
-  .openapi("TaskUploadSignRequest");
+  .openapi("AuthenticatedUploadSignRequest");
 
 const completeRequestSchema = z
   .object({ completionToken: z.string() })
@@ -473,12 +487,12 @@ const signTaskUpload = defineApiRoute(
     method: "post",
     path: "/api/v1/me/uploads/sign",
     operationId: "signTaskUpload",
-    summary: "Create an authenticated task-upload presign",
+    summary: "Create an authenticated speaker upload presign",
     description:
       "Creates a presigned R2 PUT only for a task owned by the authenticated speaker session.",
     tags: ["Uploads"],
     request: {
-      body: { content: { "application/json": { schema: taskSignRequestSchema } } },
+      body: { content: { "application/json": { schema: authenticatedSignRequestSchema } } },
     },
     policy: {
       auth: { kind: "authenticated" },
