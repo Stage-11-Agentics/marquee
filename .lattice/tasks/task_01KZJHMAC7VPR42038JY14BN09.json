@@ -15,11 +15,21 @@
       "id": "art_01KZQPRM3X2FAKYHFQ3AQ3TED2",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQV6DPJYDWXVCX6T92SEGR9",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQV7124N5SNG1DJ4Q5563BZ",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMAC7VPR42038JY14BN09",
-  "last_event_id": "ev_01KZQV51HDKQYWR8HX6HCA1241",
-  "last_status_changed_at": "2026-08-11T07:21:22Z",
+  "last_event_id": "ev_01KZQV71269JJ2FHDJN4MHFTPV",
+  "last_status_changed_at": "2026-08-11T07:22:10Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -41,10 +51,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-32",
-  "status": "review",
+  "status": "in_validation",
   "tags": null,
   "title": "Automated triggers, filtered group email, and rejection at scale",
   "type": "task",
-  "updated_at": "2026-08-11T07:21:22Z",
+  "updated_at": "2026-08-11T07:22:27Z",
   "urgency": null
 }
