@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-34",
   "branch_links": [],
+  "c11_surface": "surface:174",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMAJE83227X9NNDJETFQ4",
-  "last_event_id": "ev_01KZJHMHCTAB5JEHVAZ3AR1HBA",
-  "last_status_changed_at": "2026-08-09T05:58:45Z",
+  "last_event_id": "ev_01KZQJXFT62368TGPG2SY974SM",
+  "last_status_changed_at": "2026-08-11T04:57:26Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -33,10 +35,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-34",
-  "status": "backlog",
+  "status": "in_progress",
   "tags": null,
   "title": "Saved views, configurable columns, Draft queue, and builder condition summary",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:52Z",
+  "updated_at": "2026-08-11T04:57:26Z",
   "urgency": null
 }

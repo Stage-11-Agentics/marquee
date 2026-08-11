@@ -14,4 +14,45 @@ Hours: 7 (6 + 1)
 Workflow: sub-agent-full (≥7 h combined)
 Shared files: consumes `src/lib/form-conditions.ts` (M-12's) and M-08's column registry — **add to them, never rewrite** (§7).
 Deps: M-08, M-12
-Plan: filled in by delegator's plan phase
+
+## Rough implementation plan (MRQ-34)
+
+1. Rebase `mrq-34-views` onto the current `forgejo/master`, refresh dependencies with
+   `npm ci`, and inspect the MRQ-8/MRQ-9/MRQ-13/MRQ-33 contracts and existing route,
+   schema, form-condition, list, builder, and auth patterns. Establish a baseline with
+   the repository's focused tests and `npm run pr-gate -- --ticket MRQ-34` where practical.
+2. Preserve and reuse the existing list query vocabulary (`page`, `per_page`, `q`,
+   `sort`, `filters`) and `isFieldApplicable()` from `src/lib/form-conditions.ts`.
+   Add only the shared behavior needed by the saved-view/Draft consumers; do not create
+   a second evaluator or re-derive required fields.
+3. Implement the fixed column registry and configurable submissions list behavior:
+   exactly the eleven named columns, with Title always present and immovable; stable
+   widths/order and honest empty values (`—`) in the UI.
+4. Implement personal, conference-scoped saved-view CRUD for query/filters/sort/column
+   order, with immutable built-ins and authorization through the credential-resolved
+   form-admin/program-staff principal. Use generated `*.routes.ts` modules for every
+   API route and keep the existing list response contract.
+5. Implement the authorized `Drafts needing attention` surface with count, contact,
+   last-save, and applicable missing fields. Prove the decisive hidden/revealed
+   conditional-field pair: hidden missing is not attention; revealed missing is.
+   Opening/editing a draft must remain read-only and never submit it. Prove unauthorized
+   access with both status and absence of draft content in the response body.
+6. Add the builder field-list condition summary affordance only; render the evaluator's
+   known conditions without opening/editing a field. Keep the summary legible and
+   non-layout-jumping per the binding prototype/design rules.
+7. Add AC-tagged tests under `tests/` and `tests/ac-claims/MRQ-34.json`, run focused and
+   full local validation, inspect the diff, and perform an inline self-review. Attach a
+   standard-shape PASS review naming the exact HEAD, run the mandatory PR gate, commit
+   meaningful units, push after the first and each subsequent meaningful commit, open
+   the Forgejo PR against `master`, attach its reference, and finish at `pr_open`.
+
+## Verification targets
+
+- AC-134: condition summary is visible in the builder field list without opening a field.
+- AC-247: event-scoped personal view CRUD round-trips the existing list query shape and
+  built-ins cannot be mutated; authorization is enforced.
+- AC-248: exactly the eleven registry columns are available and Title cannot be removed
+  or reordered out.
+- AC-249: Draft queue exposes count/contact/last-save/applicable missing fields, uses
+  `isFieldApplicable()` output, preserves read-only behavior, and fails closed for an
+  unauthorized reader without leaking draft content.
