@@ -6,6 +6,7 @@ import { applyMigrations, env } from "../apply-migrations";
 const ORIGIN = "https://marquee.stage11.dev";
 const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
 const EVENT_ID = "evt_mrq35_routing";
+const OTHER_EVENT_ID = "evt_other_routing";
 const FORM_ID = "form_mrq35_routing";
 const PLAN_ID = "plan_mrq35_routing";
 const ROUND_ID = "round_mrq35_routing";
@@ -14,12 +15,15 @@ const FORMAT_WORKSHOP = "format_mrq35_workshop";
 const TRACK_PRIMARY = "track_mrq35_primary";
 const TRACK_SECONDARY = "track_mrq35_secondary";
 const TRACK_VENDOR = "track_mrq35_vendor";
+const TRACK_OTHER_EVENT = "track_other_routing";
 const COMMITTEE_MAIN = "committee_mrq35_mainstage";
 const COMMITTEE_WORKSHOP = "committee_mrq35_workshop";
 const COMMITTEE_BAD = "committee_mrq35_bad_scope";
+const COMMITTEE_BAD_EVENT = "committee_other_event";
 const REVIEWER_MAIN = "person_mrq35_main_reviewer";
 const REVIEWER_WORKSHOP = "person_mrq35_workshop_reviewer";
 const REVIEWER_BAD = "person_mrq35_bad_reviewer";
+const REVIEWER_BAD_EVENT = "person_other_event_reviewer";
 const ORGANIZER = "person_mrq35_organizer";
 const REVIEWER_SESSION = "session_mrq35_workshop_reviewer";
 const ORGANIZER_SESSION = "session_mrq35_organizer";
@@ -27,6 +31,7 @@ const RULE_SECONDARY = "rule_mrq35_secondary_plan";
 const RULE_FORMAT = "rule_mrq35_stage_format_plan";
 const RULE_VENDOR_BAD = "rule_mrq35_vendor_bad_scope";
 const RULE_VENDOR_GOOD = "rule_mrq35_vendor_workshop";
+const RULE_VENDOR_OTHER_EVENT = "rule_vendor_other_event";
 let tokenSerial = 0;
 
 function nextTurnstileToken(): string {
@@ -76,8 +81,9 @@ async function seedFixture(): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES ('org_mrq35_routing', 'MRQ-35 Org', 'mrq35-routing', ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at) VALUES (?, 'org_mrq35_routing', 'MRQ-35 Conference', 'mrq35-routing', '2026-10-12', '2026-10-14', 'America/New_York', 'live', 0, ?, ?)").bind(EVENT_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at) VALUES (?, 'org_mrq35_routing', 'Other Conference', 'other-routing', '2026-11-12', '2026-11-14', 'America/New_York', 'live', 0, ?, ?)").bind(OTHER_EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO formats (id, event_id, name, default_duration_min, min_duration_min, max_duration_min, position, created_at, updated_at) VALUES (?, ?, 'Stage', 20, 15, 30, 0, ?, ?), (?, ?, 'Workshop', 30, 20, 60, 1, ?, ?)").bind(FORMAT_STAGE, EVENT_ID, NOW, NOW, FORMAT_WORKSHOP, EVENT_ID, NOW, NOW),
-    env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, 'Primary', '#db4c3f', 0, ?, ?), (?, ?, 'Secondary', '#0d9488', 1, ?, ?), (?, ?, 'Vendor', '#7c3aed', 2, ?, ?)").bind(TRACK_PRIMARY, EVENT_ID, NOW, NOW, TRACK_SECONDARY, EVENT_ID, NOW, NOW, TRACK_VENDOR, EVENT_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, 'Primary', '#db4c3f', 0, ?, ?), (?, ?, 'Secondary', '#0d9488', 1, ?, ?), (?, ?, 'Vendor', '#7c3aed', 2, ?, ?), (?, ?, 'Other event', '#f59e0b', 0, ?, ?)").bind(TRACK_PRIMARY, EVENT_ID, NOW, NOW, TRACK_SECONDARY, EVENT_ID, NOW, NOW, TRACK_VENDOR, EVENT_ID, NOW, NOW, TRACK_OTHER_EVENT, OTHER_EVENT_ID, NOW, NOW),
     env.DB.prepare(`INSERT INTO forms
       (id, event_id, name, slug, kind, status, opens_at, closes_at, welcome_md,
        per_submitter_limit, min_speakers, max_speakers, max_sponsors,
@@ -104,16 +110,17 @@ async function seedFixture(): Promise<void> {
     personStatement(REVIEWER_MAIN, "main@mrq35.example", "Mainstage reviewer"),
     personStatement(REVIEWER_WORKSHOP, "workshop@mrq35.example", "Workshop reviewer"),
     personStatement(REVIEWER_BAD, "bad@mrq35.example", "Bad-scope reviewer"),
+    personStatement(REVIEWER_BAD_EVENT, "other-event@mrq35.example", "Other-event reviewer"),
     personStatement(ORGANIZER, "organizer@mrq35.example", "MRQ-35 Organizer"),
-    env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('membership_mrq35_main', 'org_mrq35_routing', ?, ?, 'reviewer', ?, ?), ('membership_mrq35_workshop', 'org_mrq35_routing', ?, ?, 'reviewer', ?, ?), ('membership_mrq35_bad', 'org_mrq35_routing', ?, ?, 'reviewer', ?, ?), ('membership_mrq35_owner', 'org_mrq35_routing', NULL, ?, 'owner', ?, ?)").bind(EVENT_ID, REVIEWER_MAIN, NOW, NOW, EVENT_ID, REVIEWER_WORKSHOP, NOW, NOW, EVENT_ID, REVIEWER_BAD, NOW, NOW, ORGANIZER, NOW, NOW),
+    env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('membership_mrq35_main', 'org_mrq35_routing', ?, ?, 'reviewer', ?, ?), ('membership_mrq35_workshop', 'org_mrq35_routing', ?, ?, 'reviewer', ?, ?), ('membership_mrq35_bad', 'org_mrq35_routing', ?, ?, 'reviewer', ?, ?), ('membership_other_event', 'org_mrq35_routing', ?, ?, 'reviewer', ?, ?), ('membership_mrq35_owner', 'org_mrq35_routing', NULL, ?, 'owner', ?, ?)").bind(EVENT_ID, REVIEWER_MAIN, NOW, NOW, EVENT_ID, REVIEWER_WORKSHOP, NOW, NOW, EVENT_ID, REVIEWER_BAD, NOW, NOW, OTHER_EVENT_ID, REVIEWER_BAD_EVENT, NOW, NOW, ORGANIZER, NOW, NOW),
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'reviewer', ?, 'mrq35', NULL, ?, ?), (?, ?, 'owner', ?, 'mrq35', NULL, ?, ?)").bind(REVIEWER_SESSION, REVIEWER_WORKSHOP, NOW + 86_400_000, NOW, NOW, ORGANIZER_SESSION, ORGANIZER, NOW + 86_400_000, NOW, NOW),
     env.DB.prepare("INSERT INTO evaluation_plans (id, event_id, name, instructions, status, created_at, updated_at) VALUES (?, ?, 'MRQ-35 Review Plan', '', 'open', ?, ?)").bind(PLAN_ID, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, target_reviews_per_submission, created_at, updated_at) VALUES (?, ?, 0, 'Initial review', 'scorecard', 0, 1, ?, ?)").bind(ROUND_ID, PLAN_ID, NOW, NOW),
-    env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, 'Mainstage pool', ?, ?), (?, ?, 'Workshop pool', ?, ?), (?, ?, 'Bad scope pool', ?, ?)").bind(COMMITTEE_MAIN, EVENT_ID, NOW, NOW, COMMITTEE_WORKSHOP, EVENT_ID, NOW, NOW, COMMITTEE_BAD, EVENT_ID, NOW, NOW),
-    env.DB.prepare("INSERT INTO committee_members (id, committee_id, person_id, role, created_at, updated_at) VALUES ('member_mrq35_main', ?, ?, 'reviewer', ?, ?), ('member_mrq35_workshop', ?, ?, 'reviewer', ?, ?), ('member_mrq35_bad', ?, ?, 'reviewer', ?, ?)").bind(COMMITTEE_MAIN, REVIEWER_MAIN, NOW, NOW, COMMITTEE_WORKSHOP, REVIEWER_WORKSHOP, NOW, NOW, COMMITTEE_BAD, REVIEWER_BAD, NOW, NOW),
-    env.DB.prepare("INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES ('scope_mrq35_main', ?, ?, ?, ?, ?), ('scope_mrq35_workshop', ?, ?, ?, ?, ?), ('scope_mrq35_bad', ?, ?, ?, ?, ?)").bind(EVENT_ID, REVIEWER_MAIN, TRACK_PRIMARY, NOW, NOW, EVENT_ID, REVIEWER_WORKSHOP, TRACK_VENDOR, NOW, NOW, EVENT_ID, REVIEWER_BAD, TRACK_PRIMARY, NOW, NOW),
-    env.DB.prepare(`INSERT INTO routing_rules (id, event_id, name, when_json, then_json, position, enabled, created_at, updated_at) VALUES (?, ?, 'Secondary review plan', '{"field":"track","op":"equals","value":"Secondary"}', ?, 0, 1, ?, ?), (?, ?, 'Stage format plan', '{"field":"format","op":"equals","value":"Stage"}', ?, 1, 1, ?, ?), (?, ?, 'Vendor isolation trap', '{"field":"vendor","op":"equals","value":true}', ?, 2, 1, ?, ?), (?, ?, 'Vendor workshop pool', '{"field":"vendor","op":"equals","value":true}', ?, 3, 0, ?, ?)`)
-      .bind(RULE_SECONDARY, EVENT_ID, JSON.stringify({ plan_id: PLAN_ID }), NOW, NOW, RULE_FORMAT, EVENT_ID, JSON.stringify({ plan_id: PLAN_ID }), NOW, NOW, RULE_VENDOR_BAD, EVENT_ID, JSON.stringify({ committee_id: COMMITTEE_BAD, round_id: ROUND_ID }), NOW, NOW, RULE_VENDOR_GOOD, EVENT_ID, JSON.stringify({ committee_id: COMMITTEE_WORKSHOP, round_id: ROUND_ID }), NOW, NOW),
+    env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, 'Mainstage pool', ?, ?), (?, ?, 'Workshop pool', ?, ?), (?, ?, 'Bad scope pool', ?, ?), (?, ?, 'Other-event reviewer pool', ?, ?)").bind(COMMITTEE_MAIN, EVENT_ID, NOW, NOW, COMMITTEE_WORKSHOP, EVENT_ID, NOW, NOW, COMMITTEE_BAD, EVENT_ID, NOW, NOW, COMMITTEE_BAD_EVENT, EVENT_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO committee_members (id, committee_id, person_id, role, created_at, updated_at) VALUES ('member_mrq35_main', ?, ?, 'reviewer', ?, ?), ('member_mrq35_workshop', ?, ?, 'reviewer', ?, ?), ('member_mrq35_bad', ?, ?, 'reviewer', ?, ?), ('member_other_event', ?, ?, 'reviewer', ?, ?)").bind(COMMITTEE_MAIN, REVIEWER_MAIN, NOW, NOW, COMMITTEE_WORKSHOP, REVIEWER_WORKSHOP, NOW, NOW, COMMITTEE_BAD, REVIEWER_BAD, NOW, NOW, COMMITTEE_BAD_EVENT, REVIEWER_BAD_EVENT, NOW, NOW),
+    env.DB.prepare("INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES ('scope_mrq35_main', ?, ?, ?, ?, ?), ('scope_mrq35_workshop', ?, ?, ?, ?, ?), ('scope_mrq35_bad', ?, ?, ?, ?, ?), ('scope_other_event', ?, ?, ?, ?, ?)").bind(EVENT_ID, REVIEWER_MAIN, TRACK_PRIMARY, NOW, NOW, EVENT_ID, REVIEWER_WORKSHOP, TRACK_VENDOR, NOW, NOW, EVENT_ID, REVIEWER_BAD, TRACK_PRIMARY, NOW, NOW, OTHER_EVENT_ID, REVIEWER_BAD_EVENT, TRACK_OTHER_EVENT, NOW, NOW),
+    env.DB.prepare(`INSERT INTO routing_rules (id, event_id, name, when_json, then_json, position, enabled, created_at, updated_at) VALUES (?, ?, 'Secondary review plan', '{"field":"track","op":"equals","value":"Secondary"}', ?, 0, 1, ?, ?), (?, ?, 'Stage format plan', '{"field":"format","op":"equals","value":"Stage"}', ?, 1, 1, ?, ?), (?, ?, 'Vendor isolation trap', '{"field":"vendor","op":"equals","value":true}', ?, 2, 1, ?, ?), (?, ?, 'Vendor workshop pool', '{"field":"vendor","op":"equals","value":true}', ?, 3, 0, ?, ?), (?, ?, 'Non-vendor other-event reviewer', '{"field":"vendor","op":"equals","value":false}', ?, 4, 1, ?, ?)`)
+      .bind(RULE_SECONDARY, EVENT_ID, JSON.stringify({ plan_id: PLAN_ID }), NOW, NOW, RULE_FORMAT, EVENT_ID, JSON.stringify({ plan_id: PLAN_ID }), NOW, NOW, RULE_VENDOR_BAD, EVENT_ID, JSON.stringify({ committee_id: COMMITTEE_BAD, round_id: ROUND_ID }), NOW, NOW, RULE_VENDOR_GOOD, EVENT_ID, JSON.stringify({ committee_id: COMMITTEE_WORKSHOP, round_id: ROUND_ID }), NOW, NOW, RULE_VENDOR_OTHER_EVENT, EVENT_ID, JSON.stringify({ committee_id: COMMITTEE_BAD_EVENT, round_id: ROUND_ID }), NOW, NOW),
   ]);
 }
 
@@ -133,7 +140,7 @@ describe.sequential("MRQ-35 category routing", () => {
     });
     expect(empty.status).toBe(422);
     expect(await count("submissions")).toBe(0);
-    expect(await count("people")).toBe(4);
+    expect(await count("people")).toBe(5);
 
     const anyTrack = await request("/api/v1/public/forms/mrq35-cfp/submissions", {
       method: "POST",
@@ -166,6 +173,20 @@ describe.sequential("MRQ-35 category routing", () => {
       people: await count("people"),
       submissions: await count("submissions"),
     };
+    const refusedOtherEvent = await request("/api/v1/public/forms/mrq35-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify(submitBody("refused-other-event@mrq35.example", { format: "Workshop", tracks: ["Vendor"], vendor: "No", title: "Other event route" })),
+    });
+    expect(refusedOtherEvent.status).toBe(422);
+    const refusedOtherEventBody = await json<{ error: { message: string } }>(refusedOtherEvent);
+    expect(refusedOtherEventBody.error.message).toContain("review pool");
+    expect(JSON.stringify(refusedOtherEventBody)).not.toContain(COMMITTEE_BAD_EVENT);
+    expect(JSON.stringify(refusedOtherEventBody)).not.toContain(REVIEWER_BAD_EVENT);
+    expect(await count("round_assignments")).toBe(before.assignments);
+    expect(await count("outbox")).toBe(before.outbox);
+    expect(await count("people")).toBe(before.people);
+    expect(await count("submissions")).toBe(before.submissions);
+
     const refused = await request("/api/v1/public/forms/mrq35-cfp/submissions", {
       method: "POST",
       body: JSON.stringify(submitBody("refused@mrq35.example", { format: "Workshop", tracks: ["Vendor"], vendor: "Yes", title: "Out of scope route" })),

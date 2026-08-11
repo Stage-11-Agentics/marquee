@@ -18,6 +18,7 @@ const submissionResponse = z.object({
 });
 
 let handlerCalls = 0;
+let reviewerHandlerCalls = 0;
 
 const protectedSubmissionsRoute = defineApiRoute(
   {
@@ -45,9 +46,36 @@ const protectedSubmissionsRoute = defineApiRoute(
   },
 );
 
+const reviewerBoundaryRoute = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/reviewer-boundary",
+    operationId: "credentialResolverReviewerBoundaryFixture",
+    summary: "Reviewer boundary fixture",
+    policy: {
+      auth: { kind: "grants", grants: ["review:write"] },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    request: { params: z.object({ eventId: z.string().min(1) }) },
+    responses: {
+      200: jsonResponse(submissionResponse, "fixture reviewer submissions"),
+      ...errorResponses([401, 403, 429, 500]),
+    },
+  },
+  (context) => {
+    reviewerHandlerCalls += 1;
+    return context.json(
+      { data: [{ id: PRIVATE_SUBMISSION_ID, title: "Unpublished private submission" }] },
+      200,
+    );
+  },
+);
+
 beforeEach(async () => {
   await applyMigrations();
   handlerCalls = 0;
+  reviewerHandlerCalls = 0;
   const now = Date.now();
   await env.DB.prepare(
     "INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
@@ -84,7 +112,7 @@ beforeEach(async () => {
 });
 
 async function makeRouter() {
-  return createApiRouter([protectedSubmissionsRoute], {
+  return createApiRouter([protectedSubmissionsRoute, reviewerBoundaryRoute], {
     credentialResolver: createCredentialResolver(),
   });
 }
@@ -96,6 +124,18 @@ async function request(
 ): Promise<Response> {
   return router.app.request(
     `${ORIGIN}/api/v1/events/${eventId}/submissions`,
+    { headers },
+    env,
+  );
+}
+
+async function requestReviewer(
+  router: Awaited<ReturnType<typeof makeRouter>>,
+  eventId: string,
+  headers?: HeadersInit,
+): Promise<Response> {
+  return router.app.request(
+    `${ORIGIN}/api/v1/events/${eventId}/reviewer-boundary`,
     { headers },
     env,
   );
@@ -173,6 +213,12 @@ test("CONTRACT · cookie and bearer credentials agree on effective grant interse
     userAgent: "mrq-47-reviewer-cookie",
   });
 
+  const reviewerCookiePositive = await requestReviewer(router, EVENT_A, {
+    cookie: `mq_session=${reviewerSession.id}`,
+  });
+  expect(reviewerCookiePositive.status).toBe(200);
+  expect(reviewerHandlerCalls).toBe(1);
+
   const reviewerCookie = await request(router, EVENT_A, {
     cookie: `mq_session=${reviewerSession.id}`,
   });
@@ -201,6 +247,48 @@ test("CONTRACT · cookie and bearer credentials agree on effective grant interse
   });
   expect(reviewerBearer.status).toBe(403);
   expect(await expectNoSubmissionLeak(reviewerBearer)).toContain("forbidden");
+
+  const nowForMalformedMembership = Date.now();
+  await env.DB.prepare(
+    "INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES ('org_2', 'Org Two', 'org-two', ?, ?)",
+  )
+    .bind(nowForMalformedMembership, nowForMalformedMembership)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO memberships
+     (id, org_id, event_id, person_id, role, created_at, updated_at)
+     VALUES ('mem_wrong_org_reviewer', 'org_2', ?, 'per_reviewer', 'reviewer', ?, ?)`,
+  )
+    .bind(EVENT_B, nowForMalformedMembership, nowForMalformedMembership)
+    .run();
+
+  const malformedReviewerCookie = await requestReviewer(router, EVENT_B, {
+    cookie: `mq_session=${reviewerSession.id}`,
+  });
+  expect(malformedReviewerCookie.status).toBe(403);
+  expect(await expectNoSubmissionLeak(malformedReviewerCookie)).toContain("forbidden");
+  expect(reviewerHandlerCalls).toBe(1);
+
+  const reviewerParitySecret = `mq_${mintToken()}`;
+  await env.DB.prepare(
+    `INSERT INTO api_tokens
+     (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+     VALUES ('tok_reviewer_boundary', 'org_1', NULL, 'Reviewer parity token', ?, ?, ?, 'per_reviewer', ?, ?)`,
+  )
+    .bind(
+      await sha256Hex(reviewerParitySecret),
+      reviewerParitySecret.slice(0, 7),
+      JSON.stringify({ permissions: ["review:write"], event_ids: [EVENT_A, EVENT_B] }),
+      nowForMalformedMembership,
+      nowForMalformedMembership,
+    )
+    .run();
+  const reviewerParityBearer = await requestReviewer(router, EVENT_B, {
+    authorization: `Bearer ${reviewerParitySecret}`,
+  });
+  expect(reviewerParityBearer.status).toBe(403);
+  expect(await expectNoSubmissionLeak(reviewerParityBearer)).toContain("forbidden");
+  expect(reviewerHandlerCalls).toBe(1);
 
   const ownerSession = await createSession(env.DB, {
     personId: "per_owner",

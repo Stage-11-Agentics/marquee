@@ -6,7 +6,7 @@ import { API_GRANTS, type ApiGrant } from "../../api/grants";
 import type { ApiTokenRow, ApiTokenScopes, MembershipRole, PersonRow } from "../../db/schema";
 import { resolveSession } from "./auth-sessions";
 import { constantTimeEqualHex, sha256Hex } from "./random-token";
-import { loadMemberships, loadMembershipsForOrg, type AuthContext } from "./scope-resolution";
+import { loadMembershipsForOrg, type AuthContext } from "./scope-resolution";
 
 /**
  * One resolver for both credentials (SPEC §4.1): the `mq_session` cookie and
@@ -75,7 +75,7 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
     sessionId: session.id,
     personId: person.id,
     orgId: person.org_id,
-    memberships: await loadMemberships(db, person.id),
+    memberships: await loadMembershipsForOrg(db, person.id, person.org_id),
   };
 }
 

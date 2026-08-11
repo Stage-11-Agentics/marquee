@@ -48,7 +48,7 @@ async function buildFixture(): Promise<void> {
       origin TEXT NOT NULL, submitted_at INTEGER, updated_at INTEGER NOT NULL,
       search_blob TEXT NOT NULL DEFAULT ''
     );
-    CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, name TEXT NOT NULL, company TEXT);
+    CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, org_id TEXT NOT NULL, name TEXT NOT NULL, company TEXT);
     CREATE TABLE IF NOT EXISTS participations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, person_id TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS tracks (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS submission_tracks (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, track_id TEXT NOT NULL, is_primary INTEGER NOT NULL);
@@ -66,8 +66,8 @@ async function buildFixture(): Promise<void> {
     DELETE FROM buildings; DELETE FROM events;
     INSERT INTO events VALUES ('${EVENT_ID}', 'America/New_York');
     INSERT INTO formats VALUES ('fmt-stage', 'Stage Talk');
-    INSERT INTO people VALUES ('person-zoe', 'Zoë Łukaszewicz-García', 'Société Générale');
-    INSERT INTO people VALUES ('person-reviewer', 'Different Event Reviewer', 'Other Org');
+    INSERT INTO people VALUES ('person-zoe', 'org-list', 'Zoë Łukaszewicz-García', 'Société Générale');
+    INSERT INTO people VALUES ('person-reviewer', 'org-list', 'Different Event Reviewer', 'Other Org');
     INSERT INTO memberships VALUES ('membership-other-event', 'org-list', 'evt-other', 'person-reviewer', 'reviewer', 1700000000000, 1700000000000);
     INSERT INTO auth_sessions VALUES ('${DIFFERENT_EVENT_SESSION}', 'person-reviewer', 'reviewer', 4102444800000, 'fixture', NULL, 1700000000000, 1700000000000);
     INSERT INTO tracks VALUES ('track-agents', 'Agents', '#db4c3f', 1), ('track-evals', 'Evals', '#0d9488', 2);
