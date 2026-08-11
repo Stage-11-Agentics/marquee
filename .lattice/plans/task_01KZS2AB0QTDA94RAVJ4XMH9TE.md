@@ -1,9 +1,9 @@
 # MRQ-78: API tokens screen is unreachable for every seeded user — org-scope membership never created
 
-Ticket: MRQ-78  
-Actor: `agent:delegator-mrq-78`  
-Worktree: `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-78-api-tokens-org-scope`  
-Branch: `mrq-78-api-tokens-org-scope`  
+Ticket: MRQ-78
+Actor: `agent:delegator-mrq-78`
+Worktree: `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-78-api-tokens-org-scope`
+Branch: `mrq-78-api-tokens-org-scope`
 Base: `github/main @ ba22fb3`
 
 ## Decision
