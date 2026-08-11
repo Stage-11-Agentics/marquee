@@ -31,11 +31,11 @@ test("AC-1, AC-2 · the SSR landing exposes both reachable demo entries and live
   const data = await loadLandingData(env.DB);
   expect(data.conferenceName).toBe("AIE NYC 2026");
   expect(data.counts).toEqual({
-    submitted: 3,
+    submitted: 1,
     inReview: 1,
-    accepted: 1,
-    onboarding: 1,
-    scheduled: 2,
+    accepted: 0,
+    onboarding: 0,
+    scheduled: 1,
     published: 1,
     reviewPressure: 2,
     overdueSpeakers: 1,
@@ -46,7 +46,7 @@ test("AC-1, AC-2 · the SSR landing exposes both reachable demo entries and live
   expect(html).toContain('data-demo-role="organizer"');
   expect(html).toContain('data-demo-role="speaker"');
   expect(html).toContain("Submitted");
-  expect(html).toContain(">3</strong>");
+  expect(html).toContain(">1</strong>");
   expect(html).toContain(">1</strong>");
   expect(html).toContain("/submissions?demo=organizer");
   expect(html).toContain("/submissions?demo=speaker");

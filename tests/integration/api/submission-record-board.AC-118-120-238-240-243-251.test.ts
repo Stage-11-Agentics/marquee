@@ -143,8 +143,8 @@ describe.sequential("MRQ-33 admin record and program board", () => {
       body: JSON.stringify({ starts_at: Date.UTC(2026, 9, 20, 15, 30), duration_min: 30, room_id: ROOM_ID, track_id: TRACK_IN }),
     });
     expect(scheduled.status).toBe(200);
-    const scheduledRecord = await body<{ slot: { day: string; time: string; room: string; is_published: boolean }; stage: string }>(scheduled);
-    expect(scheduledRecord).toMatchObject({ stage: "scheduled", slot: { room: "Room 101", is_published: false } });
+    const scheduledRecord = await body<{ slot: { day: string; time: string; room: string; is_published: boolean }; stage: string; actions: { can_decide: boolean; can_schedule: boolean } }>(scheduled);
+    expect(scheduledRecord).toMatchObject({ stage: "scheduled", slot: { room: "Room 101", is_published: false }, actions: { can_decide: false, can_schedule: false } });
     expect(scheduledRecord.slot.day).toContain("·");
     expect(scheduledRecord.slot.time).toMatch(/:/);
 
@@ -163,8 +163,8 @@ describe.sequential("MRQ-33 admin record and program board", () => {
 
     const published = await request(`/api/v1/events/${EVENT_ID}/submissions/${session.id}/publish`, { method: "POST" });
     expect(published.status).toBe(200);
-    const publicRecord = await body<{ stage: string; slot: { is_published: boolean } }>(published);
-    expect(publicRecord).toMatchObject({ stage: "published", slot: { is_published: true } });
+    const publicRecord = await body<{ stage: string; slot: { is_published: boolean }; actions: { can_decide: boolean } }>(published);
+    expect(publicRecord).toMatchObject({ stage: "published", slot: { is_published: true }, actions: { can_decide: false } });
   });
 
   test("AC-251 · the evaluation panel assignment guard rejects an out-of-scope reviewer before any row is written and updates the reviewer queue in scope", async () => {

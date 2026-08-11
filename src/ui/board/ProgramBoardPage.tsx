@@ -60,7 +60,7 @@ function VirtualColumn({ column, cards, navigate }: { column: BoardColumn; cards
   const visible = cards.slice(first, first + visibleCount);
   return <section class="program-board-column" aria-label={`${column.label}, ${column.count.toLocaleString()} records`}>
     <header class="program-board-column-head"><div><strong>{column.label}</strong><small>{column.entry_action}</small></div><span class="program-board-count tabular">{column.count.toLocaleString()}</span></header>
-    <div class="program-board-derived-note">{column.id === "scheduled" ? "placed on the working agenda" : column.id === "published" ? "live on the public site" : "Record-owned actions"}</div>
+    <div class="program-board-derived-note">{column.id === "scheduled" ? "placed on the working agenda" : column.id === "published" ? "live on the public site" : column.id === "declined" ? "decision history" : "Record-owned actions"}</div>
     <div class="program-board-column-list" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)} style={{ height: `${viewportHeight}px` }}>
       {cards.length === 0 ? <div class="program-board-empty">No matching submissions</div> : <div style={{ height: `${cards.length * CARD_HEIGHT}px`, position: "relative" }}>
         <div class="program-board-window" style={{ transform: `translateY(${first * CARD_HEIGHT}px)` }}>
@@ -115,7 +115,7 @@ export function ProgramBoardPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props
   const hasFilters = Object.values(filters).some(Boolean);
   const ready = state.kind === "ready" ? state : null;
   return <div class="program-board-page">
-    <PageHeader title="Program board" copy={ready ? `${ready.cards.length.toLocaleString()} records · seven stages · read-only record projection.` : "Reading the conference record projection…"} actions={<Button small onClick={() => setFilters(EMPTY_FILTERS)}>Reset filters</Button>} />
+    <PageHeader title="Program board" copy={ready ? `${ready.cards.length.toLocaleString()} records · seven lifecycle stages + terminal outcomes · read-only record projection.` : "Reading the conference record projection…"} actions={<Button small onClick={() => setFilters(EMPTY_FILTERS)}>Reset filters</Button>} />
     <Card class="program-board-card-shell">
       <form class="program-board-filters" onSubmit={(event) => event.preventDefault()}>
         <label class="program-board-search"><span class="sr-only">Search the program board</span><input value={filters.q} onInput={(event) => updateFilter("q", event.currentTarget.value)} placeholder="Search title, speaker, ID, or company" /></label>

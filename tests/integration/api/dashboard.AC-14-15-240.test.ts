@@ -44,6 +44,7 @@ async function buildFixture(): Promise<void> {
       ('sub-submitted', '${EVENT_ID}', 'abstract', 'Submitted work', 'submitted', 'fmt-stage', NULL, 'public', ${now}, ${now}, 'submitted work'),
       ('sub-review', '${EVENT_ID}', 'abstract', 'Review work', 'in_review', 'fmt-stage', NULL, 'public', ${now}, ${now}, 'review work'),
       ('sub-unplaced', '${EVENT_ID}', 'abstract', 'Unplaced accepted work', 'accepted', 'fmt-stage', 'wave-1', 'public', ${now}, ${now}, 'unplaced work'),
+      ('sub-waved', '${EVENT_ID}', 'abstract', 'Pending wave work', 'accepted', 'fmt-stage', 'wave-2', 'public', ${now}, ${now}, 'pending wave work'),
       ('sub-scheduled', '${EVENT_ID}', 'abstract', 'Private scheduled work', 'accepted', 'fmt-stage', 'wave-2', 'public', ${now}, ${now}, 'private scheduled work'),
       ('sub-published', '${EVENT_ID}', 'session', 'Published work', 'accepted', 'fmt-stage', 'wave-2', 'admin', ${now}, ${now}, 'published work'),
       ('sub-rejected', '${EVENT_ID}', 'abstract', 'Workshop rejected work', 'rejected', 'fmt-workshop', NULL, 'public', ${now}, ${now}, 'rejected work');
@@ -52,6 +53,7 @@ async function buildFixture(): Promise<void> {
       ('st-submitted', 'sub-submitted', 'track-agents', 1),
       ('st-review', 'sub-review', 'track-agents', 1),
       ('st-unplaced', 'sub-unplaced', 'track-evals', 1),
+      ('st-waved', 'sub-waved', 'track-agents', 1),
       ('st-scheduled', 'sub-scheduled', 'track-evals', 1),
       ('st-published', 'sub-published', 'track-agents', 1),
       ('st-rejected', 'sub-rejected', 'track-evals', 1);
@@ -109,7 +111,7 @@ describe.sequential("MRQ-11 program dashboard", () => {
     const initial = await dashboard();
     expect(countById(initial.pipeline, "submitted")).toBe(1);
     expect(countById(initial.pipeline, "in_review")).toBe(1);
-    expect(countById(initial.format_mix, "fmt-stage")).toBe(5);
+    expect(countById(initial.format_mix, "fmt-stage")).toBe(6);
     expect(countById(initial.format_mix, "fmt-workshop")).toBe(1);
     expect(countById(initial.track_pressure, "track-agents")).toBe(2);
     expect(countById(initial.track_pressure, "track-evals")).toBe(0);
@@ -122,7 +124,7 @@ describe.sequential("MRQ-11 program dashboard", () => {
     const refreshed = await dashboard();
     expect(countById(refreshed.pipeline, "submitted")).toBe(0);
     expect(countById(refreshed.pipeline, "in_review")).toBe(2);
-    expect(countById(refreshed.format_mix, "fmt-stage")).toBe(4);
+    expect(countById(refreshed.format_mix, "fmt-stage")).toBe(5);
     expect(countById(refreshed.format_mix, "fmt-workshop")).toBe(2);
     expect(countById(refreshed.track_pressure, "track-agents")).toBe(1);
     expect(countById(refreshed.track_pressure, "track-evals")).toBe(1);
@@ -131,6 +133,15 @@ describe.sequential("MRQ-11 program dashboard", () => {
 
   test("AC-15 · every dashboard number opens a submissions filter with the same result cardinality", async () => {
     const snapshot = await dashboard();
+    expect(Object.fromEntries(snapshot.pipeline.map((item) => [item.id, item.count]))).toMatchObject({
+      submitted: 0,
+      in_review: 2,
+      waved: 1,
+      accepted: 0,
+      onboarding: 1,
+      scheduled: 1,
+      published: 1,
+    });
     for (const item of countLinkPairs(snapshot).filter((item) => item.href.startsWith("/submissions"))) {
       expect(await listTotal(item.href), `${item.label} must preserve its displayed count`).toBe(item.count);
     }

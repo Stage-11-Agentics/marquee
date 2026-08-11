@@ -80,6 +80,37 @@ export async function hasSpeakerTaskCancellationColumn(database: D1Database): Pr
   return row?.present === 1;
 }
 
+function pendingWavePredicate(submission: string): string {
+  return `${submission}.wave_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM waves stage_wave
+    WHERE stage_wave.id = ${submission}.wave_id
+      AND stage_wave.event_id = ${submission}.event_id
+      AND stage_wave.sent_at IS NULL
+  )`;
+}
+
+function onboardingStagePredicate(
+  submission: string,
+  agenda: string,
+  includeCancelledAt: boolean,
+): string {
+  return `${submission}.status = 'accepted'
+    AND ${agenda}.id IS NULL
+    AND NOT (${pendingWavePredicate(submission)})
+    AND ${submissionTaskPredicate("open", submission, includeCancelledAt)}`;
+}
+
+function acceptedStagePredicate(
+  submission: string,
+  agenda: string,
+  includeCancelledAt: boolean,
+): string {
+  return `${submission}.status = 'accepted'
+    AND ${agenda}.id IS NULL
+    AND NOT (${onboardingStagePredicate(submission, agenda, includeCancelledAt)})
+    AND NOT (${pendingWavePredicate(submission)})`;
+}
+
 /**
  * One status vocabulary powers list filtering and dashboard instruments. A
  * dashboard tile therefore cannot count a different set than its destination.
@@ -90,11 +121,15 @@ export function submissionStatusPredicate(
 ): string {
   const submission = aliases.submission ?? "s";
   const agenda = aliases.agenda ?? "ai";
+  const includeCancelledAt = aliases.includeCancelledAt ?? false;
   if (status === "scheduled") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 0`;
   if (status === "published") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 1`;
-  if (status === "waved") return `${submission}.wave_id IS NOT NULL AND ${submission}.status = 'accepted'`;
+  if (status === "waved") return `${submission}.status = 'accepted'
+    AND ${agenda}.id IS NULL
+    AND ${pendingWavePredicate(submission)}`;
   if (status === "unreviewed") return `${submission}.status IN ('submitted', 'in_review')`;
-  if (status === "onboarding") return submissionTaskPredicate("open", submission, aliases.includeCancelledAt);
+  if (status === "onboarding") return onboardingStagePredicate(submission, agenda, includeCancelledAt);
+  if (status === "accepted") return acceptedStagePredicate(submission, agenda, includeCancelledAt);
   return `${submission}.status = '${status}'`;
 }
 
