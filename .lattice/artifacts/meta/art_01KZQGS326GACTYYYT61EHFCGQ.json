@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T04:20:04Z",
+  "created_by": "agent:delegator-mrq-18",
+  "custom_fields": {},
+  "id": "art_01KZQGS326GACTYYYT61EHFCGQ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQGS326GACTYYYT61EHFCGQ.md",
+    "size_bytes": 3000
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS live Worker/c11 validation and final pr-gate at exact HEAD",
+  "tags": [],
+  "title": "MRQ-18 validation 492a7ff",
+  "token_usage": null,
+  "type": "note"
+}

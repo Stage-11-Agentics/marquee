@@ -20,10 +20,40 @@
       "id": "art_01KZQFANRDYVYMA0A07BF4R5BG",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGG91XSD2EZ0R6DJMP2XPK",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGGG1B7840CJ99XFH8KPM9",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGPZS20S63061FQH91B2P4",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGPZXKH2KKBE5CXYJQ705R",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGRN583ZEDJM92PS2BYKHR",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGRNAV7DXM4JSMTHW3GVRN",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM97XAXRCH0J791FE5ESJ",
-  "last_event_id": "ev_01KZQFBDQMZFH0MXNMWW6R6NP9",
+  "last_event_id": "ev_01KZQGRNAXW2YH3P1549D0FFNZ",
   "last_status_changed_at": "2026-08-11T03:55:08Z",
   "linked_files": [],
   "priority": "medium",
@@ -43,6 +73,6 @@
   "tags": null,
   "title": "Agenda: data, pool, placement, and day/list/week/room views",
   "type": "task",
-  "updated_at": "2026-08-11T03:55:08Z",
+  "updated_at": "2026-08-11T04:19:50Z",
   "urgency": null
 }

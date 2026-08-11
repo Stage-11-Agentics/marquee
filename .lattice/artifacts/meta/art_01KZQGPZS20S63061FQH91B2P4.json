@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T04:18:55Z",
+  "created_by": "agent:delegator-mrq-20",
+  "custom_fields": {},
+  "id": "art_01KZQGPZS20S63061FQH91B2P4",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQGPZS20S63061FQH91B2P4.md",
+    "size_bytes": 2176
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: exact-HEAD inline self-review; no findings; headless review suspended.",
+  "tags": [],
+  "title": "MRQ-20 self-review (HEAD 735c308)",
+  "token_usage": null,
+  "type": "file"
+}

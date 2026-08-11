@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM9Q27F5F60RPPN93V9X5",
-  "last_event_id": "ev_01KZQG11MMN9RXXDW4445M2R2V",
-  "last_status_changed_at": "2026-08-11T04:04:06Z",
+  "last_event_id": "ev_01KZQGGPPWRW4SG556RS1AJ1HB",
+  "last_status_changed_at": "2026-08-11T04:15:30Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -42,10 +42,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-25",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Calendar invites and the un-accept cascade",
   "type": "task",
-  "updated_at": "2026-08-11T04:06:56Z",
+  "updated_at": "2026-08-11T04:15:30Z",
   "urgency": null
 }

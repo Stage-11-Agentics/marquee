@@ -1,7 +1,7 @@
 # MRQ-20 running-system validation (exact head)
 
-Validated commit: 735c308b34ed67c0884be048c923d4d8c1c7abcc
-Base: forgejo/master @ a05a015da45d3c9379b99ef1e48d5b291e127c32
+Validated commit: a470ea4839d0316ff5f0551c6d2c38b081bc3313
+Base: forgejo/master @ a3b55b332bc93d11b301dcdd3d4074cec2473352
 Verdict: PASS
 
 Validation mode: local Wrangler Worker over HTTPS with an isolated local D1
@@ -18,7 +18,7 @@ Observed proof:
 - A subsequent agenda read removed that submission from the pool and returned the placed session with its date/time, room, building, and source title.
 - `DELETE /api/v1/events/evt_aie-ny-2026/agenda/items/:id` with the returned `If-Match` returned 204; the next agenda read restored the submission to the pool and retained the 6 visible conflicts.
 - `npm run check:api` passed on this exact head with 59 OpenAPI operations and no findings.
-- `npm run pr-gate -- --ticket MRQ-20` passed on this exact head in 19.959s.
+- `npm run pr-gate -- --ticket MRQ-20` passed on this exact head in 22.961s.
 
 Validation boundary: the local runtime proves the API lifecycle and agenda
 projection against seeded D1; no public AV/notes surface or building seed was

@@ -1,7 +1,7 @@
 # MRQ-18 inline self-review (final rebased head)
 
-Reviewed commit: 492a7ffaed196f4f07d2853be6d00fdc2541ba5c
-Base: forgejo/master @ a05a015da45d3c9379b99ef1e48d5b291e127c32
+Reviewed commit: 44dc59515d755d4b6a7c895597b0e0710d5f3208
+Base: forgejo/master @ 394b63242f385baa4eec9ca570c4662d2e7dd843
 Verdict: PASS
 Review mode: inline self-review; headless code review is suspended by the ticket directive.
 

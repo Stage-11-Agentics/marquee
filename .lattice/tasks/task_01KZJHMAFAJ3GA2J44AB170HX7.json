@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMAFAJ3GA2J44AB170HX7",
-  "last_event_id": "ev_01KZQG48YCMRWHK96DCVF6B1VK",
-  "last_status_changed_at": "2026-08-11T04:08:42Z",
+  "last_event_id": "ev_01KZQGH610VB9ZBM93K9PFZV4A",
+  "last_status_changed_at": "2026-08-11T04:15:45Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-33",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Admin create, the submission record, and the program board",
   "type": "task",
-  "updated_at": "2026-08-11T04:08:42Z",
+  "updated_at": "2026-08-11T04:15:45Z",
   "urgency": null
 }

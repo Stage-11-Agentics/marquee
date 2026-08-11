@@ -25,10 +25,25 @@
       "id": "art_01KZQFVT1TRWF72XRVG9BC2R0B",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGEXNC7FCZYS486ZGE9J7N",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGQ3J64FC18H8PYANN638R",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGS326GACTYYYT61EHFCGQ",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM91S8KRZST6J185QK1K3",
-  "last_event_id": "ev_01KZQFVT1YA4GHGJXHEYHF9QZ8",
+  "last_event_id": "ev_01KZQGS328NPV2Z1DK11ZKJAWX",
   "last_status_changed_at": "2026-08-11T03:54:45Z",
   "linked_files": [],
   "priority": "medium",
@@ -48,6 +63,6 @@
   "tags": null,
   "title": "Reviewer queue",
   "type": "task",
-  "updated_at": "2026-08-11T04:04:05Z",
+  "updated_at": "2026-08-11T04:20:04Z",
   "urgency": null
 }

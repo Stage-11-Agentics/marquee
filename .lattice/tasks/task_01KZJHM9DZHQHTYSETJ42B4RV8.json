@@ -15,11 +15,21 @@
       "id": "art_01KZQF6GGFKJDE6HS8Z7X977GS",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGGR704J50KB434AP3P3A9",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGQEYBWFADQHDBZKEFRWPT",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM9DZHQHTYSETJ42B4RV8",
-  "last_event_id": "ev_01KZQF6GGJQA0DZDY3MGJEJW0X",
-  "last_status_changed_at": "2026-08-11T03:46:29Z",
+  "last_event_id": "ev_01KZQGQEYDCTKPYAJCFFFFRQMK",
+  "last_status_changed_at": "2026-08-11T04:16:13Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +44,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-22",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Public event site, permalinks, and embeds",
   "type": "task",
-  "updated_at": "2026-08-11T03:52:27Z",
+  "updated_at": "2026-08-11T04:19:11Z",
   "urgency": null
 }

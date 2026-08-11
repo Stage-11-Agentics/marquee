@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T04:14:31Z",
+  "created_by": "agent:delegator-mrq-18",
+  "custom_fields": {},
+  "id": "art_01KZQGEXNC7FCZYS486ZGE9J7N",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQGEXNC7FCZYS486ZGE9J7N.md",
+    "size_bytes": 1989
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS exact final HEAD after MRQ-19/MRQ-13 rebases; no findings",
+  "tags": [],
+  "title": "MRQ-18 self-review 44dc595",
+  "token_usage": null,
+  "type": "note"
+}
