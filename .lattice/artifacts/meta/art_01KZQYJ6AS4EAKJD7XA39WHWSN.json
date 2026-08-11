@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T08:20:58Z",
+  "created_by": "agent:delegator-mrq-30",
+  "custom_fields": {},
+  "id": "art_01KZQYJ6AS4EAKJD7XA39WHWSN",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQYJ6AS4EAKJD7XA39WHWSN.md",
+    "size_bytes": 1613
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Measured validation PASS for M-29; M-54 AC-241 remains held behind CP-2/Tier A.",
+  "tags": [],
+  "title": "MRQ-30 validation at b03185f",
+  "token_usage": null,
+  "type": "note"
+}

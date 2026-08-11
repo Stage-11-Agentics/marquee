@@ -392,7 +392,7 @@ Scopes resolve from `memberships`: `public` < `speaker` (own records only) < `re
 | Airtable | `GET /mirror/status`, `POST /mirror/sync`, `POST /mirror/webhook` (unauthenticated but signature-checked) |
 | Search | `GET /search?q=` — submissions, speakers, sessions, forms in one labelled list (AC-102) |
 | Tokens | `GET/POST /org/tokens`, `DELETE /org/tokens/:id` |
-| Webhooks | `GET/POST /webhooks`, `PATCH/DELETE /webhooks/:id`, `POST /webhooks/:id/test` (one signed test delivery), `GET /webhooks/:id/deliveries` (AC-241, Amendment 15). Outbound only — not to be confused with `POST /mirror/webhook`, which is Airtable **inbound**. Six event types: `submission.created`, `submission.status_changed`, `evaluation.completed`, `task.completed`, `agenda.published`, `speaker.confirmed`. Delivery is `HMAC-SHA256` over `id.timestamp.body`, retried with backoff on `WEBHOOK_QUEUE`, idempotent on delivery `id`. **These routes exist in this table so `check:api`'s registry/OpenAPI parity has something to match — a promised feature absent from §4.2 fails the gate on its own PR** |
+| Webhooks | `GET/POST /webhooks`, `PATCH/DELETE /webhooks/:id`, `POST /webhooks/:id/test` (one signed test delivery), `GET /webhooks/:id/deliveries` (AC-241, Amendment 15). Outbound only — not to be confused with `POST /mirror/webhook`, which is Airtable **inbound**. Six event types (**Amendment 16, ratified 2026-08-11** — see below): `submission.created`, `submission.status_changed`, `evaluation.completed`, `speaker_task.completed`, `agenda.published`, `speaker.confirmed`. Delivery is `HMAC-SHA256` over `id.timestamp.body`, retried with backoff on `WEBHOOK_QUEUE`, idempotent on delivery `id`. **These routes exist in this table so `check:api`'s registry/OpenAPI parity has something to match — a promised feature absent from §4.2 fails the gate on its own PR** |
 | Ops | `POST /admin/reset-demo`, `GET /admin/health` |
 
 **Meta:** `GET /api/openapi.json`, `GET /api/docs` (rendered, linked from the app's sidebar — AC-106).
@@ -782,3 +782,24 @@ Amendment 11 gave a building a name, an address, and a position in a list. This 
 **[Beyond v1.8 prototype — acknowledged divergence: none for the three items above. AC-233's authoring surface remains unbuilt in both prototype and product, which is the if-capacity ruling, not a divergence.]**
 
 ---
+
+## Amendment 16 — the webhook event allowlist (ratified 2026-08-11)
+
+`SPEC.md` §4.2 and `USER_STORIES.md` AC-241 shipped **two different six-event lists**, sharing only three entries. MRQ-30 flagged it rather than picking one, which was correct — a delegator choosing silently would have set the wire contract by accident.
+
+**The ratified six:**
+
+| Event | Emitter in merged code |
+|---|---|
+| `submission.created` | MRQ-15 public CFP form; MRQ-33 admin create |
+| `submission.status_changed` | MRQ-19's single `insertDecisions` writer |
+| `evaluation.completed` | MRQ-18 reviewer queue |
+| `speaker_task.completed` | MRQ-16 speaker portal; MRQ-24 chase board |
+| `agenda.published` | MRQ-20 agenda; MRQ-22 public site |
+| `speaker.confirmed` | MRQ-38 role confirm/decline |
+
+**Why this list.** Every entry has a real emitter already merged — a webhook that can never fire is the same defect class as a green test over a dead feature. It is SPEC's list with one rename adopted from the stories: `task.completed` → **`speaker_task.completed`**, because the table is `speaker_tasks` and the shorter name would be ambiguous once organiser-side tasks exist.
+
+**Dropped, deliberately:** `submission.updated` (fires on every keystroke-level edit — noise that would swamp a consumer) and `person.updated` (profile edits are covered where they matter by `speaker.confirmed` and `speaker_task.completed`). Both remain available to a later amendment if a consumer asks; neither is worth a bonus event slot now.
+
+Delivery is unchanged: `HMAC-SHA256` over `id.timestamp.body`, retried with backoff on `WEBHOOK_QUEUE`, idempotent on delivery `id`.

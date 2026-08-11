@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:186",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 1,
+  "comment_count": 5,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-28 \u2014 Tier B rank 5 (US-67), Wave 2 (\u00a75)\n\nScope (verbatim): affordance on every admin route, `/` and \u2318K with no navigation, one labelled result list across submissions/speakers/sessions/forms, fuzzy on name and title, <200 ms.\n\nAC-101 iterates **every** admin route in the route manifest \u2014 the affordance must be in M-05a's shell, not bolted onto individual screens.\n\nACs: AC-101 \u2013 AC-104\nHours: 4\nWorkflow: inline-full\nShared files: the search affordance lives in the shell topbar (M-05a's `src/ui/shell/*`) \u2014 additive only; do not restyle the shell.\nDeps: M-10\nSpeed: AC-103 is an AC-sourced budget \u2014 keystroke \u2192 results painted p95 \u2264 200 ms over \u226510 queries including misspellings.\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T08:22:58Z",
   "evidence_refs": [
     {
       "id": "art_01KZQPR6MEQDQWG26FJD1W1FYC",
@@ -20,11 +20,36 @@
       "id": "art_01KZQV58NGCPDSHSN86PWKHFXB",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQWKWF1Z0QTZ2DSH5WM2KTZ",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZQWQ09FHAZ7WXC412F36Y5R",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQWT13AQRXAKNXWSNNXRDSE",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQYNV77BW39R76EAR97FW20",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQYNV77BW39R76EAR97FW1Z",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMA377D1W31X8NY6Q8FPB",
-  "last_event_id": "ev_01KZQV58NK69RPT83Q3JNFRPXG",
-  "last_status_changed_at": "2026-08-11T07:14:39Z",
+  "last_event_id": "ev_01KZQYNV77BW39R76EAR97FW23",
+  "last_status_changed_at": "2026-08-11T08:22:58Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -36,13 +61,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-29",
-  "status": "review",
+  "status": "done",
   "tags": null,
   "title": "Quick search",
   "type": "task",
-  "updated_at": "2026-08-11T07:21:29Z",
+  "updated_at": "2026-08-11T08:22:58Z",
   "urgency": null
 }

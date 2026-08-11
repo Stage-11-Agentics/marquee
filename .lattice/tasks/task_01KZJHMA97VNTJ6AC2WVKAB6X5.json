@@ -3,17 +3,43 @@
   "branch_links": [],
   "c11_surface": "surface:191",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-30 \u2014 Tier B rank 11 (US-66), Wave 2 (\u00a75)\n\nScope (verbatim): mapping preview, relationships/scores/statuses, idempotent outcomes, batch undo, named empty-state/README entry.\n\nAC-109 is the plan's **single `op-assist` criterion**: it needs one real Sessionize export from the operator (any event: sessions + speakers + evaluation results) \u2014 the only thing that proves our column fixture's names and status vocabulary match reality. Everything else runs against `fixtures/sessionize/{sessions,speakers}.csv`.\nWhen this lands, fold its real text back into M-45's README import section (which was written against the fixture).\n\nACs: AC-109 \u2013 AC-113\nHours: 7\nWorkflow: sub-agent-full (\u22657 h)\nShared files: `README.md` is **M-45's** \u2014 file the import section as `docs/notes/M-30.md` for M-45 to fold in (\u00a77).\nDeps: M-08\nHuman precondition: one real Sessionize export (\u00a78 item 8, EVALUATION \u00a71.6 item 6)\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQWKQT07X4NP9X5REEPS1BX",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQYCSANAS67038XWAX0TKT2",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQYEDZ98PKFTVRTTM0S95Y5",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQYGDS3937B0A6YJP0J9AWY",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQYGSYDY5KR1SDYH0G9NCJ7",
+      "role": null,
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHMA97VNTJ6AC2WVKAB6X5",
-  "last_event_id": "ev_01KZQVVGAX5H9CGD7NXE27FNKM",
-  "last_status_changed_at": "2026-08-11T07:33:38Z",
+  "last_event_id": "ev_01KZQYGSYDY5KR1SDYH0G9NCJ8",
+  "last_status_changed_at": "2026-08-11T08:20:01Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +54,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-31",
-  "status": "in_planning",
+  "status": "pr_open",
   "tags": null,
   "title": "Sessionize import",
   "type": "task",
-  "updated_at": "2026-08-11T07:33:38Z",
+  "updated_at": "2026-08-11T08:20:13Z",
   "urgency": null
 }

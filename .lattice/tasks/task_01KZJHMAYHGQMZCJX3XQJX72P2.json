@@ -30,11 +30,21 @@
       "id": "art_01KZQVWV6BAHFQZ72PXJ906TJ3",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQWJMFH2B6TDS0D8S1XZ5E9",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQWPBESMCEHGR19HJ76H4GX",
+      "role": null,
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMAYHGQMZCJX3XQJX72P2",
-  "last_event_id": "ev_01KZQVWV6D75NDB30PC6MZXX9Z",
-  "last_status_changed_at": "2026-08-11T07:28:11Z",
+  "last_event_id": "ev_01KZQWPH68N1ESGY8ZG6P42P1Q",
+  "last_status_changed_at": "2026-08-11T07:48:23Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -70,10 +80,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-38",
-  "status": "in_validation",
+  "status": "pr_open",
   "tags": null,
   "title": "Role confirm/decline and decision feedback",
   "type": "task",
-  "updated_at": "2026-08-11T07:34:22Z",
+  "updated_at": "2026-08-11T07:48:23Z",
   "urgency": null
 }

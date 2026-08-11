@@ -885,7 +885,7 @@ Source: Atin driving v1.2 (scheduled/published legibility; multi-track demo visi
 
 Source: `sequence/research/api-comparison.md` (Sessionboard's public API docs crawled and diffed; R53 API bonus is the frame).
 
-**AC-241** *(appended to US-68's area, Tier B — build only after Tier A is green)*: Signed outbound webhooks: endpoint CRUD per event, a test-delivery action, and a deliveries log; only six event types (`submission.created|updated|status_changed`, `person.updated`, `speaker_task.completed`, `agenda.published`); deliveries queued with retry/backoff, HMAC-signed over `id.timestamp.body`, replay-idempotent.
+**AC-241** *(appended to US-68's area, Tier B — build only after Tier A is green)*: Signed outbound webhooks: endpoint CRUD per event, a test-delivery action, and a deliveries log; only six event types (**SPEC Amendment 16, ratified 2026-08-11**): `submission.created`, `submission.status_changed`, `evaluation.completed`, `speaker_task.completed`, `agenda.published`, `speaker.confirmed`; deliveries queued with retry/backoff, HMAC-signed over `id.timestamp.body`, replay-idempotent.
 
 **AC-242** *(appended to US-68, Tier B)*: API tokens are issued with named scopes (`program:read/write`, `review:write`, `speaker:write`, `agenda:write`, `comms:send`, `mirror:write`) and optional event restriction; effective authority is the intersection of the token's grants and the issuer's membership; the secret is shown once and stored only as a hash; revocation is immediate.
 

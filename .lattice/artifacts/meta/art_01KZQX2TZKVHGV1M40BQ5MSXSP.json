@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T07:55:07Z",
+  "created_by": "agent:delegator-mrq-24",
+  "custom_fields": {},
+  "id": "art_01KZQX2TZKVHGV1M40BQ5MSXSP",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQX2TZKVHGV1M40BQ5MSXSP.md",
+    "size_bytes": 1074
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Gate and merged AC trace pass at 3ecba5f",
+  "tags": [],
+  "title": "MRQ-24 final validation",
+  "token_usage": null,
+  "type": "note"
+}

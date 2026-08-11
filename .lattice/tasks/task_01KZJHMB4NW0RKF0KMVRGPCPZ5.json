@@ -15,11 +15,31 @@
       "id": "art_01KZQVHFN1KFSAH151YF7QQD8W",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQWEVE7895ZAN1FTR4EWF9Y",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQWKXEK3S3N4K0AW7VPY7TE",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQWP7Z8RS319ERH0DB4Y62Z",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQWPK4FP8Y1G0EFAJN0NJXV",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMB4NW0RKF0KMVRGPCPZ5",
-  "last_event_id": "ev_01KZQVHFN3SKKHFAS96SE2NV77",
-  "last_status_changed_at": "2026-08-11T07:24:45Z",
+  "last_event_id": "ev_01KZQWPK4HK7VM797MWVNKGCY9",
+  "last_status_changed_at": "2026-08-11T07:44:25Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +54,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-40",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "README, self-host path, and extension points",
   "type": "task",
-  "updated_at": "2026-08-11T07:28:09Z",
+  "updated_at": "2026-08-11T07:48:25Z",
   "urgency": null
 }

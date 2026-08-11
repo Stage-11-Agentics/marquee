@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T08:20:12Z",
+  "created_by": "agent:delegator-mrq-30",
+  "custom_fields": {},
+  "id": "art_01KZQYGRWF1B9DA7G5GBG91Y5J",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQYGRWF1B9DA7G5GBG91Y5J.md",
+    "size_bytes": 2735
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: exact-head review of M-29 implementation; M-54 remains CP-2 gated.",
+  "tags": [],
+  "title": "MRQ-30 self-review at b03185f",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T08:22:12Z",
+  "created_by": "agent:delegator-mrq-30",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/43"
+  },
+  "id": "art_01KZQYMEBZ39TFAMY1EBB6JAST",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open PR against master for the validated M-29 slice; M-54 remains deferred.",
+  "tags": [],
+  "title": "MRQ-30 PR #43",
+  "token_usage": null,
+  "type": "reference"
+}

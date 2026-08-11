@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T07:46:16Z",
+  "created_by": "agent:delegator-mrq-38",
+  "custom_fields": {},
+  "id": "art_01KZQWJMFH2B6TDS0D8S1XZ5E9",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQWJMFH2B6TDS0D8S1XZ5E9.md",
+    "size_bytes": 1293
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Exact-head pr-gate PASS on master 3be1909; 163 tests, 0 uncovered AC claims, demo-safe mail.",
+  "tags": [],
+  "title": "MRQ-38 validation 4b130f2",
+  "token_usage": null,
+  "type": "note"
+}

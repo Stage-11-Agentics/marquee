@@ -1,17 +1,35 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-30",
   "branch_links": [],
-  "comment_count": 1,
+  "c11_surface": "surface:192",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-29 (Tier B rank 7, US-68) + M-54 (Tier B rank 7, US-68) \u2014 Wave 2 (\u00a75) \u00b7 MERGED at mint (5 h + 4 h = 9 h; one story, one API module, identical ticket-level dependency {M-07})\n\n**M-29 \u2014 API surface completion** (5 h, ACs AC-105 \u2013 AC-108, AC-242, dep M-07)\nScope (verbatim): scoped token UI and effective grant\u2229membership, docs route linked from sidebar, `check:api` route-manifest parity.\nAC-242: tokens issued with named scopes (`program:read/write`, `review:write`, `speaker:write`, `agenda:write`, `comms:send`, `mirror:write`) and optional event restriction; effective authority is grant \u2229 membership; the secret is shown once and stored only as a hash; revocation is immediate.\n\n**M-54 \u2014 Signed outbound webhooks** (4 h, AC-241, deps M-07 + CP-2)\nScope (verbatim): endpoint CRUD/test/log, six-event allowlist, queue retry/backoff, HMAC over `id.timestamp.body`, replay idempotency; **cannot begin until CP-2/Tier A is green**.\nSix-event allowlist: `submission.created|updated|status_changed`, `person.updated`, `speaker_task.completed`, `agenda.published`.\n\n**SEQUENCING (binding, read before planning):** CP-2 is a checkpoint, not a ticket, so it cannot be linked \u2014 the webhook half must not start until Tier A is green. **Land the token/docs half first**: M-38+M-39 (the \ud83d\udd12 gate-12 CLI + SKILL pair) depends on this ticket, and gate 12 cannot be waived. If Tier A is not yet green when this ticket is claimed, ship the M-29 half, open the PR, and take the webhook half as the second pass.\n\nACs (union): AC-105 \u2013 AC-108, **AC-241, AC-242**\nHours: 9 (5 + 4)\nWorkflow: sub-agent-full (\u22657 h combined)\nShared files: none \u2014 routes register by glob (M-07's generated `_manifest.ts`); **never hand-edit a route registry**. Docs, CLI, and SKILL all derive from that one registry \u2014 `check:api` asserts operation counts and content hashes match across served JSON and rendered docs (Amendment 6; this is what beats the incumbent's 177-vs-18 docs drift).\nDeps: M-07 \u00b7 plus the CP-2 gate on the webhook half (recorded here; no ticket to link)\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQYGRWF1B9DA7G5GBG91Y5J",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQYJ6AS4EAKJD7XA39WHWSN",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQYMEBZ39TFAMY1EBB6JAST",
+      "role": null,
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHMA68VG0MQV5469WSS0HJ",
-  "last_event_id": "ev_01KZQFNZSV8DN59FXQ6XACF3FG",
-  "last_status_changed_at": "2026-08-09T05:58:44Z",
+  "last_event_id": "ev_01KZQYNAVSG42PFVYB4ZZE6DY6",
+  "last_status_changed_at": "2026-08-11T08:22:16Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -33,10 +51,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-30",
-  "status": "backlog",
+  "status": "pr_open",
   "tags": null,
   "title": "API surface completion and signed outbound webhooks",
   "type": "task",
-  "updated_at": "2026-08-11T04:00:54Z",
+  "updated_at": "2026-08-11T08:22:41Z",
   "urgency": null
 }

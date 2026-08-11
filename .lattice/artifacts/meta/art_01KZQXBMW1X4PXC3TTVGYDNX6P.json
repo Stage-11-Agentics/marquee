@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T07:59:55Z",
+  "created_by": "agent:delegator-mrq-24",
+  "custom_fields": {},
+  "id": "art_01KZQXBMW1X4PXC3TTVGYDNX6P",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQXBMW1X4PXC3TTVGYDNX6P.md",
+    "size_bytes": 826
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Local Wrangler board, speaker drawer, and portal flow passed at 3ecba5f",
+  "tags": [],
+  "title": "MRQ-24 running-system validation",
+  "token_usage": null,
+  "type": "note"
+}

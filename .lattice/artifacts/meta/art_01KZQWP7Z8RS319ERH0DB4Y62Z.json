@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T07:48:14Z",
+  "created_by": "agent:delegator-mrq-40",
+  "custom_fields": {},
+  "id": "art_01KZQWP7Z8RS319ERH0DB4Y62Z",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQWP7Z8RS319ERH0DB4Y62Z.md",
+    "size_bytes": 908
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS review for final rebased HEAD",
+  "tags": [],
+  "title": "MRQ-40 final-head implementation review",
+  "token_usage": null,
+  "type": "file"
+}
