@@ -157,7 +157,8 @@ function toRoom(row: RoomQueryRow): AgendaRoom {
 }
 
 function toSession(row: SessionQueryRow): AgendaSession {
-  const speakers = parseSpeakers(row.speakers_json);
+  const rawSpeakers = parseJsonArray<SubmissionSpeakerListItem>(row.speakers_json);
+  const speakers = dedupeParticipants(rawSpeakers);
   const tracks = parseTracks(row.tracks_json);
   const status = row.kind === "break"
     ? "scheduled"
@@ -178,6 +179,10 @@ function toSession(row: SessionQueryRow): AgendaSession {
     track: row.track_name,
     tracks,
     speakers,
+    // The visible speaker list remains one row per person, but the agenda
+    // flag must inspect every role: a second role can be declined while the
+    // first role remains the display representative.
+    has_declined_participant: rawSpeakers.some((speaker) => speaker.confirmation_status === "declined"),
     format_id: row.format_id,
     format: row.format_name,
     status,
@@ -360,9 +365,9 @@ async function readTracks(database: D1Database, eventId: string): Promise<Agenda
 }
 
 const SPEAKERS_JSON = `COALESCE((
-  SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company, 'role', ordered.role))
+  SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company, 'role', ordered.role, 'confirmation_status', ordered.confirmation_status))
   FROM (
-    SELECT person.id, person.name, person.company, participation.role
+    SELECT person.id, person.name, person.company, participation.role, participation.confirmation_status
     FROM participations participation
     JOIN people person ON person.id = participation.person_id
     WHERE participation.submission_id = submission.id

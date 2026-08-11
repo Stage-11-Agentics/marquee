@@ -26,6 +26,7 @@ const speakerSchema = z.object({
   id: z.string(),
   name: z.string(),
   company: z.string().nullable(),
+  confirmation_status: z.enum(["pending", "confirmed", "declined"]).optional(),
 });
 
 const trackSchema = z.object({
@@ -76,6 +77,7 @@ const agendaSessionSchema = z.object({
   track: z.string().nullable(),
   tracks: z.array(trackSchema),
   speakers: z.array(speakerSchema),
+  has_declined_participant: z.boolean(),
   format_id: z.string().nullable(),
   format: z.string().nullable(),
   status: z.string(),

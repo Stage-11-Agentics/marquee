@@ -32,6 +32,7 @@ afterEach(async () => {
     env.DB.prepare("DELETE FROM email_templates WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM outbox WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM event_settings WHERE event_id = 'evt_mail'"),
+    env.DB.prepare("DELETE FROM audit_log WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM speaker_tasks WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM task_templates WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM submission_tracks WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = 'evt_mail')"),

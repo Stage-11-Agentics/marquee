@@ -16,6 +16,9 @@ import type { AuthContext, SessionAuth } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { roomDisplayLabel } from "../lib/venues";
 import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
+import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { enqueueBulkReminder } from "../jobs/mail/triggers";
+import { firstName } from "../jobs/mail/merge-data";
 import {
   isFieldApplicable,
   projectApplicableAnswers,
@@ -25,6 +28,7 @@ import { listFormFields, type FormFieldView } from "./forms.queries";
 const eventQuery = z.object({ eventId: z.string().min(1).optional() });
 const taskParams = z.object({ taskId: z.string().min(1) });
 const submissionParams = z.object({ submissionId: z.string().min(1) });
+const participationParams = z.object({ participationId: z.string().min(1) });
 const eventSubmissionParams = z.object({ eventId: z.string().min(1), submissionId: z.string().min(1) });
 
 const profileBody = z.object({
@@ -47,6 +51,7 @@ const talkBody = z.object({
 });
 
 const talkEditingBody = z.object({ enabled: z.boolean() });
+const declineBody = z.object({ note: z.string().trim().max(10_000).nullable().optional() }).strict();
 
 const portalResponseSchema = z
   .object({
@@ -99,8 +104,19 @@ type SubmissionProjection = {
   room_name: string | null;
   building_name: string | null;
   is_published: number | null;
+  participation_id: string;
+  participation_role: string;
+  confirmation_status: "pending" | "confirmed" | "declined";
+  confirmed_at: number | null;
   feedback_md: string | null;
+  feedback_decision_id: string | null;
   feedback_decided_at: number | null;
+  participations: Array<{
+    id: string;
+    role: string;
+    confirmation_status: "pending" | "confirmed" | "declined";
+    confirmed_at: number | null;
+  }>;
 };
 
 type TaskProjection = {
@@ -232,6 +248,159 @@ async function speakerEvent(
   return event;
 }
 
+type SpeakerParticipationRow = {
+  id: string;
+  event_id: string;
+  submission_id: string;
+  submission_title: string;
+  submission_status: string;
+  person_id: string;
+  person_name: string;
+  person_email: string;
+  role: string;
+  confirmation_status: "pending" | "confirmed" | "declined";
+  confirmed_at: number | null;
+};
+
+async function speakerParticipationFor(
+  db: D1Database,
+  auth: SessionAuth,
+  participationId: string,
+): Promise<SpeakerParticipationRow> {
+  const row = await db
+    .prepare(
+      `SELECT participation.id, submission.event_id, participation.submission_id,
+         submission.title AS submission_title, submission.status AS submission_status,
+         participation.person_id, person.name AS person_name, person.email AS person_email,
+         participation.role, participation.confirmation_status, participation.confirmed_at
+       FROM participations participation
+       JOIN submissions submission ON submission.id = participation.submission_id
+       JOIN events conference ON conference.id = submission.event_id AND conference.org_id = ?
+       JOIN memberships membership
+         ON membership.event_id = submission.event_id
+        AND membership.person_id = ?
+        AND membership.role = 'speaker'
+       JOIN people person ON person.id = participation.person_id
+       WHERE participation.id = ? AND participation.person_id = ?`,
+    )
+    .bind(auth.orgId, auth.personId, participationId, auth.personId)
+    .first<SpeakerParticipationRow>();
+  if (!row) throw ApiError.notFound("participation not found");
+  return row;
+}
+
+function participationPayload(row: SpeakerParticipationRow): Record<string, unknown> {
+  return {
+    id: row.id,
+    submission_id: row.submission_id,
+    role: row.role,
+    confirmation_status: row.confirmation_status,
+    confirmed_at: row.confirmed_at,
+  };
+}
+
+async function notifyProgramLeadsOfDecline(
+  db: D1Database,
+  queue: ApiEnv["Bindings"]["MAIL_QUEUE"],
+  row: SpeakerParticipationRow,
+  note: string | null,
+  now: number,
+): Promise<string[]> {
+  const leads = await db
+    .prepare(
+      `SELECT DISTINCT person.id, person.name, person.email
+       FROM memberships membership
+       JOIN people person ON person.id = membership.person_id
+       WHERE membership.event_id = ? AND membership.role IN ('program_lead', 'owner')
+       ORDER BY person.id`,
+    )
+    .bind(row.event_id)
+    .all<{ id: string; name: string; email: string }>();
+  const reason = note ? ` Note from the speaker: ${note}` : "";
+  const queued = await enqueueBulkReminder({
+    db,
+    eventId: row.event_id,
+    templateKey: "custom",
+    recipients: leads.results.map((lead) => ({
+      entityId: row.id,
+      personId: lead.id,
+      toEmail: lead.email,
+      data: {
+        "speaker.first_name": firstName(lead.name),
+        "speaker.name": lead.name,
+        "speaker.email": lead.email,
+        "submission.title": row.submission_title,
+        "message.body": `${row.person_name} declined the ${row.role.replaceAll("_", " ")} role for ${row.submission_title}.${reason}`,
+      },
+    })),
+    now,
+  });
+  const outboxIds: string[] = [];
+  for (const item of queued) {
+    if (!item.inserted) continue;
+    outboxIds.push(item.id);
+    await enqueueMailMessage(queue, item.id);
+  }
+  return outboxIds;
+}
+
+async function respondToParticipation(
+  context: import("hono").Context<ApiEnv>,
+  participationId: string,
+  status: "confirmed" | "declined",
+  note: string | null = null,
+) {
+  const auth = requireSession(context);
+  const current = await speakerParticipationFor(context.env.DB, auth, participationId);
+  const normalizedNote = note?.trim() || null;
+  if (current.submission_status !== "accepted") {
+    throw ApiError.conflict("role confirmation is available after the conference accepts the submission");
+  }
+  if (current.confirmation_status !== "pending") {
+    if (current.confirmation_status === status) {
+      return context.json({ participation: participationPayload(current), changed: false, notification_outbox_ids: [] }, 200);
+    }
+    throw ApiError.conflict("this role already has a different response");
+  }
+
+  const now = Date.now();
+  const updated = await context.env.DB
+    .prepare(
+      `UPDATE participations
+       SET confirmation_status = ?, confirmed_at = ?, updated_at = ?
+       WHERE id = ? AND person_id = ? AND confirmation_status = 'pending'`,
+    )
+    .bind(status, status === "confirmed" ? now : null, now, current.id, auth.personId)
+    .run();
+  if (Number(updated.meta?.changes ?? 0) !== 1) {
+    throw ApiError.conflict("this role changed before your response was saved");
+  }
+
+  await context.env.DB
+    .prepare(
+      `INSERT INTO audit_log
+        (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at)
+       VALUES (?, ?, ?, 'user', ?, 'submission', ?, ?, ?, ?)`,
+    )
+    .bind(
+      crypto.randomUUID(),
+      current.event_id,
+      auth.personId,
+      `participation.${status}`,
+      current.submission_id,
+      JSON.stringify({ participation_id: current.id, role: current.role, confirmation_status: current.confirmation_status }),
+      JSON.stringify({ participation_id: current.id, role: current.role, confirmation_status: status, note: normalizedNote }),
+      now,
+    )
+    .run();
+
+  const next = { ...current, confirmation_status: status, confirmed_at: status === "confirmed" ? now : null };
+  const notificationOutboxIds = status === "declined"
+    ? await notifyProgramLeadsOfDecline(context.env.DB, context.env.MAIL_QUEUE, next, normalizedNote, now)
+    : [];
+  return context.json({ participation: participationPayload(next), changed: true, notification_outbox_ids: notificationOutboxIds }, 200);
+}
+
 async function personFor(db: D1Database, personId: string): Promise<PersonProjection> {
   const person = await db
     .prepare(
@@ -251,7 +420,9 @@ async function listSubmissions(db: D1Database, event: EventProjection, personId:
          format.name AS format_name, wave.name AS wave_name, wave.decision_on AS wave_decision_on,
          agenda.starts_at, agenda.duration_min, room.name AS room_name, building.name AS building_name,
          agenda.is_published,
-         decision.feedback_md, decision.decided_at AS feedback_decided_at
+         participation.id AS participation_id, participation.role AS participation_role,
+         participation.confirmation_status, participation.confirmed_at,
+         decision.id AS feedback_decision_id, decision.feedback_md, decision.decided_at AS feedback_decided_at
        FROM submissions s
        JOIN participations participation
          ON participation.submission_id = s.id AND participation.person_id = ?
@@ -272,12 +443,31 @@ async function listSubmissions(db: D1Database, event: EventProjection, personId:
     .bind(personId, event.id)
     .all<SubmissionProjection>();
 
-  const seen = new Set<string>();
-  return rows.results.filter((row) => {
-    if (seen.has(row.id)) return false;
-    seen.add(row.id);
-    return true;
-  });
+  const grouped = new Map<string, SubmissionProjection>();
+  for (const row of rows.results) {
+    const current = grouped.get(row.id);
+    if (current) {
+      if (!current.participations.some((participation) => participation.id === row.participation_id)) {
+        current.participations.push({
+          id: row.participation_id,
+          role: row.participation_role,
+          confirmation_status: row.confirmation_status,
+          confirmed_at: row.confirmed_at,
+        });
+      }
+      continue;
+    }
+    grouped.set(row.id, {
+      ...row,
+      participations: [{
+        id: row.participation_id,
+        role: row.participation_role,
+        confirmation_status: row.confirmation_status,
+        confirmed_at: row.confirmed_at,
+      }],
+    });
+  }
+  return [...grouped.values()];
 }
 
 async function readSubmissionAnswers(
@@ -396,8 +586,9 @@ function submissionView(event: EventProjection, row: SubmissionProjection): Reco
         }
       : null,
     decision_feedback: row.feedback_md
-      ? { markdown: row.feedback_md, decided_at: row.feedback_decided_at }
+      ? { id: row.feedback_decision_id, markdown: row.feedback_md, decided_at: row.feedback_decided_at }
       : null,
+    participations: row.participations,
     talk_editable: true,
   };
 }
@@ -717,6 +908,55 @@ const getPortal = defineApiRoute(
   },
 );
 
+const participationResponseSchema = z.object({
+  participation: z.object({
+    id: z.string(),
+    submission_id: z.string(),
+    role: z.string(),
+    confirmation_status: z.enum(["pending", "confirmed", "declined"]),
+    confirmed_at: z.number().nullable(),
+  }),
+  changed: z.boolean(),
+  notification_outbox_ids: z.array(z.string()),
+});
+
+const confirmParticipation = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/me/participations/{participationId}/confirm",
+    operationId: "confirmSpeakerParticipation",
+    summary: "Confirm one speaker role",
+    description: "Confirms exactly one authenticated speaker participation; other roles on the same submission remain independent.",
+    tags: ["Speaker portal"],
+    request: { params: participationParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: jsonResponse(participationResponseSchema, "Confirmed speaker role"), ...errorResponses([401, 403, 404, 409, 429, 500]) },
+  },
+  async (context) => {
+    const { participationId } = context.req.valid("param");
+    return respondToParticipation(context, participationId, "confirmed");
+  },
+);
+
+const declineParticipation = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/me/participations/{participationId}/decline",
+    operationId: "declineSpeakerParticipation",
+    summary: "Decline one speaker role",
+    description: "Declines exactly one authenticated speaker participation, notifies program leads, and flags the agenda through the derived participation state.",
+    tags: ["Speaker portal"],
+    request: { params: participationParams, body: { content: { "application/json": { schema: declineBody } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: jsonResponse(participationResponseSchema, "Declined speaker role"), ...errorResponses([401, 403, 404, 409, 422, 429, 500]) },
+  },
+  async (context) => {
+    const { participationId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    return respondToParticipation(context, participationId, "declined", body.note ?? null);
+  },
+);
+
 const completeSpeakerTask = defineApiRoute(
   {
     method: "post",
@@ -837,6 +1077,8 @@ const updateSpeakerTalkEditing = defineApiRoute(
 
 export const apiRoutes = [
   getPortal,
+  confirmParticipation,
+  declineParticipation,
   completeSpeakerTask,
   updateSpeakerProfile,
   updateSpeakerTalk,

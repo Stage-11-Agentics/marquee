@@ -47,6 +47,7 @@ const session = (
   track: "Main",
   tracks: [{ id: "track-main", name: "Main", color: "#db4c3f", is_primary: true }],
   speakers: participants,
+  has_declined_participant: participants.some((participant) => participant.confirmation_status === "declined"),
   format_id: "format-stage",
   format: "Stage Talk",
   status: "scheduled",

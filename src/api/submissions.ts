@@ -32,6 +32,7 @@ export interface SubmissionSpeakerListItem {
   name: string;
   company: string | null;
   role?: SubmissionParticipationRole;
+  confirmation_status?: "pending" | "confirmed" | "declined";
 }
 
 export interface SubmissionSubmitterListItem {

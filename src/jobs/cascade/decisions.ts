@@ -46,6 +46,7 @@ export interface BulkDecisionInput {
   ids: readonly Id[];
   actor: DecisionActor;
   action: BulkAction;
+  feedbackMd?: string | null;
   waveId?: Id | null;
   operationId: Id;
   now?: number;
@@ -124,6 +125,11 @@ const ACTIONABLE_STATUSES = new Set([
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+export function normalizeDecisionFeedback(value: string | null | undefined): string | null {
+  const normalized = value?.replace(/\r\n?/g, "\n").trim() ?? "";
+  return normalized.length > 0 ? normalized : null;
 }
 
 function decisionTarget(action: DecisionAction): {
@@ -668,6 +674,7 @@ export async function writeSubmissionDecision(
   input: SubmissionDecisionInput,
 ): Promise<SubmissionDecisionResult> {
   const now = input.now ?? Date.now();
+  const feedbackMd = normalizeDecisionFeedback(input.feedbackMd);
   const target = decisionTarget(input.recommendation === "approve" ? "accept" : input.recommendation === "maybe" ? "waitlist" : "reject");
   const submission = await loadSubmission(input.db, input.eventId, input.submissionId);
   if (!submission) return failureResult(input.submissionId, "submission not found");
@@ -700,7 +707,7 @@ export async function writeSubmissionDecision(
       submission,
       status: target.status === "accepted" ? "accepted" : "rejected",
       decision: target.decision,
-      feedbackMd: input.feedbackMd,
+      feedbackMd,
       now,
     });
   const taskCounts = target.status === "accepted"
@@ -712,7 +719,7 @@ export async function writeSubmissionDecision(
     submissionId: submission.id,
     decision: target.decision,
     status: target.status,
-    feedbackMd: input.feedbackMd ?? null,
+    feedbackMd,
     actor: input.actor,
     decidedAt: now,
     outboxId: mail.id,
@@ -743,6 +750,7 @@ export async function writeBulkSubmissionDecisions(
   input: BulkDecisionInput,
 ): Promise<BulkDecisionResult> {
   const now = input.now ?? Date.now();
+  const feedbackMd = normalizeDecisionFeedback(input.feedbackMd);
   const ids = [...new Set(input.ids)];
   const submissions = await loadSubmissions(input.db, input.eventId, ids);
   const byId = new Map(submissions.map((submission) => [submission.id, submission]));
@@ -827,7 +835,7 @@ export async function writeBulkSubmissionDecisions(
         submission,
         status: target.status === "accepted" ? "accepted" : "rejected",
         decision: target.decision,
-        feedbackMd: null,
+        feedbackMd,
         now,
       });
     mailById.set(submission.id, mail);
@@ -838,7 +846,7 @@ export async function writeBulkSubmissionDecisions(
       submissionId: submission.id,
       decision: target.decision,
       status: target.status,
-      feedbackMd: null,
+      feedbackMd,
       actor: input.actor,
       decidedAt: now,
       outboxId: mail.id,

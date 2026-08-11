@@ -52,6 +52,8 @@
 .agenda-tile-room-link:hover { color: var(--accent-dark); text-decoration: underline; }
 .agenda-conflict-flag { display: block; min-height: 10px; margin-top: 4px; color: var(--alarm); font: 700 8px var(--mono); }
 .agenda-conflict-flag.is-placeholder { visibility: hidden; }
+.agenda-decline-flag { display: block; min-height: 10px; margin-top: 4px; color: var(--alarm); font: 700 8px var(--mono); }
+.agenda-decline-flag.is-placeholder { visibility: hidden; }
 .agenda-list { min-width: 1100px; }
 .agenda-list-head, .agenda-list-row { display: grid; grid-template-columns: 112px 66px minmax(220px, 1fr) minmax(150px, .8fr) minmax(130px, .7fr) 160px 110px; gap: 10px; align-items: center; padding: 0 14px; }
 .agenda-list-head { min-height: 38px; position: sticky; top: 0; z-index: 2; background: var(--sunk); border-bottom: 1px solid var(--line-strong); color: var(--muted); font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }

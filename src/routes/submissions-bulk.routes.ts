@@ -23,6 +23,7 @@ const bulkBodySchema = z
   .object({
     selector: bulkSelectorWireSchema(submissionFilterSchema, submissionIdSchema),
     action: z.enum(["accept", "reject", "waitlist", "withdraw"]),
+    feedback_md: z.string().max(50_000).nullable().optional(),
     wave_id: z.string().min(1).max(200).nullable().optional(),
   })
   .strict();
@@ -94,6 +95,7 @@ const bulkDecideSubmissions = defineApiRoute(
       ids,
       actor,
       action: body.action,
+      feedbackMd: body.feedback_md,
       waveId: body.wave_id,
       operationId,
     });

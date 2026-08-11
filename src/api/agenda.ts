@@ -74,6 +74,7 @@ export interface AgendaSession {
   track: string | null;
   tracks: AgendaTrack[];
   speakers: SubmissionSpeakerListItem[];
+  has_declined_participant: boolean;
   format_id: string | null;
   format: string | null;
   status: SubmissionListStatus | "scheduled" | "published";

@@ -51,6 +51,7 @@ function session(id: string, trackId: string, startsAt: number): AgendaSession {
     track: track.name,
     tracks: [{ ...track, is_primary: true }],
     speakers: [{ id: `speaker-${id}`, name: `Speaker ${id}`, company: null }],
+    has_declined_participant: false,
     format_id: "format-stage",
     format: "Stage Talk",
     status: "scheduled",

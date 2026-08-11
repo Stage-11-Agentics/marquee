@@ -166,8 +166,9 @@ export function SessionTile({
 }): JSX.Element {
   const format = snapshot.formats.find((candidate) => candidate.id === session.format_id);
   const hasConflict = conflicts.has(session.id);
+  const hasDeclined = session.has_declined_participant === true;
   return <article
-    class={`agenda-session-tile${hasConflict ? " has-conflict" : ""}`}
+    class={`agenda-session-tile${hasConflict ? " has-conflict" : ""}${hasDeclined ? " has-declined" : ""}`}
     draggable={session.kind !== "break"}
     data-session-id={session.id}
     style={{ borderLeftColor: session.kind === "break" ? "#64748b" : trackColor(snapshot, session) }}
@@ -179,6 +180,9 @@ export function SessionTile({
     {session.kind !== "break" && <TrackChips session={session} />}
     <span class={`agenda-conflict-flag${hasConflict ? "" : " is-placeholder"}`} aria-hidden={!hasConflict} title={hasConflict ? "This placement needs attention" : undefined}>
       ⚠ {conflicts.get(session.id) ?? "Conflict"}
+    </span>
+    <span class={`agenda-decline-flag${hasDeclined ? "" : " is-placeholder"}`} aria-hidden={!hasDeclined} title={hasDeclined ? "A speaker role was declined" : undefined}>
+      ⚑ Declined role
     </span>
     {session.kind !== "break" && <span class="agenda-tile-actions">
       <button type="button" aria-label={`Shorten ${session.title}`} disabled={Boolean(format && !durationIsAllowed(session.duration_min - 5, format))} onClick={(event) => { event.stopPropagation(); onResize(session, -5); }}>−</button>
@@ -245,7 +249,8 @@ function AgendaList({
           <span class="tabular">{session.duration_min}m</span>
           <button type="button" aria-label={`Lengthen ${session.title}`} onClick={(event) => { event.stopPropagation(); onResize(session, 5); }}>+</button>
         </span>}
-        {conflicts.has(session.id) && <span class="agenda-conflict-flag" title="This placement needs attention">⚠ {conflicts.get(session.id) ?? "Conflict"}</span>}
+        <span class={`agenda-conflict-flag${conflicts.has(session.id) ? "" : " is-placeholder"}`} aria-hidden={!conflicts.has(session.id)} title={conflicts.has(session.id) ? "This placement needs attention" : undefined}>⚠ {conflicts.get(session.id) ?? "Conflict"}</span>
+        <span class={`agenda-decline-flag${session.has_declined_participant ? "" : " is-placeholder"}`} aria-hidden={!session.has_declined_participant} title={session.has_declined_participant ? "A speaker role was declined" : undefined}>⚑ Declined role</span>
       </div>
     </div>) : <div class="agenda-list-empty">No scheduled Sessions match these filters.</div>}
   </div>;

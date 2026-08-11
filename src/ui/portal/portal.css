@@ -15,6 +15,28 @@
 .portal-slot { color: #d9edf1; display: grid; gap: 3px; font: 500 11px/1.25 var(--mono); min-width: 180px; }
 .portal-slot small { color: #8aa6b5; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; }
 .portal-slot-note { color: #f0d69d; font-size: 10px; }
+.portal-role-responses { border-top: 1px solid #38515d; display: grid; gap: 8px; min-height: 62px; padding-top: 11px; }
+.portal-role-responses-head { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; }
+.portal-role-responses-head span { color: #edf8fb; font: 600 9px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.portal-role-responses-head small { color: #8aa6b5; font-size: 10px; }
+.portal-role-response { align-items: start; border-top: 1px solid #2c444f; display: grid; gap: 12px; grid-template-columns: minmax(140px, 1fr) minmax(235px, 1fr); min-height: 42px; padding-top: 8px; }
+.portal-role-copy { display: grid; gap: 3px; min-width: 0; }
+.portal-role-copy strong { color: #f4fbff; font: 600 11px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.portal-role-copy span { color: #9db5c0; font-size: 10px; }
+.portal-role-actions { align-items: center; display: flex; gap: 8px; justify-content: flex-end; min-height: 30px; min-width: 235px; }
+.portal-role-actions .portal-button { min-width: 112px; }
+.portal-role-decline, .portal-role-cancel { background: transparent; border: 1px solid #6e8590; color: #c5d7dd; font: 600 10px/1 var(--mono); min-height: 30px; min-width: 78px; padding: 8px 10px; }
+.portal-role-decline:hover, .portal-role-cancel:hover { border-color: #b9d0d8; color: #fff; }
+.portal-role-status, .portal-role-pending { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; min-width: 190px; padding: 8px 10px; font: 600 10px/1 var(--mono); text-align: center; }
+.portal-role-status.confirmed { background: #214d48; border: 1px solid #5f9f92; color: #d7f3e8; }
+.portal-role-status.declined { background: #5a3b39; border: 1px solid #bd8176; color: #ffe3d7; }
+.portal-role-pending { color: #9db5c0; }
+.portal-decline-panel { display: grid; gap: 7px; width: 100%; }
+.portal-decline-panel label { color: #9db5c0; font: 600 9px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.portal-decline-panel textarea { background: #182a33; border: 1px solid #526d79; color: #f4fbff; font-size: 11px; min-height: 58px; padding: 7px; resize: vertical; width: 100%; }
+.portal-decline-panel textarea::placeholder { color: #78919d; }
+.portal-role-action-buttons { align-items: center; display: flex; gap: 8px; min-height: 30px; }
+.portal-role-error { color: #ffb2a2; font-size: 10px; line-height: 1.35; min-height: 14px; }
 .portal-welcome { align-items: end; border-bottom: 1px solid var(--rule); display: flex; gap: 18px; justify-content: space-between; margin: 0 0 26px; padding: 24px 0 18px; }
 .portal-welcome h2 { font-size: 20px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 5px; }
 .portal-welcome p { color: var(--muted); font-size: 12px; margin: 0; }
@@ -104,6 +126,8 @@
 }
 @media (max-width: 580px) {
   .portal-status-meta, .portal-welcome { align-items: start; display: grid; }
+  .portal-role-response { grid-template-columns: 1fr; }
+  .portal-role-actions { justify-content: flex-start; min-width: 0; }
   .portal-task-row { grid-template-columns: 24px minmax(0, 1fr) 82px; }
   .portal-task-action { width: 82px; }
   .portal-task-payload { grid-column: 2 / 4; }

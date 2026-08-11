@@ -36,6 +36,7 @@ const session = (id: string, roomId: string, startsAt: number, speakerId: string
   track: "Agents",
   tracks: [{ id: "track-1", name: "Agents", color: "#db4c3f", is_primary: true }],
   speakers: [{ id: speakerId, name: `Speaker ${speakerId}`, company: null }],
+  has_declined_participant: false,
   format_id: "format-stage",
   format: "Stage Talk",
   status: "scheduled",

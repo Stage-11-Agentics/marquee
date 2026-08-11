@@ -53,12 +53,12 @@ export const DEFAULT_TEMPLATES: Record<MailTemplateKey, DefaultTemplate> = {
   acceptance: {
     name: "Acceptance",
     subject: "Your session was accepted",
-    body_md: "Hi {{speaker.first_name}},\n\n**{{submission.title}}** was accepted.",
+    body_md: "Hi {{speaker.first_name}},\n\n**{{submission.title}}** was accepted.\n\n{{decision.feedback}}",
   },
   rejection: {
     name: "Rejection",
     subject: "An update about {{submission.title}}",
-    body_md: "Hi {{speaker.first_name}},\n\nThank you for sharing **{{submission.title}}**.",
+    body_md: "Hi {{speaker.first_name}},\n\nThank you for sharing **{{submission.title}}**.\n\n{{decision.feedback}}",
   },
   task_assigned: {
     name: "Task assigned",

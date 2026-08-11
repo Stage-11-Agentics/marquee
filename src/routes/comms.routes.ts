@@ -165,6 +165,20 @@ function requireComms(context: Parameters<NonNullable<ApiRouteEntry["handler"]>>
   }
 }
 
+async function commsActor(
+  context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0],
+): Promise<{ personId: string; kind: "user" | "api_token" }> {
+  const auth = getAuth(context);
+  if (!auth) throw ApiError.unauthenticated();
+  if (auth.kind === "session") return { personId: auth.personId, kind: "user" };
+  const token = await context.env.DB
+    .prepare("SELECT created_by FROM api_tokens WHERE id = ?")
+    .bind(auth.tokenId)
+    .first<{ created_by: string }>();
+  if (!token?.created_by) throw ApiError.unauthenticated("the token issuer is no longer available");
+  return { personId: token.created_by, kind: "api_token" };
+}
+
 export interface RecipientRow {
   person_id: string;
   submission_id: string | null;
@@ -523,12 +537,13 @@ const previewComms = defineApiRoute(
          )`,
     ).bind(body.person_id, eventId, eventId).first<{ id: string; email: string; name: string }>();
     if (!recipient) throw ApiError.notFound("recipient not found");
-    const selected = (await recipientsFor(context.env.DB, eventId, {
-      person_ids: [body.person_id],
-      ...(body.submission_id ? { submission_ids: [body.submission_id] } : {}),
-      role: body.role,
-      task_state: "open",
-    }))[0];
+    const selected = body.submission_id
+      ? (await recipientsFor(context.env.DB, eventId, {
+        person_ids: [body.person_id],
+        submission_ids: [body.submission_id],
+        role: body.role,
+      }))[0]
+      : undefined;
     const data: MergeData = selected
       ? mergeDataFor(selected)
       : { "speaker.first_name": firstName(recipient.name), "speaker.name": recipient.name, "speaker.email": recipient.email };
@@ -560,6 +575,7 @@ const sendComms = defineApiRoute(
   async (context) => {
     const { eventId } = context.req.valid("param");
     requireComms(context, eventId, true);
+    const actor = await commsActor(context);
     const body = context.req.valid("json");
     const hasTemplate = body.template_key !== undefined;
     const hasAdHoc = body.subject !== undefined || body.body !== undefined;
@@ -594,6 +610,29 @@ const sendComms = defineApiRoute(
         duplicate += 1;
       }
     }
+    const auditRows = queued.flatMap((item, index) => {
+      const recipient = recipients[index];
+      if (!item.inserted || !recipient?.submission_id) return [];
+      return [context.env.DB.prepare(
+        `INSERT INTO audit_log
+          (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at)
+         VALUES (?, ?, ?, ?, 'submission.message_sent', 'submission', ?, NULL, ?, ?)`
+      ).bind(
+        crypto.randomUUID(),
+        eventId,
+        actor.personId,
+        actor.kind,
+        recipient.submission_id,
+        JSON.stringify({
+          outbox_id: item.id,
+          person_id: recipient.person_id,
+          role: recipient.role,
+          template_key: body.template_key ?? "custom",
+        }),
+        Date.now(),
+      )];
+    });
+    if (auditRows.length > 0) await context.env.DB.batch(auditRows);
     return context.json({ selected: recipients.length, queued: outboxIds.length, duplicate, outbox_ids: outboxIds, outbox_rows: outboxRows }, 202);
   },
 );
