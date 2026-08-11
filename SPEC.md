@@ -717,3 +717,31 @@ Why the rename stops here:
 ---
 
 *v1.4 contract revision, 2026-08-09; folded against `USER_STORIES.md` Amendments 1–9. Amendments follow that file's rules: **the next criteria append from AC-254**; deletions are struck, never recycled. Next input — client review and sign-off of the v1.4 prototype; only then mint `DESIGN.md` and hand the complete contract to orchestration.*
+
+---
+
+## Amendment 14 — geography becomes a constraint (2026-08-10, client-directed)
+
+*Extends Amendment 11. Binding prototype: `prototypes/pipeline-v1.1/index.html` at **v1.7**. Design reasoning: `sequence/venue-map-ux.md`.*
+
+Amendment 11 gave a building a name, an address, and a position in a list. This amendment gives it a **place**, and makes that place a scheduling constraint rather than a label. Locations are rendered at five zooms of attention; most surfaces take the cheapest one that answers their question, and only two render a map at all.
+
+**Model.** `buildings` gains `lat` REAL nullable, `lng` REAL nullable, `access_minutes` INTEGER (default 0) — all three shipped in `migrations/0002_venue_geography.sql` — and **`access_note` TEXT** (AC-255), which is *new here and not yet migrated*. Nullable coordinates are a first-class state, not an omission: a streamed venue never takes a pin and must never be given a fabricated one. **Entrance instructions belong to the building, not the room** — every room in a building inherits its `access_note`. Seed §6 currently carries the photo-ID/security sentence on a room note; it moves to the building.
+
+**Transit conflicts (AC-258, AC-259).** `getConflicts` gains a third class beside room overlap and speaker double-booking. Two sessions sharing a speaker, in different pinned buildings, whose gap is smaller than `walk + access_minutes` at the destination, raise a **`transit`** conflict. Walking time is `haversine × 1.3 ÷ 80 m/min`, floored at 1 minute — the 1.3 factor is a street-grid detour allowance, and the model claims no more precision than that. The class **warns without blocking**, like every other conflict.
+
+> **The class is named Transit, never Travel.** "Travel and accommodation" is already a speaker task meaning flights and hotels, and both land on the same person. The rename is binding across the conflict object's `kind`, the drawer, tile flags, dashboard labels, the API conflict type, and any copy.
+
+**Venues is the screen that edits venues (AC-256).** Buildings *and* rooms are authored at `/settings/venues`, under the site map their coordinates drive. `/settings` keeps the conference record and points at Venues with a count; it holds no venue editors. Both screens write through one shared writer, so no save path silently owns fields it does not display.
+
+**Rendering (AC-257).** The map is a **tile mosaic, not a map library**: OpenStreetMap rasters positioned as plain `<img>` on a centre-clipped fixed-width plane, with pins and walking lines drawn over them. No Leaflet, no CDN, no API key, no initialisation, and no reflow when tiles land — the box is fixed-aspect and reserved. **Tile failure is a designed state**, not an error: pins, walking lines, and the scale legend render over the graph-paper grid, so the map is never a blank rectangle. Attribution is required and always visible. OSM's tile policy is not intended for heavy application traffic; acceptable for the judging window, and a self-host or keyed provider is the production answer (§6 open dependency).
+
+**The speaker's arrival instructions (AC-260 – AC-262).** The portal renders room, building, address, entrance note, and a **leave-by** derived from the speaker's own previous session that day, falling back to the primary building when they have none. Comms gains place merge fields — `{{session.room}}`, `{{session.building}}`, `{{session.address}}`, `{{session.accessNote}}`, `{{session.leaveBy}}` — because email is the surface speakers actually read. The ICS carries a real `LOCATION` (room, building, street address, ICS-escaped) and `GEO:lat;lng` when pinned, replacing a bare room name a phone cannot navigate to.
+
+**Disclosure (AC-263).** Venue surfaces show for every conference and **fold** when there is one building. The rule: **zoom 2 is independent of building count; zoom 1 is not.** A single hotel still has a door and a security desk, so address, entrance note, and access minutes stay on at any count. What folds is the *comparison* — the "· Building" room-label suffix, walk times, transit conflicts, the agenda building band, and the embedded site map, which arrives collapsed.
+
+**Seed consequence — this amendment supersedes §6's "without inventing a second real venue."** That clause was written when buildings were labels. Transit conflicts require two buildings genuinely apart in space: the seed as shipped places Sheraton and the Workshop Annex at *identical* coordinates with zero access minutes, which makes the conflict class unreachable and stacks two pins on one point. §6 must seed at least two buildings far enough apart to produce a real walking time, with a non-zero access time on one, and at least one live transit conflict visible on load. `check:seed` asserts it (AC-259).
+
+**[Beyond v1.7 prototype — acknowledged divergence: none. Every surface in this amendment is built in the prototype and driven.]**
+
+---

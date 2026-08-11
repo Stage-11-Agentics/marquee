@@ -1,0 +1,42 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": "medium",
+  "created_at": "2026-08-11T02:30:44Z",
+  "created_by": "agent:claude",
+  "custom_fields": {},
+  "description": "BUILDPLAN M-60 \u00b7 AC-263 \u00b7 SPEC Amendment 14.\n\nClient ruling: venue surfaces show for every conference and FOLD when there is one building.\n\nThe rule that matters: zoom 2 (instruction) is independent of building count; zoom 1 (relation) is not. A single hotel still has a door and a security desk.\n\nWith fewer than two pinned buildings, hide: the '\u00b7 Building' room-label suffix (it is disambiguation, not decoration \u2014 name the building once in the page header instead), walking times, Transit conflicts, and the agenda building band. Collapse the embedded site map.\n\nKeep rendered at ANY building count, including one: address, entrance note, minutes-to-get-in.\n\nCross-cutting \u2014 touches every surface M-57 through M-59 produce, so it lands last.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZQAGWE9MWZBMSR0STDNWQ1J",
+  "last_event_id": "ev_01KZQAHKSTHTREQXNBFSG4EJCZ",
+  "last_status_changed_at": "2026-08-11T02:30:44Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-11T02:31:08Z",
+      "created_by": "agent:claude",
+      "note": null,
+      "target_task_id": "task_01KZQAGW864Y559SFNMMGFRQWQ",
+      "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-11T02:31:08Z",
+      "created_by": "agent:claude",
+      "note": null,
+      "target_task_id": "task_01KZQAGWB5YGHDZ98ZK5JG2NN0",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-65",
+  "status": "backlog",
+  "tags": null,
+  "title": "Disclosure fold \u2014 hide the comparison, never the instruction",
+  "type": "task",
+  "updated_at": "2026-08-11T02:31:08Z",
+  "urgency": null
+}

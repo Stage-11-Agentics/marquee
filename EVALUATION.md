@@ -2,7 +2,7 @@
 
 **Status:** v1.4 contract revision for client prototype review · updated 2026-08-09; not yet signed for orchestration.
 **Authority once signed:** this file defines what "done" means for the Marquee build and *how an agent proves each criterion without a human in the loop*. The build fleet writes against it; the terminal auditor — who did not write the spec — runs it.
-**Upstream:** `sequence/USER_STORIES.md` (252 live criteria through AC-253; AC-239 struck) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
+**Upstream:** `sequence/USER_STORIES.md` (261 live criteria through AC-263; AC-239 struck) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
 
 **Build scope: 197 live criteria — read the tier, not the number.** Amendments allocate IDs without implying tier; AC-239 is struck and deliberately has no test. **`sequence/USER_STORIES.md` §"Scope at a glance" is the authority on tier membership**; this file follows it and never re-derives it from ID arithmetic.
 
@@ -116,7 +116,7 @@ These gate suites, not individual ACs. Each is a human action item; unresolved o
 
 ---
 
-## 2. Per-AC verifiability — all 197 live in-scope criteria
+## 2. Per-AC verifiability — all 206 live in-scope criteria
 
 The original 178 rows remain grouped by story in build order; the sixteen live context/amendment rows are consolidated at §2.3 with explicit tier labels. Grouping — not ID arithmetic — carries membership. AC-239 is struck and excluded.
 
@@ -566,7 +566,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-168 | `auto` | `test:` run the AI pass over 50 submissions with a stubbed model; assert zero status transitions. |
 | AC-169 | `auto` | `e2e:` crawler from both demo entries reaches no AI surface without explicitly enabling the flag. |
 
-### 2.3 Amendment criteria — AC-234–AC-253
+### 2.3 Amendment criteria — AC-234–AC-263
 
 | AC | Tier | Tag | How verified |
 |---|---|---|---|
@@ -588,8 +588,17 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-249 | B | `auto` | `test + e2e:` built-in Drafts queue count equals derived draft rows; each shows last-save/contact/applicable missing fields; open/edit leaves status draft; reviewer/speaker 403 while form-admin/program-staff succeed. |
 | AC-250 | B | `auto` | `test + e2e:` a stored template **or** a caller-supplied `{subject, body}` is accepted on `POST /api/v1/events/:id/comms/send` — the single send route, no `/messages/send` alias, asserted by `check:api`'s registry parity — and on `marquee remind`; merge fields render in both forms; exactly-one-of is enforced server-side; an ad-hoc send writes an outbox row and a recipient-record log entry byte-identical in shape to a templated send; demo-safe suppression and the `comms:send` scope behave unchanged. |
 | AC-251 | B | `auto` | `e2e + test:` a record's evaluation panel lists its per-round reviewers with coverage counts; assigning and removing a specific reviewer writes `round_assignments`, the affected reviewer's queue updates, and an out-of-track-scope assignment is rejected; `/rounds/:id/assignments` CRUD appears in `check:api` registry parity. *(Amendment 10 fold — rows added 2026-08-09 at intake ratification; verification transcribed from SPEC.)* |
-| AC-252 | B | `auto` | `e2e + check:seed:` buildings CRUD (name, address) in Event Settings; every room requires a building; `check:seed` asserts the SPEC §6 Sheraton-coherent building trio; agenda room headers, room view, public session pages, and ICS `LOCATION` all render "Room · Building". |
+| AC-252 | B | `auto` | `e2e + check:seed:` buildings CRUD (name, address) in Event Settings; every room requires a building; `check:seed` asserts the SPEC §6 building set (**Amendment 14 supersedes the "no second real venue" clause** — the set must now be genuinely separated in space; see AC-259); agenda room headers, room view, public session pages, and ICS `LOCATION` all render "Room · Building". |
 | AC-253 | B | `auto` | `e2e:` AV capability tags and free-text notes editable per room in Event Settings; rendered in the agenda room-header tooltip/panel; absent from all public surfaces. |
+| AC-255 | B | `auto` | `test + e2e:` `buildings` carries `lat`, `lng`, `access_minutes`, `access_note`; a migration adds `access_note` (0002 shipped the first three). Null coordinates round-trip as null and are never defaulted to a number; a room inherits its building's entrance note with no room-note fallback; `check:seed` asserts no room note carries door/ID/security text. |
+| AC-256 | B | `auto` | `e2e + route scan:` create, edit, and remove a building and a room on `/settings/venues` and assert persistence after reload; `/settings` renders zero elements matching the venue-editor selectors and links to Venues; both Save paths call the one shared writer (single call site asserted statically). Regression: `+ Add building` must be live on the venues route — a handler bound only to `/settings` is the defect this AC exists to catch. |
+| AC-257 | B | `auto` | `e2e + static:` pins equal pinned buildings, walking lines carry minute labels, attribution is present and visible. Map container height is set before tiles resolve — assert no layout shift (bounding box identical before and after tile load). Force tile failure and assert pins/lines still render and the box is not blank. `check:repo` greps the tree for third-party map CDN hosts and map API keys and fails on either. |
+| AC-258 | A | `auto` | `test + e2e:` shared speaker, different pinned buildings, gap < walk + access → one `transit` conflict that warns and never blocks placement. Same building, unpinned building, and online venue each produce none. The conflict appears in the dashboard count, the drawer, and the tiles from the same `getConflicts` call — assert one code path, not a parallel one. |
+| AC-259 | A | `auto` | `test + check:seed:` walking time equals `haversine × 1.3 ÷ 80 m/min` floored at 1 against fixture coordinates; the message names walk, access, needed, and available minutes. **Byte-scan: the string "Travel" never appears as a conflict label in any surface, API payload, or copy** while remaining intact in the speaker task set. `check:seed` fails unless the seed has ≥2 buildings far enough apart to yield a real walking time, ≥1 building with non-zero access minutes, and ≥1 live Transit conflict on load. |
+| AC-260 | A | `auto` | `e2e:` portal shows room, building, address, and entrance note; the leave-by equals session start minus walk minus access, computed from that speaker's own previous session that day, and falls back to the primary building when they have none. Unscheduled session and unpinned venue each render an honest degraded state naming the absence, with no implied location. |
+| AC-261 | B | `auto` | `test + e2e:` all five place merge fields resolve per recipient in the preview and in the rendered outbox body, byte-identical; an insertable field reference exists in the editor; an unknown field is left intact rather than blanked. |
+| AC-262 | B | `auto` | `test:` invite contains `LOCATION` with room, building, and street address, ICS-escaped for `,` `;` `\`; `GEO:lat;lng` present for a pinned building and absent for an unpinned one; parse the artifact and assert `METHOD:REQUEST`, `UID`, `SEQUENCE`, and cancellation semantics are unchanged from AC-95 – AC-97. |
+| AC-263 | B | `auto` | `e2e:` with fewer than two pinned buildings, assert absence of the room-label building suffix, walk times, Transit conflicts, and the agenda building band, and that the embedded site map is collapsed. In the same state assert address, entrance note, and minutes-to-get-in are still rendered — the fold hides comparison, never instruction. |
 
 ---
 

@@ -10,9 +10,15 @@
   "custom_fields": {},
   "description": "BUILDPLAN: M-16 \u2014 Wave 1 (\u00a74), walkthrough step 7\n\nScope (verbatim): Plan, optional weighted scorecard, two rounds, committees, both assignment modes, per-reviewer progress, and explicit one-or-more reviewer track responsibilities editable by managers. One centralized intersection helper is exported for M-17 and audits.\n\nBinding: the centralized helper `src/lib/reviewer-scope.ts` is **the** authorization path. Every reviewer route \u2014 queue, record, file, export, evaluation-write \u2014 invokes it; A-9 scans for a route that does not.\nNon-goal (EVALUATION \u00a75): multi-round beyond two. Two ordered rounds and funnel promotion ship; the schema is round-aware from the first migration, so a third round is data, not a migration.\n\nFile surface: `src/routes/evaluation.routes.ts`, `src/lib/reviewer-scope.ts`, `src/ui/evaluation/*`\n\nACs: AC-53 \u2013 AC-58, AC-98, **AC-246**\nHours: 7\nWorkflow: sub-agent-full (\u22657 h)\nShared files: `src/lib/reviewer-scope.ts` \u2014 created here, **added to, never rewritten** by M-17 and the audits.\nDeps: M-08\nAudit that keys off this ticket: A-9 (reviewer event+track isolation), from CP-2\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQAGY8JV16HSY7T6CDJEBW9",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHM8YR9B5FJ394S7C1HBYF",
-  "last_event_id": "ev_01KZQA8Z1A7HVYJC5CJXKGQYFN",
+  "last_event_id": "ev_01KZQAGY8P1ZB01A080WA0T081",
   "last_status_changed_at": "2026-08-11T02:26:24Z",
   "linked_files": [],
   "priority": "medium",
@@ -32,6 +38,6 @@
   "tags": null,
   "title": "Evaluation plan, committees, and reviewer track scopes",
   "type": "task",
-  "updated_at": "2026-08-11T02:26:24Z",
+  "updated_at": "2026-08-11T02:30:46Z",
   "urgency": null
 }

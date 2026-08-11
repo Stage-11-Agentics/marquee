@@ -353,3 +353,24 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 - **Duplicate AC claims resolved to single owners for `trace:ac`:** AC-155–157 → M-43's ticket (MRQ-37, co-speaker + mobile submit), AC-146–148 → M-40's ticket (MRQ-24, chase board + slide upload); the other claimant (M-14 / M-13) tests but does not own.
 - M-51 does not exist (numbering skip, no gap).
 
+
+## Amendment 9 — geography as a constraint (2026-08-10, client-directed)
+
+*Folds `SPEC.md` Amendment 14 and `USER_STORIES.md` US-77 – US-79 (AC-255 – AC-263). Binding prototype v1.7; design reasoning in `sequence/venue-map-ux.md`.*
+
+**Already landed.** MRQ-58 shipped `migrations/0002_venue_geography.sql` (`lat`, `lng`, `access_minutes`) and mirrored `src/db/schema.ts`. That work is not re-done here; three tickets sit on top of it.
+
+**One blocking seed defect, found while folding.** `scripts/seed/event.ts` seeds Sheraton and the Workshop Annex at *identical* coordinates (`40.7625188, -73.9814528`) with `access_minutes` 0 on both. The migration is correct and the seed is faithful to §6 as written — and the consequence is that **the Transit conflict class can never fire in the shipped product and the site map stacks two pins on one point.** The feature would pass its unit tests and be inert in the demo. SPEC Amendment 14 supersedes §6's "without inventing a second real venue" clause for exactly this reason, and AC-259 makes `check:seed` fail until the seed can produce a live Transit conflict. **M-57 owns the fix; it is a prerequisite for M-58 demonstrating anything.**
+
+| # | Ticket | ACs | Hrs | Deps |
+|---|---|---|---|---|
+| **M-57** | **Venue geography — `access_note`, the Venues screen, and a seed that can actually conflict.** Third migration adding `buildings.access_note` (0002 is merged and immutable). Move buildings *and* rooms authoring to `/settings/venues` under the site map; strip venue editors from `/settings` and leave a linking count; one shared writer behind both Save paths. **Re-seed the building set so two buildings are genuinely apart in space with a non-zero access time on one**, and move the photo-ID/security sentence off its room note onto the building's `access_note`. Site map as a tile mosaic — plain `<img>` OSM rasters on a centre-clipped plane, pins and walking lines drawn over, fixed-aspect reserved box, attribution visible, tile failure degrading to pins over the grid. No map library, no CDN, no API key. | AC-255 – AC-257 | 6 | MRQ-58 (merged) |
+| **M-58** | **Transit conflicts.** Third conflict class in `getConflicts` beside room overlap and speaker double-booking: shared speaker, different pinned buildings, gap < walk + destination access. `haversine × 1.3 ÷ 80 m/min`, floored at 1. Warns, never blocks. Flows into the existing dashboard count, drawer, and tiles through the one existing call — no parallel path. Building band over the agenda room columns, and room headers drop the now-redundant building suffix. **The class is Transit, never Travel**, across `kind`, drawer, tiles, dashboard, API type, and copy; byte-scan enforced. | AC-258, AC-259 | 5 | M-57, agenda |
+| **M-59** | **Arrival instructions.** Speaker-portal location card — room, building, address, entrance note, and a leave-by computed from the speaker's own previous session that day (primary building as fallback), degrading honestly when unscheduled or unpinned. Five place merge fields in comms with an insertable field reference. Real ICS `LOCATION` + `GEO`, replacing the bare room name, leaving `METHOD:REQUEST`/`UID`/`SEQUENCE`/cancel semantics untouched. | AC-260 – AC-262 | 4 | M-57, M-24 (ICS), comms |
+| **M-60** | **Disclosure fold.** Fewer than two pinned buildings hides the comparison — room-label building suffix, walk times, Transit conflicts, agenda building band — and collapses the embedded site map, while address, entrance note, and access minutes stay rendered at any building count. Cross-cutting: touches every surface M-57 – M-59 produce. | AC-263 | 2 | M-57, M-58, M-59 |
+
+**Rank.** US-77 – US-79 insert after US-72 in the Tier B band, above the mirror. **M-57 is not cuttable while M-58 or M-59 are in scope** — it owns the seed those two need to demonstrate anything; cutting it and keeping them ships an inert feature, the exact failure mode this amendment exists to prevent. M-58 and M-59 are cuttable as a pair from the bottom of the band; M-60 is cuttable only if all three are cut.
+
+**Total: 17 agent-hours.**
+
+---

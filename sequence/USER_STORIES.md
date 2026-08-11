@@ -940,3 +940,31 @@ Source: client approval of the v1.3 context-gap audit against `/Users/atin/Downl
 ---
 
 *Canonical as of 2026-08-09 (Amendments 1–9 applied). Changes to this file are amendments: new criteria append from AC-254; deletions are struck, never recycled. Next inputs — the Sunday clarification video (requirements freeze), remaining Discord rulings, and Phase-4 client review.*
+
+
+## Amendment 14 — geography as a constraint (2026-08-10, client-directed)
+
+*Three stories minted: **US-77**, **US-78**, **US-79**. Nine criteria minted: **AC-255 – AC-263**. Extends Amendment 11's venue model; design reasoning in `sequence/venue-map-ux.md`, binding prototype v1.7.*
+
+### US-77 · Tell the system where the conference actually is *(new, Tier B — insert after US-72)*
+
+**As a** program operator running a conference across more than one building, **I want** each building to carry a real location and the instructions for getting into it, **so that** every downstream surface can answer "where is this and how do I get in" without me repeating myself.
+- **AC-255**: A building carries latitude, longitude, minutes-to-get-in, and an entrance note. Coordinates are nullable and a null is a first-class state — a streamed or remote venue never takes a pin and is never given a fabricated one. Entrance instructions belong to the building; every room in it inherits them, and no room note is required to carry door, ID, or security text.
+- **AC-256**: Buildings and rooms are created, edited, and removed on `/settings/venues`, beneath the site map their coordinates drive. `/settings` contains no venue editors and links to Venues with a count. Both screens persist through one shared writer, so neither save path writes fields the operator cannot see on that screen.
+- **AC-257**: The site map renders from stored coordinates: one pin per pinned building, walking lines labelled in minutes, and visible map attribution. The box is fixed-aspect and reserved, so arriving tiles never move the page. When tiles fail to load, pins and lines still render over the grid and the map is never blank. No map asset loads from a third-party CDN and no map API key exists anywhere in the repository.
+
+### US-78 · Catch the schedule that cannot physically be walked *(new, Tier B — insert after US-77)*
+
+**As a** program operator building a multi-building agenda, **I want** the schedule to know how long it takes to get between rooms, **so that** I find out a speaker cannot make their next session while I can still move it.
+- **AC-258**: Two scheduled sessions sharing a speaker, in different pinned buildings, whose gap is smaller than the walking time plus the destination's minutes-to-get-in, raise a **Transit** conflict. It warns and never blocks. Sessions in the same building, in a building without coordinates, or at an online venue raise none. The conflict joins the existing count on the dashboard, the conflicts drawer, and the affected tiles without a second code path.
+- **AC-259**: Walking time is haversine distance × 1.3 street-grid detour ÷ 80 m/min, floored at one minute. The conflict message names the walking minutes, the access minutes, the gap required, and the gap available. The class is called **Transit** on every surface — object `kind`, drawer, tile flag, dashboard label, API conflict type, and copy — and never "Travel", which already means flights and accommodation in the speaker task set. `check:seed` proves the seed can actually produce one: at least two buildings far enough apart to yield a real walking time, a non-zero access time on one, and at least one live Transit conflict visible on load.
+
+### US-79 · Arrive at the right door, on time *(new, Tier B — insert after US-78)*
+
+**As an** accepted speaker, **I want** to be told where my session is, when to leave, and how to get in, **so that** I am not solving a wayfinding problem ten minutes before I am due on stage.
+- **AC-260**: The speaker portal shows the room, building, street address, and entrance note for a scheduled session, with a leave-by time derived from that speaker's own previous session that day, falling back to the primary building when they have none. When the session is unscheduled or its venue has no pin, the card degrades honestly and states that instead of implying a location.
+- **AC-261**: `{{session.room}}`, `{{session.building}}`, `{{session.address}}`, `{{session.accessNote}}`, and `{{session.leaveBy}}` resolve per recipient in both the template preview and delivered mail, and an insertable field reference exists in the template editor.
+- **AC-262**: The calendar invite carries a real `LOCATION` — room, building, and street address, ICS-escaped — and `GEO:lat;lng` for a pinned building, omitting `GEO` when there is no pin. Existing `METHOD:REQUEST`, `UID`, `SEQUENCE`, and cancellation semantics are unchanged.
+- **AC-263**: With fewer than two pinned buildings, the "· Building" room-label suffix, walking times, Transit conflicts, and the agenda building band are all absent, and the embedded site map renders collapsed. Address, entrance note, and minutes-to-get-in remain present at any building count, including one.
+
+---
