@@ -20,10 +20,15 @@ Open-source speaker/session-management platform for conference organizers — St
 
 ## Delegator harness defaults (this project)
 
-Build delegators run on **codex at `xhigh` reasoning effort**. The codex config already sets `model = "gpt-5.6-sol"` and `model_reasoning_effort = "xhigh"` globally, so **launch without an `--effort` flag** — passing `--effort high` silently *downgrades* the agent below the configured default:
+Build delegators run on **codex, model `gpt-5.6-luna`, at `xhigh` reasoning effort** (operator directive 2026-08-10; verified working).
 
 ```
-c11 launch-agent --type codex --workspace <ws> --pane <pane> --suppressed --prompt-file <boot>
+c11 launch-agent --type codex --model gpt-5.6-luna --workspace <ws> --pane <pane> --suppressed --prompt-file <boot>
 ```
+
+Two footguns, both hit in this run:
+
+- **Never pass `--effort high`.** `~/.codex/config.toml` already sets `model_reasoning_effort = "xhigh"`, and an explicit `--effort high` silently *downgrades* below it. Omit the flag and inherit xhigh.
+- **`--model` must be passed explicitly.** That same config still pins `model = "gpt-5.6-sol"`, so a launch without `--model` gets the older model without saying so.
 
 Claude delegators, when used, run on **sonnet** (operator ruling 2026-08-10), never opus; opus is reserved for tickets whose contracts every later ticket inherits.
