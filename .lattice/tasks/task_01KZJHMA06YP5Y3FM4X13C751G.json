@@ -10,10 +10,16 @@
   "custom_fields": {},
   "description": "BUILDPLAN: M-27 (Tier B rank 4, US-30) + M-46 (Tier B rank 27, US-71) \u2014 Wave 2 (\u00a75) \u00b7 MERGED at mint (4 h + 4 h = 8 h; same evaluation-round module, M-46 depends only on M-27)\n\n**M-27 \u2014 Two-round funnel** (4 h, ACs AC-98 \u2013 AC-100, dep M-16)\nScope (verbatim): per-round scorecard and evaluator set, bulk promote from a filtered round-1 list, both rounds' scores together on the record.\n\n**M-46 \u2014 Comparison mode** (4 h, ACs AC-163 \u2013 AC-166, dep M-27)\nScope (verbatim): three-card ranking/ties, win aggregate, mode switch preserves evidence.\nAC-166 is the load-bearing one: switch a round's mode both ways and scores recorded in the other mode survive intact.\n\nACs (union): AC-98 \u2013 AC-100, AC-163 \u2013 AC-166\nHours: 8 (4 + 4)\nWorkflow: sub-agent-full (\u22657 h combined)\nShared files: none \u2014 module-local; consumes `src/lib/reviewer-scope.ts` (M-16's) on every reviewer-facing route.\nDeps: M-16\nNon-goal (EVALUATION \u00a75): multi-round beyond two \u2014 parallel mode, per-round anonymity variation, and round-specific visibility layers are post-competition.\nCut-line note: M-46 sits at **rank 27**, second from the bottom of the band. If the capacity calculation cuts it, the merged ticket ships its M-27 half and gate 19 must name US-71 with AC-163 \u2013 AC-166 and the reason.\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQPP744BGXCKB7Y6W1BWJGG",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHMA06YP5Y3FM4X13C751G",
-  "last_event_id": "ev_01KZQP1WWD6G2BR72V5S9KFV25",
-  "last_status_changed_at": "2026-08-11T05:52:16Z",
+  "last_event_id": "ev_01KZQPP747WF3AKMBM2N28Z9VG",
+  "last_status_changed_at": "2026-08-11T05:59:55Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +34,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-28",
-  "status": "in_planning",
+  "status": "planned",
   "tags": null,
   "title": "Two-round funnel and comparison mode",
   "type": "task",
-  "updated_at": "2026-08-11T05:52:16Z",
+  "updated_at": "2026-08-11T06:03:22Z",
   "urgency": null
 }

@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMA377D1W31X8NY6Q8FPB",
-  "last_event_id": "ev_01KZQP2Q8PBBAD79Y8M4D0NQEX",
-  "last_status_changed_at": "2026-08-11T05:52:43Z",
+  "last_event_id": "ev_01KZQPJ57EJ0QJWNG63D8D1VXT",
+  "last_status_changed_at": "2026-08-11T06:01:09Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-29",
-  "status": "in_planning",
+  "status": "planned",
   "tags": null,
   "title": "Quick search",
   "type": "task",
-  "updated_at": "2026-08-11T05:52:43Z",
+  "updated_at": "2026-08-11T06:01:09Z",
   "urgency": null
 }

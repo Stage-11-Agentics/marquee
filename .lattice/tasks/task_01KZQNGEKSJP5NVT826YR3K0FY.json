@@ -18,18 +18,18 @@
     }
   ],
   "id": "task_01KZQNGEKSJP5NVT826YR3K0FY",
-  "last_event_id": "ev_01KZQP8ZCF07ABKJ9MCGRPC03C",
-  "last_status_changed_at": "2026-08-11T05:53:02Z",
+  "last_event_id": "ev_01KZQPFWDY1FKKVVNERRPA8WHX",
+  "last_status_changed_at": "2026-08-11T05:59:54Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-70",
-  "status": "planned",
+  "status": "in_progress",
   "tags": null,
   "title": "Test harness: cut per-file Worker boot so the fast suite stays under budget",
   "type": "task",
-  "updated_at": "2026-08-11T05:56:08Z",
+  "updated_at": "2026-08-11T05:59:54Z",
   "urgency": null
 }

@@ -10,10 +10,16 @@
   "custom_fields": {},
   "description": "BUILDPLAN: M-23 (Tier B rank 1, US-44) + M-40 (Tier B rank 21, US-41) \u2014 Wave 2 (\u00a75) \u00b7 MERGED at mint (6 h + 2 h = 8 h \u2264 10 h; one coherent scope \u2014 the organizer's live view of what speakers owe and what they have delivered. M-40's \"live organizer view\" of an upload *is* the chase board's task matrix cell.)\n\n**M-23 \u2014 Chase board** (6 h, ACs AC-91 \u2013 AC-94, deps M-15/M-11)\nScope (verbatim): accepted-speaker \u00d7 task matrix with state glyphs, live filter chips with counts, task-type and track filters, select-all \u2192 fixed-width `Send reminder (N)`, per-row Nudge, compose drawer with template + merge preview + per-recipient outbox rows and per-speaker send log, speaker context drawer (tasks, message history, sessions, bio), live update as speakers complete tasks.\nHouse UI rule, called out in the plan's own words: the `Send reminder (N)` button is **fixed-width** \u2014 relabelling must not move anything.\n\n**M-40 \u2014 Slide upload** (2 h, ACs AC-146 \u2013 AC-148, AC-232, dep M-13)\nScope (verbatim): file types/limit/progress/recovery/live organizer view; upload safety from M-13.\n\nACs (union): AC-91 \u2013 AC-94, AC-146 \u2013 AC-148, **AC-232**\nHours: 8 (6 + 2)\nWorkflow: sub-agent-full (\u22657 h combined)\nShared files: none \u2014 module-local. Sends go through M-11's outbox; **never call Resend** (G3).\nDeps: M-15, M-11, M-13\nSpeed: the chase board (~150 speakers \u00d7 task matrix) carries a *proposed objective* budget \u2014 p95 \u2264 1000 ms, measured and reported by `check:speed`, never a gate. It is our strongest screen and the heaviest table.\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQPGZJ8CGH900GVD0D5096E",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHM9M28PY96JTQYFJFTFHM",
-  "last_event_id": "ev_01KZQP92ZXRFENZ4R4PW6DX0MX",
-  "last_status_changed_at": "2026-08-11T05:56:11Z",
+  "last_event_id": "ev_01KZQPP5ET5GMGH73Z1DDPE55K",
+  "last_status_changed_at": "2026-08-11T06:03:20Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -42,10 +48,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-24",
-  "status": "planned",
+  "status": "in_progress",
   "tags": null,
   "title": "Chase board and slide upload",
   "type": "task",
-  "updated_at": "2026-08-11T05:56:11Z",
+  "updated_at": "2026-08-11T06:03:20Z",
   "urgency": null
 }

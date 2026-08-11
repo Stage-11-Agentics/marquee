@@ -12,16 +12,17 @@ Baseline after rebasing to `forgejo/master @ 62b8748`: `npm test` passed, 38 fil
 
 ### 1. Organizer onboarding projection and routes
 
-Add module-local `src/api/onboarding.ts` and `src/routes/onboarding.routes.ts` (the latter follows the `*.routes.ts` manifest convention):
+Add module-local `src/routes/onboarding.queries.ts` and `src/routes/onboarding.routes.ts` (the latter follows the `*.routes.ts` manifest convention and the query module stays beside its route):
 
 - `GET /api/v1/events/{eventId}/onboarding` returns accepted speaker rows, all assigned task-template columns, session/track metadata, state cells, last-contact timestamps, counts for the four metric buttons and filter chips, and task/track facets. Query filters cover `all|overdue|incomplete|risk`, task type, track, and search. Server-side assembly keeps the matrix bounded to accepted speakers and preserves rows with `—` for an unassigned template.
 - State derivation is centralized and tested: `done` → `✓`, overdue open → `!`, open due within the risk window → `×`, future open → `·`, cancelled → `–`, unassigned → `—`; severity sorts by maximum days overdue then risk then name. Every count uses the same owed predicate, including task-type counts and overdue totals.
+- Row membership follows SPEC §5.10 and AC-265: a row is present when an accepted speaker has at least one owed task (`status = 'open' AND cancelled_at IS NULL`). A speaker whose only work is cancelled leaves the board; a speaker with another accepted session that still has owed work keeps the row. Thus accepted-speaker count and matrix-row count may differ when there is nothing outstanding, and the honest empty state covers that case.
 - `GET /api/v1/events/{eventId}/onboarding/speakers/{personId}` returns the authorized speaker context: profile/bio/email, task rows, accepted Sessions with tracks and agenda IDs, and outbox message history. It verifies the person is an accepted speaker in that conference.
 - Both routes use the existing `program:read` authorization policy. The projection reads the merged `cancelled_at` schema and does not create a parallel task state. It refreshes as a whole snapshot so an upload completion is visible on the next live read.
 
 ### 2. Demo-safe reminder path and idempotency
 
-Extend the existing `src/routes/comms.routes.ts` selector/preview contract only as needed for the board: support a JSON-backed exact submission/person selection and a speaker-role constraint, avoiding one SQL placeholder per selected row. Preview resolves the same recipient/task merge data used at enqueue. Queueing remains `POST .../comms/send` → `enqueueBulkReminder` → `enqueueOutbox` (default `demo_safe`) → `enqueueMailMessage`; no reminder path calls Resend or writes `always_live`.
+Extend the existing `src/routes/comms.routes.ts` selector/preview contract only as needed for the board: add optional JSON-backed exact submission/person selection and a speaker-role constraint without reshaping or removing existing selector fields, avoiding one SQL placeholder per selected row. This is an explicit compatibility handoff with MRQ-32 (currently `in_planning` and owner of this comms module); before implementation and at every rebase boundary, re-check its latest selector shape and keep this change additive. Preview resolves the same recipient/task merge data used at enqueue. Queueing remains `POST .../comms/send` → `enqueueBulkReminder` → `enqueueOutbox` (default `demo_safe`) → `enqueueMailMessage`; no reminder path calls Resend or writes `always_live`.
 
 The UI sends the selected board rows' stable submission IDs, template key, and `task_state: open`, so the existing `sha256(template_key, entity_id, person_id)` UNIQUE key governs retries. The AC-117 proof will invoke the same bulk action twice and process both returned IDs with a fake provider, asserting one outbox row, one provider delivery, `demo_safe`, and the idempotency key. No pre-check will be added.
 
@@ -43,7 +44,7 @@ Keep the portal's existing M-13 transport and M-15 task completion writer. In `s
 
 ### 5. AC-tagged evidence
 
-Add a lean AC-named test under `tests/` (prefer node/unit coverage for pure state/filter/idempotency helpers; use one focused Worker integration probe only where route/D1 behavior is required) covering AC-91–AC-94 and AC-146–AC-148/AC-232. The test will assert matrix shape/state/count/filter/sort semantics, exact selection/reminder idempotency and demo-safe policy, upload limit/progress/retry contract, and that a completed portal task is visible to the organizer projection. Add `tests/ac-claims/MRQ-24.json` with `owns` set to the eight ticket ACs and no unrelated claims. Keep the default suite lean and under 30s.
+Add a lean AC-named test under `tests/` (prefer node/unit coverage for pure state/filter/idempotency helpers; use one focused Worker integration probe only where route/D1 behavior is required) covering AC-91–AC-94 and AC-146–AC-148/AC-232. The test will assert matrix shape/state/count/filter/sort semantics, exact selection/reminder idempotency and demo-safe policy, upload limit/progress/retry contract, and that a completed portal task is visible to the organizer projection. The verified M-15 portal payload already exposes parsed `payload.accept` and `payload.max_bytes`, so the upload UI will consume those fields and no portal route change is planned. Add `tests/ac-claims/MRQ-24.json` with `owns` set to the seven registry-unclaimed ACs AC-91–AC-94 and AC-146–AC-148, and list AC-232 under `exercises`; MRQ-14 remains the sole owner of AC-232. Keep the default suite lean and under 30s, and flag that ticket/registry discrepancy to the Orchestrator in the completion comment.
 
 Validation will run `npm run pr-gate -- --ticket MRQ-24`, capture its complete result in the Lattice completion comment, then use the allowed running-system path for `/onboarding` and the speaker upload flow (or record an explicit N/A if the local environment cannot exercise R2). A proposed speed measurement will be reported, not promoted to a gate.
 
@@ -51,7 +52,7 @@ Validation will run `npm run pr-gate -- --ticket MRQ-24`, capture its complete r
 
 - No edits to `SPEC.md`, `EVALUATION.md`, `BUILDPLAN.md`, `DESIGN.md`, `PHILOSOPHY.md`, or `sequence/USER_STORIES.md`; no new schema or alternate upload pipeline.
 - No Resend calls, no additional `always_live` writer, no preflight idempotency query, no destructive deletion of completed/cancelled task history, no board drag or record-owned lifecycle action.
-- If the merged route/schema differs from the contract (notably task cancellation columns or the comms selector shape), use the merged implementation as the compatibility source and flag the exact deviation and reason to the Orchestrator in the completion comment.
+- If the merged route/schema differs from the contract (notably task cancellation columns or the comms selector shape), use the merged implementation as the compatibility source and flag the exact deviation and reason to the Orchestrator in the completion comment. MRQ-32's ownership of `src/routes/comms.routes.ts` is a known same-file handoff: do not rewrite its route, and report any unavoidable additive overlap before implementation.
 
 ## Verification sequence
 
@@ -60,3 +61,15 @@ Validation will run `npm run pr-gate -- --ticket MRQ-24`, capture its complete r
 3. Implement projection/routes/tests and UI/upload improvements in small commits; run focused tests, `npm test`, type checks, `check:api`, and `trace:ac`.
 4. Move through `review` and `in_validation`, attach a PASS review artifact and real validation evidence, then run the mandatory PR gate.
 5. Create the Forgejo PR against `master`, attach its URL, bump MRQ-24 to `pr_open`, push, and notify the Orchestrator at workspace:9/surface:60.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+Review artifact: `art_01KZQPGZJ8CGH900GVD0D5096E` (single-agent plan review, 2026-08-11).
+
+1. **CRITICAL — AC-232 duplicate owner:** Resolved by changing MRQ-24's claims contract to `owns` AC-91–AC-94 and AC-146–AC-148 only, with AC-232 in `exercises`. `tests/ac-claims/MRQ-14.json` remains the sole owner because `trace:ac-core.mjs` rejects duplicate owners. The implementation test still names and exercises AC-232, and the ticket/registry mismatch will be called out to the Orchestrator in the completion comment.
+2. **MAJOR — MRQ-32 comms collision:** Resolved as an additive compatibility handoff. MRQ-24 will touch `src/routes/comms.routes.ts` only for optional JSON-backed exact selection and speaker-role filtering, will not reshape existing fields or create another send route, and will re-check the MRQ-32 selector at each rebase boundary. The overlap and any unavoidable merged-shape deviation will be reported to the Orchestrator.
+3. **MINOR — row membership:** Resolved explicitly per SPEC §5.10/AC-265: only accepted speakers with at least one owed task appear; cancelled-only speakers leave; a speaker with another accepted session that still has owed work remains. A clear accepted-speaker set therefore has an honest empty board rather than fabricated rows.
+4. **MINOR — upload payload:** Resolved by source verification: M-15's portal task payload already returns parsed `accept` and `max_bytes` for file tasks. MRQ-24 consumes those fields in the client and does not widen `portal.routes.ts`.
+5. **MINOR — query module placement:** Resolved by moving the planned projection module to `src/routes/onboarding.queries.ts`, beside `onboarding.routes.ts`, matching the repository's existing route-query convention.
+
+All findings are triaged and resolved; implementation may proceed against this amended plan.

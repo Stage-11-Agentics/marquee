@@ -1,0 +1,39 @@
+# Plan Review: MRQ-24 — Chase board and slide upload
+
+## 1. Verdict
+
+**FAIL (plan-level)** — one gate-breaking defect (the AC-232 claims instruction will turn `trace:ac` red as written) and one unaddressed same-file collision with an in-flight ticket. Both are cheap to fix; this is a narrow revision, not a redesign. Everything else in the plan verified clean against the repo.
+
+## 2. Summary
+
+Reviewed the MRQ-24 plan (M-23 chase board + M-40 slide upload, AC-91–94, AC-146–148, AC-232) against the contract documents, the binding prototype, the merged tree at `62b8748`, and the Lattice task registry. The plan is unusually well-grounded: every helper, script, route, and schema column it cites was verified to exist (`enqueueBulkReminder`, `putFileToR2` progress, `route-table.ts`'s `/onboarding` entry, `cancelled_at` in migration 0004, sign-time `maxBytes` enforcement in `uploads.routes.ts`), and its glyph mapping matches prototype v1.9 exactly. The two blocking concerns: §5 instructs creating an AC-claims file that double-owns AC-232 — `tests/ac-claims/MRQ-14.json` already owns it, and `trace-ac-core.mjs:77` hard-errors on `duplicate-owner`, which the mandatory `pr-gate` runs — and §2 modifies `src/routes/comms.routes.ts` while MRQ-32 (the comms cluster, whose ticket explicitly owns that module) is in flight, dispatched at the very commit this plan rebased onto.
+
+## 3. Issues
+
+**[CRITICAL] §5 AC-tagged evidence — Claims file double-owns AC-232, failing the mandatory gate**
+The plan says `tests/ac-claims/MRQ-24.json` will have "`owns` set to the eight ticket ACs," which includes AC-232. But `tests/ac-claims/MRQ-14.json` already declares `"owns": ["AC-231", "AC-232"]` (M-13 built the presign/MIME/magic-byte/caps machinery AC-232 grades). `scripts/checks/trace-ac-core.mjs:77` emits a `duplicate-owner` error when two claim files own the same AC, and `pr-gate` runs `trace:ac` — so the plan as written directs an action that turns its own required gate red. The ticket description does assign AC-232 to this ticket, so this is a genuine ticket-vs-registry conflict, not a plan misreading.
+**Recommendation:** Own the seven ACs AC-91–94 and AC-146–148 and list AC-232 under `exercises` (mirroring MRQ-14, which lists AC-146–148 as `exercises`), and flag the ticket/registry discrepancy to the Orchestrator in the completion comment per the plan's own deviation clause — or get the Orchestrator to transfer ownership out of MRQ-14 first. Either resolution works; silently double-owning does not.
+
+**[MAJOR] §2 Demo-safe reminder path — Same-file collision with in-flight MRQ-32, unnamed in the plan**
+The plan extends the selector/preview contract in `src/routes/comms.routes.ts`. MRQ-32 (M-34 + M-35 + M-31, the comms cluster) was dispatched at `62b8748` — the exact commit this plan rebased to — is still open, and its ticket declares `src/routes/comms.routes.ts` / `src/ui/comms/*` as its module, including M-35's ownership of the single send route and its "counted selector, exactly-one-of enforced server-side" contract. The plan's deviation clause mentions "the comms selector shape" generically but never names the live collision; the ticket's own "Shared files: none — module-local" declaration is falsified by this section. Two agents reshaping `selectorSchema` concurrently is a merge-conflict and contract-churn machine. (Related: the plan calls the send route "the existing M-35 comms send route" — the route at `comms.routes.ts:291` exists from M-11's foundation; M-35 proper is what MRQ-32 is building right now.)
+**Recommendation:** Keep the change strictly additive — a new optional selector field (e.g. `submission_ids` + a speaker-role constraint) with no reshaping of existing fields — name MRQ-32 explicitly in the plan's deviation section, notify the Orchestrator of the shared-file overlap before implementation, and re-check the merged selector shape at every rebase boundary in the verification sequence.
+
+**[MINOR] §1 Projection — Row-membership rule under cancellation is unstated**
+AC-91's evidence is "row count equals accepted-speaker count," while SPEC §5.10 (AC-265, owned by the backlog M-62 ticket that explicitly touches M-23) says a speaker whose only outstanding tasks were cancelled *leaves the board* unless another accepted session keeps them owing. The plan states the owed predicate correctly and says cancelled cells stay as glyphs, but never says which row-membership rule the projection implements. These reconcile only if the seed contains no fully-cancelled speaker — a coincidence, not a design.
+**Recommendation:** State the rule explicitly (rows = accepted speakers who owe anything under the shared predicate, or all accepted speakers — pick per SPEC §5.10) and note the M-62 interaction so its later reader-conversion pass finds the board already conformant.
+
+**[MINOR] §4 Slide upload — "Limit stated before the picker" depends on the portal payload carrying `file_config`**
+AC-146 requires the byte limit and accepted types stated before picker interaction. `portal.routes.ts` reads `template.file_config` internally (lines 342, 498), but the plan doesn't confirm the portal task list payload actually surfaces `accept[]`/`maxBytes` to the client. If it doesn't, a small addition to `portal.routes.ts` (M-15's module) is needed — worth knowing before implementation, since it widens the touched-file set.
+**Recommendation:** Verify the task payload includes parsed `file_config`; if not, add it as a named, minimal extension and record it in the plan.
+
+**[MINOR] §1 File placement — `src/api/onboarding.ts` diverges from the query-module convention**
+Existing per-screen query assembly lives in `src/routes/*.queries.ts` (`agenda.queries.ts`, `submissions.queries.ts`, `forms.queries.ts`); `src/api/` holds framework machinery (router, pagination, rate-limit). A new domain module in `src/api/` bends that boundary.
+**Recommendation:** Prefer `src/routes/onboarding.queries.ts` beside `onboarding.routes.ts` unless there's a concrete reason the shared-API layer needs it.
+
+## 4. Positive Observations
+
+- **Every factual claim I checked was true.** The rebase baseline and test timing are stated with numbers; `enqueueBulkReminder`/`enqueueOutbox`/`enqueueMailMessage` exist in `src/jobs/mail/`; `putFileToR2` exposes progress; `route-table.ts:20` really does already carry the `/onboarding` entry; `cancelled_at` really is merged (migration 0004); sign-time size enforcement really exists (`validateDeclared` with `policy.maxBytes` in `uploads.routes.ts`). A plan whose citations all resolve is a plan that was written against the tree, not from memory.
+- **The glyph and severity semantics match the binding prototype exactly** (`✓`/`!`/`×`/`·`/`–`/`—`, severity by max days overdue then risk then name — prototype line 2442 and SPEC §5.10 both concur), and the centralized, tested owed predicate (`status='open' AND cancelled_at IS NULL` behind every count) is precisely the discipline the M-62 contract will later demand of every reader.
+- **Guardrail literacy is excellent.** No Resend import, no third `always_live` write site, no preflight idempotency query (relying on the UNIQUE key and proving it by invoking the bulk action twice against a fake provider), demo-safe banner in the compose drawer — G3 is respected in both the plan and the non-goals.
+- **House rules are quoted back with mechanisms, not vibes:** fixed-width `Send reminder (N)` via reserved CSS width, select-all never removing a row, the 5 s poll named as the F-8 recorded decision rather than reinvented as SSE.
+- **The proof section is honest about its boundaries** — speed reported not gated, R2 validation with an explicit N/A path, the deviation-flagging protocol to the Orchestrator. The verification sequence (plan commit before source edits, re-fetch at phase boundaries, `npm ci` after rebase) is the right shape; it just needs the two blocking fixes above folded in.

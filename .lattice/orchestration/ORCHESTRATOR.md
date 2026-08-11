@@ -53,6 +53,7 @@ What a real guardrail test looks like: it asserts **the status code AND the abse
 - **MRQ-30** (API completion + webhooks, 9h, Tier B) is the first cut if Wednesday gets tight.
 - **Watch pr-gate wall-clock each merge.** It has drifted 13s → 21s across 26 merged tickets and the trend tracks file count: ~70% is the hermetic suite, whose cost is a fixed per-*file* Miniflare boot + 983-line schema apply, currently hidden behind vitest parallelism. The 30s inner-loop rule is the line. MRQ-23 owns the fix (batch the 46-table wipe in `tests/integration/apply-migrations.ts`) and the tracked budget.
 - Contract conflicts are the orchestrator's to resolve — delegators flag and keep moving; you amend SPEC or redirect.
+- **When two live tickets share a file, rule immediately: who lands first, who extends.** Do not let them coordinate it between themselves and do not wait for the conflict at rebase. The pattern that works: the ticket further along **defines the shape additively and names its functions and their contract in its PR body**; the later ticket **adds to that shape and never rewrites it** — the same rule that keeps `src/lib/form-conditions.ts` single-source. Tell both sides the same ruling in the same tick. (2026-08-11: MRQ-24 and MRQ-32 on `comms.routes.ts`.)
 - **Design-contract changes (the prototype) are the orchestrator's call**, never a delegator's silent reconciliation.
 
 ## Current standing context
