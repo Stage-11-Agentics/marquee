@@ -62,6 +62,7 @@ const STATUS_OPTIONS = [
   ["withdrawn", "Withdrawn"],
   ["scheduled", "Scheduled"],
   ["published", "Published"],
+  ["not_notified", "Decided · not notified"],
 ] as const;
 
 const SORT_OPTIONS = [
@@ -165,6 +166,9 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
     return <span title={item.speakers.map((speaker) => speaker.name).join(", ")}>{first ? `${first.name}${rest.length ? ` +${rest.length}` : ""}` : "—"}</span>;
   }
   if (column === "status") return <span class={`chip status-chip ${item.status}`}>{statusLabel(item.status)}</span>;
+  if (column === "notified") return item.notified
+    ? <span class={`notification-state ${item.notified.state}`} title={item.notified.detail}><strong>{item.notified.label}</strong><small>{item.notified.detail}</small></span>
+    : <span class="subtle">—</span>;
   if (column === "tracks") return <span class="track-chips">{item.tracks.length ? item.tracks.map((track) => <span key={track.id} class="chip track-chip" style={{ borderLeftColor: track.color }} title={track.is_primary ? "Primary track" : "Additional track"}>{track.name}{track.is_primary ? " · Primary" : ""}</span>) : "—"}</span>;
   if (column === "score") return <span class="tabular">{item.score === null ? "—" : item.score.toFixed(2)}</span>;
   if (column === "submitted") return <span class="tabular">{item.status === "draft" ? "Not submitted" : formatMoment(item.submitted_at)}</span>;
@@ -201,6 +205,10 @@ export function SubmissionsPage({
   const [viewsError, setViewsError] = useState("");
   const [viewBusy, setViewBusy] = useState(false);
   const [columnPanelOpen, setColumnPanelOpen] = useState(false);
+  const [notifiedSummary, setNotifiedSummary] = useState<{ total: number; sendable: number; no_valid_address: number } | null>(null);
+  const [notifying, setNotifying] = useState(false);
+  const [notifyMessage, setNotifyMessage] = useState("");
+  const [notifyError, setNotifyError] = useState("");
 
   const page = Number(queryValue(params, "page", "1"));
   const status = queryValue(params, "status");
@@ -214,6 +222,7 @@ export function SubmissionsPage({
   const q = queryValue(params, "q");
   const queryIdentity = `${q}\u0000${status}\u0000${kind}\u0000${track}\u0000${format}\u0000${wave}\u0000${task}\u0000${placement}\u0000${sort}`;
   const draftQueue = status === "draft";
+  const notifiedQueue = status === "not_notified";
 
   useEffect(() => {
     setColumns(storedColumns(eventId));
@@ -231,19 +240,45 @@ export function SubmissionsPage({
       })
       .then((body) => {
         setViews(body.data);
-        setActiveViewId((current) => draftQueue ? "drafts-needing-attention" : current === "drafts-needing-attention" ? "all-submissions" : current);
+        setActiveViewId((current) => notifiedQueue
+          ? "decided-not-notified"
+          : draftQueue
+            ? "drafts-needing-attention"
+            : current === "drafts-needing-attention" || current === "decided-not-notified" ? "all-submissions" : current);
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setViewsError(error instanceof Error ? error.message : "Saved views could not be loaded.");
       })
       .finally(() => { if (!controller.signal.aborted) setViewsLoading(false); });
     return () => controller.abort();
-  }, [eventId, draftQueue]);
+  }, [eventId, draftQueue, notifiedQueue]);
 
   useEffect(() => {
-    if (draftQueue) setActiveViewId("drafts-needing-attention");
-    else if (activeViewId === "drafts-needing-attention") setActiveViewId("all-submissions");
-  }, [draftQueue, activeViewId]);
+    if (notifiedQueue) setActiveViewId("decided-not-notified");
+    else if (draftQueue) setActiveViewId("drafts-needing-attention");
+    else if (activeViewId === "drafts-needing-attention" || activeViewId === "decided-not-notified") setActiveViewId("all-submissions");
+  }, [draftQueue, notifiedQueue, activeViewId]);
+
+  useEffect(() => {
+    if (!notifiedQueue) {
+      setNotifiedSummary(null);
+      setNotifyMessage("");
+      setNotifyError("");
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/summary`, { signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as unknown;
+        if (!response.ok) throw new Error(errorMessage(body, `The notification summary could not be loaded (${response.status}).`));
+        return body as { total: number; sendable: number; no_valid_address: number };
+      })
+      .then(setNotifiedSummary)
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setNotifyError(error instanceof Error ? error.message : "The notification summary could not be loaded.");
+      });
+    return () => controller.abort();
+  }, [eventId, notifiedQueue, reloadKey]);
 
   const updateQuery = (updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(params);
@@ -430,22 +465,44 @@ export function SubmissionsPage({
     }
   };
 
+  const notifySpeakers = async () => {
+    setNotifying(true);
+    setNotifyMessage("");
+    setNotifyError("");
+    try {
+      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify`, { method: "POST" });
+      const body = await response.json().catch(() => null) as unknown;
+      if (!response.ok) throw new Error(errorMessage(body, `Notifications could not be queued (${response.status}).`));
+      const result = body as { queued: number; skipped_no_address: number };
+      setNotifyMessage(`${result.queued.toLocaleString()} notification${result.queued === 1 ? "" : "s"} queued${result.skipped_no_address ? ` · ${result.skipped_no_address.toLocaleString()} need an address first` : ""}.`);
+      setReloadKey((value) => value + 1);
+    } catch (error: unknown) {
+      setNotifyError(error instanceof Error ? error.message : "Notifications could not be queued.");
+    } finally {
+      setNotifying(false);
+    }
+  };
+
   const activeView = views.find((view) => view.id === activeViewId);
   const orderedColumns = [...columns, ...SUBMISSION_COLUMN_REGISTRY.map((column) => column.id).filter((column) => !columns.includes(column))];
   const singleVenueName = rows.find((item) => item.slot && !item.slot.show_building)?.slot?.building ?? null;
   return <div class="submissions-page">
     <PageHeader
-      title={draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
-      copy={envelope ? `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered 50 at a time for an instant response at full scale.` : "Loading the conference submission register…"}
-      actions={<><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button><Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button></>}
+      title={notifiedQueue ? "Decided · not notified" : draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
+      copy={envelope ? notifiedQueue
+        ? `${envelope.total.toLocaleString()} decisions need attention · ${notifiedSummary?.sendable.toLocaleString() ?? "—"} can be notified now · ${notifiedSummary?.no_valid_address.toLocaleString() ?? "—"} need an address first.`
+        : `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered 50 at a time for an instant response at full scale.`
+        : "Loading the conference submission register…"}
+      actions={<><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
     />
     <div class={`export-message ${exportError ? "visible" : ""}`} role="status">{exportError || "Export status space reserved"}</div>
+    {notifiedQueue && <div class={`notify-message ${notifyError || notifyMessage ? "visible" : ""}`} role="status">{notifyError || notifyMessage || "Notification status space reserved"}</div>}
     <section class="card table-card" aria-busy={state.kind === "loading"}>
       <div class="saved-view-strip" aria-label="Saved conference views">
         <span class="eyebrow">Views</span>
         <div class="saved-view-chips">
           {views.map((view) => <span class={`saved-view-chip ${activeViewId === view.id ? "active" : ""}`} key={view.id}>
-            <button type="button" onClick={() => applyView(view)} disabled={viewBusy}>{view.name}{view.id === "drafts-needing-attention" && envelope && <span class="tabular view-count">{envelope.total.toLocaleString()}</span>}</button>
+            <button type="button" onClick={() => applyView(view)} disabled={viewBusy}>{view.name}{view.id === "drafts-needing-attention" && envelope && <span class="tabular view-count">{envelope.total.toLocaleString()}</span>}{view.id === "decided-not-notified" && envelope && <span class="tabular view-count">{envelope.total.toLocaleString()}</span>}</button>
             {!view.built_in && <><button type="button" class="view-icon-button" aria-label={`Rename ${view.name}`} onClick={() => void renameView(view)} disabled={viewBusy}>✎</button><button type="button" class="view-icon-button" aria-label={`Delete ${view.name}`} onClick={() => void deleteView(view)} disabled={viewBusy}>×</button></>}
           </span>)}
           {!viewsLoading && views.length === 0 && <span class="subtle">No saved views yet.</span>}
@@ -484,9 +541,9 @@ export function SubmissionsPage({
         <table class="submissions-table">
           <thead><tr><th class="check-col"><input type="checkbox" aria-label="Select visible rows" checked={rows.length > 0 && rows.every((item) => allMatching || selectedIds.has(item.id))} onChange={(event) => togglePage(event.currentTarget.checked)} /></th>{columns.map((column) => <th class={`${column}-col`}>{submissionColumn(column).label}</th>)}</tr></thead>
           <tbody>
-            {state.kind === "loading" && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{draftQueue ? "Loading drafts…" : "Loading submissions…"}</strong><span>Reading the exact filtered slice from D1.</span></td></tr>}
-            {state.kind === "error" && <tr class="state-row error"><td colSpan={columns.length + 1}><strong>{draftQueue ? "Drafts did not load" : "Submissions did not load"}</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></td></tr>}
-            {envelope && rows.length === 0 && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{draftQueue ? "No drafts need attention" : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{draftQueue ? "Every draft is complete for the fields its submitter can see." : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{draftQueue ? <Button small onClick={() => navigate("/submissions")}>View all submissions</Button> : q || status || kind || track || format || wave || task || placement ? <Button small onClick={() => navigate("/submissions")}>Clear filters</Button> : <Button small onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</td></tr>}
+            {state.kind === "loading" && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Loading notification gaps…" : draftQueue ? "Loading drafts…" : "Loading submissions…"}</strong><span>Reading the exact filtered slice from D1.</span></td></tr>}
+            {state.kind === "error" && <tr class="state-row error"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Notification gaps did not load" : draftQueue ? "Drafts did not load" : "Submissions did not load"}</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></td></tr>}
+            {envelope && rows.length === 0 && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Every decision has reached its speaker" : draftQueue ? "No drafts need attention" : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{notifiedQueue ? "The notification gap is clear." : draftQueue ? "Every draft is complete for the fields its submitter can see." : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{notifiedQueue || draftQueue ? <Button small onClick={() => navigate("/submissions")}>View all submissions</Button> : q || status || kind || track || format || wave || task || placement ? <Button small onClick={() => navigate("/submissions")}>Clear filters</Button> : <Button small onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</td></tr>}
             {rows.map((item) => <tr class="submission-row" key={item.id} onClick={(event) => { const target = event.target as HTMLElement; if (!target.closest("a,input,button,select")) navigate(`/submissions/${item.id}`); }}>
               <td class="check-col"><input type="checkbox" aria-label={`Select ${item.id}`} checked={allMatching || selectedIds.has(item.id)} onChange={(event) => toggleRow(item.id, event.currentTarget.checked)} /></td>
               {columns.map((column) => <td class={`${column}-col`}><Cell item={item} column={column} navigate={navigate} /></td>)}

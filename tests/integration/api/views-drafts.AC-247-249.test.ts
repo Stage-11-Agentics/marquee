@@ -121,7 +121,7 @@ describe.sequential("MRQ-34 saved views and draft attention queue", () => {
 
   test("AC-248 · the fixed registry round-trips every column while Title remains mandatory", async () => {
     expect(SUBMISSION_COLUMN_REGISTRY.map((column) => [column.id, column.label])).toEqual([
-      ["type", "Type"], ["id", "ID"], ["title", "Title"], ["speakers", "Speakers"], ["status", "Status"], ["tracks", "Tracks"], ["score", "Score"], ["submitted", "Submitted"], ["updated", "Last updated"], ["origin", "Origin"], ["missing", "Missing fields"],
+      ["type", "Type"], ["id", "ID"], ["title", "Title"], ["speakers", "Speakers"], ["status", "Status"], ["notified", "Notified"], ["tracks", "Tracks"], ["score", "Score"], ["submitted", "Submitted"], ["updated", "Last updated"], ["origin", "Origin"], ["missing", "Missing fields"],
     ]);
     const response = await request(`/api/v1/events/${EVENT_ID}/views`, { method: "POST", body: JSON.stringify({ name: "Every column", columns: SUBMISSION_COLUMN_REGISTRY.map((column) => column.id).reverse(), sort: "title" }) });
     expect(response.status).toBe(201);

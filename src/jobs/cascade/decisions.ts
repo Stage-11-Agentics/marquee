@@ -3,6 +3,7 @@ import type { D1Database, Queue } from "@cloudflare/workers-types";
 import { runBulkByIds } from "../../api/bulk";
 import { newUlid } from "../../api/ids";
 import type { Decision, Id } from "../../db/schema";
+import { sha256Hex } from "../../lib/auth/random-token";
 import { cancelCalendarInvites } from "../calendar/invites";
 import { enqueueMailMessage } from "../mail/consumer";
 import { enqueueTrigger } from "../mail/triggers";
@@ -360,6 +361,8 @@ async function enqueueDecisionMail(
     decision: Decision;
     feedbackMd?: string | null;
     now: number;
+    entityId?: Id;
+    idempotencyKey?: string;
   },
 ): Promise<{ id: Id | null; inserted: boolean }> {
   if (!isValidEmail(input.submission.person_email)) return { id: null, inserted: false };
@@ -368,7 +371,7 @@ async function enqueueDecisionMail(
     db: input.db,
     eventId: input.eventId,
     templateKey,
-    entityId: input.submission.id,
+    entityId: input.entityId ?? input.submission.id,
     personId: input.submission.person_id,
     toEmail: input.submission.person_email.trim(),
     data: {
@@ -381,9 +384,102 @@ async function enqueueDecisionMail(
       "decision.recommendation": input.decision,
     },
     now: input.now,
+    idempotencyKey: input.idempotencyKey,
   });
   if (result?.inserted) await enqueueMailMessage(input.queue, result.id);
   return { id: result?.id ?? null, inserted: result?.inserted ?? false };
+}
+
+export interface NotifyNotifiedResult {
+  selected: number;
+  queued: number;
+  skippedNoAddress: number;
+  outboxIds: Id[];
+}
+
+interface ExistingDecisionCandidate {
+  decision_id: Id;
+  submission_id: Id;
+  decision: Decision;
+  resulting_status: "accepted" | "rejected";
+  feedback_md: string | null;
+}
+
+/**
+ * Re-send a decision without touching the decision record. The decision id is
+ * the retry's business entity, while a fresh key makes every deliberate retry
+ * a new outbox row rather than a duplicate of the automatic send.
+ */
+export async function notifyExistingDecisions(input: {
+  db: D1Database;
+  queue: Queue<unknown>;
+  eventId: Id;
+  submissionIds: readonly Id[];
+  now?: number;
+}): Promise<NotifyNotifiedResult> {
+  const ids = [...new Set(input.submissionIds)];
+  if (ids.length === 0) return { selected: 0, queued: 0, skippedNoAddress: 0, outboxIds: [] };
+  const now = input.now ?? Date.now();
+  const submissions = await loadSubmissions(input.db, input.eventId, ids);
+  const submissionsById = new Map(submissions.map((submission) => [submission.id, submission]));
+  const idsJson = JSON.stringify(ids);
+  const candidates = await input.db
+    .prepare(
+      `SELECT decision.id AS decision_id, decision.submission_id, decision.decision,
+              decision.resulting_status, decision.feedback_md
+       FROM submission_decisions decision
+       WHERE decision.event_id = ?
+         AND decision.resulting_status IN ('accepted', 'rejected')
+         AND decision.submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+         AND NOT EXISTS (
+           SELECT 1
+           FROM submission_decisions newer
+           WHERE newer.event_id = decision.event_id
+             AND newer.submission_id = decision.submission_id
+             AND (newer.decided_at > decision.decided_at
+               OR (newer.decided_at = decision.decided_at AND newer.id > decision.id))
+         )
+         AND NOT EXISTS (
+           SELECT 1
+           FROM outbox sent
+           WHERE sent.event_id = decision.event_id
+             AND sent.status = 'sent'
+             AND (sent.id = decision.outbox_id OR sent.entity_id = decision.id)
+         )
+       ORDER BY decision.submission_id ASC, decision.id ASC`,
+    )
+    .bind(input.eventId, idsJson)
+    .all<ExistingDecisionCandidate>();
+
+  let skippedNoAddress = 0;
+  let selected = 0;
+  let queued = 0;
+  const outboxIds: Id[] = [];
+  for (const candidate of candidates.results) {
+    const submission = submissionsById.get(candidate.submission_id);
+    if (!submission || !isValidEmail(submission.person_email)) {
+      skippedNoAddress += 1;
+      continue;
+    }
+    selected += 1;
+    const templateKey = candidate.resulting_status === "accepted" ? "acceptance" : "rejection";
+    const retryKey = await sha256Hex(`${templateKey}:${candidate.decision_id}:${newUlid(now)}`);
+    const result = await enqueueDecisionMail({
+      db: input.db,
+      queue: input.queue,
+      eventId: input.eventId,
+      submission,
+      status: candidate.resulting_status,
+      decision: candidate.decision,
+      feedbackMd: candidate.feedback_md,
+      entityId: candidate.decision_id,
+      idempotencyKey: retryKey,
+      now,
+    });
+    if (result.id) outboxIds.push(result.id);
+    if (result.inserted) queued += 1;
+  }
+  return { selected, queued, skippedNoAddress, outboxIds };
 }
 
 async function updateSubmissionStatus(

@@ -51,6 +51,20 @@ export interface SubmissionSlotListItem {
   show_building: boolean;
 }
 
+export type SubmissionNotificationState =
+  | "sent"
+  | "changed_in_airtable"
+  | "not_delivered"
+  | "no_valid_address";
+
+export interface SubmissionNotification {
+  state: SubmissionNotificationState;
+  label: string;
+  detail: string;
+  sent_at: number | null;
+  outbox_status: "queued" | "sent" | "suppressed" | "failed" | null;
+}
+
 export interface SubmissionListItem {
   id: string;
   kind: "abstract" | "session";
@@ -68,4 +82,5 @@ export interface SubmissionListItem {
   missing_fields: string[];
   submitter: SubmissionSubmitterListItem | null;
   slot: SubmissionSlotListItem | null;
+  notified: SubmissionNotification | null;
 }

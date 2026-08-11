@@ -20,6 +20,7 @@ export interface TriggerInput {
   now?: number;
   icsUid?: string | null;
   icsBody?: string | null;
+  idempotencyKey?: string;
 }
 
 /** Every automated trigger follows the same enabled-template and outbox path. */

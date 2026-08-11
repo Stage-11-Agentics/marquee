@@ -3,6 +3,7 @@ import { z } from "@hono/zod-openapi";
 import type { ListEnvelope } from "../api/list";
 import type {
   SubmissionListItem,
+  SubmissionNotificationState,
   SubmissionSpeakerListItem,
   SubmissionTrackListItem,
 } from "../api/submissions";
@@ -36,6 +37,7 @@ export const SUBMISSION_STATUS_FILTERS = [
   "onboarding",
   "scheduled",
   "published",
+  "not_notified",
 ] as const;
 
 /** The filter-only arm shared by list reads and server-side bulk selection. */
@@ -136,6 +138,11 @@ interface SubmissionQueryRow {
   submitter_id?: string | null;
   submitter_name?: string | null;
   submitter_email?: string | null;
+  notification_state?: SubmissionNotificationState | null;
+  notification_outbox_status?: "queued" | "sent" | "suppressed" | "failed" | null;
+  notification_outbox_reason?: string | null;
+  notification_outbox_error?: string | null;
+  notification_sent_at?: number | null;
 }
 
 interface DraftFieldRow extends FormFieldConditionInput {
@@ -165,7 +172,8 @@ function filterParts(filters: SubmissionListFilters, includeCancelledAt = false)
     clauses.push("s.kind = ?");
     bindings.push(filters.kind);
   }
-  if (filters.status) clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt }));
+  if (filters.status === "not_notified") clauses.push(NOTIFICATION_GAP_PREDICATE);
+  else if (filters.status) clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt }));
   if (filters.track) {
     clauses.push(`EXISTS (
       SELECT 1 FROM submission_tracks filter_st
@@ -214,6 +222,68 @@ LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
 LEFT JOIN rooms room ON room.id = ai.room_id
 LEFT JOIN buildings building ON building.id = room.building_id`;
 
+/**
+ * The notification view is deliberately a read-time join. The latest
+ * decision owns the state, while a retry is attached to that decision through
+ * outbox.entity_id. A sent retry wins over an older queued/suppressed row so
+ * the view closes as soon as a notification actually leaves the outbox.
+ */
+const NOTIFICATION_FROM = `${FROM}
+LEFT JOIN submission_decisions latest_decision
+  ON latest_decision.id = (
+    SELECT candidate.id
+    FROM submission_decisions candidate
+    WHERE candidate.event_id = s.event_id
+      AND candidate.submission_id = s.id
+    ORDER BY candidate.decided_at DESC, candidate.id DESC
+    LIMIT 1
+  )
+LEFT JOIN outbox notification_outbox
+  ON notification_outbox.id = (
+    SELECT candidate.id
+    FROM outbox candidate
+    WHERE candidate.event_id = s.event_id
+      AND (candidate.id = latest_decision.outbox_id OR candidate.entity_id = latest_decision.id)
+    ORDER BY CASE WHEN candidate.status = 'sent' THEN 0 ELSE 1 END,
+             candidate.created_at DESC,
+             candidate.id DESC
+    LIMIT 1
+  )`;
+
+const NOTIFICATION_ADDRESS_SQL = `COALESCE((
+  SELECT speaker.email
+  FROM participations speaker_part
+  JOIN people speaker ON speaker.id = speaker_part.person_id
+  WHERE speaker_part.submission_id = s.id
+    AND speaker_part.role IN ('speaker', 'submitter')
+  ORDER BY CASE speaker_part.role WHEN 'speaker' THEN 0 ELSE 1 END,
+           speaker_part.position ASC,
+           speaker_part.id ASC
+  LIMIT 1
+), (
+  SELECT submitter.email FROM people submitter WHERE submitter.id = s.submitter_person_id
+))`;
+
+const NOTIFICATION_STATE_SQL = `CASE
+  WHEN latest_decision.id IS NULL THEN NULL
+  WHEN notification_outbox.status = 'sent' THEN 'sent'
+  WHEN notification_outbox.id IS NOT NULL THEN 'not_delivered'
+  WHEN s.last_write_source = 'airtable' THEN 'changed_in_airtable'
+  WHEN trim(${NOTIFICATION_ADDRESS_SQL}) <> '' AND ${NOTIFICATION_ADDRESS_SQL} LIKE '%@%.%' THEN 'not_delivered'
+  ELSE 'no_valid_address'
+END`;
+
+const NOTIFICATION_GAP_PREDICATE = `latest_decision.id IS NOT NULL
+  AND latest_decision.resulting_status IN ('accepted', 'rejected')
+  AND COALESCE(notification_outbox.status, '') <> 'sent'`;
+
+const NOTIFICATION_SELECT = `
+  ${NOTIFICATION_STATE_SQL} AS notification_state,
+  notification_outbox.status AS notification_outbox_status,
+  notification_outbox.suppressed_reason AS notification_outbox_reason,
+  notification_outbox.error AS notification_outbox_error,
+  notification_outbox.sent_at AS notification_sent_at`;
+
 function parseJsonArray<T>(value: string): T[] {
   const parsed: unknown = JSON.parse(value);
   return Array.isArray(parsed) ? (parsed as T[]) : [];
@@ -257,7 +327,60 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
           is_published: row.agenda_published === 1,
           show_building: showsBuildingComparisonCount(row.pinned_building_count),
         },
+    notified: row.notification_state ? notificationForRow(row) : null,
   };
+}
+
+function notificationForRow(row: SubmissionQueryRow): NonNullable<SubmissionListItem["notified"]> {
+  switch (row.notification_state) {
+    case "changed_in_airtable":
+      return {
+        state: "changed_in_airtable",
+        label: "Changed in Airtable",
+        detail: "The Airtable mirror is currently cut; this is a theoretical legacy path. It deliberately did not run the acceptance cascade.",
+        sent_at: null,
+        outbox_status: null,
+      };
+    case "not_delivered": {
+      const status = row.notification_outbox_status;
+      const reason = row.notification_outbox_reason ?? row.notification_outbox_error;
+      return {
+        state: "not_delivered",
+        label: "Not delivered",
+        detail: reason
+          ? `The mail outbox is ${status ?? "unresolved"}: ${reason}.`
+          : status
+            ? `The mail outbox is ${status}.`
+            : "No delivered message is present in the mail outbox.",
+        sent_at: row.notification_sent_at ?? null,
+        outbox_status: row.notification_outbox_status ?? null,
+      };
+    }
+    case "no_valid_address":
+      return {
+        state: "no_valid_address",
+        label: "No valid address",
+        detail: "No usable speaker address was available, so no message could be queued.",
+        sent_at: null,
+        outbox_status: null,
+      };
+    case "sent":
+      return {
+        state: "sent",
+        label: "Sent",
+        detail: "The decision message was sent to the speaker.",
+        sent_at: row.notification_sent_at ?? null,
+        outbox_status: "sent",
+      };
+    default:
+      return {
+        state: "no_valid_address",
+        label: "No valid address",
+        detail: "No usable speaker address was available, so no message could be queued.",
+        sent_at: null,
+        outbox_status: null,
+      };
+  }
 }
 
 const ITEM_SELECT = `
@@ -433,6 +556,7 @@ export async function listSubmissions(
   database: D1Database,
   filters: SubmissionListFilters,
 ): Promise<ListEnvelope<SubmissionListItem>> {
+  if (filters.status === "not_notified") return listNotNotifiedSubmissions(database, filters);
   if (filters.status === "draft" && await hasColumns(database, "submissions", ["form_id", "last_saved_at", "submitter_person_id"])) {
     return listDraftsNeedingAttention(database, filters);
   }
@@ -455,14 +579,86 @@ export async function listSubmissions(
   return { ...envelope, data: envelope.data.map(toItem) };
 }
 
+async function listNotNotifiedSubmissions(
+  database: D1Database,
+  filters: SubmissionListFilters,
+): Promise<ListEnvelope<SubmissionListItem>> {
+  const page = parsePagination(filters);
+  const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "newest");
+  const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
+  const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
+  const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const count = database
+    .prepare(`SELECT COUNT(DISTINCT s.id) AS total ${NOTIFICATION_FROM} WHERE ${where}`)
+    .bind(...bindings);
+  const data = database
+    .prepare(`
+      SELECT ${itemSelect(includeVenueDisclosure)}, ${NOTIFICATION_SELECT}
+      ${NOTIFICATION_FROM}
+      WHERE ${where}
+      ORDER BY ${stableOrder}
+      LIMIT ? OFFSET ?
+    `)
+    .bind(...bindings, page.limit, page.offset);
+  const envelope = await executeListPage<SubmissionQueryRow>({ count, data, page });
+  return { ...envelope, data: envelope.data.map(toItem) };
+}
+
+export interface NotifiedSummary {
+  total: number;
+  sendable: number;
+  no_valid_address: number;
+}
+
+function emptyNotifiedSummary(): NotifiedSummary {
+  return { total: 0, sendable: 0, no_valid_address: 0 };
+}
+
+/** Dashboard counts are intentionally the actionable subset; no-address rows stay visible in the view. */
+export async function summarizeNotNotifiedSubmissions(
+  database: D1Database,
+  eventId: string,
+): Promise<NotifiedSummary> {
+  try {
+    const row = await database
+      .prepare(`
+        SELECT
+          COUNT(*) AS total,
+          COUNT(CASE WHEN notification_state <> 'no_valid_address' THEN 1 END) AS sendable,
+          COUNT(CASE WHEN notification_state = 'no_valid_address' THEN 1 END) AS no_valid_address
+        FROM (
+          SELECT ${NOTIFICATION_STATE_SQL} AS notification_state
+          ${NOTIFICATION_FROM}
+          WHERE s.event_id = ? AND ${NOTIFICATION_GAP_PREDICATE}
+        ) notification_summary
+      `)
+      .bind(eventId)
+      .first<{ total: number | null; sendable: number | null; no_valid_address: number | null }>();
+    return {
+      total: countValue(row?.total),
+      sendable: countValue(row?.sendable),
+      no_valid_address: countValue(row?.no_valid_address),
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/no such (?:table|column)/i.test(message)) return emptyNotifiedSummary();
+    throw error;
+  }
+}
+
+function countValue(value: unknown): number {
+  return Number(value ?? 0);
+}
+
 /** Resolve a filter-wide selector without applying the list page or sort. */
 export async function selectSubmissionIds(
   database: D1Database,
   filters: SubmissionFilter & { eventId: string },
 ): Promise<string[]> {
   const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
+  const source = filters.status === "not_notified" ? NOTIFICATION_FROM : FROM;
   const result = await database
-    .prepare(`SELECT DISTINCT s.id ${FROM} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC`)
+    .prepare(`SELECT DISTINCT s.id ${source} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC`)
     .bind(...bindings)
     .all<{ id: string }>();
   return result.results.map((row) => row.id);

@@ -21,6 +21,8 @@ export interface EnqueueOutboxInput {
   icsBody?: string | null;
   scheduledFor?: number | null;
   now?: number;
+  /** Explicitly supplied only for a deliberate retry against an existing action. */
+  idempotencyKey?: string;
 }
 
 export interface EnqueuedOutbox {
@@ -55,7 +57,8 @@ async function insertOutbox(
   sendPolicy: OutboxSendPolicy = "demo_safe",
 ): Promise<EnqueuedOutbox> {
   const now = input.now ?? Date.now();
-  const idempotencyKey = await buildIdempotencyKey(input.templateKey, input.entityId, input.personId);
+  const idempotencyKey = input.idempotencyKey
+    ?? await buildIdempotencyKey(input.templateKey, input.entityId, input.personId);
   const id = crypto.randomUUID();
   let rendered = {
     subject: input.subject ?? "",

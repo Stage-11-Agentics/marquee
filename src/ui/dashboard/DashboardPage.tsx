@@ -90,6 +90,9 @@ function DashboardContents({ snapshot, navigate }: { snapshot: DashboardSnapshot
       <DashboardLink href={attention.overdue_submissions.href} navigate={navigate} class="dashboard-attention-item" label="Open submissions with overdue speaker tasks">
         <strong>{formatNumber(attention.overdue_submissions.count)} speaker tasks overdue</strong><span>Open the affected submissions and chase work</span>
       </DashboardLink>
+      <DashboardLink href={attention.decided_not_notified.href} navigate={navigate} class="dashboard-attention-item" label={`Open ${formatNumber(attention.decided_not_notified.count)} decided submissions not notified`}>
+        <strong>{formatNumber(attention.decided_not_notified.count)} decisions not notified</strong><span>{attention.decided_not_notified.note}</span>
+      </DashboardLink>
     </section>
 
     <div class="dashboard-grid">

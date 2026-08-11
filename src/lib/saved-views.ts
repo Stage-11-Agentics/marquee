@@ -66,6 +66,19 @@ export const BUILT_IN_SAVED_VIEWS: readonly BuiltInSavedView[] = [
     created_at: null,
     updated_at: null,
   },
+  {
+    id: "decided-not-notified",
+    name: "Decided · not notified",
+    built_in: true,
+    config: normalizeSavedViewConfig({
+      q: "",
+      filters: { status: "not_notified" },
+      sort: "newest",
+      columns: ["id", "title", "speakers", "status", "notified", "updated"],
+    }),
+    created_at: null,
+    updated_at: null,
+  },
 ] as const;
 
 export function builtInSavedView(id: string): BuiltInSavedView | undefined {

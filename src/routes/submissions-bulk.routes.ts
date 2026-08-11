@@ -13,9 +13,9 @@ import { newUlid } from "../api/ids";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
-import { writeBulkSubmissionDecisions } from "../jobs/cascade/decisions";
+import { notifyExistingDecisions, writeBulkSubmissionDecisions } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
-import { selectSubmissionIds, submissionFilterSchema } from "./submissions.queries";
+import { selectSubmissionIds, submissionFilterSchema, summarizeNotNotifiedSubmissions } from "./submissions.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionIdSchema = z.string().min(1).max(200);
@@ -27,6 +27,18 @@ const bulkBodySchema = z
     wave_id: z.string().min(1).max(200).nullable().optional(),
   })
   .strict();
+
+const notifiedSummarySchema = z.object({
+  total: z.number().int().nonnegative(),
+  sendable: z.number().int().nonnegative(),
+  no_valid_address: z.number().int().nonnegative(),
+});
+const notifyNotifiedResultSchema = z.object({
+  selected: z.number().int().nonnegative(),
+  queued: z.number().int().nonnegative(),
+  skipped_no_address: z.number().int().nonnegative(),
+  outbox_ids: z.array(z.string()),
+});
 
 async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   const auth = getAuth(context);
@@ -125,4 +137,66 @@ const bulkDecideSubmissions = defineApiRoute(
   },
 );
 
-export const apiRoutes = [bulkDecideSubmissions];
+const getNotifiedSummary = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/submissions/not-notified/summary",
+    operationId: "getDecidedNotNotifiedSummary",
+    summary: "Summarize decided submissions without delivered notifications",
+    description: "Read the derived notification gap behind the built-in Decided · not notified view.",
+    tags: ["Submissions"],
+    request: { params: eventParams },
+    policy: {
+      auth: { kind: "grants", grants: ["program:read"] },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(notifiedSummarySchema, "Derived notification gap summary"),
+      ...errorResponses([401, 403, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    return context.json(await summarizeNotNotifiedSubmissions(context.env.DB, eventId), 200);
+  },
+);
+
+const notifyNotifiedSubmissions = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/not-notified/notify",
+    operationId: "notifyDecidedSubmissions",
+    summary: "Queue notifications for decided submissions",
+    description: "Queue a new message for each sendable decision while preserving the existing decision rows byte-for-byte.",
+    tags: ["Submissions"],
+    request: { params: eventParams },
+    policy: {
+      auth: { kind: "grants", grants: ["program:write"] },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      202: jsonResponse(notifyNotifiedResultSchema, "Notification retry summary"),
+      ...errorResponses([401, 403, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" });
+    const result = await notifyExistingDecisions({
+      db: context.env.DB,
+      queue: context.env.MAIL_QUEUE,
+      eventId,
+      submissionIds: ids,
+    });
+    return context.json({
+      selected: result.selected,
+      queued: result.queued,
+      skipped_no_address: result.skippedNoAddress,
+      outbox_ids: result.outboxIds,
+    }, 202);
+  },
+);
+
+export const apiRoutes = [bulkDecideSubmissions, getNotifiedSummary, notifyNotifiedSubmissions];

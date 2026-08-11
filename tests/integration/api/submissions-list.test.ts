@@ -171,7 +171,7 @@ describe.sequential("MRQ-9 submissions list", () => {
 
   test("CONTRACT · the fixed column registry is complete and Title cannot be removed", () => {
     expect(SUBMISSION_COLUMN_REGISTRY.map((column) => column.label)).toEqual([
-      "Type", "ID", "Title", "Speakers", "Status", "Tracks", "Score",
+      "Type", "ID", "Title", "Speakers", "Status", "Notified", "Tracks", "Score",
       "Submitted", "Last updated", "Origin", "Missing fields",
     ]);
     expect(SUBMISSION_COLUMN_REGISTRY.find((column) => column.id === "title")?.required).toBe(true);

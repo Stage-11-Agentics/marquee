@@ -36,6 +36,13 @@ const submissionSlotSchema = z.object({
   is_published: z.boolean(),
   show_building: z.boolean(),
 });
+const submissionNotificationSchema = z.object({
+  state: z.enum(["sent", "changed_in_airtable", "not_delivered", "no_valid_address"]),
+  label: z.string(),
+  detail: z.string(),
+  sent_at: z.number().int().nullable(),
+  outbox_status: z.enum(["queued", "sent", "suppressed", "failed"]).nullable(),
+});
 const submissionListItemSchema = z.object({
   id: z.string(),
   kind: z.enum(["abstract", "session"]),
@@ -53,6 +60,7 @@ const submissionListItemSchema = z.object({
   missing_fields: z.array(z.string()),
   submitter: submissionSubmitterSchema.nullable(),
   slot: submissionSlotSchema.nullable(),
+  notified: submissionNotificationSchema.nullable(),
 }).openapi("SubmissionListItem");
 
 export const submissionListQuerySchema = createListQuerySchema(

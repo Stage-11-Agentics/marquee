@@ -48,6 +48,7 @@ export interface DashboardSnapshot {
     next_wave: DashboardWave | null;
     unreviewed_track: DashboardCount | null;
     overdue_submissions: DashboardCount;
+    decided_not_notified: DashboardCount;
   };
   metrics: DashboardCount[];
   task_preview: DashboardTaskPreview[];

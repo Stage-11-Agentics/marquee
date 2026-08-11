@@ -9,6 +9,7 @@ import {
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import {
   hasSpeakerTaskCancellationColumn,
+  summarizeNotNotifiedSubmissions,
   submissionStatusPredicate,
   submissionTaskPredicate,
 } from "./submissions.queries";
@@ -43,6 +44,7 @@ const dashboardSnapshotSchema = z.object({
     next_wave: dashboardWaveSchema.nullable(),
     unreviewed_track: dashboardCountSchema.nullable(),
     overdue_submissions: dashboardCountSchema,
+    decided_not_notified: dashboardCountSchema,
   }),
   metrics: z.array(dashboardCountSchema),
   task_preview: z.array(z.object({
@@ -104,7 +106,7 @@ async function readDashboardBuildingComparison(database: D1Database, eventId: st
 
 async function readDashboard(database: D1Database, eventId: string, now: number): Promise<DashboardSnapshot> {
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
-  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts, showBuildingComparison] = await Promise.all([
+  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts, showBuildingComparison, notifiedSummary] = await Promise.all([
     database.prepare(`
       SELECT ${dashboardStageSql(includeCancelledAt)}
       FROM submissions s
@@ -175,6 +177,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     }>(),
     readDashboardConflicts(database, eventId),
     readDashboardBuildingComparison(database, eventId),
+    summarizeNotNotifiedSubmissions(database, eventId),
   ]);
 
   const stages = stageResult ?? {};
@@ -215,6 +218,15 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     href: submissionsHref({ status: "onboarding", task: "overdue" }),
     note: "submissions with speaker work overdue",
   };
+  const decidedNotNotified: DashboardCount = {
+    id: "decided-not-notified",
+    label: "Decided · not notified",
+    count: notifiedSummary.sendable,
+    href: submissionsHref({ status: "not_notified" }),
+    note: notifiedSummary.sendable === 0 && notifiedSummary.no_valid_address === 0
+      ? "Every decision has reached its speaker"
+      : `${notifiedSummary.sendable.toLocaleString()} can be notified now · ${notifiedSummary.no_valid_address.toLocaleString()} need an address first`,
+  };
   const unplaced: DashboardCount = {
     id: "unplaced",
     label: "Unscheduled",
@@ -243,6 +255,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       next_wave: waves.find((wave) => wave.sent_at === null) ?? null,
       unreviewed_track: unreviewedTrack,
       overdue_submissions: overdueSubmissions,
+      decided_not_notified: decidedNotNotified,
     },
     metrics: [
       pipeline.find((item) => item.id === "in_review")!,

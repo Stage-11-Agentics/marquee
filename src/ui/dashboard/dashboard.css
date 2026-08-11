@@ -10,7 +10,7 @@
 .dashboard-pipeline-stage:nth-last-child(-n+2) .dashboard-pipeline-note { color: var(--muted); }
 .dashboard-skeleton { color: var(--line-strong); }
 .dashboard-skeleton strong { font: 400 30px/1 var(--mono); margin: 9px 0 8px; }
-.dashboard-attention { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dashboard-attention { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .dashboard-attention-item { background: var(--panel); border: 1px solid var(--line-strong); border-left: 3px solid var(--warning); border-radius: var(--radius); color: inherit; min-height: 60px; padding: 11px 13px 11px 12px; text-decoration: none; transition: background 110ms, border-color 110ms; }
 .dashboard-attention-item:hover { background: var(--accent-soft); border-color: var(--accent); border-left-color: var(--accent); }
 .dashboard-attention-item strong { display: block; font: 600 13px/1.2 var(--mono); letter-spacing: -.02em; margin-bottom: 5px; }

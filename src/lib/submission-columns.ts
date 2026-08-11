@@ -10,6 +10,7 @@ export const SUBMISSION_COLUMN_REGISTRY = [
   { id: "title", label: "Title", required: true },
   { id: "speakers", label: "Speakers", required: false },
   { id: "status", label: "Status", required: false },
+  { id: "notified", label: "Notified", required: false },
   { id: "tracks", label: "Tracks", required: false },
   { id: "score", label: "Score", required: false },
   { id: "submitted", label: "Submitted", required: false },

@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "70a5c9d103cab5c5c97bdd6198936c4be6ec45e3c3abd0a848cfbe6694c0880a",
+  "documentSha256": "d6a2d4eaa4bf1e97e59608ab8ecf2a1d19c19a8a4bbb682e7093ed0d341aab99",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",
@@ -45,6 +45,7 @@
     "GET /api/v1/events/{eventId}/submissions listEventSubmissions",
     "GET /api/v1/events/{eventId}/submissions/{submissionId} getSubmissionRecord",
     "GET /api/v1/events/{eventId}/submissions/{submissionId}/reversal previewSubmissionAcceptanceReversal",
+    "GET /api/v1/events/{eventId}/submissions/not-notified/summary getDecidedNotNotifiedSummary",
     "GET /api/v1/events/{eventId}/templates listEmailTemplates",
     "GET /api/v1/events/{eventId}/tracks listEventTracks",
     "GET /api/v1/events/{eventId}/venues listVenues",
@@ -107,6 +108,7 @@
     "POST /api/v1/events/{eventId}/submissions/{submissionId}/reversal reverseSubmissionAcceptance",
     "POST /api/v1/events/{eventId}/submissions/{submissionId}/schedule scheduleSubmission",
     "POST /api/v1/events/{eventId}/submissions/bulk bulkDecideSubmissions",
+    "POST /api/v1/events/{eventId}/submissions/not-notified/notify notifyDecidedSubmissions",
     "POST /api/v1/events/{eventId}/templates createEmailTemplate",
     "POST /api/v1/events/{eventId}/tracks createEventTrack",
     "POST /api/v1/events/{eventId}/views createSavedView",
