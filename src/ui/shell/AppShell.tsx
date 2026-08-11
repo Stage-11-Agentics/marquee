@@ -8,6 +8,7 @@ import { useBrowserRouter } from "./router";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { CommsScreen } from "../comms/CommsScreen";
+import { DashboardPage } from "../dashboard/DashboardPage";
 
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
@@ -39,6 +40,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
         <div class="page">
           {isSubmissionsList
             ? <SubmissionsPage search={location.search} navigate={navigate} />
+            : route?.id === "dashboard" ? <DashboardPage navigate={navigate} />
             : route?.id === "communications" ? <>
             <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />
             <CommsScreen />

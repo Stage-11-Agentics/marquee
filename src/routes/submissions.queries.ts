@@ -29,9 +29,45 @@ export const SUBMISSION_STATUS_FILTERS = [
   "withdrawn",
   "waved",
   "unreviewed",
+  "onboarding",
   "scheduled",
   "published",
 ] as const;
+
+export type SubmissionStatusFilter = (typeof SUBMISSION_STATUS_FILTERS)[number];
+export type SubmissionTaskFilter = "overdue";
+export type SubmissionPlacementFilter = "unplaced";
+
+export function submissionTaskPredicate(
+  task: "open" | SubmissionTaskFilter,
+  submission = "s",
+): string {
+  return `EXISTS (
+    SELECT 1 FROM speaker_tasks filtered_task
+    WHERE filtered_task.event_id = ${submission}.event_id
+      AND filtered_task.submission_id = ${submission}.id
+      AND filtered_task.status = 'open'
+      ${task === "overdue" ? "AND filtered_task.due_at < ?" : ""}
+  )`;
+}
+
+/**
+ * One status vocabulary powers list filtering and dashboard instruments. A
+ * dashboard tile therefore cannot count a different set than its destination.
+ */
+export function submissionStatusPredicate(
+  status: SubmissionStatusFilter,
+  aliases: { submission?: string; agenda?: string } = {},
+): string {
+  const submission = aliases.submission ?? "s";
+  const agenda = aliases.agenda ?? "ai";
+  if (status === "scheduled") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 0`;
+  if (status === "published") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 1`;
+  if (status === "waved") return `${submission}.wave_id IS NOT NULL AND ${submission}.status = 'accepted'`;
+  if (status === "unreviewed") return `${submission}.status IN ('submitted', 'in_review')`;
+  if (status === "onboarding") return submissionTaskPredicate("open", submission);
+  return `${submission}.status = '${status}'`;
+}
 
 export interface SubmissionListFilters {
   eventId: string;
@@ -40,8 +76,12 @@ export interface SubmissionListFilters {
   q?: string;
   sort?: keyof typeof SUBMISSION_SORTS;
   kind?: "abstract" | "session";
-  status?: (typeof SUBMISSION_STATUS_FILTERS)[number];
+  status?: SubmissionStatusFilter;
   track?: string;
+  format?: string;
+  wave?: string;
+  task?: SubmissionTaskFilter;
+  placement?: SubmissionPlacementFilter;
 }
 
 interface SubmissionQueryRow {
@@ -49,6 +89,7 @@ interface SubmissionQueryRow {
   kind: "abstract" | "session";
   title: string;
   stored_status: Exclude<SubmissionListItem["status"], "scheduled" | "published">;
+  format_id: string | null;
   format: string | null;
   speakers_json: string;
   tracks_json: string;
@@ -77,18 +118,7 @@ function filterParts(filters: SubmissionListFilters): QueryParts {
     clauses.push("s.kind = ?");
     bindings.push(filters.kind);
   }
-  if (filters.status === "scheduled") {
-    clauses.push("ai.id IS NOT NULL AND ai.is_published = 0");
-  } else if (filters.status === "published") {
-    clauses.push("ai.id IS NOT NULL AND ai.is_published = 1");
-  } else if (filters.status === "waved") {
-    clauses.push("s.wave_id IS NOT NULL AND s.status = 'accepted'");
-  } else if (filters.status === "unreviewed") {
-    clauses.push("s.status IN ('submitted', 'in_review')");
-  } else if (filters.status) {
-    clauses.push("s.status = ?");
-    bindings.push(filters.status);
-  }
+  if (filters.status) clauses.push(submissionStatusPredicate(filters.status));
   if (filters.track) {
     clauses.push(`EXISTS (
       SELECT 1 FROM submission_tracks filter_st
@@ -96,6 +126,19 @@ function filterParts(filters: SubmissionListFilters): QueryParts {
     )`);
     bindings.push(filters.track);
   }
+  if (filters.format) {
+    clauses.push("s.format_id = ?");
+    bindings.push(filters.format);
+  }
+  if (filters.wave) {
+    clauses.push("s.wave_id = ?");
+    bindings.push(filters.wave);
+  }
+  if (filters.task) {
+    clauses.push(submissionTaskPredicate(filters.task));
+    if (filters.task === "overdue") bindings.push(Date.now());
+  }
+  if (filters.placement === "unplaced") clauses.push("ai.id IS NULL");
   if (filters.q) {
     const query = `%${filters.q.toLocaleLowerCase()}%`;
     clauses.push(`(
@@ -140,6 +183,7 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
     kind: row.kind,
     title: row.title,
     status,
+    format_id: row.format_id,
     format: row.format,
     speakers: parseJsonArray<SubmissionSpeakerListItem>(row.speakers_json),
     tracks: parseJsonArray<SubmissionTrackListItem>(row.tracks_json).map((track) => ({
@@ -181,6 +225,7 @@ export async function listSubmissions(
       s.kind,
       s.title,
       s.status AS stored_status,
+      s.format_id,
       format.name AS format,
       COALESCE((
         SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company))

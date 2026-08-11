@@ -8,6 +8,7 @@ export type SubmissionListStatus =
   | "withdrawn"
   | "waved"
   | "unreviewed"
+  | "onboarding"
   | "scheduled"
   | "published";
 
@@ -38,6 +39,7 @@ export interface SubmissionListItem {
   kind: "abstract" | "session";
   title: string;
   status: SubmissionListStatus;
+  format_id: string | null;
   format: string | null;
   speakers: SubmissionSpeakerListItem[];
   tracks: SubmissionTrackListItem[];

@@ -40,6 +40,7 @@ const STATUS_OPTIONS = [
   ["in_review", "In review"],
   ["unreviewed", "Unreviewed"],
   ["waved", "Waved"],
+  ["onboarding", "Onboarding"],
   ["accepted", "Accepted"],
   ["waitlisted", "Maybe"],
   ["rejected", "Rejected"],
@@ -142,9 +143,13 @@ export function SubmissionsPage({
   const status = queryValue(params, "status");
   const kind = queryValue(params, "kind");
   const track = queryValue(params, "track");
+  const format = queryValue(params, "format");
+  const wave = queryValue(params, "wave");
+  const task = queryValue(params, "task");
+  const placement = queryValue(params, "placement");
   const sort = queryValue(params, "sort", "newest");
   const q = queryValue(params, "q");
-  const queryIdentity = `${q}\u0000${status}\u0000${kind}\u0000${track}\u0000${sort}`;
+  const queryIdentity = `${q}\u0000${status}\u0000${kind}\u0000${track}\u0000${format}\u0000${wave}\u0000${task}\u0000${placement}\u0000${sort}`;
 
   const updateQuery = (updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(params);
@@ -270,7 +275,7 @@ export function SubmissionsPage({
           <tbody>
             {state.kind === "loading" && <tr class="state-row"><td colSpan={DEFAULT_SUBMISSION_COLUMNS.length + 1}><strong>Loading submissions…</strong><span>Reading the exact filtered slice from D1.</span></td></tr>}
             {state.kind === "error" && <tr class="state-row error"><td colSpan={DEFAULT_SUBMISSION_COLUMNS.length + 1}><strong>Submissions did not load</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></td></tr>}
-            {envelope && rows.length === 0 && <tr class="state-row"><td colSpan={DEFAULT_SUBMISSION_COLUMNS.length + 1}><strong>{envelope.total === 0 && !q && !status && !kind && !track ? "No submissions yet" : "No matching records"}</strong><span>{envelope.total === 0 && !q && !status && !kind && !track ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{(q || status || kind || track) && <Button small onClick={() => navigate("/submissions")}>Clear filters</Button>}</td></tr>}
+            {envelope && rows.length === 0 && <tr class="state-row"><td colSpan={DEFAULT_SUBMISSION_COLUMNS.length + 1}><strong>{envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{(q || status || kind || track || format || wave || task || placement) && <Button small onClick={() => navigate("/submissions")}>Clear filters</Button>}</td></tr>}
             {rows.map((item) => <tr class="submission-row" key={item.id} onClick={(event) => { const target = event.target as HTMLElement; if (!target.closest("a,input,button,select")) navigate(`/submissions/${item.id}`); }}>
               <td class="check-col"><input type="checkbox" aria-label={`Select ${item.id}`} checked={allMatching || selectedIds.has(item.id)} onChange={(event) => toggleRow(item.id, event.currentTarget.checked)} /></td>
               {DEFAULT_SUBMISSION_COLUMNS.map((column) => <td class={`${column}-col`}><Cell item={item} column={column} navigate={navigate} /></td>)}
