@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T11:12:40Z",
+  "created_by": "agent:delegator-mrq-69",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/62"
+  },
+  "id": "art_01KZR8CJQ1QNRE2T9A6ZPTG5FE",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open PR #62 against master at exact head 3be9bcf",
+  "tags": [],
+  "title": "MRQ-69 Forgejo pull request",
+  "token_usage": null,
+  "type": "reference"
+}

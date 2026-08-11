@@ -1,0 +1,1 @@
+PASS. Exact head 068a122 is pushed on mrq-52-audit-bulk. The source guard inventories all 12 map callbacks that emit SQL placeholders, including hoisted and inline forms, and classifies the two named bulk findings separately. npm test: 67/67, 23.97s, within 30s. trace:ac MRQ-52: pass, uncovered auto criteria 0. Runtime evidence is recorded for the validation artifact.

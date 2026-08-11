@@ -40,3 +40,7 @@ The immutable `0004_calendar_reversal.sql` already adds `speaker_tasks.cancelled
 - Run `npm test`, type checks/build through `npm run pr-gate -- --ticket MRQ-66`, and record the gate result before pushing the final implementation commit.
 - At each lifecycle boundary refresh `forgejo/master`, record the exact base SHA, keep the worktree-root commit guard, push the branch, and verify local HEAD equals `forgejo/mrq-66-migration`.
 - Self-review the final diff at the exact branch HEAD for additive-only scope, no contract edits, no `handbook_pages`, no public/internal leakage, and no status-enum drift. Attach PASS review and validation evidence, create the Forgejo PR against `master`, attach its URL, then transition only to `pr_open` and notify the Orchestrator.
+
+## Reset 2026-08-11 by agent:delegator-mrq-66
+
+## Reset 2026-08-11 by agent:delegator-mrq-66
