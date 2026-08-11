@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-38",
   "branch_links": [],
+  "c11_surface": "surface:189",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMAYHGQMZCJX3XQJX72P2",
-  "last_event_id": "ev_01KZJHMJ8YN5ACP1Z04WDTT6NV",
-  "last_status_changed_at": "2026-08-09T05:58:45Z",
+  "last_event_id": "ev_01KZQQ34MKT2Z52EP9JYZ0R3JQ",
+  "last_status_changed_at": "2026-08-11T06:10:25Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -47,10 +49,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-38",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Role confirm/decline and decision feedback",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:52Z",
+  "updated_at": "2026-08-11T06:10:25Z",
   "urgency": null
 }

@@ -9,7 +9,7 @@ The standing rules for dispatching this run. The tick prompt points here so it s
 3. **Merge what's ready** (protocol below).
 4. **Refill to N** — merges free slots faster than you expect; check the count, don't assume.
 5. **Verify master isn't ahead of the remote**, then push. `git pull --rebase --autostash forgejo master` always.
-6. **Check that every live branch exists on the remote** — `git ls-remote --heads forgejo` against the worktree list. A delegator that hasn't pushed is one crash from losing everything, and the board looks identical either way. Push clean branches yourself; hand a mid-rebase branch back to its agent rather than pushing behind it.
+6. **Check that every live branch exists on the remote** — `git ls-remote --heads forgejo` against the worktree list. A delegator that hasn't pushed is one crash from losing everything, and the board looks identical either way. Push clean branches yourself; hand a mid-rebase branch back to its agent rather than pushing behind it. **Before declaring a branch unpushed, `git fetch forgejo <branch>` and compare against FETCH_HEAD** — a worktree ref read from the root repo goes stale the moment the agent rebases or amends, and "local ≠ remote" reads identically whether the remote is behind (needs a push) or *ahead* (agent already pushed a rewritten history). Never `--force` to resolve it: a rejected non-fast-forward push is the remote protecting the agent's newer work.
 7. Reschedule ~300s while building.
 
 ## Merge protocol — in order, no shortcuts

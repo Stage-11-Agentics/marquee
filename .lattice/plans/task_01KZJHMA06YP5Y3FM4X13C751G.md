@@ -18,7 +18,7 @@ Non-goal (EVALUATION §5): multi-round beyond two — parallel mode, per-round a
 Cut-line note: M-46 sits at **rank 27**, second from the bottom of the band. If the capacity calculation cuts it, the merged ticket ships its M-27 half and gate 19 must name US-71 with AC-163 – AC-166 and the reason.
 ## Ground truth and boundary
 
-- The initial plan was written against `62b874873655b34d5f6aa24dfa20874c0c79551a`; Forgejo has since advanced. At the implementation boundary, fetch and rebase onto the then-current `forgejo/master` (currently `b3672e3f13e4db7d91faa7466e9d8e87815a6abb`), then run `npm ci` before trusting tests. The requested clean branch tip `8a39b4b` was one commit behind after the fleet dispatch commit.
+- The initial plan was written against `62b874873655b34d5f6aa24dfa20874c0c79551a`; Forgejo advanced during planning. At the implementation boundary, the branch is based on current `forgejo/master` at `c2293f1`; after any further rebase, run `npm ci` before trusting tests. The requested clean branch tip `8a39b4b` was one commit behind after the fleet dispatch commit.
 - MRQ-17 already owns AC-98 in `tests/ac-claims/MRQ-17.json`; MRQ-28 will exercise AC-98 and own AC-99, AC-100, and AC-163 through AC-166. The MRQ-28 test names will still carry every ticket AC so `trace:ac` sees the complete union without duplicate owners.
 - The existing first-migration schema is sufficient: `evaluation_rounds`, `round_assignments`, `evaluations`, `comparisons`, and `round_promotions` are already round-aware. Do not edit contract docs or `migrations/0001_init.sql`.
 
