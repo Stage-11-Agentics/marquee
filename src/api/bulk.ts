@@ -70,7 +70,7 @@ export const BULK_FAILURE_REPORT_LIMIT = 100;
 
 export const bulkItemFailureSchema = z
   .object({
-    id: ulidSchema,
+    id: z.string().min(1),
     code: z.string(),
     message: z.string(),
   })
