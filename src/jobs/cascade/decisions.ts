@@ -2,6 +2,7 @@ import type { D1Database, Queue } from "@cloudflare/workers-types";
 
 import { runBulkByIds } from "../../api/bulk";
 import { newUlid } from "../../api/ids";
+import { auditStatement, writeAudit as writeAuditRow, type AuditEntry } from "../../lib/audit";
 import type { Decision, Id } from "../../db/schema";
 import { sha256Hex } from "../../lib/auth/random-token";
 import { cancelCalendarInvites } from "../calendar/invites";
@@ -14,6 +15,13 @@ export type BulkAction = DecisionAction | "withdraw";
 export interface DecisionActor {
   kind: "user" | "api_token";
   personId: Id;
+  /**
+   * The request this actor is acting within, carried alongside the identity
+   * rather than threaded separately: every decision path already passes the
+   * actor, and "who did it" and "in which request" are one fact about one
+   * moment. Null where there is no inbound request (a cron sweep).
+   */
+  requestId: string | null;
 }
 
 export interface SubmissionDecisionInput {
@@ -243,6 +251,31 @@ async function loadSubmissions(
   return result.results;
 }
 
+/** Local shape adapter over the shared audit writer; the actor carries the request. */
+function auditEntryFor(input: {
+  eventId: Id;
+  actor: DecisionActor;
+  action: string;
+  entityType: string;
+  entityId: Id;
+  before?: unknown;
+  after?: unknown;
+  now: number;
+}): AuditEntry {
+  return {
+    eventId: input.eventId,
+    actorKind: input.actor.kind,
+    actorPersonId: input.actor.personId,
+    action: input.action,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    before: input.before,
+    after: input.after,
+    now: input.now,
+    requestId: input.actor.requestId,
+  };
+}
+
 async function writeAudit(
   db: D1Database,
   input: {
@@ -256,26 +289,7 @@ async function writeAudit(
     now: number;
   },
 ): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO audit_log
-        (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id,
-         before_json, after_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      newUlid(input.now),
-      input.eventId,
-      input.actor.personId,
-      input.actor.kind,
-      input.action,
-      input.entityType,
-      input.entityId,
-      input.before === undefined ? null : JSON.stringify(input.before),
-      input.after === undefined ? null : JSON.stringify(input.after),
-      input.now,
-    )
-    .run();
+  await writeAuditRow(db, auditEntryFor(input));
 }
 
 export async function reconcileTaskSet(
@@ -1002,25 +1016,19 @@ export async function writeBulkSubmissionDecisions(
 
   await input.db.batch(
     eligible.map((submission) =>
-      input.db
-        .prepare(
-          `INSERT INTO audit_log
-            (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id,
-             before_json, after_json, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(
-          newUlid(now),
-          input.eventId,
-          input.actor.personId,
-          input.actor.kind,
-          `bulk.${input.action}`,
-          "submission",
-          submission.id,
-          JSON.stringify({ status: submission.status }),
-          JSON.stringify({ status: targetStatus, operation_id: input.operationId }),
+      auditStatement(
+        input.db,
+        auditEntryFor({
+          eventId: input.eventId,
+          actor: input.actor,
+          action: `bulk.${input.action}`,
+          entityType: "submission",
+          entityId: submission.id,
+          before: { status: submission.status },
+          after: { status: targetStatus, operation_id: input.operationId },
           now,
-        ),
+        }),
+      ),
     ),
   );
   await writeAudit(input.db, {

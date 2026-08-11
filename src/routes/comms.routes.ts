@@ -26,6 +26,7 @@ import {
   type ArrivalSession,
 } from "../lib/venue-geometry";
 import { hasSpeakerTaskCancellationColumn, submissionFilterSchema } from "./submissions.queries";
+import { auditStatement } from "../lib/audit";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const templateParams = eventParams.extend({ templateId: z.string().min(1) });
@@ -732,24 +733,22 @@ const sendComms = defineApiRoute(
     const auditRows = queued.flatMap((item, index) => {
       const recipient = recipients[index];
       if (!item.inserted || !recipient?.submission_id) return [];
-      return [context.env.DB.prepare(
-        `INSERT INTO audit_log
-          (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at)
-         VALUES (?, ?, ?, ?, 'submission.message_sent', 'submission', ?, NULL, ?, ?)`
-      ).bind(
-        crypto.randomUUID(),
+      return [auditStatement(context.env.DB, {
         eventId,
-        actor.personId,
-        actor.kind,
-        recipient.submission_id,
-        JSON.stringify({
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "submission.message_sent",
+        entityType: "submission",
+        entityId: recipient.submission_id,
+        after: {
           outbox_id: item.id,
           person_id: recipient.person_id,
           role: recipient.role,
           template_key: body.template_key ?? "custom",
-        }),
-        Date.now(),
-      )];
+        },
+        now: Date.now(),
+        requestId: context.get("requestId") ?? null,
+      })];
     });
     if (auditRows.length > 0) await context.env.DB.batch(auditRows);
     return context.json({ selected: recipients.length, queued: outboxIds.length, duplicate, outbox_ids: outboxIds, outbox_rows: outboxRows }, 202);
