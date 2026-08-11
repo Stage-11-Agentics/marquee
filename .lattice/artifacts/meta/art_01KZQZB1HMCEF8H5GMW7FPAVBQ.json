@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T08:34:33Z",
+  "created_by": "agent:delegator-mrq-30",
+  "custom_fields": {},
+  "id": "art_01KZQZB1HMCEF8H5GMW7FPAVBQ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQZB1HMCEF8H5GMW7FPAVBQ.md",
+    "size_bytes": 1454
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: exact-head review after MRQ-31/MRQ-38/Amendment 16 upstream rebase.",
+  "tags": [],
+  "title": "MRQ-30 final rebase review at c0c4e98",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-64",
   "branch_links": [],
+  "c11_surface": "surface:193",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": "medium",
   "created_at": "2026-08-11T02:30:44Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZQAGWB5YGHDZ98ZK5JG2NN0",
-  "last_event_id": "ev_01KZQAHKKJHY20H57TS5PGAGRG",
-  "last_status_changed_at": "2026-08-11T02:30:44Z",
+  "last_event_id": "ev_01KZQZB4MXSKYQ1VAPR5S2EJA8",
+  "last_status_changed_at": "2026-08-11T08:34:36Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-64",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Arrival instructions \u2014 portal location card, place merge fields, ICS GEO",
   "type": "task",
-  "updated_at": "2026-08-11T02:31:08Z",
+  "updated_at": "2026-08-11T08:34:36Z",
   "urgency": null
 }

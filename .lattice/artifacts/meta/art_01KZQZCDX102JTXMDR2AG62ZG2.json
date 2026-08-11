@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T08:35:18Z",
+  "created_by": "agent:delegator-mrq-30",
+  "custom_fields": {},
+  "id": "art_01KZQZCDX102JTXMDR2AG62ZG2",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQZCDX102JTXMDR2AG62ZG2.md",
+    "size_bytes": 887
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: fresh post-rebase npm ci, settle, pr-gate, and API parity.",
+  "tags": [],
+  "title": "MRQ-30 final validation at c0c4e98",
+  "token_usage": null,
+  "type": "note"
+}

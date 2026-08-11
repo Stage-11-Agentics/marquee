@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-35",
   "branch_links": [],
+  "c11_surface": "surface:195",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMANFBSR9HBSE6ZSEFCF3",
-  "last_event_id": "ev_01KZJHMHJSK002P25W33218W1G",
-  "last_status_changed_at": "2026-08-09T05:58:45Z",
+  "last_event_id": "ev_01KZQZB1V5P3GP49KDN42ZTZJJ",
+  "last_status_changed_at": "2026-08-11T08:34:33Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -33,10 +35,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-35",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Category routing",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:52Z",
+  "updated_at": "2026-08-11T08:34:33Z",
   "urgency": null
 }
