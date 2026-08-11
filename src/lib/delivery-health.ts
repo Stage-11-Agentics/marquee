@@ -672,9 +672,11 @@ function uploadsCapability(facts: DeliveryHealthFacts, infrastructure: Infrastru
 }
 
 function mirrorCapability(facts: DeliveryHealthFacts): CapabilityStatus {
-  const base = { id: "mirror", label: "Airtable sync", href: "/settings/airtable" as string | null };
+  // No link: the mirror is configured where the conference is hosted, not from
+  // a screen inside Marquee. A row that promised one would land nowhere.
+  const base = { id: "mirror", label: "Airtable sync", href: null as string | null };
   if (!facts.mirror.configured) {
-    return { ...base, level: "ok", headline: "Airtable is not connected.", detail: "Nothing to sync. Connect a base in settings if your team works in Airtable." };
+    return { ...base, level: "ok", headline: "Airtable is not connected.", detail: "Nothing to sync. This conference is not mirroring to Airtable." };
   }
   if (facts.mirror.stuck > 0) {
     return {

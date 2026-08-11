@@ -272,6 +272,20 @@ describe("MRQ-74 · capability verdicts", () => {
     expect(mirror?.headline).toBe("Airtable is not connected.");
   });
 
+  test("CONTRACT · the mirror row never offers a destination, because there is no mirror screen to reach", () => {
+    const unconnected = deriveDeliveryHealth(facts(), UNREPORTED);
+    const draining = deriveDeliveryHealth(
+      facts({ mirror: { configured: true, pending: 30, stuck: 30, last_sync_at: NOW - 6 * HOUR, has_error: true } }),
+      UNREPORTED,
+    );
+    for (const snapshot of [unconnected, draining]) {
+      const mirror = snapshot.capabilities.find((row) => row.id === "mirror");
+      expect(mirror?.href).toBeNull();
+    }
+    // The old copy sent the organizer to a settings screen that was never built.
+    expect(unconnected.capabilities.find((row) => row.id === "mirror")?.detail).not.toContain("settings");
+  });
+
   test("CONTRACT · a mirror that has stopped draining is red because the other room is looking at stale data", () => {
     const snapshot = deriveDeliveryHealth(
       facts({ mirror: { configured: true, pending: 30, stuck: 30, last_sync_at: NOW - 6 * HOUR, has_error: true } }),
