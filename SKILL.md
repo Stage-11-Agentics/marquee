@@ -16,6 +16,8 @@ The command registry is:
 - `node cli/marquee.mjs submissions reject <event-id> --filter <key=value>`
 - `node cli/marquee.mjs tasks list <event-id> --overdue`
 - `node cli/marquee.mjs remind <event-id> --filter <key=value> (--template <key> | --subject <s> --body <b>)`
+- `node cli/marquee.mjs diagnose`
+- `node cli/marquee.mjs logs --tail`
 - `node cli/marquee.mjs agenda export <event-id>`
 
 ## Seed
@@ -77,5 +79,24 @@ curl -fsS -X POST "$MARQUEE_URL/api/v1/events/$EVENT_ID/submissions/$SUBMISSION_
   -H "Authorization: Bearer $MARQUEE_TOKEN" \
   -H "Accept: application/json"
 ```
+
+## Diagnose
+
+When something is wrong, start with the verdict and then read the line behind it. `diagnose` probes every binding — database, cache, media, queues, scheduled work — and answers ok or degraded with per-probe timings and the running build.
+
+```sh
+node cli/marquee.mjs diagnose --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs diagnose --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --bundle
+```
+
+Every error surface shows a short reference code. It is a prefix of the correlation id on the server's own log lines, so the code an organizer read off the screen is the filter that finds them.
+
+```sh
+node cli/marquee.mjs logs --tail --request-id 8f2a4c
+node cli/marquee.mjs logs --tail --level error
+node cli/marquee.mjs logs --tail --event api_error
+```
+
+Logs are structured, one JSON object per event, built from a field allowlist: they carry route templates, opaque IDs, statuses and timings, and never request bodies, query strings, credentials, or mail addresses. `GET /health` is the cheap liveness probe and names the running build.
 
 The product vocabulary is deliberate: Abstract, Session, Evaluation plan, Committee, Portal, Task, and Agenda. Use those nouns when describing work to another operator or agent.

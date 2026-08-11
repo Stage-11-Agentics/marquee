@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
 import "./review.css";
 
@@ -113,23 +114,16 @@ interface SubmissionDetail {
 
 const EMPTY_REVIEW: ReviewState = { comment: "", recommendation: null, score: null };
 
+/**
+ * The reviewer surface's one API call. It goes through the shared client, so a
+ * failure here carries the server's correlation id like everywhere else — a
+ * reviewer reporting "it won't save" can quote a reference instead of a status.
+ */
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  return apiFetch<T>(path, {
     ...init,
     headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...(init?.headers ?? {}) },
   });
-  const text = await response.text();
-  if (!response.ok) {
-    let message = `Reviewer request failed (${response.status})`;
-    try {
-      const body = JSON.parse(text) as { error?: { message?: string } };
-      message = body.error?.message ?? message;
-    } catch {
-      // Keep the honest status message when an upstream error is not JSON.
-    }
-    throw new Error(message);
-  }
-  return JSON.parse(text) as T;
 }
 
 function formatBytes(bytes: number): string {
@@ -210,7 +204,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
         return next;
       });
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Reviewer data is unavailable");
+      setError(errorSummary(reason));
     } finally {
       setLoading(false);
     }
@@ -245,7 +239,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
       const response = await api<SubmissionDetail>(`/api/v1/events/${eventId}/rounds/${roundId}/submissions/${submissionId}`);
       setDetail(response);
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "The full submission is unavailable");
+      setError(errorSummary(reason));
       setDetailOpen(false);
     } finally {
       setDetailLoading(false);
@@ -282,7 +276,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
       setCurrentId(nextQueue[oldIndex]?.id ?? nextQueue[oldIndex - 1]?.id ?? null);
       setNotice(`${recommendationLabel(currentReview.recommendation)} saved · next submission ready`);
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Recommendation could not be saved");
+      setError(errorSummary(reason));
     } finally {
       setSaving(false);
     }
@@ -305,7 +299,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
       setNotice("Comparison saved · next three submissions ready");
       await load();
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Comparison could not be saved");
+      setError(errorSummary(reason));
     } finally {
       setSaving(false);
     }

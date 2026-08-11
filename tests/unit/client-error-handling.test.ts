@@ -1,0 +1,192 @@
+/**
+ * The browser's failure path, tested as the arithmetic it is.
+ *
+ * Two things here would be very expensive to get wrong and are invisible until
+ * they are: the taxonomy (a code with no sentence renders a raw status to an
+ * organizer) and the throttle (an unthrottled beacon on a five-second poll is
+ * a self-inflicted denial of service).
+ */
+import { describe, expect, test } from "vitest";
+
+import { ERROR_STATUS_CODES } from "../../src/api/errors";
+import {
+  API_ERROR_CODES,
+  backoffDelayMs,
+  ERROR_TREATMENTS,
+  MarqueeApiError,
+  describeError,
+  referenceCode,
+} from "../../src/ui/shell/api-client";
+import {
+  createReporter,
+  errorSignature,
+  rateVital,
+  routeTemplate,
+  type TelemetryReport,
+} from "../../src/ui/shell/error-reporting";
+
+describe("the error taxonomy", () => {
+  test("CONTRACT · the client's code list has not drifted from the server envelope", () => {
+    expect([...API_ERROR_CODES].sort()).toEqual(Object.keys(ERROR_STATUS_CODES).sort());
+  });
+
+  test("CONTRACT · every code an operator can be shown has a plain sentence and a recovery", () => {
+    for (const code of Object.keys(ERROR_TREATMENTS)) {
+      const treatment = ERROR_TREATMENTS[code as keyof typeof ERROR_TREATMENTS];
+      expect(treatment.sentence.length).toBeGreaterThan(10);
+      expect(treatment.recovery.length).toBeGreaterThan(10);
+      // No status codes, no jargon. "429" is not a sentence.
+      expect(`${treatment.sentence} ${treatment.recovery}`).not.toMatch(/\b[45]\d\d\b/);
+    }
+  });
+
+  test("CONTRACT · rate limiting reads as pace, not as a number", () => {
+    expect(ERROR_TREATMENTS.rate_limited.sentence).toContain("faster than the system allows");
+  });
+
+  test("CONTRACT · offline and server failure are different sentences", () => {
+    expect(ERROR_TREATMENTS.offline.sentence).not.toBe(ERROR_TREATMENTS.internal_error.sentence);
+    expect(ERROR_TREATMENTS.offline.sentence).toContain("connection");
+  });
+});
+
+describe("the reference code", () => {
+  test("CONTRACT · it is a greppable prefix of the correlation id, not a hash of it", () => {
+    const requestId = "8f2a4c90-5f0b-4b1e-9d2a-9b1d2f0a1c2d";
+    expect(referenceCode(requestId)).toBe("8f2a4c");
+    expect(requestId.replaceAll("-", "")).toContain(referenceCode(requestId));
+  });
+
+  test("CONTRACT · a request that never reached the server says so instead of inventing one", () => {
+    expect(referenceCode(undefined)).toBe("none");
+    expect(describeError(new MarqueeApiError({ code: "offline", message: "x", status: 0, route: "/" })).reference)
+      .toBe("none");
+  });
+
+  test("CONTRACT · an unknown throw still lands on a sentence rather than a stack", () => {
+    const described = describeError(new Error("Cannot read properties of undefined"));
+    expect(described.sentence).not.toContain("undefined");
+    expect(described.retryable).toBe(false);
+  });
+});
+
+describe("backoff with jitter", () => {
+  test("CONTRACT · a healthy poll keeps its interval exactly", () => {
+    expect(backoffDelayMs(0, 5_000)).toBe(5_000);
+  });
+
+  test("CONTRACT · failures back off, and never below the healthy interval", () => {
+    for (const failures of [1, 2, 3, 5, 12]) {
+      for (const random of [0, 0.5, 1]) {
+        const delay = backoffDelayMs(failures, 5_000, { random: () => random });
+        expect(delay).toBeGreaterThanOrEqual(5_000);
+        expect(delay).toBeLessThanOrEqual(60_000);
+      }
+    }
+  });
+
+  test("CONTRACT · the cap holds however long the outage lasts", () => {
+    expect(backoffDelayMs(50, 5_000, { random: () => 1 })).toBe(60_000);
+  });
+
+  test("CONTRACT · jitter actually spreads: two tabs failing together do not retry together", () => {
+    const low = backoffDelayMs(4, 5_000, { random: () => 0.01 });
+    const high = backoffDelayMs(4, 5_000, { random: () => 0.99 });
+    expect(high - low).toBeGreaterThan(10_000);
+  });
+});
+
+describe("the beacon throttle", () => {
+  function harness(startAt = 1_000_000) {
+    const sent: TelemetryReport[] = [];
+    let clock = startAt;
+    const reporter = createReporter({
+      send: (report) => sent.push(report),
+      build: "abc123",
+      session: "sess1",
+      currentRoute: () => "/dashboard",
+      now: () => clock,
+    });
+    return { sent, reporter, advance: (ms: number) => { clock += ms; } };
+  }
+
+  test("CONTRACT · the same failure on a five-second poll is reported once, not every tick", () => {
+    const { sent, reporter, advance } = harness();
+    const failure = new Error("dashboard refresh failed");
+    for (let tick = 0; tick < 60; tick += 1) {
+      reporter.report("error", failure);
+      advance(5_000);
+    }
+    // Five minutes of a broken dashboard, not 60 requests at the wounded origin.
+    expect(sent.length).toBeLessThanOrEqual(3);
+    expect(reporter.sentCount()).toBe(sent.length);
+  });
+
+  test("CONTRACT · a repeat report carries how many were collapsed into it", () => {
+    const { sent, reporter, advance } = harness();
+    const failure = new Error("same failure");
+    reporter.report("error", failure);
+    expect(sent[0]).toMatchObject({ occurrences: 1 });
+    for (let index = 0; index < 5; index += 1) reporter.report("error", failure);
+    advance(200_000);
+    reporter.report("error", failure);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toMatchObject({ occurrences: 6 });
+  });
+
+  test("CONTRACT · distinct failures are still spaced, so a burst is not a burst of requests", () => {
+    const { sent, reporter } = harness();
+    for (let index = 0; index < 10; index += 1) reporter.report("error", new Error(`failure ${index}`));
+    expect(sent).toHaveLength(1);
+  });
+
+  test("CONTRACT · the per-session cap is a stop, not a slowdown", () => {
+    const { sent, reporter, advance } = harness();
+    for (let index = 0; index < 200; index += 1) {
+      reporter.report("error", new Error(`distinct failure ${index}`));
+      advance(60_000);
+    }
+    expect(sent).toHaveLength(20);
+  });
+
+  test("CONTRACT · switching telemetry off sends nothing at all", () => {
+    const sent: TelemetryReport[] = [];
+    const reporter = createReporter({
+      send: (report) => sent.push(report),
+      build: "abc123",
+      session: "sess1",
+      currentRoute: () => "/dashboard",
+      enabled: () => false,
+    });
+    reporter.report("error", new Error("boom"));
+    reporter.vital("LCP", 1_200, "good");
+    expect(sent).toHaveLength(0);
+    // Recent events are still kept locally for the diagnostic report; they
+    // just never leave the browser.
+    expect(reporter.recentEvents()).toHaveLength(1);
+  });
+
+  test("CONTRACT · two failures with the same message but different frames are different failures", () => {
+    expect(errorSignature("boom", "    at renderWaves (a.ts:1:1)")).not.toBe(
+      errorSignature("boom", "    at renderTasks (b.ts:1:1)"),
+    );
+  });
+});
+
+describe("route templates leaving the browser", () => {
+  test("CONTRACT · opaque record ids collapse and free text never appears", () => {
+    expect(routeTemplate("/submissions/sub_01JQZ8XK2M3N4P5Q6R7S8T")).toBe("/submissions/{id}");
+    expect(routeTemplate("/dashboard")).toBe("/dashboard");
+    expect(routeTemplate("/")).toBe("/");
+  });
+});
+
+describe("web vitals", () => {
+  test("CONTRACT · thresholds are the published ones", () => {
+    expect(rateVital("LCP", 2_000)).toBe("good");
+    expect(rateVital("LCP", 3_000)).toBe("needs-improvement");
+    expect(rateVital("LCP", 5_000)).toBe("poor");
+    expect(rateVital("INP", 150)).toBe("good");
+    expect(rateVital("INP", 900)).toBe("poor");
+  });
+});

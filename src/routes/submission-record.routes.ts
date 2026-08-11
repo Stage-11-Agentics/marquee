@@ -10,6 +10,7 @@ import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { projectApplicableAnswers, type FormAnswerValue } from "../lib/form-conditions";
+import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -585,7 +586,10 @@ const createSubmission = defineApiRoute(
     try {
       await context.env.DB.batch(statements);
     } catch (error) {
-      console.error("admin submission create failed", error);
+      context.get("logger")?.emit("worker_error", "error", {
+        source: "createSubmissionRecord",
+        ...errorFields(error),
+      });
       throw ApiError.conflict("the submission could not be created with those record relationships");
     }
     return context.json(await loadRecord(context.env.DB, eventId, id), 201);

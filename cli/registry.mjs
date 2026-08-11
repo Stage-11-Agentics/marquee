@@ -90,6 +90,32 @@ export const COMMAND_REGISTRY = [
     ],
   },
   {
+    path: ["diagnose"],
+    usage: "marquee diagnose",
+    summary: "Probe every binding and report an ok or degraded verdict.",
+    operations: ["getDiagnostics"],
+    skill: "diagnose",
+    options: [
+      { name: "--bundle", description: "Print a pasteable support report instead of raw JSON." },
+    ],
+  },
+  {
+    path: ["logs"],
+    usage: "marquee logs --tail",
+    summary: "Follow this deployment's structured logs, filtered.",
+    // No API operation: logs are read from the platform's own log stream, not
+    // from an endpoint this conference serves.
+    operations: [],
+    skill: "diagnose",
+    local: true,
+    options: [
+      { name: "--tail", description: "Required; follow the live log stream." },
+      { name: "--request-id <id>", description: "Only lines carrying this reference or correlation id." },
+      { name: "--level <level>", description: "debug, info, warn, or error, and everything above it." },
+      { name: "--event <name>", description: "Only this event name, e.g. api_error or http_request." },
+    ],
+  },
+  {
     path: ["agenda", "export"],
     usage: "marquee agenda export <event-id>",
     summary: "Export the current agenda snapshot.",

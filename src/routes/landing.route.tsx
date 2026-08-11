@@ -3,6 +3,7 @@ import type { JSX } from "preact";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { errorFields, loggerForEnv } from "../lib/observability/log";
 import { hasSpeakerTaskCancellationColumn } from "./submissions.queries";
 
 export interface LandingCounts {
@@ -285,7 +286,10 @@ landingRoutes.get("/", async (context) => {
   try {
     data = await loadLandingData(context.env.DB);
   } catch (error) {
-    console.error("landing preview failed", error);
+    loggerForEnv(context.env).emit("worker_error", "error", {
+      source: "landingPreview",
+      ...errorFields(error),
+    });
     data = {
       conferenceName: "AIE NYC 2026",
       counts: EMPTY_COUNTS,

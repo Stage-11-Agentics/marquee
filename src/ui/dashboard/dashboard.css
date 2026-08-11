@@ -57,3 +57,7 @@
   .dashboard-metric, .dashboard-metric:nth-child(2n), .dashboard-metric:nth-last-child(-n + 2) { border-bottom: 1px solid var(--line); border-right: 0; }
   .dashboard-metric:last-child { border-bottom: 0; }
 }
+
+/* Build identity, quietly: enough to make a bug report unambiguous, small
+   enough that it never competes with the program data above it. */
+.dashboard-build { display: flex; justify-content: flex-end; min-height: 16px; padding-top: var(--s1); }

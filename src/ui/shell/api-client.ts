@@ -1,0 +1,317 @@
+/**
+ * The browser's side of the error envelope.
+ *
+ * The API has always returned `{ error: { code, message }, request_id }` and an
+ * `X-Request-Id` header. Screens used to throw away both and keep the HTTP
+ * status, which is how a "Dashboard refresh failed" banner could be
+ * undiagnosable: the operator saw `500`, the log line existed, and nothing
+ * connected them. Everything a screen needs to close that gap lives here.
+ *
+ * Three jobs:
+ *
+ *   1. Parse the envelope into a `MarqueeApiError` that keeps the correlation
+ *      id, so every error surface can print a reference the operator can quote
+ *      and an engineer can grep.
+ *   2. Say what happened in the organizer's language. `429` is not a sentence;
+ *      "going faster than the system allows" is. The taxonomy below is the one
+ *      place those sentences live.
+ *   3. Tell a dropped connection apart from a broken server. They are the same
+ *      screen in most software and they call for opposite reactions.
+ */
+
+import { reporter } from "./error-reporting";
+
+/**
+ * The stable envelope codes, mirroring `ERROR_STATUS_CODES` in `src/api/errors.ts`.
+ * They are restated rather than imported because the client bundle must not
+ * pull the Worker's schema module in; `tests/unit/client-error-handling.test.ts`
+ * asserts the two lists never drift.
+ */
+export const API_ERROR_CODES = [
+  "malformed_request",
+  "unauthenticated",
+  "forbidden",
+  "not_found",
+  "conflict",
+  "unprocessable",
+  "rate_limited",
+  "internal_error",
+] as const;
+
+export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
+
+/** Failures that never reach the server, so they have no envelope of their own. */
+export type ClientFailureCode = "offline" | "unreachable" | "unreadable";
+
+export type MarqueeErrorCode = ApiErrorCode | ClientFailureCode;
+
+export interface ErrorTreatment {
+  /** One plain sentence. No status codes, no jargon, no blame. */
+  sentence: string;
+  /** What happens next, or what the operator can do. */
+  recovery: string;
+  /** Retrying on a timer is worth it — the condition is expected to pass. */
+  retryable: boolean;
+}
+
+/**
+ * Every code an operator can actually be shown, mapped to a sentence and a
+ * recovery. Adding a code to the envelope without adding it here is a test
+ * failure, not a silent fallback to a number on screen.
+ */
+export const ERROR_TREATMENTS: Readonly<Record<MarqueeErrorCode, ErrorTreatment>> = {
+  malformed_request: {
+    sentence: "The system sent a request this conference could not accept.",
+    recovery: "Reload the page. If it repeats, copy the diagnostic report and file it.",
+    retryable: false,
+  },
+  unauthenticated: {
+    sentence: "Your session has expired.",
+    recovery: "Sign in again to pick up where you left off.",
+    retryable: false,
+  },
+  forbidden: {
+    sentence: "Your account does not have access to this.",
+    recovery: "Ask a program lead to grant access.",
+    retryable: false,
+  },
+  not_found: {
+    sentence: "That is not here any more.",
+    recovery: "It may have been moved or removed. Go back and try again.",
+    retryable: false,
+  },
+  conflict: {
+    sentence: "Someone else changed this while you were working on it.",
+    recovery: "Reload to see their version before saving yours.",
+    retryable: false,
+  },
+  unprocessable: {
+    sentence: "That change would leave the program in a state it cannot be in.",
+    recovery: "Adjust the values and try again.",
+    retryable: false,
+  },
+  rate_limited: {
+    sentence: "Going faster than the system allows.",
+    recovery: "Retrying shortly — nothing is lost.",
+    retryable: true,
+  },
+  internal_error: {
+    sentence: "The conference server hit an unexpected problem.",
+    recovery: "Retrying shortly. If it keeps failing, copy the diagnostic report.",
+    retryable: true,
+  },
+  offline: {
+    sentence: "Your connection dropped.",
+    recovery: "The conference is fine — this device is offline. Reconnecting automatically.",
+    retryable: true,
+  },
+  unreachable: {
+    sentence: "The conference server could not be reached.",
+    recovery: "Retrying shortly. Your work is not lost.",
+    retryable: true,
+  },
+  unreadable: {
+    sentence: "The conference server sent something unreadable.",
+    recovery: "Retrying shortly. If it repeats, copy the diagnostic report.",
+    retryable: true,
+  },
+};
+
+/**
+ * A short reference an operator can read aloud or paste into an issue. It is a
+ * PREFIX of the full correlation id rather than a hash of it, so `grep 8f2a4c`
+ * over the logs finds the line — a code that cannot be grepped is decoration.
+ */
+export function referenceCode(requestId: string | undefined): string {
+  if (!requestId) return "none";
+  return requestId.replaceAll("-", "").slice(0, 6).toLowerCase();
+}
+
+export class MarqueeApiError extends Error {
+  readonly code: MarqueeErrorCode;
+  readonly status: number;
+  /** The server's correlation id; absent when the request never arrived. */
+  readonly requestId?: string;
+  readonly field?: string;
+  /** The route template, for the diagnostic report. */
+  readonly route: string;
+
+  constructor(options: {
+    code: MarqueeErrorCode;
+    message: string;
+    status: number;
+    requestId?: string;
+    field?: string;
+    route: string;
+  }) {
+    super(options.message);
+    this.name = "MarqueeApiError";
+    this.code = options.code;
+    this.status = options.status;
+    this.requestId = options.requestId;
+    this.field = options.field;
+    this.route = options.route;
+  }
+
+  get treatment(): ErrorTreatment {
+    return ERROR_TREATMENTS[this.code];
+  }
+
+  get reference(): string {
+    return referenceCode(this.requestId);
+  }
+
+  /** What a banner shows: the plain sentence, then the reference to quote. */
+  get display(): string {
+    const treatment = this.treatment;
+    return `${treatment.sentence} ${treatment.recovery}`;
+  }
+}
+
+/** Anything thrown at a screen, described. Non-API throws get honest wording. */
+export function describeError(error: unknown): {
+  sentence: string;
+  recovery: string;
+  reference: string;
+  retryable: boolean;
+} {
+  if (error instanceof MarqueeApiError) {
+    return {
+      sentence: error.treatment.sentence,
+      recovery: error.treatment.recovery,
+      reference: error.reference,
+      retryable: error.treatment.retryable,
+    };
+  }
+  return {
+    sentence: "Something in this screen stopped working.",
+    recovery: "Reload the page. If it repeats, copy the diagnostic report and file it.",
+    reference: "none",
+    retryable: false,
+  };
+}
+
+/**
+ * One line for a screen that keeps its error state as a string rather than as a
+ * banner component. Always ends in the reference, because a message an operator
+ * cannot quote back is a message that costs somebody an afternoon.
+ */
+export function errorSummary(error: unknown): string {
+  const described = describeError(error);
+  return `${described.sentence} ${described.recovery} · ref ${described.reference}`;
+}
+
+function isOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+interface EnvelopeShape {
+  error?: { code?: unknown; message?: unknown; field?: unknown };
+  request_id?: unknown;
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function codeFromEnvelope(value: unknown, status: number): ApiErrorCode {
+  if (typeof value === "string" && (API_ERROR_CODES as readonly string[]).includes(value)) {
+    return value as ApiErrorCode;
+  }
+  // A response that is not one of ours (a proxy's 502 page, say) still has to
+  // land on a sentence, and "the server hit a problem" is the honest one.
+  return status === 429 ? "rate_limited" : status === 404 ? "not_found" : "internal_error";
+}
+
+export interface ApiFetchOptions extends RequestInit {
+  /** Route template for logging and the diagnostic report; defaults to the path. */
+  route?: string;
+}
+
+/**
+ * Record a failure in the local ring the diagnostic report reads from. This is
+ * what turns "Recent client events" from an empty block into the trail that
+ * explains how the screen got here — the second request failing after a token
+ * expired reads very differently from one failure out of nowhere.
+ *
+ * Local only. Nothing here is sent; the beacon is a separate, throttled path.
+ */
+function noted(error: MarqueeApiError): MarqueeApiError {
+  reporter().note(`${error.code} ${error.status} ${error.route}${error.requestId ? ` ref ${error.reference}` : ""}`);
+  return error;
+}
+
+/**
+ * `fetch`, with the envelope actually read.
+ *
+ * Every failure path produces a `MarqueeApiError` carrying a code, a human
+ * sentence and — whenever the request reached the server — the correlation id.
+ * Callers never see a bare status again.
+ */
+export async function apiFetch<Result>(
+  path: string,
+  options: ApiFetchOptions = {},
+): Promise<Result> {
+  const { route = path, ...init } = options;
+  let response: Response;
+  try {
+    response = await fetch(path, init);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    // A dropped connection and a broken server are different problems with
+    // different reactions, and must never render as the same screen.
+    throw noted(new MarqueeApiError({
+      code: isOffline() ? "offline" : "unreachable",
+      message: error instanceof Error ? error.message : "the request could not be sent",
+      status: 0,
+      route,
+    }));
+  }
+
+  const requestId = asString(response.headers.get("X-Request-Id") ?? undefined);
+  if (!response.ok) {
+    const envelope = (await response.json().catch(() => null)) as EnvelopeShape | null;
+    throw noted(new MarqueeApiError({
+      code: codeFromEnvelope(envelope?.error?.code, response.status),
+      message: asString(envelope?.error?.message) ?? `the request failed with status ${response.status}`,
+      status: response.status,
+      requestId: asString(envelope?.request_id) ?? requestId,
+      field: asString(envelope?.error?.field),
+      route,
+    }));
+  }
+
+  try {
+    return (await response.json()) as Result;
+  } catch {
+    throw noted(new MarqueeApiError({
+      code: "unreadable",
+      message: "the response body was not valid JSON",
+      status: response.status,
+      requestId,
+      route,
+    }));
+  }
+}
+
+/**
+ * Exponential backoff with full jitter.
+ *
+ * The dashboard used to re-poll every five seconds forever, failure or not. On
+ * a sustained outage that is every open tab in the building hammering an origin
+ * that is already wounded — the classic way a small incident becomes a large
+ * one. Full jitter (a uniform draw from `[0, capped]`) is what stops every tab
+ * from retrying in lockstep after the same failure.
+ */
+export function backoffDelayMs(
+  consecutiveFailures: number,
+  baseMs: number,
+  options: { maxMs?: number; random?: () => number } = {},
+): number {
+  if (consecutiveFailures <= 0) return baseMs;
+  const maxMs = options.maxMs ?? 60_000;
+  const random = options.random ?? Math.random;
+  const capped = Math.min(maxMs, baseMs * 2 ** consecutiveFailures);
+  // Never retry faster than the healthy interval, never slower than the cap.
+  return Math.round(baseMs + random() * Math.max(0, capped - baseMs));
+}

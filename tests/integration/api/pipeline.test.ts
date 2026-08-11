@@ -39,5 +39,7 @@ test("CONTRACT · a client-supplied request id is never trusted", async () => {
 test("CONTRACT · the app's non-API routes are unaffected by the API mount", async () => {
   const health = await SELF.fetch(`${ORIGIN}/health`);
   expect(health.status).toBe(200);
-  expect(await health.json()).toEqual({ service: "marquee", status: "ok" });
+  // `/health` stays a cheap liveness probe; it gained only the build stamp, so
+  // "which version answered?" is a curl rather than a guess.
+  expect(await health.json()).toMatchObject({ service: "marquee", status: "ok", build: expect.any(String) });
 });

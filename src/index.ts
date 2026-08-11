@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 
+import { resolveRequestId } from "./api/errors";
 import { createApiRouter } from "./api/router";
 import { setSessionCookie } from "./lib/cookies";
 import { runUploadOrphanSweep } from "./lib/r2/orphan-sweep";
@@ -11,6 +12,10 @@ import { processMailQueue, MAIL_MESSAGE_TYPE, runMailSchedule } from "./jobs/mai
 import { MAIL_SCHEDULE_CRON } from "./jobs/mail/schedule";
 import type { Principal } from "./api/runtime";
 import type { ApiGrant } from "./api/grants";
+import { BUILD_INFO } from "./lib/observability/build-info";
+import { recordCronHeartbeat } from "./lib/observability/heartbeat";
+import { errorFields, loggerForEnv } from "./lib/observability/log";
+import { correlateQueue, instrumentBindings } from "./lib/observability/request-instrumentation";
 import { landingRoutes } from "./routes/landing.route";
 import { publicFormRoutes } from "./routes/public-form.route";
 import { publicAgendaRoutes } from "./routes/public-agenda.route";
@@ -22,6 +27,10 @@ export interface Env {
   CACHE: KVNamespace;
   DB: D1Database;
   LOCAL_VALIDATION_TOKEN?: string;
+  /** `debug | info | warn | error`; anything else falls back to `info`. */
+  LOG_LEVEL?: string;
+  /** `"0"` or `"false"` turns the browser error beacon off at the source. */
+  CLIENT_TELEMETRY?: string;
   MAIL_QUEUE: Queue<unknown>;
   RESEND_API_KEY?: string;
   MEDIA: R2Bucket;
@@ -40,6 +49,17 @@ export interface Env {
 }
 
 type AppEnv = { Bindings: Env };
+
+/** The queue-message envelope the composition root dispatches on. */
+type QueueMessageBody = {
+  type?: string;
+  job_id?: string;
+  /** Correlation id of the request that enqueued this message (see `enqueue`). */
+  request_id?: string;
+};
+
+/** Nightly orphaned-upload sweep; the schedule is declared in `wrangler.jsonc`. */
+const UPLOAD_SWEEP_CRON = "30 4 * * *";
 
 const TURNSTILE_ALWAYS_PASS_SITE_KEY = "1x00000000000000000000AA";
 const TURNSTILE_ALWAYS_PASS_SECRET_KEY =
@@ -83,9 +103,18 @@ app.use("*", async (context, next) => {
   }
 });
 
+// `/health` stays a cheap liveness probe — no binding is touched, so it answers
+// under load and under partial failure alike. It gains only the build stamp,
+// which turns "which version is this?" from a guess into a curl. The deep probe
+// that does touch bindings is `/api/v1/telemetry/diagnostics`.
 app.get("/health", (context) => {
   context.header("Cache-Control", "no-store");
-  return context.json({ service: "marquee", status: "ok" });
+  return context.json({
+    service: "marquee",
+    status: "ok",
+    build: BUILD_INFO.sha,
+    built_at: BUILD_INFO.built_at,
+  });
 });
 
 app.get("/__validation/session-cookie", (context) => {
@@ -117,13 +146,18 @@ app.all("/api/*", async (context) => {
     credentialResolver: createCredentialResolver(),
   });
   const { app: api } = await apiApp;
+  // The bindings are instrumented HERE, before the API app sees them, because
+  // this is the last point at which one object can be handed to every handler.
+  // A per-request copy carries a metered D1 and correlated queues; the real env
+  // is shared by every request the isolate serves and must not be mutated.
+  const instrumented = instrumentBindings(context.env, resolveRequestId(context.req.raw));
   // Unmatched `/api/*` falls through to the API app's own not-found handler,
   // so a miss returns the one error envelope with its request id like every
   // other failure — there is no second 404 shape.
   // The nested API app does not use ExecutionContext. Omitting the optional
   // third argument also keeps direct in-process `app.fetch` probes equivalent
   // to Worker requests, where no execution context is supplied.
-  return api.fetch(context.req.raw, context.env);
+  return api.fetch(context.req.raw, instrumented);
 });
 
 app.all("*", (context) => context.env.ASSETS.fetch(context.req.raw));
@@ -131,18 +165,56 @@ app.all("*", (context) => context.env.ASSETS.fetch(context.req.raw));
 const worker: ExportedHandler<Env> = {
   fetch: app.fetch,
   async queue(batch, env, _context): Promise<void> {
-    if (batch.messages.some((message) => (message.body as { type?: string })?.type === MAIL_MESSAGE_TYPE)) {
-      await processMailQueue(batch, env);
+    const logger = loggerForEnv(env);
+    const mailMessages = batch.messages.filter(
+      (message) => (message.body as { type?: string })?.type === MAIL_MESSAGE_TYPE,
+    );
+    if (mailMessages.length > 0) {
+      const startedAt = Date.now();
+      try {
+        await processMailQueue(batch, env);
+        logger.emit("queue_message", "info", {
+          queue: batch.queue,
+          message_type: MAIL_MESSAGE_TYPE,
+          outcome: "processed",
+          batch_size: mailMessages.length,
+          duration_ms: Date.now() - startedAt,
+        });
+      } catch (error) {
+        logger.emit("queue_error", "error", {
+          queue: batch.queue,
+          message_type: MAIL_MESSAGE_TYPE,
+          ...errorFields(error),
+        });
+        throw error;
+      }
     }
     for (const message of batch.messages) {
-      const body = message.body as { type?: string; job_id?: string };
+      const body = message.body as QueueMessageBody;
       if (body?.type === MAIL_MESSAGE_TYPE) continue;
+      // The producer stamps the originating request id into the message body,
+      // so the acceptance a human clicked and the mail the queue sent four
+      // invocations later share one correlation id.
+      const messageLogger = logger.withRequestId(body?.request_id);
       if (body?.type === RESET_DEMO_MESSAGE_TYPE && body.job_id) {
+        const startedAt = Date.now();
         try {
           await runResetJob(env, body.job_id);
           message.ack();
+          messageLogger.emit("queue_message", "info", {
+            queue: batch.queue,
+            message_type: body.type,
+            outcome: "acked",
+            job_id: body.job_id,
+            duration_ms: Date.now() - startedAt,
+          });
         } catch (error) {
-          console.error(`reset_demo job ${body.job_id} failed`, error);
+          messageLogger.emit("queue_error", "error", {
+            queue: batch.queue,
+            message_type: body.type,
+            job_id: body.job_id,
+            ...errorFields(error),
+          });
           message.retry();
         }
         continue;
@@ -151,17 +223,50 @@ const worker: ExportedHandler<Env> = {
       // reset-demo path (which enqueues exactly one of these) doesn't stall.
       if (body?.type === MIRROR_RECONCILE_MESSAGE_TYPE) {
         message.ack();
+        messageLogger.emit("queue_message", "info", {
+          queue: batch.queue,
+          message_type: body.type,
+          outcome: "acked_stub",
+        });
         continue;
       }
-      console.warn(`No queue handler registered for message type ${body?.type ?? "unknown"}; retrying`);
+      messageLogger.emit("queue_message", "warn", {
+        queue: batch.queue,
+        message_type: body?.type ?? "unknown",
+        outcome: "no_handler_retried",
+      });
       message.retry();
     }
   },
   async scheduled(controller, env, _context): Promise<void> {
-    if (controller.cron === MAIL_SCHEDULE_CRON) {
-      await runMailSchedule(env.DB, env.MAIL_QUEUE, Date.now());
-    } else if (controller.cron === "30 4 * * *") {
-      await runUploadOrphanSweep(env.DB, env.MEDIA, Date.now());
+    // A cron that never fires leaves no trace at all, so every run — including
+    // the ones with nothing to do — records an outcome, and every success
+    // stamps a heartbeat the diagnostics probe can read back. Silence then
+    // means "the trigger did not fire", not "we did not look".
+    // A cron run gets its own correlation id, and the queue it writes to is
+    // stamped with it — so the mail a scheduled run enqueued is followable back
+    // to the run, exactly as an organizer's click is.
+    const runId = crypto.randomUUID();
+    const logger = loggerForEnv(env, { requestId: runId });
+    const startedAt = Date.now();
+    try {
+      let outcome = "ran";
+      if (controller.cron === MAIL_SCHEDULE_CRON) {
+        await runMailSchedule(env.DB, correlateQueue(env.MAIL_QUEUE, runId), Date.now());
+      } else if (controller.cron === UPLOAD_SWEEP_CRON) {
+        await runUploadOrphanSweep(env.DB, env.MEDIA, Date.now());
+      } else {
+        outcome = "no_handler";
+      }
+      await recordCronHeartbeat(env.CACHE, controller.cron);
+      logger.emit("cron_run", "info", {
+        cron: controller.cron,
+        outcome,
+        duration_ms: Date.now() - startedAt,
+      });
+    } catch (error) {
+      logger.emit("cron_error", "error", { cron: controller.cron, ...errorFields(error) });
+      throw error;
     }
   },
 };

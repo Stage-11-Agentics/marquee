@@ -4,6 +4,17 @@
   "main": "./src/index.ts",
   "compatibility_date": "2026-08-08",
   "workers_dev": false,
+
+  // Workers Logs, on and unsampled. Every line this Worker emits is one JSON
+  // object built from a field allowlist (see src/lib/observability/log.ts), so
+  // sampling would only ever hide the one request an organizer is asking about.
+  // A conference is not a firehose. To turn logging off entirely, set
+  // "enabled": false here — that is the real off switch, and it is documented
+  // in docs/OBSERVABILITY.md.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
   "dev": {
     "local_protocol": "https"
   },
