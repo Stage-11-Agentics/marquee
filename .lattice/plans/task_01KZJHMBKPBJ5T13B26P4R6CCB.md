@@ -59,3 +59,5 @@ repair product code.
 - Before pr_open, attach a review artifact for the exact branch HEAD and a
   validation artifact. This audit has no browser/UI flow; validation is the
   deterministic trigger matrix and static whole-tree checks.
+
+## Reset 2026-08-11 by agent:auditor-mrq-45

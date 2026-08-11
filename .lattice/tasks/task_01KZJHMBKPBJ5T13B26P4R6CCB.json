@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:196",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 1,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
@@ -28,8 +28,8 @@
     }
   ],
   "id": "task_01KZJHMBKPBJ5T13B26P4R6CCB",
-  "last_event_id": "ev_01KZR0WA6AH8RM0596NDADNGZG",
-  "last_status_changed_at": "2026-08-11T09:01:00Z",
+  "last_event_id": "ev_01KZR0XYXXKR8ZJ11PMJDSGT71",
+  "last_status_changed_at": "2026-08-11T09:02:20Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -41,13 +41,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-45",
-  "status": "in_validation",
+  "status": "in_progress",
   "tags": null,
   "title": "Audit \u2014 mail containment and demo-safe suppression",
   "type": "task",
-  "updated_at": "2026-08-11T09:01:27Z",
+  "updated_at": "2026-08-11T09:02:21Z",
   "urgency": null
 }
