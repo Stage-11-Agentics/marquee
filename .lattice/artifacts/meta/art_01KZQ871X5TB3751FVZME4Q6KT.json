@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:50:25Z",
+  "created_by": "agent:delegator-mrq-60",
+  "custom_fields": {},
+  "id": "art_01KZQ871X5TB3751FVZME4Q6KT",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ871X5TB3751FVZME4Q6KT.md",
+    "size_bytes": 645
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Observed final API behavior and passing local gate on de5ab25.",
+  "tags": [],
+  "title": "MRQ-60 final validation",
+  "token_usage": null,
+  "type": "note"
+}

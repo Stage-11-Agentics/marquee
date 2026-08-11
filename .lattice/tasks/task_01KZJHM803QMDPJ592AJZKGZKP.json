@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM803QMDPJ592AJZKGZKP",
-  "last_event_id": "ev_01KZQ7SR8QHRHDYZ2EMF3WJ07Z",
-  "last_status_changed_at": "2026-08-11T01:43:09Z",
+  "last_event_id": "ev_01KZQ88H2KCWSXGXHMRHEWC2RM",
+  "last_status_changed_at": "2026-08-11T01:51:13Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -42,10 +42,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-7",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Public landing page with live pipeline preview",
   "type": "task",
-  "updated_at": "2026-08-11T01:43:09Z",
+  "updated_at": "2026-08-11T01:51:13Z",
   "urgency": null
 }

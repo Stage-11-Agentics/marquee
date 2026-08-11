@@ -1,0 +1,3 @@
+Validated commit: de5ab25ab31c0c23f9a19a72265ecd3d914e0e10
+Observed running behavior: the real Cloudflare SELF-backed MRQ-9 submissions route returned 401/403 for denied requests, with no submission IDs or titles in either response body; a reviewer session scoped only to evt-other was denied 403 for the target event, while the in-event bearer fixture continued to return the 200 list used by the remaining 5 MRQ-9 tests. The focused submissions suite passed 6/6.
+Gate evidence: npm run pr-gate -- --ticket MRQ-60 passed after rebase onto forgejo/master @ 84a84b8; 16 test files / 81 tests passed, and all type/build/design/trace checks passed.

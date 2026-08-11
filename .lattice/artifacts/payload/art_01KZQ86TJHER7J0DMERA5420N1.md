@@ -1,0 +1,7 @@
+Verdict: PASS
+Reviewed commit: de5ab25ab31c0c23f9a19a72265ecd3d914e0e10
+Base: forgejo/master @ 84a84b80d99e611fae7898f875d68661b5ebc65c
+Scope: canonical Principal/AuthContext reconciliation; D1 session-cookie and bearer resolution; event-aware admin grant checks; API wiring; and the merged MRQ-9 submissions-route re-gate.
+Findings: None. The submissions policy is program:read admin scope with no TODO(MRQ-60); the existing MRQ-9 guard test remains and asserts unauthenticated 401/403 plus no submission identifiers/titles, and a different-event reviewer session gets 403 plus no submission data. Valid in-event bearer access remains covered by the same running list suite.
+Verification: npm run pr-gate -- --ticket MRQ-60 passed after the final rebase in 23.038s; worker/client/test types, production build, design contract, 16 files/81 tests, and merged AC trace all passed. Focused submissions suite passed 6/6; git diff --check passed.
+Contract decision: Principal is canonical because the API router, rate limiter, ApiVariables, and CredentialResolver already consume it; AuthContext is now a compatibility alias. MRQ-60 owns no stable AC, so no claims file was added; pr-gate's missing-current-ticket-manifest warning is expected.

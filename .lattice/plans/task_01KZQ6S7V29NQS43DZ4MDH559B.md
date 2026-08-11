@@ -29,3 +29,5 @@
 ## Plan Review Cycle 1 Resolutions (AUTHORITATIVE)
 
 - No headless plan-review was run because the orchestrator's boot instruction suspends headless reviews. The MRQ-9 base mismatch and mandatory post-merge re-gate are explicit in the sequencing and completion gates above.
+
+## Reset 2026-08-11 by agent:delegator-mrq-60

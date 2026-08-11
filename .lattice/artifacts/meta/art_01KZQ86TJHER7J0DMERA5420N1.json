@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:50:17Z",
+  "created_by": "agent:delegator-mrq-60",
+  "custom_fields": {},
+  "id": "art_01KZQ86TJHER7J0DMERA5420N1",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ86TJHER7J0DMERA5420N1.md",
+    "size_bytes": 1238
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS for final resolver plus submissions re-gate at exact HEAD de5ab25.",
+  "tags": [],
+  "title": "MRQ-60 final inline self-review",
+  "token_usage": null,
+  "type": "note"
+}

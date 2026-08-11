@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:51:18Z",
+  "created_by": "agent:delegator-mrq-58",
+  "custom_fields": {},
+  "id": "art_01KZQ88P0JR8RJ24GHRGR2YPHH",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ88P0JR8RJ24GHRGR2YPHH.md",
+    "size_bytes": 1155
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS review of exact HEAD dc3903f47f88cca45668a0b38c801290da080074",
+  "tags": [],
+  "title": "MRQ-58 self-review dc3903f",
+  "token_usage": null,
+  "type": "file"
+}
