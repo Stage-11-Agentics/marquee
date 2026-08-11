@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { SubmissionsPage } from "../submissions/SubmissionsPage";
+import { apiFetch, errorSummary } from "./api-client";
 import { Button, EmptyState, PageHeader } from "./components";
 import { ErrorBoundary } from "./ErrorSurface";
 import { OverlayHost, ToastHost, type OverlayState } from "./OverlayHosts";
@@ -29,13 +30,10 @@ import { SessionizeImportPage } from "../import/SessionizeImportPage";
 type ResetResponse = {
   job_id?: unknown;
   status?: unknown;
-  error?: { message?: unknown };
 };
 
-function resetError(body: ResetResponse | null, fallback: string): Error {
-  const message = body?.error?.message;
-  return new Error(typeof message === "string" && message.length > 0 ? message : fallback);
-}
+const RESET_DEMO_ROUTE = "/api/v1/admin/reset-demo";
+const RESET_DEMO_STATUS_ROUTE = "/api/v1/admin/reset-demo/{jobId}";
 
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
@@ -55,13 +53,12 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
     setResetting(true);
     setToast("Resetting demo…");
     try {
-      const response = await fetch("/api/v1/admin/reset-demo", {
+      const body = await apiFetch<ResetResponse>("/api/v1/admin/reset-demo", {
         method: "POST",
         headers: { accept: "application/json" },
         cache: "no-store",
+        route: RESET_DEMO_ROUTE,
       });
-      const body = await response.json().catch(() => null) as ResetResponse | null;
-      if (!response.ok) throw resetError(body, "Reset request failed (" + response.status + ")");
       if (typeof body?.job_id !== "string" || body.job_id.length === 0) {
         throw new Error("Reset request returned no job id");
       }
@@ -71,14 +68,12 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
       let job: ResetResponse | null = body;
       while (status !== "done" && Date.now() < deadline) {
         await new Promise((resolve) => window.setTimeout(resolve, 250));
-        const statusResponse = await fetch(
+        job = await apiFetch<ResetResponse>(
           "/api/v1/admin/reset-demo/" + encodeURIComponent(body.job_id),
-          { headers: { accept: "application/json" }, cache: "no-store" },
+          { headers: { accept: "application/json" }, cache: "no-store", route: RESET_DEMO_STATUS_ROUTE },
         );
-        job = await statusResponse.json().catch(() => null) as ResetResponse | null;
-        if (!statusResponse.ok) throw resetError(job, "Reset status failed (" + statusResponse.status + ")");
         status = typeof job?.status === "string" ? job.status : "unknown";
-        if (status === "failed") throw resetError(job, "The demo reset job failed");
+        if (status === "failed") throw new Error("The demo reset job failed");
       }
       if (status !== "done") throw new Error("The demo reset timed out after 20 seconds");
 
@@ -86,7 +81,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
       window.setTimeout(() => window.location.reload(), 250);
     } catch (error) {
       setResetting(false);
-      setToast("Reset failed: " + (error instanceof Error ? error.message : String(error)));
+      setToast("Reset failed: " + errorSummary(error));
     }
   }, [resetting]);
 

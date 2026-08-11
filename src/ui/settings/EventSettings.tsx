@@ -1,6 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
 import { DEFAULT_EVENT_ID, loadVenueModel } from "../venues/venue-writer";
 import type { VenueModel } from "../../lib/venues";
@@ -64,15 +65,8 @@ function temporaryId(prefix: string): string {
   return `new-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-async function readError(response: Response, fallback: string): Promise<Error> {
-  const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
-  return new Error(body?.error?.message || fallback);
-}
-
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { credentials: "include", ...init });
-  if (!response.ok) throw await readError(response, `Request failed (${response.status}).`);
-  return response.json() as Promise<T>;
+async function requestJson<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
+  return apiFetch<T>(path, { credentials: "include", ...init, route });
 }
 
 function moveItem<T extends { id: string }>(items: T[], id: string, targetId: string): T[] {
@@ -184,9 +178,9 @@ export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
   useEffect(() => {
     let active = true;
     setState({ kind: "loading", model: null });
-    void requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`)
+    void requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, "/api/v1/events/{eventId}")
       .then((response) => { if (active) { setState({ kind: "ready", model: response.data }); setDirty(false); setRemovedFormats([]); setRemovedTracks([]); } })
-      .catch((error: unknown) => { if (active) setState({ kind: "error", model: null, message: error instanceof Error ? error.message : "Conference settings could not be loaded." }); });
+      .catch((error: unknown) => { if (active) setState({ kind: "error", model: null, message: errorSummary(error) }); });
     return () => { active = false; };
   }, [eventId, reloadKey]);
 
@@ -212,35 +206,35 @@ export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
     setSaveError(null);
     setNotice(null);
     try {
-      await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, {
+      await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, "/api/v1/events/{eventId}", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(model.event),
       });
       for (const id of removedFormats) {
-        if (!id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/formats/${encodeURIComponent(id)}`, { method: "DELETE" });
+        if (!id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/formats/${encodeURIComponent(id)}`, "/api/v1/events/{eventId}/formats/{formatId}", { method: "DELETE" });
       }
       for (const [position, format] of model.formats.filter((item) => !removedFormats.includes(item.id)).entries()) {
         const body = { name: format.name, default_duration_min: format.default_duration_min, min_duration_min: format.min_duration_min, max_duration_min: format.max_duration_min, position };
-        if (format.id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/formats`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-        else await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/formats/${encodeURIComponent(format.id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        if (format.id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/formats`, "/api/v1/events/{eventId}/formats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        else await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/formats/${encodeURIComponent(format.id)}`, "/api/v1/events/{eventId}/formats/{formatId}", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       }
       for (const id of removedTracks) {
-        if (!id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/tracks/${encodeURIComponent(id)}`, { method: "DELETE" });
+        if (!id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/tracks/${encodeURIComponent(id)}`, "/api/v1/events/{eventId}/tracks/{trackId}", { method: "DELETE" });
       }
       for (const [position, track] of model.tracks.filter((item) => !removedTracks.includes(item.id)).entries()) {
         const body = { name: track.name, color: track.color, position };
-        if (track.id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/tracks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-        else await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/tracks/${encodeURIComponent(track.id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        if (track.id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/tracks`, "/api/v1/events/{eventId}/tracks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        else await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/tracks/${encodeURIComponent(track.id)}`, "/api/v1/events/{eventId}/tracks/{trackId}", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       }
-      const response = await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`);
+      const response = await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, "/api/v1/events/{eventId}");
       setState({ kind: "ready", model: response.data });
       setRemovedFormats([]);
       setRemovedTracks([]);
       setDirty(false);
       setNotice("Conference settings saved");
     } catch (error: unknown) {
-      setSaveError(error instanceof Error ? error.message : "Conference settings could not be saved.");
+      setSaveError(errorSummary(error));
     }
   };
 

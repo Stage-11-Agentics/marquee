@@ -133,6 +133,7 @@ export class MarqueeApiError extends Error {
   /** The server's correlation id; absent when the request never arrived. */
   readonly requestId?: string;
   readonly field?: string;
+  readonly details?: unknown;
   /** The route template, for the diagnostic report. */
   readonly route: string;
 
@@ -142,6 +143,7 @@ export class MarqueeApiError extends Error {
     status: number;
     requestId?: string;
     field?: string;
+    details?: unknown;
     route: string;
   }) {
     super(options.message);
@@ -150,6 +152,7 @@ export class MarqueeApiError extends Error {
     this.status = options.status;
     this.requestId = options.requestId;
     this.field = options.field;
+    this.details = options.details;
     this.route = options.route;
   }
 
@@ -206,7 +209,7 @@ function isOffline(): boolean {
 }
 
 interface EnvelopeShape {
-  error?: { code?: unknown; message?: unknown; field?: unknown };
+  error?: { code?: unknown; message?: unknown; field?: unknown; details?: unknown };
   request_id?: unknown;
 }
 
@@ -277,9 +280,15 @@ export async function apiFetch<Result>(
       status: response.status,
       requestId: asString(envelope?.request_id) ?? requestId,
       field: asString(envelope?.error?.field),
+      details: envelope?.error?.details,
       route,
     }));
   }
+
+  // Some successful mutation routes deliberately return 204 with no JSON
+  // body. Treat that as a successful API call rather than turning a completed
+  // action into an "unreadable" error for the caller.
+  if (response.status === 204 || response.status === 205) return undefined as Result;
 
   try {
     return (await response.json()) as Result;

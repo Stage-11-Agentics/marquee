@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "../shell/components";
 import "./evaluation.css";
 
@@ -68,16 +69,12 @@ interface EvaluationPageProps {
   eventId?: string;
 }
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+async function api<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
+  return apiFetch<T>(path, {
     ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+    route,
   });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
-    throw new Error(body?.error?.message ?? `Evaluation request failed (${response.status})`);
-  }
-  return response.json() as Promise<T>;
 }
 
 function percent(done: number, total: number): number {
@@ -115,21 +112,21 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     setLoading(true);
     setError(null);
     try {
-      const summaries = await api<{ data: PlanSummary[] }>(`/api/v1/events/${eventId}/plans`);
+      const summaries = await api<{ data: PlanSummary[] }>(`/api/v1/events/${eventId}/plans`, "/api/v1/events/{eventId}/plans");
       const current = summaries.data[0];
       if (!current) {
         setPlan(null);
         setLoading(false);
         return;
       }
-      const detail = await api<Plan>(`/api/v1/events/${eventId}/plans/${current.id}`);
+      const detail = await api<Plan>(`/api/v1/events/${eventId}/plans/${current.id}`, "/api/v1/events/{eventId}/plans/{planId}");
       setPlan(detail);
       setPlanName(detail.name);
       setInstructions(detail.instructions);
       setCriteria(detail.rounds[0]?.criteria ?? []);
       setReviewerTarget(detail.rounds[0]?.target_reviews_per_submission ?? 3);
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Evaluation data is unavailable");
+      setError(errorSummary(reason));
     } finally {
       setLoading(false);
     }
@@ -140,7 +137,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const savePlan = async (event: Event): Promise<void> => {
     event.preventDefault();
     try {
-      const detail = await api<Plan>(`/api/v1/events/${eventId}/plans`, {
+      const detail = await api<Plan>(`/api/v1/events/${eventId}/plans`, "/api/v1/events/{eventId}/plans", {
         method: "POST",
         body: JSON.stringify({
           name: planName,
@@ -159,7 +156,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       setDialog(null);
       setNotice("Evaluation plan created · two rounds ready");
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Evaluation plan could not be saved");
+      setError(errorSummary(reason));
     }
   };
 
@@ -167,24 +164,24 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     event.preventDefault();
     if (!firstRound) return;
     try {
-      await api(`/api/v1/events/${eventId}/rounds/${firstRound.id}/criteria`, { method: "PUT", body: JSON.stringify({ criteria }) });
+      await api(`/api/v1/events/${eventId}/rounds/${firstRound.id}/criteria`, "/api/v1/events/{eventId}/rounds/{roundId}/criteria", { method: "PUT", body: JSON.stringify({ criteria }) });
       setDialog(null);
       setNotice("Scorecard saved · criteria total 100%");
       await load();
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Scorecard could not be saved");
+      setError(errorSummary(reason));
     }
   };
 
   const createCommittee = async (event: Event): Promise<void> => {
     event.preventDefault();
     try {
-      await api(`/api/v1/events/${eventId}/committees`, { method: "POST", body: JSON.stringify({ name: committeeName }) });
+      await api(`/api/v1/events/${eventId}/committees`, "/api/v1/events/{eventId}/committees", { method: "POST", body: JSON.stringify({ name: committeeName }) });
       setDialog(null);
       setNotice("Committee created · add reviewers to begin assignment");
       await load();
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Committee could not be saved");
+      setError(errorSummary(reason));
     }
   };
 
@@ -193,7 +190,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     const targetRound = plan?.rounds.find((round) => round.id === (assignmentRoundId ?? firstRound?.id));
     if (!targetRound || !committee) return;
     try {
-      await api(`/api/v1/events/${eventId}/rounds/${targetRound.id}/assignments`, {
+      await api(`/api/v1/events/${eventId}/rounds/${targetRound.id}/assignments`, "/api/v1/events/{eventId}/rounds/{roundId}/assignments", {
         method: "POST",
         body: JSON.stringify({ committee_id: committee.id, mode: assignmentMode, reviewers_per_submission: reviewerTarget }),
       });
@@ -201,17 +198,17 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       setNotice(`${targetRound.name} assignments recalculated · completed reviews were preserved`);
       await load();
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Assignments could not be distributed");
+      setError(errorSummary(reason));
     }
   };
 
   const updateRound = async (round: Round, patch: Record<string, unknown>): Promise<void> => {
     try {
-      await api(`/api/v1/events/${eventId}/rounds/${round.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+      await api(`/api/v1/events/${eventId}/rounds/${round.id}`, "/api/v1/events/{eventId}/rounds/{roundId}", { method: "PATCH", body: JSON.stringify(patch) });
       setNotice(`${round.name} settings saved · recorded evidence preserved`);
       await load();
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Round settings could not be saved");
+      setError(errorSummary(reason));
     }
   };
 
@@ -221,7 +218,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     try {
       const filter: Record<string, string> = { status: promotionStatus };
       if (promotionQuery.trim()) filter.q = promotionQuery.trim();
-      const response = await api<{ already_promoted: number; assignments: number; promoted: number; selected: number }>(`/api/v1/events/${eventId}/rounds/${firstRound.id}/promote`, {
+      const response = await api<{ already_promoted: number; assignments: number; promoted: number; selected: number }>(`/api/v1/events/${eventId}/rounds/${firstRound.id}/promote`, "/api/v1/events/{eventId}/rounds/{roundId}/promote", {
         method: "POST",
         body: JSON.stringify({ preview, selector: { filter } }),
       });
@@ -229,7 +226,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       setNotice(preview ? `${response.promoted} submissions ready · ${response.assignments} committee assignments` : `${response.promoted} submissions promoted to ${secondRound.name}`);
       if (!preview) await load();
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : preview ? "Promotion preview is unavailable" : "Promotion could not be applied");
+      setError(errorSummary(reason));
     } finally {
       setPromotionApplying(false);
     }
@@ -289,7 +286,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         <CardBody><p>Round 1 review remains separate from the Committee decision round. Preview a filtered promotion set before creating any round-two records.</p><Button variant="primary" onClick={() => { setDialog("promotion"); void runPromotion(true); }}>Preview promotions</Button>{secondRound?.promotions.length ? <span class="subtle promotion-count">{secondRound.promotions.length} submission{secondRound.promotions.length === 1 ? "" : "s"} already promoted</span> : null}</CardBody>
       </Card>
     </div>
-    {dialog === "plan" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={plan ? async (event) => { event.preventDefault(); try { const updated = await api<Plan>(`/api/v1/events/${eventId}/plans/${plan.id}`, { method: "PATCH", body: JSON.stringify({ name: planName, instructions }) }); setPlan(updated); setDialog(null); setNotice("Evaluation plan updated"); } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : "Plan could not be saved"); } } : savePlan}><header><span class="eyebrow">Evaluation plan</span><h2>{plan ? "Edit plan" : "New evaluation plan"}</h2></header><div class="eval-dialog-body"><label class="field">Name<input value={planName} onInput={(event) => setPlanName((event.currentTarget as HTMLInputElement).value)} /></label><label class="field">Instructions<textarea rows={4} value={instructions} onInput={(event) => setInstructions((event.currentTarget as HTMLTextAreaElement).value)} /></label><div class="message-preview">Two ordered rounds ship together: Initial screen → Committee decision. Numeric scoring remains optional for reviewers.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save plan</Button></footer></form></div>}
+    {dialog === "plan" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={plan ? async (event) => { event.preventDefault(); try { const updated = await api<Plan>(`/api/v1/events/${eventId}/plans/${plan.id}`, "/api/v1/events/{eventId}/plans/{planId}", { method: "PATCH", body: JSON.stringify({ name: planName, instructions }) }); setPlan(updated); setDialog(null); setNotice("Evaluation plan updated"); } catch (reason: unknown) { setError(errorSummary(reason)); } } : savePlan}><header><span class="eyebrow">Evaluation plan</span><h2>{plan ? "Edit plan" : "New evaluation plan"}</h2></header><div class="eval-dialog-body"><label class="field">Name<input value={planName} onInput={(event) => setPlanName((event.currentTarget as HTMLInputElement).value)} /></label><label class="field">Instructions<textarea rows={4} value={instructions} onInput={(event) => setInstructions((event.currentTarget as HTMLTextAreaElement).value)} /></label><div class="message-preview">Two ordered rounds ship together: Initial screen → Committee decision. Numeric scoring remains optional for reviewers.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save plan</Button></footer></form></div>}
     {dialog === "scorecard" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={saveScorecard}><header><span class="eyebrow">Round 1 · Initial screen</span><h2>Edit optional scorecard</h2></header><div class="eval-dialog-body"><div class="criterion-editor">{criteria.map((criterion, index) => <div class="criterion-row" key={criterion.id}><span class="tabular">{index + 1}</span><input aria-label={`Criterion ${index + 1} name`} value={criterion.name} onInput={(event) => setCriteria(criteria.map((item) => item.id === criterion.id ? { ...item, name: (event.currentTarget as HTMLInputElement).value } : item))} /><input aria-label={`Criterion ${index + 1} weight`} type="number" min="0" max="100" value={criterion.weight_pct} onInput={(event) => setCriteria(criteria.map((item) => item.id === criterion.id ? { ...item, weight_pct: Number((event.currentTarget as HTMLInputElement).value) } : item))} /><span>%</span></div>)}</div><div class={`criterion-total ${criteriaTotal === 100 ? "valid" : "invalid"}`}><span>Total</span><strong>{criteriaTotal}%</strong><small>{criteriaTotal === 100 ? "Valid weighted rubric" : "Criteria must total exactly 100%"}</small></div><div class="message-preview">Approve, Maybe, and Deny remain available without numeric scores. Comments are always free text.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={criteriaTotal !== 100}>Save scorecard</Button></footer></form></div>}
     {dialog === "committee" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={createCommittee}><header><span class="eyebrow">Program committee</span><h2>Manage committee</h2></header><div class="eval-dialog-body"><label class="field">Committee name<input value={committeeName} onInput={(event) => setCommitteeName((event.currentTarget as HTMLInputElement).value)} /></label><div class="message-preview">Reviewer rows carry explicit track responsibilities. Scope changes recalculate queue membership without replacing completed reviews.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save committee</Button></footer></form></div>}
     {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round assignments</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Round<select value={assignmentRoundId ?? firstRound?.id ?? ""} onChange={(event) => setAssignmentRoundId((event.currentTarget as HTMLSelectElement).value)}>{plan.rounds.map((round) => <option key={round.id} value={round.id}>{round.position + 1} · {round.name}</option>)}</select></label><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label><div class="message-preview">Assignments belong to the selected round. Re-running distribution is idempotent and never replaces completed review or comparison evidence.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!committee}>Distribute</Button></footer></form></div>}

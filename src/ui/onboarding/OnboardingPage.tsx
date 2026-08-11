@@ -2,6 +2,7 @@ import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import type { OnboardingFilter, OnboardingRow, OnboardingSnapshot, OnboardingSpeakerDetail } from "../../routes/onboarding.queries";
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import "./onboarding.css";
 
@@ -43,14 +44,12 @@ const FALLBACK_TEMPLATE: EmailTemplate = {
   enabled: 1,
 };
 
-async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
+async function requestJson<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
+  return apiFetch<T>(path, {
     ...init,
     headers: { ...(init.body ? { "content-type": "application/json" } : {}), ...(init.headers ?? {}) },
+    route,
   });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.error?.message ?? `The onboarding request failed (${response.status}).`);
-  return body as T;
 }
 
 async function readBoard(eventId: string, filters: { filter: OnboardingFilter; taskType: string; track: string; search: string }, signal: AbortSignal): Promise<OnboardingSnapshot> {
@@ -58,7 +57,7 @@ async function readBoard(eventId: string, filters: { filter: OnboardingFilter; t
   if (filters.taskType) query.set("task_type", filters.taskType);
   if (filters.track) query.set("track", filters.track);
   if (filters.search.trim()) query.set("q", filters.search.trim());
-  return requestJson<OnboardingSnapshot>(`/api/v1/events/${encodeURIComponent(eventId)}/onboarding?${query.toString()}`, { signal });
+  return requestJson<OnboardingSnapshot>(`/api/v1/events/${encodeURIComponent(eventId)}/onboarding?${query.toString()}`, "/api/v1/events/{eventId}/onboarding", { signal });
 }
 
 function formatDate(value: number | null): string {
@@ -84,9 +83,9 @@ function SpeakerDrawer({ eventId, personId, onClose }: { eventId: string; person
   useEffect(() => {
     const controller = new AbortController();
     setState({ kind: "loading" });
-    requestJson<OnboardingSpeakerDetail>(`/api/v1/events/${encodeURIComponent(eventId)}/onboarding/speakers/${encodeURIComponent(personId)}`, { signal: controller.signal })
+    requestJson<OnboardingSpeakerDetail>(`/api/v1/events/${encodeURIComponent(eventId)}/onboarding/speakers/${encodeURIComponent(personId)}`, "/api/v1/events/{eventId}/onboarding/speakers/{personId}", { signal: controller.signal })
       .then((detail) => setState({ kind: "ready", detail }))
-      .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: error instanceof Error ? error.message : "The speaker context could not be loaded." }); });
+      .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error) }); });
     return () => controller.abort();
   }, [eventId, personId]);
 
@@ -121,7 +120,7 @@ function ComposeDrawer({ eventId, rows, onClose }: { eventId: string; rows: Onbo
 
   useEffect(() => {
     const controller = new AbortController();
-    requestJson<{ data: EmailTemplate[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/templates`, { signal: controller.signal })
+    requestJson<{ data: EmailTemplate[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/templates`, "/api/v1/events/{eventId}/templates", { signal: controller.signal })
       .then((response) => setTemplates([FALLBACK_TEMPLATE, ...response.data.filter((template) => template.enabled === 1 && template.key !== FALLBACK_TEMPLATE.key)]))
       .catch(() => undefined);
     return () => controller.abort();
@@ -139,24 +138,24 @@ function ComposeDrawer({ eventId, rows, onClose }: { eventId: string; rows: Onbo
     if (!firstRecipient) return;
     setBusy("preview"); setError(null);
     try {
-      const next = await requestJson<{ subject: string; text: string; to_email: string }>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/preview`, {
+      const next = await requestJson<{ subject: string; text: string; to_email: string }>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/preview`, "/api/v1/events/{eventId}/comms/preview", {
         method: "POST",
         body: JSON.stringify({ person_id: firstRecipient.row.person.id, submission_id: firstRecipient.submissionId ?? undefined, role: "speaker", ...message }),
       });
       setPreview(next);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "The preview could not be rendered."); }
+    } catch (caught) { setError(errorSummary(caught)); }
     finally { setBusy(null); }
   };
   const queue = async () => {
     if (personIds.length === 0) return;
     setBusy("send"); setError(null); setResult(null);
     try {
-      const next = await requestJson<SendResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/send`, {
+      const next = await requestJson<SendResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/send`, "/api/v1/events/{eventId}/comms/send", {
         method: "POST",
         body: JSON.stringify({ selector: { recipient_pairs: recipientPairs, role: "speaker", task_state: "open" }, ...message }),
       });
       setResult(next);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "The reminder could not be queued."); }
+    } catch (caught) { setError(errorSummary(caught)); }
     finally { setBusy(null); }
   };
 
@@ -201,7 +200,7 @@ export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, navigate }: { event
           setState({ kind: "ready", snapshot });
           setSelected((current) => new Set([...current].filter((id) => snapshot.rows.some((row) => row.id === id))));
         })
-        .catch((error: unknown) => { if (!disposed && !active?.signal.aborted) setState({ kind: "error", message: error instanceof Error ? error.message : "The onboarding board could not be loaded." }); });
+        .catch((error: unknown) => { if (!disposed && !active?.signal.aborted) setState({ kind: "error", message: errorSummary(error) }); });
     };
     load(true);
     const timer = window.setInterval(() => load(false), 5_000);

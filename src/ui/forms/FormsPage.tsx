@@ -2,6 +2,7 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
 import { fieldPreviewProjection, isFieldApplicable, type FormAnswerValue, type FormCondition } from "../../lib/form-conditions";
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "../shell/components";
 import "./forms.css";
 
@@ -87,6 +88,11 @@ const FIELD_TYPES: Array<{ value: FieldType; label: string }> = [
 ];
 
 const STEP_NAMES = ["Type & basics", "Welcome", "Form fields", "Participants", "Rules & routing", "Messages", "Publish"];
+const LIFECYCLE_ROUTES = {
+  publish: "/api/v1/events/{eventId}/forms/{formId}/publish",
+  close: "/api/v1/events/{eventId}/forms/{formId}/close",
+  reopen: "/api/v1/events/{eventId}/forms/{formId}/reopen",
+} as const;
 
 function fieldTypeLabel(type: string): string {
   return FIELD_TYPES.find((item) => item.value === type)?.label ?? type;
@@ -98,22 +104,12 @@ export function conditionSummary(condition: FormCondition | null): string {
   return clauses.map((clause) => `${clause.fieldKey} ${clause.op.replaceAll("_", " ")} ${String(clause.value ?? "answered")}`).join(" · ");
 }
 
-function apiMessage(body: unknown, fallback: string): string {
-  if (typeof body === "object" && body !== null && "error" in body) {
-    const error = (body as { error?: { message?: string } }).error;
-    if (error?.message) return error.message;
-  }
-  return fallback;
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+async function request<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
+  return apiFetch<T>(path, {
     ...init,
-    headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...(init?.headers ?? {}) },
+    headers: { ...(init.body ? { "content-type": "application/json" } : {}), ...(init.headers ?? {}) },
+    route,
   });
-  const body = await response.json().catch(() => null) as unknown;
-  if (!response.ok) throw new Error(apiMessage(body, `The form request failed (${response.status}).`));
-  return body as T;
 }
 
 function formStatusTone(status: FormStatus): "success" | "warning" | "alarm" | "" {
@@ -208,7 +204,7 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
   const loadCatalog = async () => {
     setState("loading");
     try {
-      const result = await request<ListResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/forms?page=1&per_page=100&sort=name`);
+      const result = await request<ListResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/forms?page=1&per_page=100&sort=name`, "/api/v1/events/{eventId}/forms");
       setCatalog(result.data);
       const queryFormId = requestedFormId && result.data.some((item) => item.id === requestedFormId) ? requestedFormId : null;
       setSelectedId((current) => queryFormId ?? (current && result.data.some((item) => item.id === current) ? current : result.data[0]?.id ?? null));
@@ -216,13 +212,13 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
       setMessage("");
     } catch (error) {
       setState("error");
-      setMessage(error instanceof Error ? error.message : "The conference forms could not be loaded.");
+      setMessage(errorSummary(error));
     }
   };
 
   const loadForm = async (id: string) => {
     try {
-      const detail = await request<FormDetail>(`/api/v1/events/${encodeURIComponent(eventId)}/forms/${encodeURIComponent(id)}`);
+      const detail = await request<FormDetail>(`/api/v1/events/${encodeURIComponent(eventId)}/forms/${encodeURIComponent(id)}`, "/api/v1/events/{eventId}/forms/{formId}");
       setForm(detail);
       setSelectedFieldId((current) => current && detail.fields.some((field) => field.id === current) ? current : detail.fields[0]?.id ?? null);
       setPreviewAnswers(initialPreviewAnswers(detail.fields));
@@ -230,7 +226,7 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
       setAdminPersonId("");
       setMessage("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "This form could not be loaded.");
+      setMessage(errorSummary(error));
     }
   };
 
@@ -244,13 +240,13 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
 
   const mutate = async (key: string, action: () => Promise<void>) => {
     setBusy(key);
-    try { await action(); } catch (error) { setMessage(error instanceof Error ? error.message : "The form could not be saved."); } finally { setBusy(null); }
+    try { await action(); } catch (error) { setMessage(errorSummary(error)); } finally { setBusy(null); }
   };
 
   const saveForm = () => {
     if (!form) return;
     void mutate("form", async () => {
-      const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}`, { method: "PATCH", body: JSON.stringify({
+      const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}`, "/api/v1/events/{eventId}/forms/{formId}", { method: "PATCH", body: JSON.stringify({
         name: form.name, slug: form.slug, kind: form.kind, welcome_md: form.welcome_md, per_submitter_limit: form.per_submitter_limit,
         min_speakers: form.min_speakers, max_speakers: form.max_speakers, max_sponsors: form.max_sponsors,
         closes_at: form.closes_at, reminder_offset_hours: form.reminder_offset_hours, thankyou_template_key: form.thankyou_template_key,
@@ -262,39 +258,39 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
   const addForm = () => {
     const suffix = Date.now().toString(36);
     void mutate("new", async () => {
-      const created = await request<FormDetail>(`/api/v1/events/${eventId}/forms`, { method: "POST", body: JSON.stringify({ name: `New conference form ${catalog.length + 1}`, slug: `conference-form-${suffix}`, kind: "abstract" }) });
+      const created = await request<FormDetail>(`/api/v1/events/${eventId}/forms`, "/api/v1/events/{eventId}/forms", { method: "POST", body: JSON.stringify({ name: `New conference form ${catalog.length + 1}`, slug: `conference-form-${suffix}`, kind: "abstract" }) });
       setSelectedId(created.id); setForm(created); await loadCatalog();
     });
   };
 
   const duplicateForm = () => {
     if (!form) return;
-    void mutate("duplicate", async () => { const copy = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}/duplicate`, { method: "POST" }); setSelectedId(copy.id); setForm(copy); await loadCatalog(); });
+      void mutate("duplicate", async () => { const copy = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}/duplicate`, "/api/v1/events/{eventId}/forms/{formId}/duplicate", { method: "POST" }); setSelectedId(copy.id); setForm(copy); await loadCatalog(); });
   };
 
   const setLifecycle = (next: "publish" | "close" | "reopen") => {
     if (!form) return;
-    void mutate(next, async () => { const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}/${next}`, { method: "POST" }); setForm(updated); await loadCatalog(); });
+    void mutate(next, async () => { const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}/${next}`, LIFECYCLE_ROUTES[next], { method: "POST" }); setForm(updated); await loadCatalog(); });
   };
 
   const addField = () => {
     if (!form) return;
     const key = `field_${Date.now().toString(36)}`;
-    void mutate("field", async () => { const created = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields`, { method: "POST", body: JSON.stringify({ key, label: "New question", type: newFieldType, required: false, config: newFieldType.includes("select") ? { options: ["Yes", "No"] } : {} }) }); setForm((current) => current ? { ...current, fields: [...current.fields, created] } : current); setSelectedFieldId(created.id); });
+    void mutate("field", async () => { const created = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields`, "/api/v1/events/{eventId}/forms/{formId}/fields", { method: "POST", body: JSON.stringify({ key, label: "New question", type: newFieldType, required: false, config: newFieldType.includes("select") ? { options: ["Yes", "No"] } : {} }) }); setForm((current) => current ? { ...current, fields: [...current.fields, created] } : current); setSelectedFieldId(created.id); });
   };
 
   const saveField = () => {
     if (!form || !selectedField) return;
     void mutate("field", async () => {
       const condition = conditionTrigger ? { all: [{ fieldKey: conditionTrigger, op: "equals", value: conditionValue }] } : null;
-      const updated = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields/${selectedField.id}`, { method: "PATCH", body: JSON.stringify({ key: selectedField.key, label: selectedField.label, help_text: selectedField.help_text, type: selectedField.type, required: selectedField.required, config: selectedField.config, condition }) });
+      const updated = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields/${selectedField.id}`, "/api/v1/events/{eventId}/forms/{formId}/fields/{fieldId}", { method: "PATCH", body: JSON.stringify({ key: selectedField.key, label: selectedField.label, help_text: selectedField.help_text, type: selectedField.type, required: selectedField.required, config: selectedField.config, condition }) });
       setForm((current) => current ? { ...current, fields: current.fields.map((field) => field.id === updated.id ? updated : field) } : current);
     });
   };
 
   const deleteField = () => {
     if (!form || !selectedField) return;
-    void mutate("field", async () => { await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/forms/${form.id}/fields/${selectedField.id}`, { method: "DELETE" }); setForm((current) => current ? { ...current, fields: current.fields.filter((field) => field.id !== selectedField.id) } : current); setSelectedFieldId(form.fields.find((field) => field.id !== selectedField.id)?.id ?? null); });
+    void mutate("field", async () => { await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/forms/${form.id}/fields/${selectedField.id}`, "/api/v1/events/{eventId}/forms/{formId}/fields/{fieldId}", { method: "DELETE" }); setForm((current) => current ? { ...current, fields: current.fields.filter((field) => field.id !== selectedField.id) } : current); setSelectedFieldId(form.fields.find((field) => field.id !== selectedField.id)?.id ?? null); });
   };
 
   const moveField = (direction: -1 | 1) => {
@@ -304,18 +300,18 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
     const to = from + direction;
     if (from < 0 || to < 0 || to >= fields.length) return;
     [fields[from], fields[to]] = [fields[to], fields[from]];
-    void mutate("field", async () => { const result = await request<{ data: FormField[] }>(`/api/v1/events/${eventId}/forms/${form.id}/fields/reorder`, { method: "PATCH", body: JSON.stringify({ field_ids: fields.map((field) => field.id) }) }); setForm((current) => current ? { ...current, fields: result.data } : current); });
+    void mutate("field", async () => { const result = await request<{ data: FormField[] }>(`/api/v1/events/${eventId}/forms/${form.id}/fields/reorder`, "/api/v1/events/{eventId}/forms/{formId}/fields/reorder", { method: "PATCH", body: JSON.stringify({ field_ids: fields.map((field) => field.id) }) }); setForm((current) => current ? { ...current, fields: result.data } : current); });
   };
 
   const setFieldValue = (key: keyof FormField, value: unknown) => { setForm((current) => current && selectedField ? { ...current, fields: current.fields.map((field) => field.id === selectedField.id ? { ...field, [key]: value } : field) } : current); };
   const setFieldConfig = (key: string, value: unknown) => { setForm((current) => current && selectedField ? { ...current, fields: current.fields.map((field) => { if (field.id !== selectedField.id) return field; const config = { ...field.config }; if (value === undefined || value === "") delete config[key]; else config[key] = value; return { ...field, config }; }) } : current); };
   const addAdmin = () => {
     if (!form || !adminPersonId.trim()) return;
-    void mutate("admin", async () => { const admin = await request<FormAdmin>(`/api/v1/events/${eventId}/forms/${form.id}/admins`, { method: "POST", body: JSON.stringify({ person_id: adminPersonId.trim() }) }); setForm((current) => current ? { ...current, admins: [...current.admins, admin] } : current); setAdminPersonId(""); });
+    void mutate("admin", async () => { const admin = await request<FormAdmin>(`/api/v1/events/${eventId}/forms/${form.id}/admins`, "/api/v1/events/{eventId}/forms/{formId}/admins", { method: "POST", body: JSON.stringify({ person_id: adminPersonId.trim() }) }); setForm((current) => current ? { ...current, admins: [...current.admins, admin] } : current); setAdminPersonId(""); });
   };
   const removeAdmin = (personId: string) => {
     if (!form) return;
-    void mutate("admin", async () => { await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/forms/${form.id}/admins/${personId}`, { method: "DELETE" }); setForm((current) => current ? { ...current, admins: current.admins.filter((admin) => admin.person_id !== personId) } : current); });
+    void mutate("admin", async () => { await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/forms/${form.id}/admins/${personId}`, "/api/v1/events/{eventId}/forms/{formId}/admins/{personId}", { method: "DELETE" }); setForm((current) => current ? { ...current, admins: current.admins.filter((admin) => admin.person_id !== personId) } : current); });
   };
   const projection = useMemo(() => form ? fieldPreviewProjection(form.fields) : [], [form?.fields]);
 

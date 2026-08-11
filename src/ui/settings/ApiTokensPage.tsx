@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { EmptyState, PageHeader } from "../shell/components";
 import { DEFAULT_EVENT_ID } from "../venues/venue-writer";
 import "./settings.css";
@@ -40,15 +41,8 @@ type LoadState =
   | { kind: "ready"; tokens: ApiToken[] }
   | { kind: "error"; tokens: ApiToken[]; message: string };
 
-async function readError(response: Response, fallback: string): Promise<Error> {
-  const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
-  return new Error(body?.error?.message || fallback);
-}
-
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { credentials: "include", ...init });
-  if (!response.ok) throw await readError(response, `Request failed (${response.status}).`);
-  return response.json() as Promise<T>;
+async function requestJson<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
+  return apiFetch<T>(path, { credentials: "include", ...init, route });
 }
 
 function formatDate(value: number | null): string {
@@ -110,10 +104,10 @@ export function ApiTokensPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
   useEffect(() => {
     let active = true;
     setState({ kind: "loading", tokens: [] });
-    void requestJson<{ data: ApiToken[] }>("/api/v1/org/tokens")
+    void requestJson<{ data: ApiToken[] }>("/api/v1/org/tokens", "/api/v1/org/tokens")
       .then((response) => { if (active) setState({ kind: "ready", tokens: response.data }); })
       .catch((reason: unknown) => {
-        if (active) setState({ kind: "error", tokens: [], message: reason instanceof Error ? reason.message : "API tokens could not be loaded." });
+        if (active) setState({ kind: "error", tokens: [], message: errorSummary(reason) });
       });
     return () => { active = false; };
   }, [reloadKey]);
@@ -134,7 +128,7 @@ export function ApiTokensPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
     setError(null);
     setNotice(null);
     try {
-      const response = await requestJson<{ data: ApiToken; secret: string }>("/api/v1/org/tokens", {
+      const response = await requestJson<{ data: ApiToken; secret: string }>("/api/v1/org/tokens", "/api/v1/org/tokens", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -153,7 +147,7 @@ export function ApiTokensPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
       setNotice("Token created. Copy the secret now; Marquee will not show it again.");
       setReloadKey((value) => value + 1);
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Token could not be created.");
+      setError(errorSummary(reason));
     } finally {
       setPending(false);
     }
@@ -164,11 +158,11 @@ export function ApiTokensPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
     setError(null);
     setNotice(null);
     try {
-      await requestJson(`/api/v1/org/tokens/${encodeURIComponent(token.id)}`, { method: "DELETE" });
+      await requestJson(`/api/v1/org/tokens/${encodeURIComponent(token.id)}`, "/api/v1/org/tokens/{tokenId}", { method: "DELETE" });
       setNotice(`${token.name} revoked immediately.`);
       setReloadKey((value) => value + 1);
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Token could not be revoked.");
+      setError(errorSummary(reason));
     }
   };
 

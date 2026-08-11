@@ -12,12 +12,16 @@ import type {
 } from "../../api/agenda";
 import { AGENDA_VIEWS, durationIsAllowed, viewNames } from "../../api/agenda";
 import { displayRoomLabel, showsBuildingComparison, showsBuildingComparisonCount, visibleVenueConflicts } from "../../lib/venue-disclosure";
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import { localParts, sessionDay, sessionTime, TIME_SLOTS, TrackBoard } from "./track-board";
 import "./agenda.css";
 
 const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const DAY_MS = 86_400_000;
+const AGENDA_ROUTE = "/api/v1/events/{eventId}/agenda";
+const AGENDA_ITEMS_ROUTE = "/api/v1/events/{eventId}/agenda/items";
+const AGENDA_ITEM_ROUTE = "/api/v1/events/{eventId}/agenda/items/{itemId}";
 
 interface Props {
   eventId?: string;
@@ -36,10 +40,6 @@ type LoadState =
 type DragPayload =
   | { kind: "pool"; id: string }
   | { kind: "session"; id: string };
-
-function apiMessage(response: Response, fallback: string): Promise<string> {
-  return response.json().then((body) => (body as { error?: { message?: string } }).error?.message ?? fallback).catch(() => fallback);
-}
 
 function dateAtNoon(value: string): Date {
   return new Date(`${value}T12:00:00Z`);
@@ -465,14 +465,12 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/agenda`, { signal });
-      if (!response.ok) throw new Error(await apiMessage(response, `The agenda could not be loaded (${response.status}).`));
-      const snapshot = await response.json() as AgendaSnapshot;
+      const snapshot = await apiFetch<AgendaSnapshot>(`/api/v1/events/${encodeURIComponent(eventId)}/agenda`, { signal, route: AGENDA_ROUTE });
       setState({ kind: "ready", snapshot });
       setDay((current) => current || dayOptions(snapshot)[0]?.value || "all");
     } catch (error: unknown) {
       if (signal?.aborted) return;
-      setState((current) => ({ kind: "error", snapshot: current.snapshot, message: error instanceof Error ? error.message : "The agenda could not be loaded." }));
+      setState((current) => ({ kind: "error", snapshot: current.snapshot, message: errorSummary(error) }));
     }
   }, [eventId]);
 
@@ -494,9 +492,8 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     if (boardRef.current) scrollPositions.current[view] = { top: boardRef.current.scrollTop, left: boardRef.current.scrollLeft };
   };
 
-  const mutate = async (path: string, init: RequestInit, message: string) => {
-    const response = await fetch(path, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) } });
-    if (!response.ok) throw new Error(await apiMessage(response, `The agenda could not be updated (${response.status}).`));
+  const mutate = async (path: string, init: RequestInit, message: string, route = AGENDA_ITEM_ROUTE) => {
+    await apiFetch<unknown>(path, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route });
     setNotice(message);
     await load();
   };
@@ -532,7 +529,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
         await mutate(`/api/v1/events/${encodeURIComponent(eventId)}/agenda/items`, {
           method: "POST",
           body: JSON.stringify({ submission_id: item.submission_id, starts_at: startsAt, room_id: roomId, track_id: trackId ?? primaryTrack }),
-        }, `${item.format ?? "Session"} placed · changes persist immediately`);
+        }, `${item.format ?? "Session"} placed · changes persist immediately`, AGENDA_ITEMS_ROUTE);
       } else {
         const session = current.sessions.find((candidate) => candidate.id === payload.id);
         if (!session) return;
@@ -545,7 +542,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
         }, "Placement updated · no save button needed");
       }
     } catch (error: unknown) {
-      setNotice(error instanceof Error ? error.message : "The placement could not be saved.");
+      setNotice(errorSummary(error));
     } finally {
       dragPayload.current = null;
     }
@@ -563,7 +560,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
         headers: { "If-Match": session.etag },
       }, "Session returned to the unscheduled pool");
     } catch (error: unknown) {
-      setNotice(error instanceof Error ? error.message : "The Session could not return to the pool.");
+      setNotice(errorSummary(error));
     } finally {
       dragPayload.current = null;
     }
@@ -582,7 +579,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
         body: JSON.stringify({ duration_min: duration }),
       }, `${session.title} resized to ${duration} minutes`);
     } catch (error: unknown) {
-      setNotice(error instanceof Error ? error.message : "The Session could not be resized.");
+      setNotice(errorSummary(error));
     }
   };
 

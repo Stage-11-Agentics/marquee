@@ -2,6 +2,7 @@ import type { JSX } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { SearchResult } from "../../api/search";
+import { apiFetch, errorSummary } from "./api-client";
 import { useDialogLifecycle } from "./OverlayHosts";
 import "./quick-search.css";
 
@@ -18,9 +19,7 @@ interface Props {
   navigate: (target: string) => void;
 }
 
-async function readSearchResponse(response: Response): Promise<SearchResponse> {
-  const body = await response.json().catch(() => null) as unknown;
-  if (!response.ok) throw new Error("Search could not be loaded. Try again.");
+function readSearchResponse(body: unknown): SearchResponse {
   if (typeof body !== "object" || body === null || !Array.isArray((body as { data?: unknown }).data)) {
     throw new Error("Search returned an unreadable result set.");
   }
@@ -33,6 +32,7 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [state, setState] = useState<SearchState>("idle");
+  const [errorMessage, setErrorMessage] = useState("");
   const [paintedQuery, setPaintedQuery] = useState("");
   const activeRequestRef = useRef<AbortController | null>(null);
   const searchSessionRef = useRef("");
@@ -43,9 +43,11 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     setQuery("");
     setResults([]);
     setState("idle");
+    setErrorMessage("");
     setPaintedQuery("");
-    void fetch(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
+    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
       headers: { accept: "application/json", "x-search-session": searchSessionRef.current, "x-search-prefetch": "1" },
+      route: "/api/v1/events/{eventId}/search",
     }).catch(() => undefined);
     inputRef.current?.focus();
   }, [eventId, open]);
@@ -54,6 +56,7 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     if (!open || query.trim().length === 0) {
       setResults([]);
       setState("idle");
+      setErrorMessage("");
       if (query.trim().length === 0) setPaintedQuery("");
       return;
     }
@@ -61,9 +64,11 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     activeRequestRef.current = controller;
     const requestQuery = query;
     setState("loading");
-    void fetch(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=${encodeURIComponent(requestQuery)}`, {
+    setErrorMessage("");
+    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=${encodeURIComponent(requestQuery)}`, {
       headers: { accept: "application/json", "x-search-session": searchSessionRef.current },
       signal: controller.signal,
+      route: "/api/v1/events/{eventId}/search",
     })
       .then(readSearchResponse)
       .then((body) => {
@@ -77,6 +82,7 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
         if (error instanceof Error && error.name === "AbortError") return;
         setState("error");
         setResults([]);
+        setErrorMessage(errorSummary(error));
         setPaintedQuery(requestQuery);
       });
     return () => {
@@ -120,7 +126,7 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
         data-search-state={state}
       >
         {state === "loading" && <div class="quick-search-status" role="status" aria-live="polite"><strong>Searching the conference</strong><span>Reading abstracts, sessions, speakers, and forms…</span></div>}
-        {state === "error" && <div class="quick-search-status" role="alert"><strong>Search needs attention</strong><span>Try that query again.</span></div>}
+        {state === "error" && <div class="quick-search-status" role="alert"><strong>Search needs attention</strong><span>{errorMessage || "Try that query again."}</span></div>}
         {state === "idle" && <div class="quick-search-status"><strong>Search the conference</strong><span>Type a partial or misspelled name, title, or record ID.</span></div>}
         {state === "ready" && results.length === 0 && <div class="quick-search-status"><strong>No results for “{query}”</strong><span>Try an Abstract, Session, Speaker, Form, or record ID.</span></div>}
         {state === "ready" && results.length > 0 && results.map((result, index) => <button

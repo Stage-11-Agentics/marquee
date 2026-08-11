@@ -1,11 +1,19 @@
 import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 
+import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader } from "../shell/components";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
 import "./record.css";
 
 const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
+const SUBMISSION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}";
+const DECISION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/decision";
+const SCHEDULE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/schedule";
+const PUBLISH_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/publish";
+const ASSIGNMENT_ROUTE = "/api/v1/events/{eventId}/rounds/{roundId}/assignments";
+const ASSIGNMENT_DELETE_ROUTE = "/api/v1/events/{eventId}/rounds/{roundId}/assignments/{assignmentId}";
+const COMMS_SEND_ROUTE = "/api/v1/events/{eventId}/comms/send";
 
 interface Participant { id: string; person_id: string; name: string; email: string; company: string | null; role: string; confirmation_status: "pending" | "confirmed" | "declined"; confirmed_at: number | null; invited_at: number | null; }
 interface Reviewer { id: string; name: string; company: string | null; track_ids: string[]; }
@@ -63,21 +71,19 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
   useEffect(() => {
     const controller = new AbortController();
     setState({ kind: "loading" });
-    fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`, { signal: controller.signal })
-      .then(async (response) => { if (!response.ok) throw new Error(`The record request failed (${response.status}).`); return response.json() as Promise<RecordData>; })
+    apiFetch<RecordData>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`, { signal: controller.signal, route: SUBMISSION_ROUTE })
       .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle(record.title); setDraftAbstract(record.abstract ?? ""); setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); })
-      .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: error instanceof Error ? error.message : "The record could not be loaded." }); });
+      .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error) }); });
     return () => controller.abort();
   }, [eventId, submissionId, reloadKey]);
 
-  const act = async (name: string, path: string, init: RequestInit = {}) => {
+  const act = async (name: string, path: string, init: RequestInit = {}, route = SUBMISSION_ROUTE) => {
     setBusy(name);
     try {
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) } });
-      if (!response.ok) throw new Error(`The action failed (${response.status}).`);
+      await apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route });
       reload();
     } catch (error: unknown) {
-      setState({ kind: "error", message: error instanceof Error ? error.message : "The action could not be completed." });
+      setState({ kind: "error", message: errorSummary(error) });
     } finally { setBusy(""); }
   };
 
@@ -85,7 +91,7 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
     if (!decisionRequest) return;
     const recommendation = decisionRequest;
     setDecisionRequest(null);
-    await act(recommendation, "/decision", { method: "POST", body: JSON.stringify({ recommendation, feedback_md: feedbackDraft.trim() || null }) });
+    await act(recommendation, "/decision", { method: "POST", body: JSON.stringify({ recommendation, feedback_md: feedbackDraft.trim() || null }) }, DECISION_ROUTE);
     setFeedbackDraft("");
   };
 
@@ -97,33 +103,32 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
     if (!messageSubject.trim() || !messageBody.trim()) { setMessageError("Subject and message are required."); return; }
     setBusy("message"); setMessageError(""); setMessageNotice("");
     try {
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/comms/send`, {
+      const body = await apiFetch<{ queued?: number }>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/send`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ selector: { submission_ids: [submissionId], person_ids: [recipient.person_id], role: recipient.role }, subject: messageSubject.trim(), body: messageBody }),
+        route: COMMS_SEND_ROUTE,
       });
-      const body = await response.json().catch(() => ({})) as { error?: { message?: string }; queued?: number };
-      if (!response.ok) throw new Error(body.error?.message ?? `The message could not be queued (${response.status}).`);
       setMessageNotice(body.queued ? "Message queued in the conference outbox." : "That message was already queued for this participant.");
       reload();
     } catch (error: unknown) {
-      setMessageError(error instanceof Error ? error.message : "The message could not be queued.");
+      setMessageError(errorSummary(error));
     } finally { setBusy(""); }
   };
 
   const assign = async (roundId: string) => {
     const reviewerPersonId = selectedReviewers[roundId];
     if (!reviewerPersonId) return;
-    await act(`assign-${roundId}`, `/../../rounds/${encodeURIComponent(roundId)}/assignments`, { method: "POST", body: JSON.stringify({ submission_id: submissionId, reviewer_person_id: reviewerPersonId }) });
+    await act(`assign-${roundId}`, `/../../rounds/${encodeURIComponent(roundId)}/assignments`, { method: "POST", body: JSON.stringify({ submission_id: submissionId, reviewer_person_id: reviewerPersonId }) }, ASSIGNMENT_ROUTE);
   };
 
   const removeAssignment = async (roundId: string, assignmentId: string) => {
-    await act(`remove-${assignmentId}`, `/../../rounds/${encodeURIComponent(roundId)}/assignments/${encodeURIComponent(assignmentId)}`, { method: "DELETE" });
+    await act(`remove-${assignmentId}`, `/../../rounds/${encodeURIComponent(roundId)}/assignments/${encodeURIComponent(assignmentId)}`, { method: "DELETE" }, ASSIGNMENT_DELETE_ROUTE);
   };
 
   const saveDraft = async (event: Event) => {
     event.preventDefault();
-    await act("draft", "", { method: "PATCH", body: JSON.stringify({ title: draftTitle, abstract: draftAbstract || null }) });
+    await act("draft", "", { method: "PATCH", body: JSON.stringify({ title: draftTitle, abstract: draftAbstract || null }) }, SUBMISSION_ROUTE);
   };
 
   if (state.kind === "loading") return <div class="submission-record-page"><PageHeader title="Submission record" copy="Reading the complete conference record…" /><Card><CardBody><div class="record-state">Loading record…</div></CardBody></Card></div>;
@@ -139,8 +144,8 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
         {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>Feedback is optional. If supplied, the exact normalized note is saved on this decision row and rendered through the standard conference email.</p><label class="field"><span>Feedback for the speaker · optional</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist and notify" : "Reject and notify"}</Button></div></div>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
-        {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}
-        {record.actions.can_publish && <Card><CardHeader title="Public site"><span class="subtle">The working slot is private until this action is confirmed.</span></CardHeader><CardBody><div class="record-action-row"><Button variant="primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm("Make this scheduled Session public?")) void act("publish", "/publish", { method: "POST" }); }}>Publish Session</Button><span class="subtle">The scheduled day, time, room, speakers, title, and description become public together.</span></div></CardBody></Card>}
+        {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }, SCHEDULE_ROUTE); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}
+        {record.actions.can_publish && <Card><CardHeader title="Public site"><span class="subtle">The working slot is private until this action is confirmed.</span></CardHeader><CardBody><div class="record-action-row"><Button variant="primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm("Make this scheduled Session public?")) void act("publish", "/publish", { method: "POST" }, PUBLISH_ROUTE); }}>Publish Session</Button><span class="subtle">The scheduled day, time, room, speakers, title, and description become public together.</span></div></CardBody></Card>}
         <Card><CardHeader title="Participants"><span class="tabular">{record.participants.length}</span></CardHeader><CardBody><div class="record-participants">{record.participants.length ? record.participants.map((participant) => <div class="record-person" key={participant.id}><strong>{participant.name}</strong><span>{statusLabel(participant.role)} · {participant.company || "Company not provided"}</span><small>{participant.email}</small><Chip tone={participant.confirmation_status === "confirmed" ? "success" : participant.confirmation_status === "declined" ? "alarm" : ""}>{participant.confirmation_status === "confirmed" ? "Role confirmed" : participant.confirmation_status === "declined" ? "Role declined" : "Role response pending"}</Chip></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div></CardBody></Card>
         <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
         <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small><strong>{answer.value_text || (answer.value_json === null ? "—" : JSON.stringify(answer.value_json))}</strong></div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <div class="record-answer" key={`${evaluation.round_id}-${evaluation.reviewer_name}-${index}`}><small>{evaluation.round_name} · Scorecard · {evaluation.reviewer_name}</small><strong>{evaluation.score === null ? "—" : evaluation.score.toFixed(2)} · {evaluation.recommendation || "No recommendation"}</strong><span>{evaluation.comment || "—"}</span></div>)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · {comparison.reviewer_name}</small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
