@@ -13,6 +13,7 @@
 .record-slot strong { font: 600 11px/1.2 var(--mono); }
 .record-slot span:not(.chip) { color: var(--muted); font-size: 11px; }
 .record-action-row { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.record-draft-form { display: grid; gap: 14px; }
 .record-action-row .subtle { flex: 1 1 260px; }
 .record-participants { display: grid; gap: 7px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .record-person { border: 1px solid var(--line); display: grid; gap: 3px; padding: 9px; }

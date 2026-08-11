@@ -14,7 +14,7 @@ interface Round { id: string; name: string; position: number; target_reviews_per
 interface RecordData {
   id: string; event_id: string; event_name: string; kind: "abstract" | "session"; title: string; abstract: string | null;
   status: string; stage: string; stage_label: string; bypass_evaluation: boolean; origin: string; vendor_affiliation: string;
-  submitter_person_id: string; submitted_at: number | null; updated_at: number; time_in_stage: string;
+  submitter_person_id: string; submitted_at: number | null; last_saved_at: number | null; updated_at: number; time_in_stage: string;
   slot: { day: string; time: string; room: string; building: string; duration_min: number; is_published: boolean } | null;
   format: { id: string; name: string | null } | null; wave: { id: string; name: string | null } | null;
   tracks: Array<{ id: string; name: string; color: string; is_primary: boolean }>;
@@ -45,6 +45,8 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState("");
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftAbstract, setDraftAbstract] = useState("");
   const [selectedReviewers, setSelectedReviewers] = useState<Record<string, string>>({});
   const [schedule, setSchedule] = useState({ starts_at: "", duration_min: "30", room_id: "", track_id: "" });
 
@@ -54,7 +56,7 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
     setState({ kind: "loading" });
     fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`, { signal: controller.signal })
       .then(async (response) => { if (!response.ok) throw new Error(`The record request failed (${response.status}).`); return response.json() as Promise<RecordData>; })
-      .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setState({ kind: "ready", record }); })
+      .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle(record.title); setDraftAbstract(record.abstract ?? ""); setState({ kind: "ready", record }); })
       .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: error instanceof Error ? error.message : "The record could not be loaded." }); });
     return () => controller.abort();
   }, [eventId, submissionId, reloadKey]);
@@ -85,6 +87,11 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
     await act(`remove-${assignmentId}`, `/../../rounds/${encodeURIComponent(roundId)}/assignments/${encodeURIComponent(assignmentId)}`, { method: "DELETE" });
   };
 
+  const saveDraft = async (event: Event) => {
+    event.preventDefault();
+    await act("draft", "", { method: "PATCH", body: JSON.stringify({ title: draftTitle, abstract: draftAbstract || null }) });
+  };
+
   if (state.kind === "loading") return <div class="submission-record-page"><PageHeader title="Submission record" copy="Reading the complete conference record…" /><Card><CardBody><div class="record-state">Loading record…</div></CardBody></Card></div>;
   if (state.kind === "error") return <div class="submission-record-page"><PageHeader title="Submission record" copy="The record is not available." /><Card><CardBody><div class="record-state error"><strong>Record unavailable</strong><span>{state.message}</span><Button onClick={reload}>Retry</Button></div></CardBody></Card></div>;
   const record = state.record;
@@ -93,6 +100,7 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
     <div class="record-layout">
       <div class="record-main stack">
         <Card><CardBody><div class="record-summary"><div><span class="eyebrow">Program record</span><h2>{record.title}</h2><p>{record.abstract || "—"}</p></div><div class="record-summary-meta"><Chip>{statusLabel(record.status)}</Chip><span class="tabular">{record.time_in_stage}</span><span>{record.bypass_evaluation ? "Evaluation bypassed" : "Evaluation required"}</span></div></div><div class="record-meta-grid"><span><small>Origin</small><strong>{statusLabel(record.origin)}</strong></span><span><small>Submitted</small><strong>{moment(record.submitted_at)}</strong></span><span><small>Format</small><strong>{record.format?.name ?? "—"}</strong></span><span><small>Wave</small><strong>{record.wave?.name ?? "—"}</strong></span></div>{record.slot && <div class="record-slot"><strong>{record.slot.day} · {record.slot.time} · {record.slot.room}</strong><span>{record.slot.building} · {record.slot.duration_min} min</span>{!record.slot.is_published && <Chip tone="warning">Not yet public</Chip>}{record.slot.is_published && <Chip tone="success">Live on the public site</Chip>}</div>}</CardBody></Card>
+        {record.status === "draft" && <Card><CardHeader title="Draft editor"><span class="subtle">Saving keeps this record in Draft.</span></CardHeader><CardBody><form class="record-draft-form" onSubmit={(event) => void saveDraft(event)}><label class="field"><span>Title</span><input required value={draftTitle} onInput={(event) => setDraftTitle(event.currentTarget.value)} /></label><label class="field"><span>Abstract</span><textarea rows={6} value={draftAbstract} onInput={(event) => setDraftAbstract(event.currentTarget.value)} /></label><div class="record-action-row"><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "draft" ? "Saving…" : "Save draft"}</Button><span class="subtle">No submit action is available from this editor.</span></div></form></CardBody></Card>}
         {record.actions.can_decide && <Card><CardHeader title="Record action"><span class="subtle">Consequential actions stay on the record.</span></CardHeader><CardBody><div class="record-action-row"><Button variant="primary" disabled={Boolean(busy)} onClick={() => decide("approve")}>Accept</Button><Button disabled={Boolean(busy)} onClick={() => decide("maybe")}>Maybe</Button><Button variant="danger" disabled={Boolean(busy)} onClick={() => decide("deny")}>Reject</Button></div></CardBody></Card>}
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}

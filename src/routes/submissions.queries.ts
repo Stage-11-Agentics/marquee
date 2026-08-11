@@ -6,6 +6,7 @@ import type {
   SubmissionSpeakerListItem,
   SubmissionTrackListItem,
 } from "../api/submissions";
+import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
 import {
   executeListPage,
   orderClause,
@@ -128,6 +129,25 @@ interface SubmissionQueryRow {
   building: string | null;
   timezone: string;
   agenda_published: number | null;
+  form_id?: string | null;
+  last_saved_at?: number | null;
+  submitter_id?: string | null;
+  submitter_name?: string | null;
+  submitter_email?: string | null;
+}
+
+interface DraftFieldRow extends FormFieldConditionInput {
+  form_id: string;
+  key: string;
+  label: string;
+  required: number;
+}
+
+interface DraftAnswerRow {
+  submission_id: string;
+  key: string;
+  value_text: string | null;
+  value_json: string | null;
 }
 
 interface QueryParts {
@@ -217,9 +237,13 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
     })),
     score: row.score === null ? null : Number(row.score),
     submitted_at: row.submitted_at,
+    last_saved_at: row.last_saved_at ?? null,
     updated_at: row.updated_at,
     origin: row.origin,
     missing_fields: [],
+    submitter: row.submitter_id && row.submitter_name && row.submitter_email
+      ? { id: row.submitter_id, name: row.submitter_name, email: row.submitter_email }
+      : null,
     slot: row.starts_at === null || row.duration_min === null || row.room === null || row.building === null
       ? null
       : {
@@ -233,10 +257,173 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
   };
 }
 
+const ITEM_SELECT = `
+  s.id,
+  s.kind,
+  s.title,
+  s.status AS stored_status,
+  s.format_id,
+  format.name AS format,
+  COALESCE((
+    SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company))
+    FROM (
+      SELECT speaker.id, speaker.name, speaker.company
+      FROM participations par
+      JOIN people speaker ON speaker.id = par.person_id
+      WHERE par.submission_id = s.id
+      ORDER BY par.position ASC, par.id ASC
+    ) ordered
+  ), '[]') AS speakers_json,
+  COALESCE((
+    SELECT json_group_array(json_object(
+      'id', ordered.id,
+      'name', ordered.name,
+      'color', ordered.color,
+      'is_primary', ordered.is_primary
+    ))
+    FROM (
+      SELECT carried.id, carried.name, carried.color, st.is_primary
+      FROM submission_tracks st
+      JOIN tracks carried ON carried.id = st.track_id
+      WHERE st.submission_id = s.id
+      ORDER BY st.is_primary DESC, carried.position ASC, carried.id ASC
+    ) ordered
+  ), '[]') AS tracks_json,
+  (SELECT ROUND(AVG(evaluation.score), 2) FROM evaluations evaluation WHERE evaluation.submission_id = s.id) AS score,
+  s.submitted_at,
+  s.updated_at,
+  s.origin,
+  ai.starts_at,
+  ai.duration_min,
+  room.name AS room,
+  building.name AS building,
+  event.timezone,
+  ai.is_published AS agenda_published`;
+
+async function hasColumns(database: D1Database, table: string, required: readonly string[]): Promise<boolean> {
+  const result = await database.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+  const columns = new Set(result.results.map((column) => column.name));
+  return required.every((column) => columns.has(column));
+}
+
+function answerValue(row: DraftAnswerRow): unknown {
+  if (row.value_json !== null) {
+    try {
+      return JSON.parse(row.value_json) as unknown;
+    } catch {
+      return row.value_text;
+    }
+  }
+  return row.value_text;
+}
+
+function answerPresent(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+/**
+ * Derive the attention fields for drafts from the form schema and answers.
+ * Applicability is intentionally delegated to the one shared evaluator; the
+ * queue must never turn every required field into a missing field.
+ */
+async function addDraftMetadata(
+  database: D1Database,
+  rows: SubmissionQueryRow[],
+): Promise<SubmissionListItem[]> {
+  const items = rows.map(toItem);
+  const draftRows = rows.filter((row) => row.form_id);
+  if (draftRows.length === 0) return items;
+
+  const formIds = [...new Set(draftRows.map((row) => row.form_id).filter((id): id is string => Boolean(id)))];
+  const submissionIds = draftRows.map((row) => row.id);
+  const formPlaceholders = formIds.map(() => "?").join(",");
+  const submissionPlaceholders = submissionIds.map(() => "?").join(",");
+  const [fields, answers] = await Promise.all([
+    database.prepare(`
+      SELECT form_id, key, label, required, condition
+      FROM form_fields
+      WHERE form_id IN (${formPlaceholders})
+      ORDER BY position ASC, id ASC
+    `).bind(...formIds).all<DraftFieldRow>(),
+    database.prepare(`
+      SELECT answer.submission_id, field.key, answer.value_text, answer.value_json
+      FROM submission_answers answer
+      JOIN form_fields field ON field.id = answer.field_id
+      WHERE answer.submission_id IN (${submissionPlaceholders})
+      ORDER BY answer.updated_at ASC, answer.id ASC
+    `).bind(...submissionIds).all<DraftAnswerRow>(),
+  ]);
+  const fieldsByForm = new Map<string, DraftFieldRow[]>();
+  for (const field of fields.results) {
+    const current = fieldsByForm.get(field.form_id) ?? [];
+    current.push(field);
+    fieldsByForm.set(field.form_id, current);
+  }
+  const answersBySubmission = new Map<string, Record<string, unknown>>();
+  for (const answer of answers.results) {
+    const current = answersBySubmission.get(answer.submission_id) ?? {};
+    current[answer.key] = answerValue(answer);
+    answersBySubmission.set(answer.submission_id, current);
+  }
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  for (const row of draftRows) {
+    const item = itemById.get(row.id);
+    if (!item || !row.form_id) continue;
+    const answerMap = answersBySubmission.get(row.id) ?? {};
+    const missing = (fieldsByForm.get(row.form_id) ?? [])
+      .filter((field) => field.required === 1 && isFieldApplicable(field, answerMap) && !answerPresent(answerMap[field.key]))
+      .map((field) => field.label);
+    item.missing_fields = missing;
+    item.last_saved_at = row.last_saved_at ?? null;
+    item.submitter = row.submitter_id && row.submitter_name && row.submitter_email
+      ? { id: row.submitter_id, name: row.submitter_name, email: row.submitter_email }
+      : null;
+  }
+  return items;
+}
+
+async function listDraftsNeedingAttention(
+  database: D1Database,
+  filters: SubmissionListFilters,
+): Promise<ListEnvelope<SubmissionListItem>> {
+  const page = parsePagination(filters);
+  const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "updated");
+  const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
+  const { where, bindings } = filterParts(filters);
+  const rows = await database.prepare(`
+    SELECT ${ITEM_SELECT},
+      s.form_id,
+      s.last_saved_at,
+      submitter.id AS submitter_id,
+      submitter.name AS submitter_name,
+      submitter.email AS submitter_email
+    ${FROM}
+    JOIN people submitter ON submitter.id = s.submitter_person_id
+    WHERE ${where}
+    ORDER BY ${stableOrder}
+  `).bind(...bindings).all<SubmissionQueryRow>();
+  const items = (await addDraftMetadata(database, rows.results)).filter((item) => item.missing_fields.length > 0);
+  const total = items.length;
+  const totalPages = total === 0 ? 0 : Math.ceil(total / page.perPage);
+  return {
+    data: items.slice(page.offset, page.offset + page.limit),
+    page: page.page,
+    per_page: page.perPage,
+    total,
+    total_pages: totalPages,
+  };
+}
+
 export async function listSubmissions(
   database: D1Database,
   filters: SubmissionListFilters,
 ): Promise<ListEnvelope<SubmissionListItem>> {
+  if (filters.status === "draft" && await hasColumns(database, "submissions", ["form_id", "last_saved_at", "submitter_person_id"])) {
+    return listDraftsNeedingAttention(database, filters);
+  }
   const page = parsePagination(filters);
   const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "newest");
   // The shared helper deliberately emits the canonical `id ASC` tie-break.
@@ -245,48 +432,7 @@ export async function listSubmissions(
   const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
   const data = database.prepare(`
-    SELECT
-      s.id,
-      s.kind,
-      s.title,
-      s.status AS stored_status,
-      s.format_id,
-      format.name AS format,
-      COALESCE((
-        SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company))
-        FROM (
-          SELECT speaker.id, speaker.name, speaker.company
-          FROM participations par
-          JOIN people speaker ON speaker.id = par.person_id
-          WHERE par.submission_id = s.id
-          ORDER BY par.position ASC, par.id ASC
-        ) ordered
-      ), '[]') AS speakers_json,
-      COALESCE((
-        SELECT json_group_array(json_object(
-          'id', ordered.id,
-          'name', ordered.name,
-          'color', ordered.color,
-          'is_primary', ordered.is_primary
-        ))
-        FROM (
-          SELECT carried.id, carried.name, carried.color, st.is_primary
-          FROM submission_tracks st
-          JOIN tracks carried ON carried.id = st.track_id
-          WHERE st.submission_id = s.id
-          ORDER BY st.is_primary DESC, carried.position ASC, carried.id ASC
-        ) ordered
-      ), '[]') AS tracks_json,
-      (SELECT ROUND(AVG(evaluation.score), 2) FROM evaluations evaluation WHERE evaluation.submission_id = s.id) AS score,
-      s.submitted_at,
-      s.updated_at,
-      s.origin,
-      ai.starts_at,
-      ai.duration_min,
-      room.name AS room,
-      building.name AS building,
-      event.timezone,
-      ai.is_published AS agenda_published
+    SELECT ${ITEM_SELECT}
     ${FROM}
     WHERE ${where}
     ORDER BY ${stableOrder}

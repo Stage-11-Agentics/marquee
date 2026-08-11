@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 
 import { createListQuerySchema, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import {
   listSubmissions,
   SUBMISSION_SORTS,
@@ -20,6 +21,11 @@ const submissionSpeakerSchema = z.object({
   id: z.string(),
   name: z.string(),
   company: z.string().nullable(),
+});
+const submissionSubmitterSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
 });
 const submissionSlotSchema = z.object({
   starts_at: z.number().int(),
@@ -40,9 +46,11 @@ const submissionListItemSchema = z.object({
   tracks: z.array(submissionTrackSchema),
   score: z.number().nullable(),
   submitted_at: z.number().int().nullable(),
+  last_saved_at: z.number().int().nullable(),
   updated_at: z.number().int(),
   origin: z.enum(["public", "admin", "import"]),
   missing_fields: z.array(z.string()),
+  submitter: submissionSubmitterSchema.nullable(),
   slot: submissionSlotSchema.nullable(),
 }).openapi("SubmissionListItem");
 
@@ -61,7 +69,7 @@ const listEventSubmissions = defineApiRoute(
     description: "Server-filtered, sorted, and deterministically paginated Abstracts and Sessions.",
     tags: ["Submissions"],
     policy: {
-      auth: { kind: "grants", grants: ["program:read"] },
+      auth: { kind: "authenticated" },
       rateLimit: { bucket: "read" },
       concurrency: "none",
     },
@@ -77,6 +85,8 @@ const listEventSubmissions = defineApiRoute(
   async (context) => {
     const { eventId } = context.req.valid("param");
     const query = context.req.valid("query");
+    if (query.status === "draft") await requireDraftRead(context, eventId);
+    else await requireSubmissionRead(context, eventId);
     const result = await listSubmissions(context.env.DB, { eventId, ...query });
     return context.json(result, 200);
   },

@@ -25,6 +25,12 @@ export interface SubmissionSpeakerListItem {
   company: string | null;
 }
 
+export interface SubmissionSubmitterListItem {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface SubmissionSlotListItem {
   starts_at: number;
   duration_min: number;
@@ -45,8 +51,10 @@ export interface SubmissionListItem {
   tracks: SubmissionTrackListItem[];
   score: number | null;
   submitted_at: number | null;
+  last_saved_at: number | null;
   updated_at: number;
   origin: "public" | "admin" | "import";
   missing_fields: string[];
+  submitter: SubmissionSubmitterListItem | null;
   slot: SubmissionSlotListItem | null;
 }

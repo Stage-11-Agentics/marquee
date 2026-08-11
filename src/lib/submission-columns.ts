@@ -20,6 +20,10 @@ export const SUBMISSION_COLUMN_REGISTRY = [
 
 export type SubmissionColumnId = (typeof SUBMISSION_COLUMN_REGISTRY)[number]["id"];
 
+export const SUBMISSION_COLUMN_IDS = SUBMISSION_COLUMN_REGISTRY.map(
+  (column) => column.id,
+) as [SubmissionColumnId, ...SubmissionColumnId[]];
+
 export const DEFAULT_SUBMISSION_COLUMNS: readonly SubmissionColumnId[] = [
   "type",
   "title",

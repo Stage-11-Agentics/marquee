@@ -9,6 +9,7 @@ import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
@@ -53,6 +54,13 @@ const createSubmissionInput = z.object({
   applied_rule_id: z.string().min(1).nullable().optional(),
   vendor_affiliation: z.enum(["none", "vendor_to_fi", "vendor_with_champion"]).default("none"),
   external_ref: z.string().max(500).nullable().optional(),
+});
+
+/** Draft editing has no status input: opening or saving it cannot submit it. */
+const patchDraftInput = z.object({
+  title: z.string().trim().min(1).max(500).optional(),
+  abstract: z.string().nullable().optional(),
+  answers: z.array(answerInput).max(200).optional(),
 });
 
 const scheduleInput = z.object({
@@ -518,12 +526,82 @@ const getSubmissionRecord = defineApiRoute(
     summary: "Read the full conference submission record",
     tags: ["Submissions"],
     request: { params: submissionParams },
-    policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
     responses: { 200: recordResponse, ...errors },
   },
   async (context) => {
     const { eventId, submissionId } = context.req.valid("param");
     await eventFor(context.env.DB, eventId);
+    const submission = await context.env.DB.prepare("SELECT status FROM submissions WHERE id = ? AND event_id = ?").bind(submissionId, eventId).first<{ status: string }>();
+    if (!submission) throw ApiError.notFound("submission not found");
+    if (submission.status === "draft") await requireDraftRead(context, eventId);
+    else await requireSubmissionRead(context, eventId);
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+  },
+);
+
+const patchDraft = defineApiRoute(
+  {
+    method: "patch",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}",
+    operationId: "patchDraftSubmission",
+    summary: "Edit a conference draft without submitting it",
+    description: "Draft edits preserve Draft status; the queue derives applicable missing fields through the shared condition evaluator.",
+    tags: ["Submissions"],
+    request: { params: submissionParams, body: { content: { "application/json": { schema: patchDraftInput } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: recordResponse, ...errors },
+  },
+  async (context) => {
+    const { eventId, submissionId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    await eventFor(context.env.DB, eventId);
+    const submission = await context.env.DB.prepare("SELECT id, form_id, status FROM submissions WHERE id = ? AND event_id = ?").bind(submissionId, eventId).first<{ id: string; form_id: string | null; status: string }>();
+    if (!submission) throw ApiError.notFound("submission not found");
+    if (submission.status !== "draft") throw ApiError.conflict("only Draft records can be edited from the Drafts needing attention queue");
+    await requireDraftRead(context, eventId);
+
+    const now = Date.now();
+    const updates: string[] = ["last_saved_at = ?", "updated_at = ?"];
+    const values: (string | number | null)[] = [now, now];
+    if (body.title !== undefined) {
+      updates.unshift("title = ?");
+      values.unshift(body.title);
+    }
+    if (body.abstract !== undefined) {
+      updates.unshift("abstract = ?");
+      values.unshift(body.abstract);
+    }
+    const statements: D1PreparedStatement[] = [
+      context.env.DB.prepare(`UPDATE submissions SET ${updates.join(", ")} WHERE id = ? AND event_id = ? AND status = 'draft'`)
+        .bind(...values, submissionId, eventId),
+    ];
+
+    if (body.answers !== undefined) {
+      if (!submission.form_id) throw ApiError.unprocessable("a draft without a form cannot accept field answers", "answers");
+      const fields = await context.env.DB.prepare("SELECT id, key, condition FROM form_fields WHERE form_id = ? ORDER BY position, id").bind(submission.form_id).all<{ id: string; key: string; condition: string | null }>();
+      const fieldsById = new Map(fields.results.map((field) => [field.id, field]));
+      for (const answer of body.answers) {
+        const field = fieldsById.get(answer.field_id);
+        if (!field) throw ApiError.unprocessable("every answer field must belong to this draft's form", "answers");
+      }
+      statements.push(context.env.DB.prepare("DELETE FROM submission_answers WHERE submission_id = ?").bind(submissionId));
+      for (const answer of body.answers) {
+        const field = fieldsById.get(answer.field_id);
+        if (!field) continue;
+        if (answer.value_text === undefined && answer.value_json === undefined) continue;
+        statements.push(context.env.DB.prepare(`
+          INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          newUlid(), submissionId, field.id,
+          answer.value_text ?? null,
+          answer.value_json === undefined ? null : JSON.stringify(answer.value_json),
+          now, now,
+        ));
+      }
+    }
+    await context.env.DB.batch(statements);
     return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
   },
 );
@@ -599,4 +677,4 @@ const publishSubmission = defineApiRoute(
   },
 );
 
-export const apiRoutes = [createSubmission, getSubmissionRecord, scheduleSubmission, publishSubmission];
+export const apiRoutes = [createSubmission, getSubmissionRecord, patchDraft, scheduleSubmission, publishSubmission];

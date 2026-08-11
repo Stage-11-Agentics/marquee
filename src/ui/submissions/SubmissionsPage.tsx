@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import type { SubmissionListItem, SubmissionTrackListItem } from "../../api/submissions";
 import {
   DEFAULT_SUBMISSION_COLUMNS,
+  SUBMISSION_COLUMN_REGISTRY,
   submissionColumn,
   submissionKindLabel,
   type SubmissionColumnId,
@@ -32,6 +33,20 @@ type LoadState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready"; envelope: ListEnvelope };
+
+interface SavedView {
+  id: string;
+  name: string;
+  built_in: boolean;
+  config: {
+    q: string;
+    filters: Record<string, string>;
+    sort: "newest" | "updated" | "title" | "score";
+    columns: SubmissionColumnId[];
+  };
+  created_at: number | null;
+  updated_at: number | null;
+}
 
 const STATUS_OPTIONS = [
   ["", "All statuses"],
@@ -93,6 +108,46 @@ function queryValue(params: URLSearchParams, key: string, fallback = ""): string
   return params.get(key) ?? fallback;
 }
 
+function columnsWithTitle(columns: readonly SubmissionColumnId[]): SubmissionColumnId[] {
+  const result = [...new Set(columns)];
+  if (!result.includes("title")) result.splice(0, 0, "title");
+  return result;
+}
+
+function storedColumns(eventId: string): SubmissionColumnId[] {
+  if (typeof window === "undefined") return [...DEFAULT_SUBMISSION_COLUMNS];
+  try {
+    const value = JSON.parse(window.localStorage.getItem(`marquee.columns.${eventId}`) ?? "null") as unknown;
+    if (!Array.isArray(value)) return [...DEFAULT_SUBMISSION_COLUMNS];
+    const known = new Set(SUBMISSION_COLUMN_REGISTRY.map((column) => column.id));
+    return columnsWithTitle(value.filter((column): column is SubmissionColumnId => typeof column === "string" && known.has(column as SubmissionColumnId)));
+  } catch {
+    return [...DEFAULT_SUBMISSION_COLUMNS];
+  }
+}
+
+function viewConfigFromParams(params: URLSearchParams, columns: SubmissionColumnId[]): SavedView["config"] {
+  const filters: Record<string, string> = {};
+  for (const key of ["kind", "status", "track", "format", "wave", "task", "placement"]) {
+    const value = params.get(key);
+    if (value) filters[key] = value;
+  }
+  return {
+    q: params.get("q") ?? "",
+    filters,
+    sort: (params.get("sort") as SavedView["config"]["sort"] | null) ?? "newest",
+    columns: columnsWithTitle(columns),
+  };
+}
+
+function errorMessage(body: unknown, fallback: string): string {
+  if (typeof body === "object" && body !== null && "error" in body) {
+    const error = (body as { error?: { message?: string } }).error;
+    if (error?.message) return error.message;
+  }
+  return fallback;
+}
+
 function Cell({ item, column, navigate }: { item: SubmissionListItem; column: SubmissionColumnId; navigate: (target: string) => void }): JSX.Element {
   if (column === "type") return <span class={`chip entity-chip ${item.kind}`}>{submissionKindLabel(item.kind)}</span>;
   if (column === "id") return <strong class="tabular">{item.id}</strong>;
@@ -101,6 +156,7 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
     return <>
       <a class="table-title" href={`/submissions/${item.id}`} title={item.title} onClick={(event) => { event.preventDefault(); navigate(`/submissions/${item.id}`); }}>{item.title}</a>
       <span class="row-meta">{item.id} · {item.origin}</span>
+      {item.submitter && <span class="row-meta">{item.submitter.name} · {item.submitter.email}</span>}
       {slot && <span class="slot-row"><span class="chip slot-chip">{slot}</span>{!item.slot?.is_published && <span class="chip not-public">Not yet public</span>}</span>}
     </>;
   }
@@ -112,9 +168,9 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
   if (column === "tracks") return <span class="track-chips">{item.tracks.length ? item.tracks.map((track) => <span key={track.id} class="chip track-chip" style={{ borderLeftColor: track.color }} title={track.is_primary ? "Primary track" : "Additional track"}>{track.name}{track.is_primary ? " · Primary" : ""}</span>) : "—"}</span>;
   if (column === "score") return <span class="tabular">{item.score === null ? "—" : item.score.toFixed(2)}</span>;
   if (column === "submitted") return <span class="tabular">{item.status === "draft" ? "Not submitted" : formatMoment(item.submitted_at)}</span>;
-  if (column === "updated") return <span class="tabular">{formatMoment(item.updated_at)}</span>;
+  if (column === "updated") return <span class="tabular">{formatMoment(item.last_saved_at ?? item.updated_at)}</span>;
   if (column === "origin") return <span>{item.origin[0]!.toUpperCase() + item.origin.slice(1)}</span>;
-  if (column === "missing") return item.missing_fields.length ? <span class="draft-warning">{item.missing_fields.join(" · ")}</span> : <span class="subtle">Complete</span>;
+  if (column === "missing") return item.missing_fields.length ? <span class="draft-warning">{item.missing_fields.join(" · ")}</span> : <span class="subtle">—</span>;
   return <span>—</span>;
 }
 
@@ -138,6 +194,13 @@ export function SubmissionsPage({
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [columns, setColumns] = useState<SubmissionColumnId[]>(() => storedColumns(eventId));
+  const [views, setViews] = useState<SavedView[]>([]);
+  const [activeViewId, setActiveViewId] = useState("all-submissions");
+  const [viewsLoading, setViewsLoading] = useState(true);
+  const [viewsError, setViewsError] = useState("");
+  const [viewBusy, setViewBusy] = useState(false);
+  const [columnPanelOpen, setColumnPanelOpen] = useState(false);
 
   const page = Number(queryValue(params, "page", "1"));
   const status = queryValue(params, "status");
@@ -150,6 +213,37 @@ export function SubmissionsPage({
   const sort = queryValue(params, "sort", "newest");
   const q = queryValue(params, "q");
   const queryIdentity = `${q}\u0000${status}\u0000${kind}\u0000${track}\u0000${format}\u0000${wave}\u0000${task}\u0000${placement}\u0000${sort}`;
+  const draftQueue = status === "draft";
+
+  useEffect(() => {
+    setColumns(storedColumns(eventId));
+  }, [eventId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setViewsLoading(true);
+    setViewsError("");
+    fetch(`/api/v1/events/${encodeURIComponent(eventId)}/views`, { signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as unknown;
+        if (!response.ok) throw new Error(errorMessage(body, `Saved views could not be loaded (${response.status}).`));
+        return body as { data: SavedView[] };
+      })
+      .then((body) => {
+        setViews(body.data);
+        setActiveViewId((current) => draftQueue ? "drafts-needing-attention" : current === "drafts-needing-attention" ? "all-submissions" : current);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setViewsError(error instanceof Error ? error.message : "Saved views could not be loaded.");
+      })
+      .finally(() => { if (!controller.signal.aborted) setViewsLoading(false); });
+    return () => controller.abort();
+  }, [eventId, draftQueue]);
+
+  useEffect(() => {
+    if (draftQueue) setActiveViewId("drafts-needing-attention");
+    else if (activeViewId === "drafts-needing-attention") setActiveViewId("all-submissions");
+  }, [draftQueue, activeViewId]);
 
   const updateQuery = (updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(params);
@@ -158,6 +252,94 @@ export function SubmissionsPage({
       else next.set(key, String(value));
     }
     navigate(`/submissions${next.size ? `?${next.toString()}` : ""}`);
+  };
+
+  const persistColumns = (next: SubmissionColumnId[]) => {
+    const normalized = columnsWithTitle(next);
+    setColumns(normalized);
+    try { window.localStorage.setItem(`marquee.columns.${eventId}`, JSON.stringify(normalized)); } catch { /* storage is an enhancement, not the source of truth */ }
+  };
+
+  const applyView = (view: SavedView) => {
+    const next = new URLSearchParams();
+    if (view.config.q) next.set("q", view.config.q);
+    for (const [key, value] of Object.entries(view.config.filters)) if (value) next.set(key, value);
+    if (view.config.sort !== "newest") next.set("sort", view.config.sort);
+    persistColumns(view.config.columns);
+    setActiveViewId(view.id);
+    navigate(`/submissions${next.size ? `?${next.toString()}` : ""}`);
+  };
+
+  const saveCurrentView = async () => {
+    const existing = views.find((view) => view.id === activeViewId && !view.built_in);
+    const name = existing?.name ?? window.prompt("Name this conference view");
+    if (!name?.trim()) return;
+    setViewBusy(true);
+    setViewsError("");
+    try {
+      const viewUrl = existing
+        ? `/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(existing.id)}`
+        : `/api/v1/events/${encodeURIComponent(eventId)}/views`;
+      const response = await fetch(viewUrl, {
+        method: existing ? "PATCH" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), config: viewConfigFromParams(params, columns) }),
+      });
+      const body = await response.json().catch(() => null) as unknown;
+      if (!response.ok) throw new Error(errorMessage(body, `The view could not be saved (${response.status}).`));
+      const view = body as SavedView;
+      setViews((current) => [...current.filter((item) => item.id !== view.id), view]);
+      setActiveViewId(view.id);
+    } catch (error: unknown) {
+      setViewsError(error instanceof Error ? error.message : "The view could not be saved.");
+    } finally { setViewBusy(false); }
+  };
+
+  const renameView = async (view: SavedView) => {
+    const name = window.prompt("Rename this conference view", view.name);
+    if (!name?.trim() || name.trim() === view.name) return;
+    setViewBusy(true);
+    try {
+      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      const body = await response.json().catch(() => null) as unknown;
+      if (!response.ok) throw new Error(errorMessage(body, `The view could not be renamed (${response.status}).`));
+      const updated = body as SavedView;
+      setViews((current) => current.map((item) => item.id === updated.id ? updated : item));
+    } catch (error: unknown) {
+      setViewsError(error instanceof Error ? error.message : "The view could not be renamed.");
+    } finally { setViewBusy(false); }
+  };
+
+  const deleteView = async (view: SavedView) => {
+    if (!window.confirm(`Delete “${view.name}”?`)) return;
+    setViewBusy(true);
+    try {
+      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, { method: "DELETE" });
+      const body = await response.json().catch(() => null) as unknown;
+      if (!response.ok) throw new Error(errorMessage(body, `The view could not be deleted (${response.status}).`));
+      setViews((current) => current.filter((item) => item.id !== view.id));
+      if (activeViewId === view.id) setActiveViewId("all-submissions");
+    } catch (error: unknown) {
+      setViewsError(error instanceof Error ? error.message : "The view could not be deleted.");
+    } finally { setViewBusy(false); }
+  };
+
+  const toggleColumn = (column: SubmissionColumnId, checked: boolean) => {
+    if (column === "title") return;
+    persistColumns(checked ? [...columns, column] : columns.filter((item) => item !== column));
+  };
+
+  const moveColumn = (column: SubmissionColumnId, direction: -1 | 1) => {
+    const index = columns.indexOf(column);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= columns.length) return;
+    const next = [...columns];
+    [next[index], next[nextIndex]] = [next[nextIndex]!, next[index]!];
+    persistColumns(next);
   };
 
   useEffect(() => setSearchDraft(q), [q]);
@@ -248,14 +430,42 @@ export function SubmissionsPage({
     }
   };
 
+  const activeView = views.find((view) => view.id === activeViewId);
+  const orderedColumns = [...columns, ...SUBMISSION_COLUMN_REGISTRY.map((column) => column.id).filter((column) => !columns.includes(column))];
   return <div class="submissions-page">
     <PageHeader
-      title="Abstracts & sessions"
-      copy={envelope ? `${envelope.total.toLocaleString()} matching records · rendered 50 at a time for an instant response at full scale.` : "Loading the conference submission register…"}
+      title={draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
+      copy={envelope ? `${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered 50 at a time for an instant response at full scale.` : "Loading the conference submission register…"}
       actions={<><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button><Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button></>}
     />
     <div class={`export-message ${exportError ? "visible" : ""}`} role="status">{exportError || "Export status space reserved"}</div>
     <section class="card table-card" aria-busy={state.kind === "loading"}>
+      <div class="saved-view-strip" aria-label="Saved conference views">
+        <span class="eyebrow">Views</span>
+        <div class="saved-view-chips">
+          {views.map((view) => <span class={`saved-view-chip ${activeViewId === view.id ? "active" : ""}`} key={view.id}>
+            <button type="button" onClick={() => applyView(view)} disabled={viewBusy}>{view.name}{view.id === "drafts-needing-attention" && envelope && <span class="tabular view-count">{envelope.total.toLocaleString()}</span>}</button>
+            {!view.built_in && <><button type="button" class="view-icon-button" aria-label={`Rename ${view.name}`} onClick={() => void renameView(view)} disabled={viewBusy}>✎</button><button type="button" class="view-icon-button" aria-label={`Delete ${view.name}`} onClick={() => void deleteView(view)} disabled={viewBusy}>×</button></>}
+          </span>)}
+          {!viewsLoading && views.length === 0 && <span class="subtle">No saved views yet.</span>}
+        </div>
+        <span class="toolbar-spacer" />
+        <Button small onClick={() => void saveCurrentView()} disabled={viewBusy}>Save current view</Button>
+        <Button small onClick={() => setColumnPanelOpen((open) => !open)} aria-expanded={columnPanelOpen}>{columnPanelOpen ? "Hide columns" : "Columns"}</Button>
+      </div>
+      <div class={`saved-view-message ${viewsError ? "visible" : ""}`} role="status">{viewsError || "Saved view status space reserved"}</div>
+      {columnPanelOpen && <div class="column-panel" aria-label="Configure submission columns">
+        <div class="column-panel-heading"><div><strong>Columns</strong><span>Title is always visible. Changes stay reserved in this frame and persist for this conference.</span></div><span class="tabular">{columns.length} / {SUBMISSION_COLUMN_REGISTRY.length}</span></div>
+        <div class="column-list">{orderedColumns.map((column) => {
+          const position = columns.indexOf(column);
+          const visible = position >= 0;
+          return <div class={`column-option ${visible ? "visible" : "hidden"}`} key={column}>
+            <label><input type="checkbox" checked={visible} disabled={column === "title"} onChange={(event) => toggleColumn(column, event.currentTarget.checked)} /><span>{submissionColumn(column).label}</span></label>
+            <span class="column-arrows"><button type="button" class="button tiny" aria-label={`Move ${submissionColumn(column).label} left`} disabled={!visible || position === 0} onClick={() => moveColumn(column, -1)}>←</button><button type="button" class="button tiny" aria-label={`Move ${submissionColumn(column).label} right`} disabled={!visible || position === columns.length - 1} onClick={() => moveColumn(column, 1)}>→</button></span>
+          </div>;
+        })}</div>
+        {activeView && !activeView.built_in && <span class="column-panel-note">Save current view again to capture this column order in “{activeView.name}”.</span>}
+      </div>}
       <form class="submissions-toolbar" onSubmit={(event) => { event.preventDefault(); updateQuery({ q: searchDraft.trim(), page: 1 }); }}>
         <label class="search-field"><span class="sr-only">Search submissions</span><input value={searchDraft} onInput={(event) => setSearchDraft(event.currentTarget.value)} placeholder="Search 1,000 submissions…" /><button class="button small" type="submit">Search</button></label>
         <label><span class="sr-only">Status</span><select value={status} onChange={(event) => updateQuery({ status: event.currentTarget.value, page: 1 })}>{STATUS_OPTIONS.map(([value, label]) => <option value={value}>{label}</option>)}</select></label>
@@ -271,14 +481,14 @@ export function SubmissionsPage({
 
       <div class="submissions-table-wrap">
         <table class="submissions-table">
-          <thead><tr><th class="check-col"><input type="checkbox" aria-label="Select visible rows" checked={rows.length > 0 && rows.every((item) => allMatching || selectedIds.has(item.id))} onChange={(event) => togglePage(event.currentTarget.checked)} /></th>{DEFAULT_SUBMISSION_COLUMNS.map((column) => <th class={`${column}-col`}>{submissionColumn(column).label}</th>)}</tr></thead>
+          <thead><tr><th class="check-col"><input type="checkbox" aria-label="Select visible rows" checked={rows.length > 0 && rows.every((item) => allMatching || selectedIds.has(item.id))} onChange={(event) => togglePage(event.currentTarget.checked)} /></th>{columns.map((column) => <th class={`${column}-col`}>{submissionColumn(column).label}</th>)}</tr></thead>
           <tbody>
-            {state.kind === "loading" && <tr class="state-row"><td colSpan={DEFAULT_SUBMISSION_COLUMNS.length + 1}><strong>Loading submissions…</strong><span>Reading the exact filtered slice from D1.</span></td></tr>}
-            {state.kind === "error" && <tr class="state-row error"><td colSpan={DEFAULT_SUBMISSION_COLUMNS.length + 1}><strong>Submissions did not load</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></td></tr>}
-            {envelope && rows.length === 0 && <tr class="state-row"><td colSpan={DEFAULT_SUBMISSION_COLUMNS.length + 1}><strong>{envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{(q || status || kind || track || format || wave || task || placement) && <Button small onClick={() => navigate("/submissions")}>Clear filters</Button>}</td></tr>}
+            {state.kind === "loading" && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{draftQueue ? "Loading drafts…" : "Loading submissions…"}</strong><span>Reading the exact filtered slice from D1.</span></td></tr>}
+            {state.kind === "error" && <tr class="state-row error"><td colSpan={columns.length + 1}><strong>{draftQueue ? "Drafts did not load" : "Submissions did not load"}</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></td></tr>}
+            {envelope && rows.length === 0 && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{draftQueue ? "No drafts need attention" : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{draftQueue ? "Every draft is complete for the fields its submitter can see." : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{!draftQueue && (q || status || kind || track || format || wave || task || placement) && <Button small onClick={() => navigate("/submissions")}>Clear filters</Button>}</td></tr>}
             {rows.map((item) => <tr class="submission-row" key={item.id} onClick={(event) => { const target = event.target as HTMLElement; if (!target.closest("a,input,button,select")) navigate(`/submissions/${item.id}`); }}>
               <td class="check-col"><input type="checkbox" aria-label={`Select ${item.id}`} checked={allMatching || selectedIds.has(item.id)} onChange={(event) => toggleRow(item.id, event.currentTarget.checked)} /></td>
-              {DEFAULT_SUBMISSION_COLUMNS.map((column) => <td class={`${column}-col`}><Cell item={item} column={column} navigate={navigate} /></td>)}
+              {columns.map((column) => <td class={`${column}-col`}><Cell item={item} column={column} navigate={navigate} /></td>)}
             </tr>)}
           </tbody>
         </table>
