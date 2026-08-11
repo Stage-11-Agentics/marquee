@@ -15,11 +15,16 @@
       "id": "art_01KZQAGY8JV16HSY7T6CDJEBW9",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQBGFA9CDFR3CZGDFH1AG5G",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8YR9B5FJ394S7C1HBYF",
-  "last_event_id": "ev_01KZQAGY8P1ZB01A080WA0T081",
-  "last_status_changed_at": "2026-08-11T02:26:24Z",
+  "last_event_id": "ev_01KZQBGKKAV7NFH0QXXHZPHSDV",
+  "last_status_changed_at": "2026-08-11T02:48:03Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +39,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-17",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Evaluation plan, committees, and reviewer track scopes",
   "type": "task",
-  "updated_at": "2026-08-11T02:30:46Z",
+  "updated_at": "2026-08-11T02:48:03Z",
   "urgency": null
 }

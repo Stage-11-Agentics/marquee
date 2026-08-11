@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:138",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-11T02:09:56Z",
   "created_by": "agent:orchestrator",
   "custom_fields": {},
   "description": "**Armed `check:api` failure \u2014 the same defect MRQ-59 just fixed for uploads, in a worse place.**\n\nFound while verifying MRQ-59. `src/routes/auth.endpoints.ts` and `src/routes/admin-ops.endpoints.ts` are raw Hono sub-apps mounted directly in `src/index.ts` (`app.route(\"/api/v1/admin\", adminOpsRoutes)` and equivalent). They are named `*.endpoints.ts`, so `_manifest.ts`'s `import.meta.glob(\"./**/*.routes.ts\")` never sees them, and their paths are absent from the generated manifest and the served OpenAPI document.\n\n**Why this is worse than the uploads case:** `check:api` replays a full-loop e2e session, collects every non-GET request, and fails on any path missing from the public schema. **Walkthrough step 1 is a one-click demo login** \u2014 a POST to `/api/v1/auth/demo`. So the very first action of the judges' loop is an unregistered non-GET path. The moment e2e drives the real loop, `check:api` fails, and it will look like a regression in whichever ticket happens to add that e2e coverage.\n\nScope:\n- Bring `auth` and `admin-ops` into the manifest convention (`*.routes.ts`, registered through the manifest like every other API module), or \u2014 if these genuinely must stay raw Hono sub-apps for cookie/session reasons \u2014 add them to an **explicit named allowlist** beside SPEC \u00a74.2's three calendar/feed URLs, with a comment saying why.\n- Either way the decision must be *recorded*, not implied by a filename.\n- Confirm the served OpenAPI then contains the auth and admin paths (or that the allowlist covers them), and that `check:api` passes against an e2e run that performs a demo login.\n- **Do not weaken MRQ-3's guardrail tests to make this easier.** AC-2 (demo login 403s outside `demo_mode`, no cookie set) and AC-214 (per-event reviewer scope, incl. the schema CHECK) must all still pass unchanged.\n\nNote the fleet-wide pattern this is the second instance of: a module named outside the glob passes its own tests and arms a failure for someone else. The convention is in `.lattice/orchestration/boot/COMMON.md`.\n\nDepends on: MRQ-3 (merged), MRQ-59 (merged), MRQ-60 (merged). Hours: ~2. Workflow: inline-full. Guardrail-adjacent \u2014 orchestrator hand-review at merge.",
-  "done_at": null,
+  "done_at": "2026-08-11T02:47:34Z",
   "evidence_refs": [
     {
       "id": "art_01KZQAQ0C85VWCKC8FVCK4E1YR",
@@ -25,11 +25,31 @@
       "id": "art_01KZQB4G8BNE274EVF4N6M8X7T",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQB8ETQYZHZA5NPQQFMX7M1",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQBC88TAKWJDDF69M8TNZZ6",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQBFPWFZT61FZTC681P8ZYZ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQBFPWFZT61FZTC681P8ZYY",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQ9ASCMM5EFRNCY248BXBM2",
-  "last_event_id": "ev_01KZQB4G8DQT4SC8G7EGX31X7Y",
-  "last_status_changed_at": "2026-08-11T02:37:38Z",
+  "last_event_id": "ev_01KZQBFPWGZEDBSHKR2FM0RRK2",
+  "last_status_changed_at": "2026-08-11T02:47:34Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -41,13 +61,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-61",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Register auth and admin-ops routes in the API manifest",
   "type": "task",
-  "updated_at": "2026-08-11T02:41:27Z",
+  "updated_at": "2026-08-11T02:47:34Z",
   "urgency": null
 }

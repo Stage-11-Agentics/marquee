@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:43:36Z",
+  "created_by": "agent:delegator-mrq-61",
+  "custom_fields": {},
+  "id": "art_01KZQB8ETQ0C4XYMMWYS5N0S5D",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQB8ETQ0C4XYMMWYS5N0S5D.md",
+    "size_bytes": 1344
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at final exact HEAD 0ebedfa; own-reviewer, quota directive",
+  "tags": [],
+  "title": "MRQ-61 own-reviewer PASS @ 0ebedfa",
+  "token_usage": null,
+  "type": "file"
+}

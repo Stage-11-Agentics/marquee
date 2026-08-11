@@ -39,3 +39,5 @@ Plan: filled in by delegator's plan phase
 - The binding prototype's Scheduled visual total includes Published in its local mock state, while the shipped submissions API intentionally distinguishes private scheduled slots from published ones. The implementation uses the API's canonical filter semantics for both the tile and its destination, so AC-15's count-to-result invariant remains true; the visual structure and exact AC-240 explanatory copy remain unchanged.
 - The prototype's onboarding value is speaker-oriented while the dashboard count must open a submission list. The route will count distinct submissions with open speaker tasks and use the same derived `status=onboarding` list predicate, while overdue speakers/tasks remain separately and explicitly labeled in the attention/task-preview surfaces.
 - AC-240's list/record/portal/board slot rendering and publish action are owned by their respective surface tickets. This ticket implements the M-10 dashboard portion: exact Scheduled/Published stage copy and links into the authoritative list filters.
+
+## Reset 2026-08-11 by agent:delegator-mrq-11
