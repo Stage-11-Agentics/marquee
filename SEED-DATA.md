@@ -6,13 +6,23 @@ from, what is real, and what is invented.
 
 ## Provenance
 
-The seeded **accepted core** — 60 sessions and their 75 speakers — is derived from
-the **publicly published AI Engineer Summit 2025 program**
+The seeded **accepted core** combines 60 sessions and their 75 speakers from the
+**publicly published AI Engineer Summit February 2025 program**
 (`https://www.ai.engineer/summit/2025/schedule`), captured 2026-08-08 and stored in
 this repository at `sequence/research/sources/aie-summit-2025-program.json`. Session
 titles, public abstracts, speaker names, job titles, companies, public bios, and
 public profile links are reproduced from that published program. Each seeded
 submission carries its origin in `external_ref` as `aie-2025:<source id>`.
+
+The accepted-speaker pool is extended with the **89 real, public speakers from
+AIE CODE Summit November 2025** (`https://www.ai.engineer/code/2025`). The archived
+five-group roster enumerates 80 people once pair cells are split; nine omitted
+co-speakers and program participants are reconciled from AIE's published talk
+recordings. Names are trimmed and deduplicated before any ID or email is allocated,
+including a published spelling correction for Aparna Dhinakaran/Dhinkaran. The
+two source sets resolve to 153 distinct accepted-speaker memberships. CODE-only
+speakers are not attached to invented submissions; only their public name and
+company are reproduced.
 
 Everything else in the seed — the event itself (*AI Engineer New York 2026*), its
 formats, tracks, buildings, rooms, waves, forms, task templates, and every
@@ -37,11 +47,11 @@ submission outside the accepted core — is **invented for demonstration**.
 
 ## Notice
 
-This seed is **derived from the publicly published AI Engineer Summit 2025 program
-and provided for demonstration purposes only**. Contact details, images, and all
-non-accepted submissions are synthetic. Marquee has **no affiliation with, and is
-not endorsed by, AI Engineer** or any speaker, company, or venue named in the
-seeded data.
+This seed is **derived from the publicly published AI Engineer Summit February
+2025 program and CODE Summit November 2025 roster/recordings, and provided for
+demonstration purposes only**. Contact details, images, and all non-accepted
+submissions are synthetic. Marquee has **no affiliation with, and is not endorsed
+by, AI Engineer** or any speaker, company, or venue named in the seeded data.
 
 If you are named in the seeded program data and would prefer not to be, open an
 issue and the record will be removed.

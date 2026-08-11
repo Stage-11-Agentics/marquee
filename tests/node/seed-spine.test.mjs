@@ -74,7 +74,7 @@ test("AC-252 · the seed defines the Sheraton-coherent building trio and every r
 });
 
 test("CONTRACT · the accepted core is exactly 60 accepted abstracts over at least 75 people", () => {
-  const submissions = table("submissions");
+  const submissions = table("submissions").filter((row) => row.status === "accepted");
   assert.equal(submissions.length, 60);
   assert.equal(submissions.filter((row) => row.status === "accepted").length, 60);
   assert.equal(submissions.filter((row) => row.kind === "abstract").length, 60);
@@ -96,7 +96,7 @@ test("CONTRACT · every accepted submission resolves its taxonomy, decision and 
   const formats = byId("formats");
   const tracks = byId("tracks");
   const waves = byId("waves");
-  const submissions = table("submissions");
+  const submissions = table("submissions").filter((row) => row.status === "accepted");
   const submissionIds = new Set(submissions.map((row) => row.id));
 
   for (const submission of submissions) {
@@ -109,7 +109,9 @@ test("CONTRACT · every accepted submission resolves its taxonomy, decision and 
   }
 
   // Exactly one primary track row per submission, matching the denormalization.
-  const primary = table("submission_tracks").filter((row) => row.is_primary === 1);
+  const primary = table("submission_tracks").filter(
+    (row) => row.is_primary === 1 && submissionIds.has(row.submission_id),
+  );
   assert.equal(primary.length, 60);
   const primaryBySubmission = new Map(primary.map((row) => [row.submission_id, row.track_id]));
   for (const submission of submissions) {
@@ -117,7 +119,7 @@ test("CONTRACT · every accepted submission resolves its taxonomy, decision and 
   }
 
   // One approve decision per accepted submission.
-  const decisions = table("submission_decisions");
+  const decisions = table("submission_decisions").filter((row) => submissionIds.has(row.submission_id));
   assert.equal(decisions.length, 60);
   for (const decision of decisions) {
     assert.equal(decision.decision, "approve");
@@ -126,11 +128,14 @@ test("CONTRACT · every accepted submission resolves its taxonomy, decision and 
     assert.ok(submissionIds.has(decision.submission_id));
   }
 
-  // Participations: one speaker of record per submission, co-speakers after it,
-  // contiguous positions, Wave 1 confirmed and Wave 2 still pending.
+  // Participations: one speaker of record per submission, additional accepted
+  // participants after it, contiguous positions, and no duplicate person.
+  // M-04b deliberately adds moderators to create live agenda conflicts.
   const wavesById = new Map(submissions.map((row) => [row.id, row.wave_id]));
   const bySubmission = new Map();
-  for (const participation of table("participations")) {
+  for (const participation of table("participations").filter(
+    (row) => submissionIds.has(row.submission_id),
+  )) {
     assert.ok(people.has(participation.person_id), `unknown person ${participation.person_id}`);
     assert.ok(submissionIds.has(participation.submission_id));
     const expected = wavesById.get(participation.submission_id) === "wav_wave-1"
@@ -146,7 +151,9 @@ test("CONTRACT · every accepted submission resolves its taxonomy, decision and 
     const ordered = [...group].sort((left, right) => left.position - right.position);
     assert.deepEqual(ordered.map((row) => row.position), ordered.map((_, index) => index));
     assert.equal(ordered[0].role, "speaker", `${submissionId} has no speaker of record`);
-    for (const co of ordered.slice(1)) assert.equal(co.role, "co_speaker");
+    for (const participant of ordered.slice(1)) {
+      assert.ok(["co_speaker", "moderator", "chairperson"].includes(participant.role));
+    }
     assert.equal(
       new Set(ordered.map((row) => row.person_id)).size,
       ordered.length,
