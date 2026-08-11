@@ -17,6 +17,18 @@ import { enqueueMailMessage } from "../jobs/mail/consumer";
  * credential context while OpenAPI documents every auth operation.
  */
 
+/**
+ * The sign-in doors are `public` routes, so the pipeline hands them a stale or
+ * tampered credential as anonymous rather than a 401 — but it also tells them
+ * the credential is a corpse. A success replaces the cookie on its own; a
+ * failure is the only moment left to drop it, because the cookie is HttpOnly
+ * and nothing on the page can. Without this, a browser that fails to sign in
+ * keeps re-presenting a dead session on every later request.
+ */
+function dropRejectedSessionCookie(context: Context<ApiEnv>): void {
+  if (context.get("credentialRejected")) clearSessionCookie(context);
+}
+
 const roleSchema = z.enum(["organizer", "speaker"]);
 const authErrorSchema = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
@@ -72,6 +84,7 @@ const demoLogin = defineApiRoute(
     const membershipRole = DEMO_ROLE_TO_MEMBERSHIP[body.role];
     const event = await findDemoEvent(context.env.DB);
     if (!event) {
+      dropRejectedSessionCookie(context);
       return context.json(
         { error: { code: "demo_disabled", message: "Demo login is only available in demo mode" } },
         403,
@@ -87,6 +100,7 @@ const demoLogin = defineApiRoute(
       .bind(event.id, membershipRole)
       .first<PersonRow>();
     if (!persona) {
+      dropRejectedSessionCookie(context);
       return context.json(
         { error: { code: "demo_persona_missing", message: "No demo persona for this role" } },
         403,
@@ -188,6 +202,7 @@ const exchangeMagicLink = defineApiRoute(
   (async (context: Context<ApiEnv>) => {
     const token = context.req.query("token");
     if (!token) {
+      dropRejectedSessionCookie(context);
       return context.json(
         { error: { code: "magic_link_invalid", message: "Missing token" } },
         401,
@@ -195,6 +210,7 @@ const exchangeMagicLink = defineApiRoute(
     }
     const link = await consumeMagicLink(context.env.DB, token);
     if (!link) {
+      dropRejectedSessionCookie(context);
       return context.json(
         {
           error: {
