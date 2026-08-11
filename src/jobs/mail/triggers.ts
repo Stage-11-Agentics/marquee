@@ -2,6 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
 import { enqueueOutbox, type EnqueuedOutbox } from "./outbox";
+import { selectPreCloseReminderCandidates } from "./schedule";
 import { findTemplate, TRIGGER_TEMPLATE_KEYS, type MailTemplateKey } from "./templates";
 import type { MergeData } from "./render";
 
@@ -63,43 +64,33 @@ export async function enqueueBulkReminder(input: {
   return result;
 }
 
-/** AC-127's hourly scheduler: only eligible, enabled forms are enqueued. */
-export async function enqueuePreCloseReminders(db: D1Database, now = Date.now()): Promise<number> {
-  const forms = await db
-    .prepare(
-      `SELECT f.id, f.event_id, f.closes_at, f.reminder_offset_hours,
-              p.id AS person_id, p.email, p.name
-       FROM forms f
-       JOIN submissions s ON s.form_id = f.id
-       JOIN participations part ON part.submission_id = s.id AND part.role IN ('speaker', 'submitter')
-       JOIN people p ON p.id = part.person_id
-       WHERE f.status = 'open'
-         AND f.reminder_offset_hours IS NOT NULL
-         AND f.closes_at IS NOT NULL
-         AND ? >= (f.closes_at - f.reminder_offset_hours * 3600000)
-         AND ? < f.closes_at`,
-    )
-    .bind(now, now)
-    .all<{ id: Id; event_id: Id; closes_at: number; person_id: Id; email: string; name: string }>();
-
-  let count = 0;
-  for (const row of forms.results) {
+/**
+ * AC-127's hourly scheduler: return only the outbox results created by this
+ * scan. The consumer uses these IDs for its queue handoff instead of
+ * re-querying by timestamp and accidentally including an unrelated row.
+ */
+export async function enqueuePreCloseReminderRows(db: D1Database, now = Date.now()): Promise<EnqueuedOutbox[]> {
+  const rows: EnqueuedOutbox[] = [];
+  for (const row of await selectPreCloseReminderCandidates(db, now)) {
     const result = await enqueueTrigger({
       db,
-      eventId: row.event_id,
-      templateKey: "form_closing_reminder",
-      entityId: row.id,
-      personId: row.person_id,
-      toEmail: row.email,
-      data: {
-        "speaker.first_name": row.name.trim().split(/\s+/)[0] ?? row.name,
-        "form.closes_at": new Date(row.closes_at).toISOString(),
-      },
+      eventId: row.eventId,
+      templateKey: row.templateKey,
+      entityId: row.entityId,
+      personId: row.personId,
+      toEmail: row.toEmail,
+      data: row.data,
       now,
     });
-    if (result?.inserted) count += 1;
+    if (result) rows.push(result);
   }
-  return count;
+  return rows;
+}
+
+/** AC-127's count-oriented API; repeat scans remain UNIQUE-key idempotent. */
+export async function enqueuePreCloseReminders(db: D1Database, now = Date.now()): Promise<number> {
+  const rows = await enqueuePreCloseReminderRows(db, now);
+  return rows.filter((row) => row.inserted).length;
 }
 
 export function isMailTemplateKey(value: string): value is MailTemplateKey {

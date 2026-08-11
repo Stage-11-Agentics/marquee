@@ -1,7 +1,7 @@
 import type { D1Database, MessageBatch, Queue } from "@cloudflare/workers-types";
 
 import type { OutboxRow } from "../../db/schema";
-import { enqueuePreCloseReminders } from "./triggers";
+import { enqueuePreCloseReminderRows } from "./triggers";
 
 export const MAIL_MESSAGE_TYPE = "mail_outbox";
 const PROCESSING_SENTINEL = "__mail_processing__";
@@ -280,13 +280,10 @@ export async function enqueueMailMessage(queue: Queue<unknown>, outboxId: string
 }
 
 export async function runMailSchedule(db: D1Database, queue?: Queue<unknown>, now = Date.now()): Promise<number> {
-  const count = await enqueuePreCloseReminders(db, now);
-  if (queue && count > 0) {
-    const rows = await db
-      .prepare("SELECT id FROM outbox WHERE status = 'queued' AND created_at = ? AND scheduled_for IS NULL")
-      .bind(now)
-      .all<{ id: string }>();
-    for (const row of rows.results) await enqueueMailMessage(queue, row.id);
+  const results = await enqueuePreCloseReminderRows(db, now);
+  const inserted = results.filter((row) => row.inserted);
+  if (queue) {
+    for (const row of inserted) await enqueueMailMessage(queue, row.id);
   }
-  return count;
+  return inserted.length;
 }

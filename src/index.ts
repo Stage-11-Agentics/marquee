@@ -8,6 +8,7 @@ import { createCredentialResolver } from "./lib/auth/credential-resolver";
 import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/reset-consumer";
 import { RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.routes";
 import { processMailQueue, MAIL_MESSAGE_TYPE, runMailSchedule } from "./jobs/mail/consumer";
+import { MAIL_SCHEDULE_CRON } from "./jobs/mail/schedule";
 import type { Principal } from "./api/runtime";
 import type { ApiGrant } from "./api/grants";
 import { landingRoutes } from "./routes/landing.route";
@@ -157,7 +158,7 @@ const worker: ExportedHandler<Env> = {
     }
   },
   async scheduled(controller, env, _context): Promise<void> {
-    if (controller.cron === "0 * * * *") {
+    if (controller.cron === MAIL_SCHEDULE_CRON) {
       await runMailSchedule(env.DB, env.MAIL_QUEUE, Date.now());
     } else if (controller.cron === "30 4 * * *") {
       await runUploadOrphanSweep(env.DB, env.MEDIA, Date.now());

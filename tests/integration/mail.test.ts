@@ -3,8 +3,10 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { OutboxRow } from "../../src/db/schema";
 import { app } from "../../src/index";
 import { createSession } from "../../src/lib/auth/auth-sessions";
-import { processMailOutbox, type MailProvider } from "../../src/jobs/mail/consumer";
+import { listCommsAudience, listCommsRecipientsForSubmissionIds } from "../../src/jobs/mail/audience";
+import { processMailOutbox, runMailSchedule, type MailProvider } from "../../src/jobs/mail/consumer";
 import { enqueueOutbox, enqueuePublicFormConfirmation, enqueueSmokeHarnessMail, buildIdempotencyKey } from "../../src/jobs/mail/outbox";
+import { isMailScheduleCron, selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "../../src/jobs/mail/schedule";
 import { enqueueBulkReminder, enqueuePreCloseReminders, enqueueTrigger } from "../../src/jobs/mail/triggers";
 import { findTemplate, renderStoredTemplate, TRIGGER_TEMPLATE_KEYS } from "../../src/jobs/mail/templates";
 import { renderMail } from "../../src/jobs/mail/render";
@@ -29,10 +31,15 @@ afterEach(async () => {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM email_templates WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM outbox WHERE event_id = 'evt_mail'"),
-    env.DB.prepare("DELETE FROM participations WHERE id IN ('part_mail') OR submission_id IN ('sub_mail')"),
+    env.DB.prepare("DELETE FROM event_settings WHERE event_id = 'evt_mail'"),
+    env.DB.prepare("DELETE FROM speaker_tasks WHERE event_id = 'evt_mail'"),
+    env.DB.prepare("DELETE FROM task_templates WHERE event_id = 'evt_mail'"),
+    env.DB.prepare("DELETE FROM submission_tracks WHERE submission_id IN ('sub_mail', 'sub_mail_2')"),
+    env.DB.prepare("DELETE FROM participations WHERE id IN ('part_mail', 'part_mail_2') OR submission_id IN ('sub_mail', 'sub_mail_2')"),
     env.DB.prepare("DELETE FROM submissions WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM forms WHERE event_id = 'evt_mail'"),
-    env.DB.prepare("DELETE FROM event_settings WHERE event_id = 'evt_mail'"),
+    env.DB.prepare("DELETE FROM formats WHERE event_id = 'evt_mail'"),
+    env.DB.prepare("DELETE FROM tracks WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM auth_sessions WHERE person_id = 'per_mail'"),
     env.DB.prepare("DELETE FROM memberships WHERE person_id = 'per_mail'"),
     env.DB.prepare("DELETE FROM people WHERE org_id = 'org_mail'"),
@@ -87,7 +94,9 @@ test("AC-117 · the same bulk action twice relies on the UNIQUE idempotency cons
   expect(second[0].inserted).toBe(false);
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbox WHERE idempotency_key = ?").bind(first[0].idempotencyKey).first<{ n: number }>();
   expect(count?.n).toBe(1);
-  await env.DB.prepare("UPDATE events SET demo_mode = 0 WHERE id = 'evt_mail'").run();
+  await env.DB.prepare(
+    "INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at) VALUES ('setting_mail_allowlist', 'evt_mail', 'demo_safe_allowlist', '[\"speaker@example.com\"]', ?, ?)",
+  ).bind(NOW, NOW).run();
   const fake = provider();
   expect(await processMailOutbox(env.DB, env, [first[0].id, second[0].id], { provider: fake, now: NOW, sleep: async () => undefined })).toEqual({ sent: 1, suppressed: 0, failed: 0 });
   // The duplicate was already marked by the first delivery attempt; it did not produce a second provider call.
@@ -130,9 +139,101 @@ test("AC-126 · a disabled trigger emits no row and an edited template round-tri
 });
 
 test("AC-127 · the pre-close schedule fires at the configured offset and not before", async () => {
+  expect(isMailScheduleCron("0 * * * *")).toBe(true);
+  expect(isMailScheduleCron("*/5 * * * *")).toBe(false);
+  expect(await selectPreCloseReminderCandidates(env.DB, NOW + 23 * 60 * 60_000)).toHaveLength(0);
+  expect(await selectPreCloseReminderCandidates(env.DB, NOW + 24 * 60 * 60_000)).toHaveLength(1);
+  expect(await selectOverdueTaskCandidates(env.DB, NOW)).toHaveLength(0);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 23 * 60 * 60_000)).toBe(0);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 24 * 60 * 60_000)).toBe(1);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 25 * 60 * 60_000)).toBe(0);
+});
+
+test("AC-127 · the cron handoff queues only rows created by its scan", async () => {
+  const cronNow = NOW + 24 * 60 * 60_000;
+  const unrelated = await enqueueOutbox({
+    db: env.DB,
+    eventId: "evt_mail",
+    templateKey: "custom",
+    entityId: "same-cron-unrelated",
+    personId: "per_mail",
+    toEmail: "speaker@example.com",
+    now: cronNow,
+  });
+  const queue = { send: vi.fn(async (_message: unknown) => undefined) } as unknown as Parameters<typeof runMailSchedule>[1];
+  expect(await runMailSchedule(env.DB, queue, cronNow)).toBe(1);
+  expect(queue?.send).toHaveBeenCalledTimes(1);
+  expect(queue?.send).not.toHaveBeenCalledWith(expect.objectContaining({ outbox_id: unrelated.id }));
+});
+
+test("AC-114 · AC-115 · AC-116 · AC-129 · AC-131 · the audience read path uses MRQ-8 filters and stays event-scoped", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_2', 'org_mail', 'second@example.com', 'Grace Hopper', ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO formats (id, event_id, name, default_duration_min, min_duration_min, max_duration_min, position, created_at, updated_at) VALUES ('fmt_mail', 'evt_mail', 'Session', 45, 15, 90, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES ('track_mail', 'evt_mail', 'AI', '#8B5CF6', 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("UPDATE submissions SET status = 'accepted', kind = 'session', format_id = 'fmt_mail', primary_track_id = 'track_mail' WHERE id = 'sub_mail'"),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, form_id, kind, title, status, format_id, primary_track_id, origin, submitter_person_id, created_at, updated_at) VALUES ('sub_mail_2', 'evt_mail', 'form_mail', 'session', 'Second session', 'accepted', 'fmt_mail', 'track_mail', 'public', 'per_mail_2', ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES ('st_mail', 'sub_mail', 'track_mail', 1, ?, ?), ('st_mail_2', 'sub_mail_2', 'track_mail', 1, ?, ?)").bind(NOW, NOW, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_mail_2', 'sub_mail_2', 'per_mail_2', 'speaker', 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('task_template_mail', 'evt_mail', 'Speaker task', 'acknowledge', 'Acknowledge', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, due_at, status, created_at, updated_at, cancelled_at) VALUES ('task_mail_overdue', 'evt_mail', 'per_mail_2', 'sub_mail_2', 'task_template_mail', 'Speaker agreement', 'acknowledge', ?, 'open', ?, ?, NULL), ('task_mail_cancelled', 'evt_mail', 'per_mail', 'sub_mail', 'task_template_mail', 'Cancelled task', 'acknowledge', ?, 'open', ?, ?, ?)").bind(NOW - 60 * 60_000, NOW, NOW, NOW - 60 * 60_000, NOW, NOW, NOW),
+  ]);
+
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-audience-test", now: NOW });
+  const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+  const response = await app.request(
+    "/api/v1/events/evt_mail/comms/audience?status=accepted&track=track_mail&format=fmt_mail&per_page=10",
+    { headers: { cookie: `mq_session=${session.id}` } },
+    env,
+    requestContext,
+  );
+  expect(response.status).toBe(200);
+  const body = await response.json<{ data: Array<{ email: string; submission_id: string; submission_title: string; task_title: string | null }>; total: number }>();
+  expect(body.total).toBe(2);
+  expect(body.data.map((row) => row.submission_id)).toEqual(["sub_mail", "sub_mail_2"]);
+  expect(body.data[0]).toMatchObject({ email: "speaker@example.com", submission_title: "Reliable email" });
+
+  const overdue = await app.request(
+    "/api/v1/events/evt_mail/comms/audience?task=overdue",
+    { headers: { cookie: `mq_session=${session.id}` } },
+    env,
+    requestContext,
+  );
+  expect(overdue.status).toBe(200);
+  const overdueBody = await overdue.json<{ data: Array<{ person_id: string; submission_id: string; task_title: string | null }>; total: number }>();
+  expect(overdueBody.total).toBe(1);
+  expect(overdueBody.data[0]).toMatchObject({ person_id: "per_mail_2", submission_id: "sub_mail_2", task_title: "Speaker agreement" });
+  expect(overdueBody.data.some((row) => row.submission_id === "sub_mail")).toBe(false);
+
+  const openTasks = await app.request(
+    "/api/v1/events/evt_mail/comms/audience?task_state=open",
+    { headers: { cookie: `mq_session=${session.id}` } },
+    env,
+    requestContext,
+  );
+  expect(openTasks.status).toBe(200);
+  const openTasksBody = await openTasks.json<{ data: Array<{ submission_id: string }>; total: number }>();
+  expect(openTasksBody.total).toBe(1);
+  expect(openTasksBody.data[0]?.submission_id).toBe("sub_mail_2");
+
+  const positive = await listCommsRecipientsForSubmissionIds(env.DB, "evt_mail", ["sub_mail"]);
+  expect(positive.total).toBe(1);
+  expect(positive.data[0]?.email).toBe("speaker@example.com");
+  const crossEvent = await app.request(
+    "/api/v1/events/evt_mail_other/comms/audience?status=accepted",
+    { headers: { cookie: `mq_session=${session.id}` } },
+    env,
+    requestContext,
+  );
+  expect(crossEvent.status).toBe(403);
+  const crossEventBody = await crossEvent.text();
+  expect(crossEventBody).not.toContain("speaker@example.com");
+  expect(crossEventBody).not.toContain("per_mail");
+  expect(crossEventBody).not.toContain("sub_mail");
+  expect(crossEventBody).not.toContain("Reliable email");
+  const directCrossEvent = await listCommsAudience(env.DB, { eventId: "evt_mail_other" });
+  expect(directCrossEvent.total).toBe(0);
+  expect(directCrossEvent.data).toEqual([]);
 });
 
 test("AC-128 · merge fields render the speaker, session, room, and time", () => {
@@ -230,5 +331,23 @@ test("AC-126 · the manifest route exposes authenticated template storage throug
   const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-test" });
   const response = await app.request("/api/v1/events/evt_mail/templates", { headers: { cookie: `mq_session=${session.id}` } }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
   expect(response.status).toBe(200);
-  expect(await response.json<{ data: unknown[] }>()).toEqual({ data: [] });
+  const body = await response.json<{ data: Array<{ id: string; key: string; enabled: number }> }>();
+  expect(body.data).toHaveLength(9);
+  expect(body.data.map((template) => template.key)).toEqual(expect.arrayContaining([...TRIGGER_TEMPLATE_KEYS]));
+  const defaultRejection = body.data.find((template) => template.key === "rejection");
+  expect(defaultRejection?.id).toBe("default_evt_mail_rejection");
+  const disabled = await app.request(
+    `/api/v1/events/evt_mail/templates/${defaultRejection?.id}`,
+    {
+      method: "PATCH",
+      headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+      body: JSON.stringify({ enabled: false }),
+    },
+    env,
+    { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext,
+  );
+  expect(disabled.status).toBe(200);
+  const persisted = await env.DB.prepare("SELECT enabled FROM email_templates WHERE event_id = 'evt_mail' AND key = 'rejection'").first<{ enabled: number }>();
+  expect(persisted?.enabled).toBe(0);
+  expect(await enqueueTrigger({ db: env.DB, eventId: "evt_mail", templateKey: "rejection", entityId: "sub_mail", personId: "per_mail", toEmail: "speaker@example.com" })).toBeNull();
 });

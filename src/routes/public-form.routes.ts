@@ -9,6 +9,7 @@ import type { PersonRow } from "../db/schema";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueuePublicFormConfirmation, enqueueOutbox } from "../jobs/mail/outbox";
 import { escapeHtml } from "../jobs/mail/render";
+import { findTemplate } from "../jobs/mail/templates";
 import { enqueueAuthMail } from "../lib/auth/auth-mail";
 import { mintMagicLink } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
@@ -461,21 +462,27 @@ async function handlePublicSubmission(
   await insertParticipationRows(context.env.DB, submissionId, person, projected.projected.answers, event.org_id, now);
   await moveAttachments(context.env.DB, submissionId, existing?.id ?? null, projected.projected.answers);
 
-  const confirmation = await enqueuePublicFormConfirmation({
-    db: context.env.DB,
-    eventId: base.form.event_id,
-    entityId: submissionId,
-    personId: person.id,
-    toEmail: email!,
-    typedAddress: email!,
-    templateKey: base.form.thankyou_template_key ?? "submission_confirmation",
-    data: { "submission.title": title, "speaker.first_name": (answerText(projected.projected.answers, "speaker_name") ?? "there").split(/\s+/)[0] ?? "there" },
-    subject: `We received ${title}`,
-    text: `We received ${title}.\n\nReview your conference abstract here: ${confirmationUrl}`,
-    html: `<p>We received <strong>${escapeHtml(title)}</strong>.</p><p><a href="${confirmationUrl}">Review your conference abstract</a></p>`,
-    now,
-  });
-  await enqueueMailMessage(context.env.MAIL_QUEUE, confirmation.id);
+  const confirmationTemplateKey = base.form.thankyou_template_key ?? "submission_confirmation";
+  const confirmationTemplate = await findTemplate(context.env.DB, base.form.event_id, confirmationTemplateKey);
+  // This transactional reply is enabled unless an organizer explicitly stores
+  // `enabled = 0`; an absent or unset state must not strand a submitter.
+  if (confirmationTemplate.enabled !== 0) {
+    const confirmation = await enqueuePublicFormConfirmation({
+      db: context.env.DB,
+      eventId: base.form.event_id,
+      entityId: submissionId,
+      personId: person.id,
+      toEmail: email!,
+      typedAddress: email!,
+      templateKey: confirmationTemplateKey,
+      data: { "submission.title": title, "speaker.first_name": (answerText(projected.projected.answers, "speaker_name") ?? "there").split(/\s+/)[0] ?? "there" },
+      subject: `We received ${title}`,
+      text: `We received ${title}.\n\nReview your conference abstract here: ${confirmationUrl}`,
+      html: `<p>We received <strong>${escapeHtml(title)}</strong>.</p><p><a href="${confirmationUrl}">Review your conference abstract</a></p>`,
+      now,
+    });
+    await enqueueMailMessage(context.env.MAIL_QUEUE, confirmation.id);
+  }
 
   const adminIds = (() => {
     try {

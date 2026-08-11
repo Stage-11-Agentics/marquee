@@ -1,16 +1,23 @@
 import { z } from "@hono/zod-openapi";
 
 import type { ApiRouteEntry } from "../api/route";
-import { defineApiRoute, errorResponses } from "../api/route";
+import { createListQuerySchema, createListResponseSchema } from "../api/list";
+import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { ApiError } from "../api/errors";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { listCommsAudience, type CommsRecipientRow } from "../jobs/mail/audience";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
-import { findTemplate, MAIL_TEMPLATE_KEYS } from "../jobs/mail/templates";
+import {
+  defaultTemplateKeyFromId,
+  findTemplate,
+  listCommunicationTemplates,
+  MAIL_TEMPLATE_KEYS,
+} from "../jobs/mail/templates";
 import { mergeTemplate, renderMail, type MergeData } from "../jobs/mail/render";
 import type { OutboxRow } from "../db/schema";
-import { hasSpeakerTaskCancellationColumn } from "./submissions.queries";
+import { hasSpeakerTaskCancellationColumn, submissionFilterSchema } from "./submissions.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const templateParams = eventParams.extend({ templateId: z.string().min(1) });
@@ -71,6 +78,28 @@ const outboxListResponse = z.object({
   per_page: z.number(),
   total: z.number(),
 });
+const audienceQuerySchema = createListQuerySchema(
+  { ...submissionFilterSchema.shape, task_state: z.enum(["open", "done"]).optional() },
+  ["name", "title"],
+  { defaultSort: "name" },
+);
+const audienceItemSchema = z.object({
+  person_id: z.string(),
+  submission_id: z.string(),
+  email: z.string(),
+  name: z.string(),
+  role: z.string(),
+  submission_title: z.string(),
+  format: z.string().nullable(),
+  room: z.string().nullable(),
+  starts_at: z.number().nullable(),
+  task_title: z.string().nullable(),
+  task_due_at: z.number().nullable(),
+});
+const audienceResponse = jsonResponse(
+  createListResponseSchema(audienceItemSchema, "CommunicationAudience"),
+  "The filtered communication audience",
+);
 const previewResponse = z.object({
   subject: z.string(),
   html: z.string(),
@@ -191,8 +220,12 @@ const getTemplates = defineApiRoute(
   async (context) => {
     const { eventId } = context.req.valid("param");
     requireComms(context, eventId, false);
-    const rows = await context.env.DB.prepare("SELECT id, event_id, key, name, subject, body_md, enabled, updated_at FROM email_templates WHERE event_id = ? ORDER BY key").bind(eventId).all();
-    return context.json({ data: rows.results }, 200);
+    const rows = await listCommunicationTemplates(context.env.DB, eventId);
+    return context.json({
+      data: rows.map(({ id, event_id, key, name, subject, body_md, enabled, updated_at }) => ({
+        id, event_id, key, name, subject, body_md, enabled, updated_at,
+      })),
+    }, 200);
   },
 );
 
@@ -242,13 +275,33 @@ const updateTemplate = defineApiRoute(
     const { eventId, templateId } = context.req.valid("param");
     requireComms(context, eventId, true);
     const body = context.req.valid("json");
-    const current = await context.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? AND event_id = ?").bind(templateId, eventId).first<{ key: string; name: string; subject: string; body_md: string; enabled: 0 | 1 }>();
-    if (!current) throw ApiError.notFound("template not found");
+    let persistedId = templateId;
+    let current = await context.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? AND event_id = ?").bind(templateId, eventId).first<{ key: string; name: string; subject: string; body_md: string; enabled: 0 | 1 }>();
+    if (!current) {
+      const defaultKey = defaultTemplateKeyFromId(eventId, templateId);
+      if (!defaultKey) throw ApiError.notFound("template not found");
+      const fallback = await findTemplate(context.env.DB, eventId, defaultKey);
+      persistedId = crypto.randomUUID();
+      current = {
+        key: fallback.key,
+        name: fallback.name,
+        subject: fallback.subject,
+        body_md: fallback.body_md,
+        enabled: fallback.enabled,
+      };
+      const now = Date.now();
+      await context.env.DB.prepare(
+        `INSERT INTO email_templates (id, event_id, key, name, subject, body_md, enabled, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(persistedId, eventId, current.key, current.name, current.subject, current.body_md, current.enabled, now, now).run();
+    }
+    const nextKey = body.key ?? current.key;
+    if (!(MAIL_TEMPLATE_KEYS as readonly string[]).includes(nextKey)) throw ApiError.badRequest("unknown template key", "key");
     const now = Date.now();
     await context.env.DB.prepare(
       `UPDATE email_templates SET key = ?, name = ?, subject = ?, body_md = ?, enabled = ?, updated_at = ? WHERE id = ? AND event_id = ?`,
-    ).bind(body.key ?? current.key, body.name ?? current.name, body.subject ?? current.subject, body.body_md ?? current.body_md, body.enabled === undefined ? current.enabled : body.enabled ? 1 : 0, now, templateId, eventId).run();
-    const row = await context.env.DB.prepare("SELECT id, event_id, key, name, subject, body_md, enabled, updated_at FROM email_templates WHERE id = ?").bind(templateId).first();
+    ).bind(nextKey, body.name ?? current.name, body.subject ?? current.subject, body.body_md ?? current.body_md, body.enabled === undefined ? current.enabled : body.enabled ? 1 : 0, now, persistedId, eventId).run();
+    const row = await context.env.DB.prepare("SELECT id, event_id, key, name, subject, body_md, enabled, updated_at FROM email_templates WHERE id = ?").bind(persistedId).first();
     return context.json(row, 200);
   },
 );
@@ -380,6 +433,28 @@ const getPersonMessages = defineApiRoute(
   },
 );
 
+const listCommunicationAudience = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/comms/audience",
+    operationId: "listCommunicationAudience",
+    summary: "List the filtered communication audience",
+    description:
+      "Resolve the canonical submissions list filters into one stable row per recipient without queueing mail.",
+    tags: ["Comms"],
+    request: { params: eventParams, query: audienceQuerySchema },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: audienceResponse, ...errorResponses([400, 401, 403, 404, 500]) },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    requireComms(context, eventId, false);
+    const query = context.req.valid("query");
+    const result = await listCommsAudience(context.env.DB, { eventId, ...query });
+    return context.json(result, 200);
+  },
+);
+
 export const apiRoutes = [
   getTemplates,
   createTemplate,
@@ -388,4 +463,7 @@ export const apiRoutes = [
   sendComms,
   getOutbox,
   getPersonMessages,
+  listCommunicationAudience,
 ];
+
+export type CommunicationAudienceItem = CommsRecipientRow;
