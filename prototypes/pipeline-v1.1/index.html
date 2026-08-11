@@ -739,11 +739,17 @@
       // Buildings seeded from the real AI Engineer Summit NYC 2025 program
       // (sequence/research/sources/aie-summit-2025-program.json) — that event genuinely
       // ran across three physical venues plus a stream.
+      // Coordinates geocoded from the street addresses (OSM/Nominatim, 2026-08-10),
+      // not eyeballed — a pin in the wrong place is loudly wrong, and the walking
+      // maths below depends on them. `accessMinutes` is ingress overhead: JFK27's
+      // room note already says "allow ten minutes for building security", and that
+      // ten minutes changes the answer, so it belongs in the model rather than in
+      // prose. A venue with no coordinates (the stream) is honest, not an edge case.
       const buildings = [
-        { id:"b1", name:"The Times Center",  address:"242 W 41st St, New York, NY 10036" },
-        { id:"b2", name:"Jay Suites",        address:"109 W 39th St, 2nd floor, New York, NY 10018" },
-        { id:"b3", name:"AWS JFK27",         address:"12 W 39th St, New York, NY 10018 · entrance on 39th St at 5th Ave, large gold doors" },
-        { id:"b4", name:"AIE YouTube",       address:"Online · streamed, no physical venue" }
+        { id:"b1", name:"The Times Center",  address:"242 W 41st St, New York, NY 10036", lat:40.75600, lng:-73.98923, accessMinutes:0 },
+        { id:"b2", name:"Jay Suites",        address:"109 W 39th St, 2nd floor, New York, NY 10018", lat:40.75311, lng:-73.98569, accessMinutes:2 },
+        { id:"b3", name:"AWS JFK27",         address:"12 W 39th St, New York, NY 10018 · entrance on 39th St at 5th Ave, large gold doors", lat:40.75169, lng:-73.98278, accessMinutes:10 },
+        { id:"b4", name:"AIE YouTube",       address:"Online · streamed, no physical venue", lat:null, lng:null, accessMinutes:0 }
       ];
       const AV_TAGS = ["Projector", "Confidence monitor", "Mics", "Livestream"];
       const waveDates = ["Aug 15", "Sep 1", "Sep 15"];
@@ -1047,6 +1053,15 @@
         state.scheduled[13].speakers = ["Casey O'Connell-Singh"];
         state.scheduled[14].speakers = ["Casey O'Connell-Singh"];
         state.scheduled[15].room = state.scheduled[14].room;
+        // A deliberate travel case, staged the way the room-overlap and
+        // double-booking cases already are. Wednesday is otherwise empty, so this
+        // demonstrates the class without colliding with anything else: the same
+        // speaker in The Times Center and then at JFK27 ten minutes later. Day and
+        // time alone read clean — it is a 12-minute walk plus a 10-minute security
+        // queue, and only geography can see it.
+        const travelSpeaker = "Ifeoma Adeyemi";
+        Object.assign(state.scheduled[16], { day:"Wed · Oct 14", time:"09:00", room:"Metropolitan Ballroom", duration:20, speaker:travelSpeaker, speakers:[travelSpeaker], conflict:true });
+        Object.assign(state.scheduled[17], { day:"Wed · Oct 14", time:"09:30", room:"Central Park",          duration:20, speaker:travelSpeaker, speakers:[travelSpeaker], conflict:true });
       }
       seedAgenda();
 
@@ -2135,16 +2150,58 @@
         const order={day:(a,b)=>(a.day+a.time).localeCompare(b.day+b.time),title:(a,b)=>a.title.localeCompare(b.title),speaker:(a,b)=>(a.speaker||"").localeCompare(b.speaker||""),track:(a,b)=>(a.track||"").localeCompare(b.track||""),room:(a,b)=>a.room.localeCompare(b.room),format:(a,b)=>(a.format||"Break").localeCompare(b.format||"Break")};sessions.sort(order[state.agendaSort]||order.day);
         return `<div><div class="agenda-list-head"><button data-agenda-sort="day">Day</button><span>Time</span><button data-agenda-sort="title">Title</button><button data-agenda-sort="speaker">Speakers</button><button data-agenda-sort="track">Track</button><button data-agenda-sort="room">Room</button><button data-agenda-sort="format">Format</button></div>${sessions.map(s=>`<div class="agenda-list-row"><strong>${s.day}</strong><span class="tabular">${s.time}</span><div><strong>${esc(s.title)}</strong>${s.kind==="break"?"":scheduleMeta(s,true)}</div><span>${esc(s.kind==="break"?"—":s.speakers.join(" · "))}</span><div>${s.kind==="break"?`<span class="chip" style="border-left:3px solid var(--muted)">Break</span>`:trackChips(s,true)}</div><span>${esc(s.room)}</span><span>${esc(s.kind==="break"?`Break · ${s.duration}m`:s.format)}</span></div>`).join("")}</div>`;
       }
+      // Geography, as a scheduling constraint -----------------------------------
+      // Straight-line distance underestimates a Manhattan walk, so the grid detour
+      // factor is applied before converting to minutes at a normal walking pace.
+      const WALK_DETOUR = 1.3, WALK_METRES_PER_MIN = 80;
+
+      function haversineMetres(a, b) {
+        const R = 6371000, rad = d => d * Math.PI / 180;
+        const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+        const h = Math.sin(dLat/2)**2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng/2)**2;
+        return 2 * R * Math.asin(Math.sqrt(h));
+      }
+      function hasPin(building) { return !!building && building.lat != null && building.lng != null; }
+      function walkMinutes(from, to) {
+        if (!hasPin(from) || !hasPin(to) || from.id === to.id) return 0;
+        return Math.max(1, Math.ceil(haversineMetres(from, to) * WALK_DETOUR / WALK_METRES_PER_MIN));
+      }
+      // Getting there, plus getting in. Security queues are travel time.
+      function requiredGapMinutes(from, to) {
+        if (!hasPin(from) || !hasPin(to) || from.id === to.id) return 0;
+        return walkMinutes(from, to) + (to.accessMinutes || 0);
+      }
+
       function getAgendaConflicts() {
         const conflicts = [];
         const toMinutes = value => { const [h,m]=value.split(":").map(Number); return h*60+m; };
+        const speakersOf = item => item.speakers || [item.speaker];
         for (let i=0;i<state.scheduled.length;i++) for (let j=i+1;j<state.scheduled.length;j++) {
           const a=state.scheduled[i], b=state.scheduled[j]; if(a.day!==b.day) continue;
           const overlaps = toMinutes(a.time) < toMinutes(b.time)+b.duration && toMinutes(b.time) < toMinutes(a.time)+a.duration;
-          if (!overlaps) continue;
-          if (a.room===b.room) conflicts.push({type:"Room overlap",a,b});
-          const shared=(a.speakers||[a.speaker]).find(name=>(b.speakers||[b.speaker]).includes(name));
-          if (shared) conflicts.push({type:`${shared} is double-booked`,a,b});
+          if (overlaps) {
+            if (a.room===b.room) conflicts.push({type:"Room overlap",a,b});
+            const shared=speakersOf(a).find(name=>speakersOf(b).includes(name));
+            if (shared) conflicts.push({type:`${shared} is double-booked`,a,b});
+            continue;
+          }
+          // Not overlapping is not the same as reachable. A speaker in The Times
+          // Center at 10:00 and JFK27 at 10:30 reads clean on a day+time check and
+          // is a twelve-minute walk plus a ten-minute security queue.
+          const shared = speakersOf(a).find(name=>speakersOf(b).includes(name));
+          if (!shared) continue;
+          const [first,second] = toMinutes(a.time) <= toMinutes(b.time) ? [a,b] : [b,a];
+          const from = buildingForRoom(first.room), to = buildingForRoom(second.room);
+          if (!hasPin(from) || !hasPin(to) || from.id === to.id) continue;
+          const gap = toMinutes(second.time) - (toMinutes(first.time) + first.duration);
+          const needed = requiredGapMinutes(from, to);
+          if (gap >= needed) continue;
+          const walk = walkMinutes(from, to), access = to.accessMinutes || 0;
+          conflicts.push({
+            kind: "travel",
+            type: `Travel — ${walk} min walk to ${to.name}${access?`, plus ${access} min building security`:""}. ${shared} needs ${needed} min; has ${gap}.`,
+            a: first, b: second
+          });
         }
         return conflicts;
       }
