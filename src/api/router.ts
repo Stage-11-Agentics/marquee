@@ -25,10 +25,13 @@ import {
   issueField,
   resolveRequestId,
 } from "./errors";
+import type { ApiGrant } from "./grants";
 import { assembleApiDocument, registerApiComponents, type ApiDocumentBundle } from "./openapi";
 import { allowAllRateLimiter, enforceRateLimit } from "./rate-limit";
 import type { ApiRouteEntry, ApiRoutePolicy } from "./route";
 import type { ApiEnv, ApiRuntime, Principal } from "./runtime";
+import { roleForEvent } from "../lib/auth/scope-resolution";
+import type { MembershipRole } from "../db/schema";
 
 function envelopeResponse(context: Context<ApiEnv>, error: ApiError): Response {
   const requestId = context.get("requestId") ?? "unknown";
@@ -41,19 +44,83 @@ function envelopeResponse(context: Context<ApiEnv>, error: ApiError): Response {
 }
 
 /** Step 4: authorization, with concealment rather than disclosure. */
-function authorize(policy: ApiRoutePolicy, principal: Principal): void {
+function authorize(
+  context: Context<ApiEnv>,
+  policy: ApiRoutePolicy,
+  principal: Principal,
+): void {
   if (policy.auth.kind === "public") return;
   if (principal.kind === "anonymous") throw ApiError.unauthenticated();
   if (policy.auth.kind === "authenticated") return;
-  const held = new Set(principal.kind === "token" ? principal.grants : []);
-  // A session principal's grants come from membership role, which M-03 supplies.
-  // Until it does, a session cannot satisfy a grant-scoped route: fail closed.
-  const missing = policy.auth.grants.filter((grant) => !held.has(grant));
+  const eventId = context.req.param("eventId");
+  const missing = policy.auth.grants.filter(
+    (grant) => !principalHasGrant(principal, grant, eventId),
+  );
   if (missing.length > 0) {
     throw ApiError.forbidden(
       `this credential lacks the required grant${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}`,
     );
   }
+}
+
+const MINIMUM_ROLE_BY_GRANT: Record<ApiGrant, MembershipRole[]> = {
+  "program:read": ["ops", "program_lead", "owner"],
+  "program:write": ["program_lead", "owner"],
+  "review:write": ["reviewer", "ops", "program_lead", "owner"],
+  "speaker:write": ["speaker", "reviewer", "ops", "program_lead", "owner"],
+  "agenda:write": ["program_lead", "owner"],
+  "comms:send": ["ops", "program_lead", "owner"],
+  "mirror:write": ["owner"],
+};
+
+const LEGACY_ROLE_GRANTS: Record<MembershipRole, readonly ApiGrant[]> = {
+  speaker: ["speaker:write"],
+  reviewer: ["review:write", "speaker:write"],
+  ops: ["program:read", "review:write", "speaker:write", "comms:send"],
+  program_lead: [
+    "program:read",
+    "program:write",
+    "review:write",
+    "speaker:write",
+    "agenda:write",
+    "comms:send",
+  ],
+  owner: [
+    "program:read",
+    "program:write",
+    "review:write",
+    "speaker:write",
+    "agenda:write",
+    "comms:send",
+    "mirror:write",
+  ],
+};
+
+function principalHasGrant(
+  principal: Exclude<Principal, { kind: "anonymous" }>,
+  grant: ApiGrant,
+  eventId: string | undefined,
+): boolean {
+  if (principal.kind === "token") {
+    if (
+      eventId !== undefined &&
+      (principal.eventId !== null
+        ? principal.eventId !== eventId
+        : principal.eventIds.length > 0 && !principal.eventIds.includes(eventId))
+    ) {
+      return false;
+    }
+    if (principal.grants.includes(grant)) return true;
+    return principal.permissions.some(
+      (permission) =>
+        permission in LEGACY_ROLE_GRANTS &&
+        LEGACY_ROLE_GRANTS[permission as MembershipRole].includes(grant),
+    );
+  }
+
+  if (eventId === undefined) return false;
+  const role = roleForEvent(principal.memberships, eventId);
+  return role !== null && MINIMUM_ROLE_BY_GRANT[grant].includes(role);
 }
 
 function routeMiddleware(
@@ -64,14 +131,15 @@ function routeMiddleware(
   const limiter = runtime.rateLimiter ?? allowAllRateLimiter(now);
   return async (context, next) => {
     // 2 — credential resolution.
-    const principal: Principal = runtime.credentialResolver
-      ? await runtime.credentialResolver.resolve(context)
+    const credentialResolver = runtime.credentialResolver ?? context.env.AUTH;
+    const principal: Principal = credentialResolver
+      ? await credentialResolver.resolve(context)
       : { kind: "anonymous" };
     context.set("principal", principal);
     // 3 — rate-limit selection and enforcement (headers land on every response).
     await enforceRateLimit(context, limiter, policy.rateLimit, principal, now);
     // 4 — authorization.
-    authorize(policy, principal);
+    authorize(context, policy, principal);
     // 5/6 — validation then handler.
     await next();
   };

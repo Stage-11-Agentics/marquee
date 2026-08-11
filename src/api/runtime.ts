@@ -6,6 +6,7 @@
  */
 import type { Context, Env as HonoEnv } from "hono";
 
+import type { MembershipRow } from "../db/schema";
 import type { ApiGrant } from "./grants";
 import type { ApiDocumentBundle } from "./openapi";
 
@@ -14,20 +15,23 @@ export type Principal =
   | { kind: "anonymous" }
   | {
       kind: "session";
+      sessionId: string;
       personId: string;
       orgId: string;
-      /** Effective membership role for the request's event context, if any. */
-      role?: string;
-      /** Events this principal may see; undefined means unrestricted by event. */
-      eventIds?: readonly string[];
+      /** Raw memberships are retained so every event check can resolve scope independently. */
+      memberships: readonly MembershipRow[];
     }
   | {
       kind: "token";
       tokenId: string;
       orgId: string;
+      /** A non-null issuer restriction is always enforced by the API pipeline. */
+      eventId: string | null;
+      /** Original scope names are preserved for the existing /auth/me contract. */
+      permissions: readonly string[];
       grants: readonly ApiGrant[];
-      /** Omitted restriction = all events still allowed by issuer membership. */
-      eventIds?: readonly string[];
+      /** An empty list means the token has no plural event restriction. */
+      eventIds: readonly string[];
     };
 
 export interface CredentialResolver {
@@ -92,6 +96,8 @@ export type ApiVariables = {
 export interface ApiBindings {
   CACHE: KVNamespace;
   DB: D1Database;
+  /** Optional virtual binding for embedders that compose the API directly. */
+  AUTH?: CredentialResolver;
 }
 
 /** The Hono environment every API route and middleware is typed against. */

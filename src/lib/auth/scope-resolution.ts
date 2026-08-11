@@ -1,4 +1,6 @@
-import type { ApiTokenRow, ApiTokenScopes, Id, MembershipRole, MembershipRow } from "../../db/schema";
+import type { Id, MembershipRole, MembershipRow } from "../../db/schema";
+import type { Principal } from "../../api/runtime";
+import type { ApiGrant } from "../../api/grants";
 
 /** SPEC §4.1: public < speaker < reviewer < ops < program_lead < owner. */
 const ROLE_RANK: Record<MembershipRole, number> = {
@@ -13,21 +15,15 @@ export function roleRank(role: MembershipRole): number {
   return ROLE_RANK[role];
 }
 
-export interface SessionAuth {
-  kind: "session";
-  sessionId: Id;
-  personId: Id;
-  orgId: Id;
-  memberships: MembershipRow[];
-}
-
-export interface ApiTokenAuth {
-  kind: "api_token";
-  token: ApiTokenRow;
-  scopes: ApiTokenScopes;
-}
-
-export type AuthContext = SessionAuth | ApiTokenAuth;
+/**
+ * Principal is the one canonical authenticated identity shape for both the
+ * API pipeline and the legacy Hono auth routes. Keeping this alias here lets
+ * MRQ-3's callers retain the AuthContext name without maintaining a second,
+ * incompatible union.
+ */
+export type AuthContext = Exclude<Principal, { kind: "anonymous" }>;
+export type SessionAuth = Extract<AuthContext, { kind: "session" }>;
+export type ApiTokenAuth = Extract<AuthContext, { kind: "token" }>;
 
 /**
  * Scope resolves from `memberships` only. Reviewer memberships always carry a
@@ -60,17 +56,24 @@ export function authHasRole(
     const role = roleForEvent(auth.memberships, eventId);
     return role !== null && ROLE_RANK[role] >= ROLE_RANK[required];
   }
-  const { token, scopes } = auth;
-  if (token.revoked_at !== null) return false;
   const eventGranted =
-    token.event_id === null
-      ? scopes.event_ids.length === 0 || scopes.event_ids.includes(eventId)
-      : token.event_id === eventId;
+    auth.eventId === null
+      ? auth.eventIds.length === 0 || auth.eventIds.includes(eventId)
+      : auth.eventId === eventId;
   if (!eventGranted) return false;
-  return scopes.permissions.some(
-    (permission) =>
-      permission in ROLE_RANK &&
-      ROLE_RANK[permission as MembershipRole] >= ROLE_RANK[required],
+  const minimumGrantByRole: Record<MembershipRole, ApiGrant> = {
+    speaker: "speaker:write",
+    reviewer: "review:write",
+    ops: "program:read",
+    program_lead: "program:write",
+    owner: "program:write",
+  };
+  const rolePermission = auth.permissions.find(
+    (permission): permission is MembershipRole => permission in ROLE_RANK,
+  );
+  return (
+    (rolePermission !== undefined && ROLE_RANK[rolePermission] >= ROLE_RANK[required]) ||
+    auth.grants.includes(minimumGrantByRole[required])
   );
 }
 

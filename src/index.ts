@@ -6,6 +6,7 @@ import { runUploadOrphanSweep } from "./lib/r2/orphan-sweep";
 import { apiManifest } from "./routes/_manifest";
 import { uploadsRoutes } from "./routes/uploads.direct";
 import { authMiddleware } from "./lib/auth/auth-middleware";
+import { createCredentialResolver } from "./lib/auth/credential-resolver";
 import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/reset-consumer";
 import { adminOpsRoutes, RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.endpoints";
 import { authRoutes } from "./routes/auth.endpoints";
@@ -103,7 +104,10 @@ app.get("/__validation/session-cookie", (context) => {
 // the same follow-up). Hono matches in registration order, so unmatched
 // paths still fall through to the manifest router below.
 app.route("/", uploadsRoutes);
-app.use("/api/*", authMiddleware);
+// The generated API app has its own credential-resolver adapter. These
+// mounted Hono route groups still use MRQ-3's context middleware directly.
+app.use("/api/v1/auth/*", authMiddleware);
+app.use("/api/v1/admin/*", authMiddleware);
 app.route("/api/v1/auth", authRoutes);
 app.route("/api/v1/admin", adminOpsRoutes);
 
@@ -113,7 +117,9 @@ app.route("/api/v1/admin", adminOpsRoutes);
 let apiApp: Promise<Awaited<ReturnType<typeof createApiRouter>>> | undefined;
 
 app.all("/api/*", async (context) => {
-  apiApp ??= createApiRouter(apiManifest);
+  apiApp ??= createApiRouter(apiManifest, {
+    credentialResolver: createCredentialResolver(),
+  });
   const { app: api } = await apiApp;
   // Unmatched `/api/*` falls through to the API app's own not-found handler,
   // so a miss returns the one error envelope with its request id like every

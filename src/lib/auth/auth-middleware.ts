@@ -2,7 +2,8 @@ import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
 
 import { SESSION_COOKIE_NAME } from "../cookies";
-import type { ApiTokenScopes, PersonRow } from "../../db/schema";
+import { API_GRANTS, type ApiGrant } from "../../api/grants";
+import type { ApiTokenRow, ApiTokenScopes, PersonRow } from "../../db/schema";
 import { resolveSession } from "./auth-sessions";
 import { constantTimeEqualHex, sha256Hex } from "./random-token";
 import { loadMemberships, type AuthContext } from "./scope-resolution";
@@ -23,20 +24,32 @@ export async function authMiddleware(context: Context, next: Next): Promise<void
 export async function resolveAuth(context: Context): Promise<AuthContext | null> {
   const db = context.env.DB as D1Database;
 
-  const bearer = parseBearerToken(context.req.header("authorization"));
-  if (bearer) {
+  const authorization = context.req.header("authorization");
+  if (authorization !== undefined) {
+    const bearer = parseBearerToken(authorization);
+    if (!bearer) return null;
     const tokenHash = await sha256Hex(bearer);
     const token = await db
       .prepare("SELECT * FROM api_tokens WHERE token_hash = ? AND revoked_at IS NULL")
       .bind(tokenHash)
-      .first();
+      .first<ApiTokenRow>();
     if (!token) return null;
     const scopes = JSON.parse(token.scopes as string) as ApiTokenScopes;
     await db
       .prepare("UPDATE api_tokens SET last_used_at = ? WHERE id = ?")
       .bind(Date.now(), token.id)
       .run();
-    return { kind: "api_token", token: token as never, scopes };
+    return {
+      kind: "token",
+      tokenId: token.id,
+      orgId: token.org_id,
+      eventId: token.event_id,
+      permissions: scopes.permissions,
+      grants: scopes.permissions.filter((permission): permission is ApiGrant =>
+        (API_GRANTS as readonly string[]).includes(permission),
+      ),
+      eventIds: scopes.event_ids,
+    };
   }
 
   const sessionId = getCookie(context)[SESSION_COOKIE_NAME];
@@ -57,7 +70,7 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
   };
 }
 
-function parseBearerToken(header: string | undefined): string | null {
+export function parseBearerToken(header: string | undefined): string | null {
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice("Bearer ".length).trim();
   return token.startsWith("mq_") && token.length > 3 ? token : null;

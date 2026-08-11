@@ -181,10 +181,10 @@ authRoutes.get("/me", async (context) => {
   }
   return context.json({
     kind: "api_token",
-    token_id: auth.token.id,
-    org_id: auth.token.org_id,
-    event_id: auth.token.event_id,
-    scopes: auth.scopes,
+    token_id: auth.tokenId,
+    org_id: auth.orgId,
+    event_id: auth.eventId,
+    scopes: { permissions: auth.permissions, event_ids: auth.eventIds },
     demo_event_id: demoEvent?.id ?? null,
   });
 });

@@ -63,9 +63,7 @@ const listEventSubmissions = defineApiRoute(
     description: "Server-filtered, sorted, and deterministically paginated Abstracts and Sessions.",
     tags: ["Submissions"],
     policy: {
-      // TODO(MRQ-60): SPEC scopes this to authenticated admin; public only
-      // until the credential resolver lands.
-      auth: { kind: "public" },
+      auth: { kind: "grants", grants: ["program:read"] },
       rateLimit: { bucket: "read" },
       concurrency: "none",
     },
@@ -75,7 +73,7 @@ const listEventSubmissions = defineApiRoute(
     },
     responses: {
       200: jsonResponse(createListResponseSchema(submissionListItemSchema, "Submission"), "Matching submissions"),
-      ...errorResponses([400, 429, 500]),
+      ...errorResponses([400, 401, 403, 429, 500]),
     },
   },
   async (context) => {

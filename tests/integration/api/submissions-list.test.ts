@@ -2,6 +2,7 @@ import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, test } from "vitest";
 
 import type { SubmissionListItem } from "../../../src/api/submissions";
+import { sha256Hex } from "../../../src/lib/auth/random-token";
 import {
   DEFAULT_SUBMISSION_COLUMNS,
   SUBMISSION_COLUMN_REGISTRY,
@@ -11,6 +12,8 @@ import { selectionCount } from "../../../src/ui/submissions/selection";
 
 const ORIGIN = "https://marquee.stage11.dev";
 const EVENT_ID = "evt-ugly-list";
+const IN_EVENT_TOKEN = "mq_in-event-list-token";
+const DIFFERENT_EVENT_SESSION = "sess_different-event-reviewer";
 
 interface ListEnvelope {
   data: SubmissionListItem[];
@@ -23,6 +26,21 @@ interface ListEnvelope {
 async function buildFixture(): Promise<void> {
   const fixtureSql = `
     CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, timezone TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS api_tokens (
+      id TEXT PRIMARY KEY, org_id TEXT NOT NULL, event_id TEXT,
+      token_hash TEXT NOT NULL, scopes TEXT NOT NULL,
+      revoked_at INTEGER, last_used_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS memberships (
+      id TEXT PRIMARY KEY, org_id TEXT NOT NULL, event_id TEXT,
+      person_id TEXT NOT NULL, role TEXT NOT NULL,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY, person_id TEXT NOT NULL, role_hint TEXT,
+      expires_at INTEGER NOT NULL, user_agent_hash TEXT NOT NULL,
+      revoked_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS formats (id TEXT PRIMARY KEY, name TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS submissions (
       id TEXT PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL,
@@ -49,6 +67,9 @@ async function buildFixture(): Promise<void> {
     INSERT INTO events VALUES ('${EVENT_ID}', 'America/New_York');
     INSERT INTO formats VALUES ('fmt-stage', 'Stage Talk');
     INSERT INTO people VALUES ('person-zoe', 'Zoë Łukaszewicz-García', 'Société Générale');
+    INSERT INTO people VALUES ('person-reviewer', 'Different Event Reviewer', 'Other Org');
+    INSERT INTO memberships VALUES ('membership-other-event', 'org-list', 'evt-other', 'person-reviewer', 'reviewer', 1700000000000, 1700000000000);
+    INSERT INTO auth_sessions VALUES ('${DIFFERENT_EVENT_SESSION}', 'person-reviewer', 'reviewer', 4102444800000, 'fixture', NULL, 1700000000000, 1700000000000);
     INSERT INTO tracks VALUES ('track-agents', 'Agents', '#db4c3f', 1), ('track-evals', 'Evals', '#0d9488', 2);
     INSERT INTO buildings VALUES ('building-main', 'Sheraton New York Times Square');
     INSERT INTO rooms VALUES ('room-liberty', 'building-main', 'Liberty 3');
@@ -75,10 +96,27 @@ async function buildFixture(): Promise<void> {
   for (const statement of flattened.split(";").map((item) => item.trim()).filter(Boolean)) {
     await env.DB.exec(statement);
   }
+  const now = Date.now();
+  for (const [id, rawToken, eventIds] of [
+    ["tok_in_event", IN_EVENT_TOKEN, JSON.stringify([EVENT_ID])],
+  ]) {
+    await env.DB.prepare(
+      "INSERT INTO api_tokens (id, org_id, event_id, token_hash, scopes, revoked_at, last_used_at) VALUES (?, ?, NULL, ?, ?, NULL, NULL)",
+    )
+      .bind(
+        id,
+        "org-list",
+        await sha256Hex(rawToken),
+        JSON.stringify({ permissions: ["program:read"], event_ids: JSON.parse(eventIds) }),
+      )
+      .run();
+  }
 }
 
 async function request(query = ""): Promise<ListEnvelope> {
-  const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions${query}`);
+  const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions${query}`, {
+    headers: { authorization: `Bearer ${IN_EVENT_TOKEN}` },
+  });
   expect(response.status).toBe(200);
   return response.json<ListEnvelope>();
 }
@@ -86,12 +124,20 @@ async function request(query = ""): Promise<ListEnvelope> {
 describe.sequential("MRQ-9 submissions list", () => {
   beforeAll(buildFixture, 10_000);
 
-  test("CONTRACT · MRQ-60 guard keeps the admin list explicitly public only until credential resolution lands", async () => {
-    // This credential-free 200 is deliberate temporary behavior, not an
-    // accidental omission. MRQ-60 must flip this assertion to 401/403 when it
-    // changes the route policy to authenticated admin scope.
-    const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions?per_page=1`);
-    expect(response.status).toBe(200);
+  test("CONTRACT · MRQ-60 guard rejects unauthenticated and cross-event admin reads without submission data", async () => {
+    const unauthenticated = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions?per_page=1`);
+    expect([401, 403]).toContain(unauthenticated.status);
+    const unauthenticatedBody = await unauthenticated.text();
+    expect(unauthenticatedBody).not.toContain("sub-0001");
+    expect(unauthenticatedBody).not.toContain("Submission 0001");
+
+    const differentEvent = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions?per_page=1`, {
+      headers: { cookie: `mq_session=${DIFFERENT_EVENT_SESSION}` },
+    });
+    expect(differentEvent.status).toBe(403);
+    const differentEventBody = await differentEvent.text();
+    expect(differentEventBody).not.toContain("sub-0001");
+    expect(differentEventBody).not.toContain("Submission 0001");
   });
 
   test("AC-23 · the running mixed list renders textual Abstract and Session markers", async () => {
