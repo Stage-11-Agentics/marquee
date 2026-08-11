@@ -101,7 +101,7 @@ function slotLabel(item: SubmissionListItem): string | null {
     hour: "numeric",
     minute: "2-digit",
   }).format(start);
-  return `${day} · ${time} · ${item.slot.room} · ${item.slot.building}`;
+  return `${day} · ${time} · ${item.slot.room}${item.slot.show_building ? ` · ${item.slot.building}` : ""}`;
 }
 
 function queryValue(params: URLSearchParams, key: string, fallback = ""): string {
@@ -432,10 +432,11 @@ export function SubmissionsPage({
 
   const activeView = views.find((view) => view.id === activeViewId);
   const orderedColumns = [...columns, ...SUBMISSION_COLUMN_REGISTRY.map((column) => column.id).filter((column) => !columns.includes(column))];
+  const singleVenueName = rows.find((item) => item.slot && !item.slot.show_building)?.slot?.building ?? null;
   return <div class="submissions-page">
     <PageHeader
       title={draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
-      copy={envelope ? `${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered 50 at a time for an instant response at full scale.` : "Loading the conference submission register…"}
+      copy={envelope ? `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered 50 at a time for an instant response at full scale.` : "Loading the conference submission register…"}
       actions={<><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button><Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button></>}
     />
     <div class={`export-message ${exportError ? "visible" : ""}`} role="status">{exportError || "Export status space reserved"}</div>

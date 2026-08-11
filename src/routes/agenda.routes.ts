@@ -117,6 +117,10 @@ const agendaSnapshotSchema = z.object({
     ends_on: z.string(),
     timezone: z.string(),
   }),
+  venue: z.object({
+    pinned_building_count: z.number().int().nonnegative(),
+    primary_building_name: z.string().nullable(),
+  }),
   schedulable_statuses: z.array(z.enum(SCHEDULABLE_STATUS_OPTIONS)),
   rooms: z.array(roomSchema),
   formats: z.array(formatSchema),

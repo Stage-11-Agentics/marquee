@@ -80,7 +80,7 @@ publicAgendaRoutes.get("/s/:slug", async (context) => {
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(
     shell,
-    renderToString(<PublicSessionPage event={result.event} session={result.session} />),
+    renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} />),
     { title: result.session.title },
   ));
 });
@@ -93,7 +93,7 @@ publicAgendaRoutes.get("/p/:slug", async (context) => {
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(
     shell,
-    renderToString(<PublicSpeakerPage event={result.event} speaker={result.speaker} />),
+    renderToString(<PublicSpeakerPage event={result.event} venue={result.venue} speaker={result.speaker} />),
     { title: result.speaker.name },
   ));
 });

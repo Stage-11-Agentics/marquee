@@ -90,8 +90,8 @@ async function seedFixture(): Promise<void> {
        VALUES (?, ?, ?, 'speaker', 0, 'pending', ?, ?)`,
     ).bind(id, submissionId, personId, NOW, NOW)),
     env.DB.prepare(
-      `INSERT INTO buildings (id, event_id, name, address, position, access_minutes, access_note, created_at, updated_at)
-       VALUES ('building-portal', ?, 'North Hall', '1 Conference Way', 0, 5, 'operator secret — never public', ?, ?)`,
+      `INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, access_note, created_at, updated_at)
+       VALUES ('building-portal', ?, 'North Hall', '1 Conference Way', 0, 40.7625, -73.9814, 5, 'operator secret — never public', ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO rooms (id, event_id, building_id, name, capacity, position, av_capabilities, notes, created_at, updated_at)
@@ -300,7 +300,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
   test("AC-240, AC-260 · the authenticated portal carries the arrival note while the public agenda does not", async () => {
     const { body } = await portal();
     const scheduled = body.submissions.find((submission: { id: string }) => submission.id === SUBMISSION_ID);
-    expect(scheduled.slot).toMatchObject({ room: "Room 101 · North Hall", is_published: false });
+    expect(scheduled.slot).toMatchObject({ room: "Room 101", is_published: false, show_building_comparison: false });
     expect(scheduled.slot.day).not.toBe("—");
     expect(scheduled.slot.date).not.toBe("—");
     expect(scheduled.slot.time).not.toBe("—");
@@ -308,12 +308,23 @@ describe.sequential("MRQ-16 speaker portal", () => {
       building: "North Hall",
       address: "1 Conference Way",
       access_note: "operator secret — never public",
+      access_minutes: 5,
     });
     expect(JSON.stringify(body)).toContain("operator secret — never public");
     const publicPage = await request("/agenda?event=aie-nyc-2026", {}, "");
     const publicBody = await publicPage.text();
     expect(publicPage.status).toBe(200);
     expect(publicBody).not.toContain("operator secret — never public");
+
+    await env.DB.prepare(
+      `INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, access_note, created_at, updated_at)
+       VALUES ('building-portal-annex', ?, 'South Hall', '2 Conference Way', 1, 40.7618, -73.9808, 2, 'Use the south lobby', ?, ?)`,
+    ).bind(EVENT_ID, NOW, NOW).run();
+    const twoBuilding = await portal();
+    const twoBuildingScheduled = twoBuilding.body.submissions.find((submission: { id: string }) => submission.id === SUBMISSION_ID);
+    expect(twoBuildingScheduled.slot).toMatchObject({ room: "Room 101 · North Hall", show_building_comparison: true });
+    expect(twoBuildingScheduled.slot.location).toMatchObject({ address: "1 Conference Way", access_note: "operator secret — never public", access_minutes: 5 });
+    await env.DB.prepare("DELETE FROM buildings WHERE id = 'building-portal-annex'").run();
   });
 
   test("CONTRACT · the session guard returns the required status and never discloses another speaker's portal data", async () => {

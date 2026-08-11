@@ -19,6 +19,7 @@ import {
   type SchedulableStatus,
 } from "../api/agenda";
 import { conflictParticipants, dedupeParticipants, sharedConflictParticipants } from "../lib/conflicts";
+import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import { getTransitConflicts, type TransitAgendaItem } from "../lib/venue-geometry";
 import type { SubmissionSpeakerListItem, SubmissionTrackListItem } from "../api/submissions";
 
@@ -436,16 +437,18 @@ export async function readAgendaSnapshot(
 ): Promise<AgendaSnapshot | null> {
   const event = await readEvent(database, eventId);
   if (!event) return null;
-  const [statuses, rooms, formats, tracks, sessions] = await Promise.all([
+  const [statuses, rooms, formats, tracks, sessions, venue] = await Promise.all([
     readStatuses(database, eventId),
     readRooms(database, eventId),
     readFormats(database, eventId),
     readTracks(database, eventId),
     readSessions(database, eventId),
+    readAgendaVenueDisclosure(database, eventId),
   ]);
   const unscheduled = await readPool(database, eventId, statuses);
   return {
     event,
+    venue,
     schedulable_statuses: statuses,
     rooms,
     formats,
@@ -467,6 +470,31 @@ export async function readAgendaConflicts(
     readSessions(database, eventId),
   ]);
   return getConflicts(sessions, rooms, event.timezone);
+}
+
+export async function readAgendaVenueDisclosure(
+  database: D1Database,
+  eventId: string,
+): Promise<{ pinned_building_count: number; primary_building_name: string | null }> {
+  const result = await database.prepare(
+    `SELECT id, name
+     FROM buildings
+     WHERE event_id = ? AND lat IS NOT NULL AND lng IS NOT NULL
+     ORDER BY position ASC, id ASC`,
+  ).bind(eventId).all<{ id: string; name: string }>();
+  const pinned = [...new Map(result.results.map((building) => [building.id, building])).values()];
+  return {
+    pinned_building_count: pinned.length,
+    primary_building_name: pinned.length < 2 ? pinned[0]?.name ?? null : null,
+  };
+}
+
+export async function readAgendaBuildingComparison(
+  database: D1Database,
+  eventId: string,
+): Promise<boolean> {
+  const disclosure = await readAgendaVenueDisclosure(database, eventId);
+  return showsBuildingComparisonCount(disclosure.pinned_building_count);
 }
 
 export async function readAgendaItemVersion(

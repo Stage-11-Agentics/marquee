@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "4c8abd580231ac33d9fdcae1100538c42c9988a7a94c821a1141ced8133d76e6",
+  "documentSha256": "70a5c9d103cab5c5c97bdd6198936c4be6ec45e3c3abd0a848cfbe6694c0880a",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",

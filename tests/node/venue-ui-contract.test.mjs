@@ -8,7 +8,7 @@ const settings = readFileSync(new URL("../../src/ui/settings/EventSettings.tsx",
 const submissionsPage = readFileSync(new URL("../../src/ui/submissions/SubmissionsPage.tsx", import.meta.url), "utf8");
 
 test("AC-252 · scheduler-facing room labels include their building", () => {
-  assert.match(submissionsPage, /item\.slot\.room} · \$\{item\.slot\.building/);
+  assert.match(submissionsPage, /item\.slot\.show_building \? ` · \$\{item\.slot\.building\}`/);
 });
 
 test("AC-253 · venue authoring exposes AV capability tags and room-local notes", () => {

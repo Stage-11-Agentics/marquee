@@ -1,5 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
+import { showsBuildingComparisonCount } from "./venue-disclosure";
 import { slugify } from "./ids";
 import { roomDisplayLabel } from "./venues";
 
@@ -64,8 +65,14 @@ export interface PublicSession {
   speakers: PublicSpeakerSummary[];
 }
 
+export interface PublicVenueDisclosure {
+  buildingName: string | null;
+  showComparison: boolean;
+}
+
 export interface PublicAgendaData {
   event: PublicEvent;
+  venue: PublicVenueDisclosure;
   days: PublicDay[];
   tracks: PublicTrack[];
   sessions: PublicSession[];
@@ -97,6 +104,7 @@ export interface ResolvedPublicEmbed {
 
 export interface PublicEmbedData {
   event: PublicEvent;
+  venue: PublicVenueDisclosure;
   slug: string;
   kind: "agenda" | "speakers";
   config: PublicEmbedConfig;
@@ -391,7 +399,23 @@ async function loadTrackCatalog(database: D1Database, eventId: string): Promise<
   return result.results.map((track) => ({ id: track.id, name: track.name, color: track.color }));
 }
 
-function toPublicSessions(rows: PublicSessionRow[], event: PublicEvent): PublicSession[] {
+async function publicVenueDisclosure(
+  database: D1Database,
+  eventId: string,
+): Promise<{ buildingName: string | null; showComparison: boolean }> {
+  const [count, primary] = await Promise.all([
+    database.prepare(
+      "SELECT COUNT(DISTINCT id) AS pinned_count FROM buildings WHERE event_id = ? AND lat IS NOT NULL AND lng IS NOT NULL",
+    ).bind(eventId).first<{ pinned_count: number | null }>(),
+    database.prepare(
+      "SELECT name FROM buildings WHERE event_id = ? AND lat IS NOT NULL AND lng IS NOT NULL ORDER BY position ASC, id ASC LIMIT 1",
+    ).bind(eventId).first<{ name: string }>(),
+  ]);
+  const showComparison = showsBuildingComparisonCount(count?.pinned_count);
+  return { buildingName: showComparison ? null : primary?.name ?? null, showComparison };
+}
+
+function toPublicSessions(rows: PublicSessionRow[], event: PublicEvent, showBuildingComparison: boolean): PublicSession[] {
   const sessionBase = rows.map((row) => {
     const zoned = zonedParts(row.starts_at, event.timezone);
     const speakers = parseSpeakers(row.speakers_json);
@@ -411,7 +435,7 @@ function toPublicSessions(rows: PublicSessionRow[], event: PublicEvent): PublicS
       durationMin: row.duration_min,
       room: row.room_name,
       building: row.building_name,
-      roomLabel: roomDisplayLabel(room, building),
+      roomLabel: showBuildingComparison ? roomDisplayLabel(room, building) : room.name,
       tracks,
       speakers,
     } satisfies PublicSession;
@@ -440,16 +464,20 @@ export async function loadPublicAgenda(
 ): Promise<PublicAgendaData | null> {
   const event = await findLiveEvent(database, filters.eventSlug);
   if (!event) return null;
-  const catalog = await loadTrackCatalog(database, event.id);
+  const [catalog, venue] = await Promise.all([
+    loadTrackCatalog(database, event.id),
+    publicVenueDisclosure(database, event.id),
+  ]);
   const query = sessionRowsQuery(event, filters);
   const rows = await database.prepare(query.sql).bind(...query.bindings).all<PublicSessionRow>();
-  const allSessions = toPublicSessions(rows.results, event);
+  const allSessions = toPublicSessions(rows.results, event, venue.showComparison);
   const selectedDay = filters.allDays ? null : filters.day ?? event.startsOn;
   const sessions = selectedDay
     ? allSessions.filter((session) => session.date === selectedDay || session.day === selectedDay)
     : allSessions;
   return {
     event,
+    venue,
     days: eventDays(event),
     tracks: catalog,
     sessions,
@@ -466,20 +494,20 @@ export async function loadPublicSession(
   database: D1Database,
   slug: string,
   eventSlug?: string | null,
-): Promise<{ event: PublicEvent; session: PublicSession } | null> {
+): Promise<{ event: PublicEvent; venue: PublicVenueDisclosure; session: PublicSession } | null> {
   const agenda = await loadPublicAgenda(database, { eventSlug, allDays: true });
   if (!agenda) return null;
   const session = agenda.sessions.find((item) =>
     item.slug === slug || item.id === slug || publicSessionSlug(item.title, item.id) === slug,
   );
-  return session ? { event: agenda.event, session } : null;
+  return session ? { event: agenda.event, venue: agenda.venue, session } : null;
 }
 
 export async function loadPublicSpeaker(
   database: D1Database,
   slug: string,
   eventSlug?: string | null,
-): Promise<{ event: PublicEvent; speaker: PublicSpeaker } | null> {
+): Promise<{ event: PublicEvent; venue: PublicVenueDisclosure; speaker: PublicSpeaker } | null> {
   const agenda = await loadPublicAgenda(database, { eventSlug, allDays: true });
   if (!agenda) return null;
   const sessions = agenda.sessions.filter((session) => session.speakers.some((speaker) =>
@@ -491,6 +519,7 @@ export async function loadPublicSpeaker(
   if (!source) return null;
   return {
     event: agenda.event,
+    venue: agenda.venue,
     speaker: {
       ...source,
       sessions: sessions.map((session) => ({
@@ -614,6 +643,7 @@ export async function loadPublicEmbed(
   }
   return {
     event: agenda.event,
+    venue: agenda.venue,
     slug: resolved.slug,
     kind: resolved.kind,
     config: {

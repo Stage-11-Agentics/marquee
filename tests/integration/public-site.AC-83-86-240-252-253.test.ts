@@ -102,7 +102,7 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   expect(body).toContain(PUBLIC_TITLE);
   expect(body).toContain("Public Speaker");
   expect(body).toContain("09:00");
-  expect(body).toContain("Main Stage · Sheraton New York Times Square");
+  expect(body).toContain("Main Stage</span>");
   expect(body).toContain('href="/s/visible-session-title"');
   expect(body).toContain('href="/p/public-speaker"');
   expect(body).not.toContain("Projector");
@@ -113,7 +113,8 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   const sessionBody = await session.text();
   expect(session.status).toBe(200);
   expect(sessionBody).toContain('href="/p/public-speaker"');
-  expect(sessionBody).toContain("Main Stage · Sheraton New York Times Square");
+  expect(sessionBody).toContain("Sheraton New York Times Square");
+  expect(sessionBody).toContain("Main Stage · 45 minutes");
   expect(sessionBody).toContain("Public abstract");
   expect(sessionBody).not.toContain("Projector");
   expect(sessionBody).not.toContain("PRIVATE ROOM NOTE");
@@ -123,6 +124,20 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   const speakerBody = await speaker.text();
   expect(speaker.status).toBe(200);
   expect(speakerBody).toContain('href="/s/visible-session-title"');
+  expect(speakerBody).toContain("Sheraton New York Times Square");
+
+  await env.DB.prepare(
+    `INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, access_note, created_at, updated_at)
+     VALUES ('building-public-annex', ?, 'Marriott Annex', '1535 Broadway', 1, 40.7586, -73.9862, 3, 'Use the Broadway lobby', ?, ?)`,
+  ).bind(EVENT_ID, NOW, NOW).run();
+  const twoBuildingAgenda = await request(`/agenda?event=${EVENT_SLUG}`);
+  const twoBuildingAgendaBody = await twoBuildingAgenda.text();
+  expect(twoBuildingAgenda.status).toBe(200);
+  expect(twoBuildingAgendaBody).toContain("Main Stage · Sheraton New York Times Square");
+  const twoBuildingSession = await request(`/s/visible-session-title?event=${EVENT_SLUG}`);
+  const twoBuildingSessionBody = await twoBuildingSession.text();
+  expect(twoBuildingSessionBody).toContain("Main Stage · Sheraton New York Times Square");
+  await env.DB.prepare("DELETE FROM buildings WHERE id = 'building-public-annex'").run();
 });
 
 test("AC-85 · the public agenda is SSR-first, reserves filter/list space, and carries the 375px treatment", async () => {

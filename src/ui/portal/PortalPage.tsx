@@ -65,6 +65,7 @@ type PortalSubmission = {
       lat: number | null;
       lng: number | null;
     };
+    show_building_comparison: boolean;
     arrival: {
       status: "ready" | "unscheduled" | "unassigned" | "unavailable";
       origin: { id: string; name: string; address: string } | null;
@@ -106,6 +107,7 @@ type PortalPerson = {
 
 type PortalSnapshot = {
   event: { id: string; name: string; slug: string; timezone: string; status: string };
+  venue: { pinned_building_count: number };
   person: PortalPerson;
   submissions: PortalSubmission[];
   tasks: PortalTask[];
@@ -415,16 +417,19 @@ function ParticipationActions({ submission, onRefresh }: { submission: PortalSub
 
 function ArrivalCard({ slot, timezone }: { slot: NonNullable<PortalSubmission["slot"]>; timezone: string }): JSX.Element {
   const { location, arrival } = slot;
+  const showBuildingComparison = slot.show_building_comparison;
   const hasPin = location.lat !== null && location.lng !== null;
   const directions = hasPin ? `https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}` : null;
   let arrivalCopy = "Arrival timing will appear when this session is placed.";
   if (arrival?.status === "ready" && arrival.leave_by !== null) {
     const movement = [
-      arrival.walk_minutes === null ? null : `${arrival.walk_minutes} min walk`,
+      showBuildingComparison && arrival.walk_minutes !== null ? `${arrival.walk_minutes} min walk` : null,
       arrival.access_minutes > 0 ? `${arrival.access_minutes} min to get in` : null,
     ].filter(Boolean).join(" · ");
-    const from = arrival.previous_session?.building ?? arrival.origin?.name;
-    arrivalCopy = `${from ? `From ${from}${movement ? ` · ${movement}` : ""}. ` : ""}Leave by ${formatPortalTime(arrival.leave_by, timezone)}.`;
+    const from = showBuildingComparison ? arrival.previous_session?.building ?? arrival.origin?.name : null;
+    arrivalCopy = showBuildingComparison
+      ? `${from ? `From ${from}${movement ? ` · ${movement}` : ""}. ` : ""}Leave by ${formatPortalTime(arrival.leave_by, timezone)}.`
+      : `${arrival.access_minutes > 0 ? `Allow ${arrival.access_minutes} min to get in. ` : ""}Leave by ${formatPortalTime(arrival.leave_by, timezone)}.`;
   } else if (arrival?.status === "unavailable") {
     arrivalCopy = "Arrival timing is not available until this building and your starting building have map pins.";
   } else if (arrival?.status === "unassigned") {
@@ -439,8 +444,9 @@ function ArrivalCard({ slot, timezone }: { slot: NonNullable<PortalSubmission["s
       <div><dt>Building</dt><dd>{location.building ?? "No building assigned yet"}</dd></div>
       <div><dt>Address</dt><dd>{location.address ?? "—"}</dd></div>
       <div><dt>Getting in</dt><dd>{location.access_note ?? "—"}</dd></div>
+      <div><dt>Entry time</dt><dd>{location.access_minutes > 0 ? `${location.access_minutes} min` : "No additional time recorded"}</dd></div>
       <div class="portal-arrival-leave"><dt>Arrival plan</dt><dd>{arrivalCopy}</dd></div>
-    </dl><div class={`portal-arrival-map${hasPin ? " pinned" : ""}`} aria-label={hasPin ? "Pinned venue location" : "No physical location pin available"}><span>{hasPin ? "Pinned venue" : "No map pin"}</span><small>{hasPin ? `${location.lat}, ${location.lng}` : "The conference team has not pinned this building."}</small></div></div>
+    </dl><details class="portal-arrival-map-fold" open={showBuildingComparison}><summary>{showBuildingComparison ? "Venue map" : "Show venue map"}</summary><div class={`portal-arrival-map${hasPin ? " pinned" : ""}`} aria-label={hasPin ? "Pinned venue location" : "No physical location pin available"}><span>{hasPin ? "Pinned venue" : "No map pin"}</span><small>{hasPin ? `${location.lat}, ${location.lng}` : "The conference team has not pinned this building."}</small></div></details></div>
   </section>;
 }
 

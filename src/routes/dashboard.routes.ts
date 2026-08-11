@@ -12,7 +12,8 @@ import {
   submissionStatusPredicate,
   submissionTaskPredicate,
 } from "./submissions.queries";
-import { readAgendaConflicts } from "./agenda.queries";
+import { visibleVenueConflicts } from "../lib/venue-disclosure";
+import { readAgendaBuildingComparison, readAgendaConflicts } from "./agenda.queries";
 
 const dashboardCountSchema = z.object({
   id: z.string(),
@@ -91,9 +92,19 @@ async function readDashboardConflicts(database: D1Database, eventId: string) {
   }
 }
 
+async function readDashboardBuildingComparison(database: D1Database, eventId: string): Promise<boolean> {
+  try {
+    return await readAgendaBuildingComparison(database, eventId);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/no such (?:table|column)/i.test(message)) return false;
+    throw error;
+  }
+}
+
 async function readDashboard(database: D1Database, eventId: string, now: number): Promise<DashboardSnapshot> {
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
-  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts] = await Promise.all([
+  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts, showBuildingComparison] = await Promise.all([
     database.prepare(`
       SELECT ${dashboardStageSql(includeCancelledAt)}
       FROM submissions s
@@ -163,6 +174,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       due_at: number;
     }>(),
     readDashboardConflicts(database, eventId),
+    readDashboardBuildingComparison(database, eventId),
   ]);
 
   const stages = stageResult ?? {};
@@ -211,11 +223,12 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     note: "accepted sessions",
   };
   const unreviewedTrack = trackPressure.find((item) => item.count > 0) ?? null;
-  const conflictSessionCount = new Set(agendaConflicts.flatMap((conflict) => conflict.session_ids)).size;
+  const visibleAgendaConflicts = visibleVenueConflicts(agendaConflicts, showBuildingComparison);
+  const conflictSessionCount = new Set(visibleAgendaConflicts.flatMap((conflict) => conflict.session_ids)).size;
   const conflicts: DashboardCount = {
     id: "conflicts",
     label: "Conflicts",
-    count: agendaConflicts.length,
+    count: visibleAgendaConflicts.length,
     href: "/agenda-builder",
     note: `${conflictSessionCount} affected Sessions · live`,
   };

@@ -14,6 +14,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { AuthContext, SessionAuth } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import { roomDisplayLabel } from "../lib/venues";
 import {
   arrivalForSession,
@@ -66,6 +67,7 @@ const portalResponseSchema = z
     submissions: z.array(z.any()),
     tasks: z.array(z.any()),
     handbook: z.object({ markdown: z.string() }),
+    venue: z.object({ pinned_building_count: z.number().int().nonnegative() }),
   })
   .openapi("SpeakerPortal");
 
@@ -460,6 +462,13 @@ async function primaryBuildingFor(db: D1Database, eventId: string): Promise<Arri
     .first<ArrivalBuilding>();
 }
 
+async function pinnedBuildingCountFor(db: D1Database, eventId: string): Promise<number> {
+  const row = await db.prepare(
+    "SELECT COUNT(DISTINCT id) AS pinned_count FROM buildings WHERE event_id = ? AND lat IS NOT NULL AND lng IS NOT NULL",
+  ).bind(eventId).first<{ pinned_count: number | null }>();
+  return Number(row?.pinned_count ?? 0);
+}
+
 async function listSubmissions(db: D1Database, event: EventProjection, personId: string): Promise<SubmissionProjection[]> {
   const rows = await db
     .prepare(
@@ -610,7 +619,7 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
   }));
 }
 
-function submissionView(event: EventProjection, row: SubmissionProjection): Record<string, unknown> {
+function submissionView(event: EventProjection, row: SubmissionProjection, showBuildingComparison: boolean): Record<string, unknown> {
   const dateTime = eventDateTime(event, row.starts_at);
   const waveName = row.wave_name ?? (row.wave_decision_on ? "Next wave" : null);
   const building = arrivalBuildingFor(row);
@@ -632,7 +641,7 @@ function submissionView(event: EventProjection, row: SubmissionProjection): Reco
           starts_at: row.starts_at!,
           duration_min: row.duration_min,
           room: row.room_name && row.building_name
-            ? roomDisplayLabel({ name: row.room_name }, { name: row.building_name })
+            ? roomDisplayLabel({ name: row.room_name }, { name: row.building_name }, showBuildingComparison)
             : row.room_name ?? "—",
           location: {
             room: row.room_name,
@@ -643,6 +652,7 @@ function submissionView(event: EventProjection, row: SubmissionProjection): Reco
             lat: building?.lat ?? null,
             lng: building?.lng ?? null,
           },
+          show_building_comparison: showBuildingComparison,
           arrival: arrival
             ? {
                 status: arrival.status,
@@ -717,11 +727,13 @@ async function talkIsEditable(db: D1Database, eventId: string, submissionId: str
 async function portalSnapshot(db: D1Database, auth: SessionAuth, requestedEventId?: string) {
   const event = await speakerEvent(db, auth, requestedEventId);
   const person = await personFor(db, auth.personId);
-  const [submissionRows, tasks, primaryBuilding] = await Promise.all([
+  const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount] = await Promise.all([
     listSubmissions(db, event, auth.personId),
     listTasks(db, event, auth.personId),
     primaryBuildingFor(db, event.id),
+    pinnedBuildingCountFor(db, event.id),
   ]);
+  const showBuildingComparison = showsBuildingComparisonCount(pinnedBuildingCount);
   const submissions = [...submissionRows];
   const sessions = submissions.map(arrivalSessionFor);
   for (const row of submissions) {
@@ -754,7 +766,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, requestedEventI
       historyFor(db, event.id, row.id),
       talkIsEditable(db, event.id, row.id),
     ]);
-    return { ...submissionView(event, row), history, talk_editable };
+    return { ...submissionView(event, row, showBuildingComparison), history, talk_editable };
   }));
   return {
     event,
@@ -772,6 +784,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, requestedEventI
     submissions: submissionViews,
     tasks,
     handbook: { markdown: HANDBOOKS[event.slug] ?? HANDBOOKS.default },
+    venue: { pinned_building_count: pinnedBuildingCount },
   };
 }
 

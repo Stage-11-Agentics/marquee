@@ -4,6 +4,11 @@
 .venue-message.success { background: var(--success-soft); color: #0c6b41; }
 .venue-loading { min-height: 150px; padding: 50px; text-align: center; }
 .venue-map-card .card-body { padding: 0; }
+.venue-map-fold summary { align-items: center; background: var(--sunk); border-top: 1px solid var(--line-strong); color: var(--accent-dark); cursor: pointer; display: flex; font: 600 10px/1.2 var(--mono); justify-content: space-between; letter-spacing: .08em; min-height: 38px; padding: 10px 13px; text-transform: uppercase; }
+.venue-map-fold summary::after { content: "↓"; font-size: 12px; }
+.venue-map-fold[open] summary::after { content: "↑"; }
+.venue-map-reserved { align-items: center; background: var(--sunk); border-top: 1px solid var(--line-strong); color: var(--muted); display: grid; font: 400 11px/1.5 var(--mono); min-height: 360px; padding: 24px; place-items: center; text-align: center; }
+.venue-map-fold[open] + .venue-map-reserved { display: none; }
 .venue-map-shell { background-color: var(--panel); background-image: linear-gradient(var(--graph) 1px, transparent 1px), linear-gradient(90deg, var(--graph) 1px, transparent 1px); background-size: 8px 8px; border-top: 1px solid var(--line-strong); overflow: hidden; position: relative; }
 .venue-map-plane { left: 50%; position: absolute; top: 0; transform: translateX(-50%); }
 .venue-map-tile { height: 256px; object-fit: cover; position: absolute; width: 256px; }

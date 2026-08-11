@@ -34,6 +34,7 @@ const submissionSlotSchema = z.object({
   building: z.string(),
   timezone: z.string(),
   is_published: z.boolean(),
+  show_building: z.boolean(),
 });
 const submissionListItemSchema = z.object({
   id: z.string(),

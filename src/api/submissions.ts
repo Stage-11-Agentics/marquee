@@ -48,6 +48,7 @@ export interface SubmissionSlotListItem {
   building: string;
   timezone: string;
   is_published: boolean;
+  show_building: boolean;
 }
 
 export interface SubmissionListItem {

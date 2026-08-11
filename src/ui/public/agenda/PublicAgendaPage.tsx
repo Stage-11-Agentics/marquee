@@ -6,6 +6,7 @@ import type {
   PublicEvent,
   PublicSession,
   PublicSpeaker,
+  PublicVenueDisclosure,
 } from "../../../lib/public-site";
 
 export const PUBLIC_SITE_STYLES = `
@@ -172,6 +173,7 @@ function TrackChips({ session }: { session: PublicSession }): JSX.Element {
 export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Element {
   const eventQuery = `event=${encodeURIComponent(data.event.slug)}`;
   const hasFilters = Boolean(data.filters.track || data.filters.q || (data.filters.day && data.filters.day !== "all"));
+  const venueName = data.venue?.buildingName ?? data.event.venue ?? "Online";
   return (
     <PublicShell
       event={data.event}
@@ -179,7 +181,7 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
       actions={<a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a>}
     >
       <main class="public-main">
-        <div class="public-kicker">{data.event.startsOn} → {data.event.endsOn} · {data.event.venue ?? "Online"}</div>
+        <div class="public-kicker">{data.event.startsOn} → {data.event.endsOn} · {venueName}</div>
         <div class="public-heading">
           <div>
             <h1>Agenda</h1>
@@ -229,11 +231,13 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
   );
 }
 
-export function PublicSessionPage({ event, session }: { event: PublicEvent; session: PublicSession }): JSX.Element {
+export function PublicSessionPage({ event, venue, session }: { event: PublicEvent; venue: PublicVenueDisclosure; session: PublicSession }): JSX.Element {
+  const venueName = venue.buildingName ?? event.venue ?? "Online";
   return (
     <PublicShell event={event} title="Session" actions={<a class="public-button" href="/agenda">← Agenda</a>}>
       <main class="public-main">
         <article class="public-card">
+          <div class="public-kicker">{venueName}</div>
           <div class="public-track-list" style={{ justifyContent: "flex-start" }}><TrackChips session={session} /></div>
           <h1>{session.title}</h1>
           <p class="public-detail-meta">{session.day} · {session.time} · {session.roomLabel} · {session.durationMin} minutes</p>
@@ -259,11 +263,13 @@ function initials(name: string): string {
   return name.split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
 }
 
-export function PublicSpeakerPage({ event, speaker }: { event: PublicEvent; speaker: PublicSpeaker }): JSX.Element {
+export function PublicSpeakerPage({ event, venue, speaker }: { event: PublicEvent; venue: PublicVenueDisclosure; speaker: PublicSpeaker }): JSX.Element {
+  const venueName = venue.buildingName ?? event.venue ?? "Online";
   return (
     <PublicShell event={event} title="Speaker" actions={<a class="public-button" href="/agenda">← Agenda</a>}>
       <main class="public-main">
         <article class="public-card">
+          <div class="public-kicker">{venueName}</div>
           <div class="public-profile">
             <div class="public-avatar" aria-hidden="true">{initials(speaker.name)}</div>
             <div>

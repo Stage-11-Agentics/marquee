@@ -11,6 +11,7 @@ import type {
   AgendaView,
 } from "../../api/agenda";
 import { AGENDA_VIEWS, durationIsAllowed, viewNames } from "../../api/agenda";
+import { displayRoomLabel, showsBuildingComparison, showsBuildingComparisonCount, visibleVenueConflicts } from "../../lib/venue-disclosure";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import { localParts, sessionDay, sessionTime, TIME_SLOTS, TrackBoard } from "./track-board";
 import "./agenda.css";
@@ -122,23 +123,41 @@ function roomFor(snapshot: AgendaSnapshot, roomId: string): AgendaRoom | undefin
   return snapshot.rooms.find((room) => room.id === roomId);
 }
 
+function agendaShowsBuildingComparison(snapshot: AgendaSnapshot): boolean {
+  return snapshot.venue
+    ? showsBuildingComparisonCount(snapshot.venue.pinned_building_count)
+    : showsBuildingComparison(snapshot.rooms.map((room) => room.building));
+}
+
+function agendaBuildingHeader(snapshot: AgendaSnapshot): string | null {
+  if (snapshot.venue) return snapshot.venue.primary_building_name;
+  const pinned = new Map<string, string>();
+  for (const room of snapshot.rooms) {
+    if (room.building.lat !== null && room.building.lng !== null) pinned.set(room.building.id, room.building.name);
+  }
+  return pinned.size < 2 ? [...pinned.values()][0] ?? null : null;
+}
+
 function RoomHead({
   room,
   onOpen,
   bare = false,
+  showBuildingComparison = true,
 }: {
   room: AgendaRoom;
   onOpen: (roomId: string) => void;
   bare?: boolean;
+  showBuildingComparison?: boolean;
 }): JSX.Element {
+  const label = bare ? room.name : displayRoomLabel(room.name, room.building.name, showBuildingComparison);
   return <button
     type="button"
     class="agenda-room-head"
     data-room-head={room.id}
-    title={`${room.label} · show room details`}
+    title={`${label} · show room details`}
     onClick={() => onOpen(room.id)}
   >
-    <span class="agenda-room-label">{bare ? room.name : room.label}</span>
+    <span class="agenda-room-label">{label}</span>
     <span class="agenda-room-info" aria-hidden="true">i</span>
   </button>;
 }
@@ -167,6 +186,7 @@ export function SessionTile({
   const format = snapshot.formats.find((candidate) => candidate.id === session.format_id);
   const hasConflict = conflicts.has(session.id);
   const hasDeclined = session.has_declined_participant === true;
+  const location = displayRoomLabel(session.room, session.building, agendaShowsBuildingComparison(snapshot));
   return <article
     class={`agenda-session-tile${hasConflict ? " has-conflict" : ""}${hasDeclined ? " has-declined" : ""}`}
     draggable={session.kind !== "break"}
@@ -176,7 +196,7 @@ export function SessionTile({
   >
     <strong title={session.title}>{session.title}</strong>
     <span class="agenda-tile-meta">{session.kind === "break" ? `${session.duration_min} min reservation` : `${session.format ?? "Session"} · ${speakerLine(session)}`}</span>
-    <span class="agenda-tile-location">{session.room} · {session.building}</span>
+    <span class="agenda-tile-location">{location}</span>
     {session.kind !== "break" && <TrackChips session={session} />}
     <span class={`agenda-conflict-flag${hasConflict ? "" : " is-placeholder"}`} aria-hidden={!hasConflict} title={hasConflict ? "This placement needs attention" : undefined}>
       ⚠ {conflicts.get(session.id) ?? "Conflict"}
@@ -243,7 +263,7 @@ function AgendaList({
       <div><strong title={session.title}>{session.title}</strong><span class="row-meta">{session.duration_min} minutes</span></div>
       <span title={speakerLine(session)}>{speakerLine(session)}</span>
       <span>{session.track ?? "—"}</span>
-      <button type="button" class="agenda-list-room" onClick={() => onRoomOpen(session.room_id)}>{session.room} · {session.building}</button>
+      <button type="button" class="agenda-list-room" onClick={() => onRoomOpen(session.room_id)}>{displayRoomLabel(session.room, session.building, agendaShowsBuildingComparison(snapshot))}</button>
       <div class="agenda-list-format">
         <span>{session.format ?? "Break"}</span>
         {session.kind !== "break" && <span class="agenda-list-actions">
@@ -256,14 +276,6 @@ function AgendaList({
       </div>
     </div>) : <div class="agenda-list-empty"><strong>No scheduled Sessions match these filters.</strong><span>Clear the day or track filter to bring scheduled Sessions back into view.</span><Button small variant="primary" onClick={onClearFilters}>Clear filters</Button></div>}
   </div>;
-}
-
-function pinnedBuildingCount(rooms: readonly AgendaRoom[]): number {
-  return new Set(
-    rooms
-      .filter((room) => room.building.lat !== null && room.building.lng !== null)
-      .map((room) => room.building.id),
-  ).size;
 }
 
 function BuildingBand({ rooms }: { rooms: readonly AgendaRoom[] }): JSX.Element {
@@ -304,11 +316,11 @@ function DayBoard({
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
 }): JSX.Element {
-  const showBuildingBand = pinnedBuildingCount(snapshot.rooms) >= 2;
+  const showBuildingBand = agendaShowsBuildingComparison(snapshot);
   return <div class={`agenda-grid${showBuildingBand ? " has-building-band" : ""}`} style={{ gridTemplateColumns: `68px repeat(${Math.max(snapshot.rooms.length, 1)}, minmax(190px, 1fr))` }}>
     {showBuildingBand && <BuildingBand rooms={snapshot.rooms} />}
     <div class="agenda-grid-head agenda-time-head" />
-    {snapshot.rooms.map((room) => <div class="agenda-grid-head" key={room.id}><RoomHead room={room} bare={showBuildingBand} onOpen={onRoomOpen} /></div>)}
+    {snapshot.rooms.map((room) => <div class="agenda-grid-head" key={room.id}><RoomHead room={room} bare={showBuildingBand} showBuildingComparison={showBuildingBand} onOpen={onRoomOpen} /></div>)}
     {TIME_SLOTS.map((time) => <>
       <div class="agenda-time tabular" key={`${time}-label`}>{time}</div>
       {snapshot.rooms.map((room) => <DropCell
@@ -371,9 +383,10 @@ function RoomBoard({
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
 }): JSX.Element {
+  const showBuildingComparison = agendaShowsBuildingComparison(snapshot);
   return <div class="agenda-room-board" style={{ gridTemplateColumns: `repeat(${Math.max(snapshot.rooms.length, 1)}, minmax(230px, 1fr))` }}>
     {snapshot.rooms.map((room) => <section class="agenda-room-lane" key={room.id}>
-      <header><RoomHead room={room} onOpen={onRoomOpen} /></header>
+      <header><RoomHead room={room} showBuildingComparison={showBuildingComparison} onOpen={onRoomOpen} /></header>
       {days.map((day) => <div class="agenda-room-day" key={day.value}>
         <div class="agenda-day-label">{day.label}</div>
         {sessions.filter((session) => session.room_id === room.id && sessionDay(session, snapshot.event.timezone) === day.value).sort((left, right) => left.starts_at - right.starts_at).map((session) => <div key={session.id} class="agenda-room-session-wrap"><span class="tabular">{sessionTime(session, snapshot.event.timezone)}</span><SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={onRoomOpen} conflicts={conflicts} /></div>)}
@@ -383,9 +396,10 @@ function RoomBoard({
   </div>;
 }
 
-function RoomPanel({ room, onClose }: { room: AgendaRoom; onClose: () => void }): JSX.Element {
-  return <aside class="agenda-room-panel" role="dialog" aria-label={`${room.label} details`}>
-    <header><div><span class="eyebrow">Room details</span><h2>{room.label}</h2></div><button type="button" aria-label="Close room details" onClick={onClose}>×</button></header>
+function RoomPanel({ room, showBuildingComparison, onClose }: { room: AgendaRoom; showBuildingComparison: boolean; onClose: () => void }): JSX.Element {
+  const label = displayRoomLabel(room.name, room.building.name, showBuildingComparison);
+  return <aside class="agenda-room-panel" role="dialog" aria-label={`${label} details`}>
+    <header><div><span class="eyebrow">Room details</span><h2>{label}</h2></div><button type="button" aria-label="Close room details" onClick={onClose}>×</button></header>
     <div class="agenda-room-panel-body">
       <div class="agenda-panel-section"><span class="agenda-panel-label">Building</span><strong>{room.building.name}</strong><span>{room.building.address}</span></div>
       <div class="agenda-panel-section"><span class="agenda-panel-label">Capacity</span><span class="tabular">{room.capacity.toLocaleString()} seats</span></div>
@@ -395,11 +409,12 @@ function RoomPanel({ room, onClose }: { room: AgendaRoom; onClose: () => void })
   </aside>;
 }
 
-export function ConflictPanel({ conflicts, sessions, onClose, onJump }: { conflicts: AgendaConflict[]; sessions: AgendaSession[]; onClose: () => void; onJump: (sessionId: string) => void }): JSX.Element {
+export function ConflictPanel({ conflicts, sessions, showBuildingComparison = true, onClose, onJump }: { conflicts: AgendaConflict[]; sessions: AgendaSession[]; showBuildingComparison?: boolean; onClose: () => void; onJump: (sessionId: string) => void }): JSX.Element {
   const titleFor = (id: string) => sessions.find((session) => session.id === id)?.title ?? id;
+  const visibleConflicts = visibleVenueConflicts(conflicts, showBuildingComparison);
   return <aside class="agenda-conflict-panel" role="dialog" aria-label="Agenda conflicts">
-    <header><div><span class="eyebrow">Live detection</span><h2>Agenda conflicts · <span class="tabular">{conflicts.length}</span></h2></div><button type="button" aria-label="Close conflicts" onClick={onClose}>×</button></header>
-    <div class="agenda-conflict-list">{conflicts.length ? conflicts.map((conflict, index) => <section key={`${conflict.session_ids.join("-")}-${index}`}>
+    <header><div><span class="eyebrow">Live detection</span><h2>Agenda conflicts · <span class="tabular">{visibleConflicts.length}</span></h2></div><button type="button" aria-label="Close conflicts" onClick={onClose}>×</button></header>
+    <div class="agenda-conflict-list">{visibleConflicts.length ? visibleConflicts.map((conflict, index) => <section key={`${conflict.session_ids.join("-")}-${index}`}>
       <span class="agenda-conflict-icon">!</span><div><strong>{conflict.message}</strong><span>{titleFor(conflict.session_ids[0])} ↔ {titleFor(conflict.session_ids[1])}</span><button type="button" class="agenda-conflict-jump" data-conflict-jump={conflict.session_ids[0]} onClick={() => onJump(conflict.session_ids[0])}>Jump to Session</button></div>
     </section>) : <EmptyState title="No conflicts" copy="The schedule is clear for the current placements." />}</div>
   </aside>;
@@ -579,6 +594,10 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
   const selectedDay = day || days[0]?.value || "all";
   const visibleSessions = sessionsFor(snapshot, selectedDay, track);
   const conflicts = conflictMarkers(snapshot.conflicts);
+  const showBuildingComparison = agendaShowsBuildingComparison(snapshot);
+  const visibleConflictData = visibleVenueConflicts(snapshot.conflicts, showBuildingComparison);
+  const presentationConflicts = showBuildingComparison ? conflicts : conflictMarkers(visibleConflictData);
+  const headerBuilding = agendaBuildingHeader(snapshot);
   const activeRoom = roomPanelId ? roomFor(snapshot, roomPanelId) : undefined;
   const jumpToSession = (sessionId: string) => {
     const target = snapshot.sessions.find((session) => session.id === sessionId);
@@ -594,22 +613,22 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     });
   };
   const renderBoard = () => {
-    if (view === "list") return <AgendaList snapshot={snapshot} sessions={visibleSessions} conflicts={conflicts} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} onClearFilters={() => { setDay("all"); setTrack(""); }} />;
-    if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />;
-    if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />;
+    if (view === "list") return <AgendaList snapshot={snapshot} sessions={visibleSessions} conflicts={presentationConflicts} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} onClearFilters={() => { setDay("all"); setTrack(""); }} />;
+    if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
+    if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
     if (view === "track") return <TrackBoard
       snapshot={snapshot}
       sessions={sessionsFor(snapshot, "all", track)}
       days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)}
       onDrop={onDrop}
-      renderTile={(session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />}
+      renderTile={(session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />}
     />;
     const dayForBoard = selectedDay === "all" ? days[0]?.value ?? selectedDay : selectedDay;
-    return <DayBoard snapshot={snapshot} sessions={sessionsFor(snapshot, dayForBoard, track)} day={dayForBoard} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />;
+    return <DayBoard snapshot={snapshot} sessions={sessionsFor(snapshot, dayForBoard, track)} day={dayForBoard} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
   };
 
   return <div class="agenda-page">
-    <PageHeader title="Agenda builder" copy="Drag accepted Sessions into a day, time, and room. Format defaults set duration; live conflicts warn without blocking." actions={<Button variant="danger" onClick={() => setConflictsOpen(true)}>⚠ <span class="tabular">{snapshot.conflicts.length}</span> conflicts</Button>} />
+    <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Drag accepted Sessions into a day, time, and room. Format defaults set duration; live conflicts warn without blocking.`} actions={<Button variant="danger" onClick={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</Button>} />
     <div class="agenda-toolbar card">
       <div class="segment agenda-view-tabs" role="tablist" aria-label="Agenda views">{viewNames().map((candidate) => <button type="button" role="tab" aria-selected={view === candidate} class={view === candidate ? "active" : ""} key={candidate} onClick={() => { rememberScroll(); setView(candidate); }}>{candidate[0]!.toUpperCase() + candidate.slice(1)}</button>)}</div>
       <label class="agenda-filter"><span class="eyebrow">Day</span><select value={selectedDay} onChange={(event) => { rememberScroll(); setDay((event.currentTarget as HTMLSelectElement).value); }}><option value="all">All days</option>{days.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
@@ -624,8 +643,8 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
         <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} />
         <section class="card agenda-board" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
       </div>}
-    {activeRoom && <RoomPanel room={activeRoom} onClose={() => setRoomPanelId(null)} />}
-    {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} onClose={() => setConflictsOpen(false)} onJump={jumpToSession} />}
+    {activeRoom && <RoomPanel room={activeRoom} showBuildingComparison={showBuildingComparison} onClose={() => setRoomPanelId(null)} />}
+    {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} showBuildingComparison={showBuildingComparison} onClose={() => setConflictsOpen(false)} onJump={jumpToSession} />}
   </div>;
 }
 

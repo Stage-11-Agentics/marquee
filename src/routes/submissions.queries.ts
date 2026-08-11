@@ -7,6 +7,7 @@ import type {
   SubmissionTrackListItem,
 } from "../api/submissions";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
+import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import {
   executeListPage,
   orderClause,
@@ -129,6 +130,7 @@ interface SubmissionQueryRow {
   building: string | null;
   timezone: string;
   agenda_published: number | null;
+  pinned_building_count: number | null;
   form_id?: string | null;
   last_saved_at?: number | null;
   submitter_id?: string | null;
@@ -253,6 +255,7 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
           building: row.building,
           timezone: row.timezone,
           is_published: row.agenda_published === 1,
+          show_building: showsBuildingComparisonCount(row.pinned_building_count),
         },
   };
 }
@@ -304,6 +307,14 @@ async function hasColumns(database: D1Database, table: string, required: readonl
   const result = await database.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
   const columns = new Set(result.results.map((column) => column.name));
   return required.every((column) => columns.has(column));
+}
+
+function itemSelect(includeVenueDisclosure: boolean): string {
+  return `${ITEM_SELECT}, ${includeVenueDisclosure ? `(SELECT COUNT(DISTINCT pinned_building.id)
+    FROM buildings pinned_building
+    WHERE pinned_building.event_id = event.id
+      AND pinned_building.lat IS NOT NULL
+      AND pinned_building.lng IS NOT NULL)` : "0"} AS pinned_building_count`;
 }
 
 function answerValue(row: DraftAnswerRow): unknown {
@@ -393,8 +404,9 @@ async function listDraftsNeedingAttention(
   const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "updated");
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const { where, bindings } = filterParts(filters);
+  const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const rows = await database.prepare(`
-    SELECT ${ITEM_SELECT},
+    SELECT ${itemSelect(includeVenueDisclosure)},
       s.form_id,
       s.last_saved_at,
       submitter.id AS submitter_id,
@@ -430,9 +442,10 @@ export async function listSubmissions(
   // This query joins several id-bearing tables, so qualify that fixed suffix.
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
+  const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
   const data = database.prepare(`
-    SELECT ${ITEM_SELECT}
+    SELECT ${itemSelect(includeVenueDisclosure)}
     ${FROM}
     WHERE ${where}
     ORDER BY ${stableOrder}

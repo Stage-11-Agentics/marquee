@@ -35,8 +35,9 @@ export interface VenueModelResponse {
 export function roomDisplayLabel(
   room: Pick<VenueRoomInput, "name">,
   building: Pick<VenueBuildingInput, "name"> | null,
+  includeBuilding = true,
 ): string {
-  return building ? `${room.name} · ${building.name}` : room.name;
+  return includeBuilding && building ? `${room.name} · ${building.name}` : room.name;
 }
 
 function venueError(message: string): Error {

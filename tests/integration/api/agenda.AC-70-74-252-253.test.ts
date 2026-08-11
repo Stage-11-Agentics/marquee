@@ -49,9 +49,10 @@ describe.sequential("MRQ-20 agenda API", () => {
   test("AC-70 · GET derives the unscheduled pool from accepted and unplaced submissions", async () => {
     const response = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
     expect(response.status).toBe(200);
-    const body = await response.json<{ unscheduled: Array<{ submission_id: string }>; rooms: Array<{ label: string }> }>();
+    const body = await response.json<{ unscheduled: Array<{ submission_id: string }>; rooms: Array<{ label: string }>; venue: { pinned_building_count: number; primary_building_name: string | null } }>();
     expect(body.unscheduled.map((item) => item.submission_id)).toEqual(["sub-agenda-accepted"]);
     expect(body.rooms[0]?.label).toBe("Room 101 · North Hall");
+    expect(body.venue).toEqual({ pinned_building_count: 1, primary_building_name: "North Hall" });
   });
 
   test("AC-71 · PUT changes the qualifying statuses and the next read honors them", async () => {

@@ -35,6 +35,11 @@ export interface AgendaBuilding {
   access_minutes: number;
 }
 
+export interface AgendaVenueDisclosure {
+  pinned_building_count: number;
+  primary_building_name: string | null;
+}
+
 export interface AgendaRoom {
   id: string;
   name: string;
@@ -110,6 +115,7 @@ export interface AgendaConflict {
 
 export interface AgendaSnapshot {
   event: AgendaEvent;
+  venue?: AgendaVenueDisclosure;
   schedulable_statuses: SchedulableStatus[];
   rooms: AgendaRoom[];
   formats: AgendaFormat[];

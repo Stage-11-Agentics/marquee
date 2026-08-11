@@ -97,7 +97,7 @@ export function EmbedPage({ data }: { data: PublicEmbedData }): JSX.Element {
   const hasFilters = Boolean(data.filters.track || data.filters.status);
   return (
     <div class="embed-site" data-embed-kind={data.kind} style={{ "--embed-accent": accent }}>
-      <header class="embed-header"><strong>{data.event.name} · {action}</strong><span>Published program</span></header>
+      <header class="embed-header"><strong>{data.event.name} · {action}{data.venue?.buildingName ? ` · ${data.venue.buildingName}` : ""}</strong><span>Published program</span></header>
       <form class="embed-controls" method="get" action={`/embed/${encodeURIComponent(data.slug)}`}>
         <select class="embed-control" name="track" aria-label="Filter embed by track" value={data.filters.track ?? ""}>
           <option value="">All tracks</option>
