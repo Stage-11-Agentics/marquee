@@ -20,15 +20,28 @@ Open-source speaker/session-management platform for conference organizers — St
 
 ## Delegator harness defaults (this project)
 
-Build delegators run on **codex, model `gpt-5.6-luna`, at `xhigh` reasoning effort** (operator directive 2026-08-10; verified working).
+**Model routing by kind of work** (operator directive, 2026-08-10):
+
+| Work | Model |
+|---|---|
+| **Build / implementation — the workhorse** | codex **`gpt-5.6-luna`** |
+| **Particularly hard build items** | codex **`gpt-5.6-terra`** or **`gpt-5.6-sol`** |
+| **Planning** | codex **`gpt-5.6-sol`** — or Claude |
+| **Design** | **Claude** |
+
+Claude delegators run **sonnet**, not opus (operator ruling, same day); opus is reserved for tickets whose contracts every later ticket inherits.
+
+Launch line:
 
 ```
-c11 launch-agent --type codex --model gpt-5.6-luna --workspace <ws> --pane <pane> --suppressed --prompt-file <boot>
+c11 launch-agent --type codex --model gpt-5.6-luna \
+  --workspace <ws> --pane <pane> --suppressed --prompt-file <boot>
 ```
 
-Two footguns, both hit in this run:
+Three footguns, all hit in this run:
 
-- **Never pass `--effort high`.** `~/.codex/config.toml` already sets `model_reasoning_effort = "xhigh"`, and an explicit `--effort high` silently *downgrades* below it. Omit the flag and inherit xhigh.
-- **`--model` must be passed explicitly.** That same config still pins `model = "gpt-5.6-sol"`, so a launch without `--model` gets the older model without saying so.
+- **Never pass `--effort high`.** `~/.codex/config.toml` sets `model_reasoning_effort = "xhigh"`; an explicit `--effort high` silently *downgrades* below it. Omit the flag and inherit xhigh.
+- **Always pass `--model`.** That config still pins `model = "gpt-5.6-sol"`, so a launch without `--model` quietly gets the wrong model.
+- **Fast service tier is off** — `service_tier = "default"` in `~/.codex/config.toml` (machine-wide; backup at `~/.codex/config.toml.bak-marquee`). `c11 launch-agent` has no passthrough for `-c key=value`, so this has to live in the config rather than the launch line.
 
-Claude delegators, when used, run on **sonnet** (operator ruling 2026-08-10), never opus; opus is reserved for tickets whose contracts every later ticket inherits.
+Model names are verified live before use, not assumed — `gpt-5.6-luna` and `gpt-5.6-terra` were both confirmed answering before being written here.
