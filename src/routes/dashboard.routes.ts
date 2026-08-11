@@ -220,7 +220,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     id: "overdue",
     label: "Tasks overdue",
     count: count(overdueResult?.count),
-    href: submissionsHref({ status: "onboarding", task: "overdue" }),
+    href: submissionsHref({ task: "overdue" }),
     note: "submissions with speaker work overdue",
   };
   const decidedNotNotified: DashboardCount = {
@@ -272,7 +272,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       ...row,
       overdue: row.due_at < now,
       href: row.due_at < now
-        ? submissionsHref({ status: "onboarding", task: "overdue" })
+        ? submissionsHref({ task: "overdue" })
         : submissionsHref({ status: "onboarding" }),
     })),
   };
