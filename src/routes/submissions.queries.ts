@@ -1,3 +1,5 @@
+import { z } from "@hono/zod-openapi";
+
 import type { ListEnvelope } from "../api/list";
 import type {
   SubmissionListItem,
@@ -33,6 +35,20 @@ export const SUBMISSION_STATUS_FILTERS = [
   "scheduled",
   "published",
 ] as const;
+
+/** The filter-only arm shared by list reads and server-side bulk selection. */
+export const submissionFilterSchema = z.object({
+  kind: z.enum(["abstract", "session"]).optional(),
+  status: z.enum(SUBMISSION_STATUS_FILTERS).optional(),
+  track: z.string().min(1).max(100).optional(),
+  format: z.string().min(1).max(100).optional(),
+  wave: z.string().min(1).max(100).optional(),
+  task: z.enum(["overdue"]).optional(),
+  placement: z.enum(["unplaced"]).optional(),
+  q: z.string().trim().min(1).max(200).optional(),
+});
+
+export type SubmissionFilter = z.infer<typeof submissionFilterSchema>;
 
 export type SubmissionStatusFilter = (typeof SUBMISSION_STATUS_FILTERS)[number];
 export type SubmissionTaskFilter = "overdue";
@@ -269,4 +285,17 @@ export async function listSubmissions(
   `).bind(...bindings, page.limit, page.offset);
   const envelope = await executeListPage<SubmissionQueryRow>({ count, data, page });
   return { ...envelope, data: envelope.data.map(toItem) };
+}
+
+/** Resolve a filter-wide selector without applying the list page or sort. */
+export async function selectSubmissionIds(
+  database: D1Database,
+  filters: SubmissionFilter & { eventId: string },
+): Promise<string[]> {
+  const { where, bindings } = filterParts(filters);
+  const result = await database
+    .prepare(`SELECT DISTINCT s.id ${FROM} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC`)
+    .bind(...bindings)
+    .all<{ id: string }>();
+  return result.results.map((row) => row.id);
 }

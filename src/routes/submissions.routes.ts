@@ -6,6 +6,7 @@ import {
   listSubmissions,
   SUBMISSION_SORTS,
   SUBMISSION_STATUS_FILTERS,
+  submissionFilterSchema,
 } from "./submissions.queries";
 
 const submissionStatusSchema = z.enum(SUBMISSION_STATUS_FILTERS);
@@ -45,16 +46,8 @@ const submissionListItemSchema = z.object({
   slot: submissionSlotSchema.nullable(),
 }).openapi("SubmissionListItem");
 
-const submissionListQuerySchema = createListQuerySchema(
-  {
-    kind: z.enum(["abstract", "session"]).optional(),
-    status: submissionStatusSchema.optional(),
-    track: z.string().min(1).max(100).optional(),
-    format: z.string().min(1).max(100).optional(),
-    wave: z.string().min(1).max(100).optional(),
-    task: z.enum(["overdue"]).optional(),
-    placement: z.enum(["unplaced"]).optional(),
-  },
+export const submissionListQuerySchema = createListQuerySchema(
+  submissionFilterSchema.shape,
   Object.keys(SUBMISSION_SORTS) as [keyof typeof SUBMISSION_SORTS, ...(keyof typeof SUBMISSION_SORTS)[]],
   { defaultSort: "newest" },
 );

@@ -21,7 +21,7 @@ Plan: filled in by delegator's plan phase
 
 ### Working contract
 
-- Authoritative worktree: `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-19-decisions`, branch `mrq-19-decisions`, working against `forgejo/master @ 7fd8326ae6ecd0a639f2a8d1fe0498bd2b17cf19`.
+- Authoritative worktree: `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-19-decisions`, branch `mrq-19-decisions`, working against `forgejo/master @ 9da8a3b06f20d960f0728bd5805445c9966e4a43` after a clean rebase and `npm ci`.
 - Scope is limited to the decision routes and cascade jobs named above, plus AC-tagged tests and the claim manifest. Contract documents and the binding prototype are read-only.
 - Preserve the client ruling in AC-243: the board remains a read-only overview; no board-card drag or lifecycle control is added. Agenda drag remains outside this ticket.
 - Use the existing M-11 outbox and queue path. No direct Resend call, alternate send path, or pre-check for outbox idempotency is permitted.

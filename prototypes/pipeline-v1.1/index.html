@@ -3,7 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Marquee — Pipeline v1.7 prototype</title>
+  <title>Marquee — Pipeline v1.9 prototype</title>
+  <!-- v1.9 (2026-08-11): venue set reconciled with SPEC Amendment 14 and the
+       shipped seed. The 2025 building set (The Times Center, Jay Suites, AWS
+       JFK27) was chronologically wrong for a 2026 Sheraton conference and paired
+       Sheraton-native room names with 2025 venues. Now: Sheraton New York Times
+       Square as primary, New York Marriott Marquis as real overflow a nine-minute
+       walk down 7th Ave, Online unpinned. The transit case moves to Metropolitan
+       Ballroom → Marquis Room A, which is a genuine cross-building hop: 9 min walk
+       + 3 min access = 12 needed against a 10-minute gap.
+       v1.8 (2026-08-10): the Sessionboard gap-analysis fold, contract-now band
+       (sequence/research/sessionboard-gap-analysis.md § Decided scope):
+       markdown-toolbar rich text · Tags + Level taxonomy · post-submit
+       auto-redirect · View portal / Back to Admin impersonation · per-plan
+       ratings column + text filter operators · submission pacing chart vs the
+       2025 edition · form section elements · Notified column · internal/
+       external form names · conference-default submission limit (drafts count)
+       · pronouns + discrete socials · Client session ID + session capacity ·
+       max-sponsors control removed. -->
+
   <style>
     /* ════════════════════════════════════════════════════════════════════
        MARQUEE v1.5 — FLIGHT DECK
@@ -720,6 +738,28 @@
 
     .unscheduled { max-height: 700px; }
 
+    /* ── v1.8: gap-analysis fold (ruled 2026-08-10) ──────────────────────────
+       Markdown toolbar, form section elements, submission pacing chart,
+       impersonation bar, notified receipts. */
+    .md-toolbar { display:flex; align-items:center; gap:4px; margin-bottom:5px; }
+    .md-toolbar button { width:26px; height:24px; border:1px solid var(--line-strong); border-radius:var(--radius); background:var(--panel); font:600 11px/1 var(--sans); cursor:pointer; color:var(--ink); }
+    .md-toolbar button:hover { border-color:var(--accent); color:var(--accent); }
+    .md-hint { font:400 9px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-left:6px; }
+    .form-section-row { display:flex; align-items:center; gap:9px; padding:9px 12px; background:var(--sunk); border:1px dashed var(--line-strong); border-radius:var(--radius); }
+    .form-section-row .section-kind { font:600 9px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); flex:none; }
+    .form-section-row strong { font-size:11px; }
+    .form-divider-row { display:flex; align-items:center; gap:9px; padding:4px 12px; color:var(--muted); }
+    .form-divider-row i { flex:1; border-top:1px solid var(--line-strong); }
+    .pacing-chart { width:100%; height:auto; display:block; }
+    .pacing-readout { font:400 11px var(--mono); color:var(--muted); min-height:18px; display:flex; gap:14px; align-items:center; }
+    .pacing-readout strong { color:var(--ink); font-weight:600; }
+    .axis-toggle button { width:118px; }
+    .impersonation-bar { display:flex; align-items:center; gap:9px; background:var(--ink); color:#eaf3f6; padding:6px 14px; font:500 11px var(--sans); position:sticky; top:0; z-index:250; }
+    .impersonation-bar .button { background:transparent; border-color:#4a5a66; color:#eaf3f6; }
+    .impersonation-bar .button:hover { border-color:#6fd3da; color:#6fd3da; }
+    .notified-cell { font:400 10px var(--mono); color:var(--muted); white-space:nowrap; }
+    .notified-cell.sent { color:var(--ink); }
+
     @media (max-width: 1000px) {
       .app-shell { grid-template-columns: 68px minmax(0,1fr); }
       .sidebar { padding: 16px 9px; }
@@ -807,21 +847,19 @@
       const titleSystems = ["multi-agent systems", "evaluation infrastructure", "enterprise retrieval", "open-weight models", "tool-using agents", "financial copilots", "production inference", "long-context workflows"];
       const titleContextLeads = ["after", "across", "before", "during", "inside", "through", "under", "without"];
       const titleContexts = ["the demo ends", "incompatible risk models collide", "the benchmark becomes the product", "the first serious incident review", "regulated teams have to ship", "the underlying models change", "automation loses its escape hatch"];
-      const rooms = ["Metropolitan Ballroom", "Empire East", "Empire West", "Central Park"];
-      // Buildings seeded from the real AI Engineer Summit NYC 2025 program
-      // (sequence/research/sources/aie-summit-2025-program.json) — that event genuinely
-      // ran across three physical venues plus a stream.
-      // Coordinates geocoded from the street addresses (OSM/Nominatim, 2026-08-10),
-      // not eyeballed — a pin in the wrong place is loudly wrong, and the walking
-      // maths below depends on them. `accessMinutes` is ingress overhead: JFK27's
-      // room note already says "allow ten minutes for building security", and that
-      // ten minutes changes the answer, so it belongs in the model rather than in
-      // prose. A venue with no coordinates (the stream) is honest, not an edge case.
+      const rooms = ["Metropolitan Ballroom", "Central Park Ballroom", "Marquis Room A", "Marquis Room B"];
+      // The 2026 conference runs out of the Sheraton, with the Marriott Marquis a
+      // short walk down 7th Ave as overflow space, plus a stream. Coordinates are
+      // geocoded from the street addresses, not eyeballed — a pin in the wrong place
+      // is loudly wrong, and the walking maths below depends on them. `accessMinutes`
+      // is ingress overhead: the Marquis takes three minutes through the Broadway
+      // lobby, and those three minutes change the answer, so they belong in the model
+      // rather than in prose. A venue with no coordinates (the stream) is honest, not
+      // an edge case.
       const buildings = [
-        { id:"b1", name:"The Times Center",  address:"242 W 41st St, New York, NY 10036", lat:40.75600, lng:-73.98923, accessMinutes:0, accessNote:"Street entrance on 41st. Speakers check in at the stage-left desk." },
-        { id:"b2", name:"Jay Suites",        address:"109 W 39th St, 2nd floor, New York, NY 10018", lat:40.75311, lng:-73.98569, accessMinutes:2, accessNote:"Second floor — lifts are to the right of the 39th St lobby." },
-        { id:"b3", name:"AWS JFK27",         address:"12 W 39th St, New York, NY 10018", lat:40.75169, lng:-73.98278, accessMinutes:10, accessNote:"Photo ID required at the 39th St entrance — the large gold doors at 5th Ave. Allow ten minutes for building security." },
-        { id:"b4", name:"AIE YouTube",       address:"Online · streamed, no physical venue", lat:null, lng:null, accessMinutes:0, accessNote:"" }
+        { id:"b1", name:"Sheraton New York Times Square", address:"811 7th Ave, New York, NY 10019", lat:40.7625188, lng:-73.9814528, accessMinutes:0, accessNote:"Photo ID required at the main entrance. Allow ten minutes for building security." },
+        { id:"b2", name:"New York Marriott Marquis",      address:"1535 Broadway, New York, NY 10036", lat:40.7585971, lng:-73.9861935, accessMinutes:3, accessNote:"Use the Broadway lobby for conference access. Allow three minutes for building security." },
+        { id:"b3", name:"Online",                         address:"Virtual", lat:null, lng:null, accessMinutes:0, accessNote:"" }
       ];
       const AV_TAGS = ["Projector", "Confidence monitor", "Mics", "Livestream"];
       const PORTAL_SPEAKER = "Amara van der Meer";
@@ -901,11 +939,16 @@
         newSubmissionTracks: ["AI in Financial Services"],
         builderStep: 2,
         builderFields: [
+          { id: 11, label: "About your session", kind: "Section header", element: true },
           { id: 1, label: "Session title", kind: "Short text", required: true },
           { id: 2, label: "Abstract", kind: "Long text", required: true },
           { id: 3, label: "Format", kind: "Single select", required: true },
           { id: 4, label: "Tracks", kind: "Multi-select", required: true },
+          { id: 13, label: "Tags", kind: "Multi-select", required: false },
+          { id: 14, label: "Audience level", kind: "Single select", required: false },
           { id: 5, label: "What will attendees learn?", kind: "Long text", required: true },
+          { id: 12, label: "", kind: "Divider", element: true },
+          { id: 15, label: "Who is presenting", kind: "Section header", element: true },
           { id: 6, label: "Speaker name, role, company", kind: "Person", required: true },
           { id: 7, label: "Biography + headshot", kind: "Profile + file", required: true },
           { id: 8, label: "Co-speakers", kind: "Repeating person", required: false },
@@ -930,19 +973,19 @@
         portalSessionTitle: "Beyond the demo: reliable multi-agent systems",
         portalSessionDescription: "A field-tested account of evaluation ladders, recovery behavior, and the incidents that changed how the team operates agent systems.",
         scheduled: [],
-        roomCapacities: [1200,420,420,210],
-        roomBuildings: ["b1","b2","b2","b3"],
+        roomCapacities: [2500,1100,60,60],
+        roomBuildings: ["b1","b1","b2","b2"],
         roomAV: [
           ["Projector","Confidence monitor","Mics","Livestream"],
           ["Projector","Mics"],
-          ["Projector","Confidence monitor","Mics"],
-          ["Projector","Mics"]
+          ["Projector","Mics"],
+          ["Projector","Confidence monitor","Mics"]
         ],
         roomNotes: [
-          "Mainstage. Confidence monitors downstage; the livestream feed powers the conference site.",
-          "Breakout. Shares a wall with Empire West — avoid amplified sessions in both at once.",
-          "Breakout. Livestream is not cabled; record locally and upload after the session.",
-          "Breakout. Hard stop at 17:30 — the building locks down for the evening."
+          "Main stage. Confidence monitors downstage; the livestream feed powers the conference site.",
+          "Breakout room. Shares a wall with New York Ballroom; avoid amplified sessions in both at once.",
+          "Overflow room. Confirm the presenter handoff with the room producer.",
+          "Overflow room. Keep the center aisle clear for production."
         ],
         taskTemplates: [
           {id:1,title:"Confirm slot",kind:"Acknowledge",description:"Confirm participation for each accepted role.",due:7},
@@ -984,7 +1027,7 @@
       }
 
       const restoredView=state.savedViews.find(view=>view.id===state.activeSavedView);
-      if(restoredView){const config=restoredView.config;state.submissionSearch=config.search||"";state.submissionFilter=config.status||"All";state.submissionType=config.type||"All";state.submissionTrack=config.track||"All";state.submissionSort=config.sort||"newest";state.submissionColumns=[...(config.columns||state.submissionColumns)];}
+      if(restoredView){const config=restoredView.config;state.submissionSearch=config.search||"";state.submissionSearchOp=config.searchOp||"contains";state.submissionFilter=config.status||"All";state.submissionType=config.type||"All";state.submissionTrack=config.track||"All";state.submissionSort=config.sort||"newest";state.submissionColumns=[...(config.columns||state.submissionColumns)];}
 
       function loadEvent() {
         const fallback = { name: "AIE NYC 2026", start: "2026-10-12", end: "2026-10-14", timezone: "America/New_York", venue: "Sheraton New York Times Square", accent: "Violet", submissionLimit: 3 };
@@ -1146,12 +1189,12 @@
         // A deliberate travel case, staged the way the room-overlap and
         // double-booking cases already are. Wednesday is otherwise empty, so this
         // demonstrates the class without colliding with anything else: the same
-        // speaker in The Times Center and then at JFK27 ten minutes later. Day and
-        // time alone read clean — it is a 12-minute walk plus a 10-minute security
-        // queue, and only geography can see it.
+        // speaker in the Sheraton and then at the Marriott Marquis ten minutes later.
+        // Day and time alone read clean — it is a 9-minute walk plus a 3-minute
+        // access queue, and only geography can see it.
         const travelSpeaker = "Ifeoma Adeyemi";
         Object.assign(state.scheduled[16], { day:"Wed · Oct 14", time:"09:00", room:"Metropolitan Ballroom", duration:20, speaker:travelSpeaker, speakers:[travelSpeaker], conflict:true });
-        Object.assign(state.scheduled[17], { day:"Wed · Oct 14", time:"09:30", room:"Central Park",          duration:20, speaker:travelSpeaker, speakers:[travelSpeaker], conflict:true });
+        Object.assign(state.scheduled[17], { day:"Wed · Oct 14", time:"09:30", room:"Marquis Room A",        duration:20, speaker:travelSpeaker, speakers:[travelSpeaker], conflict:true });
       }
       seedAgenda();
 
@@ -1166,6 +1209,41 @@
 
       function esc(value) {
         return String(value ?? "").replace(/[&<>'"]/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[ch]));
+      }
+
+      // ── Rich text, the Marquee way: a markdown-backed toolbar ──────────────
+      // One storage format everywhere (markdown), rendered identically into the
+      // public form, the portal, and outbound email. The toolbar inserts syntax;
+      // there is no contenteditable HTML and no sanitizer to get wrong.
+      function mdToolbar(targetId) {
+        return `<div class="md-toolbar" role="toolbar" aria-label="Formatting" data-md-for="${targetId}">
+          <button type="button" data-md="bold" title="Bold"><b>B</b></button>
+          <button type="button" data-md="italic" title="Italic"><i>I</i></button>
+          <button type="button" data-md="link" title="Link">⌁</button>
+          <button type="button" data-md="list" title="Bulleted list">≔</button>
+          <span class="md-hint">Markdown · rendered in form, portal, and email</span>
+        </div>`;
+      }
+      function mdToHtml(value) {
+        return esc(value)
+          .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+          .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, '<a href="$2" rel="noreferrer">$1</a>')
+          .replace(/(^|\n)- (.*)/g, "$1• $2")
+          .replace(/\n/g, "<br>");
+      }
+      function bindMdToolbars() {
+        document.querySelectorAll("[data-md-for]").forEach(bar => {
+          const field = document.getElementById(bar.dataset.mdFor); if (!field) return;
+          bar.querySelectorAll("[data-md]").forEach(btn => btn.onclick = () => {
+            const a = field.selectionStart ?? field.value.length, b = field.selectionEnd ?? a;
+            const sel = field.value.slice(a, b) || ({bold:"bold text",italic:"emphasis",link:"link text",list:"First point"})[btn.dataset.md];
+            const wrapped = btn.dataset.md === "bold" ? `**${sel}**` : btn.dataset.md === "italic" ? `*${sel}*`
+              : btn.dataset.md === "link" ? `[${sel}](https://)` : `\n- ${sel}`;
+            field.value = field.value.slice(0, a) + wrapped + field.value.slice(b);
+            field.focus(); field.dispatchEvent(new Event("input", { bubbles: true }));
+          });
+        });
       }
 
       function toast(message) {
@@ -1398,6 +1476,7 @@
                 <input id="global-search" aria-label="Search everything" autocomplete="off" placeholder="Search abstracts, speakers, sessions…" readonly>
                 <span class="shortcut">⌘K</span>
               </div>
+              <button class="button small" id="view-portal" title="See exactly what a speaker sees, without logging out">View portal ↗</button>
               <div class="top-user" title="Maya Chen · Program lead">MC</div>
             </header>
             ${content}
@@ -1531,6 +1610,53 @@
         </div>`;
       }
 
+      // ── v1.8: submission pacing — the one dashboard analytic that drives a
+      // real decision: do we extend the CFP? Cumulative intake this edition
+      // against the prior edition (real Feb-2025 program capture), aligned by
+      // days-before-event. The prior curve is aggregate reference data only.
+      const PACING = (() => {
+        const openT = 87, todayT = 63, closeT = 30;        // 2026 · opened Jul 17, today Aug 10, closes Sep 12
+        const priorOpenT = 84, priorCloseT = 25;           // 2025 edition, aligned by days-before-event
+        const curr = [], prior = [];
+        let c = 0, p = 0;
+        for (let t = 90; t >= 0; t--) {
+          if (t <= openT && t >= todayT) c += 8 + Math.round(seededRandom(t * 3) * 14 + (openT - t < 4 ? 26 : 0));
+          if (t <= priorOpenT && t >= priorCloseT) p += 5 + Math.round(seededRandom(t * 7) * 11 + (t - priorCloseT < 6 ? 24 : 0));
+          curr.push({ t, n: t > openT ? 0 : (t < todayT ? null : c) });
+          prior.push({ t, n: t > priorOpenT ? 0 : p });
+        }
+        const anchor = curr.find(d => d.t === todayT).n || 1;
+        curr.forEach(d => { if (d.n != null) d.n = Math.round(d.n * 1040 / anchor); });
+        return { curr, prior, openT, todayT, closeT, priorTotal: p };
+      })();
+
+      function pacingChart() {
+        const W = 1100, H = 232, L = 50, R = 118, T = 14, B = 26, yMax = 1200;
+        const x = t => L + (90 - t) / 90 * (W - L - R);
+        const y = n => T + (1 - n / yMax) * (H - T - B);
+        const path = pts => pts.filter(d => d.n != null).map((d, i) => `${i ? "L" : "M"}${x(d.t).toFixed(1)},${y(d.n).toFixed(1)}`).join(" ");
+        const priorAtToday = PACING.prior.find(d => d.t === PACING.todayT).n;
+        const delta = 1040 - priorAtToday;
+        const ticks = [90, 60, 30, 0];
+        const tickLabel = t => state.pacingAxis === "days" ? (t === 0 ? "Event" : `T−${t}`) : ({90:"Jul 14",60:"Aug 13",30:"Sep 12",0:"Oct 12"})[t];
+        const currEnd = PACING.curr.find(d => d.t === PACING.todayT), priorEnd = PACING.prior.find(d => d.t === 0);
+        return `
+          <div class="pacing-readout" id="pacing-readout" data-default="T−${PACING.todayT} · <strong>2026: 1,040</strong> · 2025 edition: ${priorAtToday.toLocaleString()} · <strong>${delta >= 0 ? "+" + delta.toLocaleString() : delta.toLocaleString()} vs prior</strong> — on pace, no extension needed">T−${PACING.todayT} · <strong>2026: 1,040</strong> · 2025 edition: ${priorAtToday.toLocaleString()} · <strong>${delta >= 0 ? "+" + delta.toLocaleString() : delta.toLocaleString()} vs prior</strong> — on pace, no extension needed</div>
+          <svg class="pacing-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumulative submissions, this edition versus the 2025 edition" id="pacing-svg">
+            ${[0, 400, 800, 1200].map(n => `<line x1="${L}" y1="${y(n)}" x2="${W - R}" y2="${y(n)}" stroke="var(--line)" stroke-width="1"></line><text x="${L - 7}" y="${y(n) + 3}" text-anchor="end" style="font:400 9px var(--mono);fill:var(--muted)">${n ? (n / 1000).toFixed(1).replace(".0", "") + (n >= 1000 ? "k" : "") : "0"}</text>`).join("")}
+            ${ticks.map(t => `<text x="${x(t)}" y="${H - 8}" text-anchor="middle" style="font:400 9px var(--mono);fill:var(--muted)">${tickLabel(t)}</text>`).join("")}
+            <line x1="${x(PACING.closeT)}" y1="${T}" x2="${x(PACING.closeT)}" y2="${H - B}" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="2 3"></line>
+            <text x="${x(PACING.closeT)}" y="${T - 3}" text-anchor="middle" style="font:600 8px var(--mono);letter-spacing:.1em;fill:var(--muted)">CFP CLOSES</text>
+            <path d="${path(PACING.prior)}" fill="none" stroke="#81838b" stroke-width="2" stroke-dasharray="5 4"></path>
+            <path d="${path(PACING.curr)}" fill="none" stroke="var(--accent)" stroke-width="2"></path>
+            <circle cx="${x(currEnd.t)}" cy="${y(currEnd.n)}" r="3.5" fill="var(--accent)"></circle>
+            <text x="${x(currEnd.t) + 8}" y="${y(currEnd.n) - 6}" style="font:600 10px var(--mono);fill:var(--accent)">2026 · 1,040 today</text>
+            <text x="${x(priorEnd.t) + 8}" y="${y(priorEnd.n) + 3}" style="font:600 10px var(--mono);fill:#666a72">2025 · ${priorEnd.n.toLocaleString()} final</text>
+            <line id="pacing-cross" x1="0" y1="${T}" x2="0" y2="${H - B}" stroke="var(--ink)" stroke-width="1" visibility="hidden"></line>
+            <rect id="pacing-hover" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"></rect>
+          </svg>`;
+      }
+
       function dashboardView() {
         const counts = pipelineCounts();
         return shell(`<div class="page">
@@ -1552,6 +1678,10 @@
             <button class="attention-item" data-route="onboarding"><strong>${onboardingCounts().overdue} speakers overdue</strong><span>Headshots, agreements, and travel · open chase board</span></button>
           </div>
           <div class="dashboard-grid">
+            <section class="card" style="grid-column:1/-1">
+              <div class="card-head"><div><h2>Submission pacing</h2><span class="subtle">Cumulative intake vs the 2025 edition, aligned by days before the event · <span style="color:var(--accent)">—</span> 2026 live · <span style="color:#666a72">– –</span> 2025 edition${state.pacingAxis==="calendar"?" (aligned by T−days)":""}</span></div><div class="segment axis-toggle"><button data-pacing-axis="days" class="${state.pacingAxis==="days"?"active":""}">Days before event</button><button data-pacing-axis="calendar" class="${state.pacingAxis==="calendar"?"active":""}">Calendar date</button></div></div>
+              <div class="card-body">${pacingChart()}</div>
+            </section>
             <section class="card" id="wave-planner">
               <div class="card-head"><div><h2>Wave planner</h2><span class="subtle">Accept while the CFP stays open</span></div><button class="button small" data-route="submissions">Plan next wave</button></div>
               <div class="card-body wave-list">
@@ -1718,11 +1848,14 @@
               <div class="field"><label for="event-venue">Venue</label><input id="event-venue" value="${esc(state.event.venue)}"></div>
               <div class="field"><label for="event-logo">Conference logo</label><input id="event-logo" type="file" accept="image/png,image/jpeg,image/svg+xml"><span class="field-note">PNG, JPEG, or SVG · preview uses the Marquee mark.</span></div>
               <div class="field"><label for="event-timezone">Timezone</label><select id="event-timezone"><option selected>America/New_York</option><option>America/Los_Angeles</option><option>Europe/London</option></select><span class="field-note">Agenda and calendar invites inherit this timezone.</span></div>
+              <div class="field"><label for="event-submission-limit">Submissions per person · conference default</label><input id="event-submission-limit" type="number" min="1" max="10" value="${state.event.submissionLimit||3}" style="width:80px"><span class="field-note">Applies when a form sets no limit of its own. Saved drafts count toward it.</span></div>
             </div></section>
             <section class="card"><div class="card-head"><h2>Formats</h2><button class="button small" id="add-format">+ Add format</button></div><div class="card-body" id="format-settings">
               ${formats.map((f,i) => `<div class="settings-row" data-format-index="${i}"><span class="drag-handle">⋮</span><input aria-label="Format name" data-format-name="${i}" value="${esc(f)}"><input aria-label="Allowed range" data-format-range="${i}" value="${esc(formatRanges[f]||"15–30")}"><label class="field" style="display:flex;align-items:center;gap:4px"><input aria-label="Default duration" data-format-duration="${i}" type="number" min="5" max="180" value="${formatDurations[f]}"><span class="subtle">min</span></label></div>`).join("")}
             </div></section>
             <section class="card"><div class="card-head"><div><h2>Tracks</h2><span class="subtle">Drag to reorder · edit names and colors in place</span></div><button class="button small" id="add-track">+ Add track</button></div><div class="card-body" id="track-settings">${tracks.map((t,i) => `<div class="settings-row" draggable="true" data-track-index="${i}"><button class="drag-button" aria-label="Drag ${esc(t.name)}">⋮⋮</button><input aria-label="Track name" data-track-name="${i}" value="${esc(t.name)}"><input aria-label="Track color" data-track-color="${i}" type="color" value="${t.color}"><span class="chip" style="border-left:3px solid ${t.color}">${i+1}</span></div>`).join("")}</div></section>
+            <section class="card"><div class="card-head"><div><h2>Tags</h2><span class="subtle">Free taxonomy · chips on rows, a multi-select on forms</span></div><button class="button small" id="add-tag">+ Add tag</button></div><div class="card-body" id="tag-settings">${sessionTags.map((t,i) => `<div class="settings-row" data-tag-index="${i}"><span class="drag-handle">${i+1}</span><input aria-label="Tag name" data-tag-name="${i}" value="${esc(t)}"><span class="chip">${state.submissions.filter(s=>(s.tags||[]).includes(t)).length} tagged</span></div>`).join("")}</div></section>
+            <section class="card"><div class="card-head"><div><h2>Levels</h2><span class="subtle">Audience experience · a single-select on forms</span></div><button class="button small" id="add-level">+ Add level</button></div><div class="card-body" id="level-settings">${levels.map((l,i) => `<div class="settings-row" data-level-index="${i}"><span class="drag-handle">${i+1}</span><input aria-label="Level name" data-level-name="${i}" value="${esc(l)}"><span class="chip">${state.submissions.filter(s=>s.level===l).length}</span></div>`).join("")}</div></section>
             <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Venues and rooms</h2><span class="subtle">Buildings, coordinates, entrance instructions, and rooms live on their own screen</span></div><a class="button small" href="#settings/venues">Open Venues →</a></div><div class="card-body"><span class="subtle">${buildings.length} ${buildings.length===1?"building":"buildings"} · ${rooms.length} ${rooms.length===1?"room":"rooms"}${geoActive()?` · ${pinnedBuildings().length} pinned`:""}</span></div></section>
           </div>
         </div>`);
@@ -1741,23 +1874,28 @@
               <div class="field"><label>Collects</label><div class="segment"><button data-form-target="Abstract" class="${state.formTarget === "Abstract" ? "active" : ""}">Abstracts</button><button data-form-target="Session" class="${state.formTarget === "Session" ? "active" : ""}">Sessions</button></div><span class="field-note">${state.formTarget === "Abstract" ? "Enters the evaluation pipeline." : "Bypasses evaluation; ready for agenda."}</span></div>
               <div class="divider"></div>
               <div class="field"><label>Closes</label><input id="form-closes" value="Sep 12, 2026 · 11:59 PM"></div>
-              <div class="field"><label>Submissions per person</label><input id="form-limit" type="number" value="3" min="1" max="5"></div>
+              <div class="field"><label>Submissions per person</label><input id="form-limit" type="number" placeholder="${state.event.submissionLimit||3}" min="1" max="10"><span class="field-note">Conference default: ${state.event.submissionLimit||3} · applies when this form sets none. Saved drafts count.</span></div>
             </section>
             ${builderCenterView()}
-              <section class="card preview-card"><div class="card-head"><h2>Live preview</h2><span class="chip">Public</span></div><div class="preview-window"><div class="preview-top"><i></i><i></i><i></i></div><div class="preview-form"><div class="eyebrow">AIE NYC 2026</div><h3>Call for speakers</h3><p>${state.formTarget === "Abstract" ? "Share an idea for the program." : "Add a guaranteed session to the program."}</p>${state.builderFields.slice(0,5).map(f => `<div style="margin-bottom:13px"><strong style="font-size:9px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="preview-input"></div></div>`).join("")}<button class="button primary small" data-route="cfp">Open complete form</button></div></div></section>
+              <section class="card preview-card"><div class="card-head"><h2>Live preview</h2><span class="chip">Public</span></div><div class="preview-window"><div class="preview-top"><i></i><i></i><i></i></div><div class="preview-form"><div class="eyebrow">AIE NYC 2026</div><h3>Call for speakers</h3><p>${state.formTarget === "Abstract" ? "Share an idea for the program." : "Add a guaranteed session to the program."}</p>${state.builderFields.slice(0,6).map(f => f.kind==="Divider" ? `<div style="border-top:1px solid var(--line-strong);margin:11px 0"></div>` : f.element ? `<div style="margin:11px 0 8px;font:600 8px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)">${esc(f.label)}</div>` : `<div style="margin-bottom:13px"><strong style="font-size:9px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="preview-input"></div></div>`).join("")}<button class="button primary small" data-route="cfp">Open complete form</button></div></div></section>
           </div>
         </div>`);
       }
 
       function builderCenterView() {
-        if(state.builderStep===2)return `<section class="card"><div class="card-head"><div><h2>Form fields</h2><span class="subtle">Drag a field or use its arrows to reorder</span></div><span class="chip ${state.formTarget === "Session" ? "session" : ""}">${state.formTarget}</span></div><div class="form-fields">${state.builderFields.map((f,i) => `<div class="form-field-row ${state.builderActive === f.id ? "active" : ""}" draggable="true" data-field-drag="${f.id}" data-field-id="${f.id}"><span class="drag-handle">⋮⋮</span><div><strong style="font-size:11px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="field-kind">${esc(f.kind)} · ${f.required ? "Required" : "Optional"}</div></div><div class="field-controls"><button aria-label="Move up" data-move-field="up" data-id="${f.id}" ${i === 0 ? "disabled" : ""}>↑</button><button aria-label="Move down" data-move-field="down" data-id="${f.id}" ${i === state.builderFields.length-1 ? "disabled" : ""}>↓</button></div></div>`).join("")}<button class="add-field" id="add-field">＋ Add a field</button></div></section>`;
+        if(state.builderStep===2)return `<section class="card"><div class="card-head"><div><h2>Form fields</h2><span class="subtle">Drag a field or use its arrows to reorder · section elements break up a long form</span></div><span class="chip ${state.formTarget === "Session" ? "session" : ""}">${state.formTarget}</span></div><div class="form-fields">${state.builderFields.map((f,i) => {
+          const controls=`<div class="field-controls"><button aria-label="Move up" data-move-field="up" data-id="${f.id}" ${i === 0 ? "disabled" : ""}>↑</button><button aria-label="Move down" data-move-field="down" data-id="${f.id}" ${i === state.builderFields.length-1 ? "disabled" : ""}>↓</button></div>`;
+          if(f.kind==="Divider")return `<div class="form-divider-row" draggable="true" data-field-drag="${f.id}" data-field-id="${f.id}"><span class="drag-handle">⋮⋮</span><i></i><span class="section-kind">Divider</span><i></i>${controls}</div>`;
+          if(f.element)return `<div class="form-section-row" draggable="true" data-field-drag="${f.id}" data-field-id="${f.id}"><span class="drag-handle">⋮⋮</span><span class="section-kind">Section</span><strong>${esc(f.label)}</strong><span style="flex:1"></span>${controls}</div>`;
+          return `<div class="form-field-row ${state.builderActive === f.id ? "active" : ""}" draggable="true" data-field-drag="${f.id}" data-field-id="${f.id}"><span class="drag-handle">⋮⋮</span><div><strong style="font-size:11px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="field-kind">${esc(f.kind)} · ${f.required ? "Required" : "Optional"}</div></div>${controls}</div>`;
+        }).join("")}<div style="display:flex;gap:8px"><button class="add-field" id="add-field" style="flex:1">＋ Add a field</button><button class="add-field" id="add-section-element" style="flex:1">＋ Add section element</button></div></div></section>`;
         const panels=[
-          ["Type & basics",`<div class="field"><label>Form name</label><input value="Call for speakers"></div><div class="field"><label>Public slug</label><input value="aie-nyc-2026"></div>`],
-          ["Welcome",`<div class="field"><label>Headline</label><input value="Share your work with AIE NYC."></div><div class="field"><label>Welcome copy</label><textarea>We welcome practical, specific sessions for people building and operating AI systems.</textarea></div>`],
+          ["Type & basics",`<div class="field"><label>Internal form name</label><input value="Call for speakers · 2026 main CFP"><span class="field-note">How your team tells twenty forms apart. Never shown publicly.</span></div><div class="field"><label>External form title</label><input value="Call for speakers"><span class="field-note">The public page title submitters see.</span></div><div class="field"><label>Public slug</label><input value="aie-nyc-2026"></div>`],
+          ["Welcome",`<div class="field"><label>Headline</label><input value="Share your work with AIE NYC."></div><div class="field"><label>Welcome copy</label>${mdToolbar("builder-welcome-copy")}<textarea id="builder-welcome-copy">We welcome **practical, specific** sessions for people building and operating AI systems.</textarea><span class="field-note">Rendered above the first field of the public form.</span></div>`],
           ["Form fields",""],
-          ["Participants",`<div class="grid-2"><div class="field"><label>Minimum speakers</label><input type="number" value="1" min="1"></div><div class="field"><label>Maximum speakers</label><input type="number" value="4" min="1"></div></div><div class="field"><label>Maximum sponsors</label><input type="number" value="2" min="0"></div>`],
+          ["Participants",`<div class="grid-2"><div class="field"><label>Minimum speakers</label><input type="number" value="1" min="1"></div><div class="field"><label>Maximum speakers</label><input type="number" value="4" min="1"></div></div><span class="field-note">One speaker minimum is the default on every new form.</span>`],
           ["Rules & routing",`<div class="field"><label>Rule</label><select><option>Track is AI in Financial Services</option></select></div><div class="field"><label>Route to</label><select><option>AIE 2026 program review · Initial screen</option></select></div><label class="toggle-line"><span>Vendor content flag routes to workshop review</span><input type="checkbox" checked></label>`],
-          ["Messages",`<div class="field"><label>Thank-you message</label><textarea>Your abstract is in. We sent a confirmation and private edit link.</textarea></div><div class="field"><label>Pre-close reminder</label><select><option>3 days before close</option><option>7 days before close</option></select></div>`],
+          ["Messages",`<div class="field"><label>Thank-you message</label>${mdToolbar("builder-thankyou")}<textarea id="builder-thankyou">Your abstract is in. We sent a confirmation and private edit link.</textarea><span class="field-note">Shown on the success page and rendered into the confirmation email.</span></div><label class="toggle-line"><span><strong>Auto-redirect to the speaker portal</strong><small class="subtle" style="display:block;margin-top:3px">10 seconds after submit. Off shows a Continue button only.</small></span><input type="checkbox" checked></label><div class="field"><label>Pre-close reminder</label><select><option>3 days before close</option><option>7 days before close</option></select></div>`],
           ["Publish",`<div class="message-preview"><strong>Open · 350 submitted · 20 drafts</strong><br><span class="subtle">Public URL: marquee.stage11.dev/f/aie-nyc-2026 · closes Sep 12 at 11:59 PM America/New_York</span></div><div class="field"><label>Preview a real form state</label><div class="segment"><button data-cfp-preview="open">Open</button><button data-cfp-preview="resumed">Resumed draft</button><button data-cfp-preview="limit">At limit</button><button data-cfp-preview="closed">Closed</button></div></div><button class="button" data-route="cfp" style="margin-top:14px">Open public form ↗</button>`]
         ];const panel=panels[state.builderStep];return `<section class="card"><div class="card-head"><div><h2>${panel[0]}</h2><span class="subtle">Changes update the public form preview immediately</span></div><span class="chip ${state.formTarget === "Session" ? "session" : ""}">${state.formTarget}</span></div><div class="card-body stack">${panel[1]}<button class="button primary" id="save-builder-step">Save ${panel[0].toLowerCase()}</button></div></section>`;
       }
@@ -1767,8 +1905,8 @@
         const switcher=`<div class="prototype-state-switch"><span>Prototype state</span>${[["open","Open"],["resumed","Resumed draft"],["limit","At limit"],["closed","Closed"]].map(([id,label])=>`<button class="button small ${state.cfpMode===id?"primary":""}" data-cfp-state="${id}">${label}</button>`).join("")}</div>`;
         let content="";
         if(state.cfpMode==="closed") content=`${switcher}<div class="eyebrow">Call for speakers · closed Sep 12</div><h1>Submissions are closed.</h1><p>The program team is reviewing 1,020 submitted proposals. Existing submitters can still use their private link to view status; organizers may re-open this form without creating a new URL.</p><div class="message-preview"><strong>Already submitted?</strong><br><span class="subtle">Use the private link in your confirmation email to view your proposal and decision status.</span></div><div style="display:flex;gap:8px;margin-top:20px"><button class="button" data-cfp-state="resumed">Open an existing draft</button><a class="button primary" href="#portal">Speaker portal</a></div>`;
-        else if(state.cfpMode==="limit") content=`${switcher}<div class="eyebrow">Call for speakers · submission limit reached</div><h1>You have submitted 3 of 3 proposals.</h1><p>Your existing proposals remain editable until September 12. Withdraw one before starting another; the limit is enforced across every form in this conference that collects abstracts.</p><div class="stack"><div class="message-preview"><strong>Reliable multi-agent systems</strong><br><span class="subtle">Submitted · AIE-0027 · Edit</span></div><div class="message-preview"><strong>Evaluation evidence that survives contact with production</strong><br><span class="subtle">Draft · saved 2 hours ago · Resume</span></div><div class="message-preview"><strong>Human escalation as infrastructure</strong><br><span class="subtle">Submitted · AIE-0714 · Edit</span></div></div>`;
-        else content=`${switcher}<div class="eyebrow">${resumed?"Draft restored from private email link · saved 2 hours ago":"Call for speakers · closes Sep 12"}</div><h1>${resumed?"Finish your proposal.":"Share your work with AIE NYC."}</h1><p>We welcome practical, specific sessions for people building and operating AI systems. You can submit without an account and return to a saved draft by email.</p>
+        else if(state.cfpMode==="limit") content=`${switcher}<div class="eyebrow">Call for speakers · submission limit reached</div><h1>You have used 3 of 3 proposal slots.</h1><p>Two submitted proposals and one saved draft — drafts count toward the limit. The limit is the conference default of ${state.event.submissionLimit||3}, enforced across every form that collects abstracts; withdraw a proposal or discard the draft to start another.</p><div class="stack"><div class="message-preview"><strong>Reliable multi-agent systems</strong><br><span class="subtle">Submitted · AIE-0027 · Edit</span></div><div class="message-preview"><strong>Evaluation evidence that survives contact with production</strong><br><span class="subtle">Draft · saved 2 hours ago · Resume</span></div><div class="message-preview"><strong>Human escalation as infrastructure</strong><br><span class="subtle">Submitted · AIE-0714 · Edit</span></div></div>`;
+        else content=`${switcher}<div class="eyebrow">${resumed?"Draft restored from private email link · saved 2 hours ago":"Call for speakers · closes Sep 12"}</div><h1>${resumed?"Finish your proposal.":"Share your work with AIE NYC."}</h1><p>${mdToHtml("We welcome **practical, specific** sessions for people building and operating AI systems. You can submit without an account and return to a saved draft by email.")}</p>
           <div class="cfp-progress"><i class="active"></i><i class="active"></i><i class="active"></i><i></i></div>
           <form class="cfp-form" id="cfp-form" novalidate>
             <div class="field"><label for="cfp-title">Session title *</label><input id="cfp-title" maxlength="120" value="${resumed?"Evaluation evidence that survives contact with production":""}" placeholder="A title that says what attendees will learn"><div class="field-error" id="error-title"></div></div>
@@ -1776,6 +1914,7 @@
             <div class="field"><label for="cfp-outcome">What will attendees learn? *</label><textarea id="cfp-outcome" placeholder="A concrete outcome">${resumed?"A practical evidence ladder and escalation checklist.":""}</textarea><div class="field-error" id="error-outcome"></div></div>
             <div class="field"><label for="cfp-format">Format *</label><select id="cfp-format"><option value="">Choose a format</option>${formats.map(f=>`<option ${resumed&&f==="Stage Talk"?"selected":""}>${f}</option>`).join("")}</select><div class="field-note">One speaker minimum · up to four</div><div class="field-error" id="error-format"></div></div>
             <div class="field"><label id="cfp-track-label">Tracks *</label><div class="track-picker" id="cfp-track-picker" tabindex="0" role="group" aria-labelledby="cfp-track-label">${tracks.map(t=>{const i=state.cfpTracks.indexOf(t.name);return `<button type="button" data-cfp-track="${esc(t.name)}" class="${i>=0?"active":""}" aria-pressed="${i>=0}"><span style="color:${t.color}">●</span> ${esc(t.name)}${i===0?"<small>Primary</small>":""}</button>`}).join("")}</div><div class="field-note">Choose one or more. The first selected track is primary for agenda placement.</div><div class="field-error" id="error-track"></div></div>
+            <div class="grid-2"><div class="field"><label for="cfp-level">Audience level</label><select id="cfp-level"><option value="">Choose a level</option>${levels.map(l=>`<option ${resumed&&l==="Intermediate"?"selected":""}>${esc(l)}</option>`).join("")}</select></div><div class="field"><label id="cfp-tags-label">Tags</label><div class="track-picker" role="group" aria-labelledby="cfp-tags-label">${sessionTags.map(t=>`<button type="button" data-cfp-tag="${esc(t)}" class="${resumed&&t==="Case study"?"active":""}" aria-pressed="${resumed&&t==="Case study"?"true":"false"}">${esc(t)}</button>`).join("")}</div></div></div>
             <div class="divider"></div><div class="eyebrow">Primary speaker</div>
             <div class="grid-2"><div class="field"><label for="cfp-speaker">Full name *</label><input id="cfp-speaker" value="${resumed?"Amara van der Meer":""}" autocomplete="name"><div class="field-error" id="error-speaker"></div></div><div class="field"><label for="cfp-email">Email *</label><input id="cfp-email" type="email" value="${resumed?"amara.vandermeer@example.com":""}" placeholder="you@company.com"><div class="field-error" id="error-email"></div></div></div>
             <div class="grid-2"><div class="field"><label for="cfp-role">Role / title *</label><input id="cfp-role" value="${resumed?"Director of Applied AI":""}"><div class="field-error" id="error-role"></div></div><div class="field"><label for="cfp-company">Company / affiliation *</label><input id="cfp-company" value="${resumed?"Capital One":""}"><div class="field-error" id="error-company"></div></div></div>
@@ -1793,7 +1932,7 @@
 
       function portalView() {
         const done = state.tasks.filter(t => t.done).length;
-        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)} · Speaker portal</a><a class="button small" href="#landing">Sign out</a></header><main class="public-body wide">
+        return `<div class="public-shell">${state.impersonating?`<div class="impersonation-bar"><span>Viewing the portal as <strong>Amara van der Meer</strong> — organizer session unchanged</span><span style="flex:1"></span><button class="button small" id="back-to-admin">← Back to Admin Mode</button></div>`:""}<header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)} · Speaker portal</a><a class="button small" href="#landing">Sign out</a></header><main class="public-body wide">
           <div class="portal-head"><div><div class="eyebrow">Welcome back</div><h1>Amara van der Meer</h1><span class="subtle">Your status, tasks, profile, and conference details in one place.</span></div><div class="portal-progress"><strong style="font-size:12px">${done} of ${state.tasks.length} tasks done</strong><div class="progress-track"><i style="width:${done/state.tasks.length*100}%"></i></div></div></div>
           ${portalSubmissionCard()}
           ${portalDecisionFeedback()}
@@ -1801,7 +1940,7 @@
           <div class="portal-grid">
             <section class="card"><div class="card-head"><div><h2>Your tasks</h2><span class="subtle">Complete the overdue item first</span></div><span class="chip overdue">1 overdue</span></div><div class="card-body" id="task-list">${state.tasks.map(taskRow).join("")}</div></section>
             <div class="stack">
-              <section class="card"><div class="card-head"><h2>Speaker profile</h2><button class="button small" id="edit-profile">Edit</button></div><div class="card-body"><div class="profile-block"><div class="avatar">AV</div><strong>Amara van der Meer</strong><div class="subtle" style="margin-top:4px">Director of Applied AI · Capital One</div></div><p class="subtle" style="line-height:1.55">Amara builds evaluation and governance systems for AI teams operating in regulated environments.</p></div></section>
+              <section class="card"><div class="card-head"><h2>Speaker profile</h2><button class="button small" id="edit-profile">Edit</button></div><div class="card-body"><div class="profile-block"><div class="avatar">AV</div><strong>Amara van der Meer</strong><div class="subtle" style="margin-top:4px">she/her · Director of Applied AI · Capital One</div></div><p class="subtle" style="line-height:1.55">Amara builds evaluation and governance systems for AI teams operating in regulated environments.</p><div class="subtle" style="margin-top:9px;display:flex;gap:11px"><span>in LinkedIn</span><span>𝕏 @amara_vdm</span><span>↗ amara.dev</span></div></div></section>
               <section class="card"><div class="card-head"><h2>Speaker handbook</h2><span class="chip">Handbook page</span></div><div class="card-body"><button class="button ghost" style="width:100%;justify-content:space-between" data-handbook="venue"><span>Venue, arrival, and green room</span><span>→</span></button><button class="button ghost" style="width:100%;justify-content:space-between" data-handbook="av"><span>Presentation and A/V guidance</span><span>→</span></button></div></section>
             </div>
           </div>
@@ -1943,9 +2082,15 @@
             s.status === state.submissionFilter) &&
           (state.submissionType === "All" || s.entity === state.submissionType) &&
           (state.submissionTrack === "All" || (s.tracks||[s.track]).includes(state.submissionTrack)) &&
-          (!q || [s.id,s.title,s.speaker,s.company,(s.tracks||[s.track]).join(" ")].some(v => v.toLowerCase().includes(q)))
+          (!q || (() => {
+            const hit = [s.id,s.title,s.speaker,s.company,(s.tracks||[s.track]).join(" ")].some(v => v.toLowerCase().includes(q));
+            if (state.submissionSearchOp === "does not contain") return !hit;
+            if (state.submissionSearchOp === "starts with") return s.title.toLowerCase().startsWith(q);
+            return hit;
+          })())
         );
         if (state.submissionSort === "score") list.sort((a,b) => Number(b.score === "—" ? -1 : b.score) - Number(a.score === "—" ? -1 : a.score));
+        if (state.submissionSort === "planRating") list.sort((a,b) => Number(b.planRating === "—" ? -1 : b.planRating) - Number(a.planRating === "—" ? -1 : a.planRating));
         if (state.submissionSort === "title") list.sort((a,b) => a.title.localeCompare(b.title));
         return list;
       }
@@ -1953,11 +2098,11 @@
       function applySavedView(id) {
         const view=state.savedViews.find(item=>item.id===id); if(!view)return;
         const config=view.config;
-        state.submissionSearch=config.search||"";state.submissionFilter=config.status||"All";state.submissionType=config.type||"All";state.submissionTrack=config.track||"All";state.submissionSort=config.sort||"newest";state.submissionColumns=[...(config.columns||state.submissionColumns)];state.activeSavedView=id;state.submissionPage=1;state.selected.clear();state.selectAllMatching=false;persistSubmissionPreferences();render();
+        state.submissionSearch=config.search||"";state.submissionSearchOp=config.searchOp||"contains";state.submissionFilter=config.status||"All";state.submissionType=config.type||"All";state.submissionTrack=config.track||"All";state.submissionSort=config.sort||"newest";state.submissionColumns=[...(config.columns||state.submissionColumns)];state.activeSavedView=id;state.submissionPage=1;state.selected.clear();state.selectAllMatching=false;persistSubmissionPreferences();render();
       }
 
       function currentSubmissionViewConfig() {
-        return {search:state.submissionSearch,status:state.submissionFilter,type:state.submissionType,track:state.submissionTrack,sort:state.submissionSort,columns:[...state.submissionColumns]};
+        return {search:state.submissionSearch,searchOp:state.submissionSearchOp,status:state.submissionFilter,type:state.submissionType,track:state.submissionTrack,sort:state.submissionSort,columns:[...state.submissionColumns]};
       }
 
       function openSaveViewModal() {
@@ -1990,6 +2135,10 @@
         if(column==="status")return `<span class="chip ${submission.status.toLowerCase().replace(" ","-")}">${submission.status}</span>`;
         if(column==="tracks")return `<div style="display:flex;gap:3px;overflow:hidden">${(submission.tracks||[submission.track]).map((name,index)=>`<span class="chip" title="${index===0?"Primary track":"Additional track"}" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${index===0?" · Primary":""}</span>`).join("")}</div>`;
         if(column==="score")return submission.score;
+        if(column==="planRating")return `<strong class="tabular">${submission.planRating}</strong>`;
+        if(column==="tags")return (submission.tags||[]).length?`<div style="display:flex;gap:3px;overflow:hidden">${submission.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>`:`<span class="subtle">—</span>`;
+        if(column==="level")return submission.level?`<span class="chip">${esc(submission.level)}</span>`:"—";
+        if(column==="notified")return submission.notifiedAt?`<span class="notified-cell sent" title="Decision email delivered · from this record's outbox entry">✓ ${esc(submission.notifiedAt)}</span>`:`<span class="notified-cell">—</span>`;
         if(column==="submitted")return submission.status==="Draft"?"Not submitted":submission.submitted;
         if(column==="updated")return submission.updated||"Today";
         if(column==="origin")return submission.source;
@@ -2010,13 +2159,14 @@
           <section class="card table-card">
             <div class="saved-view-bar"><span class="view-label">Views</span>${state.savedViews.map(view=>`<button class="saved-view ${view.id===state.activeSavedView?"active":""}" data-saved-view="${view.id}">${esc(view.name)}${view.id==="drafts"?` · ${draftCount}`:""}</button>`).join("")}<button class="button small" id="save-current-view">+ Save current</button>${activeView&&!activeView.builtIn?`<button class="button small" id="manage-current-view">Manage</button>`:""}<span class="toolbar-spacer"></span><span class="view-meta">Personal views persist per user · ${esc(state.event.name)}</span></div>
             <div class="toolbar">
+              <select id="search-op" aria-label="Search operator" style="flex:none;width:132px">${["contains","does not contain","starts with"].map(op=>`<option ${state.submissionSearchOp===op?"selected":""}>${op}</option>`).join("")}</select>
               <input id="submission-search" value="${esc(state.submissionSearch)}" placeholder="Search 1,000 submissions…">
               <select id="status-filter"><option>All</option>${["Draft","Submitted","In Review","Unreviewed","Waved","Accepted","Scheduled","Published","Waitlisted","Rejected","Withdrawn"].map(x=>`<option ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}</select>
               <select id="type-filter"><option>All</option><option ${state.submissionType==="Abstract"?"selected":""}>Abstract</option><option ${state.submissionType==="Session"?"selected":""}>Session</option></select>
               <select id="track-filter"><option>All</option>${tracks.map(t=>`<option ${state.submissionTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select>
               <span class="toolbar-spacer"></span>
               <button class="button small" id="configure-columns">Columns · ${state.submissionColumns.length}</button>
-              <select id="sort-filter"><option value="newest">Newest</option><option value="score" ${state.submissionSort==="score"?"selected":""}>Score high → low</option><option value="title" ${state.submissionSort==="title"?"selected":""}>Title A → Z</option></select>
+              <select id="sort-filter"><option value="newest">Newest</option><option value="score" ${state.submissionSort==="score"?"selected":""}>Initial rating high → low</option><option value="planRating" ${state.submissionSort==="planRating"?"selected":""}>Committee rating high → low</option><option value="title" ${state.submissionSort==="title"?"selected":""}>Title A → Z</option></select>
             </div>
             ${selectedCount ? `<div class="selection-bar"><strong>${selectedCount.toLocaleString()} selected</strong>${!state.selectAllMatching && selectedCount < all.length ? `<button class="button small" id="select-matching">Select all ${all.length.toLocaleString()} matching</button>` : `<span>All matching records selected</span>`}<span class="toolbar-spacer"></span><button class="button small" id="bulk-reject">Reject…</button><button class="button primary small" id="bulk-accept">Accept ${selectedCount.toLocaleString()} ${selectedCount===1?"abstract":"abstracts"}</button></div>` : ""}
             <div class="table-wrap"><table><thead><tr><th class="check-col"><input type="checkbox" id="select-page" aria-label="Select visible rows"></th>${state.submissionColumns.map(id=>`<th class="${id}-col">${esc(submissionColumnDefs.find(def=>def.id===id)?.label||id)}</th>`).join("")}</tr></thead><tbody>
@@ -2047,7 +2197,7 @@
         modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Program decision · ${esc(decision)}</div><h2>${esc(decision)} ${esc(submission.title)}?</h2><p>${esc(decision)} maps to ${outcome}. The speaker email and portal render the same feedback after confirmation.</p></div><div class="modal-body stack"><div class="field"><label for="decision-feedback">Feedback for the speaker · optional</label><textarea id="decision-feedback" placeholder="Share useful context with the decision.">${esc(state.decisionFeedback[id]?.note||"")}</textarea></div><div class="message-preview"><strong>Email preview · ${esc(decision)}</strong><br><span class="subtle">Hi ${esc(submission.speaker.split(" ")[0])}, here is an update on “${esc(submission.title)}.” <span id="feedback-preview">Feedback appears here and in the portal.</span></span></div><div class="wave-row"><strong>Lifecycle status</strong><span>${esc(submission.status)} → ${outcome}</span><strong>1 record</strong></div><div class="wave-row"><strong>Email + portal</strong><span>Same rendered feedback</span><strong>Queue</strong></div></div><div class="modal-actions"><button class="button" id="cancel-program-decision">Cancel</button><button class="button primary" id="confirm-program-decision">Confirm ${esc(decision)}</button></div></section></div>`;
         const feedback=document.getElementById("decision-feedback");feedback.oninput=()=>document.getElementById("feedback-preview").textContent=feedback.value||"No additional feedback.";
         document.getElementById("cancel-program-decision").onclick=()=>modalRoot.innerHTML="";
-        document.getElementById("confirm-program-decision").onclick=()=>{const note=feedback.value.trim();state.decisionFeedback[id]={decision,note,time:"Just now"};submission.status=outcome;submission.timeInStageHours=1;if(decision==="Approve"){submission.accepted=true;submission.wave=submission.wave||2;submission.waveDate=submission.waveDate||waveDates[1];submission.boardStage="Accepted";ensureOnboardingSpeaker(submission);}else{submission.accepted=false;submission.boardStage="Waved";if(decision==="Maybe")submission.wave=submission.wave||2;}state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:submission.email,template:`Decision · ${decision}`,subject:`An update on ${submission.title}`,outcome:"Queued",time:"Just now"});modalRoot.innerHTML="";toast(`${decision} confirmed · ${outcome.toLowerCase()} · email and portal feedback queued`);render();};
+        document.getElementById("confirm-program-decision").onclick=()=>{const note=feedback.value.trim();state.decisionFeedback[id]={decision,note,time:"Just now"};submission.status=outcome;submission.timeInStageHours=1;if(decision==="Approve"){submission.accepted=true;submission.wave=submission.wave||2;submission.waveDate=submission.waveDate||waveDates[1];submission.boardStage="Accepted";ensureOnboardingSpeaker(submission);}else{submission.accepted=false;submission.boardStage="Waved";if(decision==="Maybe")submission.wave=submission.wave||2;}submission.notifiedAt="Just now";state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:submission.email,template:`Decision · ${decision}`,subject:`An update on ${submission.title}`,outcome:"Queued",time:"Just now"});modalRoot.innerHTML="";toast(`${decision} confirmed · ${outcome.toLowerCase()} · email and portal feedback queued`);render();};
       }
 
       function showRecordMessage(id,kind) {
@@ -2068,11 +2218,15 @@
             <div class="stack">
               <section class="card"><div class="card-head"><div><span class="chip ${s.entity==="Session"?"session":""}">${s.entity}</span><h2 style="font-size:18px;margin-top:9px">${esc(s.title)}</h2>${scheduleMeta(s)}</div><span class="chip ${s.status.toLowerCase().replace(" ","-")}">${s.status}</span></div><div class="card-body"><dl class="definition-list"><dt>Format</dt><dd>${esc(s.format)}</dd><dt>Tracks</dt><dd><div style="display:flex;gap:5px;flex-wrap:wrap">${(s.tracks||[s.track]).map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?" · Primary":""}</span>`).join("")}</div></dd><dt>Origin</dt><dd>${esc(s.source)}${s.entity==="Session"?" · Evaluation bypassed":""}</dd><dt>Applied routing rule</dt><dd>Any carried track matches ${esc((s.tracks||[s.track]).join(" / "))} → AIE 2026 program review · Initial screen</dd><dt>Abstract</dt><dd>Teams can make complex AI systems useful without hiding uncertainty. This session shares concrete production lessons, a decision framework, and the incidents that changed the approach.</dd><dt>Attendee outcome</dt><dd>A practical checklist for choosing evaluation evidence and escalation points.</dd></dl></div></section>
               <section class="card"><div class="card-head"><h2>Participants</h2><span class="subtle">Roles are explicit per submission</span></div><div class="card-body" style="padding-top:2px;padding-bottom:2px">${participantRows}</div></section>
-              <section class="card"><div class="card-head"><h2>Form answers</h2><span class="chip">Public CFP</span></div><div class="card-body">${s.status==="Draft"?`<div class="message-preview"><strong>Incomplete draft</strong><br><span class="draft-warning">Missing: ${esc(s.missingFields.join(" · "))}</span><br><span class="subtle">Opening this record has not submitted it or changed its status.</span></div>`:`<dl class="definition-list"><dt>Audience</dt><dd>Platform and product engineers operating agent systems</dd><dt>Experience level</dt><dd>Intermediate</dd><dt>Vendor content</dt><dd>No</dd><dt>Recording consent</dt><dd>Yes</dd></dl>`}</div></section>
+              <section class="card"><div class="card-head"><h2>Form answers</h2><span class="chip">Public CFP</span></div><div class="card-body">${s.status==="Draft"?`<div class="message-preview"><strong>Incomplete draft</strong><br><span class="draft-warning">Missing: ${esc(s.missingFields.join(" · "))}</span><br><span class="subtle">Opening this record has not submitted it or changed its status.</span></div>`:`<dl class="definition-list"><dt>Audience</dt><dd>Platform and product engineers operating agent systems</dd><dt>Level</dt><dd>${esc(s.level||"—")}</dd><dt>Tags</dt><dd>${(s.tags||[]).length?s.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join(" "):"—"}</dd><dt>Vendor content</dt><dd>No</dd><dt>Recording consent</dt><dd>Yes</dd></dl>`}</div></section>
             </div>
             <aside class="stack">
               ${s.status==="Draft"?`<section class="card"><div class="card-head"><h2>Draft stewardship</h2><span class="chip overdue">Program staff</span></div><div class="card-body"><dl class="definition-list"><dt>Submitter contact</dt><dd>${esc(s.email)}</dd><dt>Last saved</dt><dd>${esc(s.updated)}</dd><dt>Access</dt><dd>Form administrators and program staff only</dd></dl></div></section>`:`<section class="card"><div class="card-head"><h2>Scores by round</h2><span class="chip review">2 rounds</span></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Initial screen</span><div class="metric">${s.score==="—"?"4.3":s.score}</div><span class="subtle">3 reviewers</span></div><div class="metric-box"><span class="eyebrow">Committee</span><div class="metric">4.6</div><span class="subtle">6 reviewers</span></div></div><div class="message-preview" style="margin-top:12px">“Specific, credible, and unusually honest about recovery paths.”<br><span class="subtle">Committee note · identity visible to admins</span></div></div></section>`}
               ${state.decisionFeedback[s.id]?`<section class="card"><div class="card-head"><h2>Decision feedback</h2><span class="chip">${esc(state.decisionFeedback[s.id].decision)}</span></div><div class="card-body"><p class="subtle" style="line-height:1.6">${esc(state.decisionFeedback[s.id].note||"No additional note was included.")}</p><div class="wave-date">Rendered in email and speaker portal · ${esc(state.decisionFeedback[s.id].time)}</div></div></section>`:""}
+              <section class="card"><div class="card-head"><div><h2>Reconciliation</h2><span class="subtle">Line this record up with the platforms you still run</span></div></div><div class="card-body stack">
+                <div class="field"><label for="record-external-ref">Client session ID</label><input id="record-external-ref" value="${esc(s.externalRef||"")}" placeholder="e.g. SZ-843 — your registration platform's ID"><span class="field-note">Editable and shown here and in exports · also the idempotent import-match key.</span></div>
+                ${s.entity==="Session"||s.accepted?`<div class="field"><label for="record-capacity">Session capacity</label><input id="record-capacity" type="number" min="0" value="${s.capacity??""}" placeholder="—" style="width:110px"><span class="field-note">Attendee cap for this session · shown while scheduling, checked against the room.</span></div>`:""}
+              </div></section>
               <section class="card"><div class="card-head"><h2>History</h2><button class="button small" data-route="comms">Messages</button></div><div class="card-body">${s.status==="Draft"?`<div class="history-row"><strong>Draft saved</strong><div class="subtle">${esc(s.updated)} · private resume link active</div></div><div class="history-row"><strong>Draft started</strong><div class="subtle">Public CFP · never submitted</div></div>`:`<div class="history-row"><strong>${s.status}</strong><div class="subtle">Wave ${s.wave||"—"} · Aug ${s.accepted?"15":"8"}, 10:04 AM</div></div><div class="history-row"><strong>Promoted to Committee decision</strong><div class="subtle">Aug 7, 4:18 PM · Maya Chen</div></div><div class="history-row"><strong>Routing rule applied</strong><div class="subtle">${esc(s.track)} → Initial screen</div></div><div class="history-row"><strong>Submitted</strong><div class="subtle">${s.submitted} · ${esc(s.source)}</div></div>`}</div></section>
             </aside>
           </div>
@@ -2101,7 +2255,7 @@
           <div class="route-tabs"><button class="button active" data-comms-anchor="templates">Templates</button><button class="button" data-comms-anchor="triggers">Triggers</button><button class="button" data-comms-anchor="outbox">Outbox · ${state.outbox.length}</button></div>
           <div class="comms-layout">
             <section class="card" id="templates"><div class="card-head"><h2>Templates</h2><span class="subtle">Merge fields render per recipient</span></div>${state.commsTemplates.map(t=>`<button class="list-button ${t.id===template.id?"active":""}" data-template-id="${t.id}"><span><strong>${esc(t.name)}</strong><small style="display:block;margin-top:4px">${esc(t.subject)}</small></span><span>→</span></button>`).join("")}</section>
-            <section class="card"><div class="card-head"><div><h2>${esc(template.name)}</h2><span class="subtle">Rendered preview uses Amara van der Meer</span></div><button class="button small" id="save-template">Save template</button></div><div class="card-body stack"><div class="field"><label>Subject</label><input id="template-subject" value="${esc(template.subject)}"></div><div class="field"><label>Message</label><textarea id="template-body" style="min-height:170px">${esc(template.body)}</textarea><div class="merge-fields" style="margin-top:7px">${MERGE_FIELDS.map(f=>`<button class="merge-chip" data-merge-field="${esc(f)}" title="Insert {{${esc(f)}}}">{{${esc(f)}}}</button>`).join("")}</div><span class="field-note">Click a field to insert it. Place fields resolve per recipient from the scheduled room.</span></div><div class="field"><label>Rendered preview</label><div class="message-preview" id="template-preview">${renderMergedTemplate(template)}</div></div></div></section>
+            <section class="card"><div class="card-head"><div><h2>${esc(template.name)}</h2><span class="subtle">Rendered preview uses Amara van der Meer</span></div><button class="button small" id="save-template">Save template</button></div><div class="card-body stack"><div class="field"><label>Subject</label><input id="template-subject" value="${esc(template.subject)}"></div><div class="field"><label>Message</label>${mdToolbar("template-body")}<textarea id="template-body" style="min-height:170px">${esc(template.body)}</textarea><div class="merge-fields" style="margin-top:7px">${MERGE_FIELDS.map(f=>`<button class="merge-chip" data-merge-field="${esc(f)}" title="Insert {{${esc(f)}}}">{{${esc(f)}}}</button>`).join("")}</div><span class="field-note">Click a field to insert it. Place fields resolve per recipient from the scheduled room.</span></div><div class="field"><label>Rendered preview</label><div class="message-preview" id="template-preview">${renderMergedTemplate(template)}</div></div></div></section>
             <section class="card" id="triggers"><div class="card-head"><div><h2>Automated triggers</h2><span class="subtle">Each can be paused without deleting its template</span></div><span class="chip published">7 configured</span></div><div class="card-body">${Object.entries(triggers).map(([key,label])=>`<div class="toggle-line"><span><strong style="font-size:11px">${esc(label)}</strong><small class="subtle" style="display:block;margin-top:3px">Uses ${esc(key==="closing"?"Submission-closing reminder":key[0].toUpperCase()+key.slice(1))}</small></span><button class="switch ${state.commsTriggers[key]?"on":""}" data-trigger="${key}" aria-label="Toggle ${esc(label)}" aria-pressed="${state.commsTriggers[key]}"></button></div>`).join("")}</div></section>
             <section class="card table-card" id="outbox"><div class="card-head"><div><h2>Outbox log</h2><span class="subtle">Demo-safe · no email leaves the prototype</span></div><span class="chip">Rendered bodies retained</span></div><div class="table-wrap" style="min-height:260px"><table><thead><tr><th>ID</th><th>Recipient</th><th>Template</th><th>Subject</th><th>Outcome</th><th></th></tr></thead><tbody>${state.outbox.map((m,i)=>`<tr><td>${m.id}</td><td>${esc(m.recipient)}</td><td>${esc(m.template)}</td><td>${esc(m.subject)}</td><td><span class="chip ${m.outcome==="Delivered"?"published":"overdue"}">${esc(m.outcome)}</span></td><td><button class="button small" data-preview-message="${i}">Preview</button></td></tr>`).join("")}</tbody></table></div></section>
           </div>
@@ -2129,7 +2283,7 @@
       }
       function renderMergedTemplate(template) {
         const vals = mergeValues();
-        return esc(template.body).replace(/\n/g,"<br>").replace(/\{\{([a-z_]+\.[a-zA-Z_]+)\}\}/g, (m,k)=> k in vals ? esc(String(vals[k])) : m);
+        return mdToHtml(template.body).replace(/\{\{([a-z_]+\.[a-zA-Z_]+)\}\}/g, (m,k)=> k in vals ? esc(String(vals[k])) : m);
       }
 
       function taskTemplatesView() {
@@ -2443,9 +2597,9 @@
             if (shared) conflicts.push({type:`${shared} is double-booked`,a,b});
             continue;
           }
-          // Not overlapping is not the same as reachable. A speaker in The Times
-          // Center at 10:00 and JFK27 at 10:30 reads clean on a day+time check and
-          // is a twelve-minute walk plus a ten-minute security queue.
+          // Not overlapping is not the same as reachable. A speaker in the Sheraton
+          // at 10:00 and the Marriott Marquis at 10:30 reads clean on a day+time
+          // check and is a nine-minute walk plus a three-minute access queue.
           const shared = speakersOf(a).find(name=>speakersOf(b).includes(name));
           if (!shared) continue;
           const [first,second] = toMinutes(a.time) <= toMinutes(b.time) ? [a,b] : [b,a];
@@ -2539,6 +2693,7 @@
         gs?.addEventListener("focus",openGlobalSearch);
         gs?.addEventListener("click",openGlobalSearch);
         document.getElementById("reset-demo")?.addEventListener("click",resetDemo);
+        document.getElementById("view-portal")?.addEventListener("click",()=>{state.impersonating=true;navigate("portal");});
         document.getElementById("exit-fresh-install")?.addEventListener("click",()=>{
           exitFreshInstall(); toast("Back in the seeded AIE NYC 2026 demo"); navigate("dashboard");
         });
@@ -2615,6 +2770,20 @@
         document.querySelectorAll("[data-unreviewed-track]").forEach(b=>b.onclick=()=>navigate("submissions",{submissionFilter:"Unreviewed",submissionTrack:b.dataset.unreviewedTrack,submissionPage:1}));
         document.querySelector("[data-scroll-wave]")?.addEventListener("click",()=>document.getElementById("wave-planner")?.scrollIntoView({behavior:"smooth"}));
         document.getElementById("export-dashboard")?.addEventListener("click",()=>downloadText("aie-nyc-program-status.csv",`metric,value\nsubmissions,${state.submissions.length}\naccepted,${pipelineCounts().AcceptedTotal}\nscheduled,${pipelineCounts().Scheduled}\noverdue_tasks,${onboardingCounts().overdueTasks}\nconflicts,${getAgendaConflicts().length}\n`,`text/csv`));
+        document.querySelectorAll("[data-pacing-axis]").forEach(b=>b.onclick=()=>{state.pacingAxis=b.dataset.pacingAxis;render();});
+        const hover=document.getElementById("pacing-hover"), cross=document.getElementById("pacing-cross"), readout=document.getElementById("pacing-readout"), svg=document.getElementById("pacing-svg");
+        if(hover&&svg){
+          const L=50,R=118,W=1100;
+          const dateFor=t=>{const d=new Date(2026,9,12);d.setDate(d.getDate()-t);return d.toLocaleDateString("en-US",{month:"short",day:"numeric"});};
+          hover.addEventListener("mousemove",e=>{
+            const rect=svg.getBoundingClientRect(), px=(e.clientX-rect.left)*(W/rect.width);
+            const t=Math.max(0,Math.min(90,Math.round(90-(px-L)/(W-L-R)*90)));
+            const c=PACING.curr.find(d=>d.t===t), p=PACING.prior.find(d=>d.t===t);
+            cross.setAttribute("x1",px.toFixed(1));cross.setAttribute("x2",px.toFixed(1));cross.setAttribute("visibility","visible");
+            readout.innerHTML=`${state.pacingAxis==="days"?`T−${t}`:dateFor(t)} · <strong>2026: ${c&&c.n!=null?c.n.toLocaleString():"—"}</strong> · 2025 edition: ${p?p.n.toLocaleString():"—"}${c&&c.n!=null&&p?` · <strong>${c.n-p.n>=0?"+":""}${(c.n-p.n).toLocaleString()} vs prior</strong>`:""}`;
+          });
+          hover.addEventListener("mouseleave",()=>{cross.setAttribute("visibility","hidden");readout.innerHTML=readout.dataset.default;});
+        }
       }
 
       // Buildings and rooms are edited on Venues but were historically saved by
@@ -2642,6 +2811,11 @@
         });
         document.getElementById("add-format")?.addEventListener("click",()=>{const name=`New format ${formats.length+1}`;formats.push(name);formatRanges[name]="15–30";formatDurations[name]=20;render();});
         document.getElementById("add-track")?.addEventListener("click",()=>{tracks.push({name:`New track ${tracks.length+1}`,color:"#64748b"});render();});
+        document.getElementById("add-tag")?.addEventListener("click",()=>{sessionTags.push(`New tag ${sessionTags.length+1}`);render();});
+        document.getElementById("add-level")?.addEventListener("click",()=>{levels.push(`New level ${levels.length+1}`);render();});
+        document.querySelectorAll("[data-tag-name]").forEach(input=>input.addEventListener("change",()=>{sessionTags[Number(input.dataset.tagName)]=input.value.trim()||sessionTags[Number(input.dataset.tagName)];toast("Tag renamed · chips and form options updated");}));
+        document.querySelectorAll("[data-level-name]").forEach(input=>input.addEventListener("change",()=>{levels[Number(input.dataset.levelName)]=input.value.trim()||levels[Number(input.dataset.levelName)];toast("Level renamed · form options updated");}));
+        document.getElementById("event-submission-limit")?.addEventListener("change",e=>{state.event.submissionLimit=Math.max(1,Number(e.target.value)||3);toast(`Conference submission limit set to ${state.event.submissionLimit} · forms may override`);});
         document.getElementById("add-room")?.addEventListener("click",()=>{rooms.push(`New room ${rooms.length+1}`);state.roomCapacities.push(100);state.roomBuildings.push(buildings[0]?.id||"");state.roomAV.push([]);state.roomNotes.push("");render();});
         document.querySelectorAll("[data-remove-room]").forEach(b=>b.onclick=()=>{const i=Number(b.dataset.removeRoom);rooms.splice(i,1);state.roomCapacities.splice(i,1);state.roomBuildings.splice(i,1);state.roomAV.splice(i,1);state.roomNotes.splice(i,1);render();});
         document.getElementById("add-building")?.addEventListener("click",()=>{buildings.push({id:`b${Date.now().toString(36)}`,name:`New building ${buildings.length+1}`,address:"",lat:null,lng:null,accessMinutes:0,accessNote:""});render();});
@@ -2685,6 +2859,13 @@
           row.addEventListener("drop",e=>{e.preventDefault();const from=state.builderFields.findIndex(f=>f.id===draggedField);const to=state.builderFields.findIndex(f=>f.id===Number(row.dataset.fieldDrag));if(from<0||to<0||from===to)return;const [field]=state.builderFields.splice(from,1);state.builderFields.splice(to,0,field);state.builderActive=field.id;toast("Field order updated in the public form");render();});
         });
         document.getElementById("add-field")?.addEventListener("click",()=>{const id=Math.max(...state.builderFields.map(f=>f.id))+1;state.builderFields.push({id,label:"Audience experience level",kind:"Single select",required:false});state.builderActive=id;toast("Field added to form and live preview");render();});
+        document.getElementById("add-section-element")?.addEventListener("click",()=>{
+          const id=Math.max(...state.builderFields.map(f=>f.id))+1;
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Add a section element</h2><p>Structure, not input — headers and dividers break a long form into readable parts.</p></div><div class="modal-body stack"><div class="field"><label for="section-el-kind">Element</label><select id="section-el-kind"><option>Section header</option><option>Divider</option></select></div><div class="field" id="section-el-label-field"><label for="section-el-label">Header text</label><input id="section-el-label" value="Logistics" maxlength="255"></div></div><div class="modal-actions"><button class="button" id="cancel-section-el">Cancel</button><button class="button primary" id="confirm-section-el">Add element</button></div></section></div>`;
+          document.getElementById("section-el-kind").onchange=e=>document.getElementById("section-el-label-field").style.visibility=e.target.value==="Divider"?"hidden":"visible";
+          document.getElementById("cancel-section-el").onclick=()=>modalRoot.innerHTML="";
+          document.getElementById("confirm-section-el").onclick=()=>{const kind=document.getElementById("section-el-kind").value;state.builderFields.push({id,label:kind==="Divider"?"":document.getElementById("section-el-label").value.trim()||"Section",kind,element:true});modalRoot.innerHTML="";toast(`${kind} added · drag it into place`);render();};
+        });
         document.getElementById("publish-form")?.addEventListener("click",()=>{const form=state.forms.find(item=>item.id===state.activeFormId);if(form){form.status="Open";form.detail=form.id==="cfp"?"Public · closes Sep 12":"Private link · published";}toast("Form published · only this form’s public surface updated");render();});
         document.getElementById("new-form")?.addEventListener("click",()=>completeSetupStep("form"));
         // Publishing the form is what opens intake — the last step of the walk.
@@ -2702,6 +2883,7 @@
         const abs=document.getElementById("cfp-abstract");abs?.addEventListener("input",()=>{document.getElementById("abstract-count").textContent=abs.value.length;document.getElementById("save-status").textContent="Saving draft…";setTimeout(()=>{const e=document.getElementById("save-status");if(e)e.textContent="Draft saved locally · just now"},250)});
         document.querySelectorAll("#cfp-form input,#cfp-form textarea,#cfp-form select").forEach(field=>field.addEventListener("change",()=>{const status=document.getElementById("save-status");if(status)status.textContent="Draft saved · private resume link remains valid";}));
         document.getElementById("cfp-vendor")?.addEventListener("change",event=>{state.cfpVendorContent=event.target.value;const field=document.getElementById("cfp-product-field");if(field)field.style.display=state.cfpVendorContent==="Yes"?"":"none";});
+        document.querySelectorAll("[data-cfp-tag]").forEach(b=>b.onclick=()=>{const on=b.classList.toggle("active");b.setAttribute("aria-pressed",String(on));});
         document.querySelectorAll("[data-cfp-track]").forEach(b=>b.onclick=()=>{const name=b.dataset.cfpTrack,index=state.cfpTracks.indexOf(name);if(index>=0)state.cfpTracks.splice(index,1);else state.cfpTracks.push(name);document.querySelectorAll("[data-cfp-track]").forEach(button=>{const i=state.cfpTracks.indexOf(button.dataset.cfpTrack);button.classList.toggle("active",i>=0);button.setAttribute("aria-pressed",String(i>=0));button.querySelector("small")?.remove();if(i===0)button.insertAdjacentHTML("beforeend","<small>Primary</small>");});document.getElementById("cfp-track-picker")?.focus();});
         document.getElementById("cfp-form")?.addEventListener("submit",e=>{
           e.preventDefault();
@@ -2721,7 +2903,17 @@
           ];
           fields.forEach(([id,ok,msg])=>document.getElementById(`error-${id}`).textContent=ok?'':msg);const bad=fields.find(x=>!x[1]);
           if(bad){document.getElementById(bad[0]==='track'?'cfp-track-picker':`cfp-${bad[0]}`).focus();return;}
-          document.getElementById("cfp-card").innerHTML=`<div class="eyebrow">Abstract submitted · AIE-1041</div><h1>Your idea is in.</h1><p>We sent a confirmation and private edit link to ${esc(document.getElementById('cfp-email').value)}. Review begins after September 12; the next decision wave is September 15.</p><div style="padding:16px;background:var(--success-soft);border-radius:9px;margin:24px 0"><strong>${esc(document.getElementById('cfp-title').value)}</strong><div class="subtle" style="margin-top:7px">Submitted by ${esc(document.getElementById('cfp-speaker').value)} · ${esc(document.getElementById('cfp-format').value)} · files attached</div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:9px">${state.cfpTracks.map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?' · Primary':''}</span>`).join('')}</div></div><a class="button primary" href="#portal">Open speaker portal →</a>`;
+          document.getElementById("cfp-card").innerHTML=`<div class="eyebrow">Abstract submitted · AIE-1041</div><h1>Your idea is in.</h1><p>${mdToHtml(document.getElementById("builder-thankyou")?.value||"Your abstract is in. We sent a confirmation and private edit link.")} Sent to ${esc(document.getElementById('cfp-email').value)}. Review begins after September 12; the next decision wave is September 15.</p><div style="padding:16px;background:var(--success-soft);border-radius:9px;margin:24px 0"><strong>${esc(document.getElementById('cfp-title').value)}</strong><div class="subtle" style="margin-top:7px">Submitted by ${esc(document.getElementById('cfp-speaker').value)} · ${esc(document.getElementById('cfp-format').value)} · files attached</div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:9px">${state.cfpTracks.map((name,i)=>`<span class="chip" style="border-left:3px solid ${trackColor(name)}">${esc(name)}${i===0?' · Primary':''}</span>`).join('')}</div></div><div style="display:flex;align-items:center;gap:12px"><a class="button primary" href="#portal">Continue to your speaker portal →</a><span class="subtle" style="font-variant-numeric:tabular-nums;min-width:200px">Taking you there in <strong id="portal-countdown">10</strong> s · <a href="#" id="cancel-redirect">stay here</a></span></div>`;
+          // The seam between walkthrough steps 5 and 6 — annotated "make sure this
+          // works" by the customer. Countdown is cancellable and dies on navigation.
+          let remaining=10;
+          const timer=setInterval(()=>{
+            const el=document.getElementById("portal-countdown");
+            if(!el){clearInterval(timer);return;}
+            remaining-=1; el.textContent=remaining;
+            if(remaining<=0){clearInterval(timer);navigate("portal");}
+          },1000);
+          document.getElementById("cancel-redirect").onclick=e=>{e.preventDefault();clearInterval(timer);const span=document.getElementById("portal-countdown").parentElement;span.innerHTML="Auto-redirect off — take your time.";};
         });
       }
 
@@ -2744,7 +2936,8 @@
         });
         document.getElementById("confirm-role")?.addEventListener("click",e=>{e.currentTarget.textContent="Role confirmed ✓";e.currentTarget.disabled=true;toast("Participation confirmed for this speaker role");});
         document.getElementById("decline-role")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Decline this speaker role?</h2><p>The program team will be notified; other roles and submissions are unchanged.</p></div><div class="modal-body field"><label>Optional note</label><textarea placeholder="Tell the program team what changed"></textarea></div><div class="modal-actions"><button class="button" id="cancel-decline">Keep role</button><button class="button danger" id="confirm-decline">Decline role</button></div></section></div>`;document.getElementById("cancel-decline").onclick=()=>modalRoot.innerHTML="";document.getElementById("confirm-decline").onclick=()=>{modalRoot.innerHTML="";toast("Role declined · program team notified");};});
-        document.getElementById("edit-profile")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Edit speaker profile</h2><p>Public speaker surfaces update after save.</p></div><div class="modal-body stack"><div class="grid-2"><div class="field"><label>Title</label><input value="Director of Applied AI"></div><div class="field"><label>Company</label><input value="Capital One"></div></div><div class="field"><label>Biography</label><textarea>Amara builds evaluation and governance systems for AI teams operating in regulated environments.</textarea></div><div class="field"><label>Headshot</label><input type="file" accept="image/*"><div class="message-preview">Crop preview · square safe area · initials placeholder retained until save</div></div><div class="field"><label>Social link</label><input value="https://www.linkedin.com/in/amara-example"></div></div><div class="modal-actions"><button class="button" id="cancel-profile">Cancel</button><button class="button primary" id="save-profile">Save profile</button></div></section></div>`;document.getElementById("cancel-profile").onclick=()=>modalRoot.innerHTML="";document.getElementById("save-profile").onclick=()=>{modalRoot.innerHTML="";toast("Speaker profile saved · conference site updated");};});
+        document.getElementById("back-to-admin")?.addEventListener("click",()=>{state.impersonating=false;toast("Back in your organizer session");navigate("dashboard");});
+        document.getElementById("edit-profile")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Edit speaker profile</h2><p>Public speaker surfaces update after save.</p></div><div class="modal-body stack"><div class="grid-2"><div class="field"><label>Title</label><input value="Director of Applied AI"></div><div class="field"><label>Company</label><input value="Capital One"></div></div><div class="grid-2"><div class="field"><label>Pronouns</label><input value="she/her" placeholder="e.g. she/her · they/them"><span class="field-note">Shown wherever your name appears, if you choose to share them.</span></div><div class="field"><label>Headshot</label><input type="file" accept="image/*"></div></div><div class="field"><label>Biography</label>${mdToolbar("profile-bio")}<textarea id="profile-bio">Amara builds evaluation and governance systems for AI teams operating in regulated environments.</textarea><span class="field-note">Rendered on the conference site and in the program.</span></div><div class="grid-2"><div class="field"><label>LinkedIn</label><input value="https://www.linkedin.com/in/amara-example"></div><div class="field"><label>X (Twitter)</label><input value="https://x.com/amara_vdm"></div></div><div class="field"><label>Website</label><input value="https://amara.dev"></div></div><div class="modal-actions"><button class="button" id="cancel-profile">Cancel</button><button class="button primary" id="save-profile">Save profile</button></div></section></div>`;bindMdToolbars();document.getElementById("cancel-profile").onclick=()=>modalRoot.innerHTML="";document.getElementById("save-profile").onclick=()=>{modalRoot.innerHTML="";toast("Speaker profile saved · conference site updated");};});
         document.querySelectorAll("[data-handbook]").forEach(b=>b.onclick=()=>{const venue=b.dataset.handbook==="venue";modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div class="eyebrow">Speaker handbook</div><h2>${venue?"Venue, arrival, and green room":"Presentation and A/V guidance"}</h2></div><div class="modal-body"><div class="message-preview" style="line-height:1.7">${venue?"Arrive at the Sheraton New York Times Square 45 minutes before your session. Check in at the program desk, then meet your room producer in the speaker green room on level two.":"Bring a 16:9 deck as PDF and PPTX. Every room provides HDMI and USB-C. Upload the final deck by October 5; the production team will test video and audio."}</div></div><div class="modal-actions"><button class="button primary" id="close-handbook">Done</button></div></section></div>`;document.getElementById("close-handbook").onclick=()=>modalRoot.innerHTML="";});
       }
 
@@ -2786,6 +2979,7 @@
         document.getElementById("manage-current-view")?.addEventListener("click",openManageViewModal);
         document.getElementById("configure-columns")?.addEventListener("click",openColumnChooser);
         let searchTimer;document.getElementById("submission-search")?.addEventListener("input",e=>{state.submissionSearch=e.target.value;const cursor=e.target.selectionStart;clearTimeout(searchTimer);searchTimer=setTimeout(()=>{rerenderFilter();const next=document.getElementById("submission-search");next?.focus();next?.setSelectionRange?.(cursor,cursor);},80)});
+        document.getElementById("search-op")?.addEventListener("change",e=>{state.submissionSearchOp=e.target.value;rerenderFilter();});
         document.getElementById("status-filter")?.addEventListener("change",e=>{state.submissionFilter=e.target.value;rerenderFilter();});
         document.getElementById("type-filter")?.addEventListener("change",e=>{state.submissionType=e.target.value;rerenderFilter();});
         document.getElementById("track-filter")?.addEventListener("change",e=>{state.submissionTrack=e.target.value;rerenderFilter();});
@@ -2806,6 +3000,8 @@
 
       function bindSubmissionDetail() {
         document.getElementById("open-unaccept")?.addEventListener("click",showUnacceptModal);
+        document.getElementById("record-external-ref")?.addEventListener("change",e=>{const s=state.submissions.find(item=>item.id===state.submissionRecordId);if(s){s.externalRef=e.target.value.trim()||null;toast(s.externalRef?`Client session ID saved · ${s.externalRef}`:"Client session ID cleared");}});
+        document.getElementById("record-capacity")?.addEventListener("change",e=>{const s=state.submissions.find(item=>item.id===state.submissionRecordId);if(s){s.capacity=e.target.value?Math.max(0,Number(e.target.value)):null;toast(s.capacity?`Session capacity set to ${s.capacity}`:"Session capacity cleared");}});
         document.querySelectorAll("[data-lifecycle-target]").forEach(button=>button.addEventListener("click",()=>showLifecycleTransition(state.submissionRecordId,button.dataset.lifecycleTarget)));
         document.querySelectorAll("[data-program-decision]").forEach(button=>button.addEventListener("click",()=>showProgramDecision(state.submissionRecordId,button.dataset.programDecision)));
         document.querySelectorAll("[data-record-message]").forEach(button=>button.addEventListener("click",()=>showRecordMessage(state.submissionRecordId,button.dataset.recordMessage)));
@@ -3029,6 +3225,7 @@
         hideRoomPanel(true); roomPanelPinned = false;
         bindCommon();
         bindRoomHeads();
+        bindMdToolbars();
         const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
         // The setup dashboard has no binder of its own — bindCommon carries its links.
         if(!showEmpty && binder && !(state.setup.active && state.route === "dashboard")) binder();

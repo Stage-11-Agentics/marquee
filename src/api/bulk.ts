@@ -22,10 +22,13 @@ export const BULK_ID_LIMIT = 1_000;
  * endpoint's typed list-filter shape, so filter-wide operations and list
  * reads share semantics (AC-108).
  */
-export function bulkSelectorWireSchema<Filter extends z.ZodType>(filterSchema: Filter) {
+export function bulkSelectorWireSchema<Filter extends z.ZodType>(
+  filterSchema: Filter,
+  idSchema: z.ZodType = ulidSchema,
+) {
   return z.union([
     z
-      .object({ ids: z.array(ulidSchema).min(1).max(BULK_ID_LIMIT) })
+      .object({ ids: z.array(idSchema).min(1).max(BULK_ID_LIMIT) })
       .strict()
       .openapi({ description: "Explicit ID selection" }),
     z
@@ -73,6 +76,15 @@ export const bulkItemFailureSchema = z
   })
   .openapi("BulkItemFailure");
 
+export const bulkItemResultSchema = z
+  .object({
+    id: z.string().min(1),
+    outcome: z.enum(["succeeded", "failed"]),
+    resulting_status: z.string().nullable(),
+    error: z.string().optional(),
+  })
+  .openapi("BulkItemResult");
+
 export const BULK_OPERATION_STATES = [
   "queued",
   "running",
@@ -98,6 +110,7 @@ export const bulkResultSchema = z
       .min(0)
       .describe("Publication/outbox rows enqueued by the operation"),
     failures: z.array(bulkItemFailureSchema).max(BULK_FAILURE_REPORT_LIMIT).optional(),
+    results: z.array(bulkItemResultSchema).max(BULK_ID_LIMIT).optional(),
   })
   .openapi("BulkResult");
 

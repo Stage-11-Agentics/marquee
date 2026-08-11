@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM94T1M998HJ07RN5G7DA",
-  "last_event_id": "ev_01KZQD075ZR1WQH3FS8JH7YFGD",
-  "last_status_changed_at": "2026-08-11T03:14:04Z",
+  "last_event_id": "ev_01KZQD4X1A2G6QHSCZF30E0YGY",
+  "last_status_changed_at": "2026-08-11T03:16:37Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -35,10 +35,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-19",
-  "status": "planned",
+  "status": "in_progress",
   "tags": null,
   "title": "Bulk and record-owned decisions with cascade",
   "type": "task",
-  "updated_at": "2026-08-11T03:14:04Z",
+  "updated_at": "2026-08-11T03:16:37Z",
   "urgency": null
 }

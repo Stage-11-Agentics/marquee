@@ -13,7 +13,7 @@ The standing rules for dispatching this run. The tick prompt points here so it s
 ## Merge protocol — in order, no shortcuts
 
 1. **Scan the diff for secrets and PII** (`re_…` keys, API keys, real email addresses, external image URLs, phone/passport/visa). Seed tickets get extra scrutiny: real people's names ship in a public repo.
-2. `head != base`, `mergeable == true`.
+2. `head != base`, `mergeable == true`. **Check whether any live branch is stacked on this one** (footgun table below) — the repair is cheapest before the squash, not after.
 3. **A PASS review naming HEAD** — or an identical tree/patch-id if the branch was rebased after review.
 4. Merge, **capture the HTTP code**, then **re-GET and confirm `.merged == true`**.
 5. **Only then**: `lattice status <id> pr_open` → `lattice complete` → close surface → delete branch locally **and** on Forgejo.
@@ -39,6 +39,7 @@ What a real guardrail test looks like: it asserts **the status code AND the abse
 | Delegator says it "routed around" something | Investigate. Twice this became an armed `check:api` failure that its own tests passed. |
 | A module under `src/routes/` not named `*.routes.ts` | It misses the manifest glob and the OpenAPI document. Check its paths reach the schema before merging. |
 | Delegator hits exit 44 on the Forgejo keychain | Its sandbox can't reach the item. Open the PR yourself rather than letting a finished branch sit. |
+| After a squash-merge, a branch that was press-ahead-stacked on the merged one shows phantom diffs of all the parent's commits | A squash means the parent's commits are **not** ancestors of master. A plain `git rebase` replays them and conflicts against the squashed copy. Fix: `git rebase --onto forgejo/master <merged-branch-head-sha> <stacked-branch>`, then `--force-with-lease`. **Check for stacked branches before every merge** — `git merge-base --is-ancestor <pr-head> <other-branch>` — and if the stacked branch has uncommitted work, send its agent the recipe rather than rebasing under it. |
 
 ## Dispatch judgment
 
