@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T19:59:13Z",
+  "created_by": "agent:delegator-mrq-75",
+  "custom_fields": {
+    "url": "https://github.com/Stage-11-Agentics/marquee/pull/19"
+  },
+  "id": "art_01KZS6GQ73459AH02NVZQ331QP",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "https://github.com/Stage-11-Agentics/marquee/pull/19",
+  "token_usage": null,
+  "type": "reference"
+}

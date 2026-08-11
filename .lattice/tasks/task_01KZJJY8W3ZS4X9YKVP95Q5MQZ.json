@@ -1,5 +1,5 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:mrq-57-deploy",
   "branch_links": [],
   "comment_count": 2,
   "complexity": null,
@@ -10,8 +10,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJJY8W3ZS4X9YKVP95Q5MQZ",
-  "last_event_id": "ev_01KZQBVKK0D01TXRR9Q5XYJTC0",
-  "last_status_changed_at": "2026-08-09T06:21:39Z",
+  "last_event_id": "ev_01KZSA5T5K0CBF8F99J5JE65QB",
+  "last_status_changed_at": "2026-08-11T21:03:10Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -40,10 +40,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-57",
-  "status": "backlog",
+  "status": "planned",
   "tags": null,
   "title": "Real Cloudflare deploy \u2014 resources, secrets, custom domain",
   "type": "task",
-  "updated_at": "2026-08-11T02:54:04Z",
+  "updated_at": "2026-08-11T21:03:10Z",
   "urgency": null
 }

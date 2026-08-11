@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T19:53:20Z",
+  "created_by": "agent:delegator-mrq-77",
+  "custom_fields": {},
+  "id": "art_01KZS65YFKHQQZT2V7E0CWBYQG",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZS65YFKHQQZT2V7E0CWBYQG.png",
+    "size_bytes": 416386
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "after-record-1000.png",
+  "token_usage": null,
+  "type": "file"
+}
