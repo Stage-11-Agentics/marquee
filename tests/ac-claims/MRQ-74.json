@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-74",
+  "owns": [],
+  "exercises": ["AC-268", "AC-269"],
+  "notes": "MRQ-74 owns no automatic AC. The delivery and system health surface is a read over columns the product already populates; it exercises the decided-not-notified derivation owned by MRQ-68 (AC-268, AC-269) from a second, organizer-facing angle and adds no requirement of its own."
+}

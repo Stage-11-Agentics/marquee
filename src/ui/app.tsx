@@ -3,6 +3,7 @@ import "../styles/tokens.css";
 import "../styles/components.css";
 import { AppShell } from "./shell/AppShell";
 import { installErrorReporting } from "./shell/error-reporting";
+import { DeliveryHealthShell } from "./health/DeliveryHealthShell";
 import { PublicForm } from "./public/form/PublicForm";
 import type { PublicFormState } from "../routes/public-form.types";
 
@@ -31,4 +32,6 @@ if (window.location.pathname.startsWith("/f/")) {
   if (stateElement?.textContent) {
     hydrate(<PublicForm initial={JSON.parse(stateElement.textContent) as PublicFormState} />, root);
   }
+} else if (window.location.pathname === "/delivery-health") {
+  render(<DeliveryHealthShell />, root);
 } else if (!isPublicPage) render(<AppShell />, root);

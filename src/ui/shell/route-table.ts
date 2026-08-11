@@ -29,6 +29,9 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "○", group: "modules", sidebar: true, external: true },
   { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "modules", sidebar: true, external: true },
   { id: "settings", path: "/settings", label: "Conference settings", icon: "⚙", group: "modules", sidebar: true },
+  // Delivery health carries its own chrome, so the sidebar hands it a real
+  // browser navigation rather than a client-side push.
+  { id: "delivery-health", path: "/delivery-health", label: "Delivery health", icon: "◎", group: "modules", sidebar: true, external: true },
   { id: "venues", path: "/settings/venues", label: "Venues", icon: "⌖", group: "utility" },
   { id: "submission-detail", path: "/submissions/:id", label: "Submission record", icon: "", group: "utility" },
   { id: "submission-new", path: "/submissions/new", label: "Create submission", icon: "", group: "utility" },
