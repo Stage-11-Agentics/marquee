@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-63",
   "branch_links": [],
+  "c11_surface": "surface:170",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": "high",
   "created_at": "2026-08-11T02:30:44Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZQAGW864Y559SFNMMGFRQWQ",
-  "last_event_id": "ev_01KZQAHKGC7GHZCSBH08P99W5Y",
-  "last_status_changed_at": "2026-08-11T02:30:44Z",
+  "last_event_id": "ev_01KZQHGJKERSFA912QG734HXZP",
+  "last_status_changed_at": "2026-08-11T04:32:54Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-63",
-  "status": "backlog",
+  "status": "in_progress",
   "tags": null,
   "title": "Transit conflicts \u2014 geography as a scheduling constraint",
   "type": "task",
-  "updated_at": "2026-08-11T02:31:08Z",
+  "updated_at": "2026-08-11T04:32:54Z",
   "urgency": null
 }

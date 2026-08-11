@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-16",
   "branch_links": [],
+  "c11_surface": "surface:171",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM8VN6XZ85B726GYFNSTT",
-  "last_event_id": "ev_01KZJMR3NA91W5XSVDHT9P5MBW",
-  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "last_event_id": "ev_01KZQHFJBFW7T6ZNXYF421DJCZ",
+  "last_status_changed_at": "2026-08-11T04:32:21Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -33,10 +35,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-16",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Speaker portal",
   "type": "task",
-  "updated_at": "2026-08-09T06:53:14Z",
+  "updated_at": "2026-08-11T04:32:21Z",
   "urgency": null
 }
