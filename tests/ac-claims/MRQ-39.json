@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-39",
+  "owns": [],
+  "exercises": ["AC-158", "AC-159"],
+  "notes": "MRQ-39 owns no auto AC; AC-158 and AC-159 remain owned by MRQ-18. M-47 / US-32 / AC-167–AC-169 are explicitly cut from this merged ticket."
+}

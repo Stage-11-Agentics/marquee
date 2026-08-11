@@ -355,7 +355,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
   if (error && !plan) return <main class="reviewer-surface"><div class="reviewer-frame"><EmptyState title="Reviewer queue unavailable" copy={error} action={<Button variant="primary" onClick={() => void load()}>Try again</Button>} /></div></main>;
   if (!plan) return <main class="reviewer-surface"><div class="reviewer-frame"><EmptyState title="No review plan" copy="A conference review round has not been configured yet." action={<Button variant="primary" onClick={exitQueue}>Return to conference</Button>} /></div></main>;
 
-  return <main class="reviewer-surface" data-reviewer-surface="true">
+  return <main class="reviewer-surface" data-reviewer-surface="true" data-mobile-review="375px">
     <div class="reviewer-frame">
       <header class="reviewer-topline">
         <div class="reviewer-brand"><span class="brand-mark" aria-hidden="true">M</span><span>Marquee</span><span class="reviewer-slash">/</span><strong>Reviewer</strong></div>
@@ -365,13 +365,14 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
         <div><span class="eyebrow">{plan.name}</span><h1>{roundMode === "comparison" ? "Comparison queue" : "Reviewer queue"}</h1><p>{roundMode === "comparison" ? <><span class="tabular">{Math.min(3, queue.length)}</span> submissions loaded · rank ties are allowed</> : <><span class="tabular">{queue.length ? currentIndex + 1 : 0}</span> of <span class="tabular">{queue.length}</span> in your authorized tracks · <span class="tabular">{Math.max(0, queue.length - currentIndex - 1)}</span> remaining</>}</p></div>
         <button type="button" class="reviewer-refresh" onClick={() => void load()} disabled={loading}>Refresh queue</button>
       </header>
-      {error && <div class="reviewer-alert alarm" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="Dismiss error">×</button></div>}
-      {notice && <div class="reviewer-alert success" role="status">{notice}<button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notification">×</button></div>}
+      <section class="reviewer-feedback-slot" data-reviewer-feedback aria-live="polite">
+        {error ? <div class="reviewer-alert alarm" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="Dismiss error">×</button></div> : notice ? <div class="reviewer-alert success" role="status">{notice}<button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notification">×</button></div> : <span class="reviewer-feedback-placeholder" aria-hidden="true" />}
+      </section>
       <section class="reviewer-responsibility" aria-label="Your track responsibility">
         <div><span class="eyebrow">Your responsibility</span><div class="scope-row">{scopes.length ? scopes.map((scope) => <Chip key={scope.id}><span class="scope-dot" style={{ background: scope.color }} />{scope.name}</Chip>) : <span class="subtle">No track scope is assigned.</span>}</div></div>
         <p>A submission appears when any carried track intersects your scope. Record, file, export, and review access use the same rule.</p>
       </section>
-      {!current ? <section class="reviewer-empty instrument"><span class="empty-mark" aria-hidden="true">✓</span><h2>{roundMode === "comparison" ? "Comparison queue clear" : "Queue clear"}</h2><p>{roundMode === "comparison" ? "There are not three authorized submissions waiting for comparison." : "There are no unreviewed submissions in your authorized tracks."}</p><button type="button" class="button" onClick={() => void load()}>Check again</button></section> : roundMode === "comparison" ? <div class="comparison-board" data-comparison-round={roundId}>
+      {!current ? <section class="reviewer-empty instrument"><span class="empty-mark" aria-hidden="true">✓</span><h2>{roundMode === "comparison" ? "Comparison queue clear" : "Queue clear"}</h2><p>{roundMode === "comparison" ? "There are not three authorized submissions waiting for comparison." : "There are no unreviewed submissions in your authorized tracks."}</p><button type="button" class="button" onClick={() => void load()}>Check again</button></section> : roundMode === "comparison" ? <div class="comparison-board" data-comparison-round={roundId} data-mobile-review="comparison">
         {queue.slice(0, 3).map((item, index) => <article class="card comparison-card" key={item.id}>
           <CardBody>
             <div class="review-card-chips"><span class="chip">Card {index + 1}</span><span class="chip">{item.format ?? "Abstract"}</span><span class="chip tabular">{item.id}</span></div>
@@ -382,7 +383,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
           </CardBody>
         </article>)}
         <Card class="comparison-save-card"><div class="card-head"><div><h2>Rank these three</h2><span class="subtle">Choose the same rank to record a tie.</span></div></div><CardBody><button type="button" class="button primary reviewer-save" disabled={queue.length < 3 || saving} onClick={() => void saveComparison()}>{saving ? "Saving…" : "Save comparison & next →"}</button><p class="review-shortcuts">Every card is authorized independently before evidence is stored.</p></CardBody></Card>
-      </div> : <div class="reviewer-layout" data-queue-id={current.queue_id} data-queue-index={currentIndex}>
+      </div> : <div class="reviewer-layout" data-queue-id={current.queue_id} data-queue-index={currentIndex} data-mobile-review="scorecard">
         <article ref={(element) => { cardRef.current = element; }} class="card review-submission-card" role="button" tabIndex={0} aria-label={`Open full submission ${current.id}`} onClick={() => void openDetail()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void openDetail(); } }}>
           <CardBody>
             <div class="review-card-chips"><span class="chip">{current.format ?? "Abstract"}</span>{current.tracks.map((track, index) => <span class="chip" key={track.id} style={{ borderLeft: `3px solid ${track.color}` }}>{track.name}{index === 0 ? " · Primary" : ""}</span>)}<span class="chip tabular">{current.id}</span></div>
@@ -398,22 +399,22 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
         <Card class="review-score-card">
           <div class="card-head"><div><h2>Your recommendation</h2><span class="subtle">Primary path · no numeric score required</span></div><span class="review-key-hint">A / M / D</span></div>
           <CardBody>
-            <div class="decision-buttons" role="group" aria-label="Recommendation">
+            <div class="decision-buttons" data-reviewer-controls="recommendation" role="group" aria-label="Recommendation">
               {["approve", "maybe", "deny"].map((value) => <button type="button" class={`decision-button ${currentReview.recommendation === value ? "active" : ""}`} aria-pressed={currentReview.recommendation === value} onClick={() => updateReview({ recommendation: value as ReviewState["recommendation"] })}>{recommendationLabel(value as ReviewState["recommendation"])}</button>)}
             </div>
             <div class="review-choice"><strong>{recommendationLabel(currentReview.recommendation)}</strong><span>{currentReview.recommendation ? `${recommendationLabel(currentReview.recommendation)} saves a proposal; only a program lead changes lifecycle status.` : "Approve, Maybe, and Deny are independent of the optional scorecard."}</span></div>
             <div class="divider" />
             <div class="score-heading"><span class="subtle">Optional scorecard · keys 1–5</span><button type="button" class="clear-score" onClick={() => updateReview({ score: null })} disabled={currentReview.score === null}>Clear</button></div>
-            <div class="score-buttons" role="group" aria-label="Optional numeric score">{[1, 2, 3, 4, 5].map((score) => <button type="button" class={currentReview.score === score ? "active" : ""} aria-pressed={currentReview.score === score} onClick={() => updateReview({ score })}>{score}</button>)}</div>
-            <label class="review-comment"><span>Committee note</span><textarea value={currentReview.comment} placeholder="Optional context for the committee" onInput={(event) => updateReview({ comment: (event.currentTarget as HTMLTextAreaElement).value })} /></label>
-            <button type="button" class="button primary reviewer-save" disabled={!currentReview.recommendation || saving} onClick={() => void saveNext()}>{saving ? "Saving…" : "Save recommendation & next →"}</button>
+            <div class="score-buttons" data-reviewer-controls="score" role="group" aria-label="Optional numeric score">{[1, 2, 3, 4, 5].map((score) => <button type="button" class={currentReview.score === score ? "active" : ""} aria-pressed={currentReview.score === score} onClick={() => updateReview({ score })}>{score}</button>)}</div>
+            <label class="review-comment"><span>Committee note</span><textarea data-reviewer-control="comment" value={currentReview.comment} placeholder="Optional context for the committee" onInput={(event) => updateReview({ comment: (event.currentTarget as HTMLTextAreaElement).value })} /></label>
+            <button type="button" class="button primary reviewer-save" data-reviewer-control="save-next" disabled={!currentReview.recommendation || saving} onClick={() => void saveNext()}>{saving ? "Saving…" : "Save recommendation & next →"}</button>
             <p class="review-shortcuts">Keyboard: <span class="tabular">A M D</span> recommendation · <span class="tabular">1–5</span> score · <span class="tabular">Enter</span> save &amp; next</p>
           </CardBody>
         </Card>
       </div>}
     </div>
     {detailOpen && <div class="reviewer-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
-      <section ref={(element) => { detailRef.current = element; }} class="reviewer-detail" role="dialog" aria-modal="true" aria-labelledby="reviewer-detail-title" tabIndex={-1} data-reviewer-detail>
+      <section ref={(element) => { detailRef.current = element; }} class="reviewer-detail" role="dialog" aria-modal="true" aria-labelledby="reviewer-detail-title" tabIndex={-1} data-reviewer-detail data-mobile-review="detail">
         {detailLoading || !detail ? <div class="reviewer-detail-loading"><span class="eyebrow">Reviewer item</span><strong>Loading full submission…</strong></div> : <>
           <header class="reviewer-detail-head"><div><span class="eyebrow">{detail.blind_mode ? "Anonymous submission" : "Submission"} · queue position preserved</span><h2 id="reviewer-detail-title">{detail.title}</h2><p>{detail.blind_mode ? "Speaker identity and contact fields remain redacted while blind review is active." : "Evaluator-visible submission details."}</p></div><button type="button" class="reviewer-detail-close" onClick={closeDetail} aria-label="Close full submission">×</button></header>
           <div class="reviewer-detail-body">
