@@ -12,8 +12,8 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { SELF } from "cloudflare:test";
 
+import { app } from "../../../src/index";
 import { applyMigrations, env } from "../apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
@@ -34,10 +34,29 @@ function turnstile(success: boolean) {
   })));
 }
 
+/**
+ * Deterministic signing values, supplied per request rather than inherited from
+ * whatever `.dev.vars` the machine happens to hold. Presigning is an HMAC over
+ * strings, so fake credentials sign perfectly well — and a test that only
+ * passes on a developer's machine because it holds live R2 credentials is not
+ * hermetic, however green it looks locally.
+ */
+const TEST_ENV = {
+  ...env,
+  TURNSTILE_SECRET_KEY: "fake-turnstile-secret",
+  R2_ACCOUNT_ID: "fake-account",
+  R2_BUCKET_NAME: "fake-bucket",
+  R2_ACCESS_KEY_ID: "fake-key-id",
+  R2_SECRET_ACCESS_KEY: "fake-secret-key",
+  MEDIA_PUBLIC_ORIGIN: "media.marquee.test",
+  UPLOAD_TOKEN_SECRET: "fake-token-secret",
+  UPLOAD_RATE_LIMIT_SECRET: "fake-rate-limit-secret",
+} as unknown as Parameters<typeof app.fetch>[1];
+
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.body !== undefined && !headers.has("content-type")) headers.set("content-type", "application/json");
-  return SELF.fetch(`${ORIGIN}${path}`, { ...init, headers });
+  return app.fetch(new Request(`${ORIGIN}${path}`, { ...init, headers }), TEST_ENV);
 }
 
 async function seed(): Promise<void> {
@@ -216,7 +235,7 @@ describe.sequential("MRQ-81 public upload presign", () => {
     expect(signed.status).toBe(200);
     const { attachmentId } = await signed.json<{ attachmentId: string }>();
 
-    const put = await SELF.fetch(`${ORIGIN}/api/v1/uploads/local/${attachmentId}?expires=${Date.now() + 60_000}&token=anything`, {
+    const put = await request(`/api/v1/uploads/local/${attachmentId}?expires=${Date.now() + 60_000}&token=anything`, {
       method: "PUT",
       body: "not-really-an-image",
     });
