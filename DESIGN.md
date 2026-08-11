@@ -1,7 +1,7 @@
 # Marquee — Design Language
 
 **Status:** Converged, client-loved, binding. Minted 2026-08-09 at the close of tone-prototype.
-**Binding visual contract:** `prototypes/pipeline-v1.1/index.html` at **v1.5** (the v1.4 converged structure reskinned to Flight Deck). The build reproduces it one-to-one; every designed control ships. Divergences are legal only where SPEC marks them `[beyond … prototype — acknowledged divergence]`.
+**Binding visual contract:** `prototypes/pipeline-v1.1/index.html` at **v1.7** (the v1.4 converged structure reskinned to Flight Deck at v1.5, a real cold start at v1.6, geography at v1.7). The build reproduces it one-to-one; every designed control ships. Divergences are legal only where SPEC marks them `[beyond … prototype — acknowledged divergence]`.
 
 ## The direction, and how it was found
 
@@ -32,4 +32,4 @@ Confident, warm, concise, operational. The interface narrates state ("Wave 2 clo
 
 ## Provenance
 
-`prototypes/` retains the full lineage: three directions (`chase/`, `pipeline/`, `marquee/`), the converged iterations (`pipeline-v1.1/`, v1.1→v1.5 in git history), and the skin round (`skins/`). `sequence/run-state.md` logs every design ruling with dates.
+`prototypes/` retains the full lineage: three directions (`chase/`, `pipeline/`, `marquee/`), the converged iterations (`pipeline-v1.1/`, v1.1→v1.7 in git history), and the skin round (`skins/`). `sequence/run-state.md` logs every design ruling with dates. The venue-map design reasoning lives in `sequence/venue-map-ux.md`.
