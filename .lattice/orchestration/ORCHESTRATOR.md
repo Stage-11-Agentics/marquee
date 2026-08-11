@@ -9,7 +9,8 @@ The standing rules for dispatching this run. The tick prompt points here so it s
 3. **Merge what's ready** (protocol below).
 4. **Refill to N** — merges free slots faster than you expect; check the count, don't assume.
 5. **Verify master isn't ahead of the remote**, then push. `git pull --rebase --autostash forgejo master` always.
-6. Reschedule ~300s while building.
+6. **Check that every live branch exists on the remote** — `git ls-remote --heads forgejo` against the worktree list. A delegator that hasn't pushed is one crash from losing everything, and the board looks identical either way. Push clean branches yourself; hand a mid-rebase branch back to its agent rather than pushing behind it.
+7. Reschedule ~300s while building.
 
 ## Merge protocol — in order, no shortcuts
 
@@ -53,6 +54,6 @@ What a real guardrail test looks like: it asserts **the status code AND the abse
 ## Current standing context
 
 - **Deadline:** Wed Aug 12 22:00 PT = **Thu Aug 13 01:00 EDT**.
-- **Models:** build on codex `gpt-5.6-luna` at `max`; `terra`/`sol` for hard items or capacity fallback; Claude sonnet for design. Always pass `--model`.
+- **Models:** build on codex `gpt-5.6-luna` at `max`; `terra`/`sol` for hard items or capacity fallback; Claude sonnet for design. **Always pass `--model` and `--effort max`** — `max` is now wanted explicitly, and `high` is the downgrade to avoid (project CLAUDE.md `8c9370f`). `terra` at `high` is the sanctioned temporary fallback when luna refuses repeatedly — a running agent at `high` beats a stalled one at `max`.
 - **Capacity:** Codex effectively free. **Bravo is orchestration + hand reviews only — never delegate on it.** Alpha untouched, needs an operator login.
 - **Refs:** workspace:9, pane:16, orchestrator surface:60.

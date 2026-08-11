@@ -374,3 +374,36 @@ Every trap in `seams-feasibility.md` §8 that touches this plan, and where it di
 **Total: 17 agent-hours.**
 
 ---
+
+## Amendment 10 — the states a forward-only model forgot (2026-08-10, client-directed)
+
+*Folds `SPEC.md` Amendment 15 and `USER_STORIES.md` Amendment 15 (**US-80, US-81; AC-264 – AC-269**) into the plan. Source dossier: `sequence/research/state-model-gaps.md`. Binding prototype **v1.8**.*
+
+**Timing is the good news.** Every ticket this touches was still `backlog` when the gaps were found — the un-accept cascade, the portal, the chase board, webhooks — so none of this is rework on merged code. The one exception is *Bulk and record-owned decisions with cascade*, `in_progress`, which owns AC-268/AC-269's write path and should receive this amendment directly.
+
+**One migration, three additions.** `0002_venue_geography.sql` established that additive migrations after M-02 are fine, so `0003` carries all of it as one ticket and one review rather than three migrations racing each other:
+
+```sql
+ALTER TABLE speaker_tasks ADD COLUMN cancelled_at INTEGER;   -- AC-264; open|done CHECK unchanged
+CREATE TABLE webhook_endpoints  (...);                       -- AC-241; see SPEC §3
+CREATE TABLE webhook_deliveries (...);                       -- AC-241
+```
+
+`handbook_pages` is **deliberately not** in this migration — the Speaker Handbook is ruled if-capacity (below), and a table with no writer is what `SPEC.md` §3 says must not ship. If the if-capacity band opens, it joins `0004`.
+
+| # | Ticket | ACs | Hrs | Deps |
+|---|---|---|---|---|
+| **M-61** | **Migration `0003`** — `speaker_tasks.cancelled_at` plus the two webhook tables, with the index on `webhook_deliveries(endpoint_id, created_at)`. Nothing else; no read sites, no UI. Split out so the three consumers below can start in parallel behind one merged migration, exactly as MRQ-58 did for venues. | — (serves AC-264, AC-241) | 1 | M-02 (merged) |
+| **M-62** | **Task cancellation and the idempotent reconciliation.** `cancelTaskSet` (stamp `cancelled_at` on open rows; never touch `completed_at`; never delete) and **one** `reconcileTaskSet` called by *every* acceptance path — first accept, re-accept, and accept after a template change — so restoration has no separate branch and running it twice is a no-op. Convert **every** reader to the `owes = neither done nor cancelled` predicate: portal active list and progress denominator, all four chase-board metric buttons, all four filter-chip counts, the task-type filter, severity ordering, overdue totals, the **`task overdue` trigger**, and the comms recipient selector. Relabel the reversal dialog's branches to `Cancel open tasks` / `Keep tasks active` and stamp both, plus any restoration, into `audit_log`. | **AC-264 – AC-267** | 4 | M-61, M-33, M-15, M-23 |
+| **M-63** | **Decided · not notified.** Derived only — `submission_decisions` left-joined to `outbox`, no schema. The immutable built-in view naming which of the three reasons applies per record, the fourth attention-strip row that holds its place at zero, and a `Notify N speakers` action that writes a **new** outbox row against the **unchanged** decision row and excludes no-address records from both the action and its count. | **AC-268, AC-269** | 2 | M-52, M-11 |
+| **M-54** | *(unchanged in rank, scope, hours, and its CP-2 gate.)* Its three missing layers are now specified — tables in `SPEC.md` §3, routes in §4.2, `/settings/webhooks` in the screen inventory — so it can be built without inventing routes that `check:api`'s registry/OpenAPI parity would reject on its own PR. **This amendment adds no hours to M-54.** | AC-241 | 4 | M-07, **M-61**, CP-2 |
+
+**Rank.** US-80 and US-81 are **Tier A** and insert after US-33 — they close behaviour an existing Tier A criterion (AC-123) already required and an existing trigger (AC-125) actively gets wrong. M-61 → M-62 is the critical pair; M-63 is independent of both and can run alongside.
+
+**Total: 7 agent-hours** (M-61 1 + M-62 4 + M-63 2). M-54 unchanged at 4.
+
+**Ruled out of this amendment, on the record:**
+- **Speaker Handbook (AC-233)** — *if capacity, after the walkthrough-loop tickets are green.* Same shape as the webhooks gap: it renders in the prototype, and has no table, no route, and no authoring surface. It remains the one cuttable criterion on a Tier A story, and gate 19 must name it if cut.
+- **Submitter/speaker split** — *extra credit.* Named as a known limitation in `SPEC.md` §10 and enforced by new **gate 19b**, citing the already-specified AC-223/AC-224. Criteria drafted and held unminted; mint from AC-270 only if the if-capacity band opens.
+
+---
