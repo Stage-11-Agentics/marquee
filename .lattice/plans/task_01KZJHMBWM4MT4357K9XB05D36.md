@@ -49,3 +49,10 @@ Plan: filled in by delegator's plan phase
 
 - Self-review verdict: PASS. The plan pins the AC-sourced set by semantic ids/sources and kinds, requires actual report inspection rather than trusting exit status, preserves the local-versus-deployed distinction, and keeps product fixes out of scope.
 - No unresolved plan findings.
+
+## Plan-Review Cycle 2 Resolutions (AUTHORITATIVE)
+
+- **Extend, do not duplicate:** the id/source/kind guard will be added to the existing `speed budget authority` CONTRACT block in `tests/unit/speed-budgets.test.ts`; it will not restate the existing count assertion as a second invariant.
+- **Shared-file deviation owned:** although the ticket says "Shared files: none," the requested future-proof machine guard necessarily extends that shared unit-test file. The PR and Lattice completion evidence will call out this intentional, low-conflict audit guard change; no product code or thresholds are touched.
+- **Manifest decision resolved:** `trace-ac.mjs` emits a warning when the current ticket has no manifest. MRQ-48 owns no automatic AC and adds `tests/ac-claims/MRQ-48.json` with `owns: []` and `exercises: []`, plus an explicit note, so the gate records that fact without a missing-manifest warning.
+- Auto plan-review verdict: PASS. No unresolved findings remain.

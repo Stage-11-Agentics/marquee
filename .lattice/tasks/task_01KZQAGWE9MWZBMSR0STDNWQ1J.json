@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:204",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": "medium",
   "created_at": "2026-08-11T02:30:44Z",
   "created_by": "agent:claude",
   "custom_fields": {},
   "description": "BUILDPLAN M-60 \u00b7 AC-263 \u00b7 SPEC Amendment 14.\n\nClient ruling: venue surfaces show for every conference and FOLD when there is one building.\n\nThe rule that matters: zoom 2 (instruction) is independent of building count; zoom 1 (relation) is not. A single hotel still has a door and a security desk.\n\nWith fewer than two pinned buildings, hide: the '\u00b7 Building' room-label suffix (it is disambiguation, not decoration \u2014 name the building once in the page header instead), walking times, Transit conflicts, and the agenda building band. Collapse the embedded site map.\n\nKeep rendered at ANY building count, including one: address, entrance note, minutes-to-get-in.\n\nCross-cutting \u2014 touches every surface M-57 through M-59 produce, so it lands last.",
-  "done_at": null,
+  "done_at": "2026-08-11T10:22:43Z",
   "evidence_refs": [
     {
       "id": "art_01KZR31Y2Q0TW5N9E3S7HCAN04",
@@ -60,11 +60,26 @@
       "id": "art_01KZR4XHSEMTY1JK48TBDJYXDW",
       "role": null,
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR5CS7N62GVSFFSQ7EJDWY6",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR5H39Y4ZE003B45T7CPPAK",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR5H39Y4ZE003B45T7CPPAJ",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQAGWE9MWZBMSR0STDNWQ1J",
-  "last_event_id": "ev_01KZR4XHWBNAZ2MPZVHZ8KN1ZK",
-  "last_status_changed_at": "2026-08-11T10:12:02Z",
+  "last_event_id": "ev_01KZR5H39Y4ZE003B45T7CPPAP",
+  "last_status_changed_at": "2026-08-11T10:22:43Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -83,13 +98,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 1,
+  "reopened_count": 2,
   "schema_version": 1,
   "short_id": "MRQ-65",
-  "status": "pr_open",
+  "status": "done",
   "tags": null,
   "title": "Disclosure fold \u2014 hide the comparison, never the instruction",
   "type": "task",
-  "updated_at": "2026-08-11T10:12:02Z",
+  "updated_at": "2026-08-11T10:22:43Z",
   "urgency": null
 }

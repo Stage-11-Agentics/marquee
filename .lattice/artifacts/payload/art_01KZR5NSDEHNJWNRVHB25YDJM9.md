@@ -1,0 +1,8 @@
+Validation verdict: PASS with browser-tooling limitation documented.
+
+Focused guard: node --test tests/node/prototype-badge-invariant.test.mjs — 1 passed.
+Default suite: npm test — 34 files, 189 tests passed; harness 18.995s/30s.
+Build: npm run build is unavailable in this checkout (Missing script: build); repository builder ./node_modules/.bin/vite build succeeded and emitted dist/client plus dist/marquee.
+Static evidence: zero badge class/copy/uppercase-marker matches in src/ and dist/; seven prototype artifacts contain the expected markers; prototypes/pipeline-v1.1/index.html retains prototype-badge and Prototype · mock data.
+Rendered evidence: fresh local Wrangler/D1 seed runtime; 29 of 34 distinct product/page URLs completed supported browser snapshot/text checks with rendered-body marker count 0, including landing, dashboard, board, submissions, onboarding, forms, evaluation, reviewer, agenda builder, communications, portal, agenda, settings, import, evaluation assist, CFP, session, speaker, embed, calendar/embed, and calendar invite paths. The remaining five URLs (/submissions/sub_synthetic-pool-0900, /settings/tasks, /settings/airtable, /settings/api, /api/docs) hit the c11 WKWebView navigation/body timeout after a fresh-tab retry; no product finding was inferred from those tool failures, and their owning source modules remain covered by the source/dist scans.
+No auto AC is owned by MRQ-44; no claims file added.

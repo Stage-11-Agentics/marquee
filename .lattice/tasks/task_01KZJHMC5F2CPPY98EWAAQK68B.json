@@ -3,23 +3,53 @@
   "branch_links": [],
   "c11_surface": "surface:206",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: A-9 \u2014 audit track (\u00a75). **Owned by an auditor who did not write the code.**\n\nScope (verbatim): Reviewer event+track isolation (**AC-214, AC-246**) \u2014 one helper on every reviewer route incl. export; out-of-scope ID probe.\nStarts when (verbatim): **From CP-2** (M-16/M-17 landed).\n\nAC-214 is a post-competition ID that carries an enforcement obligation anyway (EVALUATION \u00a77): cross-event reviewer access is not inherited; reviewer scope is per event by construction. It is the one permission bug in this domain that leaks unpublished work. The probe: guess an out-of-scope submission ID as a reviewer \u2192 403 with no metadata.\n\nACs: **AC-214, AC-246** (audit evidence)\nHours: 1\nWorkflow: fast-track\nShared files: none \u2014 audit artifact only.\nDeps: M-16, M-17\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T10:22:42Z",
   "evidence_refs": [
     {
       "id": "art_01KZR3FJ08K3MBHRGJKRT96KVZ",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR57R2X68DH92TT2259S4JV",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZR5A7AVMF6VGCQZSD1Q29Z7",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR5CK15KN2GY6RVA3E76ZFB",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR5EVSHV71RWPWYHR5F1R3V",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR5H30H7S6T0XTRFBR245W3",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR5H30H7S6T0XTRFBR245W2",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMC5F2CPPY98EWAAQK68B",
-  "last_event_id": "ev_01KZR3FJ0BHD0T4QHD9N8G6S0Y",
-  "last_status_changed_at": "2026-08-11T09:45:41Z",
+  "last_event_id": "ev_01KZR5H30H7S6T0XTRFBR245W6",
+  "last_status_changed_at": "2026-08-11T10:22:42Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -38,13 +68,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-51",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Audit \u2014 reviewer event and track isolation",
   "type": "task",
-  "updated_at": "2026-08-11T09:46:55Z",
+  "updated_at": "2026-08-11T10:22:42Z",
   "urgency": null
 }
