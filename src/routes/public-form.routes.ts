@@ -33,6 +33,11 @@ import {
   vendorAffiliation,
 } from "./public-form.shared";
 import type { PublicFormState } from "./public-form.types";
+import {
+  assertRoutingPoolAllowed,
+  selectSubmissionRouting,
+  writeRoutingPoolAssignment,
+} from "./public-form-routing";
 
 const publicParams = z.object({ slug: z.string().min(1).max(160) });
 const draftParams = publicParams.extend({ token: z.string().min(20).max(256) });
@@ -246,6 +251,108 @@ async function persistTracks(db: D1Database, submissionId: string, trackIds: str
   await db.batch(statements);
 }
 
+interface TrackSnapshot {
+  created_at: number;
+  id: string;
+  is_primary: number;
+  track_id: string;
+  updated_at: number;
+}
+
+interface RoutingStage {
+  createdSubmission: boolean;
+  previousTracks: TrackSnapshot[];
+  personId: string;
+  personCreated: boolean;
+  submissionId: string;
+}
+
+async function stageRoutingSubmission(input: {
+  db: D1Database;
+  eventId: string;
+  existing: { id: string } | null;
+  formId: string;
+  kind: "abstract" | "session";
+  personId: string;
+  personCreated: boolean;
+  submissionId: string;
+  title: string;
+  abstract: string | null;
+  formatId: string | null;
+  trackIds: string[];
+  vendorAffiliation: "none" | "vendor_to_fi" | "vendor_with_champion";
+  resumeHash: string;
+  now: number;
+  searchBlob: string;
+}): Promise<RoutingStage> {
+  const previousTracks = input.existing
+    ? (await input.db.prepare(
+      "SELECT id, track_id, is_primary, created_at, updated_at FROM submission_tracks WHERE submission_id = ? ORDER BY is_primary DESC, id",
+    ).bind(input.submissionId).all<TrackSnapshot>()).results
+    : [];
+  if (!input.existing) {
+    await input.db.prepare(
+      `INSERT INTO submissions
+        (id, event_id, form_id, kind, title, abstract, status, format_id, primary_track_id,
+         origin, vendor_affiliation, submitter_person_id, resume_token_hash, last_saved_at,
+         search_blob, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      input.submissionId, input.eventId, input.formId, input.kind, input.title, input.abstract,
+      input.formatId, input.trackIds[0] ?? null, input.vendorAffiliation, input.personId,
+      input.resumeHash, input.now, input.searchBlob, input.now, input.now,
+    ).run();
+  }
+  await persistTracks(input.db, input.submissionId, input.trackIds, input.now);
+  return {
+    createdSubmission: input.existing === null,
+    previousTracks,
+    personId: input.personId,
+    personCreated: input.personCreated,
+    submissionId: input.submissionId,
+  };
+}
+
+async function rollbackRoutingStage(db: D1Database, stage: RoutingStage): Promise<void> {
+  if (stage.createdSubmission) {
+    await db.batch([
+      db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(stage.submissionId),
+      db.prepare("DELETE FROM submissions WHERE id = ? AND status = 'draft'").bind(stage.submissionId),
+    ]);
+  } else {
+    const statements = [db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(stage.submissionId)];
+    for (const track of stage.previousTracks) {
+      statements.push(db.prepare(
+        `INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).bind(track.id, stage.submissionId, track.track_id, track.is_primary, track.created_at, track.updated_at));
+    }
+    await db.batch(statements);
+  }
+  if (stage.personCreated) {
+    await db.prepare(`
+      DELETE FROM people
+      WHERE id = ?
+        AND NOT EXISTS (SELECT 1 FROM submissions WHERE submitter_person_id = ? OR decided_by_person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM participations WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM memberships WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM auth_sessions WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM magic_links WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM form_admins WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM outbox WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM reviewer_track_scopes WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM committee_members WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM round_assignments WHERE reviewer_person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM evaluations WHERE reviewer_person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM comparisons WHERE reviewer_person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM saved_views WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM speaker_tasks WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM calendar_invites WHERE person_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM audit_log WHERE actor_person_id = ?)
+    `).bind(...Array.from({ length: 18 }, () => stage.personId)).run();
+  }
+}
+
 async function moveAttachments(
   db: D1Database,
   submissionId: string,
@@ -413,6 +520,11 @@ async function handlePublicSubmission(
     throw ApiError.unprocessable("Add the requested details, then choose Submit again.", undefined, { issues: domainIssues });
   }
 
+  const routing = await selectSubmissionRouting(context.env.DB, base.form.event_id, {
+    formatId: references.formatId,
+    trackIds: references.trackIds,
+    vendorAffiliation: vendorAffiliation(projected.projected.answers),
+  });
   const now = Date.now();
   const existing = base.submission;
   const existingPerson = existing
@@ -441,26 +553,63 @@ async function handlePublicSubmission(
   const resumeHash = await sha256Hex(rawResumeToken);
   const title = answerText(projected.projected.answers, "title") ?? "Untitled abstract";
   const abstract = answerText(projected.projected.answers, "abstract");
+  const vendor = vendorAffiliation(projected.projected.answers);
+  let routingStage: RoutingStage | null = null;
+  if (routing.committeeId !== null) {
+    routingStage = await stageRoutingSubmission({
+      db: context.env.DB,
+      eventId: base.form.event_id,
+      existing: existing ? { id: existing.id } : null,
+      formId: base.form.id,
+      kind: base.form.kind,
+      personId: person.id,
+      personCreated: existingPerson === null,
+      submissionId,
+      title,
+      abstract,
+      formatId: references.formatId,
+      trackIds: references.trackIds,
+      vendorAffiliation: vendor,
+      resumeHash,
+      now,
+      searchBlob: JSON.stringify(projected.projected.answers),
+    });
+    try {
+      await assertRoutingPoolAllowed(context.env.DB, base.form.event_id, submissionId, routing);
+    } catch (error) {
+      await rollbackRoutingStage(context.env.DB, routingStage);
+      throw error;
+    }
+  }
   const confirmationUrl = `${publicOrigin(context.req.url)}/f/${encodeURIComponent(slug)}?resume=${encodeURIComponent(rawResumeToken)}`;
-  if (existing) {
+  if (existing || routingStage !== null) {
     await context.env.DB.prepare(
       `UPDATE submissions SET title = ?, abstract = ?, status = 'submitted', origin = 'public',
        format_id = ?, primary_track_id = ?, vendor_affiliation = ?, submitted_at = ?,
-       last_saved_at = ?, search_blob = ?, updated_at = ? WHERE id = ? AND status = 'draft'`,
-    ).bind(title, abstract, references.formatId, references.trackIds[0] ?? null, vendorAffiliation(projected.projected.answers), now, now, JSON.stringify(projected.projected.answers), now, existing.id).run();
+       last_saved_at = ?, search_blob = ?, applied_rule_id = ?, updated_at = ?
+       WHERE id = ? AND status = 'draft'`,
+    ).bind(
+      title, abstract, references.formatId, references.trackIds[0] ?? null, vendor, now,
+      now, JSON.stringify(projected.projected.answers), routing.ruleId, now, submissionId,
+    ).run();
   } else {
     await context.env.DB.prepare(
       `INSERT INTO submissions
        (id, event_id, form_id, kind, title, abstract, status, format_id, primary_track_id,
         origin, vendor_affiliation, submitter_person_id, resume_token_hash, submitted_at,
-        last_saved_at, search_blob, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'submitted', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(submissionId, base.form.event_id, base.form.id, base.form.kind, title, abstract, references.formatId, references.trackIds[0] ?? null, vendorAffiliation(projected.projected.answers), person.id, resumeHash, now, now, JSON.stringify(projected.projected.answers), now, now).run();
+        last_saved_at, search_blob, applied_rule_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'submitted', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      submissionId, base.form.event_id, base.form.id, base.form.kind, title, abstract,
+      references.formatId, references.trackIds[0] ?? null, vendor, person.id, resumeHash,
+      now, now, JSON.stringify(projected.projected.answers), routing.ruleId, now, now,
+    ).run();
   }
   await replaceProjectedAnswers(context.env.DB, submissionId, base.fields, projected.projected.answers, now);
   await persistTracks(context.env.DB, submissionId, references.trackIds, now);
   await insertParticipationRows(context.env.DB, submissionId, person, projected.projected.answers, event.org_id, now);
   await moveAttachments(context.env.DB, submissionId, existing?.id ?? null, projected.projected.answers);
+  await writeRoutingPoolAssignment(context.env.DB, submissionId, routing, now);
 
   const confirmationTemplateKey = base.form.thankyou_template_key ?? "submission_confirmation";
   const confirmationTemplate = await findTemplate(context.env.DB, base.form.event_id, confirmationTemplateKey);

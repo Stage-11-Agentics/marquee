@@ -104,6 +104,7 @@ interface BaseRecordRow {
   is_published: number;
   external_ref: string | null;
   applied_rule_id: string | null;
+  applied_rule_name: string | null;
   created_at: number;
   updated_at: number;
   stage: keyof typeof BOARD_STAGE_LABELS;
@@ -184,6 +185,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       s.primary_track_id, s.origin, s.vendor_affiliation, s.wave_id, wave.name AS wave,
       s.submitter_person_id, s.decided_at, s.decided_by_person_id, s.submitted_at,
       s.last_saved_at, s.is_published, s.external_ref, s.applied_rule_id,
+      routing_rule.name AS applied_rule_name,
       s.created_at, s.updated_at, ${BOARD_STAGE_SQL} AS stage,
       ai.starts_at, ai.duration_min, room.name AS room, building.name AS building,
       ai.is_published AS agenda_published
@@ -192,6 +194,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
     LEFT JOIN forms form ON form.id = s.form_id
     LEFT JOIN formats format ON format.id = s.format_id
     LEFT JOIN waves wave ON wave.id = s.wave_id
+    LEFT JOIN routing_rules routing_rule ON routing_rule.id = s.applied_rule_id AND routing_rule.event_id = s.event_id
     LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
     LEFT JOIN rooms room ON room.id = ai.room_id
     LEFT JOIN buildings building ON building.id = room.building_id
@@ -382,7 +385,10 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
     decisions: decisions.results,
     evaluations: evaluationEvidence,
     comparisons: comparisonEvidence,
-    routing: row.applied_rule_id === null ? null : { rule_id: row.applied_rule_id },
+    routing: row.applied_rule_id === null ? null : {
+      rule_id: row.applied_rule_id,
+      name: row.applied_rule_name ?? "Unnamed routing rule",
+    },
     evaluation: {
       rounds: [...roundMap.values()],
       reviewer_options: reviewerOptions.results.map((reviewer) => ({
