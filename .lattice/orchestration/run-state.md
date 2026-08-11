@@ -22,7 +22,21 @@
 
 56 tickets MRQ-1..MRQ-56 covering all 72 BUILDPLAN items (commit 8f64ee1); authoritative map: `.lattice/orchestration/ticket-map.md`; validation plan: `validation-plan.md`.
 
-## Active dispatch — RESUMED ON KIMI 2026-08-10 18:35 (autonomous)
+## Active dispatch — SWITCHED TO CLAUDE 2026-08-10 20:55 (operator ruling)
+
+**Operator ruling, recorded on the four live tickets by the Adversary: the build fleet moves Kimi → Claude — Kimi's output was not meeting the bar.** MRQ-4 completed on Claude after the handover and merged as PR #6 (c64a9ba), and its delegator found a real defect in the inherited Kimi code (a seed filter keyed on an unreliable `type` field was seeding "Workshop Afternoon Break" as an accepted abstract and yielding 72 speakers instead of 75). That validates the switch: the inherited work needs judging, not preserving.
+
+| Ticket | Surface | Model | Note |
+|---|---|---|---|
+| MRQ-8 (M-07) | surface:118 | **opus** | API core — everything inherits its contracts, so it gets the strongest model. Carries the N-7 activation rule. |
+| MRQ-3 (M-03) | surface:119 | sonnet | Auth/demo entry. Guardrail: demo login must 403 outside `demo_mode`. Hand review. |
+| MRQ-14 (M-13) | surface:120 | sonnet | Uploads. Guardrail: AC-231 presign fails closed. Hand review. |
+
+**Model split rationale:** Bravo is at 84% weekly and resets *after* the deadline, so Opus goes only to the ticket whose contracts every later ticket inherits; Sonnet carries the other two. MRQ-4 proved the Sonnet-implements / stronger-model-reviews pattern works here.
+
+All three inherited uncommitted Kimi work and were briefed with `.lattice/orchestration/boot/HANDOVER.md`: commit the inherited WIP first so it reads as a diff, judge it rather than trust it, rebase onto current master, and push immediately.
+
+### Superseded — resumed on Kimi 2026-08-10 18:35 (autonomous)
 
 | Ticket | Surface | Harness | Note |
 |---|---|---|---|
@@ -53,6 +67,13 @@ The option set has therefore narrowed to two real choices, both requiring the op
 Bravo (78% used) is deliberately excluded: it is the pool this orchestrator session itself runs on, so spending it on delegators risks losing orchestration entirely.
 
 **Parked-state integrity confirmed:** both remaining tickets' plans are on disk and committed (e9b29c2) — MRQ-8 at 288 lines, MRQ-14 at 118, each carrying its Plan-Review Cycle 1 Resolutions and the orchestrator rulings. The idle codex sessions were closed after that verification; **no re-planning is needed on any harness**, whichever is chosen.
+
+## Contract drift caught at this tick (20:50)
+
+- **Local master had diverged from the remote with three unpushed commits** — the fleet-switch record, the `event` → `conference` rename (9e8b425), and the venue-map commit (13d37eb). Contract and copy changes that exist on one machine are invisible to every worktree; rebased and pushed (38baff5). **This is the second time an unpushed contract commit was found this run.**
+- **`MRQ-58` minted:** 222a7fe makes building geography binding for travel-conflict detection, but `buildings` ships without `lat`/`lng`/`access_minutes`. MRQ-2's migration is merged and immutable, so this is a second migration (`0002_*`), which is the correct outcome rather than a defect in M-02.
+- **MRQ-5 handoff recorded on its ticket:** `memberships` are unseeded (including the speaker membership SPEC §3.2 grants) and adversarial B-3 (organizer reviewer scopes + round-1 assignments) is required — without both, walkthrough **step 8 dead-ends**.
+- **Fleet-wide gap:** the four Kimi sessions produced ~1,900 lines and **zero test files** while `trace:ac` blocks merge on uncovered `auto` ACs. HANDOVER now makes MRQ-4's shipped pattern mandatory — an AC-tagged test plus `tests/ac-claims/<TICKET>.json`.
 
 ## Adversarial pass CLOSED (1507bff, pushed as part of 6ae2581)
 

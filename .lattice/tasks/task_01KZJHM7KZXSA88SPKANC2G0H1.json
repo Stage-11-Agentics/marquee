@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:delegator-mrq-3",
   "branch_links": [],
-  "c11_surface": "surface:103",
+  "c11_surface": "surface:119",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 1,
   "complexity": null,
@@ -18,7 +18,7 @@
     }
   ],
   "id": "task_01KZJHM7KZXSA88SPKANC2G0H1",
-  "last_event_id": "ev_01KZQ1365XA0TCZ6J1AWKGFCM8",
+  "last_event_id": "ev_01KZQ4W265403SNFJHTCBASMTT",
   "last_status_changed_at": "2026-08-10T22:38:32Z",
   "linked_files": [],
   "priority": "medium",
@@ -38,6 +38,6 @@
   "tags": null,
   "title": "Auth, demo entry, and reset-demo",
   "type": "task",
-  "updated_at": "2026-08-10T23:45:58Z",
+  "updated_at": "2026-08-11T00:51:59Z",
   "urgency": null
 }
