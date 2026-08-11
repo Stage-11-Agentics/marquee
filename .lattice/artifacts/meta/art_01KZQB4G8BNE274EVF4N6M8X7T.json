@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:41:27Z",
+  "created_by": "agent:delegator-mrq-61",
+  "custom_fields": {},
+  "id": "art_01KZQB4G8BNE274EVF4N6M8X7T",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQB4G8BNE274EVF4N6M8X7T.md",
+    "size_bytes": 1339
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: local Wrangler OpenAPI and demo-login/AC-2 probes",
+  "tags": [],
+  "title": "MRQ-61 local Worker validation @ 6aceefe",
+  "token_usage": null,
+  "type": "file"
+}

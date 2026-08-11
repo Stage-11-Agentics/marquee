@@ -1,6 +1,8 @@
 {
   "assigned_to": null,
   "branch_links": [],
+  "c11_surface": "surface:145",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 1,
   "complexity": "high",
   "created_at": "2026-08-11T02:30:44Z",
@@ -10,7 +12,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZQAGW54K6AR105Y65EJNGBK",
-  "last_event_id": "ev_01KZQART4MRVQVJXCEF28TVEJ9",
+  "last_event_id": "ev_01KZQB64XRDX13YK97BXBDQS1N",
   "last_status_changed_at": "2026-08-11T02:30:44Z",
   "linked_files": [],
   "priority": "high",
@@ -30,6 +32,6 @@
   "tags": null,
   "title": "Venue geography \u2014 access_note, the Venues screen, and a seed that can conflict",
   "type": "task",
-  "updated_at": "2026-08-11T02:35:04Z",
+  "updated_at": "2026-08-11T02:42:21Z",
   "urgency": null
 }

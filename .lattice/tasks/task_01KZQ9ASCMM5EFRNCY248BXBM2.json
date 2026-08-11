@@ -15,11 +15,21 @@
       "id": "art_01KZQAQ0C85VWCKC8FVCK4E1YR",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQAWETPZN654Q3V1D2KAC6B",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQB4G8BNE274EVF4N6M8X7T",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQ9ASCMM5EFRNCY248BXBM2",
-  "last_event_id": "ev_01KZQAQ0CC1HH8YAXHKP2WHKAH",
-  "last_status_changed_at": "2026-08-11T02:32:23Z",
+  "last_event_id": "ev_01KZQB4G8DQT4SC8G7EGX31X7Y",
+  "last_status_changed_at": "2026-08-11T02:37:38Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +44,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-61",
-  "status": "review",
+  "status": "in_validation",
   "tags": null,
   "title": "Register auth and admin-ops routes in the API manifest",
   "type": "task",
-  "updated_at": "2026-08-11T02:34:05Z",
+  "updated_at": "2026-08-11T02:41:27Z",
   "urgency": null
 }
