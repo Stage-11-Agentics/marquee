@@ -66,6 +66,7 @@ const owedSchema = z.object({
     "held_back_demo",
     "held_back",
     "undelivered",
+    "send_blocked",
     "no_address",
     "changed_elsewhere",
   ]),
@@ -91,7 +92,7 @@ const deliveryHealthSchema = z.object({
     detail: z.string(),
   }),
   totals: z.object({
-    delivered: z.number(),
+    sent: z.number(),
     waiting: z.number(),
     held_back: z.number(),
     undelivered: z.number(),
@@ -231,6 +232,11 @@ async function readOwed(database: D1Database, eventId: string): Promise<{ rows: 
         outbox_created_at: optionalNumber(row.outbox_created_at),
         suppressed_reason: row.suppressed_reason,
         has_error: status === "failed" && row.outbox_error !== null,
+        // Carried, never rendered: the derivation classifies it into an
+        // organizer sentence. Only a real failure's text is passed on, so a
+        // claimed-but-unfinished row's processing sentinel cannot be mistaken
+        // for a provider message.
+        error_text: status === "failed" ? row.outbox_error : null,
         has_valid_address: email.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
         changed_elsewhere: row.last_write_source === "airtable",
       };
