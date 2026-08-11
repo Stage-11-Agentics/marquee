@@ -144,19 +144,24 @@ export function run(ctx: SeedContext): void {
     });
   }
 
-  // Amendment 11: the Sheraton-coherent trio (AC-252).
-  const buildings: Array<[string, string, string, number]> = [
-    [BUILDING_IDS.sheraton, "Sheraton New York Times Square", "811 7th Ave, New York, NY 10019", 0],
-    [BUILDING_IDS.annex, "Workshop Annex — Lower Conference Level", "811 7th Ave, New York, NY 10019", 1],
-    [BUILDING_IDS.online, "Online", "Virtual", 2],
+  // Amendment 11: the Sheraton-coherent trio (AC-252). The physical venues
+  // share the verified 811 7th Avenue coordinate; Online is intentionally
+  // unpinned because a virtual venue has no honest map position.
+  const buildings: Array<[string, string, string, number, number | null, number | null, number]> = [
+    [BUILDING_IDS.sheraton, "Sheraton New York Times Square", "811 7th Ave, New York, NY 10019", 0, 40.7625188, -73.9814528, 0],
+    [BUILDING_IDS.annex, "Workshop Annex — Lower Conference Level", "811 7th Ave, New York, NY 10019", 1, 40.7625188, -73.9814528, 0],
+    [BUILDING_IDS.online, "Online", "Virtual", 2, null, null, 0],
   ];
-  for (const [id, name, address, position] of buildings) {
+  for (const [id, name, address, position, lat, lng, accessMinutes] of buildings) {
     ctx.add("buildings", {
       id,
       event_id: EVENT_ID,
       name,
       address,
       position,
+      lat,
+      lng,
+      access_minutes: accessMinutes,
       created_at: now,
       updated_at: now,
     });

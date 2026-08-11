@@ -170,8 +170,11 @@ export interface TrackRow extends MutableRecord {
 }
 
 export interface BuildingRow extends MutableRecord {
+  access_minutes: number;
   address: string;
   event_id: Id;
+  lat: number | null;
+  lng: number | null;
   name: string;
   position: number;
 }

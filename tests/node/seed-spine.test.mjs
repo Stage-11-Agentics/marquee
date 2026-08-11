@@ -73,6 +73,20 @@ test("AC-252 · the seed defines the Sheraton-coherent building trio and every r
   );
 });
 
+test("CONTRACT · seeded physical venues share the real address coordinate and Online stays virtual", () => {
+  const geography = table("buildings").map((row) => [
+    row.name,
+    row.lat,
+    row.lng,
+    row.access_minutes,
+  ]);
+  assert.deepEqual(geography, [
+    ["Sheraton New York Times Square", 40.7625188, -73.9814528, 0],
+    ["Workshop Annex — Lower Conference Level", 40.7625188, -73.9814528, 0],
+    ["Online", null, null, 0],
+  ]);
+});
+
 test("CONTRACT · the accepted core is exactly 60 accepted abstracts over at least 75 people", () => {
   const submissions = table("submissions").filter((row) => row.status === "accepted");
   assert.equal(submissions.length, 60);

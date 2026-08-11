@@ -1,6 +1,7 @@
 import { env as rawEnv } from "cloudflare:test";
 
 import migrationSql from "../../migrations/0001_init.sql?raw";
+import venueGeographyMigrationSql from "../../migrations/0002_venue_geography.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -58,7 +59,10 @@ export async function applyMigrations(): Promise<void> {
     }
     return;
   }
-  for (const statement of splitStatements(migrationSql)) {
+  for (const statement of [
+    ...splitStatements(migrationSql),
+    ...splitStatements(venueGeographyMigrationSql),
+  ]) {
     await env.DB.prepare(`${statement};`).run();
   }
 }

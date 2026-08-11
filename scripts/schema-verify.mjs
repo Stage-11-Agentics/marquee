@@ -17,7 +17,11 @@ const { DatabaseSync } = await import("node:sqlite");
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const wrangler = join(root, "node_modules", ".bin", "wrangler");
 const state = mkdtempSync(join(tmpdir(), "marquee-schema-"));
-const migration = readFileSync(join(root, "migrations", "0001_init.sql"), "utf8");
+const migrations = readdirSync(join(root, "migrations"))
+  .filter((name) => /^\d+_.+\.sql$/.test(name))
+  .sort()
+  .map((name) => readFileSync(join(root, "migrations", name), "utf8"));
+const migration = migrations.join("\n");
 const typeMirror = readFileSync(join(root, "src", "db", "schema.ts"), "utf8");
 
 function runWrangler(args, { expectFailure = false } = {}) {
@@ -191,6 +195,7 @@ try {
     state,
   ]);
   assert.match(firstApply.stdout, /0001_init\.sql/);
+  assert.match(firstApply.stdout, /0002_venue_geography\.sql/);
 
   const secondApply = runWrangler([
     "d1",
@@ -279,7 +284,8 @@ try {
     INSERT INTO events
       (id,org_id,name,slug,starts_on,ends_on,timezone,status,demo_mode,created_at,updated_at)
       VALUES ('event2','org1','Event Two','event-two','2026-10-01','2026-10-03','UTC','draft',0,1,1);
-    INSERT INTO buildings VALUES ('building1','event1','Main','1 Main St',0,1,1);
+    INSERT INTO buildings (id,event_id,name,address,position,created_at,updated_at)
+      VALUES ('building1','event1','Main','1 Main St',0,1,1);
     INSERT INTO rooms
       (id,event_id,building_id,name,capacity,position,av_capabilities,created_at,updated_at)
       VALUES ('room1','event1','building1','Grand',500,0,'["projector"]',1,1);
