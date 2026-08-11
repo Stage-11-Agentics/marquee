@@ -98,7 +98,7 @@ function idsFor(status: (typeof STAGES)[number]): string[] {
   `).all(EVENT_ID) as Array<{ id: string }>).map((row) => row.id);
 }
 
-test("MRQ-76 · shared stage predicates classify the fixture into distinct literal sets", () => {
+test("CONTRACT · MRQ-76 shared stage predicates classify the fixture into distinct literal sets", () => {
   seedFixture();
   const expected: Record<(typeof STAGES)[number], string[]> = {
     draft: ["draft"],

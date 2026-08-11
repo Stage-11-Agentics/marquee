@@ -43,7 +43,7 @@ beforeAll(async () => {
   await loginOrganizer();
 }, 30_000);
 
-test("MRQ-76 · every pipeline surface and its list destination share one stage cardinality", async () => {
+test("CONTRACT · MRQ-76 every pipeline surface and its list destination share one stage cardinality", async () => {
   const [landing, dashboardResponse, boardResponse] = await Promise.all([
     loadLandingData(env.DB),
     request(`/api/v1/events/${EVENT_ID}/dashboard`),
