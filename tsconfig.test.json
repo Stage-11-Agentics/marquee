@@ -3,6 +3,9 @@
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false,
+    // scripts/seed runs on plain `node` type stripping, so its imports carry
+    // the real `.ts` extension the runtime needs.
+    "allowImportingTsExtensions": true,
     "lib": ["ES2024"],
     "types": [
       "@cloudflare/workers-types",
@@ -10,6 +13,11 @@
       "vitest/globals"
     ]
   },
-  "include": ["tests/**/*.ts", "scripts/checks/**/*.mjs", "vitest.config.ts"],
+  "include": [
+    "tests/**/*.ts",
+    "scripts/checks/**/*.mjs",
+    "scripts/seed/**/*.ts",
+    "vitest.config.ts"
+  ],
   "exclude": ["tests/e2e/**", "tests/node/**"]
 }
