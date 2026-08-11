@@ -102,7 +102,8 @@ npx wrangler dev \
   --persist-to .wrangler/marquee-local \
   --local-protocol http \
   --port 8787 \
-  --var INSECURE_LOCAL_COOKIES:1
+  --var INSECURE_LOCAL_COOKIES:1 \
+  --var LOCAL_UPLOAD_SHIM:1
 ```
 
 `--var INSECURE_LOCAL_COOKIES:1` drops `Secure` from the session cookie for this
@@ -113,6 +114,16 @@ browser only. It has to be a flag on the command rather than a `.dev.vars`
 entry: `wrangler dev` rewrites the inbound URL, Host and Origin to the
 `custom_domain` route, so the Worker has no way to detect that it is local.
 Never set it on a deployed Worker; wrangler.jsonc pins the deployed default off.
+
+`--var LOCAL_UPLOAD_SHIM:1` is required for the same class of reason. An upload
+is presigned against the R2 account's own S3 endpoint, which a local checkout
+does not have, so without the flag every upload fails at the PUT — including the
+headshot the public CFP form requires, which makes the form unsubmittable. With
+it, the bytes are written through the Worker's `MEDIA` binding by
+`PUT /api/v1/uploads/local/{id}`, gated on an HMAC over the attachment id, its
+object key and a ten-minute expiry, and verified afterwards by the ordinary
+completion path. It is refused unless this flag is set. Never set it on a
+deployed Worker; wrangler.jsonc pins the deployed default off.
 
 Wrangler dev is local-only here. It is not evidence that a production
 Cloudflare account, paid-plan CPU limit, custom domain, R2 origin, or real
