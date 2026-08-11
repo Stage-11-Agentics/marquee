@@ -15,10 +15,15 @@
       "id": "art_01KZQR5C69J1A8BQVXYKQ67TP2",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQVBQ25G50RC7BEZ260K8TD",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMAYHGQMZCJX3XQJX72P2",
-  "last_event_id": "ev_01KZQTWWZ52VBDQ8QDA74ARNQ0",
+  "last_event_id": "ev_01KZQVBQ28322J78KRYZ6X3V07",
   "last_status_changed_at": "2026-08-11T07:16:55Z",
   "linked_files": [],
   "priority": "medium",
@@ -59,6 +64,6 @@
   "tags": null,
   "title": "Role confirm/decline and decision feedback",
   "type": "task",
-  "updated_at": "2026-08-11T07:16:55Z",
+  "updated_at": "2026-08-11T07:25:00Z",
   "urgency": null
 }

@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMB4NW0RKF0KMVRGPCPZ5",
-  "last_event_id": "ev_01KZQV20DCSKV57YQ2XGWNKGCN",
-  "last_status_changed_at": "2026-08-11T07:19:42Z",
+  "last_event_id": "ev_01KZQVB8GV50Q6E8X7S9SQ30K4",
+  "last_status_changed_at": "2026-08-11T07:24:45Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-40",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "README, self-host path, and extension points",
   "type": "task",
-  "updated_at": "2026-08-11T07:19:42Z",
+  "updated_at": "2026-08-11T07:24:45Z",
   "urgency": null
 }
