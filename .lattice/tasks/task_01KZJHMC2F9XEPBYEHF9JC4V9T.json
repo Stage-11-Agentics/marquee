@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMC2F9XEPBYEHF9JC4V9T",
-  "last_event_id": "ev_01KZR2M94TMZ65F558FN2W6MPC",
-  "last_status_changed_at": "2026-08-11T09:32:01Z",
+  "last_event_id": "ev_01KZR31ACSA1MZ5XV257WAE764",
+  "last_status_changed_at": "2026-08-11T09:39:08Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-50",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Audit \u2014 reviewer anonymity byte-scan",
   "type": "task",
-  "updated_at": "2026-08-11T09:32:01Z",
+  "updated_at": "2026-08-11T09:39:08Z",
   "urgency": null
 }
