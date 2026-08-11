@@ -11,7 +11,11 @@ permissions:
 jobs:
   fast-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Generous on purpose: these are hang detectors, not speed gates. The runner
+    # is far smaller than a dev machine, so a timeout here reports the hardware
+    # rather than the change. Suite speed is an objective, measured and warned
+    # about by scripts/checks/run-test.mjs.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,5 +29,5 @@ jobs:
       - run: npx vite build
       - run: npm run check:design
       - run: npm test
-        timeout-minutes: 1
+        timeout-minutes: 5
       - run: npm run trace:ac -- --scope=merged
