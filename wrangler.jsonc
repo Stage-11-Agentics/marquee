@@ -102,7 +102,14 @@
   "vars": {
     "R2_ACCOUNT_ID": "replace-me-account-id",
     "R2_BUCKET_NAME": "replace-me-media",
-    "MEDIA_PUBLIC_ORIGIN": "media.marquee.stage11.dev"
+    "MEDIA_PUBLIC_ORIGIN": "media.marquee.stage11.dev",
+
+    // Observability levers, declared so they are visible rather than folklore.
+    // LOG_LEVEL: debug | info | warn | error | silent.
+    "LOG_LEVEL": "info",
+    // "0" stops the browser error beacon recording anything, enforced at the
+    // endpoint rather than trusted to the client. See docs/OBSERVABILITY.md.
+    "CLIENT_TELEMETRY": "1"
   },
 
   // Values come from ignored .dev.vars locally and Wrangler secrets in production.

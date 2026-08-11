@@ -9,6 +9,12 @@ export default defineConfig({
         bindings: {
           TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
           TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+          // The suite drives thousands of requests; at the default `info` each
+          // one writes a JSON line that vitest then intercepts and re-emits.
+          // That buries the test output that IS the oracle, and the suite runs
+          // against a 29s hard kill. A test that needs the lines asks for them
+          // explicitly (see tests/unit/api/observability-correlation.test.ts).
+          LOG_LEVEL: "silent",
         },
       },
     }),

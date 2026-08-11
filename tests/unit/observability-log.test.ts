@@ -13,6 +13,7 @@ import {
   errorFields,
   LINE_MAX_BYTES,
   LOG_EVENT_FIELDS,
+  LOG_LEVELS,
   LOG_SCHEMA_VERSION,
   parseLogLevel,
   redactFreeText,
@@ -205,5 +206,21 @@ describe("stack frames", () => {
     expect(truncated).toContain("index.js:27063:164");
     expect(truncated).not.toContain("/Users/");
     expect(truncated).not.toContain("/srv/build");
+  });
+});
+
+describe("the silent threshold", () => {
+  test("CONTRACT · silent emits nothing at any level", () => {
+    const emitted: string[] = [];
+    const logger = createLogger({ level: "silent", build: BUILD, sink: (_l, line) => emitted.push(line) });
+    for (const level of LOG_LEVELS) logger.emit("http_request", level, { status: 200 });
+    expect(emitted).toHaveLength(0);
+  });
+
+  test("CONTRACT · silent is configurable but not emittable, and anything else still means info", () => {
+    expect(parseLogLevel("silent")).toBe("silent");
+    // The emission union stays closed: `silent` is a threshold, not an event level.
+    expect(LOG_LEVELS).not.toContain("silent" as never);
+    expect(parseLogLevel("quiet")).toBe("info");
   });
 });

@@ -112,20 +112,32 @@ Three switches, from the largest to the smallest:
    set `window.__MARQUEE_TELEMETRY__ = false` to stop sending in the first
    place.
 3. **Quieter, not off.** Set `LOG_LEVEL` to `warn` or `error` to keep failures
-   and drop the routine request lines. The default is `info`.
+   and drop the routine request lines; `silent` stops every line without
+   touching the platform-level switch. The default is `info`. Both this and
+   `CLIENT_TELEMETRY` are declared in `wrangler.jsonc` so the levers are
+   visible rather than folklore.
 
 ## What this costs
 
-Workers Logs bills by the line. Marquee writes roughly one line per API request
-plus one per failure, and it is configured unsampled
+Workers Logs bills by the line, so the only number you need is how many lines
+Marquee writes, and that number is easy to state exactly: **one per API request,
+plus one per failure, plus one per queue message, cron run and browser report.**
+Nothing else writes a line. It is configured unsampled
 (`head_sampling_rate: 1`) because a conference is not a firehose and sampling
 would hide the one request an organizer is actually asking about.
 
-A conference of a thousand submissions with a handful of organizers working the
-pipeline generates on the order of tens of thousands of lines a day during the
-busy weeks — comfortably inside the included allowance on a paid Workers plan,
-and near-zero outside them. If your event is far larger, drop
-`head_sampling_rate` for `http_request` volume; errors are worth keeping whole.
+That makes your bill a multiplication you can do rather than an estimate you
+have to trust: requests per day × 1, against the per-line price and included
+allowance on your own Workers plan. Check the current numbers on Cloudflare's
+pricing page — they change, and this document would go stale claiming
+otherwise. During a busy CFP week a mid-size conference is dominated by
+organizers working the pipeline in the admin app, not by public traffic.
+
+Two levers if the volume is more than you want. `LOG_LEVEL=warn` drops the
+routine `http_request` lines and keeps every failure, which is the right trade
+for a large event: errors are worth keeping whole. `head_sampling_rate` below 1
+samples everything indiscriminately, including the failure you are looking for,
+so reach for the level first.
 
 ## Performance
 

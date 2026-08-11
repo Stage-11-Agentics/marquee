@@ -36,8 +36,23 @@ export const LOG_SCHEMA_VERSION = 1;
 export const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
-const LEVEL_RANK: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
-export const DEFAULT_LOG_LEVEL: LogLevel = "info";
+/**
+ * `silent` is a configuration threshold, not an emission level: a caller can
+ * never emit AT it, and setting it blocks every line. Tests use it so that a
+ * suite is not paying to serialize and re-emit thousands of lines nobody reads
+ * — the test output is the oracle, and drowning it is a real cost, not a
+ * cosmetic one.
+ */
+export type LogThreshold = LogLevel | "silent";
+
+const LEVEL_RANK: Record<LogThreshold, number> = {
+  debug: 10,
+  info: 20,
+  warn: 30,
+  error: 40,
+  silent: Number.POSITIVE_INFINITY,
+};
+export const DEFAULT_LOG_LEVEL: LogThreshold = "info";
 
 /**
  * Hard caps. A log line that can grow without bound is a cost incident.
@@ -265,14 +280,15 @@ const consoleSink: LogSink = (level, line) => {
   else console.log(line);
 };
 
-export function parseLogLevel(value: unknown): LogLevel {
+export function parseLogLevel(value: unknown): LogThreshold {
+  if (value === "silent") return "silent";
   return typeof value === "string" && (LOG_LEVELS as readonly string[]).includes(value)
     ? (value as LogLevel)
     : DEFAULT_LOG_LEVEL;
 }
 
 export interface Logger {
-  readonly level: LogLevel;
+  readonly level: LogThreshold;
   readonly requestId: string | undefined;
   emit<Event extends LogEvent>(
     event: Event,
@@ -284,7 +300,7 @@ export interface Logger {
 }
 
 export interface LoggerOptions {
-  level?: LogLevel;
+  level?: LogThreshold;
   requestId?: string;
   build?: BuildInfo;
   now?: () => number;
