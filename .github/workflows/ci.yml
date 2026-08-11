@@ -20,7 +20,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.19.0
+          # Must satisfy package.json engines (>=22.18.0). That floor is not
+          # arbitrary: 22.18 is where Node runs TypeScript directly without a
+          # flag, and several checks in tests/node execute .ts entry points
+          # (scripts/seed/index.ts among them). On 20.x those throw
+          # ERR_UNKNOWN_FILE_EXTENSION — which nobody saw, because the suite was
+          # being killed on time before the node-test step ever ran.
+          node-version: 24.x
           cache: npm
       - run: npm ci
       - run: npx tsc -p tsconfig.json --noEmit
