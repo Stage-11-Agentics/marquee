@@ -2,3 +2,11 @@
 # Never deploy these values to production.
 TURNSTILE_SITE_KEY=1x00000000000000000000AA
 TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+
+# MRQ-14: deterministic fake R2 S3 credentials for local signer tests only.
+# Miniflare has no real account S3 endpoint — MRQ-57 supplies production
+# values as Wrangler secrets, never committed here.
+R2_ACCESS_KEY_ID=local-fake-access-key-id
+R2_SECRET_ACCESS_KEY=local-fake-secret-access-key
+UPLOAD_TOKEN_SECRET=local-fake-upload-token-secret
+UPLOAD_RATE_LIMIT_SECRET=local-fake-upload-rate-limit-secret

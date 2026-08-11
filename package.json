@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.5.2",
+    "aws4fetch": "^1.0.20",
     "hono": "^4.13.1",
     "preact": "^10.29.8",
     "preact-render-to-string": "^6.7.0",

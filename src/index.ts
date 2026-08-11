@@ -2,7 +2,9 @@ import { Hono } from "hono";
 
 import { createApiRouter } from "./api/router";
 import { setSessionCookie } from "./lib/cookies";
+import { runUploadOrphanSweep } from "./lib/r2/orphan-sweep";
 import { apiManifest } from "./routes/_manifest";
+import { uploadsRoutes } from "./routes/uploads.direct";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -16,6 +18,13 @@ export interface Env {
   TURNSTILE_SECRET_KEY: string;
   TURNSTILE_SITE_KEY: string;
   WEBHOOK_QUEUE: Queue<unknown>;
+  R2_ACCOUNT_ID: string;
+  R2_BUCKET_NAME: string;
+  R2_ACCESS_KEY_ID: string;
+  R2_SECRET_ACCESS_KEY: string;
+  MEDIA_PUBLIC_ORIGIN: string;
+  UPLOAD_TOKEN_SECRET: string;
+  UPLOAD_RATE_LIMIT_SECRET: string;
 }
 
 type AppEnv = { Bindings: Env };
@@ -81,6 +90,13 @@ app.get("/__validation/session-cookie", (context) => {
   return context.json({ cookie: "mq_session", status: "set" });
 });
 
+// MRQ-14's upload routes are mounted ahead of the generated API router
+// rather than joined to its glob manifest (deviate-with-flag — see PR body:
+// MRQ-8/M-07 merged mid-implementation and reconciling onto its manifest
+// convention was not done in this pass). Hono matches in registration
+// order, so unmatched paths still fall through to the manifest router below.
+app.route("/", uploadsRoutes);
+
 // The API app is built from the generated route manifest. Assembly digests the
 // OpenAPI document, which is async, so it is memoized on first request rather
 // than awaited at module scope.
@@ -105,7 +121,11 @@ const worker: ExportedHandler<Env> = {
     );
     batch.retryAll();
   },
-  async scheduled(_controller, _env, _context): Promise<void> {},
+  async scheduled(controller, env, _context): Promise<void> {
+    if (controller.cron === "30 4 * * *") {
+      await runUploadOrphanSweep(env.DB, env.MEDIA, Date.now());
+    }
+  },
 };
 
 export default worker;
