@@ -190,3 +190,20 @@ describe("errorFields", () => {
     expect(fields.stack?.length ?? 0).toBeLessThanOrEqual(STACK_MAX_LENGTH + 1);
   });
 });
+
+describe("stack frames", () => {
+  test("CONTRACT · a stack keeps its frames and loses the machine that built it", () => {
+    const stack = [
+      "Error: D1_ERROR: no such table: waves",
+      "    at readDashboard (file:///Users/somebody/Projects/thing/dist/index.js:27063:164)",
+      "    at async dispatch (/srv/build/worker/index.js:29:11)",
+    ].join("\n");
+    const truncated = truncateStack(stack) ?? "";
+    // The file name and line number are the diagnostic value; the path to a
+    // developer's home directory is not, and it names a machine.
+    expect(truncated).toContain("readDashboard");
+    expect(truncated).toContain("index.js:27063:164");
+    expect(truncated).not.toContain("/Users/");
+    expect(truncated).not.toContain("/srv/build");
+  });
+});

@@ -19,10 +19,12 @@
  *      screen in most software and they call for opposite reactions.
  */
 
+import { reporter } from "./error-reporting";
+
 /**
  * The stable envelope codes, mirroring `ERROR_STATUS_CODES` in `src/api/errors.ts`.
  * They are restated rather than imported because the client bundle must not
- * pull the Worker's schema module in; `tests/unit/api-error-taxonomy.test.ts`
+ * pull the Worker's schema module in; `tests/unit/client-error-handling.test.ts`
  * asserts the two lists never drift.
  */
 export const API_ERROR_CODES = [
@@ -227,6 +229,19 @@ export interface ApiFetchOptions extends RequestInit {
 }
 
 /**
+ * Record a failure in the local ring the diagnostic report reads from. This is
+ * what turns "Recent client events" from an empty block into the trail that
+ * explains how the screen got here — the second request failing after a token
+ * expired reads very differently from one failure out of nowhere.
+ *
+ * Local only. Nothing here is sent; the beacon is a separate, throttled path.
+ */
+function noted(error: MarqueeApiError): MarqueeApiError {
+  reporter().note(`${error.code} ${error.status} ${error.route}${error.requestId ? ` ref ${error.reference}` : ""}`);
+  return error;
+}
+
+/**
  * `fetch`, with the envelope actually read.
  *
  * Every failure path produces a `MarqueeApiError` carrying a code, a human
@@ -245,37 +260,37 @@ export async function apiFetch<Result>(
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     // A dropped connection and a broken server are different problems with
     // different reactions, and must never render as the same screen.
-    throw new MarqueeApiError({
+    throw noted(new MarqueeApiError({
       code: isOffline() ? "offline" : "unreachable",
       message: error instanceof Error ? error.message : "the request could not be sent",
       status: 0,
       route,
-    });
+    }));
   }
 
   const requestId = asString(response.headers.get("X-Request-Id") ?? undefined);
   if (!response.ok) {
     const envelope = (await response.json().catch(() => null)) as EnvelopeShape | null;
-    throw new MarqueeApiError({
+    throw noted(new MarqueeApiError({
       code: codeFromEnvelope(envelope?.error?.code, response.status),
       message: asString(envelope?.error?.message) ?? `the request failed with status ${response.status}`,
       status: response.status,
       requestId: asString(envelope?.request_id) ?? requestId,
       field: asString(envelope?.error?.field),
       route,
-    });
+    }));
   }
 
   try {
     return (await response.json()) as Result;
   } catch {
-    throw new MarqueeApiError({
+    throw noted(new MarqueeApiError({
       code: "unreadable",
       message: "the response body was not valid JSON",
       status: response.status,
       requestId,
       route,
-    });
+    }));
   }
 }
 

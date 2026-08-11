@@ -21,10 +21,32 @@
  * not named below reaches the real binding untouched.
  */
 
-/** Query counters for one request, read back when the request line is emitted. */
+/**
+ * Query counters for one request, read back when the request line is emitted.
+ *
+ * `totalMs` is BUSY time — the wall-clock span during which at least one query
+ * was in flight — not the sum of per-query durations. Handlers run their reads
+ * concurrently, so summing durations produces a number larger than the request
+ * itself took, which reads as a bug in the instrument rather than a fact about
+ * the request. Busy time is always a real fraction of `duration_ms`, which is
+ * also what `Server-Timing` means by a duration.
+ */
 export interface D1Meter {
   queries: number;
   totalMs: number;
+  /** Internal: open queries, and when the current busy span began. */
+  inFlight: number;
+  busySince: number;
+}
+
+function beginQuery(meter: D1Meter): void {
+  if (meter.inFlight === 0) meter.busySince = Date.now();
+  meter.inFlight += 1;
+}
+
+function endQuery(meter: D1Meter): void {
+  meter.inFlight -= 1;
+  if (meter.inFlight === 0) meter.totalMs += Date.now() - meter.busySince;
 }
 
 export interface RequestMeter {
@@ -53,12 +75,12 @@ function meterStatement(statement: D1PreparedStatement, meter: D1Meter): D1Prepa
       }
       if (property === "first" || property === "all" || property === "run" || property === "raw") {
         return async (...args: never[]) => {
-          const startedAt = Date.now();
           meter.queries += 1;
+          beginQuery(meter);
           try {
             return await (forward(target, property) as (...a: never[]) => Promise<unknown>)(...args);
           } finally {
-            meter.totalMs += Date.now() - startedAt;
+            endQuery(meter);
           }
         };
       }
@@ -76,14 +98,14 @@ export function meterD1(database: D1Database, meter: D1Meter): D1Database {
       }
       if (property === "batch") {
         return async (statements: D1PreparedStatement[]) => {
-          const startedAt = Date.now();
           // A batch is one round trip carrying many statements; counting the
           // statements is what makes an N+1 written as a batch still visible.
           meter.queries += statements.length;
+          beginQuery(meter);
           try {
             return await target.batch(statements);
           } finally {
-            meter.totalMs += Date.now() - startedAt;
+            endQuery(meter);
           }
         };
       }
@@ -139,7 +161,7 @@ export function instrumentBindings<Bindings extends object>(
   env: Bindings,
   requestId: string,
 ): Bindings & InstrumentedBindings {
-  const meter: RequestMeter = { requestId, d1: { queries: 0, totalMs: 0 } };
+  const meter: RequestMeter = { requestId, d1: { queries: 0, totalMs: 0, inFlight: 0, busySince: 0 } };
   const source = env as Record<string, unknown>;
   const instrumented: Record<string, unknown> = { ...source, [REQUEST_METER_KEY]: meter };
   const database = source.DB as D1Database | undefined;

@@ -59,7 +59,10 @@ export async function readCronHeartbeats(
       const raw = await cache.get(`${HEARTBEAT_PREFIX}${cron}`);
       const lastSuccessAt = Number(raw);
       if (!Number.isFinite(lastSuccessAt) || lastSuccessAt <= 0) {
-        return { cron, last_success_at: 0, age_ms: now, stale: true };
+        // Never run. `age_ms` is 0 rather than "milliseconds since the epoch",
+        // which is not an age of anything; `last_success_at: 0` is what says
+        // never, and `stale` is what says it matters.
+        return { cron, last_success_at: 0, age_ms: 0, stale: true };
       }
       const ageMs = Math.max(0, now - lastSuccessAt);
       return {

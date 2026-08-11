@@ -49,7 +49,7 @@ function fakeQueue(): { queue: Queue<unknown>; sent: unknown[] } {
 
 test("CONTRACT · every query is counted, however it is issued", async () => {
   const { db, issued } = fakeDatabase();
-  const meter = { queries: 0, totalMs: 0 };
+  const meter = { queries: 0, totalMs: 0, inFlight: 0, busySince: 0 };
   const metered = meterD1(db, meter);
 
   await metered.prepare("SELECT 1").first();
@@ -68,14 +68,14 @@ test("CONTRACT · a query that throws is still counted and still throws", async 
   const db = {
     prepare: () => ({ first: async () => { throw new Error("D1_ERROR"); } }) as unknown as D1PreparedStatement,
   } as unknown as D1Database;
-  const meter = { queries: 0, totalMs: 0 };
+  const meter = { queries: 0, totalMs: 0, inFlight: 0, busySince: 0 };
   await expect(meterD1(db, meter).prepare("SELECT 1").first()).rejects.toThrow("D1_ERROR");
   expect(meter.queries).toBe(1);
 });
 
 test("CONTRACT · methods the wrapper does not know about reach the real binding", async () => {
   const { db } = fakeDatabase();
-  const metered = meterD1(db, { queries: 0, totalMs: 0 });
+  const metered = meterD1(db, { queries: 0, totalMs: 0, inFlight: 0, busySince: 0 });
   await expect(metered.dump()).resolves.toBeInstanceOf(ArrayBuffer);
 });
 
@@ -126,4 +126,29 @@ test("CONTRACT · instrumenting an environment leaves the original untouched", a
 test("CONTRACT · an environment missing a binding instruments what it has", () => {
   const instrumented = instrumentBindings({ CACHE: {} }, "ray-2");
   expect(readRequestMeter(instrumented)?.requestId).toBe("ray-2");
+});
+
+test("CONTRACT · concurrent queries report busy time, not a sum larger than the request", async () => {
+  const slow = {
+    prepare: () =>
+      ({
+        first: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 40));
+          return { ok: 1 };
+        },
+      }) as unknown as D1PreparedStatement,
+  } as unknown as D1Database;
+  const meter = { queries: 0, totalMs: 0, inFlight: 0, busySince: 0 };
+  const metered = meterD1(slow, meter);
+
+  const startedAt = Date.now();
+  await Promise.all(Array.from({ length: 8 }, () => metered.prepare("SELECT 1").first()));
+  const elapsed = Date.now() - startedAt;
+
+  expect(meter.queries).toBe(8);
+  // Eight 40ms queries run at once take ~40ms, not 320ms. A d1_ms larger than
+  // the request's own duration reads as a broken instrument.
+  expect(meter.totalMs).toBeLessThanOrEqual(elapsed + 5);
+  expect(meter.totalMs).toBeGreaterThan(0);
+  expect(meter.inFlight).toBe(0);
 });

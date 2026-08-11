@@ -211,7 +211,12 @@ const getDiagnostics = defineApiRoute(
       .catch(() => "unknown");
 
     const crons = await readCronHeartbeats(env.CACHE).catch(() => []);
-    const status = probes.every((each) => each.ok) ? "ok" : "degraded";
+    // A trigger that ran before and has now gone quiet is a real fault and
+    // belongs in the verdict. A trigger that has never run is reported but not
+    // counted: on a fresh deployment that is every trigger, and a verdict that
+    // is always degraded is a verdict nobody reads.
+    const stoppedCron = crons.some((each) => each.last_success_at > 0 && each.stale);
+    const status = probes.every((each) => each.ok) && !stoppedCron ? "ok" : "degraded";
     context.get("logger")?.emit("diagnostics", status === "ok" ? "info" : "warn", {
       verdict: status,
       duration_ms: probes.reduce((total, each) => total + each.duration_ms, 0),

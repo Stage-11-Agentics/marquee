@@ -183,10 +183,18 @@ function clampText(value: string, max: number): string {
   return scrubbed.length <= max ? scrubbed : `${scrubbed.slice(0, max)}…`;
 }
 
+/**
+ * Absolute build paths in a stack frame. They name the machine that built the
+ * bundle — under a local dev server that is somebody's home directory — and
+ * they carry no diagnostic value the file name does not already carry.
+ */
+const BUILD_PATH_PATTERN = /\b(?:file:\/\/)?\/(?:[\w.@%+-]{1,64}\/){1,24}(?=[\w.@%+-]{1,64}:\d)/g;
+
 /** A stack is useful for its top frames and ruinous for its full length. */
 export function truncateStack(stack: string | undefined): string | undefined {
   if (typeof stack !== "string" || stack.length === 0) return undefined;
-  return clampText(stack.split("\n").slice(0, 12).join("\n"), STACK_MAX_LENGTH);
+  const frames = stack.split("\n").slice(0, 12).join("\n").replaceAll(BUILD_PATH_PATTERN, "");
+  return clampText(frames, STACK_MAX_LENGTH);
 }
 
 function coerce(type: FieldType, value: unknown, field: string): string | number | boolean | undefined {
