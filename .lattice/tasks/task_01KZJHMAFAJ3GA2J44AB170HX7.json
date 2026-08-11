@@ -15,11 +15,31 @@
       "id": "art_01KZQGVMGWFFW105RCKZDZWPBF",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQJ973WKP7H7VJ3BCYFBPZS",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQJD7Y8G5MTC4AVC5M0CXN3",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQJDRD9GNGQDCEHDF7CWF8S",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQJET1VA2W5EA2YVRNJQ9F9",
+      "role": null,
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMAFAJ3GA2J44AB170HX7",
-  "last_event_id": "ev_01KZQGVMGZ66TT53X0TN8599Y1",
-  "last_status_changed_at": "2026-08-11T04:15:45Z",
+  "last_event_id": "ev_01KZQJEYPE9EDCKMJ8ZWWJ5J30",
+  "last_status_changed_at": "2026-08-11T04:49:29Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +54,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-33",
-  "status": "in_progress",
+  "status": "pr_open",
   "tags": null,
   "title": "Admin create, the submission record, and the program board",
   "type": "task",
-  "updated_at": "2026-08-11T04:21:28Z",
+  "updated_at": "2026-08-11T04:49:29Z",
   "urgency": null
 }

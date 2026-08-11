@@ -1,6 +1,8 @@
 # Venue map — design brief
 
 **Status:** Client-decided 2026-08-10 (Atin). Awaiting implementation in the prototype, then contract reconciliation.
+
+> **SUPERSEDED IN ITS VENUE SET AND ITS LABEL — SPEC Amendment 14 (2026-08-11).** Two things below are now wrong. (1) **The buildings.** The suggested seed table names the real 2025 programme (The Times Center · Jay Suites · AWS JFK27); the shipped set is **Sheraton New York Times Square** (`access_minutes` 0), **New York Marriott Marquis** (`access_minutes` 3, a nine-minute walk), and **`Online`** unpinned. (2) **The label.** The conflict class is **Transit**, never "Travel" — AC-259 byte-scans for it, because the speaker task set legitimately keeps *"Hotel and Travel Reservations"*. The canonical message is *"Transit — 9 min walk to New York Marriott Marquis, plus 3 min building access. Needs 12 min; has 0."* Ground truth: `src/lib/venue-geometry.ts`, `scripts/seed/event.ts`, prototype v1.9.
 **Owner:** the prototype surface (currently surface:110). Written by the map-design surface (surface:116) to avoid a concurrent edit on `prototypes/pipeline-v1.1/index.html`.
 
 ## The decision
@@ -50,7 +52,7 @@ Required gap from a session in A to a session in B = `walkMinutes(A, B) + access
 
 Raise a **Travel** conflict when two scheduled sessions share a speaker, sit in different buildings, and the actual gap between them is less than the required gap. Message shape:
 
-> ⚠ Travel — 6 min walk to AWS JFK27, plus 10 min building security. Needs 16 min; has 30.
+> ⚠ Transit — 9 min walk to New York Marriott Marquis, plus 3 min building access. Needs 12 min; has 0.
 
 Rules:
 - **Warns, never blocks** — matches the existing agenda contract ("live conflicts warn without blocking").

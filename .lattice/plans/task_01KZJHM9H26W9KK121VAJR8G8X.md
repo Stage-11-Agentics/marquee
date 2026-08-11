@@ -38,3 +38,9 @@ Extend the real `check:seed` path and implement the real `check:speed` path agai
 - Inline self-review artifact naming the exact HEAD with a PASS verdict, then `npm run pr-gate -- --ticket MRQ-23` pasted into the completion comment.
 
 Open details to resolve during reconnaissance: the existing check command wrappers, the public API/auth transport available to scripts, the canonical local runtime bootstrap/reset path, the complete §1.3 budget table and AC/objective split, and the exact §6 response fields/count thresholds.
+
+## Scope addition — harness wipe measurement (2026-08-11)
+
+Before implementation, measure the current `npm test` and full `npm run pr-gate -- --ticket MRQ-23` wall clocks. Change only `tests/integration/apply-migrations.ts`'s repeated FK-safe wipe from 46 serial `run()` calls to one ordered `env.DB.batch(...)`, preserving `WIPE_ORDER` and avoiding `DROP TABLE`. Repeat both measurements after the change and record the before/after and interpretation in the PR/completion evidence. Add the PR-gate wall clock as a tracked speed-report budget/measurement while keeping the ≤30 s default-suite budget. Treat any per-file Miniflare boot/shared-isolate or integration-file consolidation opportunity as a named follow-up, not implementation scope.
+
+Observed A/B on the rebased local worktree before commit `a3f15b8` (same machine, `npm ci` already run): `npm test` 23.38s -> 14.56s (both pass; -8.82s, about 38%), full `npm run pr-gate -- --ticket MRQ-23` 27.53s -> 21.75s (both pass; -5.78s, about 21%). The wipe is material. The remaining per-file Worker/Miniflare boot tax remains a named follow-up.

@@ -1,6 +1,8 @@
 # Where the map lives — geography as a product primitive
 
 **Status:** UX design thinking, 2026-08-10. Follows `venue-map-brief.md` (T1 model + T3 travel conflict already shipped in the prototype).
+
+> **SUPERSEDED IN ITS VENUE SET — SPEC Amendment 14 (2026-08-11).** The reasoning below stands; the buildings it names do not. This document was written against the real 2025 programme (The Times Center · Jay Suites · AWS JFK27), which is chronologically wrong for a 2026 Sheraton conference. **The shipped venue set is: Sheraton New York Times Square (811 7th Ave, `access_minutes` 0) as primary, New York Marriott Marquis (1535 Broadway, `access_minutes` 3) as real overflow a nine-minute walk away, and `Online` unpinned.** The canonical message shape is the one the merged helper emits — *"Transit — 9 min walk to New York Marriott Marquis, plus 3 min building access. Needs 12 min; has 0."* Read any example below as illustrating the *shape*, never as a source of names or numbers. Ground truth: `src/lib/venue-geometry.ts`, `scripts/seed/event.ts`, and prototype v1.9.
 **Question this answers:** not "where do we put a map," but "what does it mean for Marquee to know where things are."
 
 ---
@@ -126,9 +128,9 @@ Organizers are already encoding building, address, and entrance instructions int
 
 For the walkthrough video, in order of power:
 
-1. **The catch.** Drag a session onto the agenda; a travel conflict fires: *"6 min walk to AWS JFK27, plus 10 min building security. Needs 16 min; has 10."* Nothing else on the market says this.
-2. **The portal card.** A speaker's real instruction set — leave-by time, gold doors, ID required.
-3. **The overview.** The whole conference across three Midtown buildings, live, with today's load on each pin.
+1. **The catch.** Drag a session onto the agenda; a Transit conflict fires: *"Transit — 9 min walk to New York Marriott Marquis, plus 3 min building access. Needs 12 min; has 0."* Nothing else on the market says this.
+2. **The portal card.** A speaker's real instruction set — leave-by time, which lobby, ID required.
+3. **The overview.** The whole conference across its Midtown buildings, live, with today's load on each pin.
 
 ---
 
@@ -136,7 +138,7 @@ For the walkthrough video, in order of power:
 
 **Vocabulary collision — "Travel" already means something else.** The speaker task list has *"Travel and accommodation"* (flights and hotels), and the new conflict class was also called **Travel** (walking between buildings). Two meanings, one product, both landing on the same person.
 
-**Ruled 2026-08-10: the conflict class is renamed Transit.** It reads *"Transit — 6 min walk to AWS JFK27, plus 10 min building security. Needs 16 min; has 10."* The speaker task keeps its name. Rename every surface — the conflict object's `kind`, the drawer, the tile flag, the dashboard label, and the API's conflict type — before it sets in emails and the wire contract.
+**Ruled 2026-08-10: the conflict class is renamed Transit.** It reads *"Transit — 9 min walk to New York Marriott Marquis, plus 3 min building access. Needs 12 min; has 0."* The speaker task keeps its name. Rename every surface — the conflict object's `kind`, the drawer, the tile flag, the dashboard label, and the API's conflict type — before it sets in emails and the wire contract.
 
 **A wrong pin is worse than no pin.** Zooms 1–2 assert precise numbers ("leave by 10:22") derived from coordinates. That precision is a promise. Coordinates need verifying, and any building without them must degrade to zoom 0 silently rather than guess.
 
