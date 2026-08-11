@@ -45,11 +45,26 @@
       "id": "art_01KZR4N710HFSCA86GSEJD6V55",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR4W11SS9RYKSBHQT51ZNG4",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR4W14RQ8WT81470S0HBEXN",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR4XHSEMTY1JK48TBDJYXDW",
+      "role": null,
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQAGWE9MWZBMSR0STDNWQ1J",
-  "last_event_id": "ev_01KZR4N71327PCX4AG2EMVPMK5",
-  "last_status_changed_at": "2026-08-11T10:05:07Z",
+  "last_event_id": "ev_01KZR4XHWBNAZ2MPZVHZ8KN1ZK",
+  "last_status_changed_at": "2026-08-11T10:12:02Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -71,10 +86,10 @@
   "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-65",
-  "status": "in_validation",
+  "status": "pr_open",
   "tags": null,
   "title": "Disclosure fold \u2014 hide the comparison, never the instruction",
   "type": "task",
-  "updated_at": "2026-08-11T10:07:29Z",
+  "updated_at": "2026-08-11T10:12:02Z",
   "urgency": null
 }

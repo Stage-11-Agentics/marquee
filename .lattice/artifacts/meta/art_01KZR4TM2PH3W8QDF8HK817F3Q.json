@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:10:26Z",
+  "created_by": "agent:delegator-mrq-41",
+  "custom_fields": {},
+  "id": "art_01KZR4TM2PH3W8QDF8HK817F3Q",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR4TM2PH3W8QDF8HK817F3Q.md",
+    "size_bytes": 1454
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at exact final HEAD 83938501; rebased onto 5f39f7c1; npm ci and pr-gate passed; lease-push verified.",
+  "tags": [],
+  "title": "MRQ-41 final post-rebase review @ 83938501",
+  "token_usage": null,
+  "type": "note"
+}

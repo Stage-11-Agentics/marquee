@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:11:12Z",
+  "created_by": "agent:delegator-mrq-65",
+  "custom_fields": {},
+  "id": "art_01KZR4W11SS9RYKSBHQT51ZNG4",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR4W11SS9RYKSBHQT51ZNG4.md",
+    "size_bytes": 1409
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Final self-review at exact pushed head",
+  "tags": [],
+  "title": "MRQ-65 final self-review",
+  "token_usage": null,
+  "type": "file"
+}

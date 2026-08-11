@@ -65,3 +65,5 @@ Workflow: inline-full
 Shared files: `scripts/checks/*` — additive; the `package.json` entries already exist (registered by M-05a+M-06).
 Deps: none listed in the plan's cross-cutting table
 Audit that keys off this ticket: A-1 runs `check:repo` twice at the push — over the assembled orphan history, then over the pushed remote.
+
+## Reset 2026-08-11 by agent:delegator-mrq-42

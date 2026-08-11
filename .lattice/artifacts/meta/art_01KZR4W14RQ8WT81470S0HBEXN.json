@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:11:12Z",
+  "created_by": "agent:delegator-mrq-65",
+  "custom_fields": {},
+  "id": "art_01KZR4W14RQ8WT81470S0HBEXN",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR4W14RQ8WT81470S0HBEXN.md",
+    "size_bytes": 860
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Final pr-gate and exact-head evidence",
+  "tags": [],
+  "title": "MRQ-65 final validation",
+  "token_usage": null,
+  "type": "file"
+}
