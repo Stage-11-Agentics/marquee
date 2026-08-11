@@ -14,7 +14,7 @@ const COMMON = {
   description: "A session with a comma, semicolon; and a long description that folds safely across UTF-8 octets.",
   dtstamp: Date.parse("2026-08-11T12:00:00.000Z"),
   durationMin: 30,
-  location: "Metropolitan Ballroom · Sheraton New York Times Square",
+  location: "Metropolitan Ballroom, Sheraton New York Times Square, 811 7th Ave",
   organizerEmail: "marquee@stage11.systems",
   organizerName: "Marquee",
   startsAt: Date.parse("2026-09-09T19:00:00.000Z"),
@@ -49,12 +49,29 @@ test("AC-95, AC-96, AC-97 · RFC wire output carries the required request/update
     expect(ics).toContain("BEGIN:STANDARD\r\n");
     expect(ics).toContain("ORGANIZER;CN=Marquee:mailto:marquee@stage11.systems\r\n");
     expect(ics).toContain("ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;");
-    expect(ics).toContain("LOCATION:Metropolitan Ballroom · Sheraton New York Times Square\r\n");
+    expect(ics).toContain("LOCATION:Metropolitan Ballroom\\, Sheraton New York Times Square");
     assertFoldedIcs(ics);
   }
   expect(series[0]).toContain("STATUS:CONFIRMED\r\n");
   expect(series[2]).toContain("STATUS:CANCELLED\r\n");
   expect(series[1]).toContain("DTSTART;TZID=America/New_York:20260909T160000\r\n");
+});
+
+test("AC-262 · ICS carries GEO only for a complete pin and keeps the location address escaped", () => {
+  const pinned = buildCalendarIcs({
+    ...COMMON,
+    geo: { lat: 40.7625, lng: -73.9814 },
+    method: "REQUEST",
+    sequence: 7,
+  });
+  expect(pinned).toContain("LOCATION:Metropolitan Ballroom\\, Sheraton New York Times Square");
+  expect(pinned).toContain("GEO:40.7625;-73.9814\r\n");
+  expect(pinned).toContain("METHOD:REQUEST\r\n");
+  expect(pinned).toContain(`UID:${COMMON.uid}\r\n`);
+  expect(pinned).toContain("SEQUENCE:7\r\n");
+
+  const unpinned = buildCalendarIcs({ ...COMMON, geo: null, method: "REQUEST", sequence: 8 });
+  expect(unpinned).not.toContain("GEO:");
 });
 
 test("AC-95, AC-96 · calendar mail exposes exactly one method-matched calendar alternative and both deep links", () => {

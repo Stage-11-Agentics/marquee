@@ -297,14 +297,23 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(reopenedBody.history.length).toBeGreaterThanOrEqual(2);
   });
 
-  test("AC-240 · the portal schedule carries day, time, Room · Building, and no operator access note", async () => {
+  test("AC-240, AC-260 · the authenticated portal carries the arrival note while the public agenda does not", async () => {
     const { body } = await portal();
     const scheduled = body.submissions.find((submission: { id: string }) => submission.id === SUBMISSION_ID);
     expect(scheduled.slot).toMatchObject({ room: "Room 101 · North Hall", is_published: false });
     expect(scheduled.slot.day).not.toBe("—");
     expect(scheduled.slot.date).not.toBe("—");
     expect(scheduled.slot.time).not.toBe("—");
-    expect(JSON.stringify(body)).not.toContain("operator secret");
+    expect(scheduled.slot.location).toMatchObject({
+      building: "North Hall",
+      address: "1 Conference Way",
+      access_note: "operator secret — never public",
+    });
+    expect(JSON.stringify(body)).toContain("operator secret — never public");
+    const publicPage = await request("/agenda?event=aie-nyc-2026", {}, "");
+    const publicBody = await publicPage.text();
+    expect(publicPage.status).toBe(200);
+    expect(publicBody).not.toContain("operator secret — never public");
   });
 
   test("CONTRACT · the session guard returns the required status and never discloses another speaker's portal data", async () => {

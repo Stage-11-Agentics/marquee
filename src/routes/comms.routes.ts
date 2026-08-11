@@ -19,6 +19,12 @@ import {
 import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
 import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
 import type { OutboxRow } from "../db/schema";
+import {
+  arrivalForSession,
+  type ArrivalBuilding,
+  type ArrivalProjection,
+  type ArrivalSession,
+} from "../lib/venue-geometry";
 import { hasSpeakerTaskCancellationColumn, submissionFilterSchema } from "./submissions.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -184,9 +190,101 @@ export interface RecipientRow {
   name: string;
   submission_title: string;
   room: string | null;
+  room_id: string | null;
   starts_at: number | null;
+  duration_min: number | null;
+  event_timezone: string | null;
+  building_id: string | null;
+  building_name: string | null;
+  building_address: string | null;
+  building_lat: number | null;
+  building_lng: number | null;
+  building_access_minutes: number | null;
+  building_access_note: string | null;
   task_title: string | null;
   task_due_at: number | null;
+  arrival?: ArrivalProjection | null;
+}
+
+function arrivalBuildingFor(row: Pick<RecipientRow, "building_id" | "building_name" | "building_address" | "building_lat" | "building_lng" | "building_access_minutes" | "building_access_note">): ArrivalBuilding | null {
+  if (!row.building_id || row.building_name === null || row.building_access_minutes === null) return null;
+  return {
+    id: row.building_id,
+    name: row.building_name,
+    address: row.building_address ?? "",
+    lat: row.building_lat,
+    lng: row.building_lng,
+    access_minutes: row.building_access_minutes,
+    access_note: row.building_access_note,
+  };
+}
+
+function arrivalSessionFor(row: Pick<RecipientRow, "submission_id" | "starts_at" | "duration_min" | "room" | "building_id" | "building_name" | "building_address" | "building_lat" | "building_lng" | "building_access_minutes" | "building_access_note">): ArrivalSession | null {
+  if (!row.submission_id) return null;
+  return {
+    id: row.submission_id,
+    starts_at: row.starts_at,
+    duration_min: row.duration_min,
+    room_name: row.room,
+    building: arrivalBuildingFor(row),
+  };
+}
+
+async function hydrateRecipientArrivals(db: D1Database, eventId: string, rows: RecipientRow[]): Promise<RecipientRow[]> {
+  const submissionRows = rows.filter((row) => row.submission_id !== null);
+  if (submissionRows.length === 0) return rows;
+  const personIds = unique(submissionRows.map((row) => row.person_id));
+  const [event, primaryBuilding, schedule] = await Promise.all([
+    db.prepare("SELECT timezone FROM events WHERE id = ?").bind(eventId).first<{ timezone: string }>(),
+    db.prepare(
+      `SELECT id, name, address, lat, lng, access_minutes, access_note
+       FROM buildings WHERE event_id = ? ORDER BY position ASC, id ASC LIMIT 1`,
+    ).bind(eventId).first<ArrivalBuilding>(),
+    db.prepare(
+      `SELECT participation.person_id, submission.id AS submission_id,
+              agenda.starts_at, agenda.duration_min, room.id AS room_id, room.name AS room,
+              building.id AS building_id, building.name AS building_name, building.address AS building_address,
+              building.lat AS building_lat, building.lng AS building_lng,
+              building.access_minutes AS building_access_minutes, building.access_note AS building_access_note
+       FROM participations participation
+       JOIN submissions submission ON submission.id = participation.submission_id AND submission.event_id = ?
+       LEFT JOIN agenda_items agenda ON agenda.id = (
+         SELECT selected_agenda.id FROM agenda_items selected_agenda
+         WHERE selected_agenda.event_id = submission.event_id
+           AND selected_agenda.submission_id = submission.id
+           AND selected_agenda.kind = 'session'
+         ORDER BY selected_agenda.starts_at ASC, selected_agenda.id ASC
+         LIMIT 1
+       )
+       LEFT JOIN rooms room ON room.id = agenda.room_id AND room.event_id = submission.event_id
+       LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = submission.event_id
+       WHERE participation.person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+       ORDER BY participation.person_id, agenda.starts_at, submission.id`,
+    ).bind(eventId, JSON.stringify(personIds)).all<Pick<RecipientRow, "person_id" | "submission_id" | "starts_at" | "duration_min" | "room_id" | "room" | "building_id" | "building_name" | "building_address" | "building_lat" | "building_lng" | "building_access_minutes" | "building_access_note">>(),
+  ]);
+  const sessionsByPerson = new Map<string, ArrivalSession[]>();
+  for (const scheduleRow of schedule.results) {
+    const session = arrivalSessionFor(scheduleRow);
+    if (!session) continue;
+    const sessions = sessionsByPerson.get(scheduleRow.person_id) ?? [];
+    if (!sessions.some((item) => item.id === session.id)) sessions.push(session);
+    sessionsByPerson.set(scheduleRow.person_id, sessions);
+  }
+  return rows.map((row) => {
+    const current = arrivalSessionFor(row);
+    if (!current) return row;
+    const sessions = sessionsByPerson.get(row.person_id) ?? [current];
+    return {
+      ...row,
+      event_timezone: row.event_timezone ?? event?.timezone ?? "UTC",
+      arrival: arrivalForSession({
+        current,
+        previousSessions: sessions,
+        primaryBuilding,
+        timezone: event?.timezone ?? "UTC",
+      }),
+    };
+  });
 }
 
 /**
@@ -282,9 +380,14 @@ export async function recipientsFor(
   const result = await db
     .prepare(
       `SELECT DISTINCT p.id AS person_id, s.id AS submission_id, part.role, p.email, p.name,
-              s.title AS submission_title, r.name AS room, ai.starts_at,
+              s.title AS submission_title, r.id AS room_id, r.name AS room, ai.starts_at, ai.duration_min,
+              conference.timezone AS event_timezone,
+              b.id AS building_id, b.name AS building_name, b.address AS building_address,
+              b.lat AS building_lat, b.lng AS building_lng,
+              b.access_minutes AS building_access_minutes, b.access_note AS building_access_note,
               st.title AS task_title, st.due_at AS task_due_at
        FROM submissions s
+       JOIN events conference ON conference.id = s.event_id
        JOIN participations part ON part.submission_id = s.id
        JOIN people p ON p.id = part.person_id
        LEFT JOIN agenda_items ai ON ai.id = (
@@ -295,7 +398,8 @@ export async function recipientsFor(
          ORDER BY selected_agenda.starts_at ASC, selected_agenda.id ASC
          LIMIT 1
        )
-       LEFT JOIN rooms r ON r.id = ai.room_id
+       LEFT JOIN rooms r ON r.id = ai.room_id AND r.event_id = s.event_id
+       LEFT JOIN buildings b ON b.id = r.building_id AND b.event_id = s.event_id
        LEFT JOIN speaker_tasks st ON st.id = (
          SELECT selected_task.id FROM speaker_tasks selected_task
            WHERE selected_task.event_id = s.event_id
@@ -354,8 +458,12 @@ export async function recipientsFor(
     const fallback = await db
       .prepare(
         `SELECT person.id AS person_id, NULL AS submission_id, 'speaker' AS role,
-                person.email, person.name, '—' AS submission_title, NULL AS room,
-                NULL AS starts_at, st.title AS task_title, st.due_at AS task_due_at
+                person.email, person.name, '—' AS submission_title,
+                NULL AS room_id, NULL AS room, NULL AS starts_at, NULL AS duration_min,
+                NULL AS event_timezone, NULL AS building_id, NULL AS building_name,
+                NULL AS building_address, NULL AS building_lat, NULL AS building_lng,
+                NULL AS building_access_minutes, NULL AS building_access_note,
+                st.title AS task_title, st.due_at AS task_due_at
          FROM memberships membership
          JOIN people person ON person.id = membership.person_id
          LEFT JOIN speaker_tasks st ON st.id = (
@@ -387,7 +495,8 @@ export async function recipientsFor(
     rows.push(...fallback.results);
   }
 
-  return rows.sort((left, right) => left.name.localeCompare(right.name) || (left.submission_title ?? "").localeCompare(right.submission_title ?? "") || left.person_id.localeCompare(right.person_id));
+  const sorted = rows.sort((left, right) => left.name.localeCompare(right.name) || (left.submission_title ?? "").localeCompare(right.submission_title ?? "") || left.person_id.localeCompare(right.person_id));
+  return hydrateRecipientArrivals(db, eventId, sorted);
 }
 
 function mergeDataFor(row: RecipientRow): MergeData {
@@ -396,6 +505,11 @@ function mergeDataFor(row: RecipientRow): MergeData {
     email: row.email,
     submissionTitle: row.submission_title,
     room: row.room,
+    building: row.arrival?.building?.name ?? row.building_name,
+    address: row.arrival?.building?.address ?? row.building_address,
+    accessNote: row.arrival?.building?.access_note ?? row.building_access_note,
+    leaveBy: row.arrival?.leave_by ?? null,
+    timezone: row.event_timezone,
     startsAt: row.starts_at,
     taskTitle: row.task_title,
     taskDueAt: row.task_due_at,

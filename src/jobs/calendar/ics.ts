@@ -10,6 +10,7 @@ export interface CalendarEventInput {
   description?: string;
   dtstamp: number | Date;
   durationMin: number;
+  geo?: { lat: number; lng: number } | null;
   location: string;
   method: CalendarMethod;
   organizerEmail?: string;
@@ -248,6 +249,9 @@ export function buildCalendarIcs(input: CalendarEventInput): string {
     `SUMMARY:${escapeIcsText(input.title)}`,
     `DESCRIPTION:${escapeIcsText(input.description ?? input.title)}`,
     `LOCATION:${escapeIcsText(input.location)}`,
+    ...(input.geo && Number.isFinite(input.geo.lat) && Number.isFinite(input.geo.lng)
+      ? [`GEO:${input.geo.lat};${input.geo.lng}`]
+      : []),
     `URL:${input.url}`,
     `ORGANIZER;CN=${quoteParameter(input.organizerName ?? "Marquee")}:mailto:${organizerEmail}`,
     `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN=${quoteParameter(input.attendeeName)}:mailto:${attendeeEmail}`,

@@ -56,6 +56,23 @@ type PortalSubmission = {
     starts_at: number;
     duration_min: number | null;
     room: string;
+    location: {
+      room: string | null;
+      building: string | null;
+      address: string | null;
+      access_note: string | null;
+      access_minutes: number;
+      lat: number | null;
+      lng: number | null;
+    };
+    arrival: {
+      status: "ready" | "unscheduled" | "unassigned" | "unavailable";
+      origin: { id: string; name: string; address: string } | null;
+      previous_session: { id: string; room: string | null; building: string | null; starts_at: number | null; duration_min: number | null } | null;
+      walk_minutes: number | null;
+      access_minutes: number;
+      leave_by: number | null;
+    } | null;
     is_published: boolean;
   } | null;
   decision_feedback: { id: string | null; markdown: string; decided_at: number | null } | null;
@@ -121,6 +138,11 @@ function formatDate(value: number): string {
 
 function formatDay(value: string): string {
   return value || "—";
+}
+
+function formatPortalTime(value: number | null, timezone: string): string {
+  if (value === null) return "—";
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone }).format(new Date(value));
 }
 
 type UploadHandlers = UploadProgressHandlers & { onAbortReady?: (abort: (() => void) | null) => void };
@@ -391,10 +413,41 @@ function ParticipationActions({ submission, onRefresh }: { submission: PortalSub
   </div>;
 }
 
-function StatusHero({ submission, index, onRefresh }: { submission: PortalSubmission; index: number; onRefresh: () => Promise<void> }): JSX.Element {
+function ArrivalCard({ slot, timezone }: { slot: NonNullable<PortalSubmission["slot"]>; timezone: string }): JSX.Element {
+  const { location, arrival } = slot;
+  const hasPin = location.lat !== null && location.lng !== null;
+  const directions = hasPin ? `https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}` : null;
+  let arrivalCopy = "Arrival timing will appear when this session is placed.";
+  if (arrival?.status === "ready" && arrival.leave_by !== null) {
+    const movement = [
+      arrival.walk_minutes === null ? null : `${arrival.walk_minutes} min walk`,
+      arrival.access_minutes > 0 ? `${arrival.access_minutes} min to get in` : null,
+    ].filter(Boolean).join(" · ");
+    const from = arrival.previous_session?.building ?? arrival.origin?.name;
+    arrivalCopy = `${from ? `From ${from}${movement ? ` · ${movement}` : ""}. ` : ""}Leave by ${formatPortalTime(arrival.leave_by, timezone)}.`;
+  } else if (arrival?.status === "unavailable") {
+    arrivalCopy = "Arrival timing is not available until this building and your starting building have map pins.";
+  } else if (arrival?.status === "unassigned") {
+    arrivalCopy = "Your room is scheduled, but its building has not been assigned yet.";
+  } else if (arrival?.status === "unscheduled") {
+    arrivalCopy = "Your arrival instructions will appear when the session time is set.";
+  }
+  return <section class="portal-arrival-card" aria-labelledby={`arrival-heading-${slot.starts_at}`}>
+    <header class="portal-arrival-head"><div><h2 id={`arrival-heading-${slot.starts_at}`}>Where you are speaking</h2><span>{slot.day} · {slot.date} · {slot.time}</span></div>{directions ? <a class="portal-button secondary" href={directions} target="_blank" rel="noreferrer">Directions ↗</a> : null}</header>
+    <div class="portal-arrival-body"><dl class="portal-arrival-details">
+      <div><dt>Room</dt><dd>{location.room ?? "—"}</dd></div>
+      <div><dt>Building</dt><dd>{location.building ?? "No building assigned yet"}</dd></div>
+      <div><dt>Address</dt><dd>{location.address ?? "—"}</dd></div>
+      <div><dt>Getting in</dt><dd>{location.access_note ?? "—"}</dd></div>
+      <div class="portal-arrival-leave"><dt>Arrival plan</dt><dd>{arrivalCopy}</dd></div>
+    </dl><div class={`portal-arrival-map${hasPin ? " pinned" : ""}`} aria-label={hasPin ? "Pinned venue location" : "No physical location pin available"}><span>{hasPin ? "Pinned venue" : "No map pin"}</span><small>{hasPin ? `${location.lat}, ${location.lng}` : "The conference team has not pinned this building."}</small></div></div>
+  </section>;
+}
+
+function StatusHero({ submission, index, timezone, onRefresh }: { submission: PortalSubmission; index: number; timezone: string; onRefresh: () => Promise<void> }): JSX.Element {
   const statusText = `${submission.status_label}${submission.wave ? ` · ${submission.wave}` : ""}`;
   const titleId = `portal-status-heading-${submission.id}`;
-  return <section class={`portal-status-hero ${index > 0 ? "secondary" : ""}`} aria-labelledby={titleId}><span class="eyebrow">{index === 0 ? "Current status" : "Submission status"}</span>{index === 0 ? <h1 id={titleId}>{statusText}</h1> : <h2 id={titleId}>{statusText}</h2>}<div class="portal-status-meta"><div class="portal-status-copy"><strong title={submission.title}>{submission.title}</strong><br />{submission.format} · {submission.wave_decision_on ? `next decision ${submission.wave_decision_on}` : "status is current"}</div>{submission.slot ? <div class="portal-slot"><small>Schedule</small><span>{formatDay(submission.slot.day)} · {submission.slot.date} · {submission.slot.time}</span><span>{submission.slot.room}</span>{!submission.slot.is_published ? <span class="portal-slot-note">Not yet public</span> : null}</div> : <div class="portal-slot"><small>Schedule</small><span>—</span></div>}</div><ParticipationActions submission={submission} onRefresh={onRefresh} /></section>;
+  return <section class={`portal-status-hero ${index > 0 ? "secondary" : ""}`} aria-labelledby={titleId}><span class="eyebrow">{index === 0 ? "Current status" : "Submission status"}</span>{index === 0 ? <h1 id={titleId}>{statusText}</h1> : <h2 id={titleId}>{statusText}</h2>}<div class="portal-status-meta"><div class="portal-status-copy"><strong title={submission.title}>{submission.title}</strong><br />{submission.format} · {submission.wave_decision_on ? `next decision ${submission.wave_decision_on}` : "status is current"}</div>{submission.slot ? <div class="portal-slot"><small>Schedule</small><span>{formatDay(submission.slot.day)} · {submission.slot.date} · {submission.slot.time}</span><span>{submission.slot.room}</span>{!submission.slot.is_published ? <span class="portal-slot-note">Not yet public</span> : null}</div> : <div class="portal-slot"><small>Schedule</small><span>—</span></div>}</div>{submission.slot ? <ArrivalCard slot={submission.slot} timezone={timezone} /> : null}<ParticipationActions submission={submission} onRefresh={onRefresh} /></section>;
 }
 
 function PortalPage(): JSX.Element {
@@ -412,7 +465,7 @@ function PortalPage(): JSX.Element {
   if (error && !snapshot && error.status === 401) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></div><main class="portal-main"><div class="portal-error"><div><strong>Sign in to open your speaker portal.</strong><p>Your session is missing or has expired.</p><a class="portal-signin" href="/">Return to sign in</a></div></div></main></div>;
   if (error && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-error"><div><strong>We could not load your portal.</strong><p>{error.message}</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
   if (!snapshot) return <div class="portal-shell"><main class="portal-main"><div class="portal-error">No portal data is available.</div></main></div>;
-  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={async () => { await requestJson("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined); window.location.assign("/"); }}>Sign out</button></header><main class="portal-main">{snapshot.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div></section> : snapshot.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {snapshot.person.name}</h2><p>{snapshot.event.name} · your speaker workspace</p></div><div class="portal-progress">{completedTasks} / {snapshot.tasks.length} tasks complete</div></div><div class="portal-grid"><TasksPanel tasks={snapshot.tasks} onRefresh={refresh} /><ProfileEditor person={snapshot.person} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{snapshot.submissions.length} record{snapshot.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{snapshot.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record.</div> : snapshot.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{snapshot.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{snapshot.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{snapshot.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
+  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={async () => { await requestJson("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined); window.location.assign("/"); }}>Sign out</button></header><main class="portal-main">{snapshot.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div></section> : snapshot.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={snapshot.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {snapshot.person.name}</h2><p>{snapshot.event.name} · your speaker workspace</p></div><div class="portal-progress">{completedTasks} / {snapshot.tasks.length} tasks complete</div></div><div class="portal-grid"><TasksPanel tasks={snapshot.tasks} onRefresh={refresh} /><ProfileEditor person={snapshot.person} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{snapshot.submissions.length} record{snapshot.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{snapshot.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record.</div> : snapshot.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{snapshot.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{snapshot.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{snapshot.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
 }
 
 export { PortalPage };

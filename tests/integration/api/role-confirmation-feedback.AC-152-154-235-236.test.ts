@@ -73,8 +73,8 @@ async function seedFixture(): Promise<void> {
        VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)`,
     ).bind(id, submissionId, SPEAKER_ID, role, position, NOW, NOW)),
     env.DB.prepare(
-      `INSERT INTO buildings (id, event_id, name, address, position, access_minutes, created_at, updated_at)
-       VALUES ('building-mrq38', ?, 'North Hall', '1 Conference Way', 0, 0, ?, ?)`,
+      `INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, access_note, created_at, updated_at)
+       VALUES ('building-mrq38', ?, 'North Hall', '1 Conference Way', 0, 40.7625, -73.9814, 0, 'Use the North Hall security desk', ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO rooms (id, event_id, building_id, name, capacity, position, av_capabilities, notes, created_at, updated_at)
@@ -85,6 +85,19 @@ async function seedFixture(): Promise<void> {
         (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
        VALUES ('agenda-mrq38-decline', ?, ?, 'session', NULL, ?, 30, 'room-mrq38', NULL, 0, ?, ?)`,
     ).bind(EVENT_ID, SUB_DECLINE, NOW + 86_400_000, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, access_note, created_at, updated_at)
+       VALUES ('building-mrq64-current', ?, 'South Annex', '2 Conference Way', 1, 40.7586, -73.9861, 3, 'Use the south lobby for conference access', ?, ?)`,
+    ).bind(EVENT_ID, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO rooms (id, event_id, building_id, name, capacity, position, av_capabilities, notes, created_at, updated_at)
+       VALUES ('room-mrq64-current', ?, 'building-mrq64-current', 'Room 201', 100, 0, '[]', NULL, ?, ?)`,
+    ).bind(EVENT_ID, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO agenda_items
+        (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
+       VALUES ('agenda-mrq64-current', ?, ?, 'session', NULL, ?, 30, 'room-mrq64-current', NULL, 0, ?, ?)`,
+    ).bind(EVENT_ID, SUB_NO_FEEDBACK, NOW + 86_400_000 + 120 * 60_000, NOW, NOW),
   ]);
 
   const speakerSession = await createSession(env.DB, { personId: SPEAKER_ID, roleHint: "speaker", userAgent: "mrq38-test", now: NOW });
@@ -339,5 +352,34 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
       "SELECT COUNT(*) AS total FROM outbox WHERE event_id = ? AND template_key = 'custom' AND entity_id = ?",
     ).bind(EVENT_ID, SUB_SINGLE).first<{ total: number }>();
     expect(afterEmpty?.total).toBe(1);
+  });
+
+  test("AC-261 · place merge fields render through preview and delivery byte-for-byte, including unknown fields", async () => {
+    const body = {
+      subject: "Where to be: {{session.room}} · {{session.building}}",
+      body: "{{session.title}}\n{{session.room}}\n{{session.building}}\n{{session.address}}\n{{session.accessNote}}\nLeave by {{session.leaveBy}}\nUnknown {{session.not_a_field}}",
+    };
+    const preview = await request(`/api/v1/events/${EVENT_ID}/comms/preview`, {
+      method: "POST",
+      body: JSON.stringify({ person_id: SPEAKER_ID, submission_id: SUB_NO_FEEDBACK, role: "speaker", ...body }),
+    }, ownerCookie);
+    expect(preview.status).toBe(200);
+    const previewPayload = await preview.json<{ subject: string; text: string; html: string; to_email: string }>();
+    const previewBody = { subject: previewPayload.subject, text: previewPayload.text, html: previewPayload.html };
+    expect(previewBody.text).toContain("Room 201");
+    expect(previewBody.text).toContain("South Annex");
+    expect(previewBody.text).toContain("2 Conference Way");
+    expect(previewBody.text).toContain("Use the south lobby for conference access");
+    expect(previewBody.text).toContain("Leave by");
+    expect(previewBody.text).toContain("{{session.not_a_field}}");
+
+    const sent = await request(`/api/v1/events/${EVENT_ID}/comms/send`, {
+      method: "POST",
+      body: JSON.stringify({ selector: { submission_ids: [SUB_NO_FEEDBACK], person_ids: [SPEAKER_ID], role: "speaker" }, ...body }),
+    }, ownerCookie);
+    expect(sent.status).toBe(202);
+    const sentBody = await sent.json<{ outbox_ids: string[] }>();
+    const delivered = await env.DB.prepare("SELECT subject, text, html FROM outbox WHERE id = ?").bind(sentBody.outbox_ids[0]).first<{ subject: string; text: string; html: string }>();
+    expect(delivered).toEqual(previewBody);
   });
 });

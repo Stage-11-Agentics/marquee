@@ -6,6 +6,32 @@ export interface GeometryBuilding {
   access_minutes: number;
 }
 
+/** The complete building record needed by speaker-facing arrival surfaces. */
+export interface ArrivalBuilding extends GeometryBuilding {
+  address: string;
+  access_note: string | null;
+}
+
+export interface ArrivalSession {
+  id: string;
+  starts_at: number | null;
+  duration_min: number | null;
+  room_name: string | null;
+  building: ArrivalBuilding | null;
+}
+
+export type ArrivalStatus = "ready" | "unscheduled" | "unassigned" | "unavailable";
+
+export interface ArrivalProjection {
+  status: ArrivalStatus;
+  building: ArrivalBuilding | null;
+  previous_session: ArrivalSession | null;
+  origin: ArrivalBuilding | null;
+  walk_minutes: number | null;
+  access_minutes: number;
+  leave_by: number | null;
+}
+
 export interface TransitAgendaItem {
   id: string;
   starts_at: number;
@@ -54,6 +80,103 @@ export function walkingMinutes(
 ): number | null {
   const metres = haversineMetres(from, to);
   return metres === null ? null : Math.max(1, Math.floor((metres * WALKING_FACTOR) / WALKING_METRES_PER_MINUTE));
+}
+
+function hasPin(
+  building: Pick<GeometryBuilding, "lat" | "lng"> | null,
+): building is Pick<GeometryBuilding, "lat" | "lng"> & { lat: number; lng: number } {
+  return building !== null
+    && building.lat !== null
+    && building.lng !== null
+    && Number.isFinite(building.lat)
+    && Number.isFinite(building.lng);
+}
+
+function dayKey(value: number, timezone: string): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(value)).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function buildingGeo(
+  building: Pick<GeometryBuilding, "lat" | "lng"> | null,
+): { lat: number; lng: number } | null {
+  return hasPin(building) ? { lat: building.lat, lng: building.lng } : null;
+}
+
+/** One canonical, navigable location string for mail and calendar clients. */
+export function sessionLocation(room: string | null, building: Pick<ArrivalBuilding, "name" | "address"> | null): string {
+  return [room, building?.name, building?.address].filter((part): part is string => Boolean(part?.trim())).join(", ") || "—";
+}
+
+function previousSessionFor(
+  current: ArrivalSession,
+  previousSessions: readonly ArrivalSession[],
+  timezone: string,
+): ArrivalSession | null {
+  if (current.starts_at === null) return null;
+  const currentDay = dayKey(current.starts_at, timezone);
+  return [...previousSessions]
+    .filter((session) => {
+      if (
+        session.id === current.id
+        || session.starts_at === null
+        || session.duration_min === null
+        || session.duration_min < 0
+      ) return false;
+      return dayKey(session.starts_at, timezone) === currentDay
+        && session.starts_at + session.duration_min * 60_000 <= current.starts_at!;
+    })
+    .sort((left, right) => (
+      right.starts_at! - left.starts_at!
+      || right.id.localeCompare(left.id)
+    ))[0] ?? null;
+}
+
+/**
+ * Project one speaker's arrival plan. The route math deliberately stays here:
+ * every surface consumes the same haversine-derived walkingMinutes result and
+ * the same primary-building fallback.
+ */
+export function arrivalForSession(input: {
+  current: ArrivalSession;
+  previousSessions: readonly ArrivalSession[];
+  primaryBuilding: ArrivalBuilding | null;
+  timezone: string;
+}): ArrivalProjection {
+  const { current } = input;
+  const building = current.building;
+  const accessMinutes = building ? Math.max(0, building.access_minutes) : 0;
+  const previousSession = previousSessionFor(current, input.previousSessions, input.timezone);
+  const origin = previousSession?.building ?? input.primaryBuilding;
+  if (current.starts_at === null) {
+    return { status: "unscheduled", building, previous_session: previousSession, origin, walk_minutes: null, access_minutes: accessMinutes, leave_by: null };
+  }
+  if (!building) {
+    return { status: "unassigned", building: null, previous_session: previousSession, origin, walk_minutes: null, access_minutes: 0, leave_by: null };
+  }
+  if (!hasPin(building) || !hasPin(origin)) {
+    return { status: "unavailable", building, previous_session: previousSession, origin, walk_minutes: null, access_minutes: accessMinutes, leave_by: null };
+  }
+  const walkMinutes = origin.id === building.id ? 0 : walkingMinutes(origin, building);
+  if (walkMinutes === null) {
+    return { status: "unavailable", building, previous_session: previousSession, origin, walk_minutes: null, access_minutes: accessMinutes, leave_by: null };
+  }
+  return {
+    status: "ready",
+    building,
+    previous_session: previousSession,
+    origin,
+    walk_minutes: walkMinutes,
+    access_minutes: accessMinutes,
+    leave_by: current.starts_at - (walkMinutes + accessMinutes) * 60_000,
+  };
 }
 
 function pairKey(left: string, right: string): string {

@@ -1,7 +1,7 @@
 import type { D1Database, Queue } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
-import { roomDisplayLabel } from "../../lib/venues";
+import { buildingGeo, sessionLocation } from "../../lib/venue-geometry";
 import { enqueueMailMessage } from "../mail/consumer";
 import { enqueueOutbox } from "../mail/outbox";
 import {
@@ -22,6 +22,9 @@ interface CalendarSessionRow {
   event_slug: string;
   event_timezone: string;
   room_name: string;
+  building_address: string | null;
+  building_lat: number | null;
+  building_lng: number | null;
   starts_at: number;
   submission_id: Id;
   title: string;
@@ -72,7 +75,8 @@ async function sessionFor(db: D1Database, eventId: Id, submissionId: Id): Promis
               event.name AS event_name, event.slug AS event_slug,
               event.timezone AS event_timezone,
               agenda.starts_at, agenda.duration_min,
-              room.name AS room_name, building.name AS building_name
+              room.name AS room_name, building.name AS building_name,
+              building.address AS building_address, building.lat AS building_lat, building.lng AS building_lng
        FROM submissions s
        JOIN events event ON event.id = s.event_id
        JOIN agenda_items agenda
@@ -112,17 +116,17 @@ function eventInput(
     uid: string;
   },
 ): CalendarEventInput & { origin: string } {
-  const location = roomDisplayLabel(
-    { name: session.room_name },
-    session.building_name === null ? null : { name: session.building_name },
-  );
+  const building = session.building_name === null
+    ? null
+    : { name: session.building_name, address: session.building_address ?? "" };
   return {
     attendeeEmail: recipient.email,
     attendeeName: recipient.name,
     description: session.abstract ?? session.title,
     dtstamp: input.dtstamp,
     durationMin: session.duration_min,
-    location,
+    geo: buildingGeo({ lat: session.building_lat, lng: session.building_lng }),
+    location: sessionLocation(session.room_name, building),
     method: input.method,
     organizerEmail: "marquee@stage11.systems",
     organizerName: "Marquee",

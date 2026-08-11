@@ -83,6 +83,11 @@ const TRIGGER_KEYS = [
 const MERGE_FIELDS = [
   "speaker.first_name",
   "submission.title",
+  "session.room",
+  "session.building",
+  "session.address",
+  "session.accessNote",
+  "session.leaveBy",
   "room.name",
   "session.time",
   "task.title",

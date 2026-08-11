@@ -15,6 +15,12 @@ import type { ApiEnv } from "../api/runtime";
 import type { AuthContext, SessionAuth } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { roomDisplayLabel } from "../lib/venues";
+import {
+  arrivalForSession,
+  type ArrivalBuilding,
+  type ArrivalProjection,
+  type ArrivalSession,
+} from "../lib/venue-geometry";
 import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
@@ -101,8 +107,15 @@ type SubmissionProjection = {
   wave_decision_on: string | null;
   starts_at: number | null;
   duration_min: number | null;
+  room_id: string | null;
   room_name: string | null;
+  building_id: string | null;
   building_name: string | null;
+  building_address: string | null;
+  building_lat: number | null;
+  building_lng: number | null;
+  building_access_minutes: number | null;
+  building_access_note: string | null;
   is_published: number | null;
   participation_id: string;
   participation_role: string;
@@ -117,6 +130,7 @@ type SubmissionProjection = {
     confirmation_status: "pending" | "confirmed" | "declined";
     confirmed_at: number | null;
   }>;
+  arrival?: ArrivalProjection;
 };
 
 type TaskProjection = {
@@ -413,12 +427,48 @@ async function personFor(db: D1Database, personId: string): Promise<PersonProjec
   return person;
 }
 
+function arrivalBuildingFor(row: Pick<SubmissionProjection, "building_id" | "building_name" | "building_address" | "building_lat" | "building_lng" | "building_access_minutes" | "building_access_note">): ArrivalBuilding | null {
+  if (!row.building_id || row.building_name === null || row.building_address === null || row.building_access_minutes === null) return null;
+  return {
+    id: row.building_id,
+    name: row.building_name,
+    address: row.building_address,
+    lat: row.building_lat,
+    lng: row.building_lng,
+    access_minutes: row.building_access_minutes,
+    access_note: row.building_access_note,
+  };
+}
+
+function arrivalSessionFor(row: SubmissionProjection): ArrivalSession {
+  return {
+    id: row.id,
+    starts_at: row.starts_at,
+    duration_min: row.duration_min,
+    room_name: row.room_name,
+    building: arrivalBuildingFor(row),
+  };
+}
+
+async function primaryBuildingFor(db: D1Database, eventId: string): Promise<ArrivalBuilding | null> {
+  return db
+    .prepare(
+      `SELECT id, name, address, lat, lng, access_minutes, access_note
+       FROM buildings WHERE event_id = ? ORDER BY position ASC, id ASC LIMIT 1`,
+    )
+    .bind(eventId)
+    .first<ArrivalBuilding>();
+}
+
 async function listSubmissions(db: D1Database, event: EventProjection, personId: string): Promise<SubmissionProjection[]> {
   const rows = await db
     .prepare(
       `SELECT s.id, s.title, s.abstract, s.status, s.updated_at,
          format.name AS format_name, wave.name AS wave_name, wave.decision_on AS wave_decision_on,
-         agenda.starts_at, agenda.duration_min, room.name AS room_name, building.name AS building_name,
+         agenda.starts_at, agenda.duration_min, room.id AS room_id, room.name AS room_name,
+         building.id AS building_id, building.name AS building_name, building.address AS building_address,
+         building.lat AS building_lat, building.lng AS building_lng,
+         building.access_minutes AS building_access_minutes, building.access_note AS building_access_note,
          agenda.is_published,
          participation.id AS participation_id, participation.role AS participation_role,
          participation.confirmation_status, participation.confirmed_at,
@@ -563,6 +613,8 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
 function submissionView(event: EventProjection, row: SubmissionProjection): Record<string, unknown> {
   const dateTime = eventDateTime(event, row.starts_at);
   const waveName = row.wave_name ?? (row.wave_decision_on ? "Next wave" : null);
+  const building = arrivalBuildingFor(row);
+  const arrival = row.arrival ?? null;
   return {
     id: row.id,
     title: row.title,
@@ -577,11 +629,40 @@ function submissionView(event: EventProjection, row: SubmissionProjection): Reco
           day: dateTime.day,
           date: dateTime.date,
           time: dateTime.time,
-          starts_at: row.starts_at,
+          starts_at: row.starts_at!,
           duration_min: row.duration_min,
           room: row.room_name && row.building_name
             ? roomDisplayLabel({ name: row.room_name }, { name: row.building_name })
             : row.room_name ?? "—",
+          location: {
+            room: row.room_name,
+            building: building?.name ?? row.building_name,
+            address: building?.address ?? null,
+            access_note: building?.access_note ?? null,
+            access_minutes: building?.access_minutes ?? 0,
+            lat: building?.lat ?? null,
+            lng: building?.lng ?? null,
+          },
+          arrival: arrival
+            ? {
+                status: arrival.status,
+                origin: arrival.origin
+                  ? { id: arrival.origin.id, name: arrival.origin.name, address: arrival.origin.address }
+                  : null,
+                previous_session: arrival.previous_session
+                  ? {
+                      id: arrival.previous_session.id,
+                      room: arrival.previous_session.room_name,
+                      building: arrival.previous_session.building?.name ?? null,
+                      starts_at: arrival.previous_session.starts_at,
+                      duration_min: arrival.previous_session.duration_min,
+                    }
+                  : null,
+                walk_minutes: arrival.walk_minutes,
+                access_minutes: arrival.access_minutes,
+                leave_by: arrival.leave_by,
+              }
+            : null,
           is_published: row.is_published === 1,
         }
       : null,
@@ -636,11 +717,21 @@ async function talkIsEditable(db: D1Database, eventId: string, submissionId: str
 async function portalSnapshot(db: D1Database, auth: SessionAuth, requestedEventId?: string) {
   const event = await speakerEvent(db, auth, requestedEventId);
   const person = await personFor(db, auth.personId);
-  const [submissionRows, tasks] = await Promise.all([
+  const [submissionRows, tasks, primaryBuilding] = await Promise.all([
     listSubmissions(db, event, auth.personId),
     listTasks(db, event, auth.personId),
+    primaryBuildingFor(db, event.id),
   ]);
   const submissions = [...submissionRows];
+  const sessions = submissions.map(arrivalSessionFor);
+  for (const row of submissions) {
+    row.arrival = arrivalForSession({
+      current: arrivalSessionFor(row),
+      previousSessions: sessions,
+      primaryBuilding,
+      timezone: event.timezone,
+    });
+  }
   if (submissions.some((row) => row.wave_name === null && ["draft", "submitted", "in_review"].includes(row.status))) {
     const nextWave = await db
       .prepare(

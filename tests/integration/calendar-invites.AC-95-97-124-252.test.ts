@@ -22,7 +22,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', ?, 30, ?, 0, ?, ?)").bind("agenda_calendar", EVENT_ID, SUBMISSION_ID, Date.parse("2026-09-09T19:00:00.000Z"), "room_calendar", NOW, NOW),
   ]);
 });
-test("AC-95, AC-96, AC-97, AC-124, AC-252 · request update cancel keeps one UID sequence and a public Room · Building artifact", async () => {
+test("AC-95, AC-96, AC-97, AC-124, AC-252, AC-262 · request update cancel keeps one UID sequence, escaped address, and GEO", async () => {
   const first = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW });
   const second = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW + 1_000 });
   const cancelled = await cancelCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW + 2_000 });
@@ -40,7 +40,8 @@ test("AC-95, AC-96, AC-97, AC-124, AC-252 · request update cancel keeps one UID
   expect(outbox.results.map((row) => row.ics_body.match(/SEQUENCE:(\d+)/)?.[1])).toEqual(["0", "1", "2"]);
   expect(outbox.results.map((row) => row.ics_body.match(/METHOD:(REQUEST|CANCEL)/)?.[1])).toEqual(["REQUEST", "REQUEST", "CANCEL"]);
   expect(outbox.results.every((row) => row.send_policy === "demo_safe")).toBe(true);
-  expect(outbox.results[0]?.ics_body).toContain("LOCATION:Metropolitan Ballroom · Sheraton New York Times Square\r\n");
+  expect(outbox.results[0]?.ics_body).toContain("LOCATION:Metropolitan Ballroom\\, Sheraton New York Times Square");
+  expect(outbox.results[0]?.ics_body).toContain("GEO:40.7625;-73.9814");
   expect(outbox.results[0]?.ics_body).not.toContain("Use the east entrance");
   expect(outbox.results[0]?.ics_body).not.toContain("Projector");
 
