@@ -64,3 +64,5 @@ The single plan review returned **PASS** with four minor findings. All are resol
 - **Duplicate roles:** the agenda SQL projection will preserve role while parsing, then dedupe each session's display participants by person ID. The unit conflict fixture will include one person with two roles on a submission and assert one person conflict for the pair.
 - **AC-75 evidence:** the integration placement test carries `AC-75 + AC-79`; it asserts the hard persistence half and warning-only `201` behavior. C5 remains a felt/operator checkpoint, recorded in the claims notes and not self-signed.
 - **Claims format:** `tests/ac-claims/MRQ-21.json` follows existing manifest fields and the AC title scanner's `AC-NN ·` convention; coverage comes from the test titles, not manifest paths.
+
+## Reset 2026-08-11 by agent:delegator-mrq-21

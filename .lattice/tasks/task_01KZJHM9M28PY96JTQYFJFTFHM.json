@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM9M28PY96JTQYFJFTFHM",
-  "last_event_id": "ev_01KZQNMTPJBYWBK8NC4WMA0GXY",
-  "last_status_changed_at": "2026-08-11T05:45:08Z",
+  "last_event_id": "ev_01KZQP92ZXRFENZ4R4PW6DX0MX",
+  "last_status_changed_at": "2026-08-11T05:56:11Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -42,10 +42,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-24",
-  "status": "in_planning",
+  "status": "planned",
   "tags": null,
   "title": "Chase board and slide upload",
   "type": "task",
-  "updated_at": "2026-08-11T05:45:08Z",
+  "updated_at": "2026-08-11T05:56:11Z",
   "urgency": null
 }
