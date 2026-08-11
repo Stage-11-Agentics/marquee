@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T05:16:33Z",
+  "created_by": "agent:delegator-mrq-23",
+  "custom_fields": {},
+  "id": "art_01KZQM0FZHQP353HJ8VG7TA44W",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQM0FZHQP353HJ8VG7TA44W.md",
+    "size_bytes": 1391
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at exact HEAD 78f227a",
+  "tags": [],
+  "title": "MRQ-23 inline self-review",
+  "token_usage": null,
+  "type": "note"
+}

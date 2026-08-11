@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T05:13:29Z",
+  "created_by": "agent:delegator-mrq-16",
+  "custom_fields": {},
+  "id": "art_01KZQKTWWNGBNE3BD14B06DJWB",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQKTWWNGBNE3BD14B06DJWB.md",
+    "size_bytes": 1457
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-16 self-review",
+  "token_usage": null,
+  "type": "note"
+}

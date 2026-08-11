@@ -15,11 +15,21 @@
       "id": "art_01KZQK74VFNCS1EAWB5WQWZMKE",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQMSVZ5RPZRJ9WP21NJH6S7",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQMV16W56KAQSR7MGDKAER7",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMAJE83227X9NNDJETFQ4",
-  "last_event_id": "ev_01KZQK74VJQ5JVSXJYVFAFK9MF",
-  "last_status_changed_at": "2026-08-11T04:57:26Z",
+  "last_event_id": "ev_01KZQMV16YY9NQ0ZXGJ28W499H",
+  "last_status_changed_at": "2026-08-11T05:30:32Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -41,10 +51,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-34",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Saved views, configurable columns, Draft queue, and builder condition summary",
   "type": "task",
-  "updated_at": "2026-08-11T05:02:42Z",
+  "updated_at": "2026-08-11T05:31:02Z",
   "urgency": null
 }

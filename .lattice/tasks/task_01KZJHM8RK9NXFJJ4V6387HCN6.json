@@ -3,23 +3,58 @@
   "branch_links": [],
   "c11_surface": "surface:168",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 1,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-14 \u2014 Wave 1 (\u00a74), walkthrough step 5 \u00b7 the judge's own path\n\nScope (verbatim): SSR form in builder order with the complete participant/profile/file/conditional path; client-blur + server-authoritative validation; drafts + emailed resume link + restored values/files; **Turnstile server-side before every write/presign**; real open, closed, at-limit, resumed, submitted, and re-opened states; confirmation email; 375 px pass. **The vendor conditional renders through M-12's `isFieldApplicable()` helper \u2014 it is an ordinary schema-driven field, never a hardcoded alternate form (SPEC \u00a75.4/\u00a75.5).** M-14 exercises **AC-132/AC-133** on the public surface; M-12 owns those IDs for `trace:ac`.\n\nAC-231's gated set is draft creation, submit, and every presign; `PATCH \u2026/drafts/:token` autosave requires **no** Turnstile token (that literal reading would break AC-41) but is rejected without a valid resume token and is rate-limited per token.\nFelt checkpoint C3 reads this surface aloud: force every validation failure and every submit failure (5xx, Turnstile challenge failure, 429, dropped connection); no sentence may contain a field name, a type name, an error code, or \"invalid\" without a remedy.\n\nFile surface: `src/routes/public-form.route.tsx`, `src/ui/public/form/*`\n\nACs: AC-25, AC-26, AC-29, AC-30 \u2013 AC-42, AC-155 \u2013 AC-157, **AC-231, AC-234**\nHours: 8\nWorkflow: sub-agent-full (\u22657 h)\nShared files: none \u2014 module-local. Consumes `src/lib/form-conditions.ts` (M-12's); add to it, never rewrite it.\nDeps: M-12, M-11, M-13\nSpeed: AC-36 is an AC-sourced budget \u2014 public CFP form cold load \u2192 interactive p95 \u2264 1000 ms.\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T05:31:19Z",
   "evidence_refs": [
     {
       "id": "art_01KZQHEM7PAKNW3FY4VG1XK3PG",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQMBSVXQ4RPZFNR0KY3FEE4",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQMCFB5AEXBY4S2NCT8GED3",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQMJ6QDK02ZG8KMPVCMA2MA",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQMJPQ72RBVAFNXXN3ZW0H5",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQMMT38E3SJ50GV715HRTMV",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQMVHCJD8Y076B3VQMM60DY",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQMVHCJD8Y076B3VQMM60DX",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8RK9NXFJJ4V6387HCN6",
-  "last_event_id": "ev_01KZQHEM7SN5MSE7BEVKYM06GJ",
-  "last_status_changed_at": "2026-08-11T04:28:37Z",
+  "last_event_id": "ev_01KZQMVHCJD8Y076B3VQMM60E1",
+  "last_status_changed_at": "2026-08-11T05:31:19Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -45,13 +80,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 1,
+  "reopened_count": 3,
   "schema_version": 1,
   "short_id": "MRQ-15",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Public CFP form",
   "type": "task",
-  "updated_at": "2026-08-11T04:31:50Z",
+  "updated_at": "2026-08-11T05:31:19Z",
   "urgency": null
 }

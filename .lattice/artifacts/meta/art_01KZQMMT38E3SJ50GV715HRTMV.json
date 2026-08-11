@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T05:27:38Z",
+  "created_by": "agent:delegator-mrq-15",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/33"
+  },
+  "id": "art_01KZQMMT38E3SJ50GV715HRTMV",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open PR against master for exact HEAD df7d64385468874b775c330b9c252549f7edeb29.",
+  "tags": [],
+  "title": "Forgejo PR #33",
+  "token_usage": null,
+  "type": "reference"
+}

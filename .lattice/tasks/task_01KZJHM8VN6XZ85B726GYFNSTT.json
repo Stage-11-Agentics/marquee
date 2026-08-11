@@ -3,17 +3,38 @@
   "branch_links": [],
   "c11_surface": "surface:171",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 1,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-15 \u2014 Wave 1 (\u00a74), walkthrough step 6\n\nScope (verbatim): Status hero and concrete wave/slot; task list where acknowledge/form/file open and validate their actual payload surface; profile/headshot edit; organizer-controlled talk title/description edit + history; handbook pages (AC-233 cuttable if named). **Does not own AC-235/236** \u2014 it renders the decision-feedback slot that M-52 fills, and **role confirm/decline is M-42's** (AC-152\u2013154, rank 23), not duplicated here in prose. Three tickets writing `src/ui/portal/*` against one AC is exactly the failure \u00a77 exists to prevent, and an AC owned by everyone is owned by no one when `trace:ac` asks who covers it.\n\nOwnership boundary (binding): this ticket renders slots; **M-52 owns AC-235/236 end to end** and **M-42 owns AC-152\u2013154**. Do not claim their IDs in test names.\nAC-233 (Speaker Handbook) is the one cut-line criterion sitting on a Tier A story \u2014 if cut, gate 19 must name it explicitly.\n\nFile surface: `src/routes/portal.routes.ts`, `src/ui/portal/*`\n\nACs: AC-43 \u2013 AC-52, **AC-237, AC-240**, AC-233 (cuttable if named)\nHours: 7\nWorkflow: sub-agent-full (\u22657 h)\nShared files: `src/ui/portal/*` is written by M-15, M-42, and M-52 \u2014 **one file per concern**, and the AC ownership above is what keeps them from colliding.\nDeps: M-13, M-11\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQKTWWNGBNE3BD14B06DJWB",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQKW32NZQP57T4FAH5J5DPK",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQM013VZGNCMEHVF3DHJFPZ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQM411PB50QAVYWCNNPQW97",
+      "role": null,
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHM8VN6XZ85B726GYFNSTT",
-  "last_event_id": "ev_01KZQJ3Q7W5R0TPXDWPD9EGHM7",
-  "last_status_changed_at": "2026-08-11T04:43:21Z",
+  "last_event_id": "ev_01KZQM417J0JD4D47W8FGMY1P2",
+  "last_status_changed_at": "2026-08-11T05:18:29Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -35,10 +56,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-16",
-  "status": "in_progress",
+  "status": "pr_open",
   "tags": null,
   "title": "Speaker portal",
   "type": "task",
-  "updated_at": "2026-08-11T04:43:21Z",
+  "updated_at": "2026-08-11T05:18:29Z",
   "urgency": null
 }

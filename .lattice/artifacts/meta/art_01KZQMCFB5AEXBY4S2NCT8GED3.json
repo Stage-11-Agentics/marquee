@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T05:23:05Z",
+  "created_by": "agent:delegator-mrq-15",
+  "custom_fields": {},
+  "id": "art_01KZQMCFB5AEXBY4S2NCT8GED3",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQMCFB5AEXBY4S2NCT8GED3.md",
+    "size_bytes": 1515
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: local Wrangler/Miniflare, integration, full suite, trace, API/design checks, and pr-gate.",
+  "tags": [],
+  "title": "MRQ-15 validation @ a519f44f84cb47c0c44f5400a7ad9854a9690409",
+  "token_usage": null,
+  "type": "file"
+}

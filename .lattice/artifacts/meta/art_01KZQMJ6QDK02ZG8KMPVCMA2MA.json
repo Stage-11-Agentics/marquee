@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T05:26:13Z",
+  "created_by": "agent:delegator-mrq-15",
+  "custom_fields": {},
+  "id": "art_01KZQMJ6QDK02ZG8KMPVCMA2MA",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQMJ6QDK02ZG8KMPVCMA2MA.md",
+    "size_bytes": 1754
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: exact post-rebase HEAD self-review; no findings.",
+  "tags": [],
+  "title": "MRQ-15 self-review @ df7d64385468874b775c330b9c252549f7edeb29",
+  "token_usage": null,
+  "type": "file"
+}
