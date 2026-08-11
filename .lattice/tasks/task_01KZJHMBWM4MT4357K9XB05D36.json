@@ -40,11 +40,16 @@
       "id": "art_01KZR6R6GKQ5JQFJ5NCM568RAF",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR6TJ1PQB6R9E4H5MEVPVE0",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMBWM4MT4357K9XB05D36",
-  "last_event_id": "ev_01KZR6R6GRNHKZBD8FRNGM149Z",
-  "last_status_changed_at": "2026-08-11T10:39:52Z",
+  "last_event_id": "ev_01KZR6TP5XDK6QEQ4HEE0WKJ7F",
+  "last_status_changed_at": "2026-08-11T10:45:25Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -59,10 +64,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-48",
-  "status": "in_validation",
+  "status": "pr_open",
   "tags": null,
   "title": "Audit \u2014 speed report, AC-sourced versus objective",
   "type": "task",
-  "updated_at": "2026-08-11T10:44:04Z",
+  "updated_at": "2026-08-11T10:45:25Z",
   "urgency": null
 }
