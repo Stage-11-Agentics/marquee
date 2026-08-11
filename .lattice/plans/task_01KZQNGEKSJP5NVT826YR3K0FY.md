@@ -4,10 +4,10 @@
 
 MRQ-70 owns the integration-test harness cost only. It owns no acceptance criteria and will not add `tests/ac-claims/MRQ-70.json`; the PR body will say this explicitly. Existing tests are the proof surface, especially auth, presign, demo-mode, reviewer event/track isolation, hidden-field persistence in `public-form.AC-25-42-...`, and AC-259 Transit. No test assertions or test files are to be changed.
 
-The hard 30-second limits remain untouched:
+The budget contracts are separate:
 
-- `scripts/checks/run-test.mjs` remains the source of the `npm test` limit.
-- `scripts/checks/pr-gate.mjs` remains the source of the full-gate limit.
+- `scripts/checks/run-test.mjs` remains the source of the non-negotiable 30-second suite limit.
+- `scripts/checks/pr-gate.mjs` uses a documented 45-second whole-gate allowance for the suite plus production build and three typechecks; it is not the inner-loop suite budget.
 - No test is skipped, deleted, weakened, or moved to change the clock.
 
 The worktree was rebased to the fetched `forgejo/master` at `835967dedaa4f8552238c24d16f94493c43e15b6` before implementation. The branch cut point supplied by the orchestrator was `19f8f1d`; subsequent master merges changed the test counts, so the latest pre-implementation baseline below is authoritative for validation.
@@ -32,7 +32,7 @@ Keep Worker isolation for every integration test and the one unit test that expl
 
 This removes fourteen unnecessary Miniflare boots without sharing a D1 database, changing an assertion, or moving a test file. `tests/integration/apply-migrations.ts` remains unchanged: the timing experiment showed that DDL batching would be a small optimization against the actual startup bottleneck and is not part of this implementation.
 
-This is the smallest harness-only change that attacks the per-file Worker boot cost without sharing mutable databases across files. The success bar is named: repeated `npm test` and full `npm run pr-gate -- --ticket MRQ-70` runs must stay at or below 27s (at least 3s under the hard 30s limit), with the current 41 Vitest files / 210 tests still passing plus the existing 40 native Node tests. Do not consolidate integration files, move integration assertions to `tests/node`, or alter Worker isolation; those choices create avoidable conflicts with the six active test-file delegators.
+This is the smallest harness-only change that attacks the per-file Worker boot cost without sharing mutable databases across files. The suite success bar is named: repeated `npm test` runs must stay at or below 27s (at least 3s under the hard 30s suite limit), with the current 41 Vitest files / 210 tests still passing plus the existing 40 native Node tests. The full gate is measured separately against its 45s whole-gate allowance. Do not consolidate integration files, move integration assertions to `tests/node`, or alter Worker isolation; those choices create avoidable conflicts with the six active test-file delegators.
 
 ## Implementation and proof steps
 
@@ -40,7 +40,7 @@ This is the smallest harness-only change that attacks the per-file Worker boot c
 2. Record the temporary profiling evidence already gathered: a representative integration file took 7.90s wall-clock while `applyMigrations()` took 238ms; `--no-file-parallelism --no-isolate` took 17.76s but failed three suites (36 passed, 17 skipped) through shared-schema, foreign-key, duplicate-table, and missing-secret failures.
 3. Implement the harness split in `vitest.config.ts`, new `vitest.node.config.ts`, `scripts/checks/run-test.mjs`, and `tsconfig.test.json`. Keep the Worker config's integration and D1-dependent unit coverage unchanged; the Node config must exclude only `tests/unit/r2/uploads-routes.test.ts`.
 4. Run type checks and the full existing `npm test`; compare repeated before/after wall clocks and test/file counts. Re-run any candidate Vitest pool setting separately and report a plainly labeled negative result when it does not help.
-5. Extend `recordSpeedHarness` in `scripts/checks/lib/command.mjs` (and its caller only if needed) so `harness.pr_gate` preserves the latest measurement plus a small bounded `history` array with timestamp/commit context; preserve the existing latest-value fields and the 30s budget. This is the required trend, not a single overwritten observation.
+5. Extend `recordSpeedHarness` in `scripts/checks/lib/command.mjs` (and its callers) so separate `harness.suite` and `harness.pr_gate` entries preserve the latest measurement plus a small bounded `history` array with timestamp/commit context; preserve the existing latest-value fields, the 30s suite budget, and the documented 45s whole-gate budget. This is the required trend, not a single overwritten observation.
 6. Perform self-review and the required Lattice review artifact against the exact branch HEAD. The review must confirm that no guardrail assertions changed and that no AC claim file was fabricated.
 7. Enter validation and run the actual local gate: `npm run pr-gate -- --ticket MRQ-70`. Record its complete result, including the `pr-gate` wall-clock, in the Lattice completion evidence and c11 update.
 8. Push the committed implementation, open a Forgejo PR against `master`, attach the PR reference, bump the ticket to terminal `pr_open`, and stop for the Orchestrator to merge.
@@ -50,16 +50,16 @@ This is the smallest harness-only change that attacks the per-file Worker boot c
 The completion report must include:
 
 - before/after `npm test` wall-clock and emitted elapsed values;
-- before/after full `npm run pr-gate -- --ticket MRQ-70` wall-clock;
+- before/after full `npm run pr-gate -- --ticket MRQ-70` wall-clock, evaluated against the separate 45s whole-gate budget;
 - the current 41 Vitest files / 210 tests and 40 native Node tests still passing (or an exact explanation if master changes the count before validation);
 - the rejected `--fileParallelism=false` and `--isolate=false` experiments above;
-- the resulting `speed-report.json` latest harness entry and bounded pr-gate history;
+- the resulting `speed-report.json` separate suite and pr-gate entries, each with its own budget and bounded history;
 - explicit statement that MRQ-70 owns no AC directly and therefore has no claims file;
 - the exact pre-PR gate result pasted into the completion comment.
 
 ## Non-goals
 
-Do not raise either budget, weaken/delete tests, alter contract documents, mint AC IDs, broadly consolidate integration files, alter production code, or merge the PR. The Orchestrator owns merge and final lifecycle completion after `pr_open`.
+Do not raise the 30s suite budget, weaken/delete tests, alter contract documents, mint AC IDs, broadly consolidate integration files, alter production code, or merge the PR. The 45s whole-gate allowance is explicitly part of this harness correction. The Orchestrator owns merge and final lifecycle completion after `pr_open`.
 
 ## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
 
@@ -73,3 +73,7 @@ Do not raise either budget, weaken/delete tests, alter contract documents, mint 
 The required timing probe supersedes the initial batch hypothesis. The representative Worker file took 7.90s wall-clock while its schema apply took 238ms, so batching DDL would not cut the dominant per-file boot cost. The combined `--no-file-parallelism --no-isolate` experiment was also rejected: it took 17.76s but failed three suites with shared-schema contamination and skipped 17 tests. The safe measured win is the project split: a temporary Worker config ran 27 files / 148 tests in 13.67s, while a normal Node Vitest config ran 12 Worker-free unit files / 56 tests in 0.51s. No test files or assertions move; only the harness selects the runtime.
 
 The later current-master control is 41 files / 210 tests and 40 native tests. The split's sequential A/B was negative (`14.56s` control versus `15.61s` and `16.59s`), while concurrent launch of the two Vitest projects passed in `14.18s`; this modest but measured win is the selected runner behavior. A three-process experiment that also overlapped native Node tests caused a real public-form timeout and was rejected. Worker pool caps 8/4/2 did not get the concurrent pair under 30s and were removed.
+
+## Budget Correction (AUTHORITATIVE)
+
+The Orchestrator corrected the harness contract after validation: `run-test.mjs` keeps the hard 30s suite budget, while `pr-gate.mjs` uses 45s for the whole gate because production build, three typechecks, design verification, and AC trace are outside the inner-loop suite clock. `speed-report.json` must track `harness.suite` with `budgetMs: 30000` separately from `harness.pr_gate` with `budgetMs: 45000`.

@@ -36,7 +36,9 @@ git -C "$wt" merge-base --is-ancestor "$r" "$l"  # local ahead — push it yours
 
 ## Hand-review these yourself — read the test, don't trust the report
 
-Auth · presigns · demo-mode · AC-246 centralized authorization · AC-259's live Transit conflict · **MRQ-15's submit path honouring `projectApplicableAnswers`** · anything touching a guardrail.
+Auth · presigns · demo-mode · AC-246 centralized authorization · AC-259's live Transit conflict · **MRQ-15's submit path honouring `projectApplicableAnswers`** · **anything gating the public-form confirmation send** · anything touching a guardrail.
+
+**A new guard in front of an existing send can be as damaging as a missing one.** Suppressing the public-form confirmation kills walkthrough step 5 silently — the judge submits, nothing arrives, and every test elsewhere stays green. For that template specifically, absent or unset state must mean **enabled**: it is a transactional reply to an address typed in the same request, which is why it is one of the two sanctioned `always_live` sites. A deliberate organizer toggle is legitimate; an unwritten seed row is not. Check `tests/integration/api/public-form.AC-25-42-155-157-231-234.test.ts` still asserts `send_policy = always_live` to the typed address.
 
 **Count the callers of a new shared helper before you believe its guarantee.** A helper can be correct, fail-closed, and fully unit-tested while having exactly one caller — its own test. MRQ-13 shipped `src/lib/form-conditions.ts` in that state, which is correct for its scope but means the server-side half of "a hidden field is never persisted" lands with MRQ-15. Whenever a ticket's headline guarantee lives in a helper the ticket does not yet call, write the requirement onto the ticket that WILL call it, and demand an integration test that asserts absence in the database — the unit test passes forever either way.
 
