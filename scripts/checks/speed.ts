@@ -117,6 +117,8 @@ async function coldPublicPages(
     const context = await browser.newContext();
     const page = await context.newPage();
     try {
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
       values.push(await loadPage(page, baseUrl, path, selector));
     } finally {
       await context.close();
@@ -191,7 +193,8 @@ async function bulkAcceptSample(
 
 async function embedPropagationSample(client: ApiClient, agendaSession: Record<string, any>): Promise<number> {
   const embedPath = "/api/v1/public/embeds/aie-ny-2026-agenda";
-  const before = await client.json<Record<string, any>>(embedPath);
+  const publicClient = new ApiClient(client.baseUrl);
+  const before = await publicClient.json<Record<string, any>>(embedPath);
   const beforeSnapshot = JSON.stringify(before.body);
   await client.json(`/api/v1/events/${EVENT}/agenda/items/${encodeURIComponent(String(agendaSession.id))}`, {
     method: "PATCH",
@@ -201,7 +204,7 @@ async function embedPropagationSample(client: ApiClient, agendaSession: Record<s
   const startedAt = performance.now();
   const deadline = startedAt + 60_000;
   while (performance.now() < deadline) {
-    const response = await client.json<Record<string, any>>(embedPath);
+    const response = await publicClient.json<Record<string, any>>(embedPath);
     if (JSON.stringify(response.body) !== beforeSnapshot) return performance.now() - startedAt;
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
   }
@@ -265,6 +268,10 @@ export async function runSpeedCheck({ gate = false } = {}): Promise<SpeedReport>
     try {
       const admin = await adminContext(browser, runtime.baseUrl, client.sessionCookie);
       const adminPage = await admin.newPage();
+      const speakerClient = new ApiClient(runtime.baseUrl);
+      await speakerClient.login("speaker");
+      const speaker = await adminContext(browser, runtime.baseUrl, speakerClient.sessionCookie);
+      const speakerPage = await speaker.newPage();
       const dashboardValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(adminPage, runtime.baseUrl, "/dashboard", ".dashboard-page"));
       recordSample(samples, measurements, "dashboard-render", dashboardValues, "Playwright authenticated /dashboard render", "p95");
       methods["dashboard-render"] = "Playwright authenticated /dashboard render to .dashboard-page";
@@ -284,17 +291,18 @@ export async function runSpeedCheck({ gate = false } = {}): Promise<SpeedReport>
       recordSample(samples, measurements, "review-next-interactive", reviewValues, "Playwright click recommendation + Save recommendation & next", "median");
       methods["review-next-interactive"] = "20 consecutive real reviewer UI advances; duration starts at save click and ends on next card";
 
-      const adminRoutes = ["/dashboard", "/submissions", "/forms", "/evaluation", "/agenda-builder", "/settings", "/board", "/portal"];
+      const adminRoutes = ["/dashboard", "/submissions", "/forms", "/evaluation", "/agenda-builder", "/settings", "/board"];
       const transitionValues: number[] = [];
       for (let index = 0; index < SAMPLE_COUNTS.transitions; index += 1) {
         transitionValues.push(await loadPage(adminPage, runtime.baseUrl, adminRoutes[index % adminRoutes.length]!, ".page"));
       }
-      recordSample(samples, measurements, "admin-route-transition", transitionValues, "Playwright authenticated route navigation", "p95");
-      methods["admin-route-transition"] = "10 authenticated route navigations through the installed shell";
+      recordSample(samples, measurements, "admin-route-transition", transitionValues, "Playwright authenticated admin route navigation", "p95");
+      methods["admin-route-transition"] = "10 authenticated admin route navigations through the installed shell; the external speaker portal is measured separately";
 
-      const portalValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(adminPage, runtime.baseUrl, "/portal", ".page"));
-      recordSample(samples, measurements, "speaker-portal-load", portalValues, "Playwright authenticated /portal shell load", "p95");
-      methods["speaker-portal-load"] = "Playwright /portal shell; the current tree exposes an honest module placeholder, not a deployed speaker portal";
+      const portalValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(speakerPage, runtime.baseUrl, "/portal", ".portal-shell"));
+      recordSample(samples, measurements, "speaker-portal-load", portalValues, "Playwright authenticated speaker /portal shell load", "p95");
+      methods["speaker-portal-load"] = "Playwright /portal shell with the seeded speaker persona; this is an objective proxy for deployed-device speaker-portal performance";
+      await speaker.close();
 
       const bulk = await bulkAcceptSample(await admin.newPage(), runtime.baseUrl, inReviewIds);
       measurements["bulk-accept-completion"] = bulk.completed;
@@ -310,9 +318,9 @@ export async function runSpeedCheck({ gate = false } = {}): Promise<SpeedReport>
 
       await admin.close();
 
-      const cfpValues = await coldPublicPages(browser, runtime.baseUrl, "/", "main", SAMPLE_COUNTS.cold);
-      recordSample(samples, measurements, "cfp-cold-interactive", cfpValues, "Playwright cold public landing render", "p95", ["The public CFP route is not present in this tree; / is the closest installed server-rendered public entry and is reported as a proxy."]);
-      methods["cfp-cold-interactive"] = "Playwright cold / landing render proxy; the signed /f/:formSlug route is a named MRQ-57 follow-up";
+      const cfpValues = await coldPublicPages(browser, runtime.baseUrl, "/f/cfp", ".public-form", SAMPLE_COUNTS.cold);
+      recordSample(samples, measurements, "cfp-cold-interactive", cfpValues, "Playwright cold public /f/cfp render", "p95", ["Five fresh browser contexts with Chromium cache disabled; the exact seeded public CFP route is measured."]);
+      methods["cfp-cold-interactive"] = "Playwright cold /f/cfp render to .public-form with a fresh context and disabled HTTP cache";
 
       const agendaValues = await coldPublicPages(browser, runtime.baseUrl, "/agenda?event=aie-ny-2026", "main", SAMPLE_COUNTS.cold);
       recordSample(samples, measurements, "agenda-cold-interactive", agendaValues, "Playwright cold public /agenda render", "p95");

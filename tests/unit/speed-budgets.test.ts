@@ -6,10 +6,29 @@ function passingMeasurements(): Record<string, number | boolean> {
   return Object.fromEntries(SPEED_BUDGETS.map((budget) => [budget.id, budget.metric === "completed" ? true : budget.threshold]));
 }
 
+const EXPECTED_AC_SOURCED_BUDGETS = Object.freeze({
+  "dashboard-render": { source: "AC-16", kind: "acceptance" },
+  "cfp-cold-interactive": { source: "AC-36", kind: "acceptance" },
+  "agenda-cold-interactive": { source: "AC-85", kind: "acceptance" },
+  "review-next-interactive": { source: "AC-62", kind: "acceptance" },
+  "global-search-painted": { source: "AC-103", kind: "acceptance" },
+  "embed-source-reflection": { source: "AC-89", kind: "acceptance" },
+  "bulk-accept-completion": { source: "AC-69", kind: "acceptance" },
+});
+
 describe("speed budget authority", () => {
   test("CONTRACT · the manifest has seven failing acceptance budgets and seven warning-only objectives", () => {
     expect(SPEED_BUDGETS.filter((budget) => budget.kind === "acceptance")).toHaveLength(7);
     expect(SPEED_BUDGETS.filter((budget) => budget.kind === "objective")).toHaveLength(7);
+  });
+
+  test("CONTRACT · every AC-sourced budget retains its acceptance classification", () => {
+    const actual = Object.fromEntries(
+      SPEED_BUDGETS
+        .filter((budget) => budget.source.startsWith("AC-"))
+        .map((budget) => [budget.id, { source: budget.source, kind: budget.kind }]),
+    );
+    expect(actual).toEqual(EXPECTED_AC_SOURCED_BUDGETS);
   });
 
   test("CONTRACT · an acceptance breach fails while an objective breach only warns", () => {
