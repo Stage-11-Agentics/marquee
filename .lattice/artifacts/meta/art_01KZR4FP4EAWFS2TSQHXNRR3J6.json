@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:04:28Z",
+  "created_by": "agent:delegator-mrq-65",
+  "custom_fields": {},
+  "id": "art_01KZR4FP4EAWFS2TSQHXNRR3J6",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR4FP4EAWFS2TSQHXNRR3J6.md",
+    "size_bytes": 1908
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS review of exact rebased implementation head e0157a114d534c3a05ac5ff849c4640a9e9278e5",
+  "tags": [],
+  "title": "MRQ-65 self-review after master rebase",
+  "token_usage": null,
+  "type": "file"
+}

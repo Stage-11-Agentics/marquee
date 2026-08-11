@@ -68,3 +68,16 @@ Deps: M-16, M-17
 - No product implementation change is authorized by this plan. Findings will
   be routed with exact source locations and concrete inputs; only the
   test-only machine guard and audit evidence may be committed here.
+
+## Plan-Review Cycle 2 Resolutions (AUTHORITATIVE)
+
+- The Orchestrator accepted the second independent reproduction of the
+  cookie/bearer authority mismatch and authorized one product change: the
+  cookie session loader must call the same organization-filtered membership
+  loader already used by bearer credentials.
+- No other authority layer is in scope: do not change the membership CHECK,
+  reviewer scope helper, assignment guard, or category-routing behavior.
+- Extend the existing cookie/bearer parity test with the malformed cross-org
+  membership and cookie/reviewer positive controls. The reviewer isolation
+  proof must assert refusal and unchanged assignment row counts.
+- This auditor owns no automatic AC claim; do not add an empty claims file.

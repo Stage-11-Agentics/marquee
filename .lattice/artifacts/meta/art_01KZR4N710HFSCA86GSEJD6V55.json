@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:07:29Z",
+  "created_by": "agent:delegator-mrq-65",
+  "custom_fields": {},
+  "id": "art_01KZR4N710HFSCA86GSEJD6V55",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR4N710HFSCA86GSEJD6V55.md",
+    "size_bytes": 1781
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS exact final head 8e4c708a0b8c4516d5903e6aa718e214b447c5ef",
+  "tags": [],
+  "title": "MRQ-65 final self-review",
+  "token_usage": null,
+  "type": "file"
+}

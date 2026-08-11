@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "0B35D9AA-3B7F-4E94-A2D8-577798AB4AF6",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 1,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: A-8 \u2014 audit track (\u00a75). **Owned by an auditor who did not write the code.**\n\nScope (verbatim): Anonymity scan \u2014 byte-scan every reviewer-visible response **and export** for seeded identity strings.\nStarts when (verbatim): After M-17.\n\nThe export is the half that gets forgotten \u2014 AC-64 and AC-246 both assert over \"every export\", which is why M-17 ships `GET /rounds/:id/export?format=csv` for this audit to scan. Strings to scan: name, company, email, bio fragment, headshot URL. Identity is stripped **in the query layer**, so a view-layer fix is a finding.\n\nACs: **AC-64** (audit evidence)\nHours: 1\nWorkflow: fast-track\nShared files: none \u2014 audit artifact only.\nDeps: M-17\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T10:06:01Z",
   "evidence_refs": [
     {
       "id": "art_01KZR35QHPQPPPY0568VCH7ZCZ",
@@ -35,11 +35,21 @@
       "id": "art_01KZR47JRTPD4RFJEBRD6SHFQ5",
       "role": null,
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR4JHAE4453GXK7NA3TXV05",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR4JHAE4453GXK7NA3TXV04",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMC2F9XEPBYEHF9JC4V9T",
-  "last_event_id": "ev_01KZR47NTFJR39GW9H57242WX9",
-  "last_status_changed_at": "2026-08-11T10:00:05Z",
+  "last_event_id": "ev_01KZR4JHAE4453GXK7NA3TXV08",
+  "last_status_changed_at": "2026-08-11T10:06:01Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -51,13 +61,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-50",
-  "status": "pr_open",
+  "status": "done",
   "tags": null,
   "title": "Audit \u2014 reviewer anonymity byte-scan",
   "type": "task",
-  "updated_at": "2026-08-11T10:00:05Z",
+  "updated_at": "2026-08-11T10:06:01Z",
   "urgency": null
 }

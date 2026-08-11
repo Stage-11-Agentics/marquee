@@ -51,3 +51,5 @@ Use explicit disclosure containers for folded maps. The map card/column keeps
 its own structural slot and the map component retains its fixed expanded box;
 opening the comparison does not change the surrounding grid's structure. This
 is deliberate restructuring rather than removing the instruction card.
+
+## Reset 2026-08-11 by agent:delegator-mrq-65
