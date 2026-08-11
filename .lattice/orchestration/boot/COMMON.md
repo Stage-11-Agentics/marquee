@@ -41,7 +41,7 @@ If your implementation must diverge from `SPEC.md` (or any contract doc), implem
 
 ## Reviews (inline-full mode; skip for fast-track, self-review instead)
 
-- **SINGLE reviews are allowed; TRINET (multi-agent) reviews are not** (operator ruling, 2026-08-11). A single headless reviewer via `claude -p` is fine and encouraged — fresh eyes catch what self-review does not. A tri-agent review is banned outright: it triples cost and wall-clock for the same finding set.
+- **Default to a SINGLE headless reviewer** (operator ruling, 2026-08-11). One reviewer via `claude -p` is fine and encouraged — fresh eyes catch what self-review does not. **Trident (three-agent) review is available but slow; it is the Orchestrator's call, not yours.** Do not start one on your own initiative — if you believe your ticket genuinely warrants it, say so and I will decide.
 - **Never call `lattice review-wait`.** Nothing background-answers it on this run, so it burns your whole window on a timeout. If you spawn a reviewer, spawn it synchronously and read its output.
 - Spawn form: `env -u CLAUDECODE claude -p "<review prompt>" --dangerously-skip-permissions`. `env -u CLAUDECODE` is required — you are a subprocess of a Claude Code session and inherit that var, which breaks the child. Always `--dangerously-skip-permissions`: nobody is watching to approve tool calls, so a bare `claude` stalls forever.
 - After planning: self-review your plan inline, or spawn one single reviewer. Triage every finding into an amendment block appended to the plan file (`## Plan-Review Cycle K Resolutions (AUTHORITATIVE)`); never implement over untriaged findings.
