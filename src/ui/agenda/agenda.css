@@ -25,6 +25,10 @@
 .agenda-grid { display: grid; min-width: 930px; }
 .agenda-grid-head { min-height: 50px; padding: 6px; background: var(--sunk); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line-strong); position: sticky; top: 0; z-index: 2; display: flex; align-items: center; }
 .agenda-grid-head:first-child { left: 0; z-index: 3; }
+.agenda-building-band-spacer, .agenda-building-band { min-height: 28px; padding: 6px 8px 5px; background: var(--sunk); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line-strong); position: sticky; top: 0; z-index: 4; color: var(--muted); font: 600 8px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agenda-building-band-spacer { left: 0; z-index: 5; }
+.agenda-grid.has-building-band .agenda-grid-head { top: 28px; }
+.agenda-grid.has-building-band .agenda-time-head { left: 0; z-index: 5; }
 .agenda-room-head { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: 600 10px/1.2 var(--mono); text-align: left; text-transform: uppercase; letter-spacing: .06em; }
 .agenda-room-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agenda-room-info { flex: 0 0 auto; width: 14px; height: 14px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--muted); font: 700 9px var(--mono); }

@@ -18,6 +18,7 @@ import {
   type AgendaTrack,
   type SchedulableStatus,
 } from "../api/agenda";
+import { getTransitConflicts, type TransitAgendaItem } from "../lib/venue-geometry";
 import type { SubmissionSpeakerListItem, SubmissionTrackListItem } from "../api/submissions";
 
 const SETTINGS_KEY = "agenda_schedulable_statuses";
@@ -202,40 +203,12 @@ function toPoolItem(row: PoolQueryRow): AgendaPoolItem {
   };
 }
 
-export function walkingMinutes(from: AgendaBuilding, to: AgendaBuilding): number {
-  if (
-    from.id === to.id ||
-    from.lat === null ||
-    from.lng === null ||
-    to.lat === null ||
-    to.lng === null
-  ) return 0;
-  const radians = (value: number) => value * Math.PI / 180;
-  const dLat = radians(to.lat - from.lat);
-  const dLng = radians(to.lng - from.lng);
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(radians(from.lat)) * Math.cos(radians(to.lat)) * Math.sin(dLng / 2) ** 2;
-  const metres = 2 * 6_371_000 * Math.asin(Math.sqrt(a));
-  return Math.max(1, Math.floor(metres * 1.3 / 80));
-}
-
-function dayKey(timestamp: number, timezone: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(timestamp));
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-}
-
-function sharedSpeaker(
+function sharedSpeakers(
   left: AgendaSession,
   right: AgendaSession,
-): SubmissionSpeakerListItem | null {
+): SubmissionSpeakerListItem[] {
   const rightIds = new Set(right.speakers.map((speaker) => speaker.id));
-  return left.speakers.find((speaker) => rightIds.has(speaker.id)) ?? null;
+  return left.speakers.filter((speaker) => rightIds.has(speaker.id));
 }
 
 function overlaps(left: AgendaSession, right: AgendaSession): boolean {
@@ -243,46 +216,48 @@ function overlaps(left: AgendaSession, right: AgendaSession): boolean {
     && right.starts_at < left.starts_at + left.duration_min * 60_000;
 }
 
-function transitConflict(
-  left: AgendaSession,
-  right: AgendaSession,
-  shared: SubmissionSpeakerListItem,
-  rooms: ReadonlyMap<string, AgendaRoom>,
-  timezone: string,
-): AgendaConflict | null {
-  if (dayKey(left.starts_at, timezone) !== dayKey(right.starts_at, timezone)) return null;
-  const [first, second] = left.starts_at <= right.starts_at ? [left, right] : [right, left];
-  const from = rooms.get(first.room_id)?.building;
-  const to = rooms.get(second.room_id)?.building;
-  if (!from || !to || from.id === to.id) return null;
-  const walk = walkingMinutes(from, to);
-  if (walk === 0) return null;
-  const available = Math.floor(
-    (second.starts_at - (first.starts_at + first.duration_min * 60_000)) / 60_000,
-  );
-  const needed = walk + Math.max(0, to.access_minutes);
-  if (available >= needed) return null;
+function transitInputs(
+  sessions: readonly AgendaSession[],
+  rooms: readonly AgendaRoom[],
+): { items: TransitAgendaItem[]; buildings: AgendaBuilding[] } {
+  const roomMap = new Map(rooms.map((room) => [room.id, room]));
+  const items = sessions.map<TransitAgendaItem>((session) => ({
+    id: session.id,
+    starts_at: session.starts_at,
+    duration_min: session.duration_min,
+    building_id: roomMap.get(session.room_id)?.building.id ?? null,
+    person_ids: session.speakers.map((speaker) => speaker.id),
+  }));
   return {
-    kind: "transit",
-    message: `Transit — ${walk} min walk to ${to.name}${to.access_minutes ? `, plus ${to.access_minutes} min to get in` : ""}. ${shared.name} needs ${needed} min; has ${Math.max(0, available)}.`,
-    session_ids: [first.id, second.id],
-    person_id: shared.id,
+    items,
+    buildings: [...new Map(rooms.map((room) => [room.building.id, room.building])).values()],
   };
 }
 
-export function deriveConflicts(
+function orderedAgendaPair(left: AgendaSession, right: AgendaSession): [AgendaSession, AgendaSession] {
+  return left.starts_at < right.starts_at
+    || (left.starts_at === right.starts_at && left.id.localeCompare(right.id) <= 0)
+    ? [left, right]
+    : [right, left];
+}
+
+export function getConflicts(
   sessions: readonly AgendaSession[],
   rooms: readonly AgendaRoom[],
-  timezone: string,
+  _timezone: string,
 ): AgendaConflict[] {
   const roomMap = new Map(rooms.map((room) => [room.id, room]));
+  const transit = transitInputs(sessions, rooms);
+  const transitConflicts = getTransitConflicts(transit.items, transit.buildings);
+  const usedTransitConflicts = new Set<number>();
   const conflicts: AgendaConflict[] = [];
   for (let index = 0; index < sessions.length; index += 1) {
     const left = sessions[index]!;
     for (let next = index + 1; next < sessions.length; next += 1) {
       const right = sessions[next]!;
       if (left.kind === "break" && right.kind === "break") continue;
-      const shared = sharedSpeaker(left, right);
+      const sharedPeople = sharedSpeakers(left, right);
+      const shared = sharedPeople[0] ?? null;
       if (overlaps(left, right)) {
         if (left.room_id === right.room_id) {
           conflicts.push({
@@ -299,14 +274,44 @@ export function deriveConflicts(
             person_id: shared.id,
           });
         }
-      } else if (shared) {
-        const transit = transitConflict(left, right, shared, roomMap, timezone);
-        if (transit) conflicts.push(transit);
+      }
+      if (sharedPeople.length) {
+        const [first, second] = orderedAgendaPair(left, right);
+        const from = roomMap.get(first.room_id)?.building;
+        const to = roomMap.get(second.room_id)?.building;
+        if (!from || !to || from.id === to.id) continue;
+        const available = Math.max(
+          0,
+          Math.floor((second.starts_at - (first.starts_at + first.duration_min * 60_000)) / 60_000),
+        );
+        for (const speaker of sharedPeople) {
+          const transitIndex = transitConflicts.findIndex((candidate, candidateIndex) =>
+            !usedTransitConflicts.has(candidateIndex)
+            && candidate.speaker_id === speaker.id
+            && candidate.from_building_id === from.id
+            && candidate.to_building_id === to.id
+            && candidate.access_minutes === Math.max(0, to.access_minutes)
+            && candidate.available_minutes === available,
+          );
+          if (transitIndex < 0) continue;
+          const transitConflict = transitConflicts[transitIndex]!;
+          usedTransitConflicts.add(transitIndex);
+          conflicts.push({
+            kind: "transit",
+            label: transitConflict.label,
+            message: transitConflict.message,
+            session_ids: [first.id, second.id],
+            person_id: transitConflict.speaker_id,
+          });
+        }
       }
     }
   }
   return conflicts;
 }
+
+/** MRQ-20's exported name remains available to its existing unit contract. */
+export const deriveConflicts = getConflicts;
 
 async function readStatuses(database: D1Database, eventId: string): Promise<SchedulableStatus[]> {
   const current = await database.prepare(
@@ -449,8 +454,21 @@ export async function readAgendaSnapshot(
     tracks,
     sessions,
     unscheduled,
-    conflicts: deriveConflicts(sessions, rooms, event.timezone),
+    conflicts: getConflicts(sessions, rooms, event.timezone),
   };
+}
+
+export async function readAgendaConflicts(
+  database: D1Database,
+  eventId: string,
+): Promise<AgendaConflict[]> {
+  const event = await readEvent(database, eventId);
+  if (!event) return [];
+  const [rooms, sessions] = await Promise.all([
+    readRooms(database, eventId),
+    readSessions(database, eventId),
+  ]);
+  return getConflicts(sessions, rooms, event.timezone);
 }
 
 export async function readAgendaItemVersion(

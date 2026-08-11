@@ -20,6 +20,11 @@ function formatNumber(value: number): string {
   return value.toLocaleString("en-US");
 }
 
+function dashboardMetricLabel(metric: DashboardCount): string {
+  const noun = metric.id === "conflicts" ? "active conflicts" : "matching submissions";
+  return `Open ${metric.label}: ${formatNumber(metric.count)} ${noun}`;
+}
+
 function formatWaveDate(value: string): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(
     new Date(`${value}T12:00:00`),
@@ -97,7 +102,7 @@ function DashboardContents({ snapshot, navigate }: { snapshot: DashboardSnapshot
         <header class="card-head"><div><h2>Work in motion</h2><span class="subtle">Revalidated every 5 seconds</span></div></header>
         <div class="card-body">
           <div class="dashboard-metric-grid">
-            {snapshot.metrics.map((metric) => <DashboardLink key={metric.id} href={metric.href} navigate={navigate} class="dashboard-metric" label={`Open ${metric.label}: ${formatNumber(metric.count)} matching submissions`}>
+            {snapshot.metrics.map((metric) => <DashboardLink key={metric.id} href={metric.href} navigate={navigate} class="dashboard-metric" label={dashboardMetricLabel(metric)}>
               <span class="eyebrow">{metric.label}</span><strong>{formatNumber(metric.count)}</strong><span class="subtle">{metric.note}</span>
             </DashboardLink>)}
           </div>

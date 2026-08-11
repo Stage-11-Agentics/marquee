@@ -128,8 +128,18 @@ function sessionsFor(
   );
 }
 
-function conflictIds(conflicts: readonly AgendaConflict[]): Set<string> {
-  return new Set(conflicts.flatMap((conflict) => conflict.session_ids));
+type ConflictMarker = "Conflict" | "Transit";
+type ConflictMarkers = ReadonlyMap<string, ConflictMarker>;
+
+function conflictMarkers(conflicts: readonly AgendaConflict[]): ConflictMarkers {
+  const markers = new Map<string, ConflictMarker>();
+  for (const conflict of conflicts) {
+    const marker: ConflictMarker = conflict.kind === "transit" ? "Transit" : "Conflict";
+    for (const sessionId of conflict.session_ids) {
+      if (marker === "Transit" || !markers.has(sessionId)) markers.set(sessionId, marker);
+    }
+  }
+  return markers;
 }
 
 function roomFor(snapshot: AgendaSnapshot, roomId: string): AgendaRoom | undefined {
@@ -139,9 +149,11 @@ function roomFor(snapshot: AgendaSnapshot, roomId: string): AgendaRoom | undefin
 function RoomHead({
   room,
   onOpen,
+  bare = false,
 }: {
   room: AgendaRoom;
   onOpen: (roomId: string) => void;
+  bare?: boolean;
 }): JSX.Element {
   return <button
     type="button"
@@ -150,7 +162,7 @@ function RoomHead({
     title={`${room.label} · show room details`}
     onClick={() => onOpen(room.id)}
   >
-    <span class="agenda-room-label">{room.label}</span>
+    <span class="agenda-room-label">{bare ? room.name : room.label}</span>
     <span class="agenda-room-info" aria-hidden="true">i</span>
   </button>;
 }
@@ -174,7 +186,7 @@ function SessionTile({
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
   onRoomOpen: (roomId: string) => void;
-  conflicts: Set<string>;
+  conflicts: ConflictMarkers;
 }): JSX.Element {
   const format = snapshot.formats.find((candidate) => candidate.id === session.format_id);
   const hasConflict = conflicts.has(session.id);
@@ -189,7 +201,7 @@ function SessionTile({
     <span class="agenda-tile-meta">{session.kind === "break" ? `${session.duration_min} min reservation` : `${session.format ?? "Session"} · ${speakerLine(session)}`}</span>
     <span class="agenda-tile-location">{session.room} · {session.building}</span>
     {session.kind !== "break" && <TrackChips session={session} />}
-    {hasConflict && <span class="agenda-conflict-flag" title="This placement needs attention">⚠ Conflict</span>}
+    {hasConflict && <span class="agenda-conflict-flag" title="This placement needs attention">⚠ {conflicts.get(session.id) ?? "Conflict"}</span>}
     {session.kind !== "break" && <span class="agenda-tile-actions">
       <button type="button" aria-label={`Shorten ${session.title}`} disabled={Boolean(format && !durationIsAllowed(session.duration_min - 5, format))} onClick={(event) => { event.stopPropagation(); onResize(session, -5); }}>−</button>
       <span class="tabular">{session.duration_min}m</span>
@@ -227,7 +239,7 @@ function AgendaList({
 }: {
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
-  conflicts: Set<string>;
+  conflicts: ConflictMarkers;
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
   onRoomOpen: (roomId: string) => void;
@@ -255,10 +267,37 @@ function AgendaList({
           <span class="tabular">{session.duration_min}m</span>
           <button type="button" aria-label={`Lengthen ${session.title}`} onClick={(event) => { event.stopPropagation(); onResize(session, 5); }}>+</button>
         </span>}
-        {conflicts.has(session.id) && <span class="agenda-conflict-flag" title="This placement needs attention">⚠ Conflict</span>}
+        {conflicts.has(session.id) && <span class="agenda-conflict-flag" title="This placement needs attention">⚠ {conflicts.get(session.id) ?? "Conflict"}</span>}
       </div>
     </div>) : <div class="agenda-list-empty">No scheduled Sessions match these filters.</div>}
   </div>;
+}
+
+function pinnedBuildingCount(rooms: readonly AgendaRoom[]): number {
+  return new Set(
+    rooms
+      .filter((room) => room.building.lat !== null && room.building.lng !== null)
+      .map((room) => room.building.id),
+  ).size;
+}
+
+function BuildingBand({ rooms }: { rooms: readonly AgendaRoom[] }): JSX.Element {
+  const runs: Array<{ id: string; name: string; count: number }> = [];
+  for (const room of rooms) {
+    const id = room.building.id;
+    const last = runs[runs.length - 1];
+    if (last && last.id === id) last.count += 1;
+    else runs.push({ id, name: room.building.name, count: 1 });
+  }
+  return <>
+    <div class="agenda-building-band-spacer" aria-hidden="true" />
+    {runs.map((run) => <div
+      class="agenda-building-band"
+      key={`${run.id}-${run.count}`}
+      style={{ gridColumn: `span ${run.count}` }}
+      title={run.name}
+    >{run.name}</div>)}
+  </>;
 }
 
 function DayBoard({
@@ -278,11 +317,13 @@ function DayBoard({
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
   onRoomOpen: (roomId: string) => void;
-  conflicts: Set<string>;
+  conflicts: ConflictMarkers;
 }): JSX.Element {
-  return <div class="agenda-grid" style={{ gridTemplateColumns: `68px repeat(${Math.max(snapshot.rooms.length, 1)}, minmax(190px, 1fr))` }}>
+  const showBuildingBand = pinnedBuildingCount(snapshot.rooms) >= 2;
+  return <div class={`agenda-grid${showBuildingBand ? " has-building-band" : ""}`} style={{ gridTemplateColumns: `68px repeat(${Math.max(snapshot.rooms.length, 1)}, minmax(190px, 1fr))` }}>
+    {showBuildingBand && <BuildingBand rooms={snapshot.rooms} />}
     <div class="agenda-grid-head agenda-time-head" />
-    {snapshot.rooms.map((room) => <div class="agenda-grid-head" key={room.id}><RoomHead room={room} onOpen={onRoomOpen} /></div>)}
+    {snapshot.rooms.map((room) => <div class="agenda-grid-head" key={room.id}><RoomHead room={room} bare={showBuildingBand} onOpen={onRoomOpen} /></div>)}
     {TIME_SLOTS.map((time) => <>
       <div class="agenda-time tabular" key={`${time}-label`}>{time}</div>
       {snapshot.rooms.map((room) => <DropCell
@@ -311,7 +352,7 @@ function WeekBoard({
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
   onRoomOpen: (roomId: string) => void;
-  conflicts: Set<string>;
+  conflicts: ConflictMarkers;
 }): JSX.Element {
   const fallbackRoom = snapshot.rooms[0];
   return <div class="agenda-week-grid" style={{ gridTemplateColumns: `68px repeat(${Math.max(days.length, 1)}, minmax(240px, 1fr))` }}>
@@ -343,7 +384,7 @@ function RoomBoard({
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
   onRoomOpen: (roomId: string) => void;
-  conflicts: Set<string>;
+  conflicts: ConflictMarkers;
 }): JSX.Element {
   return <div class="agenda-room-board" style={{ gridTemplateColumns: `repeat(${Math.max(snapshot.rooms.length, 1)}, minmax(230px, 1fr))` }}>
     {snapshot.rooms.map((room) => <section class="agenda-room-lane" key={room.id}>
@@ -374,7 +415,7 @@ function TrackBoard({
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
   onRoomOpen: (roomId: string) => void;
-  conflicts: Set<string>;
+  conflicts: ConflictMarkers;
 }): JSX.Element {
   const fallbackRoom = snapshot.rooms[0];
   return <div class="agenda-track-board">
@@ -585,7 +626,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
   const days = dayOptions(snapshot);
   const selectedDay = day || days[0]?.value || "all";
   const visibleSessions = sessionsFor(snapshot, selectedDay, track);
-  const conflicts = conflictIds(snapshot.conflicts);
+  const conflicts = conflictMarkers(snapshot.conflicts);
   const activeRoom = roomPanelId ? roomFor(snapshot, roomPanelId) : undefined;
   const renderBoard = () => {
     if (view === "list") return <AgendaList snapshot={snapshot} sessions={visibleSessions} conflicts={conflicts} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} />;

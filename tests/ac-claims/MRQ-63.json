@@ -1,0 +1,11 @@
+{
+  "ticket": "MRQ-63",
+  "owns": ["AC-258", "AC-259"],
+  "exercises": [],
+  "handoff": {
+    "MRQ-62": ["AC-259 geometry, seed existence, and helper contract already exercised there"]
+  },
+  "notes": [
+    "MRQ-62 owns the geometry formula and check:seed proof that a real Transit conflict exists; MRQ-63 owns the surfacing proof through the single agenda conflict path, dashboard count, drawer payload, and affected tiles."
+  ]
+}

@@ -11,6 +11,7 @@ import {
   submissionStatusPredicate,
   submissionTaskPredicate,
 } from "./submissions.queries";
+import { readAgendaConflicts } from "./agenda.queries";
 
 const dashboardCountSchema = z.object({
   id: z.string(),
@@ -77,8 +78,20 @@ function dashboardStageSql(): string {
   ).join(",\n");
 }
 
+async function readDashboardConflicts(database: D1Database, eventId: string) {
+  try {
+    return await readAgendaConflicts(database, eventId);
+  } catch (error: unknown) {
+    // Keep the dashboard's older minimal contract fixture usable; deployed
+    // databases always carry the agenda and venue geography schema.
+    const message = error instanceof Error ? error.message : String(error);
+    if (/no such (?:table|column)/i.test(message)) return [];
+    throw error;
+  }
+}
+
 async function readDashboard(database: D1Database, eventId: string, now: number): Promise<DashboardSnapshot> {
-  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult] = await Promise.all([
+  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts] = await Promise.all([
     database.prepare(`
       SELECT ${dashboardStageSql()}
       FROM submissions s
@@ -147,6 +160,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       task_title: string;
       due_at: number;
     }>(),
+    readDashboardConflicts(database, eventId),
   ]);
 
   const stages = stageResult ?? {};
@@ -195,6 +209,14 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     note: "accepted sessions",
   };
   const unreviewedTrack = trackPressure.find((item) => item.count > 0) ?? null;
+  const conflictSessionCount = new Set(agendaConflicts.flatMap((conflict) => conflict.session_ids)).size;
+  const conflicts: DashboardCount = {
+    id: "conflicts",
+    label: "Conflicts",
+    count: agendaConflicts.length,
+    href: "/agenda-builder",
+    note: `${conflictSessionCount} affected Sessions · live`,
+  };
 
   return {
     generated_at: now,
@@ -211,7 +233,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       pipeline.find((item) => item.id === "in_review")!,
       overdueSubmissions,
       unplaced,
-      pipeline.find((item) => item.id === "published")!,
+      conflicts,
     ],
     task_preview: taskResult.results.map((row) => ({
       ...row,

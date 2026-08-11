@@ -104,6 +104,7 @@ const conflictSchema = z.object({
   message: z.string(),
   session_ids: z.tuple([z.string(), z.string()]),
   person_id: z.string().optional(),
+  label: z.literal("Transit").optional(),
 });
 
 const agendaSnapshotSchema = z.object({

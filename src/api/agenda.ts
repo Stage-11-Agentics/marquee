@@ -104,6 +104,7 @@ export interface AgendaConflict {
   message: string;
   session_ids: [string, string];
   person_id?: string;
+  label?: "Transit";
 }
 
 export interface AgendaSnapshot {

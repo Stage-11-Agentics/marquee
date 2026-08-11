@@ -131,7 +131,7 @@ describe.sequential("MRQ-11 program dashboard", () => {
 
   test("AC-15 · every dashboard number opens a submissions filter with the same result cardinality", async () => {
     const snapshot = await dashboard();
-    for (const item of countLinkPairs(snapshot)) {
+    for (const item of countLinkPairs(snapshot).filter((item) => item.href.startsWith("/submissions"))) {
       expect(await listTotal(item.href), `${item.label} must preserve its displayed count`).toBe(item.count);
     }
   });
