@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:39:48Z",
+  "created_by": "agent:auditor-mrq-48",
+  "custom_fields": {},
+  "id": "art_01KZR6GCK0QR978QMVQHG6V5W9",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR6GCK0QR978QMVQHG6V5W9.md",
+    "size_bytes": 6777
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS self-review of classification, measurement paths, truthful local environment label, proxy limitations, and MRQ-57 handoff.",
+  "tags": [],
+  "title": "MRQ-48 self-review",
+  "token_usage": null,
+  "type": "file"
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:44:04Z",
+  "created_by": "agent:auditor-mrq-48",
+  "custom_fields": {},
+  "id": "art_01KZR6R6GKQ5JQFJ5NCM568RAF",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR6R6GKQ5JQFJ5NCM568RAF.md",
+    "size_bytes": 5263
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS self-review at 11d7a19: exact AC classification guard, path-honest metrics, local-only environment, and concrete proxy findings.",
+  "tags": [],
+  "title": "MRQ-48 final-head self-review",
+  "token_usage": null,
+  "type": "file"
+}

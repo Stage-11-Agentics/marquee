@@ -1,0 +1,516 @@
+{
+  "command": "check:speed",
+  "status": "pass",
+  "gate": true,
+  "environment": {
+    "kind": "local-wrangler-dev",
+    "runtime": "wrangler dev/miniflare",
+    "deployed": false,
+    "seed": "scripts/seed/index.ts"
+  },
+  "measurements": {
+    "dashboard-render": 88.1,
+    "submissions-first-interactive": 38.13,
+    "submissions-filter-sort": 40.41,
+    "review-next-interactive": 29.38,
+    "admin-route-transition": 58.15,
+    "speaker-portal-load": 41.76,
+    "bulk-accept-completion": true,
+    "bulk-accept-long-task": 0,
+    "global-search-painted": 174.41,
+    "cfp-cold-interactive": 65.46,
+    "agenda-cold-interactive": 67.93,
+    "agenda-view-switch": 16.15,
+    "chase-board-load": 13.57,
+    "embed-source-reflection": 30008.39
+  },
+  "samples": {
+    "dashboard-render": {
+      "n": 10,
+      "p50": 31.88,
+      "p95": 88.1,
+      "max": 88.1,
+      "values": [
+        88.1,
+        46.4,
+        29.69,
+        28.68,
+        28.35,
+        32.55,
+        31.75,
+        32.37,
+        31.88,
+        35.12
+      ],
+      "method": "Playwright authenticated /dashboard render"
+    },
+    "submissions-first-interactive": {
+      "n": 10,
+      "p50": 29.16,
+      "p95": 38.13,
+      "max": 38.13,
+      "values": [
+        38.13,
+        29.51,
+        34.61,
+        29.04,
+        28.19,
+        29.16,
+        34.34,
+        26.96,
+        29.88,
+        23.94
+      ],
+      "method": "Playwright authenticated /submissions render"
+    },
+    "submissions-filter-sort": {
+      "n": 10,
+      "p50": 31.16,
+      "p95": 40.41,
+      "max": 40.41,
+      "values": [
+        27.47,
+        29.42,
+        24.15,
+        32.81,
+        31.65,
+        34.28,
+        31.16,
+        32.1,
+        40.41,
+        29.1
+      ],
+      "method": "Playwright authenticated submissions filter/sort reload"
+    },
+    "review-next-interactive": {
+      "n": 20,
+      "p50": 29.38,
+      "p95": 29.97,
+      "max": 30.27,
+      "values": [
+        18.78,
+        28.13,
+        29.31,
+        29.17,
+        30.27,
+        29.07,
+        27.56,
+        28,
+        29.86,
+        29.6,
+        29.6,
+        29.63,
+        29.17,
+        29.59,
+        29.97,
+        29.63,
+        29.74,
+        28.57,
+        29.45,
+        29.38
+      ],
+      "method": "Playwright click recommendation + Save recommendation & next"
+    },
+    "admin-route-transition": {
+      "n": 10,
+      "p50": 31.36,
+      "p95": 58.15,
+      "max": 58.15,
+      "values": [
+        26.79,
+        29.99,
+        36.2,
+        31.38,
+        31.36,
+        33.15,
+        58.15,
+        47.3,
+        30.4,
+        29.19
+      ],
+      "method": "Playwright authenticated admin route navigation"
+    },
+    "speaker-portal-load": {
+      "n": 10,
+      "p50": 24.29,
+      "p95": 41.76,
+      "max": 41.76,
+      "values": [
+        41.76,
+        36.89,
+        21.7,
+        31.62,
+        24.29,
+        18.98,
+        26.9,
+        29.65,
+        23.67,
+        18.87
+      ],
+      "method": "Playwright authenticated speaker /portal shell load"
+    },
+    "bulk-accept-completion": {
+      "n": 1,
+      "p50": 391,
+      "p95": 391,
+      "max": 391,
+      "values": [
+        391
+      ],
+      "method": "Playwright page.evaluate fetch to bulk decision API",
+      "completed": true
+    },
+    "bulk-accept-long-task": {
+      "n": 1,
+      "p50": 0,
+      "p95": 0,
+      "max": 0,
+      "values": [
+        0
+      ],
+      "method": "Chromium PerformanceObserver longtask during the same bulk operation",
+      "longTaskMs": 0
+    },
+    "global-search-painted": {
+      "n": 10,
+      "p50": 87.37,
+      "p95": 174.41,
+      "max": 174.41,
+      "values": [
+        87.37,
+        41.59,
+        41.81,
+        148.55,
+        110.56,
+        104.68,
+        73.48,
+        76.12,
+        95.21,
+        174.41
+      ],
+      "method": "Playwright keystroke-to-painted global search",
+      "notes": [
+        "Ten real browser queries include genuine seeded misspellings (Casy, Dhinkran, retrieval systms), a no-match, and a diacritic probe."
+      ]
+    },
+    "cfp-cold-interactive": {
+      "n": 5,
+      "p50": 58.9,
+      "p95": 65.46,
+      "max": 65.46,
+      "values": [
+        65.46,
+        57.48,
+        58.67,
+        62.1,
+        58.9
+      ],
+      "method": "Playwright cold public /f/cfp render",
+      "notes": [
+        "Five fresh browser contexts with Chromium cache disabled; the exact seeded public CFP route is measured."
+      ]
+    },
+    "agenda-cold-interactive": {
+      "n": 5,
+      "p50": 52.82,
+      "p95": 67.93,
+      "max": 67.93,
+      "values": [
+        49.37,
+        54.13,
+        52.82,
+        47.02,
+        67.93
+      ],
+      "method": "Playwright cold public /agenda render"
+    },
+    "agenda-view-switch": {
+      "n": 20,
+      "p50": 12.65,
+      "p95": 16.15,
+      "max": 19.85,
+      "values": [
+        14.25,
+        15.25,
+        14.08,
+        12.76,
+        12.65,
+        10.47,
+        12.93,
+        9.91,
+        14.01,
+        13.19,
+        13.41,
+        9.33,
+        12,
+        8.76,
+        8.47,
+        8.9,
+        16.15,
+        19.85,
+        9.95,
+        8.81
+      ],
+      "method": "Public agenda API filtered snapshot",
+      "notes": [
+        "The installed public agenda exposes server-rendered filters; this records the source snapshot switch, not a deployed device paint."
+      ]
+    },
+    "chase-board-load": {
+      "n": 10,
+      "p50": 12.42,
+      "p95": 13.57,
+      "max": 13.57,
+      "values": [
+        13.57,
+        12.74,
+        12.95,
+        12.24,
+        12.79,
+        12.21,
+        12.42,
+        12.77,
+        11.79,
+        11.69
+      ],
+      "method": "Authenticated onboarding/task-backed submissions API",
+      "notes": [
+        "The current tree has no board data module; this is the real task-backed source query and is not presented as a board render."
+      ]
+    },
+    "embed-source-reflection": {
+      "values": [
+        30008.39
+      ],
+      "method": "Agenda API mutation then clean unauthenticated public embed polls",
+      "n": 1,
+      "p50": 30008.39,
+      "p95": 30008.39,
+      "max": 30008.39
+    }
+  },
+  "methods": {
+    "dashboard-render": "Playwright authenticated /dashboard render to .dashboard-page",
+    "submissions-first-interactive": "Playwright authenticated /submissions render to .submissions-page",
+    "submissions-filter-sort": "Playwright authenticated submissions filter/sort reload to .submissions-page",
+    "review-next-interactive": "20 consecutive real reviewer UI advances; duration starts at save click and ends on next card",
+    "admin-route-transition": "10 authenticated admin route navigations through the installed shell; the external speaker portal is measured separately",
+    "speaker-portal-load": "Playwright /portal shell with the seeded speaker persona; this is an objective proxy for deployed-device speaker-portal performance",
+    "bulk-accept-completion": "150 explicit IDs through the real bulk decision API; completed means 150 succeeded, 0 failed, durable completed state",
+    "bulk-accept-long-task": "Chromium Long Tasks API; zero means no long task was observed in the local browser",
+    "global-search-painted": "For each of 10 queries, the timer starts immediately before the final keystroke and ends only when that final query is painted in data-search-painted-query with a ready result state; no input debounce is used.",
+    "cfp-cold-interactive": "Playwright cold /f/cfp render to .public-form with a fresh context and disabled HTTP cache",
+    "agenda-cold-interactive": "Playwright cold /agenda render to main",
+    "agenda-view-switch": "20 real public agenda day/track/search filter snapshots",
+    "chase-board-load": "10 real onboarding list reads backing the chase workload; board UI is a named product follow-up",
+    "embed-source-reflection": "Patch a seeded agenda item via API, then poll /api/v1/public/embeds/aie-ny-2026-agenda from the clean public path"
+  },
+  "harness": {
+    "check_speed": {
+      "observedMs": 54836,
+      "budgetMs": 240000,
+      "verdict": "pass"
+    },
+    "suite": {
+      "observedMs": 13666,
+      "budgetMs": 30000,
+      "verdict": "pass",
+      "source": "local npm test wall clock",
+      "environment": "local worktree; not deployed evidence",
+      "recordedAt": "2026-08-11T10:42:50.034Z",
+      "commit": "11d7a1972c82",
+      "history": [
+        {
+          "observedMs": 13666,
+          "budgetMs": 30000,
+          "verdict": "pass",
+          "source": "local npm test wall clock",
+          "environment": "local worktree; not deployed evidence",
+          "recordedAt": "2026-08-11T10:42:50.034Z",
+          "commit": "11d7a1972c82"
+        }
+      ]
+    },
+    "pr_gate": {
+      "observedMs": 17156,
+      "budgetMs": 45000,
+      "verdict": "pass",
+      "source": "local pr-gate wall clock",
+      "environment": "local worktree; not deployed evidence",
+      "recordedAt": "2026-08-11T10:42:50.467Z",
+      "commit": "11d7a1972c82",
+      "history": [
+        {
+          "observedMs": 17156,
+          "budgetMs": 45000,
+          "verdict": "pass",
+          "source": "local pr-gate wall clock",
+          "environment": "local worktree; not deployed evidence",
+          "recordedAt": "2026-08-11T10:42:50.467Z",
+          "commit": "11d7a1972c82"
+        }
+      ]
+    }
+  },
+  "follow_up": "Local measurements are not deployed evidence. MRQ-57 must run the same budgets against the real Cloudflare deployment, including /f/:formSlug cold interactive, browser search paint, board/portal surfaces, and production Long Tasks.",
+  "entries": [
+    {
+      "id": "dashboard-render",
+      "kind": "acceptance",
+      "source": "AC-16",
+      "metric": "p95",
+      "threshold": 1000,
+      "unit": "ms",
+      "observed": 88.1,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "cfp-cold-interactive",
+      "kind": "acceptance",
+      "source": "AC-36",
+      "metric": "p95",
+      "threshold": 1000,
+      "unit": "ms",
+      "observed": 65.46,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "agenda-cold-interactive",
+      "kind": "acceptance",
+      "source": "AC-85",
+      "metric": "p95",
+      "threshold": 1000,
+      "unit": "ms",
+      "observed": 67.93,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "review-next-interactive",
+      "kind": "acceptance",
+      "source": "AC-62",
+      "metric": "median",
+      "threshold": 300,
+      "unit": "ms",
+      "observed": 29.38,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "global-search-painted",
+      "kind": "acceptance",
+      "source": "AC-103",
+      "metric": "p95",
+      "threshold": 200,
+      "unit": "ms",
+      "observed": 174.41,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "embed-source-reflection",
+      "kind": "acceptance",
+      "source": "AC-89",
+      "metric": "max",
+      "threshold": 60000,
+      "unit": "ms",
+      "observed": 30008.39,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "bulk-accept-completion",
+      "kind": "acceptance",
+      "source": "AC-69",
+      "metric": "completed",
+      "threshold": true,
+      "unit": "boolean",
+      "observed": true,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "bulk-accept-long-task",
+      "kind": "objective",
+      "source": "client-objective",
+      "metric": "max",
+      "threshold": 100,
+      "unit": "ms",
+      "observed": 0,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "submissions-first-interactive",
+      "kind": "objective",
+      "source": "client-objective",
+      "metric": "p95",
+      "threshold": 1000,
+      "unit": "ms",
+      "observed": 38.13,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "submissions-filter-sort",
+      "kind": "objective",
+      "source": "client-objective",
+      "metric": "p95",
+      "threshold": 200,
+      "unit": "ms",
+      "observed": 40.41,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "agenda-view-switch",
+      "kind": "objective",
+      "source": "client-objective",
+      "metric": "p95",
+      "threshold": 200,
+      "unit": "ms",
+      "observed": 16.15,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "admin-route-transition",
+      "kind": "objective",
+      "source": "client-objective",
+      "metric": "p95",
+      "threshold": 300,
+      "unit": "ms",
+      "observed": 58.15,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "speaker-portal-load",
+      "kind": "objective",
+      "source": "client-objective",
+      "metric": "p95",
+      "threshold": 1000,
+      "unit": "ms",
+      "observed": 41.76,
+      "verdict": "pass",
+      "banner": null
+    },
+    {
+      "id": "chase-board-load",
+      "kind": "objective",
+      "source": "client-objective",
+      "metric": "p95",
+      "threshold": 1000,
+      "unit": "ms",
+      "observed": 13.57,
+      "verdict": "pass",
+      "banner": null
+    }
+  ],
+  "acceptanceFailures": [],
+  "objectiveWarnings": [],
+  "missing": [],
+  "shouldFail": false
+}

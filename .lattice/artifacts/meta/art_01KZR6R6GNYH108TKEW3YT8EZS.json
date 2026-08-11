@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:44:04Z",
+  "created_by": "agent:auditor-mrq-48",
+  "custom_fields": {},
+  "id": "art_01KZR6R6GNYH108TKEW3YT8EZS",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR6R6GNYH108TKEW3YT8EZS.md",
+    "size_bytes": 1253
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at 11d7a19: fresh local Wrangler/miniflare runtime, headless browser probes, pr-gate, and merged AC trace.",
+  "tags": [],
+  "title": "MRQ-48 final-head running-system validation",
+  "token_usage": null,
+  "type": "file"
+}
