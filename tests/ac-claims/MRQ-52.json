@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-52",
+  "owns": [],
+  "exercises": ["AC-66", "AC-67", "AC-68", "AC-69", "AC-117"],
+  "notes": "MRQ-52 owns no auto AC. It exercises the bulk decision criteria and AC-117 with runtime and source-guard evidence; AC-66 through AC-69 remain owned by MRQ-19 and AC-117 remains owned by MRQ-12. The two D1-cap bypasses on named bulk-write paths are routed findings, not claims of ownership; the source guard classifies the other direct-placeholder sites separately."
+}
