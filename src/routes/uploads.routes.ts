@@ -58,6 +58,18 @@ async function sha256Hex(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * Turnstile tokens are single-use credentials. Keep a short-lived local
+ * consumption marker as defense in depth so a verified token cannot mint a
+ * second public presign when verification is stubbed or retried upstream.
+ */
+async function consumePublicTurnstileToken(cache: KVNamespace, token: string): Promise<boolean> {
+  const tokenKey = `public-upload:turnstile:${await sha256Hex(token)}`;
+  if (await cache.get(tokenKey)) return false;
+  await cache.put(tokenKey, "1", { expirationTtl: 300 });
+  return true;
+}
+
 function signingConfig(env: UploadsEnv): R2SigningConfig {
   return {
     accountId: env.R2_ACCOUNT_ID,
@@ -105,8 +117,8 @@ function uploadsEnv(context: Context<ApiEnv>): UploadsEnv {
 }
 
 /**
- * Public presign: a stranger can originate this write, so every side effect
- * (row insert, signer call, KV consumption) sits behind Turnstile and scope
+ * Public presign: a stranger can originate this write, so row insertion and
+ * signing sit behind Turnstile, one-use-token consumption, and scope
  * verification — AC-231's core guardrail.
  */
 async function handlePublicSign(context: Context<ApiEnv>) {
@@ -138,6 +150,9 @@ async function handlePublicSign(context: Context<ApiEnv>) {
   });
   if (!turnstile.ok) {
     return uploadError(context, "turnstile_failed", "Turnstile verification failed");
+  }
+  if (typeof turnstileToken !== "string" || !(await consumePublicTurnstileToken(env.CACHE, turnstileToken))) {
+    return uploadError(context, "turnstile_failed", "Turnstile token has already been used");
   }
 
   const draft = await env.DB.prepare(

@@ -163,15 +163,15 @@ test("AC-231 · public upload presign fails closed without valid in-scope Turnst
   expect(attachments?.n).toBe(0);
 });
 
-test("AC-231 · public upload presign fails closed on an invalid/replayed Turnstile token", async () => {
-  await seedOrgEventDraft({ draftId: "sub-invalid", resumeToken: "tok-invalid", eventId: "evt1" });
+test("AC-231 · public upload presign fails closed when Turnstile rejects a non-empty token", async () => {
+  await seedOrgEventDraft({ draftId: "sub-turnstile-failed", resumeToken: "tok-turnstile-failed", eventId: "evt1" });
   stubTurnstile(false);
   const response = await app.fetch(
     signRequest({
-      draftId: "sub-invalid",
-      resumeToken: "tok-invalid",
+      draftId: "sub-turnstile-failed",
+      resumeToken: "tok-turnstile-failed",
       fieldKey: "deck",
-      turnstileToken: "replayed-or-invalid",
+      turnstileToken: "siteverify-rejected",
       filename: "deck.pdf",
       contentType: "application/pdf",
       sizeBytes: 100,
@@ -183,6 +183,44 @@ test("AC-231 · public upload presign fails closed on an invalid/replayed Turnst
   expect(attachments?.n).toBe(0);
 });
 
+test("AC-231 · one verified Turnstile token mints one presign, then no second row or object", async () => {
+  await seedOrgEventDraft({ draftId: "sub-replay", resumeToken: "tok-replay", eventId: "evt-replay" });
+  stubTurnstile(true);
+  const requestBody = {
+    draftId: "sub-replay",
+    resumeToken: "tok-replay",
+    fieldKey: "deck",
+    turnstileToken: "one-token-one-presign",
+    filename: "deck.pdf",
+    contentType: "application/pdf",
+    sizeBytes: 100,
+  };
+
+  const firstResponse = await app.fetch(signRequest(requestBody), BASE_ENV);
+  expect(firstResponse.status).toBe(200);
+  const firstSigned = (await firstResponse.json()) as { attachmentId: string; putUrl: string };
+  const firstRow = await env.DB.prepare(`SELECT r2_key FROM attachments WHERE id = ?1`)
+    .bind(firstSigned.attachmentId)
+    .first<{ r2_key: string }>();
+  expect(firstRow?.r2_key).toBeTruthy();
+  expect(new URL(firstSigned.putUrl).pathname).toContain(firstRow!.r2_key);
+
+  // Positive control: the first presign is usable at its generated key.
+  await env.MEDIA.put(firstRow!.r2_key, new Uint8Array([37, 80, 68, 70]));
+  const objectsBeforeReplay = await env.MEDIA.list({ prefix: "uploads/evt-replay/" });
+  expect(objectsBeforeReplay.objects).toHaveLength(1);
+
+  const secondResponse = await app.fetch(signRequest(requestBody), BASE_ENV);
+  expect(secondResponse.status).toBe(403);
+  const rowsAfterReplay = await env.DB.prepare(`SELECT COUNT(*) as n FROM attachments WHERE event_id = ?1`)
+    .bind("evt-replay")
+    .first<{ n: number }>();
+  const objectsAfterReplay = await env.MEDIA.list({ prefix: "uploads/evt-replay/" });
+  expect(rowsAfterReplay?.n).toBe(1);
+  expect(objectsAfterReplay.objects).toHaveLength(1);
+  expect(objectsAfterReplay.objects[0]?.key).toBe(firstRow!.r2_key);
+});
+
 test("AC-231 · a public request whose draft/resume-token ownership is out of scope fails closed with zero side effects", async () => {
   await seedOrgEventDraft({ draftId: "sub-scope", resumeToken: "tok-scope", eventId: "evt1" });
   stubTurnstile(true);
@@ -191,7 +229,7 @@ test("AC-231 · a public request whose draft/resume-token ownership is out of sc
       draftId: "sub-scope",
       resumeToken: "wrong-token-entirely",
       fieldKey: "deck",
-      turnstileToken: "valid",
+      turnstileToken: "valid-scope",
       filename: "deck.pdf",
       contentType: "application/pdf",
       sizeBytes: 100,
@@ -229,7 +267,7 @@ test("AC-232 · extension/MIME rejection prevents any side effect", async () => 
       draftId: "sub-ext",
       resumeToken: "tok-ext",
       fieldKey: "deck",
-      turnstileToken: "valid",
+      turnstileToken: "valid-ext",
       filename: "deck.exe",
       contentType: "application/octet-stream",
       sizeBytes: 100,
@@ -249,7 +287,7 @@ test("AC-232 · a completed upload with a magic-byte mismatch is rejected and th
       draftId: "sub-sniff",
       resumeToken: "tok-sniff",
       fieldKey: "deck",
-      turnstileToken: "valid",
+      turnstileToken: "valid-sniff",
       filename: "deck.pdf",
       contentType: "application/pdf",
       sizeBytes: 11,
@@ -286,7 +324,7 @@ test("AC-232 · a completed upload with matching magic bytes becomes ready and s
       draftId: "sub-ok",
       resumeToken: "tok-ok",
       fieldKey: "deck",
-      turnstileToken: "valid",
+      turnstileToken: "valid-ready",
       filename: "deck.pdf",
       contentType: "application/pdf",
       sizeBytes: pdfBytes.byteLength,
@@ -337,7 +375,7 @@ test("AC-232 · per-submission upload cap returns 429 without touching the objec
         draftId: "sub-cap",
         resumeToken: "tok-cap",
         fieldKey: "deck",
-        turnstileToken: "valid",
+        turnstileToken: `valid-cap-${attempt}`,
         filename: "deck.pdf",
         contentType: "application/pdf",
         sizeBytes: 100,
