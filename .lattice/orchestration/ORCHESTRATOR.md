@@ -25,7 +25,9 @@ The standing rules for dispatching this run. The tick prompt points here so it s
 
 ## Hand-review these yourself — read the test, don't trust the report
 
-Auth · presigns · demo-mode · AC-246 centralized authorization · AC-259's live Transit conflict · anything touching a guardrail.
+Auth · presigns · demo-mode · AC-246 centralized authorization · AC-259's live Transit conflict · **MRQ-15's submit path honouring `projectApplicableAnswers`** · anything touching a guardrail.
+
+**Count the callers of a new shared helper before you believe its guarantee.** A helper can be correct, fail-closed, and fully unit-tested while having exactly one caller — its own test. MRQ-13 shipped `src/lib/form-conditions.ts` in that state, which is correct for its scope but means the server-side half of "a hidden field is never persisted" lands with MRQ-15. Whenever a ticket's headline guarantee lives in a helper the ticket does not yet call, write the requirement onto the ticket that WILL call it, and demand an integration test that asserts absence in the database — the unit test passes forever either way.
 
 What a real guardrail test looks like: it asserts **the status code AND the absence of the thing** — no leaked ID or title in the body, no side-effect row written. A status-only assertion passes while the leak ships.
 

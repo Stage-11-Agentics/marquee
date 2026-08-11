@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-33",
   "branch_links": [],
+  "c11_surface": "surface:167",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMAFAJ3GA2J44AB170HX7",
-  "last_event_id": "ev_01KZJHMH6WR27VC3KKMNT930DF",
-  "last_status_changed_at": "2026-08-09T05:58:44Z",
+  "last_event_id": "ev_01KZQG48YCMRWHK96DCVF6B1VK",
+  "last_status_changed_at": "2026-08-11T04:08:42Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-33",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Admin create, the submission record, and the program board",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:51Z",
+  "updated_at": "2026-08-11T04:08:42Z",
   "urgency": null
 }

@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:151",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-12 \u2014 Wave 1 (\u00a74), walkthrough step 4 \u00b7 longest single ticket in the plan\n\nScope (verbatim): Multiple independent event forms with name/kind/status/visibility/response count; new + duplicate (fields/rules, never responses); steps rail, immutable post-open target, all field CRUD/types, per-field validation, participant limits, form admins, lifecycle/open-close-reopen settings, and deep-equal live preview. Seeded baseline visibly includes title/abstract/outcome/format/multi-track, primary speaker profile/headshot, co-speaker, supporting file, and conditional vendor field. **Owns the condition *evaluator* (+2 h, moved out of M-36 by B-7):** the `form_fields.condition` schema shape, the shared `isFieldApplicable()` helper in `src/lib/form-conditions.ts`, client show/hide, and the server rule that a hidden field is neither required nor persisted. The evaluator is load-bearing for a Tier A screen on M-14 and for M-55's applicable-missing-fields computation, both of which land before rank 17 \u2014 building it here is what stops M-14 hardcoding a vendor conditional that M-36 would then have to unpick.\n\nFile surface: `src/routes/forms.routes.ts`, `forms.queries.ts`, `src/lib/form-conditions.ts`, `src/ui/forms/*`\n\nACs: AC-17 \u2013 AC-21, AC-24, AC-27 \u2013 AC-33, **AC-132, AC-133, AC-234**\nHours: 10\nWorkflow: sub-agent-full (\u22657 h)\nShared files: `src/lib/form-conditions.ts` is created here and **added to, never rewritten** by M-14, M-36, and M-55 (\u00a77 shared-helper rule).\nDeps: M-09\nNote: M-14 exercises AC-132/AC-133 on the public surface, but **M-12 owns those IDs for `trace:ac`**.\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T04:11:52Z",
   "evidence_refs": [
     {
       "id": "art_01KZQDWENKZCHP6993FX29W1H9",
@@ -20,11 +20,31 @@
       "id": "art_01KZQG28PPEGMGXMC0DZ1W0DZD",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQG2XMMFZ6V809P4FZS4147",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQG5XXBM2H7W1ESTMACCM8G",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQGA292F1K24H7CM4MKC4MA",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQGA292F1K24H7CM4MKC4M9",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8JE5P14JJ6S5V9DAMFC",
-  "last_event_id": "ev_01KZQG2E6A5VEYS9KC7YM3DQVK",
-  "last_status_changed_at": "2026-08-11T04:07:42Z",
+  "last_event_id": "ev_01KZQGA292F1K24H7CM4MKC4MD",
+  "last_status_changed_at": "2026-08-11T04:11:52Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -36,13 +56,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-13",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Form builder, catalog, and condition evaluator",
   "type": "task",
-  "updated_at": "2026-08-11T04:07:42Z",
+  "updated_at": "2026-08-11T04:11:52Z",
   "urgency": null
 }
