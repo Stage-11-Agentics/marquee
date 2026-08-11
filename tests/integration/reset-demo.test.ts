@@ -6,7 +6,7 @@ import {
 import { beforeEach, expect, test, vi } from "vitest";
 
 import { app } from "../../src/index";
-import { RESET_DEMO_MESSAGE_TYPE } from "../../src/routes/admin-ops.endpoints";
+import { RESET_DEMO_MESSAGE_TYPE } from "../../src/routes/admin-ops.routes";
 import worker from "../../src/index";
 import {
   DEMO_ORGANIZATION_ID,

@@ -4,11 +4,9 @@ import { createApiRouter } from "./api/router";
 import { setSessionCookie } from "./lib/cookies";
 import { runUploadOrphanSweep } from "./lib/r2/orphan-sweep";
 import { apiManifest } from "./routes/_manifest";
-import { authMiddleware } from "./lib/auth/auth-middleware";
 import { createCredentialResolver } from "./lib/auth/credential-resolver";
 import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/reset-consumer";
-import { adminOpsRoutes, RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.endpoints";
-import { authRoutes } from "./routes/auth.endpoints";
+import { RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.routes";
 import { processMailQueue, MAIL_MESSAGE_TYPE, runMailSchedule } from "./jobs/mail/consumer";
 import type { Principal } from "./api/runtime";
 import type { ApiGrant } from "./api/grants";
@@ -97,13 +95,6 @@ app.get("/__validation/session-cookie", (context) => {
   context.header("Cache-Control", "no-store");
   return context.json({ cookie: "mq_session", status: "set" });
 });
-
-// The generated API app has its own credential-resolver adapter. These
-// mounted Hono route groups still use MRQ-3's context middleware directly.
-app.use("/api/v1/auth/*", authMiddleware);
-app.use("/api/v1/admin/*", authMiddleware);
-app.route("/api/v1/auth", authRoutes);
-app.route("/api/v1/admin", adminOpsRoutes);
 
 // The API app is built from the generated route manifest. Assembly digests the
 // OpenAPI document, which is async, so it is memoized on first request rather
