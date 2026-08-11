@@ -592,7 +592,7 @@
     .track-tile.conflict { border-color: #ff8a80; box-shadow: inset 0 0 0 1px #ff8a80; }
     .track-conflict { position: absolute; right: 5px; top: 4px; width: 16px; height: 16px; border-radius: 2px; display: grid; place-items: center; background: #ff8a80; color: #2a0f0c; font: 700 9px/1 var(--mono); }
     /* ── v1.6: buildings, room AV metadata, room detail panel ───────────── */
-    .building-row { display:grid; grid-template-columns:18px minmax(0,1fr) minmax(0,1.6fr) 74px auto; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid var(--line); }
+    .building-row { display:grid; grid-template-columns:18px minmax(0,1fr) minmax(0,1.6fr) 124px auto; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid var(--line); }
     .building-row:last-child { border-bottom:0; }
     .building-row input { width:100%; min-width:0; height:30px; border:1px solid var(--line-strong); border-radius:var(--radius); padding:0 8px; background:var(--panel); font-size:12px; }
     .building-row input:focus { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); outline:none; }
@@ -1667,32 +1667,25 @@
       // list — reachable, never insisted upon. With several it is the only screen
       // that shows the conference as a place rather than a schedule.
       function venuesView() {
-        const day = state.agendaDay;
-        const sessionsToday = b => state.scheduled.filter(s=>s.kind!=="break" && s.day===day && buildingForRoom(s.room)?.id===b.id).length;
-        const seatsIn = b => rooms.reduce((n,r,i)=> state.roomBuildings[i]===b.id ? n + (state.roomCapacities[i]||0) : n, 0);
-        const roomNamesIn = b => rooms.filter((r,i)=>state.roomBuildings[i]===b.id);
-        const placed = buildings.filter(hasPin), remote = buildings.filter(b=>!hasPin(b));
-        const venueRow = b => `<button class="venue-item ${state.venueFocus===b.id?"active":""}" data-venue="${b.id}">
-            <span class="vi-num tabular">${buildings.indexOf(b)+1}</span>
-            <span><strong>${esc(b.name)}</strong><span class="vi-sub">${esc(b.address||"No address recorded")}</span>
-              <span class="vi-rooms">${roomNamesIn(b).length ? esc(roomNamesIn(b).join(" · ")) : "No rooms assigned"}</span>
-              ${b.accessNote?`<span class="vi-sub">${esc(b.accessNote)}</span>`:""}
-              ${hasPin(b)&&b.accessMinutes?`<span class="vi-rooms">Allow ${b.accessMinutes} min to get in</span>`:""}</span>
-            <span class="venue-stat tabular">${sessionsToday(b)}<span>${day.split(" · ")[0]}</span></span>
-          </button>`;
+        const remote = buildings.filter(b=>!hasPin(b));
         return shell(`<div class="page">
-          ${pageHead("Venues", "Every building in the conference, what runs there today, and how long it takes to walk between them.", `<a class="button" href="#settings">Conference settings</a><a class="button primary" href="#agenda">Open agenda</a>`)}
+          ${pageHead("Venues", "Buildings, coordinates, entrance instructions, and rooms. Walking times and transit conflicts come from what you set here.", `<a class="button" href="#agenda">Open agenda</a><button class="button primary" id="save-venues">Save venues</button>`)}
           ${settingsTabs("venues")}
-          <section class="card"><div class="card-head"><div><h2>Site map</h2><span class="subtle">${geoActive()?"Dashed lines are walking time between buildings, on the street grid":"Pin a second building and walking times appear here"}</span></div><span class="chip">${placed.length} of ${buildings.length} pinned</span></div>
-            <div class="card-body">${venueMap(buildings,{width:1100,height:400,walk:geoActive(),focus:state.venueFocus})}</div></section>
-          <div class="grid-2" style="margin-top:14px">
-            <section class="card"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Sessions counted for ${esc(day)}</span></div><span class="chip">${placed.reduce((n,b)=>n+seatsIn(b),0).toLocaleString()} seats</span></div>
-              <div class="card-body">${placed.length?placed.map(venueRow).join(""):`<div class="rp-empty">No building has coordinates yet.</div>`}</div></section>
-            <section class="card"><div class="card-head"><div><h2>No physical location</h2><span class="subtle">Streamed and remote venues hold sessions but never a pin</span></div><span class="chip">${remote.length}</span></div>
-              <div class="card-body">${remote.length?remote.map(venueRow).join(""):`<div class="rp-empty">Every venue in this conference has a location.</div>`}</div></section>
-          </div>
+          <section class="card"><div class="card-head"><div><h2>Site map</h2><span class="subtle">${geoActive()?"Dashed lines are walking time between buildings, on the street grid":"Pin a second building and walking times appear here"}</span></div><span class="chip">${pinnedBuildings().length} of ${buildings.length} pinned</span></div>
+            <div class="card-body">${venueMap(buildings,{width:1100,height:360,walk:geoActive(),focus:state.venueFocus})}
+              ${remote.length?`<span class="subtle" style="display:block;margin-top:9px">${remote.map(b=>esc(b.name)).join(" · ")} ${remote.length===1?"has":"have"} no location — streamed and remote venues never take a pin.</span>`:""}</div></section>
+          <div style="margin-top:14px">${buildingsCard()}</div>
+          <div style="margin-top:14px">${roomsCard()}</div>
         </div>`);
       }
+
+      // Buildings and rooms are authored on the Venues screen — a tab named for
+      // them that could not edit them was the defect worth fixing.
+      function sessionsToday(b) {
+        return state.scheduled.filter(s=>s.kind!=="break" && s.day===state.agendaDay && buildingForRoom(s.room)?.id===b.id).length;
+      }
+      function buildingsCard() { return `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Coordinates drive walking times, transit conflicts, and the map above</span></div><button class="button small" id="add-building">+ Add building</button></div><div class="card-body">${buildings.map((b,i) => `<div class="building-block"><div class="building-row"><span class="drag-handle">${i+1}</span><input aria-label="Building name" data-building-name="${b.id}" value="${esc(b.name)}"><input aria-label="Building address" data-building-address="${b.id}" value="${esc(b.address)}" placeholder="Street address, floor, entrance notes"><span class="building-rooms tabular">${roomsInBuilding(b.id)} ${roomsInBuilding(b.id)===1?"room":"rooms"}${sessionsToday(b)?` · ${sessionsToday(b)} today`:""}</span><button class="button small" data-remove-building="${b.id}" ${buildings.length<=1?"disabled":""}>Remove</button></div><div class="building-geo"><span></span><div><label for="lat-${b.id}">Latitude</label><input id="lat-${b.id}" data-building-lat="${b.id}" value="${b.lat==null?"":b.lat}" placeholder="40.75600"></div><div><label for="lng-${b.id}">Longitude</label><input id="lng-${b.id}" data-building-lng="${b.id}" value="${b.lng==null?"":b.lng}" placeholder="-73.98923"></div><div><label for="acc-${b.id}">Minutes to get in</label><input id="acc-${b.id}" data-building-access="${b.id}" type="number" min="0" step="1" value="${b.accessMinutes||0}"></div><div><label for="note-${b.id}">Entrance note</label><input id="note-${b.id}" data-building-note="${b.id}" value="${esc(b.accessNote||"")}" placeholder="Doors, ID, lifts — shown to speakers"></div></div></div>`).join("")}</div></section>`; }
+      function roomsCard() { return `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Rooms</h2><span class="subtle">Capacity, building, AV capability, and the notes an ops lead needs on the day</span></div><button class="button small" id="add-room">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="room-row"><div class="room-row-main"><span class="drag-handle">${i+1}</span><input aria-label="Room name" data-room-name="${i}" value="${esc(r)}"><input aria-label="Room capacity" data-room-capacity="${i}" type="number" min="1" step="1" value="${state.roomCapacities[i]}"><select aria-label="Building" data-room-building="${i}"><option value="">Unassigned</option>${buildings.map(b=>`<option value="${b.id}" ${state.roomBuildings[i]===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}</select><button class="button small" data-remove-room="${i}" ${rooms.length<=1?"disabled":""}>Remove</button></div><div class="room-row-meta"><span class="room-meta-label">AV</span><div class="av-tags">${AV_TAGS.map(tag=>`<button class="av-tag ${(state.roomAV[i]||[]).includes(tag)?"on":""}" data-room-av="${i}" data-av-tag="${esc(tag)}" aria-pressed="${(state.roomAV[i]||[]).includes(tag)?"true":"false"}">${esc(tag)}</button>`).join("")}</div></div><div class="room-row-meta"><span class="room-meta-label">Notes</span><input aria-label="Room notes" data-room-notes="${i}" value="${esc(state.roomNotes[i]||"")}" placeholder="Access, load-in, quirks — shown on the agenda and to speakers"></div></div>`).join("")}</div></section>`; }
 
       function settingsView() {
         return shell(`<div class="page">
@@ -1710,8 +1703,7 @@
               ${formats.map((f,i) => `<div class="settings-row" data-format-index="${i}"><span class="drag-handle">⋮</span><input aria-label="Format name" data-format-name="${i}" value="${esc(f)}"><input aria-label="Allowed range" data-format-range="${i}" value="${esc(formatRanges[f]||"15–30")}"><label class="field" style="display:flex;align-items:center;gap:4px"><input aria-label="Default duration" data-format-duration="${i}" type="number" min="5" max="180" value="${formatDurations[f]}"><span class="subtle">min</span></label></div>`).join("")}
             </div></section>
             <section class="card"><div class="card-head"><div><h2>Tracks</h2><span class="subtle">Drag to reorder · edit names and colors in place</span></div><button class="button small" id="add-track">+ Add track</button></div><div class="card-body" id="track-settings">${tracks.map((t,i) => `<div class="settings-row" draggable="true" data-track-index="${i}"><button class="drag-button" aria-label="Drag ${esc(t.name)}">⋮⋮</button><input aria-label="Track name" data-track-name="${i}" value="${esc(t.name)}"><input aria-label="Track color" data-track-color="${i}" type="color" value="${t.color}"><span class="chip" style="border-left:3px solid ${t.color}">${i+1}</span></div>`).join("")}</div></section>
-            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Rooms belong to a building; the agenda and the conference site show both.</span></div><div style="display:flex;gap:6px"><a class="button small" href="#settings/venues">Open venue map</a><button class="button small" id="add-building">+ Add building</button></div></div><div class="card-body"><details class="map-fold" ${geoActive()?"open":""}><summary>${geoActive()?"Site map":"Site map · one building"}</summary>${venueMap(buildings,{width:1100,height:220,walk:geoActive()})}</details>${buildings.map((b,i) => `<div class="building-block"><div class="building-row"><span class="drag-handle">${i+1}</span><input aria-label="Building name" data-building-name="${b.id}" value="${esc(b.name)}"><input aria-label="Building address" data-building-address="${b.id}" value="${esc(b.address)}" placeholder="Street address, floor, entrance notes"><span class="building-rooms tabular">${roomsInBuilding(b.id)} ${roomsInBuilding(b.id)===1?"room":"rooms"}</span><button class="button small" data-remove-building="${b.id}" ${buildings.length<=1?"disabled":""}>Remove</button></div><div class="building-geo"><span></span><div><label for="lat-${b.id}">Latitude</label><input id="lat-${b.id}" data-building-lat="${b.id}" value="${b.lat==null?"":b.lat}" placeholder="40.75600"></div><div><label for="lng-${b.id}">Longitude</label><input id="lng-${b.id}" data-building-lng="${b.id}" value="${b.lng==null?"":b.lng}" placeholder="-73.98923"></div><div><label for="acc-${b.id}">Minutes to get in</label><input id="acc-${b.id}" data-building-access="${b.id}" type="number" min="0" step="1" value="${b.accessMinutes||0}"></div><div><label for="note-${b.id}">Entrance note</label><input id="note-${b.id}" data-building-note="${b.id}" value="${esc(b.accessNote||"")}" placeholder="Doors, ID, lifts — shown to speakers"></div></div></div>`).join("")}</div></section>
-            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Rooms</h2><span class="subtle">Capacity, building, AV capability, and the notes an ops lead needs on the day</span></div><button class="button small" id="add-room">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="room-row"><div class="room-row-main"><span class="drag-handle">${i+1}</span><input aria-label="Room name" data-room-name="${i}" value="${esc(r)}"><input aria-label="Room capacity" data-room-capacity="${i}" type="number" min="1" step="1" value="${state.roomCapacities[i]}"><select aria-label="Building" data-room-building="${i}"><option value="">Unassigned</option>${buildings.map(b=>`<option value="${b.id}" ${state.roomBuildings[i]===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}</select><button class="button small" data-remove-room="${i}" ${rooms.length<=1?"disabled":""}>Remove</button></div><div class="room-row-meta"><span class="room-meta-label">AV</span><div class="av-tags">${AV_TAGS.map(tag=>`<button class="av-tag ${(state.roomAV[i]||[]).includes(tag)?"on":""}" data-room-av="${i}" data-av-tag="${esc(tag)}" aria-pressed="${(state.roomAV[i]||[]).includes(tag)?"true":"false"}">${esc(tag)}</button>`).join("")}</div></div><div class="room-row-meta"><span class="room-meta-label">Notes</span><input aria-label="Room notes" data-room-notes="${i}" value="${esc(state.roomNotes[i]||"")}" placeholder="Access, load-in, quirks — shown on the agenda and to speakers"></div></div>`).join("")}</div></section>
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Venues and rooms</h2><span class="subtle">Buildings, coordinates, entrance instructions, and rooms live on their own screen</span></div><a class="button small" href="#settings/venues">Open Venues →</a></div><div class="card-body"><span class="subtle">${buildings.length} ${buildings.length===1?"building":"buildings"} · ${rooms.length} ${rooms.length===1?"room":"rooms"}${geoActive()?` · ${pinnedBuildings().length} pinned`:""}</span></div></section>
           </div>
         </div>`);
       }
@@ -2605,12 +2597,23 @@
         document.getElementById("export-dashboard")?.addEventListener("click",()=>downloadText("aie-nyc-program-status.csv",`metric,value\nsubmissions,${state.submissions.length}\naccepted,${pipelineCounts().AcceptedTotal}\nscheduled,${pipelineCounts().Scheduled}\noverdue_tasks,${onboardingCounts().overdueTasks}\nconflicts,${getAgendaConflicts().length}\n`,`text/csv`));
       }
 
+      // Buildings and rooms are edited on Venues but were historically saved by
+      // the conference Save button; both screens now share one writer.
+      function persistVenueEdits() {
+        document.querySelectorAll("[data-room-name]").forEach((input,i)=>{rooms[i]=input.value.trim()||rooms[i];state.roomCapacities[i]=Math.max(1,Math.round(Number(document.querySelector(`[data-room-capacity="${i}"]`).value)||1));state.roomBuildings[i]=document.querySelector(`[data-room-building="${i}"]`).value||"";state.roomNotes[i]=document.querySelector(`[data-room-notes="${i}"]`).value.trim();});
+        document.querySelectorAll("[data-building-name]").forEach(input=>{const b=buildingById(input.dataset.buildingName);if(!b)return;b.name=input.value.trim()||b.name;b.address=document.querySelector(`[data-building-address="${b.id}"]`).value.trim();const num=sel=>{const raw=document.querySelector(`[${sel}="${b.id}"]`)?.value.trim();const n=Number(raw);return raw===""||Number.isNaN(n)?null:n;};b.lat=num("data-building-lat");b.lng=num("data-building-lng");b.accessMinutes=Math.max(0,Math.round(num("data-building-access")||0));b.accessNote=(document.querySelector(`[data-building-note="${b.id}"]`)?.value||"").trim();});
+      }
+
       function bindSettings() {
+        document.getElementById("save-venues")?.addEventListener("click",()=>{
+          persistVenueEdits();
+          toast(`Venues saved · ${pinnedBuildings().length} pinned, ${rooms.length} rooms`);
+          render();
+        });
         document.getElementById("save-settings")?.addEventListener("click",()=>{
           document.querySelectorAll("[data-format-name]").forEach((input,i)=>{const old=formats[i],name=input.value.trim()||old;formats[i]=name;formatRanges[name]=document.querySelector(`[data-format-range="${i}"]`).value;formatDurations[name]=Math.max(5,Number(document.querySelector(`[data-format-duration="${i}"]`).value)||20);if(name!==old){delete formatRanges[old];delete formatDurations[old];}});
           document.querySelectorAll("[data-track-name]").forEach((input,i)=>{tracks[i].name=input.value.trim()||tracks[i].name;tracks[i].color=document.querySelector(`[data-track-color="${i}"]`).value;});
-          document.querySelectorAll("[data-room-name]").forEach((input,i)=>{rooms[i]=input.value.trim()||rooms[i];state.roomCapacities[i]=Math.max(1,Math.round(Number(document.querySelector(`[data-room-capacity="${i}"]`).value)||1));state.roomBuildings[i]=document.querySelector(`[data-room-building="${i}"]`).value||"";state.roomNotes[i]=document.querySelector(`[data-room-notes="${i}"]`).value.trim();});
-          document.querySelectorAll("[data-building-name]").forEach(input=>{const b=buildingById(input.dataset.buildingName);if(!b)return;b.name=input.value.trim()||b.name;b.address=document.querySelector(`[data-building-address="${b.id}"]`).value.trim();const num=sel=>{const raw=document.querySelector(`[${sel}="${b.id}"]`)?.value.trim();const n=Number(raw);return raw===""||Number.isNaN(n)?null:n;};b.lat=num("data-building-lat");b.lng=num("data-building-lng");b.accessMinutes=Math.max(0,Math.round(num("data-building-access")||0));b.accessNote=(document.querySelector(`[data-building-note="${b.id}"]`)?.value||"").trim();});
+          persistVenueEdits();
           state.event = { ...state.event, name: document.getElementById("event-name").value, start: document.getElementById("event-start").value, end: document.getElementById("event-end").value, venue: document.getElementById("event-venue").value, timezone: document.getElementById("event-timezone").value };
           // The fresh-install walk is a sandbox: it must never persist its event
           // over the seeded demo, or the demo boots as somebody's test conference.
@@ -3006,7 +3009,7 @@
         hideRoomPanel(true); roomPanelPinned = false;
         bindCommon();
         bindRoomHeads();
-        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
+        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
         // The setup dashboard has no binder of its own — bindCommon carries its links.
         if(!showEmpty && binder && !(state.setup.active && state.route === "dashboard")) binder();
         window.scrollTo(0,0);
