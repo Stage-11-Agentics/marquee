@@ -7,6 +7,7 @@
  */
 
 import { policyFor, type UploadPolicy } from "./policy";
+import type { UploadOwnerConfig } from "./protocol";
 import { matchesExpectedKind, readImageDimensions, SNIFF_HEAD_BYTES } from "./sniff";
 
 export interface AttachmentPendingRow {
@@ -34,6 +35,7 @@ export type CompleteOutcome =
 export async function verifyAndComplete(
   media: R2Bucket,
   row: AttachmentPendingRow,
+  ownerConfig?: UploadOwnerConfig,
 ): Promise<CompleteOutcome> {
   if (row.status === "ready") {
     const head = await media.head(row.r2_key);
@@ -47,7 +49,7 @@ export async function verifyAndComplete(
     return { ok: false, reason: "size_mismatch" };
   }
 
-  const policy: UploadPolicy | null = policyFor(row.owner_type as never);
+  const policy: UploadPolicy | null = policyFor(row.owner_type as never, ownerConfig);
   const rangeEnd = Math.min(head.size, SNIFF_HEAD_BYTES) - 1;
   const ranged = await media.get(row.r2_key, { range: { offset: 0, length: rangeEnd + 1 } });
   if (!ranged) {

@@ -19,8 +19,9 @@ import { defineApiRoute, jsonResponse } from "../api/route";
 import { SESSION_COOKIE_NAME } from "../lib/cookies";
 import { uploadError } from "../lib/r2/errors";
 import { objectKeyFor, publicMediaUrl } from "../lib/r2/keys";
-import { extensionOf, policyFor, sanitizeFilename, validateDeclared } from "../lib/r2/policy";
+import { extensionOf, parseUploadOwnerConfig, policyFor, sanitizeFilename, validateDeclared } from "../lib/r2/policy";
 import { presignPut, type R2SigningConfig } from "../lib/r2/presign";
+import type { UploadOwnerConfig } from "../lib/r2/protocol";
 import { checkUploadRateLimits, rateLimitHeaders } from "../lib/r2/rate-limit";
 import { isMediaHost, serveMediaObject } from "../lib/r2/serve";
 import { verifyTurnstile } from "../lib/r2/turnstile";
@@ -248,16 +249,22 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
   }
 
   let eventId: string | null = null;
+  let ownerConfig: UploadOwnerConfig | undefined;
   if (ownerType === "task_upload") {
     const task = await env.DB.prepare(
-      `SELECT id, event_id, person_id FROM speaker_tasks WHERE id = ?1`,
+      `SELECT task.id, task.event_id, task.person_id, template.file_config
+         FROM speaker_tasks task
+         JOIN task_templates template
+           ON template.id = task.template_id AND template.event_id = task.event_id
+        WHERE task.id = ?1 AND template.kind = 'file'`,
     )
       .bind(ownerId)
-      .first<{ id: string; event_id: string; person_id: string }>();
+      .first<{ id: string; event_id: string; person_id: string; file_config: string | null }>();
     if (!task || task.person_id !== session.person_id) {
       return uploadError(context, "forbidden", "task does not belong to the authenticated principal");
     }
     eventId = task.event_id;
+    ownerConfig = parseUploadOwnerConfig(task.file_config);
   } else {
     if (ownerId !== session.person_id) {
       return uploadError(context, "forbidden", "headshot does not belong to the authenticated principal");
@@ -269,7 +276,7 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
     eventId = membership.event_id;
   }
 
-  const policy = policyFor(ownerType);
+  const policy = policyFor(ownerType, ownerConfig);
   if (!policy) return uploadError(context, "invalid_request", "owner type not presignable");
   const decision = validateDeclared(policy, { filename, contentType, sizeBytes });
   if (!decision.ok) return uploadError(context, "invalid_request", `rejected: ${decision.violation}`);
@@ -337,7 +344,22 @@ async function handleComplete(context: Context<ApiEnv>) {
     return uploadError(context, "forbidden", "completion token does not match this attachment");
   }
 
-  const outcome = await verifyAndComplete(env.MEDIA, row);
+  let ownerConfig: UploadOwnerConfig | undefined;
+  if (row.owner_type === "task_upload") {
+    const task = await env.DB.prepare(
+      `SELECT template.file_config
+         FROM speaker_tasks task
+         JOIN task_templates template
+           ON template.id = task.template_id AND template.event_id = task.event_id
+        WHERE task.id = ?1 AND task.event_id = ?2 AND template.kind = 'file'`,
+    )
+      .bind(row.owner_id, row.event_id)
+      .first<{ file_config: string | null }>();
+    if (!task) return uploadError(context, "forbidden", "task template is no longer available");
+    ownerConfig = parseUploadOwnerConfig(task.file_config);
+  }
+
+  const outcome = await verifyAndComplete(env.MEDIA, row, ownerConfig);
   if (!outcome.ok) {
     return uploadError(context, "conflict", `completion failed: ${outcome.reason}`);
   }

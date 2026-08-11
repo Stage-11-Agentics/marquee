@@ -14,8 +14,10 @@ import {
   findTemplate,
   listCommunicationTemplates,
   MAIL_TEMPLATE_KEYS,
+  type MailTemplateKey,
 } from "../jobs/mail/templates";
-import { mergeTemplate, renderMail, type MergeData } from "../jobs/mail/render";
+import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
+import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
 import type { OutboxRow } from "../db/schema";
 import { hasSpeakerTaskCancellationColumn, submissionFilterSchema } from "./submissions.queries";
 
@@ -34,14 +36,42 @@ const templateSchema = z.object({
   updated_at: z.number(),
 });
 
-const selectorSchema = z
-  .object({
-    status: z.string().optional(),
-    track_id: z.string().optional(),
-    format_id: z.string().optional(),
-    task_state: z.enum(["open", "done"]).optional(),
-  })
+export const reminderSelectorSchema = z.object({
+  status: z.string().optional(),
+  track_id: z.string().optional(),
+  format_id: z.string().optional(),
+  task_state: z.enum(["open", "done"]).optional(),
+  /** Exact selections use json_each(?) rather than one D1 placeholder per row. */
+  submission_ids: z.array(z.string().min(1)).max(500).optional(),
+  person_ids: z.array(z.string().min(1)).max(500).optional(),
+  /** Board selections preserve the selected person/submission relationship. */
+  recipient_pairs: z.array(z.object({
+    person_id: z.string().min(1),
+    submission_id: z.string().min(1).nullable(),
+  })).max(500).optional(),
+  /** Existing selectors keep their prior semantics unless the caller opts in. */
+  role: z.enum(["speaker", "co_speaker", "moderator", "chairperson", "submitter", "sponsor_contact"]).optional(),
+});
+
+const selectorSchema = reminderSelectorSchema
   .default({});
+
+export type ReminderSelector = z.infer<typeof reminderSelectorSchema>;
+export type ReminderRecipientPair = NonNullable<ReminderSelector["recipient_pairs"]>[number];
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function uniqueRecipientPairs(pairs: readonly ReminderRecipientPair[]): ReminderRecipientPair[] {
+  const seen = new Set<string>();
+  return pairs.filter((pair) => {
+    const key = `${pair.person_id}\u0000${pair.submission_id ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 const templateBodySchema = z.object({
   key: z.string().min(1).max(80),
@@ -111,6 +141,12 @@ const sendResponse = z.object({
   queued: z.number(),
   duplicate: z.number(),
   outbox_ids: z.array(z.string()),
+  outbox_rows: z.array(z.object({
+    person_id: z.string(),
+    entity_id: z.string(),
+    outbox_id: z.string(),
+    inserted: z.boolean(),
+  })),
 });
 
 function requireComms(context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0], eventId: string, write: boolean): void {
@@ -129,9 +165,10 @@ function requireComms(context: Parameters<NonNullable<ApiRouteEntry["handler"]>>
   }
 }
 
-interface RecipientRow {
+export interface RecipientRow {
   person_id: string;
-  submission_id: string;
+  submission_id: string | null;
+  role: string;
   email: string;
   name: string;
   submission_title: string;
@@ -141,12 +178,27 @@ interface RecipientRow {
   task_due_at: number | null;
 }
 
-async function recipientsFor(
+/**
+ * MRQ-24-owned reminder seam: return one stable recipient row per selected
+ * person/submission, plus a person-only row for an accepted-speaker membership
+ * whose local task has no submission. Future comms surfaces add selector
+ * fields or consumers; they should keep this projection and its json-backed
+ * exact-selection shape.
+ */
+export async function recipientsFor(
   db: D1Database,
   eventId: string,
-  selector: { status?: string; track_id?: string; format_id?: string; task_state?: "open" | "done" },
+  selector: ReminderSelector,
 ): Promise<RecipientRow[]> {
+  // An explicit empty selection is a deliberate no-op. Treating [] as an
+  // omitted filter would turn a cleared board selection into a bulk send.
+  if (
+    selector.submission_ids?.length === 0
+    || selector.person_ids?.length === 0
+    || selector.recipient_pairs?.length === 0
+  ) return [];
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(db);
+  const recipientPairs = selector.recipient_pairs ? uniqueRecipientPairs(selector.recipient_pairs) : null;
   const where = ["s.event_id = ?"];
   const bindings: (string | number)[] = [eventId];
   if (selector.status) {
@@ -161,49 +213,182 @@ async function recipientsFor(
     where.push("s.format_id = ?");
     bindings.push(selector.format_id);
   }
+  if (selector.submission_ids && selector.submission_ids.length > 0) {
+    where.push("s.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))");
+    bindings.push(JSON.stringify([...new Set(selector.submission_ids)]));
+  }
+  if (selector.person_ids && selector.person_ids.length > 0) {
+    where.push("p.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))");
+    bindings.push(JSON.stringify([...new Set(selector.person_ids)]));
+  }
+  if (recipientPairs) {
+    const submittedPairs = recipientPairs.filter((pair): pair is ReminderRecipientPair & { submission_id: string } => pair.submission_id !== null);
+    if (submittedPairs.length === 0) {
+      where.push("1 = 0");
+    } else {
+      where.push(`EXISTS (
+        SELECT 1 FROM json_each(?) selected_recipient
+        WHERE json_extract(selected_recipient.value, '$.person_id') = p.id
+          AND json_extract(selected_recipient.value, '$.submission_id') = s.id
+      )`);
+      bindings.push(JSON.stringify(submittedPairs));
+    }
+  }
+  if (selector.role) {
+    where.push("part.role = ?");
+    bindings.push(selector.role);
+  }
   if (selector.task_state) {
     where.push(`EXISTS (
       SELECT 1 FROM speaker_tasks stf
-      WHERE stf.submission_id = s.id AND stf.status = ?
+      WHERE stf.event_id = s.event_id AND stf.person_id = p.id AND stf.submission_id = s.id AND stf.status = ?
       ${includeCancelledAt && selector.task_state === "open" ? "AND stf.cancelled_at IS NULL" : ""}
     )`);
     bindings.push(selector.task_state);
   }
-  const activeTaskJoin = includeCancelledAt && selector.task_state === "open"
-    ? " AND st.cancelled_at IS NULL"
+  // A person may hold more than one participation role on a submission. The
+  // reminder seam publishes one stable row per person/submission; an explicit
+  // role narrows that choice, otherwise the speaker role wins deterministically.
+  where.push(`part.id = (
+    SELECT chosen_part.id FROM participations chosen_part
+    WHERE chosen_part.submission_id = s.id AND chosen_part.person_id = p.id
+    ${selector.role ? "AND chosen_part.role = ?" : ""}
+    ORDER BY CASE chosen_part.role
+      WHEN 'speaker' THEN 0
+      WHEN 'co_speaker' THEN 1
+      WHEN 'moderator' THEN 2
+      WHEN 'chairperson' THEN 3
+      WHEN 'submitter' THEN 4
+      WHEN 'sponsor_contact' THEN 5
+      ELSE 6 END,
+      chosen_part.position ASC, chosen_part.id ASC
+    LIMIT 1
+  )`);
+  if (selector.role) bindings.push(selector.role);
+  const selectedTaskStateCondition = selector.task_state
+    ? `AND selected_task.status = '${selector.task_state === "open" ? "open" : "done"}'`
     : "";
   const result = await db
     .prepare(
-      `SELECT DISTINCT p.id AS person_id, s.id AS submission_id, p.email, p.name,
+      `SELECT DISTINCT p.id AS person_id, s.id AS submission_id, part.role, p.email, p.name,
               s.title AS submission_title, r.name AS room, ai.starts_at,
               st.title AS task_title, st.due_at AS task_due_at
        FROM submissions s
        JOIN participations part ON part.submission_id = s.id
        JOIN people p ON p.id = part.person_id
-       LEFT JOIN agenda_items ai ON ai.submission_id = s.id
+       LEFT JOIN agenda_items ai ON ai.id = (
+         SELECT selected_agenda.id FROM agenda_items selected_agenda
+         WHERE selected_agenda.event_id = s.event_id
+           AND selected_agenda.submission_id = s.id
+           AND selected_agenda.kind = 'session'
+         ORDER BY selected_agenda.starts_at ASC, selected_agenda.id ASC
+         LIMIT 1
+       )
        LEFT JOIN rooms r ON r.id = ai.room_id
-       LEFT JOIN speaker_tasks st ON st.person_id = p.id AND st.submission_id = s.id${activeTaskJoin}
+       LEFT JOIN speaker_tasks st ON st.id = (
+         SELECT selected_task.id FROM speaker_tasks selected_task
+           WHERE selected_task.event_id = s.event_id
+             AND selected_task.person_id = p.id
+             AND selected_task.submission_id = s.id
+             ${selectedTaskStateCondition}
+             ${includeCancelledAt && selector.task_state === "open" ? "AND selected_task.cancelled_at IS NULL" : ""}
+         ORDER BY CASE WHEN selected_task.status = 'open' THEN 0 ELSE 1 END,
+                  selected_task.due_at ASC, selected_task.id ASC
+         LIMIT 1
+       )
        WHERE ${where.join(" AND ")}
        ORDER BY p.name COLLATE NOCASE, s.title COLLATE NOCASE`,
     )
     .bind(...bindings)
     .all<RecipientRow>();
-  return result.results;
+  const rows = [...result.results];
+
+  // The seeded accepted-speaker roster can contain a real speaker whose local
+  // accepted session is intentionally absent. Their task rows have a NULL
+  // submission_id, so an exact board selection must still be able to address
+  // them by person. Submission-scoped selectors cannot match a person-only
+  // row, and non-speaker role selectors must not widen into one.
+  const personOnlyPairIds = recipientPairs?.filter((pair) => pair.submission_id === null).map((pair) => pair.person_id) ?? [];
+  const canAddressPersonOnly = Boolean(selector.person_ids?.length || personOnlyPairIds.length)
+    && (!selector.role || selector.role === "speaker")
+    && !selector.status && !selector.track_id && !selector.format_id;
+  if (canAddressPersonOnly) {
+    const personIds = recipientPairs ? unique(personOnlyPairIds) : unique(selector.person_ids!);
+    const exactPairMode = recipientPairs !== null;
+    const taskStateCondition = selector.task_state
+      ? `AND selected_task.status = ?${includeCancelledAt && selector.task_state === "open" ? " AND selected_task.cancelled_at IS NULL" : ""}`
+      : "";
+    const fallbackBindings: (string | number)[] = [];
+    // The selected-task subquery appears before the outer WHERE in SQL, so
+    // its status placeholder must be bound before membership/event filters.
+    if (selector.task_state) fallbackBindings.push(selector.task_state);
+    fallbackBindings.push(eventId, JSON.stringify(personIds));
+    const fallbackSelectionCondition = exactPairMode
+      ? ""
+      : selector.submission_ids && selector.submission_ids.length > 0
+      ? `AND NOT EXISTS (
+          SELECT 1 FROM participations selected_part
+          WHERE selected_part.person_id = person.id
+            AND selected_part.submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+        )`
+      : `AND NOT EXISTS (
+          SELECT 1 FROM participations any_part
+          JOIN submissions any_submission ON any_submission.id = any_part.submission_id
+            AND any_submission.event_id = membership.event_id
+          WHERE any_part.person_id = person.id
+        )`;
+    if (!exactPairMode && selector.submission_ids && selector.submission_ids.length > 0) {
+      fallbackBindings.push(JSON.stringify(unique(selector.submission_ids)));
+    }
+    const fallback = await db
+      .prepare(
+        `SELECT person.id AS person_id, NULL AS submission_id, 'speaker' AS role,
+                person.email, person.name, '—' AS submission_title, NULL AS room,
+                NULL AS starts_at, st.title AS task_title, st.due_at AS task_due_at
+         FROM memberships membership
+         JOIN people person ON person.id = membership.person_id
+         LEFT JOIN speaker_tasks st ON st.id = (
+           SELECT selected_task.id FROM speaker_tasks selected_task
+           WHERE selected_task.event_id = membership.event_id
+             AND selected_task.person_id = person.id
+             AND selected_task.submission_id IS NULL
+             ${taskStateCondition}
+           ORDER BY CASE WHEN selected_task.status = 'open' THEN 0 ELSE 1 END,
+                    selected_task.due_at ASC, selected_task.id ASC
+           LIMIT 1
+         )
+         WHERE membership.event_id = ? AND membership.role = 'speaker'
+           AND person.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+           ${fallbackSelectionCondition}
+           ${selector.task_state ? `AND EXISTS (
+             SELECT 1 FROM speaker_tasks selected_state_task
+             WHERE selected_state_task.event_id = membership.event_id
+               AND selected_state_task.person_id = person.id
+               AND selected_state_task.submission_id IS NULL
+               AND selected_state_task.status = ?
+               ${includeCancelledAt && selector.task_state === "open" ? "AND selected_state_task.cancelled_at IS NULL" : ""}
+           )` : ""}
+         GROUP BY person.id, person.email, person.name, st.title, st.due_at
+         ORDER BY person.name COLLATE NOCASE, person.id ASC`,
+      )
+      .bind(...fallbackBindings, ...(selector.task_state ? [selector.task_state] : []))
+      .all<RecipientRow>();
+    rows.push(...fallback.results);
+  }
+
+  return rows.sort((left, right) => left.name.localeCompare(right.name) || (left.submission_title ?? "").localeCompare(right.submission_title ?? "") || left.person_id.localeCompare(right.person_id));
 }
 
 function mergeDataFor(row: RecipientRow): MergeData {
-  return {
-    "speaker.first_name": row.name.trim().split(/\s+/)[0] ?? row.name,
-    "speaker.name": row.name,
-    "speaker.email": row.email,
-    "submission.title": row.submission_title,
-    "session.title": row.submission_title,
-    "room.name": row.room ?? "—",
-    "session.room": row.room ?? "—",
-    "session.time": row.starts_at === null ? "—" : new Date(row.starts_at).toISOString(),
-    "task.title": row.task_title ?? "—",
-    "task.due_date": row.task_due_at === null ? "—" : new Date(row.task_due_at).toISOString(),
-  };
+  return mergeDataForRecipient({
+    name: row.name,
+    email: row.email,
+    submissionTitle: row.submission_title,
+    room: row.room,
+    startsAt: row.starts_at,
+    taskTitle: row.task_title,
+    taskDueAt: row.task_due_at,
+  });
 }
 
 const getTemplates = defineApiRoute(
@@ -315,7 +500,7 @@ const previewComms = defineApiRoute(
     tags: ["Comms"],
     request: {
       params: eventParams,
-      body: { content: { "application/json": { schema: z.object({ person_id: z.string(), template_key: z.string().optional(), subject: z.string().optional(), body: z.string().optional() }) } } },
+      body: { content: { "application/json": { schema: z.object({ person_id: z.string(), submission_id: z.string().optional(), role: reminderSelectorSchema.shape.role, template_key: z.string().optional(), subject: z.string().optional(), body: z.string().optional() }) } } },
     },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
     responses: { 200: { content: { "application/json": { schema: previewResponse } }, description: "Rendered preview" }, ...errorResponses([400, 401, 403, 404, 500]) },
@@ -324,9 +509,29 @@ const previewComms = defineApiRoute(
     const { eventId } = context.req.valid("param");
     requireComms(context, eventId, false);
     const body = context.req.valid("json");
-    const recipient = await context.env.DB.prepare("SELECT id, email, name FROM people WHERE id = ?").bind(body.person_id).first<{ id: string; email: string; name: string }>();
+    const recipient = await context.env.DB.prepare(
+      `SELECT person.id, person.email, person.name
+       FROM people person
+       WHERE person.id = ?
+         AND (
+           EXISTS (SELECT 1 FROM memberships membership WHERE membership.event_id = ? AND membership.person_id = person.id)
+           OR EXISTS (
+             SELECT 1 FROM participations participation
+             JOIN submissions submission ON submission.id = participation.submission_id
+             WHERE submission.event_id = ? AND participation.person_id = person.id
+           )
+         )`,
+    ).bind(body.person_id, eventId, eventId).first<{ id: string; email: string; name: string }>();
     if (!recipient) throw ApiError.notFound("recipient not found");
-    const data: MergeData = { "speaker.first_name": recipient.name.split(/\s+/)[0] ?? recipient.name, "speaker.name": recipient.name, "speaker.email": recipient.email };
+    const selected = (await recipientsFor(context.env.DB, eventId, {
+      person_ids: [body.person_id],
+      ...(body.submission_id ? { submission_ids: [body.submission_id] } : {}),
+      role: body.role,
+      task_state: "open",
+    }))[0];
+    const data: MergeData = selected
+      ? mergeDataFor(selected)
+      : { "speaker.first_name": firstName(recipient.name), "speaker.name": recipient.name, "speaker.email": recipient.email };
     if (body.template_key) {
       if (!(MAIL_TEMPLATE_KEYS as readonly string[]).includes(body.template_key)) throw ApiError.badRequest("unknown template key", "template_key");
       const template = await findTemplate(context.env.DB, eventId, body.template_key);
@@ -334,7 +539,7 @@ const previewComms = defineApiRoute(
       return context.json({ ...rendered, to_email: recipient.email }, 200);
     }
     if (body.subject === undefined || body.body === undefined) throw ApiError.badRequest("preview requires template_key or subject and body");
-    return context.json({ subject: mergeTemplate(body.subject, data), text: mergeTemplate(body.body, data), html: `<p>${mergeTemplate(body.body, data).replaceAll("\n", "<br>")}</p>`, to_email: recipient.email }, 200);
+    return context.json({ ...renderAdHocMail(body.subject, body.body, data), to_email: recipient.email }, 200);
   },
 );
 
@@ -368,12 +573,18 @@ const sendComms = defineApiRoute(
     const queued = await enqueueBulkReminder({
       db: context.env.DB,
       eventId,
-      templateKey: (body.template_key ?? "custom") as "custom",
-      recipients: recipients.map((recipient) => ({ entityId: recipient.submission_id, personId: recipient.person_id, toEmail: recipient.email, data: mergeDataFor(recipient) })),
+      templateKey: (body.template_key ?? "custom") as MailTemplateKey,
+      recipients: recipients.map((recipient) => ({ entityId: recipient.submission_id ?? recipient.person_id, personId: recipient.person_id, toEmail: recipient.email, data: mergeDataFor(recipient) })),
       subject: body.subject,
       body: body.body,
     });
     const outboxIds: string[] = [];
+    const outboxRows = queued.map((item, index) => ({
+      person_id: recipients[index]?.person_id ?? "",
+      entity_id: recipients[index]?.submission_id ?? recipients[index]?.person_id ?? "",
+      outbox_id: item.id,
+      inserted: item.inserted,
+    }));
     let duplicate = 0;
     for (const item of queued) {
       if (item.inserted) {
@@ -383,7 +594,7 @@ const sendComms = defineApiRoute(
         duplicate += 1;
       }
     }
-    return context.json({ selected: recipients.length, queued: outboxIds.length, duplicate, outbox_ids: outboxIds }, 202);
+    return context.json({ selected: recipients.length, queued: outboxIds.length, duplicate, outbox_ids: outboxIds, outbox_rows: outboxRows }, 202);
   },
 );
 

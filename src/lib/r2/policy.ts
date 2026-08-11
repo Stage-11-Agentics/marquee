@@ -52,6 +52,26 @@ export interface UploadPolicy {
   minImageDimension?: number;
 }
 
+/** Parse the JSON config stored on a file task/template before applying policy. */
+export function parseUploadOwnerConfig(value: string | null | undefined): UploadOwnerConfig {
+  if (typeof value !== "string") return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const record = parsed as Record<string, unknown>;
+    return {
+      accept: Array.isArray(record.accept)
+        ? record.accept.filter((entry): entry is string => typeof entry === "string")
+        : undefined,
+      maxBytes: typeof record.maxBytes === "number" && Number.isFinite(record.maxBytes)
+        ? record.maxBytes
+        : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 function clampOwnerMaxBytes(configured: number | undefined, fallback: number): number {
   if (configured === undefined) return fallback;
   if (!Number.isFinite(configured) || configured <= 0) return fallback;

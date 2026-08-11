@@ -195,16 +195,27 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(body.tasks.filter((task: { id: string }) => task.id.startsWith("task-portal-") && task.id !== "task-portal-other").every((task: { status: string }) => task.status === "done")).toBe(true);
   });
 
-  test("AC-48 · a completed speaker task is immediately absent from the organizer's overdue dashboard count", async () => {
+  test("AC-48, AC-91, AC-92, AC-94, AC-148 · completed portal work updates organizer attention and the chase matrix", async () => {
     await env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL, due_at = ? WHERE id = 'task-portal-ack'").bind(NOW - 86_400_000).run();
+    await env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL WHERE id = 'task-portal-file'").run();
+    const uploaded = await request("/api/v1/me/tasks/task-portal-file/complete", { method: "POST", body: JSON.stringify({ attachment_id: "attachment-portal-file" }) });
+    expect(uploaded.status).toBe(200);
     const before = await request(`/api/v1/events/${EVENT_ID}/dashboard`, {}, ownerCookie);
     expect(before.status).toBe(200);
     const beforeBody = await before.json<{ attention: { overdue_submissions: { count: number } } }>();
+    const chaseBefore = await request(`/api/v1/events/${EVENT_ID}/onboarding`, {}, ownerCookie);
+    const chaseBeforeBody = await chaseBefore.json<{ rows: Array<{ cells: Record<string, { state: string; glyph: string }> }> }>();
+    expect(chaseBeforeBody.rows[0]?.cells["template-portal-ack"]).toMatchObject({ state: "overdue", glyph: "!" });
+    expect(chaseBeforeBody.rows[0]?.cells["template-portal-file"]).toMatchObject({ state: "done", glyph: "✓" });
     const completed = await request("/api/v1/me/tasks/task-portal-ack/complete", { method: "POST", body: JSON.stringify({ acknowledged: true }) });
     expect(completed.status).toBe(200);
     const after = await request(`/api/v1/events/${EVENT_ID}/dashboard`, {}, ownerCookie);
     const afterBody = await after.json<{ attention: { overdue_submissions: { count: number } } }>();
     expect(afterBody.attention.overdue_submissions.count).toBeLessThan(beforeBody.attention.overdue_submissions.count);
+    const chaseAfter = await request(`/api/v1/events/${EVENT_ID}/onboarding`, {}, ownerCookie);
+    const chaseAfterBody = await chaseAfter.json<{ rows: Array<{ cells: Record<string, { state: string; glyph: string }>; person: { id: string; name: string } }> }>();
+    expect(chaseAfterBody.rows.find((row) => row.person.id === SPEAKER_ID)).toBeUndefined();
+    expect(chaseAfterBody.rows.find((row) => row.person.id === OTHER_PERSON_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "risk", glyph: "×" });
   });
 
   test("AC-49 · overdue tasks carry a textual marker and a distinct overdue data state", async () => {
@@ -313,4 +324,5 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(other.response.status).toBe(200);
     expect(JSON.stringify(other.body)).toContain("Other Speaker Secret");
   });
+
 });

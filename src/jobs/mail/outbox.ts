@@ -2,7 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id, OutboxRow, OutboxSendPolicy } from "../../db/schema";
 import { sha256Hex } from "../../lib/auth/random-token";
-import { renderMail, type MergeData } from "./render";
+import { renderAdHocMail, renderMail, type MergeData } from "./render";
 import { findTemplate } from "./templates";
 
 export interface EnqueueOutboxInput {
@@ -62,7 +62,9 @@ async function insertOutbox(
     text: input.text ?? input.body ?? "",
     html: input.html ?? input.body ?? "",
   };
-  if (input.subject === undefined || (input.body !== undefined && input.html === undefined && input.text === undefined)) {
+  if (input.subject !== undefined && input.body !== undefined && input.html === undefined && input.text === undefined) {
+    rendered = renderAdHocMail(input.subject, input.body, input.data ?? {});
+  } else if (input.subject === undefined && input.body === undefined && input.html === undefined && input.text === undefined) {
     const template = await findTemplate(input.db, input.eventId, input.templateKey);
     const fromTemplate = renderMail(template, input.data ?? {});
     rendered = {

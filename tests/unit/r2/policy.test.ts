@@ -1,7 +1,9 @@
 import { expect, test } from "vitest";
 
-import { extensionOf, policyFor, sanitizeFilename, validateDeclared } from "../../../src/lib/r2/policy";
+import { extensionOf, parseUploadOwnerConfig, policyFor, sanitizeFilename, validateDeclared } from "../../../src/lib/r2/policy";
 import { classify, readPngDimensions } from "../../../src/lib/r2/sniff";
+import { compareOnboardingRows, deriveTaskState, rowMatchesOnboardingFilters, taskGlyph, type OnboardingRow } from "../../../src/routes/onboarding.queries";
+import { acceptedExtensions, formatBytes, validateClientUpload } from "../../../src/ui/upload/upload-policy";
 
 test("AC-232 · extension and MIME are rejected independently at sign time", () => {
   const policy = policyFor("draft_file")!;
@@ -23,6 +25,20 @@ test("AC-232 · declared size is bounded by owner policy and absolute ceiling", 
   expect(
     validateDeclared(policy, { filename: "deck.pdf", contentType: "application/pdf", sizeBytes: policy.maxBytes + 1 }),
   ).toEqual({ ok: false, violation: "too_large" });
+});
+
+test("AC-146, AC-147 · authenticated task upload policy honors template file types and limit", () => {
+  const config = parseUploadOwnerConfig(JSON.stringify({ accept: [".pdf"], maxBytes: 100 }));
+  const policy = policyFor("task_upload", config)!;
+  expect(validateDeclared(policy, { filename: "slides.pptx", contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", sizeBytes: 10 })).toEqual({
+    ok: false,
+    violation: "extension",
+  });
+  expect(validateDeclared(policy, { filename: "slides.pdf", contentType: "application/pdf", sizeBytes: 101 })).toEqual({
+    ok: false,
+    violation: "too_large",
+  });
+  expect(validateDeclared(policy, { filename: "slides.pdf", contentType: "application/pdf", sizeBytes: 100 }).ok).toBe(true);
 });
 
 test("CONTRACT · sanitizeFilename strips traversal and unsafe characters without eating dashes", () => {
@@ -67,4 +83,64 @@ test("CONTRACT · PNG dimensions read from the mandatory IHDR chunk", () => {
   view.setUint32(16, 2, false);
   view.setUint32(20, 1, false);
   expect(readPngDimensions(bytes)).toEqual({ width: 2, height: 1 });
+});
+
+const ONBOARDING_NOW = Date.parse("2026-08-11T12:00:00.000Z");
+
+test("AC-91, AC-92 · chase task states retain their glyphs and cancelled work stays visible", () => {
+  expect(deriveTaskState({ status: "done", cancelled_at: null, due_at: ONBOARDING_NOW - 1 }, ONBOARDING_NOW)).toBe("done");
+  expect(deriveTaskState({ status: "open", cancelled_at: null, due_at: ONBOARDING_NOW - 1 }, ONBOARDING_NOW)).toBe("overdue");
+  expect(deriveTaskState({ status: "open", cancelled_at: null, due_at: ONBOARDING_NOW + 7 * 86_400_000 }, ONBOARDING_NOW)).toBe("risk");
+  expect(deriveTaskState({ status: "open", cancelled_at: null, due_at: ONBOARDING_NOW + 15 * 86_400_000 }, ONBOARDING_NOW)).toBe("upcoming");
+  expect(deriveTaskState({ status: "open", cancelled_at: ONBOARDING_NOW - 1, due_at: ONBOARDING_NOW - 1 }, ONBOARDING_NOW)).toBe("cancelled");
+  expect(taskGlyph("done")).toBe("✓");
+  expect(taskGlyph("overdue")).toBe("!");
+  expect(taskGlyph("risk")).toBe("×");
+  expect(taskGlyph("cancelled")).toBe("–");
+  expect(taskGlyph("unassigned")).toBe("—");
+});
+
+test("AC-92 · chase filters match the selected task type, track, and speaker search", () => {
+  const row: OnboardingRow = {
+    id: "per_ada",
+    person: { id: "per_ada", name: "Ada Lovelace", email: "ada@example.com", title: "Engineer", company: "Analytical Engines", bio: null },
+    wave: null,
+    tracks: [{ id: "track-ai", name: "AI", color: "#0a6c73", is_primary: true }],
+    sessions: [],
+    submission_ids: ["sub_ada"],
+    tasks: [{ template_id: "task-deck", task_id: "task-ada", submission_id: "sub_ada", title: "Upload deck", kind: "file", description: "", due_at: ONBOARDING_NOW - 1, completed_at: null, state: "overdue", glyph: "!", owed: true }],
+    cells: {},
+    last_contact: null,
+    owed_count: 1,
+    done_count: 0,
+    overdue_task_count: 1,
+    risk_task_count: 0,
+    severity: 5,
+  };
+  expect(rowMatchesOnboardingFilters(row, { filter: "overdue", taskType: "task-deck", track: "track-ai", search: "analytical" })).toBe(true);
+  expect(rowMatchesOnboardingFilters(row, { filter: "risk" })).toBe(false);
+  expect(rowMatchesOnboardingFilters(row, { taskType: "other-task" })).toBe(false);
+});
+
+test("AC-92 · chase ordering puts the most overdue owed work first and ignores done work", () => {
+  const row = (id: string, name: string, severity: number, risk_task_count: number): Pick<OnboardingRow, "severity" | "risk_task_count" | "person"> => ({
+    severity,
+    risk_task_count,
+    person: { id, name, email: `${id}@example.com`, title: null, company: null, bio: null },
+  });
+  expect(compareOnboardingRows(row("per-late", "Late", 30, 0), row("per-risk", "Risk", 1, 4))).toBeLessThan(0);
+  expect(compareOnboardingRows(row("per-risk-more", "Risk More", 0, 2), row("per-risk-less", "Risk Less", 0, 1))).toBeLessThan(0);
+  expect(compareOnboardingRows(row("per-clear", "Clear", 0, 0), row("per-clear-done", "Clear Done", 0, 0))).toBeLessThan(0);
+});
+
+test("AC-146 · slide task choices advertise PDF, PPTX, and KEY before sign", () => {
+  expect(acceptedExtensions(["pdf", ".pptx", "key"])).toEqual(["pdf", "pptx", "key"]);
+  expect(validateClientUpload({ name: "slides.pptx", size: 10 }, { accept: ["pdf", "pptx", "key"], maxBytes: 25 * 1024 * 1024 })).toBeNull();
+  expect(validateClientUpload({ name: "slides.exe", size: 10 }, { accept: ["pdf", "pptx", "key"], maxBytes: 25 * 1024 * 1024 })).toContain(".pdf");
+});
+
+test("AC-147 · slide size feedback keeps a chosen file eligible for retry", () => {
+  expect(validateClientUpload({ name: "slides.pdf", size: 0 }, { accept: ["pdf"], maxBytes: 100 })).toBe("Choose a non-empty file.");
+  expect(validateClientUpload({ name: "slides.pdf", size: 101 }, { accept: ["pdf"], maxBytes: 100 })).toContain("limit is");
+  expect(formatBytes(25 * 1024 * 1024)).toBe("25.0 MB");
 });

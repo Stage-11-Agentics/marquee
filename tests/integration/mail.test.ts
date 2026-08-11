@@ -34,14 +34,14 @@ afterEach(async () => {
     env.DB.prepare("DELETE FROM event_settings WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM speaker_tasks WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM task_templates WHERE event_id = 'evt_mail'"),
-    env.DB.prepare("DELETE FROM submission_tracks WHERE submission_id IN ('sub_mail', 'sub_mail_2')"),
-    env.DB.prepare("DELETE FROM participations WHERE id IN ('part_mail', 'part_mail_2') OR submission_id IN ('sub_mail', 'sub_mail_2')"),
+    env.DB.prepare("DELETE FROM submission_tracks WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = 'evt_mail')"),
+    env.DB.prepare("DELETE FROM participations WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = 'evt_mail')"),
     env.DB.prepare("DELETE FROM submissions WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM forms WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM formats WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM tracks WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM auth_sessions WHERE person_id = 'per_mail'"),
-    env.DB.prepare("DELETE FROM memberships WHERE person_id = 'per_mail'"),
+    env.DB.prepare("DELETE FROM memberships WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM people WHERE org_id = 'org_mail'"),
     env.DB.prepare("DELETE FROM events WHERE id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM organizations WHERE id = 'org_mail'"),
@@ -81,7 +81,7 @@ test("AC-33 · auth-shaped and form-shaped messages render into the outbox with 
   expect(row?.idempotency_key).toBe(await buildIdempotencyKey("submission_confirmation", "sub_mail", "per_mail"));
 });
 
-test("AC-117 · the same bulk action twice relies on the UNIQUE idempotency constraint and delivers once", async () => {
+test("AC-117, AC-93 · the same bulk action twice relies on the UNIQUE idempotency constraint and delivers once", async () => {
   const input = {
     db: env.DB,
     eventId: "evt_mail",
@@ -102,6 +102,79 @@ test("AC-117 · the same bulk action twice relies on the UNIQUE idempotency cons
   // The duplicate was already marked by the first delivery attempt; it did not produce a second provider call.
   expect(fake.batches).toHaveLength(1);
   expect(fake.singles).toHaveLength(0);
+
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-empty-selection", now: NOW });
+  await env.DB.prepare("DELETE FROM outbox WHERE event_id = 'evt_mail'").run();
+  const emptyResponse = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+    body: JSON.stringify({ selector: { person_ids: [], submission_ids: [] }, template_key: "reminder_generic" }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(emptyResponse.status).toBe(202);
+  expect(await emptyResponse.json<{ selected: number; queued: number; duplicate: number; outbox_ids: string[]; outbox_rows: unknown[] }>()).toEqual({ selected: 0, queued: 0, duplicate: 0, outbox_ids: [], outbox_rows: [] });
+  const emptyCount = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbox WHERE event_id = 'evt_mail'").first<{ n: number }>();
+  expect(emptyCount?.n).toBe(0);
+});
+
+test("AC-93 · exact person selection can queue a demo-safe reminder for a roster speaker without a submission", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_roster', 'org_mail', 'roster@example.com', 'Roster Speaker', ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_mail_roster', 'org_mail', 'evt_mail', 'per_mail_roster', 'speaker', ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at) VALUES ('template_mail_roster', 'evt_mail', 'Upload slides', 'file', 'Upload the deck.', ?, 0, 0, ?, ?)").bind(NOW + 86_400_000, NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mail_roster', 'evt_mail', 'per_mail_roster', NULL, 'template_mail_roster', 'Upload slides', 'file', 'Upload the deck.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(NOW + 86_400_000, NOW, NOW),
+  ]);
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-person-selection", now: NOW });
+  const response = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+    body: JSON.stringify({ selector: { person_ids: ["per_mail_roster"], role: "speaker", task_state: "open" }, template_key: "task_overdue" }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(response.status).toBe(202);
+  expect(await response.json()).toMatchObject({ selected: 1, queued: 1, duplicate: 0, outbox_rows: [{ person_id: "per_mail_roster", entity_id: "per_mail_roster", inserted: true }] });
+  const row = await env.DB.prepare("SELECT entity_id, send_policy FROM outbox WHERE event_id = 'evt_mail' AND person_id = 'per_mail_roster'").first<{ entity_id: string; send_policy: string }>();
+  expect(row).toEqual({ entity_id: "per_mail_roster", send_policy: "demo_safe" });
+});
+
+test("AC-93 · exact recipient pairs do not cross-multiply co-speaking selections", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_co', 'org_mail', 'co@example.com', 'Co Speaker', ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, form_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES ('sub_mail_panel', 'evt_mail', 'form_mail', 'session', 'Panel session', 'submitted', 'public', 'per_mail', ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_mail_panel_a', 'sub_mail_panel', 'per_mail', 'speaker', 0, ?, ?), ('part_mail_panel_b', 'sub_mail_panel', 'per_mail_co', 'speaker', 1, ?, ?)").bind(NOW, NOW, NOW, NOW),
+  ]);
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-pair-selection", now: NOW });
+  const response = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      selector: {
+        recipient_pairs: [
+          { person_id: "per_mail", submission_id: "sub_mail" },
+          { person_id: "per_mail_co", submission_id: "sub_mail_panel" },
+        ],
+        role: "speaker",
+      },
+      template_key: "reminder_generic",
+    }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(response.status).toBe(202);
+  expect(await response.json()).toMatchObject({ selected: 2, queued: 2, duplicate: 0 });
+  const rows = await env.DB.prepare("SELECT person_id, entity_id FROM outbox WHERE event_id = 'evt_mail' ORDER BY person_id, entity_id").all<{ person_id: string; entity_id: string }>();
+  expect(rows.results).toEqual([
+    { person_id: "per_mail", entity_id: "sub_mail" },
+    { person_id: "per_mail_co", entity_id: "sub_mail_panel" },
+  ]);
+});
+
+test("AC-93 · preview does not resolve a person outside the requested event", async () => {
+  await env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_other_event', 'org_mail', 'other@example.com', 'Other Event Speaker', ?, ?)").bind(NOW, NOW).run();
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-preview-scope", now: NOW });
+  const response = await app.request("/api/v1/events/evt_mail/comms/preview", {
+    method: "POST",
+    headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+    body: JSON.stringify({ person_id: "per_mail_other_event", template_key: "reminder_generic" }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(response.status).toBe(404);
+  expect(await response.json()).not.toHaveProperty("to_email");
 });
 
 test("AC-125 · all seven automated triggers produce one outbox row", async () => {

@@ -1,7 +1,8 @@
 import type { JSX } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
-import { putFileToR2 } from "../upload/upload-client";
+import { putFileToR2, type UploadProgressHandlers } from "../upload/upload-client";
+import { formatBytes, validateClientUpload } from "../upload/upload-policy";
 import type { SignedUpload } from "../../lib/r2/protocol";
 import { isFieldApplicable } from "../../lib/form-conditions";
 import "./portal.css";
@@ -116,13 +117,20 @@ function formatDay(value: string): string {
   return value || "—";
 }
 
-async function uploadFile(file: File, ownerType: "task_upload" | "person_headshot", ownerId: string): Promise<string> {
+type UploadHandlers = UploadProgressHandlers & { onAbortReady?: (abort: (() => void) | null) => void };
+
+async function uploadFile(file: File, ownerType: "task_upload" | "person_headshot", ownerId: string, handlers: UploadHandlers = {}): Promise<string> {
   const signed = await requestJson<SignedUpload>("/api/v1/me/uploads/sign", {
     method: "POST",
     body: JSON.stringify({ ownerType, ownerId, filename: file.name, contentType: file.type, sizeBytes: file.size }),
   });
-  const put = putFileToR2(signed, file);
-  await put.promise;
+  const put = putFileToR2(signed, file, handlers);
+  handlers.onAbortReady?.(put.abort);
+  try {
+    await put.promise;
+  } finally {
+    handlers.onAbortReady?.(null);
+  }
   const completed = await requestJson<{ attachmentId: string }>(`/api/v1/me/uploads/${signed.attachmentId}/complete`, {
     method: "POST",
     body: JSON.stringify({ completionToken: signed.completionToken }),
@@ -172,6 +180,11 @@ function TaskSurface({ task, onComplete }: { task: PortalTask; onComplete: () =>
   const [acknowledged, setAcknowledged] = useState(task.payload.acknowledged === true);
   const [answers, setAnswers] = useState<Record<string, unknown>>(task.payload.answers ?? {});
   const [file, setFile] = useState<File | null>(null);
+  const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [canAbort, setCanAbort] = useState(false);
+  const [canRetry, setCanRetry] = useState(false);
+  const abortUpload = useRef<(() => void) | null>(null);
+  const uploadLinkExpired = useRef(false);
 
   const submit = async (event: Event) => {
     event.preventDefault();
@@ -181,7 +194,22 @@ function TaskSurface({ task, onComplete }: { task: PortalTask; onComplete: () =>
       let attachmentId = task.payload.attachment_id ?? undefined;
       if (task.kind === "file") {
         if (!file) throw new Error("Choose a file before completing this task.");
-        attachmentId = await uploadFile(file, "task_upload", task.id);
+        const validationError = validateClientUpload(file, { accept: task.payload.accept, maxBytes: task.payload.max_bytes });
+        if (validationError) throw new Error(validationError);
+        setProgress({ loaded: 0, total: file.size });
+        setCanRetry(false);
+        uploadLinkExpired.current = false;
+        attachmentId = await uploadFile(file, "task_upload", task.id, {
+          onProgress: (loaded, total) => setProgress({ loaded, total }),
+          onExpiredOrForbidden: () => {
+            uploadLinkExpired.current = true;
+            setError("The upload link expired. Retry to request a fresh link.");
+          },
+          onAbortReady: (abort) => {
+            abortUpload.current = abort;
+            setCanAbort(abort !== null);
+          },
+        });
       }
       await requestJson(`/api/v1/me/tasks/${task.id}/complete`, {
         method: "POST",
@@ -193,9 +221,13 @@ function TaskSurface({ task, onComplete }: { task: PortalTask; onComplete: () =>
       });
       await onComplete();
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(uploadLinkExpired.current ? "The upload link expired. Retry to request a fresh link." : (caught as Error).message);
+      setCanRetry(task.kind === "file" && file !== null);
     } finally {
       setBusy(false);
+      setProgress(null);
+      setCanAbort(false);
+      abortUpload.current = null;
     }
   };
 
@@ -209,8 +241,9 @@ function TaskSurface({ task, onComplete }: { task: PortalTask; onComplete: () =>
   if (task.kind === "file") {
     const accept = task.payload.accept?.map((item) => item.startsWith(".") ? item : `.${item}`).join(",") || undefined;
     return <form onSubmit={submit}>
-      <div class="portal-task-field"><label for={`file-${task.id}`}>Upload file</label><input id={`file-${task.id}`} type="file" accept={accept} onChange={(event) => setFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)} /><small>{accept ? `Accepted: ${accept}` : "Choose the file requested by the conference."}</small></div>
-      <div class="portal-payload-actions"><span class="portal-payload-error">{error ?? ""}</span><button class="portal-button" type="submit" disabled={busy}>{busy ? "Uploading…" : "Upload and complete"}</button></div>
+      <div class="portal-task-field"><label for={`file-${task.id}`}>Upload file</label><input id={`file-${task.id}`} type="file" accept={accept} onChange={(event) => { setFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null); setError(null); setCanRetry(false); }} /><small>{accept ? `Accepted: ${accept}` : "Choose the file requested by the conference."}{task.payload.max_bytes ? ` · Limit: ${formatBytes(task.payload.max_bytes)}` : ""}</small></div>
+      {progress ? <div class="portal-upload-progress" role="status" aria-live="polite"><div><span>Uploading · {progress.total > 0 ? Math.round(progress.loaded / progress.total * 100) : 0}%</span><span>{formatBytes(progress.loaded)} / {formatBytes(progress.total)}</span></div><progress max={progress.total} value={progress.loaded} /></div> : null}
+      <div class="portal-payload-actions"><span class="portal-payload-error">{error ?? (canRetry ? "The file is still selected. Retry when ready." : "")}</span><span class="portal-upload-actions">{canAbort ? <button class="portal-button secondary" type="button" onClick={() => abortUpload.current?.()}>Cancel upload</button> : null}<button class="portal-button" type="submit" disabled={busy}>{busy ? "Uploading…" : canRetry ? "Retry upload" : "Upload and complete"}</button></span></div>
     </form>;
   }
 

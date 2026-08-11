@@ -15,6 +15,7 @@ import type { ApiEnv } from "../api/runtime";
 import type { AuthContext, SessionAuth } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { roomDisplayLabel } from "../lib/venues";
+import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
 import {
   isFieldApplicable,
   projectApplicableAnswers,
@@ -305,12 +306,14 @@ function taskPayload(
     return { kind: task.kind, acknowledged: parseObject(task.response_json).acknowledged === true };
   }
   if (task.kind === "file") {
-    const config = parseObject(task.file_config);
+    const config = parseUploadOwnerConfig(task.file_config);
+    const policy = policyFor("task_upload", config);
+    const accept = policy?.rules.map((rule) => rule.extension) ?? [];
     return {
       kind: task.kind,
       attachment_id: task.attachment_id,
-      accept: Array.isArray(config.accept) ? config.accept.filter((item): item is string => typeof item === "string") : [],
-      max_bytes: typeof config.maxBytes === "number" ? config.maxBytes : null,
+      accept,
+      max_bytes: policy?.maxBytes ?? null,
     };
   }
   const projection = projectApplicableAnswers(fields, answers);

@@ -19,6 +19,7 @@ import { PortalPage } from "../portal/PortalPage";
 import { ProgramBoardPage } from "../board/ProgramBoardPage";
 import { CreateSubmissionPage } from "../submissions/CreateSubmissionPage";
 import { SubmissionRecordPage } from "../submissions/SubmissionRecordPage";
+import { OnboardingPage } from "../onboarding/OnboardingPage";
 
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
@@ -48,6 +49,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   const isEvaluation = location.pathname === "/evaluation";
   const isForms = location.pathname === "/forms";
   const isAgenda = location.pathname === "/agenda-builder";
+  const isOnboarding = location.pathname === "/onboarding";
   if (location.pathname === "/portal") return <PortalPage />;
   if (location.pathname === "/reviewer") return <ReviewerPage />;
   return <>
@@ -67,6 +69,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
             : route?.id === "settings" ? <EventSettings navigate={navigate} />
             : isForms ? <FormsPage />
             : isAgenda ? <AgendaPage />
+            : isOnboarding ? <OnboardingPage navigate={navigate} />
             : route?.id === "communications" ? <>
             <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />
             <CommsScreen />

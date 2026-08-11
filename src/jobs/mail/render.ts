@@ -46,12 +46,25 @@ function markdownToHtml(markdown: string): string {
     .join("");
 }
 
+/**
+ * Render ad-hoc operator copy through the exact same merge and escaping path
+ * as stored templates. Callers may choose the copy, but they do not get a
+ * second renderer with subtly different merge-field or HTML behavior.
+ */
+export function renderAdHocMail(subject: string, body: string, data: MergeData): RenderedMail {
+  const mergedBody = mergeTemplate(body, data);
+  return {
+    subject: mergeTemplate(subject, data),
+    text: markdownToText(mergedBody),
+    html: markdownToHtml(mergedBody),
+  };
+}
+
 export function renderMail(
   template: Pick<EmailTemplateRow, "subject" | "body_md">,
   data: MergeData,
 ): RenderedMail {
   const subject = mergeTemplate(template.subject, data);
-  const text = mergeTemplate(markdownToText(template.body_md), data);
-  const html = mergeTemplate(markdownToHtml(template.body_md), data);
-  return { subject, text, html };
+  const mergedBody = mergeTemplate(template.body_md, data);
+  return { subject, text: markdownToText(mergedBody), html: markdownToHtml(mergedBody) };
 }
