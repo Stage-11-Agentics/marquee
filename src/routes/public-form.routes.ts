@@ -11,7 +11,7 @@ import { enqueuePublicFormConfirmation, enqueueOutbox } from "../jobs/mail/outbo
 import { escapeHtml } from "../jobs/mail/render";
 import { findTemplate } from "../jobs/mail/templates";
 import { enqueueAuthMail } from "../lib/auth/auth-mail";
-import { mintMagicLink } from "../lib/auth/magic-links";
+import { mintMagicLink, mintMagicLink as issueParticipantMagicLink } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import {
@@ -104,6 +104,16 @@ function workerSecrets(context: { env: ApiEnv["Bindings"] }): { TURNSTILE_SECRET
 
 function publicOrigin(url: string): string {
   return new URL(url).origin;
+}
+
+async function mintParticipantMagicLink(
+  db: D1Database,
+  input: { personId: string; purpose: "login" | "cospeaker_profile"; redirectTo: string; now?: number },
+) {
+  // Keep participant links on the same magic-link authority path as the
+  // existing speaker portal link. The exchange route turns the purpose into
+  // the narrow session hint; no second authentication writer is introduced.
+  return issueParticipantMagicLink(db, input);
 }
 
 function tokenFromBody(body: { turnstileToken?: string; turnstile_token?: string }): string | undefined {
@@ -202,6 +212,13 @@ async function resolveDomainReferences(
   return { formatId, trackIds, issues };
 }
 
+type InsertedParticipant = {
+  id: string;
+  person: PersonRow;
+  role: "speaker" | "co_speaker";
+  position: number;
+};
+
 async function insertParticipationRows(
   db: D1Database,
   submissionId: string,
@@ -209,7 +226,7 @@ async function insertParticipationRows(
   answers: Record<string, unknown>,
   eventOrgId: string,
   now: number,
-): Promise<void> {
+): Promise<{ coSpeaker: InsertedParticipant | null }> {
   const participants: Array<{ person: PersonRow; role: "speaker" | "co_speaker"; position: number }> = [];
   const primaryName = answerText(answers, "speaker_name");
   if (primaryName || answers.speaker_email) participants.push({ person: primary, role: "speaker", position: 0 });
@@ -231,13 +248,63 @@ async function insertParticipationRows(
     `INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
      VALUES (?, ?, ?, 'submitter', 0, 'confirmed', ?, ?)`,
   ).bind(crypto.randomUUID(), submissionId, primary.id, now, now));
-  for (const participant of participants) {
+  const insertedParticipants = participants.map((participant) => ({ ...participant, id: crypto.randomUUID() }));
+  for (const participant of insertedParticipants) {
     statements.push(db.prepare(
       `INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
-    ).bind(crypto.randomUUID(), submissionId, participant.person.id, participant.role, participant.position, now, now));
+    ).bind(participant.id, submissionId, participant.person.id, participant.role, participant.position, now, now));
   }
   await db.batch(statements);
+  return { coSpeaker: insertedParticipants.find((participant) => participant.role === "co_speaker") ?? null };
+}
+
+async function enqueueCoSpeakerInvitation(
+  context: Context<ApiEnv>,
+  input: {
+    eventId: string;
+    conferenceName: string;
+    submissionId: string;
+    submissionTitle: string;
+    addedBy: string;
+    participant: InsertedParticipant;
+    now: number;
+  },
+): Promise<void> {
+  const redirectTo = `/co-speaker?participation=${encodeURIComponent(input.participant.id)}&submission=${encodeURIComponent(input.submissionId)}`;
+  const link = await mintParticipantMagicLink(context.env.DB, {
+    personId: input.participant.person.id,
+    purpose: "cospeaker_profile",
+    redirectTo,
+    now: input.now,
+  });
+  const exchangeUrl = `${publicOrigin(context.req.url)}/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`;
+  const addedBy = input.addedBy.trim() || "The conference submitter";
+  const subject = "Complete your conference speaker profile";
+  const text = `${addedBy} added you as a co-speaker on “${input.submissionTitle}” for ${input.conferenceName}.\n\nAdd your bio and headshot here: ${exchangeUrl}`;
+  const html = `<p>${escapeHtml(addedBy)} added you as a co-speaker on <strong>${escapeHtml(input.submissionTitle)}</strong> for ${escapeHtml(input.conferenceName)}.</p><p><a href="${escapeHtml(exchangeUrl)}">Add your bio and headshot</a></p>`;
+  const invitation = await enqueueOutbox({
+    db: context.env.DB,
+    eventId: input.eventId,
+    entityId: input.participant.id,
+    personId: input.participant.person.id,
+    toEmail: input.participant.person.email,
+    templateKey: "added_to_submission",
+    subject,
+    text,
+    html,
+    data: {
+      "submission.title": input.submissionTitle,
+      "speaker.name": input.participant.person.name,
+      "message.body": text,
+    },
+    now: input.now,
+  });
+  if (invitation.inserted) await enqueueMailMessage(context.env.MAIL_QUEUE, invitation.id);
+  await context.env.DB.prepare(
+    `UPDATE participations SET invited_at = ?, updated_at = ?
+     WHERE id = ? AND submission_id = ? AND person_id = ? AND role = 'co_speaker'`,
+  ).bind(input.now, input.now, input.participant.id, input.submissionId, input.participant.person.id).run();
 }
 
 async function persistTracks(db: D1Database, submissionId: string, trackIds: string[], now: number): Promise<void> {
@@ -607,9 +674,21 @@ async function handlePublicSubmission(
   }
   await replaceProjectedAnswers(context.env.DB, submissionId, base.fields, projected.projected.answers, now);
   await persistTracks(context.env.DB, submissionId, references.trackIds, now);
-  await insertParticipationRows(context.env.DB, submissionId, person, projected.projected.answers, event.org_id, now);
+  const insertedParticipants = await insertParticipationRows(context.env.DB, submissionId, person, projected.projected.answers, event.org_id, now);
   await moveAttachments(context.env.DB, submissionId, existing?.id ?? null, projected.projected.answers);
   await writeRoutingPoolAssignment(context.env.DB, submissionId, routing, now);
+
+  if (insertedParticipants.coSpeaker) {
+    await enqueueCoSpeakerInvitation(context, {
+      eventId: base.form.event_id,
+      conferenceName: event.name,
+      submissionId,
+      submissionTitle: title,
+      addedBy: answerText(projected.projected.answers, "speaker_name") ?? person.name,
+      participant: insertedParticipants.coSpeaker,
+      now,
+    });
+  }
 
   const confirmationTemplateKey = base.form.thankyou_template_key ?? "submission_confirmation";
   const confirmationTemplate = await findTemplate(context.env.DB, base.form.event_id, confirmationTemplateKey);

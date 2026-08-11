@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "d6a2d4eaa4bf1e97e59608ab8ecf2a1d19c19a8a4bbb682e7093ed0d341aab99",
+  "documentSha256": "e0f85197621d683967e3372fa4dd8eab46a8058f39f6f4a4481230b23d131cd0",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",
@@ -50,6 +50,7 @@
     "GET /api/v1/events/{eventId}/tracks listEventTracks",
     "GET /api/v1/events/{eventId}/venues listVenues",
     "GET /api/v1/events/{eventId}/views listSavedViews",
+    "GET /api/v1/me/co-speaker/submissions/{submissionId} getCoSpeakerSubmission",
     "GET /api/v1/me/portal getSpeakerPortal",
     "GET /api/v1/media/{key} serveMedia",
     "GET /api/v1/org/tokens listApiTokens",
@@ -71,6 +72,7 @@
     "PATCH /api/v1/events/{eventId}/templates/{templateId} updateEmailTemplate",
     "PATCH /api/v1/events/{eventId}/tracks/{trackId} updateEventTrack",
     "PATCH /api/v1/events/{eventId}/views/{viewId} updateSavedView",
+    "PATCH /api/v1/me/co-speaker/submissions/{submissionId}/profile updateCoSpeakerSubmissionProfile",
     "PATCH /api/v1/me/profile updateSpeakerProfile",
     "PATCH /api/v1/me/submissions/{submissionId}/talk updateSpeakerTalk",
     "PATCH /api/v1/public/forms/{slug}/drafts/{token} autosavePublicFormDraft",

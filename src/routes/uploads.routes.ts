@@ -240,10 +240,10 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
   if (!sessionId) return uploadError(context, "unauthorized", "no session");
 
   const session = await env.DB.prepare(
-    `SELECT person_id, expires_at, revoked_at FROM auth_sessions WHERE id = ?1`,
+    `SELECT person_id, role_hint, expires_at, revoked_at FROM auth_sessions WHERE id = ?1`,
   )
     .bind(sessionId)
-    .first<{ person_id: string; expires_at: number; revoked_at: number | null }>();
+    .first<{ person_id: string; role_hint: string | null; expires_at: number; revoked_at: number | null }>();
   if (!session || session.revoked_at !== null || session.expires_at <= Date.now()) {
     return uploadError(context, "unauthorized", "session invalid or expired");
   }
@@ -261,6 +261,9 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
     typeof sizeBytes !== "number"
   ) {
     return uploadError(context, "invalid_request", "only task_upload and person_headshot are supported on this route");
+  }
+  if (session.role_hint?.startsWith("cospeaker_profile:") && ownerType === "task_upload") {
+    return uploadError(context, "forbidden", "this co-speaker link can upload only its profile headshot");
   }
 
   let eventId: string | null = null;
@@ -284,11 +287,34 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
     if (ownerId !== session.person_id) {
       return uploadError(context, "forbidden", "headshot does not belong to the authenticated principal");
     }
-    const membership = await env.DB.prepare(
-      `SELECT event_id FROM memberships WHERE person_id = ? AND role = 'speaker' AND event_id IS NOT NULL ORDER BY event_id LIMIT 1`,
-    ).bind(session.person_id).first<{ event_id: string }>();
-    if (!membership) return uploadError(context, "forbidden", "speaker membership is required for a headshot upload");
-    eventId = membership.event_id;
+    const scopedParticipationId = session.role_hint?.startsWith("cospeaker_profile:")
+      ? session.role_hint.slice("cospeaker_profile:".length)
+      : null;
+    if (scopedParticipationId && !/^[A-Za-z0-9_-]+$/.test(scopedParticipationId)) {
+      return uploadError(context, "forbidden", "the profile link is not valid for a headshot upload");
+    }
+    if (scopedParticipationId) {
+      const participation = await env.DB.prepare(
+        `SELECT submission.event_id
+         FROM participations participation
+         JOIN submissions submission ON submission.id = participation.submission_id
+         JOIN events conference ON conference.id = submission.event_id
+         JOIN people person ON person.id = participation.person_id AND person.org_id = conference.org_id
+         WHERE participation.id = ? AND participation.person_id = ? AND participation.role = 'co_speaker'`,
+      ).bind(scopedParticipationId, session.person_id).first<{ event_id: string }>();
+      if (!participation) return uploadError(context, "forbidden", "the profile link is not valid for a headshot upload");
+      eventId = participation.event_id;
+    } else {
+      const membership = await env.DB.prepare(
+        `SELECT membership.event_id
+         FROM memberships membership
+         JOIN people person ON person.id = membership.person_id AND person.org_id = membership.org_id
+         WHERE membership.person_id = ? AND membership.role = 'speaker' AND membership.event_id IS NOT NULL
+         ORDER BY membership.event_id LIMIT 1`,
+      ).bind(session.person_id).first<{ event_id: string }>();
+      if (!membership) return uploadError(context, "forbidden", "speaker membership is required for a headshot upload");
+      eventId = membership.event_id;
+    }
   }
 
   const policy = policyFor(ownerType, ownerConfig);

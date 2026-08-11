@@ -80,6 +80,10 @@ export function authHasRole(
   eventId: Id,
 ): boolean {
   if (auth.kind === "session") {
+    // A co-speaker invitation is a deliberately narrow browser surface. It
+    // must not widen into the person's ordinary event memberships, even when
+    // that person also has another role in the same conference.
+    if (auth.roleHint?.startsWith("cospeaker_profile:")) return false;
     const role = roleForEvent(auth.memberships, eventId);
     return role !== null && ROLE_RANK[role] >= ROLE_RANK[required];
   }

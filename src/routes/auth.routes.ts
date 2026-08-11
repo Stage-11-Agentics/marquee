@@ -205,9 +205,20 @@ const exchangeMagicLink = defineApiRoute(
         401,
       );
     }
+    const roleHint = (() => {
+      if (link.purpose !== "cospeaker_profile") return "login";
+      try {
+        const participationId = new URL(link.redirect_to, context.req.url).searchParams.get("participation");
+        return participationId && /^[A-Za-z0-9_-]+$/.test(participationId)
+          ? `cospeaker_profile:${participationId}`
+          : "login";
+      } catch {
+        return "login";
+      }
+    })();
     const session = await createSession(context.env.DB, {
       personId: link.person_id,
-      roleHint: "login",
+      roleHint,
       userAgent: context.req.header("user-agent") ?? "",
     });
     setSessionCookie(context, session.id, SESSION_TTL_MS / 1000);

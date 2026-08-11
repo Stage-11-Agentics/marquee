@@ -96,6 +96,43 @@ export function PublicForm({ initial }: PublicFormProps) {
   }, [state.turnstile_site_key]);
 
   useEffect(() => {
+    const settleFocusedField = () => {
+      const target = document.activeElement;
+      if (!(target instanceof HTMLElement) || !target.matches("input, textarea, select, button")) return;
+      const viewport = window.visualViewport;
+      const top = viewport?.offsetTop ?? 0;
+      const bottom = top + (viewport?.height ?? window.innerHeight);
+      const box = target.getBoundingClientRect();
+      if (box.top < top + 12 || box.bottom > bottom - 12) {
+        target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }
+    };
+    const onFocus = () => window.requestAnimationFrame(settleFocusedField);
+    const onViewportResize = () => window.requestAnimationFrame(settleFocusedField);
+    document.addEventListener("focusin", onFocus);
+    window.visualViewport?.addEventListener("resize", onViewportResize);
+    return () => {
+      document.removeEventListener("focusin", onFocus);
+      window.visualViewport?.removeEventListener("resize", onViewportResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = document.querySelector<HTMLElement>("[data-public-form]");
+    if (!root) return;
+    const measureOverflow = () => {
+      root.toggleAttribute("data-horizontal-overflow", root.scrollWidth > root.clientWidth);
+    };
+    measureOverflow();
+    window.addEventListener("resize", measureOverflow);
+    window.visualViewport?.addEventListener("resize", measureOverflow);
+    return () => {
+      window.removeEventListener("resize", measureOverflow);
+      window.visualViewport?.removeEventListener("resize", measureOverflow);
+    };
+  }, []);
+
+  useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
       return;
@@ -276,7 +313,7 @@ export function PublicForm({ initial }: PublicFormProps) {
       const inputType = field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "number" ? "number" : "text";
       control = <input id={`public-${field.key}`} ref={ref as never} type={inputType} maxLength={maxLength} value={value === undefined || value === null ? "" : String(value)} onBlur={() => { if (dirty) validate(); }} onInput={(event) => { const text = (event.currentTarget as HTMLInputElement).value; setAnswer(field.key, field.type === "number" && text ? Number(text) : text); }} aria-invalid={Boolean(error)} />;
     }
-    return <div class={`public-field${error ? " has-error" : ""}`} data-field-key={field.key} key={field.key}>{label}{note}{control}{counter}{error && <div class="public-field-error" role="alert">{error}</div>}</div>;
+    return <div class={`public-field${error ? " has-error" : ""}`} data-field-key={field.key} data-field-type={field.type} key={field.key}>{label}{note}{control}{counter}<div class={`public-field-error${error ? " has-message" : ""}`} role={error ? "alert" : undefined} aria-hidden={!error}>{error ?? " "}</div></div>;
   }
 
   const closed = state.state === "closed" || state.state === "at_limit" || state.state === "submitted";
@@ -286,7 +323,7 @@ export function PublicForm({ initial }: PublicFormProps) {
 
   const minimumParticipants = state.form.min_speakers === 1 ? "one participant" : `${state.form.min_speakers} participants`;
   const maximumParticipants = state.form.max_speakers === 1 ? "one participant" : `${state.form.max_speakers} participants`;
-  return <div class="public-form"><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && <span>Closes {new Date(state.form.closes_at).toLocaleDateString()}</span>}<span class="public-save-status" aria-live="polite">{state.resume_token ? (dirty ? "Saving…" : state.last_saved_at ? `Saved ${new Date(state.last_saved_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Draft linked") : "Draft saved locally · just now"}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}{pageError && <div class="public-error" role="alert">{pageError}</div>}<form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div><p class="public-participant-limit">Include at least {minimumParticipants}; this conference can review up to {maximumParticipants} on one abstract.</p><div class="public-form-fields">{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} data-callback="marqueeTurnstileCallback" /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></div><div class="public-form-footer"><span class="public-security">Your answers stay here while you work. A resume link goes to the address you enter.</span><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : "Submit abstract"}</button></div></form></main><PublicFooter /></div>;
+  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && <span>Closes {new Date(state.form.closes_at).toLocaleDateString()}</span>}<span class="public-save-status" aria-live="polite">{state.resume_token ? (dirty ? "Saving…" : state.last_saved_at ? `Saved ${new Date(state.last_saved_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Draft linked") : "Draft saved locally · just now"}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}{pageError && <div class="public-error" role="alert">{pageError}</div>}<form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div><p class="public-participant-limit">Include at least {minimumParticipants}; this conference can review up to {maximumParticipants} on one abstract.</p><div class="public-form-fields">{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} data-callback="marqueeTurnstileCallback" /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></div><div class="public-form-footer"><span class="public-security">Your answers stay here while you work. A resume link goes to the address you enter.</span><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : "Submit abstract"}</button></div></form></main><PublicFooter /></div>;
 }
 
 function PublicHeader({ state }: { state: PublicFormState }) {

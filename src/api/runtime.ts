@@ -19,6 +19,8 @@ export type Principal =
       sessionId: string;
       personId: string;
       orgId: string;
+      /** A single-use link may carry one narrow, session-bound surface hint. */
+      roleHint?: string | null;
       /** Raw memberships are retained so every event check can resolve scope independently. */
       memberships: readonly MembershipRow[];
     }

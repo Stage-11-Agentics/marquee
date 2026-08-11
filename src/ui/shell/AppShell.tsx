@@ -18,6 +18,7 @@ import { FormsPage } from "../forms/FormsPage";
 import { AgendaPage } from "../agenda/AgendaPage";
 import { ReviewerPage } from "../review/ReviewerPage";
 import { PortalPage } from "../portal/PortalPage";
+import { CoSpeakerPage } from "../portal/CoSpeakerPage";
 import { ProgramBoardPage } from "../board/ProgramBoardPage";
 import { CreateSubmissionPage } from "../submissions/CreateSubmissionPage";
 import { SubmissionRecordPage } from "../submissions/SubmissionRecordPage";
@@ -89,7 +90,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   }, [resetting]);
 
   useEffect(() => {
-    const isNonAdminShell = location.pathname === "/portal" || location.pathname === "/reviewer";
+    const isNonAdminShell = location.pathname === "/portal" || location.pathname === "/reviewer" || location.pathname === "/co-speaker";
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const isTextControl = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
@@ -120,6 +121,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   const isImport = location.pathname === "/import";
   const isApiTokens = location.pathname === "/settings/api";
   if (location.pathname === "/portal") return <PortalPage />;
+  if (location.pathname === "/co-speaker") return <CoSpeakerPage />;
   if (location.pathname === "/reviewer") return <ReviewerPage />;
   return <>
     <div class="app-shell">

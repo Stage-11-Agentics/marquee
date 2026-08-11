@@ -1,10 +1,10 @@
 /**
  * Speaker portal API.
  *
- * The portal is a session surface, not a public projection. The shared API
- * policy admits an authenticated principal; every handler below narrows that
- * principal to a session with an event-scoped speaker membership and repeats
- * the person/event predicate on each read and write.
+ * The portal is a session surface, not a public projection. Ordinary handlers
+ * narrow an authenticated principal to an event-scoped speaker membership;
+ * the co-speaker surface instead repeats the exact invited participation
+ * predicate on every read and write.
  */
 
 import { z } from "@hono/zod-openapi";
@@ -46,6 +46,11 @@ const profileBody = z.object({
   headshot_attachment_id: z.string().min(1).nullable().optional(),
 });
 
+const coSpeakerProfileBody = z.object({
+  bio: z.string().max(20_000).nullable().optional(),
+  headshot_attachment_id: z.string().min(1).nullable().optional(),
+}).strict();
+
 const taskCompletionBody = z.object({
   acknowledged: z.boolean().optional(),
   answers: z.record(z.string(), z.unknown()).optional(),
@@ -73,6 +78,11 @@ const portalResponseSchema = z
 
 const taskResponseSchema = z.object({ task: z.any() }).openapi("SpeakerTaskCompletion");
 const profileResponseSchema = z.object({ person: z.any() }).openapi("SpeakerProfile");
+const coSpeakerResponseSchema = z.object({
+  submission: z.any(),
+  participation: z.any(),
+  person: z.any(),
+}).openapi("CoSpeakerSubmission");
 const talkResponseSchema = z.object({ submission: z.any(), history: z.array(z.any()) }).openapi("SpeakerTalk");
 const talkEditingResponseSchema = z.object({ enabled: z.boolean() }).openapi("SpeakerTalkEditing");
 
@@ -245,6 +255,26 @@ function requireSession(context: import("hono").Context<ApiEnv>): SessionAuth {
   return auth;
 }
 
+function requireUnscopedSpeakerSession(context: import("hono").Context<ApiEnv>): SessionAuth {
+  const auth = requireSession(context);
+  if (coSpeakerParticipationId(auth)) throw ApiError.forbidden("this co-speaker link is limited to its invited abstract");
+  return auth;
+}
+
+function coSpeakerParticipationId(auth: SessionAuth): string | null {
+  const hint = auth.roleHint;
+  if (!hint?.startsWith("cospeaker_profile:")) return null;
+  const participationId = hint.slice("cospeaker_profile:".length);
+  return /^[A-Za-z0-9_-]+$/.test(participationId) ? participationId : null;
+}
+
+function requireCoSpeakerSession(context: import("hono").Context<ApiEnv>): { auth: SessionAuth; participationId: string } {
+  const auth = requireSession(context);
+  const participationId = coSpeakerParticipationId(auth);
+  if (!participationId) throw ApiError.forbidden("this profile link is not scoped to a co-speaker participation");
+  return { auth, participationId };
+}
+
 async function speakerEvent(
   db: D1Database,
   auth: SessionAuth,
@@ -286,6 +316,19 @@ async function speakerParticipationFor(
   auth: SessionAuth,
   participationId: string,
 ): Promise<SpeakerParticipationRow> {
+  const scopedParticipationId = coSpeakerParticipationId(auth);
+  const membershipJoin = scopedParticipationId
+    ? ""
+    : `JOIN memberships membership
+         ON membership.event_id = submission.event_id
+        AND membership.person_id = ?
+        AND membership.role = 'speaker'`;
+  const scopedPredicate = scopedParticipationId
+    ? "AND participation.role = 'co_speaker' AND participation.id = ?"
+    : "";
+  const bindings = scopedParticipationId
+    ? [auth.orgId, participationId, auth.personId, scopedParticipationId]
+    : [auth.orgId, auth.personId, participationId, auth.personId];
   const row = await db
     .prepare(
       `SELECT participation.id, submission.event_id, participation.submission_id,
@@ -295,14 +338,11 @@ async function speakerParticipationFor(
        FROM participations participation
        JOIN submissions submission ON submission.id = participation.submission_id
        JOIN events conference ON conference.id = submission.event_id AND conference.org_id = ?
-       JOIN memberships membership
-         ON membership.event_id = submission.event_id
-        AND membership.person_id = ?
-        AND membership.role = 'speaker'
+       ${membershipJoin}
        JOIN people person ON person.id = participation.person_id
-       WHERE participation.id = ? AND participation.person_id = ?`,
+       WHERE participation.id = ? AND participation.person_id = ? ${scopedPredicate}`,
     )
-    .bind(auth.orgId, auth.personId, participationId, auth.personId)
+    .bind(...bindings)
     .first<SpeakerParticipationRow>();
   if (!row) throw ApiError.notFound("participation not found");
   return row;
@@ -430,6 +470,116 @@ async function personFor(db: D1Database, personId: string): Promise<PersonProjec
     .first<PersonProjection>();
   if (!person) throw ApiError.notFound("speaker not found");
   return person;
+}
+
+type CoSpeakerSubmissionRow = {
+  submission_id: string;
+  submission_title: string;
+  submission_abstract: string | null;
+  submission_status: string;
+  submission_updated_at: number;
+  participation_id: string;
+  participation_role: string;
+  confirmation_status: "pending" | "confirmed" | "declined";
+  confirmed_at: number | null;
+  event_id: string;
+};
+
+async function coSpeakerSubmissionFor(
+  db: D1Database,
+  auth: SessionAuth,
+  scopedParticipationId: string,
+  submissionId: string,
+): Promise<CoSpeakerSubmissionRow> {
+  const row = await db
+    .prepare(
+      `SELECT participation.submission_id,
+         submission.title AS submission_title, submission.abstract AS submission_abstract,
+         submission.status AS submission_status, submission.updated_at AS submission_updated_at,
+         participation.id AS participation_id, participation.role AS participation_role,
+         participation.confirmation_status, participation.confirmed_at,
+         submission.event_id
+       FROM participations participation
+       JOIN submissions submission ON submission.id = participation.submission_id
+       JOIN events conference ON conference.id = submission.event_id AND conference.org_id = ?
+       WHERE participation.id = ?
+         AND participation.submission_id = ?
+         AND participation.person_id = ?
+         AND participation.role = 'co_speaker'`,
+    )
+    .bind(auth.orgId, scopedParticipationId, submissionId, auth.personId)
+    .first<CoSpeakerSubmissionRow>();
+  if (!row) throw ApiError.notFound("submission not found");
+  return row;
+}
+
+function coSpeakerResponse(
+  person: PersonProjection,
+  submission: CoSpeakerSubmissionRow,
+): Record<string, unknown> {
+  return {
+    submission: {
+      id: submission.submission_id,
+      title: submission.submission_title,
+      abstract: submission.submission_abstract,
+      status: submission.submission_status,
+      updated_at: submission.submission_updated_at,
+    },
+    participation: {
+      id: submission.participation_id,
+      role: submission.participation_role,
+      confirmation_status: submission.confirmation_status,
+      confirmed_at: submission.confirmed_at,
+    },
+    person: {
+      id: person.id,
+      name: person.name,
+      email: person.email,
+      bio: person.bio,
+      headshot_attachment_id: person.headshot_attachment_id,
+      updated_at: person.updated_at,
+    },
+  };
+}
+
+async function updateCoSpeakerProfile(
+  context: import("hono").Context<ApiEnv>,
+  submissionId: string,
+  body: z.infer<typeof coSpeakerProfileBody>,
+) {
+  const { auth, participationId } = requireCoSpeakerSession(context);
+  const current = await coSpeakerSubmissionFor(context.env.DB, auth, participationId, submissionId);
+  const person = await personFor(context.env.DB, auth.personId);
+  if (body.bio === undefined && body.headshot_attachment_id === undefined) {
+    throw ApiError.badRequest("Add a bio or choose a headshot before saving your profile.");
+  }
+  let headshot = person.headshot_attachment_id;
+  if (body.headshot_attachment_id !== undefined) {
+    if (body.headshot_attachment_id === null) {
+      headshot = null;
+    } else {
+      const attachment = await context.env.DB
+        .prepare(
+          `SELECT id FROM attachments
+           WHERE id = ? AND event_id = ? AND owner_type = 'person_headshot'
+             AND owner_id = ? AND status = 'ready'`,
+        )
+        .bind(body.headshot_attachment_id, current.event_id, auth.personId)
+        .first<{ id: string }>();
+      if (!attachment) throw ApiError.unprocessable("Choose a ready headshot upload, then save your profile.", "headshot_attachment_id");
+      headshot = attachment.id;
+    }
+  }
+  const now = Date.now();
+  await context.env.DB
+    .prepare(
+      `UPDATE people
+       SET bio = ?, headshot_attachment_id = ?, last_write_source = 'marquee', updated_at = ?
+       WHERE id = ? AND org_id = ?`,
+    )
+    .bind(body.bio === undefined ? person.bio : body.bio, headshot, now, auth.personId, auth.orgId)
+    .run();
+  return context.json(coSpeakerResponse(await personFor(context.env.DB, auth.personId), current), 200);
 }
 
 function arrivalBuildingFor(row: Pick<SubmissionProjection, "building_id" | "building_name" | "building_address" | "building_lat" | "building_lng" | "building_access_minutes" | "building_access_note">): ArrivalBuilding | null {
@@ -979,7 +1129,7 @@ function talkEditingOpen(current: Awaited<ReturnType<typeof editableTalk>>): boo
 }
 
 async function updateProfile(context: import("hono").Context<ApiEnv>, body: z.infer<typeof profileBody>) {
-  const auth = requireSession(context);
+  const auth = requireUnscopedSpeakerSession(context);
   await speakerEvent(context.env.DB, auth);
   const current = await personFor(context.env.DB, auth.personId);
   let headshot = current.headshot_attachment_id;
@@ -1031,6 +1181,40 @@ async function updateProfile(context: import("hono").Context<ApiEnv>, body: z.in
   }, 200);
 }
 
+const getCoSpeakerSubmission = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/me/co-speaker/submissions/{submissionId}",
+    operationId: "getCoSpeakerSubmission",
+    summary: "Read the one submission attached to a co-speaker link",
+    description: "Returns exactly the submission named by the co-speaker participation scope, never the person's wider speaker portal.",
+    tags: ["Speaker portal"],
+    request: { params: submissionParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(coSpeakerResponseSchema, "Co-speaker submission"), ...errorResponses([401, 403, 404, 429, 500]) },
+  },
+  async (context) => {
+    const { auth, participationId } = requireCoSpeakerSession(context);
+    const submission = await coSpeakerSubmissionFor(context.env.DB, auth, participationId, context.req.valid("param").submissionId);
+    return context.json(coSpeakerResponse(await personFor(context.env.DB, auth.personId), submission), 200);
+  },
+);
+
+const updateCoSpeakerSubmissionProfile = defineApiRoute(
+  {
+    method: "patch",
+    path: "/api/v1/me/co-speaker/submissions/{submissionId}/profile",
+    operationId: "updateCoSpeakerSubmissionProfile",
+    summary: "Update a co-speaker bio or headshot",
+    description: "Updates only the linked co-speaker's profile fields; submission title and abstract remain read-only on this surface.",
+    tags: ["Speaker portal"],
+    request: { params: submissionParams, body: { content: { "application/json": { schema: coSpeakerProfileBody } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: jsonResponse(coSpeakerResponseSchema, "Updated co-speaker profile"), ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500]) },
+  },
+  async (context) => updateCoSpeakerProfile(context, context.req.valid("param").submissionId, context.req.valid("json")),
+);
+
 const getPortal = defineApiRoute(
   {
     method: "get",
@@ -1044,7 +1228,7 @@ const getPortal = defineApiRoute(
     responses: { 200: jsonResponse(portalResponseSchema, "Speaker portal snapshot"), ...errorResponses([401, 403, 404, 429, 500]) },
   },
   async (context) => {
-    const auth = requireSession(context);
+    const auth = requireUnscopedSpeakerSession(context);
     const query = context.req.valid("query");
     return context.json(await portalSnapshot(context.env.DB, auth, query.eventId), 200);
   },
@@ -1112,7 +1296,7 @@ const completeSpeakerTask = defineApiRoute(
     responses: { 200: jsonResponse(taskResponseSchema, "Completed speaker task"), ...errorResponses([401, 403, 404, 409, 422, 429, 500]) },
   },
   async (context) => {
-    const auth = requireSession(context);
+    const auth = requireUnscopedSpeakerSession(context);
     const task = await taskFor(context.env.DB, auth, context.req.valid("param").taskId);
     return context.json({ task: await completeTask(context.env.DB, auth, task, context.req.valid("json")) }, 200);
   },
@@ -1146,7 +1330,7 @@ const updateSpeakerTalk = defineApiRoute(
     responses: { 200: jsonResponse(talkResponseSchema, "Updated speaker talk"), ...errorResponses([401, 403, 404, 409, 422, 429, 500]) },
   },
   async (context) => {
-    const auth = requireSession(context);
+    const auth = requireUnscopedSpeakerSession(context);
     const { submissionId } = context.req.valid("param");
     const body = context.req.valid("json");
     if (body.title === undefined && body.description === undefined) {
@@ -1218,6 +1402,8 @@ const updateSpeakerTalkEditing = defineApiRoute(
 );
 
 export const apiRoutes = [
+  getCoSpeakerSubmission,
+  updateCoSpeakerSubmissionProfile,
   getPortal,
   confirmParticipation,
   declineParticipation,

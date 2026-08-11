@@ -75,6 +75,7 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
     sessionId: session.id,
     personId: person.id,
     orgId: person.org_id,
+    roleHint: session.role_hint,
     memberships: await loadMembershipsForOrg(db, person.id, person.org_id),
   };
 }
