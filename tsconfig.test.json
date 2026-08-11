@@ -19,6 +19,7 @@
     "scripts/checks/**/*.mjs",
     "scripts/seed/**/*.ts",
     "vitest.config.ts",
+    "vitest.worker.config.ts",
     "vitest.node.config.ts"
   ],
   "exclude": ["tests/e2e/**", "tests/node/**"]
