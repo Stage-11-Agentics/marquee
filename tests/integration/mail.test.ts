@@ -178,7 +178,7 @@ test("AC-93 · preview does not resolve a person outside the requested event", a
   expect(await response.json()).not.toHaveProperty("to_email");
 });
 
-test("AC-125 · all seven automated triggers produce one outbox row", async () => {
+test("AC-125 · G3 · all seven automated triggers plus bulk are suppressed before delivery in demo mode", async () => {
   const ids: string[] = [];
   for (const [index, templateKey] of TRIGGER_TEMPLATE_KEYS.entries()) {
     const result = await enqueueTrigger({
@@ -192,12 +192,34 @@ test("AC-125 · all seven automated triggers produce one outbox row", async () =
     expect(result?.inserted).toBe(true);
     if (result) ids.push(result.id);
   }
+  const bulk = await enqueueBulkReminder({
+    db: env.DB,
+    eventId: "evt_mail",
+    templateKey: "reminder_generic",
+    recipients: [{
+      entityId: "bulk_entity",
+      personId: "per_mail",
+      toEmail: "bulk-not-allowlisted@example.com",
+      data: { "speaker.first_name": "Ada" },
+    }],
+  });
+  ids.push(...bulk.map((row) => row.id));
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbox").first<{ n: number }>();
-  expect(count?.n).toBe(7);
+  expect(count?.n).toBe(8);
   const fake = provider();
-  expect(await processMailOutbox(env.DB, env, ids, { provider: fake, now: NOW, sleep: async () => undefined })).toEqual({ sent: 0, suppressed: 7, failed: 0 });
+  expect(await processMailOutbox(env.DB, env, ids, { provider: fake, now: NOW, sleep: async () => undefined })).toEqual({ sent: 0, suppressed: 8, failed: 0 });
   expect(fake.batches).toHaveLength(0);
   expect(fake.singles).toHaveLength(0);
+  const statusRows = await env.DB.prepare(
+    "SELECT status, send_policy, suppressed_reason, COUNT(*) AS count FROM outbox GROUP BY status, send_policy, suppressed_reason",
+  ).all<{ status: string; send_policy: string; suppressed_reason: string; count: number }>();
+  expect(statusRows.results).toEqual([{
+    status: "suppressed",
+    send_policy: "demo_safe",
+    suppressed_reason: "demo_mode_not_allowlisted",
+    count: 8,
+  }]);
+  console.log("MRQ-45 demo matrix: outbox_rows=" + (count?.n ?? 0) + " suppressed=" + (statusRows.results[0]?.count ?? 0) + " sent=0 provider_batches=" + fake.batches.length + " provider_singles=" + fake.singles.length);
 });
 
 test("AC-126 · a disabled trigger emits no row and an edited template round-trips into rendered content", async () => {
