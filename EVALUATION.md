@@ -2,16 +2,16 @@
 
 **Status:** v1.4 contract revision for client prototype review · updated 2026-08-09; not yet signed for orchestration.
 **Authority once signed:** this file defines what "done" means for the Marquee build and *how an agent proves each criterion without a human in the loop*. The build fleet writes against it; the terminal auditor — who did not write the spec — runs it.
-**Upstream:** `sequence/USER_STORIES.md` (267 live criteria through AC-269; AC-239 struck) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
+**Upstream:** `sequence/USER_STORIES.md` (269 live criteria through AC-274 — AC-270–272 reserved, unminted; AC-239 struck) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
 
-**Build scope: 203 live criteria — read the tier, not the number.** Amendments allocate IDs without implying tier; AC-239 is struck and deliberately has no test. **`sequence/USER_STORIES.md` §"Scope at a glance" is the authority on tier membership**; this file follows it and never re-derives it from ID arithmetic.
+**Build scope: 207 live criteria — read the tier, not the number.** Amendments allocate IDs without implying tier; AC-239 is struck and deliberately has no test. **`sequence/USER_STORIES.md` §"Scope at a glance" is the authority on tier membership**; this file follows it and never re-derives it from ID arithmetic.
 
 | Tier | ACs | Count | Consequence here |
 |---|---|---|---|
-| **A — the walkthrough loop** | AC-1 – AC-90, **AC-231, AC-234, AC-240, AC-244–246, AC-264 – AC-269** | 102 | Binding, no waivers (§1.4, gate 18) |
+| **A — the walkthrough loop** | AC-1 – AC-90, **AC-217–AC-218, AC-231, AC-234, AC-240, AC-244–246, AC-264 – AC-269, AC-273–AC-274** | 106 | Binding, no waivers (§1.4, gate 18) |
 | **B — ordered differentiators** | AC-91 – AC-169, **AC-225 – AC-230, AC-232, AC-235–238, AC-241–243, AC-247–253** | 100 | Cut from the bottom; a cut must be named (gate 19) |
 | **Cut-line criterion on a Tier A story** | **AC-233** | 1 | Speaker Handbook — hosted on US-39, outside Tier A's no-waiver set; cuttable if named |
-| **Post-competition** | AC-170 – AC-224 | 55 | Not built, not tested, not a defect (§7) |
+| **Post-competition** | AC-170 – AC-224 except **AC-217–AC-218** (promoted, Amendment 18 — see §7) | 53 | Not built, not tested, not a defect (§7) |
 
 **The one sentence.** The judges' rubric is a deployed URL driven through the 11-step walkthrough loop by a practitioner who will spend minutes, not an hour. Everything below exists to make that pass provable before a judge ever opens it.
 
@@ -116,13 +116,13 @@ These gate suites, not individual ACs. Each is a human action item; unresolved o
 
 ---
 
-## 2. Per-AC verifiability — all 206 live in-scope criteria
+## 2. Per-AC verifiability — all 210 live in-scope criteria
 
 The original 178 rows remain grouped by story in build order; the sixteen live context/amendment rows are consolidated at §2.3 with explicit tier labels. Grouping — not ID arithmetic — carries membership. AC-239 is struck and excluded.
 
 Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:` · `api:` · `repo:` · `readme:` · `oracle:` · `C1`–`C7` = checkpoints in §3.
 
-### Tier A — the walkthrough loop (27 stories · 96 live ACs; AC-233 rides on US-39 but is cut-line, not Tier A)
+### Tier A — the walkthrough loop (28 stories · 100 live ACs; AC-233 rides on US-39 but is cut-line, not Tier A)
 
 **US-01 · A judge lands on a working, populated product**
 
@@ -350,6 +350,15 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-88 | `auto` | `e2e:` both embeds render; track and status filters change the rendered set. |
 | AC-89 | `auto` | `speed:` mutate via API, poll the embed from a clean context; assert ≤60s, record actual. |
 | AC-90 | `auto` | `e2e:` embed at 375px and 1440px with no horizontal overflow; configured colors present in the resolved styles. |
+| AC-273 | `auto` | `e2e:` *(Amendment 18)* `sessions` kind renders a flat title/track/time row per published session, no room or speaker detail; track and status filters change the rendered set exactly as the `agenda` kind's; selectable in the embed dialog's format segment. |
+| AC-274 | `auto` | `e2e:` *(Amendment 18)* `speakers` kind's Cards/List layout segment changes the rendered markup (grid vs. compact rows); the chosen layout is carried as `layout=list` in the snippet URL (cards is the unparameterized default); both layouts pass AC-90's 375px/1440px responsive assertion. |
+
+**US-16 · Promote the call with a live block** *(Amendment 18 — promoted to live in-scope)*
+
+| AC | Tag | How verified |
+|---|---|---|
+| AC-217 | `auto` | `e2e:` the `cfp` embed kind renders the event's primary open form's deadline and formats, plus a link to `/f/:slug`; selectable in the same embed dialog as the other three formats. |
+| AC-218 | `auto` | `e2e:` set the form's `closes_at` into the past with no other action; re-fetch past the 30s cache TTL and assert the embed renders its closed copy with the submit link removed — the flip is computed from `closes_at` alone, not stamped by a republish. |
 
 ### Tier B — ordered differentiators (28 stories, ranked · 100 live ACs)
 
@@ -684,7 +693,7 @@ Named, not guessed. Each changes something specific in this contract.
 | # | Dependency | What it changes | Status |
 |---|---|---|---|
 | 1 | **Sunday clarification video** — requirements freeze | May add or remove ACs. New criteria append from **AC-251**; nothing here is renumbered or reused. Any new criterion needs a row in §2, a tier assignment in `USER_STORIES.md`, and — if it lands in Tier A's no-waiver set — a line in §1.4, all before the gate. | Open. Video is unlisted, announced only in Discord. |
-| 2 | **Discord ruling Q2 — embeddable gallery** (struck in the brief, described in the video) | If struck: **AC-87 – AC-90 move to §5 non-goals** and gate 6's embed steps drop. Currently building them; the video overrides the strikethrough. | Open. |
+| 2 | **Discord ruling Q2 — embeddable gallery** (struck in the brief, described in the video) | **Closed, resolved-built (Amendment 18, 2026-08-11).** MRQ-22 merged AC-87–90; MRQ-75 widened the family to four kinds (`agenda\|sessions\|speakers\|cfp`) and moved all of it — original and new — into Tier A's no-waiver set. The video's override of the brief's strikethrough stands; nothing here is cuttable anymore. | **Closed.** |
 | 3 | **Discord ruling Q1 — Airtable as literal primary datastore** | If ruled primary, gate 9 changes shape and the §5 entry is void. The mirror is built under either answer. | Open; we build the mirror regardless. |
 | 4 | **Resend plan tier** | Free is 100 sends/day. Decides whether gates 10 and 11 must be rationed and whether Pro is bought for the judging window. | Open — a 30-second dashboard check. |
 | 5 | **Real Sessionize export** | The only thing that settles AC-109's `op-assist` tag. | Open. |
@@ -693,9 +702,9 @@ Named, not guessed. Each changes something specific in this contract.
 
 ---
 
-## 7. Out of build scope — AC-170 – AC-224
+## 7. Out of build scope — AC-170 – AC-224 except AC-217–AC-218
 
-**AC-170 – AC-224 are post-competition and are not built by Wednesday.** This is the *only* contiguous ID range that maps cleanly to a tier — everything above AC-224 is in scope, so do not read "higher number = later" anywhere else. They carry permanent IDs and are modeled where the data model makes it cheap (round-aware schema, the complete status enum including waitlisted, the `(person, session, role)` participation triple, org-level people). The auditor does not test them and does not fail the build for their absence.
+**AC-170 – AC-224, except AC-217–AC-218 (promoted to live Tier A by Amendment 18, 2026-08-11), are post-competition and are not built by Wednesday.** This was the *only* contiguous ID range that mapped cleanly to a tier before Amendment 18 opened this one hole in it — everything above AC-224 is in scope and everything in this range other than AC-217–AC-218 is not, so do not read "higher number = later" anywhere else. The remaining post-competition ACs carry permanent IDs and are modeled where the data model makes it cheap (round-aware schema, the complete status enum including waitlisted, the `(person, session, role)` participation triple, org-level people). The auditor does not test them and does not fail the build for their absence.
 
 Two carry enforcement obligations even though their UI is deferred, because retrofitting them is expensive or they leak data:
 
@@ -705,6 +714,8 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 ---
 
 ## Amendment log
+
+**Amendment 11 — public widgets widened and protected, 2026-08-11, client-directed.** Folds `SPEC.md` Amendment 18 and `USER_STORIES.md` Amendment 18. Four `auto` rows added to §2 Tier A: **AC-217, AC-218** (new `US-16` block, promoted out of post-competition) and **AC-273, AC-274** (appended to the existing `US-58` block) — in-scope live count 206 → 210, build-scope (Tier A + Tier B + cut-line) 203 → 207, Tier A 102 → 106 (27 stories → 28), post-competition 55 → 53. §6 dependency 2 (Discord Q2 — embeddable gallery) closes **resolved-built** rather than staying open against a strikethrough the shipped video already overrides. §7's post-competition range gets its one carve-out (AC-217–AC-218). **Tier rationale, since neither the ticket nor `USER_STORIES.md`'s (unmaintained-per-amendment) "Scope at a glance" table states it explicitly:** all four join Tier A, not Tier B, because the client ruling was "protect and widen" — landing the widened half of the embed family in still-cuttable Tier B would leave exactly the part the ruling was about exposed to the cut it was meant to end. Built by MRQ-75 on top of merged MRQ-22; no new milestone dependency beyond it.
 
 **Amendment 1 — contract-review fold, 2026-08-08.** `USER_STORIES.md` appended AC-225 – AC-233, closing four `SPEC.md` flags that named contract items with no acceptance criterion. Folded here: nine `auto` rows added to §2 (in-scope count 169 → 178, `auto` 159 → 168); `check:mirror` added to the harness; a dedicated Airtable test base added as precondition 9; gate 9 now cites AC-225 – AC-229 and gate 13 cites AC-230; gate 18's no-waiver set widened to include AC-231; gate 19 now names AC-233 explicitly. At that amendment, Tier B ranks 3–23 renumbered 4–25 to seat US-73 at rank 3 and US-72 at rank 7; Amendment 8 later shifted US-72 to final rank 8 — **no AC ID moved**. Two flags this closes were previously invisible defects in this file: gates 9 and 13 asserted behaviour that no AC covered, so a build could have passed §2 whole and still failed the gate.
 

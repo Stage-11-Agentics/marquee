@@ -1,5 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
+import { EMBED_KINDS, type EmbedKind, type EmbedLayout, type FormRow } from "../db/schema";
 import { showsBuildingComparisonCount } from "./venue-disclosure";
 import { slugify } from "./ids";
 import { roomDisplayLabel } from "./venues";
@@ -89,7 +90,7 @@ export interface PublicSpeaker extends PublicSpeakerSummary {
 }
 
 export interface PublicEmbedConfig {
-  kind: "agenda" | "speakers";
+  kind: EmbedKind;
   tracks: string[];
   statuses: string[];
   accent: string | null;
@@ -98,22 +99,33 @@ export interface PublicEmbedConfig {
 export interface ResolvedPublicEmbed {
   event: PublicEvent;
   slug: string;
-  kind: "agenda" | "speakers";
+  kind: EmbedKind;
   config: PublicEmbedConfig;
+}
+
+export interface PublicEmbedCfp {
+  formSlug: string;
+  formName: string;
+  status: "open" | "closed";
+  closesAt: number | null;
+  formats: string[];
+  url: string;
 }
 
 export interface PublicEmbedData {
   event: PublicEvent;
   venue: PublicVenueDisclosure;
   slug: string;
-  kind: "agenda" | "speakers";
+  kind: EmbedKind;
   config: PublicEmbedConfig;
   tracks: PublicTrack[];
   sessions: PublicSession[];
   speakers: PublicSpeaker[];
+  cfp: PublicEmbedCfp | null;
   filters: {
     track: string | null;
     status: string | null;
+    layout: EmbedLayout | null;
   };
 }
 
@@ -145,7 +157,7 @@ interface PublicSessionRow {
 interface EmbedRow {
   event_id: string;
   event_slug: string;
-  kind: "agenda" | "speakers";
+  kind: EmbedKind;
   slug: string;
   config: string;
 }
@@ -539,7 +551,7 @@ function validAccent(value: unknown): string | null {
   return typeof value === "string" && /^#[0-9a-f]{3,8}$/i.test(value) ? value : null;
 }
 
-function parseEmbedConfig(value: string | null, kind: "agenda" | "speakers"): PublicEmbedConfig {
+function parseEmbedConfig(value: string | null, kind: EmbedKind): PublicEmbedConfig {
   const raw = parseJson<Record<string, unknown>>(value, {});
   const trackValues = Array.isArray(raw.tracks)
     ? raw.tracks.filter((item): item is string => typeof item === "string")
@@ -555,20 +567,22 @@ function parseEmbedConfig(value: string | null, kind: "agenda" | "speakers"): Pu
   };
 }
 
-function inferEmbedKind(slug: string): "agenda" | "speakers" | null {
+function inferEmbedKind(slug: string): EmbedKind | null {
   if (slug === "agenda" || slug.endsWith("-agenda")) return "agenda";
+  if (slug === "sessions" || slug.endsWith("-sessions")) return "sessions";
   if (slug === "speakers" || slug.endsWith("-speakers")) return "speakers";
+  if (slug === "cfp" || slug.endsWith("-cfp")) return "cfp";
   return null;
 }
 
 function inferEventSlug(slug: string): string | null {
-  if (slug === "agenda" || slug === "speakers") return null;
-  return slug.replace(/-(?:agenda|speakers)$/, "") || null;
+  if (EMBED_KINDS.includes(slug as EmbedKind)) return null;
+  return slug.replace(/-(?:agenda|sessions|speakers|cfp)$/, "") || null;
 }
 
 export async function resolvePublicEmbed(
   database: D1Database,
-  request: { slug: string; eventSlug?: string | null; kind?: "agenda" | "speakers" },
+  request: { slug: string; eventSlug?: string | null; kind?: EmbedKind },
 ): Promise<ResolvedPublicEmbed | null> {
   const row = await database.prepare(
     `SELECT embeds.event_id, events.slug AS event_slug, embeds.kind, embeds.slug, embeds.config
@@ -596,13 +610,70 @@ export async function resolvePublicEmbed(
   };
 }
 
+async function findPrimaryEmbedForm(database: D1Database, eventId: string): Promise<FormRow | null> {
+  return database
+    .prepare(
+      `SELECT * FROM forms
+        WHERE event_id = ? AND status <> 'draft'
+        ORDER BY (status = 'open') DESC, opens_at DESC, id ASC
+        LIMIT 1`,
+    )
+    .bind(eventId)
+    .first<FormRow>();
+}
+
+/** Mirrors `publicFormIsClosed` in `src/routes/public-form.shared.ts` — duplicated
+ * rather than imported so this module (reachable from the client bundle via
+ * `EmbedPage.tsx`) never pulls in route-layer code that assumes Worker globals. */
+function isFormClosed(form: FormRow, now = Date.now()): boolean {
+  return form.status !== "open"
+    || (form.opens_at !== null && Number(form.opens_at) > now)
+    || (form.closes_at !== null && Number(form.closes_at) <= now);
+}
+
+async function loadPublicCfp(database: D1Database, eventId: string): Promise<PublicEmbedCfp | null> {
+  const form = await findPrimaryEmbedForm(database, eventId);
+  if (!form) return null;
+  const formatRows = await database
+    .prepare("SELECT name FROM formats WHERE event_id = ? ORDER BY position ASC, id ASC")
+    .bind(eventId)
+    .all<{ name: string }>();
+  return {
+    formSlug: form.slug,
+    formName: form.name,
+    status: isFormClosed(form) ? "closed" : "open",
+    closesAt: form.closes_at !== null ? Number(form.closes_at) : null,
+    formats: formatRows.results.map((row) => row.name),
+    url: `/f/${encodeURIComponent(form.slug)}`,
+  };
+}
+
 export async function loadPublicEmbed(
   database: D1Database,
   resolved: ResolvedPublicEmbed,
-  filters: { track?: string | null; status?: string | null; accent?: string | null } = {},
+  filters: { track?: string | null; status?: string | null; accent?: string | null; layout?: string | null } = {},
 ): Promise<PublicEmbedData> {
+  const accent = validAccent(filters.accent) ?? resolved.config.accent;
+  const config = { ...resolved.config, accent };
+
+  if (resolved.kind === "cfp") {
+    return {
+      event: resolved.event,
+      venue: { buildingName: null, showComparison: false },
+      slug: resolved.slug,
+      kind: resolved.kind,
+      config,
+      tracks: [],
+      sessions: [],
+      speakers: [],
+      cfp: await loadPublicCfp(database, resolved.event.id),
+      filters: { track: null, status: null, layout: null },
+    };
+  }
+
   const track = filters.track ?? resolved.config.tracks[0] ?? null;
   const status = filters.status ?? resolved.config.statuses[0] ?? null;
+  const layout: EmbedLayout = filters.layout === "list" ? "list" : "cards";
   const agenda = await loadPublicAgenda(database, {
     eventSlug: resolved.event.slug,
     allDays: true,
@@ -646,21 +717,19 @@ export async function loadPublicEmbed(
     venue: agenda.venue,
     slug: resolved.slug,
     kind: resolved.kind,
-    config: {
-      ...resolved.config,
-      accent: validAccent(filters.accent) ?? resolved.config.accent,
-    },
+    config,
     tracks: agenda.tracks,
     sessions: agenda.sessions,
     speakers: [...speakersById.values()].sort((left, right) => left.name.localeCompare(right.name)),
-    filters: { track, status },
+    cfp: null,
+    filters: { track, status, layout: resolved.kind === "speakers" ? layout : null },
   };
 }
 
 export function publicEmbedCacheKey(
   eventId: string,
   slug: string,
-  filters: { track?: string | null; status?: string | null; accent?: string | null } = {},
+  filters: { track?: string | null; status?: string | null; accent?: string | null; layout?: string | null } = {},
 ): string {
   return [
     "public-embed",
@@ -669,6 +738,7 @@ export function publicEmbedCacheKey(
     filters.track ?? "all-tracks",
     filters.status ?? "all-statuses",
     filters.accent ?? "event-accent",
+    filters.layout === "list" ? "list" : "cards",
   ].map((part) => encodeURIComponent(part)).join(":");
 }
 
