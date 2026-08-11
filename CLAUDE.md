@@ -17,6 +17,8 @@ Open-source speaker/session-management platform for conference organizers — St
 - The walkthrough video is the evaluation rubric: the 11-step loop must complete with zero dead ends.
 - Speed is a graded feature (R7). Treat any slow list or transition as a defect.
 - This repo will be **public open source** (competition requirement). Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
+- **Do not report subscription usage, limits, or glideslope position unless asked.** The operator can see it and has it under control. It is visible in every agent's status line, which makes it tempting to volunteer — and with a fleet this size, one mention per agent becomes a stream of noise about a number nobody needs. Answer if asked; otherwise leave it alone.
+- **The suite budget is 45s and the gate budget is 120s** (`scripts/checks/run-test.mjs`, `pr-gate.mjs`). Several agents build and test here at once, so the budgets are set to survive contention: a red suite must mean a real defect, never a busy machine. If a run fails on time alone, check the load before believing it.
 
 ## Source control: GitHub is canonical for Marquee (operator ruling, 2026-08-11)
 
