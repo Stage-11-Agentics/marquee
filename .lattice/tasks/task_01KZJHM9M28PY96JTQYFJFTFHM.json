@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-24",
   "branch_links": [],
+  "c11_surface": "surface:184",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM9M28PY96JTQYFJFTFHM",
-  "last_event_id": "ev_01KZJHMFWR986KGG2VRE0AE73Z",
-  "last_status_changed_at": "2026-08-09T05:58:44Z",
+  "last_event_id": "ev_01KZQNMTPJBYWBK8NC4WMA0GXY",
+  "last_status_changed_at": "2026-08-11T05:45:08Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -40,10 +42,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-24",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Chase board and slide upload",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:50Z",
+  "updated_at": "2026-08-11T05:45:08Z",
   "urgency": null
 }

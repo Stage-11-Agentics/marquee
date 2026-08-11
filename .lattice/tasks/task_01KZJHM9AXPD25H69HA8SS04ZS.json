@@ -18,8 +18,8 @@
     }
   ],
   "id": "task_01KZJHM9AXPD25H69HA8SS04ZS",
-  "last_event_id": "ev_01KZQMKE1QZWGGBBP3DJ7PQSAR",
-  "last_status_changed_at": "2026-08-11T05:26:53Z",
+  "last_event_id": "ev_01KZQNP50YVYK8883CBK3CSYVH",
+  "last_status_changed_at": "2026-08-11T05:45:51Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +34,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-21",
-  "status": "in_progress",
+  "status": "review",
   "tags": null,
   "title": "Agenda: track swimlane and conflicts",
   "type": "task",
-  "updated_at": "2026-08-11T05:26:53Z",
+  "updated_at": "2026-08-11T05:45:51Z",
   "urgency": null
 }
