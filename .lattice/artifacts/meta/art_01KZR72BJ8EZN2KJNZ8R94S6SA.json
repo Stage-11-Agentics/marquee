@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:49:37Z",
+  "created_by": "agent:delegator-mrq-66",
+  "custom_fields": {},
+  "id": "art_01KZR72BJ8EZN2KJNZ8R94S6SA",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR72BJ8EZN2KJNZ8R94S6SA.md",
+    "size_bytes": 764
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: plan is additive-only and correctly targets migration 0005",
+  "tags": [],
+  "title": "MRQ-66 plan self-review",
+  "token_usage": null,
+  "type": "note"
+}

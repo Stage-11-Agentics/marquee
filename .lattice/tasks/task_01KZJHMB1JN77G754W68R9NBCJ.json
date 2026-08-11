@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:218",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-44 (rank 25, US-27) + M-47 (rank 28, US-32) \u2014 Wave 2 (\u00a75) \u00b7 MERGED at mint (3 h + 3 h = 6 h; identical dependency set {M-17}, same reviewer module)\n\n**M-44 \u2014 Mobile reviewer pass** (3 h, ACs AC-158/AC-159, dep M-17)\nScope (verbatim): mobile reviewer pass.\nAC-159: the reviewer surface contains no admin navigation and no admin route is reachable from it.\n\n**M-47 \u2014 Optional AI first pass** (3 h, ACs AC-167 \u2013 AC-169, dep M-17)\nScope (verbatim): off, aid-only language, zero status changes, absent from demo path.\nAC-169: a crawler from both demo entries reaches **no** AI surface without explicitly enabling the flag. AC-168: the pass over 50 submissions with a stubbed model makes zero status transitions.\n\nACs (union): AC-158, AC-159, AC-167 \u2013 AC-169\nHours: 6 (3 + 3)\nWorkflow: inline-full\nShared files: none \u2014 module-local under `src/ui/review/*` (M-17's module; add files, do not rewrite).\nDeps: M-17\nCut-line note: M-47 is **rank 28 \u2014 the bottom of the band, the first thing cut.** If cut, the merged ticket ships its M-44 half and gate 19 names US-32 with AC-167 \u2013 AC-169 and the reason.\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T10:48:28Z",
   "evidence_refs": [
     {
       "id": "art_01KZR68VZMCZ0PKVPB1TWJQX4Z",
@@ -25,11 +25,31 @@
       "id": "art_01KZR6RJH070FBKW162CWVARH9",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR6TZCJJZH689BH2K77NRFP",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR6XDEBTQXENGSQN9GTN9S6",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR70900XGV010XZ5F0M5PKG",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR70900XGV010XZ5F0M5PKF",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMB1JN77G754W68R9NBCJ",
-  "last_event_id": "ev_01KZR6RJH27ZKWW8MR4W2R905C",
-  "last_status_changed_at": "2026-08-11T10:43:04Z",
+  "last_event_id": "ev_01KZR70900XGV010XZ5F0M5PKK",
+  "last_status_changed_at": "2026-08-11T10:48:28Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -41,13 +61,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-39",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Mobile reviewer pass and optional AI first pass",
   "type": "task",
-  "updated_at": "2026-08-11T10:44:16Z",
+  "updated_at": "2026-08-11T10:48:28Z",
   "urgency": null
 }

@@ -10,6 +10,14 @@ SCOPE DISCIPLINE: this ticket ships the migration and NOTHING else — no read s
 
 Serves AC-264 and AC-241. 1 agent-hour.
 
+## Plan correction (2026-08-11)
+
+The scaffold calls this M-61's third migration, but the checkout already contains immutable `0003_building_access_note.sql` and `0004_calendar_reversal.sql`; the implementation is therefore `0005_task_cancellation_webhooks.sql`.
+
+## Implementation resolution (2026-08-11)
+
+The immutable `0004_calendar_reversal.sql` already adds `speaker_tasks.cancelled_at`; a duplicate `ALTER TABLE` in 0005 was measured to fail fresh application with `duplicate column name: cancelled_at`. Preserve 0004 unchanged, verify its nullable tombstone and unchanged `open|done` check, and make 0005 create only the missing webhook tables/index. This is a flagged codebase-overlap deviation from the stale ticket wording; no cancellation behavior is broadened.
+
 ## Execution plan
 
 ### Scope and non-goals
@@ -21,7 +29,7 @@ Serves AC-264 and AC-241. 1 agent-hour.
 
 ### Implementation
 
-1. Add `migrations/0005_task_cancellation_webhooks.sql` with `ALTER TABLE speaker_tasks ADD COLUMN cancelled_at INTEGER`, the exact `webhook_endpoints` and `webhook_deliveries` columns/defaults/foreign keys/status checks from SPEC §3, allowlist validation, and an index on `webhook_deliveries(endpoint_id, created_at)`.
+1. Verify immutable `0004_calendar_reversal.sql` already supplies `speaker_tasks.cancelled_at` without changing the `open|done` status check, then add `migrations/0005_task_cancellation_webhooks.sql` with the exact `webhook_endpoints` and `webhook_deliveries` columns/defaults/foreign keys/status checks from SPEC §3, allowlist validation, and an index on `webhook_deliveries(endpoint_id, created_at)`.
 2. Extend `src/db/schema.ts` as the physical-schema mirror: webhook event/status constants and types, immutable row interfaces, the table-name/table-row registries, default-column declarations, and insert aliases. Update the schema verifier's initial 46-table assertion to distinguish immutable 0001 tables from the 48-table applied schema, and require the new named index.
 3. Add 0005 to `tests/integration/apply-migrations.ts` so Worker-backed tests run the same complete migration sequence. Add both new tables to `WIPE_ORDER` in child-before-parent order (`webhook_deliveries` before `webhook_endpoints`, both before `events`).
 4. Add a focused `tests/node` contract test for migration numbering, the unchanged open/done check, nullable cancellation, the two webhook table shapes, the six-event allowlist, and FK-safe wipe order. Add `tests/ac-claims/MRQ-66.json` with explicit empty `owns`/`exercises` because M-61 supplies schema for AC-241 and AC-264; downstream behavior tickets own the auto criteria.
