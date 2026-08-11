@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T04:26:22Z",
+  "created_by": "agent:delegator-mrq-22",
+  "custom_fields": {},
+  "id": "art_01KZQH4KJ2Y0Q9TJ48PYK6CM36",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQH4KJ2Y0Q9TJ48PYK6CM36.md",
+    "size_bytes": 884
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS; final-head agenda, embed, and no-guess leak probes.",
+  "tags": [],
+  "title": "MRQ-22 final-head Worker validation at 43a1f47",
+  "token_usage": null,
+  "type": "file"
+}

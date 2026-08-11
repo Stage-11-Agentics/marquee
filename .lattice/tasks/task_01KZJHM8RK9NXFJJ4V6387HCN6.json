@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM8RK9NXFJJ4V6387HCN6",
-  "last_event_id": "ev_01KZQGH5Z3FE1Z02E0AVFVF98E",
-  "last_status_changed_at": "2026-08-11T04:15:45Z",
+  "last_event_id": "ev_01KZQH8QB9JQZ3JSN7QKYJCEAN",
+  "last_status_changed_at": "2026-08-11T04:28:37Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -39,13 +39,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-15",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Public CFP form",
   "type": "task",
-  "updated_at": "2026-08-11T04:15:45Z",
+  "updated_at": "2026-08-11T04:28:37Z",
   "urgency": null
 }

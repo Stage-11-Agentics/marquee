@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:149",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-19a \u2014 Wave 1 (\u00a74), walkthrough step 10\n\nScope (verbatim): Unscheduled pool = accepted-and-unplaced, configurable schedulable statuses, drag pool\u2194slot, drop sets date/time/room, duration from format, resize, **no save button**, filters + scroll preserved across view switches. **The unscheduled pool is derived from status** (accepted-and-unplaced), so a live M-18 accept flows into it with no code dependency \u2014 which is why this ticket depends on M-08's list/queries and **not** on M-16's evaluation plan. That dependency was serializing the whole agenda branch behind evaluation and made M-08 \u2192 M-16 \u2192 M-19a \u2192 M-20 \u2192 M-22 the longest chain in Wave 1; removing it is the single cheapest schedule win available (F-17).\n\nNon-goal (EVALUATION \u00a75): **no Month view.** List, Day, Week, Track, and Room are the five signed views; \"Month\" appeared only in a context reference image.\nAmendment 11 fold (SPEC.md): agenda room headers render \"Room \u00b7 Building\" and expose the AV/notes tooltip panel where placement decisions happen (AC-252, AC-253) \u2014 without cluttering public surfaces.\n\nFile surface: `src/routes/agenda.routes.ts`, `agenda.queries.ts`, `src/ui/agenda/*`\n\nACs: AC-70 \u2013 AC-74, AC-80, AC-82 \u00b7 **AC-252, AC-253** (agenda-side rendering, Amendment 11 fold)\nHours: 7\nWorkflow: sub-agent-full (\u22657 h)\nShared files: none \u2014 module-local.\nDeps: M-08 (explicitly **not** M-16)\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T04:23:18Z",
   "evidence_refs": [
     {
       "id": "art_01KZQD1HS69K6W00CA1WWSEHQ3",
@@ -50,11 +50,26 @@
       "id": "art_01KZQGRNAV7DXM4JSMTHW3GVRN",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQGTGZ02M3MS6H9YAM99TBA",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQGZ0PG4MSF3THJF04HFTGY",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQGZ0PG4MSF3THJF04HFTGX",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM97XAXRCH0J791FE5ESJ",
-  "last_event_id": "ev_01KZQGRNAXW2YH3P1549D0FFNZ",
-  "last_status_changed_at": "2026-08-11T03:55:08Z",
+  "last_event_id": "ev_01KZQGZ0PG4MSF3THJF04HFTH1",
+  "last_status_changed_at": "2026-08-11T04:23:18Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -66,13 +81,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-20",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Agenda: data, pool, placement, and day/list/week/room views",
   "type": "task",
-  "updated_at": "2026-08-11T04:19:50Z",
+  "updated_at": "2026-08-11T04:23:18Z",
   "urgency": null
 }

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T04:26:22Z",
+  "created_by": "agent:delegator-mrq-22",
+  "custom_fields": {},
+  "id": "art_01KZQH4KF06ZNF9AVNWAW6FM48",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQH4KF06ZNF9AVNWAW6FM48.md",
+    "size_bytes": 1161
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS; exact final HEAD reviewed against current master f8e824d; no findings.",
+  "tags": [],
+  "title": "MRQ-22 inline self-review at 43a1f47",
+  "token_usage": null,
+  "type": "file"
+}
