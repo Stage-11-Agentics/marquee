@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-78",
+  "owns": [],
+  "exercises": ["AC-242"],
+  "notes": "MRQ-78 restores the seeded organization-scoped token-admin path and exercises the existing API token contract with positive, refusal, scope, and revocation coverage."
+}
