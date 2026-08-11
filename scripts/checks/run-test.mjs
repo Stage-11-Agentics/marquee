@@ -5,17 +5,25 @@ import { resolve } from "node:path";
 import { REPOSITORY_ROOT, emit, recordSpeedHarness } from "./lib/command.mjs";
 
 /**
- * The inner-loop clock. The suite is hermetic and parallel, so wall time is
- * dominated by how many cores it can actually get — and this repo is routinely
- * worked by several agents at once, each running its own build and suite. The
- * budget is set to survive that contention rather than to fail on it: a red
- * suite must mean a real defect, not a busy machine, or the signal is worthless.
+ * Two different numbers doing two different jobs. Conflating them is what made
+ * a green suite go red on a busy machine.
  *
- * The hard kill sits just under the budget so a hung suite is killed and
- * reported rather than hanging the gate.
+ * `BUDGET_MS` is the inner-loop clock — an OBJECTIVE. Speed budgets report and
+ * warn; they never fail CI (client ruling, 2026-08-09). Wall time on a hermetic
+ * parallel suite is dominated by how many cores it can actually get, and this
+ * repo is worked by several agents at once while CI runs on a far smaller
+ * machine. A number that means "fast enough here" cannot also mean "correct".
+ * Exceeding it is a signal to go fix the suite, not a reason to block a merge.
+ *
+ * `HARD_LIMIT_MS` is a hang detector, and it does fail: a killed suite has
+ * unknown results, and unknown is not passing. It is set generously on purpose,
+ * because its job is to catch a wedged process, not a slow one.
+ *
+ * A real test failure fails regardless of either number. That is the only thing
+ * a red suite should ever mean.
  */
 const BUDGET_MS = 45_000;
-const HARD_LIMIT_MS = BUDGET_MS - 1_000;
+const HARD_LIMIT_MS = 240_000;
 const startedAt = performance.now();
 const vitestEntry = resolve(REPOSITORY_ROOT, "node_modules/vitest/vitest.mjs");
 const vitestConfigs = ["vitest.config.ts", "vitest.node.config.ts"];
@@ -64,19 +72,31 @@ if (exitCode === 0 && !timedOut) {
 }
 
 const elapsedMs = Math.round(performance.now() - startedAt);
+const overBudget = elapsedMs > BUDGET_MS;
 await recordSpeedHarness("suite", {
   observedMs: elapsedMs,
   budgetMs: BUDGET_MS,
-  verdict: timedOut || elapsedMs > BUDGET_MS ? "fail" : "pass",
+  verdict: overBudget ? "warn" : "pass",
   source: "local npm test wall clock",
   environment: "local worktree; not deployed evidence",
 });
+if (overBudget && !timedOut) {
+  // Loud, because a suite that quietly drifts past its budget is how the inner
+  // loop rots. Not fatal, because the machine it ran on is not the change.
+  process.stdout.write(
+    `\n[test] OVER BUDGET: ${elapsedMs}ms against a ${BUDGET_MS}ms objective. ` +
+      `Tests passed; the suite is slow. Check machine load before treating this as a defect.\n`,
+  );
+}
 emit({
   command: "test",
-  status: timedOut ? "timeout" : exitCode === 0 ? "pass" : "fail",
+  status: timedOut ? "timeout" : exitCode === 0 ? (overBudget ? "pass-over-budget" : "pass") : "fail",
   elapsedMs,
   budgetMs: BUDGET_MS,
+  overBudget,
   hermetic: true,
 });
 
-process.exitCode = timedOut || elapsedMs > BUDGET_MS ? 1 : exitCode;
+// A killed suite has unknown results, and unknown is not passing. A slow one
+// that finished is reported, not failed.
+process.exitCode = timedOut ? 1 : exitCode;
