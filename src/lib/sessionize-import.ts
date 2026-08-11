@@ -1,0 +1,919 @@
+import type { ImportRowRow } from "../db/schema";
+
+export type SessionizeEntity = "sessions" | "speakers";
+
+export interface SessionizeMapping {
+  sessions: Record<string, string | null>;
+  speakers: Record<string, string | null>;
+}
+
+export interface CsvTable {
+  headers: string[];
+  rows: string[][];
+}
+
+export interface SessionizePreview {
+  headers: string[];
+  mapped: Record<string, string | null>;
+  rows: Array<Record<string, string>>;
+  missing: string[];
+}
+
+export interface SessionizeManifest {
+  sessions_csv: string;
+  speakers_csv: string;
+}
+
+export interface ImportRunCounts {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  sessions: number;
+  speakers: number;
+  evaluations: number;
+}
+
+interface EventRow {
+  id: string;
+  org_id: string;
+}
+
+interface PersonRow {
+  id: string;
+  org_id: string;
+  email: string;
+  name: string;
+  title: string | null;
+  company: string | null;
+  bio: string | null;
+  headshot_attachment_id: string | null;
+  social_links: string;
+  is_demo: number;
+  last_write_source: string;
+  created_at: number;
+  updated_at: number;
+}
+
+interface AttachmentRow {
+  id: string;
+  event_id: string;
+  owner_type: string;
+  owner_id: string;
+  r2_key: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  status: string;
+  sha256: string | null;
+  r2_etag: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+interface SubmissionRow {
+  id: string;
+  event_id: string;
+  form_id: string | null;
+  kind: string;
+  bypass_evaluation: number;
+  title: string;
+  abstract: string | null;
+  status: string;
+  format_id: string | null;
+  primary_track_id: string | null;
+  origin: string;
+  vendor_affiliation: string;
+  wave_id: string | null;
+  submitter_person_id: string;
+  decided_at: number | null;
+  decided_by_person_id: string | null;
+  submitted_at: number | null;
+  last_saved_at: number | null;
+  resume_token_hash: string | null;
+  is_published: number;
+  external_ref: string | null;
+  search_blob: string;
+  applied_rule_id: string | null;
+  last_write_source: string;
+  created_at: number;
+  updated_at: number;
+}
+
+interface ParticipationRow {
+  id: string;
+  submission_id: string;
+  person_id: string;
+  role: string;
+  position: number;
+  confirmation_status: string;
+  confirmed_at: number | null;
+  invited_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+interface AnswerRow {
+  id: string;
+  submission_id: string;
+  field_id: string;
+  value_text: string | null;
+  value_json: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+interface EvaluationRow {
+  id: string;
+  round_id: string;
+  submission_id: string;
+  reviewer_person_id: string;
+  recommendation: string | null;
+  score: number | null;
+  criteria_scores: string | null;
+  comment: string;
+  abstained: number;
+  created_at: number;
+  updated_at: number;
+}
+
+interface FormRow {
+  id: string;
+  event_id: string;
+  name: string;
+  slug: string;
+  kind: string;
+  status: string;
+  opens_at: number | null;
+  closes_at: number | null;
+  welcome_md: string;
+  per_submitter_limit: number;
+  min_speakers: number;
+  max_speakers: number;
+  max_sponsors: number;
+  password_hash: string | null;
+  reminder_offset_hours: number | null;
+  thankyou_template_key: string | null;
+  admin_notify_person_ids: string;
+  turnstile_required: number;
+  created_at: number;
+  updated_at: number;
+}
+
+interface ImportSnapshot {
+  kind: "speaker" | "session";
+  person: PersonRow | null;
+  attachment: AttachmentRow | null;
+  submission: SubmissionRow | null;
+  participations: ParticipationRow[];
+  answers: AnswerRow[];
+  evaluations: EvaluationRow[];
+}
+
+interface ImportRowInput {
+  importId: string;
+  rowIndex: number;
+  entity: string;
+  outcome: "created" | "updated" | "skipped" | "failed";
+  reason: string | null;
+  targetId: string | null;
+  before: ImportSnapshot | null;
+}
+
+const SESSION_FIELDS = [
+  "external_ref",
+  "title",
+  "abstract",
+  "status",
+  "kind",
+  "track",
+  "format",
+  "speaker_emails",
+  "reviewer_email",
+  "score",
+  "reviewer_comment",
+  "custom_fields",
+] as const;
+
+const SPEAKER_FIELDS = [
+  "external_ref",
+  "name",
+  "first_name",
+  "last_name",
+  "email",
+  "title",
+  "company",
+  "bio",
+  "headshot_url",
+  "custom_fields",
+] as const;
+
+const FIELD_ALIASES: Record<SessionizeEntity, Record<string, string[]>> = {
+  sessions: {
+    external_ref: ["external ref", "external id", "session id", "sessionid", "id", "code", "key"],
+    title: ["title", "session title", "name"],
+    abstract: ["abstract", "description", "session description", "summary", "abstract/description"],
+    status: ["status", "session status", "state", "decision", "result"],
+    kind: ["kind", "type", "session type"],
+    track: ["track", "tracks", "track name"],
+    format: ["format", "session format", "format name"],
+    speaker_emails: ["speaker emails", "speakers emails", "speaker email", "speakers", "speaker"],
+    reviewer_email: ["reviewer email", "reviewer", "evaluator email", "evaluator", "reviewer e-mail"],
+    score: ["score", "evaluation score", "rating", "average score", "evaluation"],
+    reviewer_comment: ["reviewer comment", "evaluation comment", "comment", "feedback", "review notes"],
+    custom_fields: ["custom fields", "custom_fields", "fields", "answers", "additional fields"],
+  },
+  speakers: {
+    external_ref: ["external ref", "external id", "speaker id", "speakerid", "id", "code", "key"],
+    name: ["name", "speaker name", "full name"],
+    first_name: ["first name", "firstname", "given name", "forename"],
+    last_name: ["last name", "lastname", "family name", "surname"],
+    email: ["email", "e-mail", "email address", "speaker email"],
+    title: ["title", "job title", "role", "position"],
+    company: ["company", "company name", "organization", "organisation", "affiliation"],
+    bio: ["bio", "biography", "description", "about"],
+    headshot_url: ["headshot url", "headshot", "photo url", "photo", "picture", "image url", "avatar"],
+    custom_fields: ["custom fields", "custom_fields", "fields", "answers", "additional fields"],
+  },
+};
+
+function normalizeHeader(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[._-]+/g, " ")
+    .replaceAll(/\s+/g, " ");
+}
+
+function hashPart(value: string): string {
+  let hash = 2166136261;
+  for (const byte of new TextEncoder().encode(value)) {
+    hash ^= byte;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function stableImportId(prefix: string, ...parts: string[]): string {
+  return `${prefix}_import_${hashPart(parts.join("\u001f"))}`;
+}
+
+export function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function csvRow(line: string): string[] {
+  const values: string[] = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "," && !quoted) {
+      values.push(value);
+      value = "";
+    } else {
+      value += character;
+    }
+  }
+  values.push(value);
+  return values;
+}
+
+/** Parse RFC-4180-style CSV, including quoted commas, newlines and quotes. */
+export function parseCsv(text: string): CsvTable {
+  const rows: string[][] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      if (quoted && text[index + 1] === '"') {
+        current += '""';
+        index += 1;
+      } else {
+        quoted = !quoted;
+        current += character;
+      }
+    } else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && text[index + 1] === "\n") index += 1;
+      if (current.length > 0 || rows.length > 0) rows.push(csvRow(current));
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+  if (current.length > 0 || rows.length === 0) rows.push(csvRow(current));
+  const headers = (rows.shift() ?? []).map((header) => header.replace(/^\uFEFF/, "").trim());
+  return { headers, rows: rows.filter((row) => row.some((value) => value.trim() !== "")) };
+}
+
+function fieldNames(entity: SessionizeEntity): readonly string[] {
+  return entity === "sessions" ? SESSION_FIELDS : SPEAKER_FIELDS;
+}
+
+export function defaultMapping(entity: SessionizeEntity, headers: readonly string[]): Record<string, string | null> {
+  const normalized = new Map(headers.map((header) => [normalizeHeader(header), header]));
+  return Object.fromEntries(fieldNames(entity).map((field) => {
+    const aliases = FIELD_ALIASES[entity][field] ?? [field.replaceAll("_", " ")];
+    const match = aliases.map(normalizeHeader).map((alias) => normalized.get(alias)).find(Boolean) ?? null;
+    return [field, match];
+  }));
+}
+
+export function previewCsv(entity: SessionizeEntity, text: string, mapping?: Record<string, string | null>): SessionizePreview {
+  const table = parseCsv(text);
+  const mapped = mapping ?? defaultMapping(entity, table.headers);
+  const missing = fieldNames(entity).filter((field) => !mapped[field]);
+  const rows = table.rows.slice(0, 5).map((row) => Object.fromEntries(
+    fieldNames(entity).map((field) => {
+      const header = mapped[field];
+      const column = header === null || header === undefined ? -1 : table.headers.indexOf(header);
+      return [field, column < 0 ? "" : row[column] ?? ""];
+    }),
+  ));
+  return { headers: table.headers, mapped, rows, missing };
+}
+
+function mappedRows(entity: SessionizeEntity, text: string, mapping: Record<string, string | null>): Array<Record<string, string>> {
+  const table = parseCsv(text);
+  return table.rows.map((row) => Object.fromEntries(fieldNames(entity).map((field) => {
+    const header = mapping[field];
+    const column = header === null || header === undefined ? -1 : table.headers.indexOf(header);
+    return [field, column < 0 ? "" : (row[column] ?? "").trim()];
+  })));
+}
+
+function splitValues(value: string): string[] {
+  return value
+    .split(/[;,|\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseJsonObject(value: string): Record<string, unknown> {
+  if (!value.trim()) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+  } catch {
+    // Sessionize exports sometimes use `key=value; key2=value2` for extras.
+  }
+  return Object.fromEntries(value.split(/[;|]/).map((part) => {
+    const separator = part.indexOf("=");
+    return separator < 1 ? [part.trim(), ""] : [part.slice(0, separator).trim(), part.slice(separator + 1).trim()];
+  }).filter(([key]) => key));
+}
+
+function textValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
+}
+
+function canonicalStatus(raw: string): { status: string | null; note: string | null } {
+  const normalized = raw.trim().toLowerCase().replaceAll(/[ -]+/g, "_");
+  const direct = new Set(["draft", "submitted", "in_review", "accepted", "waitlisted", "rejected", "withdrawn"]);
+  if (direct.has(normalized)) return { status: normalized, note: null };
+  if (["undecided", "pending", "new", "maybe", "under_review", "review", "inprogress"].includes(normalized)) {
+    return { status: "in_review", note: `source status '${raw}' mapped to in_review` };
+  }
+  if (!normalized) return { status: "in_review", note: "source status was empty; mapped to in_review" };
+  return { status: "in_review", note: `source status '${raw}' is not in Marquee's vocabulary; mapped to in_review` };
+}
+
+function customFieldKey(value: string): string {
+  const normalized = value.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, "_").replaceAll(/^_|_$/g, "");
+  return `sessionize_${normalized || "field"}`;
+}
+
+function contentTypeForUrl(url: string): string {
+  const path = url.toLowerCase().split("?")[0] ?? "";
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".webp")) return "image/webp";
+  if (path.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+function nowAfter(current: number | null | undefined): number {
+  return Math.max(Date.now(), (current ?? 0) + 1);
+}
+
+function rowJson(value: unknown): string {
+  return JSON.stringify(value);
+}
+
+async function eventFor(db: D1Database, eventId: string): Promise<EventRow> {
+  const event = await db.prepare("SELECT id, org_id FROM events WHERE id = ?").bind(eventId).first<EventRow>();
+  if (!event) throw new Error("conference not found");
+  return event;
+}
+
+async function saveImportRow(db: D1Database, input: ImportRowInput): Promise<void> {
+  const existing = await db.prepare("SELECT before_json, outcome FROM import_rows WHERE import_id = ? AND row_index = ?")
+    .bind(input.importId, input.rowIndex)
+    .first<Pick<ImportRowRow, "before_json" | "outcome">>();
+  const beforeJson = existing
+    ? existing.before_json ?? (existing.outcome === "failed" && input.before ? rowJson(input.before) : null)
+    : (input.before ? rowJson(input.before) : null);
+  await db.prepare(
+    `INSERT INTO import_rows (id, import_id, row_index, entity, outcome, reason, target_id, before_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(import_id, row_index) DO UPDATE SET
+       entity = excluded.entity, outcome = excluded.outcome, reason = excluded.reason,
+       target_id = excluded.target_id, before_json = COALESCE(import_rows.before_json, excluded.before_json),
+       updated_at = excluded.updated_at`,
+  ).bind(
+    stableImportId("row", input.importId, String(input.rowIndex)), input.importId, input.rowIndex,
+    input.entity, input.outcome, input.reason, input.targetId, beforeJson, Date.now(), Date.now(),
+  ).run();
+}
+
+async function personByEmail(db: D1Database, orgId: string, email: string): Promise<PersonRow | null> {
+  return db.prepare("SELECT * FROM people WHERE org_id = ? AND lower(email) = lower(?) ORDER BY id LIMIT 1")
+    .bind(orgId, email).first<PersonRow>();
+}
+
+async function personByName(db: D1Database, orgId: string, name: string): Promise<PersonRow | null> {
+  if (!name) return null;
+  return db.prepare("SELECT * FROM people WHERE org_id = ? AND lower(name) = lower(?) ORDER BY id LIMIT 1")
+    .bind(orgId, name).first<PersonRow>();
+}
+
+async function attachmentForPerson(db: D1Database, eventId: string, personId: string): Promise<AttachmentRow | null> {
+  return db.prepare("SELECT * FROM attachments WHERE event_id = ? AND owner_type = 'person_headshot' AND owner_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1")
+    .bind(eventId, personId).first<AttachmentRow>();
+}
+
+async function importSpeaker(
+  db: D1Database,
+  event: EventRow,
+  row: Record<string, string>,
+  importId: string,
+  rowIndex: number,
+): Promise<{ person: PersonRow; outcome: "created" | "updated" | "skipped"; reason: string | null }> {
+  const externalRef = row.external_ref.trim();
+  const firstName = row.first_name.trim();
+  const lastName = row.last_name.trim();
+  const name = row.name.trim() || [firstName, lastName].filter(Boolean).join(" ");
+  if (!name) throw new Error("speaker name is required");
+  const email = normalizeEmail(row.email || `speaker+${hashPart(`${event.id}|${externalRef || name}`)}@example.invalid`);
+  const current = await personByEmail(db, event.org_id, email) ?? await personByName(db, event.org_id, name);
+  const beforeAttachment = current ? await attachmentForPerson(db, event.id, current.id) : null;
+  const before: ImportSnapshot = current ? {
+    kind: "speaker", person: current, attachment: beforeAttachment, submission: null,
+    participations: [], answers: [], evaluations: [],
+  } : { kind: "speaker", person: null, attachment: null, submission: null, participations: [], answers: [], evaluations: [] };
+  const now = nowAfter(current?.updated_at);
+  const id = current?.id ?? stableImportId("person", event.id, externalRef || email);
+  const next = {
+    email,
+    name,
+    title: row.title.trim() || null,
+    company: row.company.trim() || null,
+    bio: row.bio.trim() || null,
+  };
+  const changed = !current || current.email !== next.email || current.name !== next.name || current.title !== next.title || current.company !== next.company || current.bio !== next.bio;
+  if (!current) {
+    await db.prepare(
+      `INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', 0, 'marquee', ?, ?)`,
+    ).bind(id, event.org_id, next.email, next.name, next.title, next.company, next.bio, now, now).run();
+  } else if (changed) {
+    await db.prepare(
+      `UPDATE people SET email = ?, name = ?, title = ?, company = ?, bio = ?, last_write_source = 'marquee', updated_at = ? WHERE id = ? AND org_id = ?`,
+    ).bind(next.email, next.name, next.title, next.company, next.bio, now, current.id, event.org_id).run();
+  }
+  let person = await db.prepare("SELECT * FROM people WHERE id = ?").bind(id).first<PersonRow>();
+  if (!person) throw new Error("imported speaker disappeared");
+  const headshot = row.headshot_url.trim();
+  let attachmentChanged = false;
+  if (headshot) {
+    const wantedKey = `external:${headshot}`;
+    const existing = await attachmentForPerson(db, event.id, person.id);
+    if (!existing || existing.r2_key !== wantedKey || existing.status !== "pending") {
+      const attachmentId = stableImportId("attachment", event.id, person.id, headshot);
+      if (existing && existing.id !== attachmentId) {
+        await db.prepare("DELETE FROM attachments WHERE id = ? AND owner_type = 'person_headshot' AND owner_id = ?").bind(existing.id, person.id).run();
+      }
+      if (!(await db.prepare("SELECT id FROM attachments WHERE id = ?").bind(attachmentId).first())) {
+        await db.prepare(
+          `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, created_at, updated_at)
+           VALUES (?, ?, 'person_headshot', ?, ?, ?, ?, 0, 'pending', ?, ?)`,
+        ).bind(attachmentId, event.id, person.id, wantedKey, `sessionize-${hashPart(headshot)}.jpg`, contentTypeForUrl(headshot), now, now).run();
+      }
+      await db.prepare("UPDATE people SET headshot_attachment_id = ?, updated_at = ? WHERE id = ?").bind(attachmentId, now, person.id).run();
+      attachmentChanged = true;
+    }
+  }
+  person = (await db.prepare("SELECT * FROM people WHERE id = ?").bind(id).first<PersonRow>())!;
+  const outcome = !current ? "created" : changed || attachmentChanged ? "updated" : "skipped";
+  const reason = [
+    externalRef ? `matched external_ref ${externalRef}` : "matched by normalized email",
+    headshot ? "headshot retained as a pending external attachment" : null,
+  ].filter(Boolean).join("; ");
+  await saveImportRow(db, {
+    importId, rowIndex, entity: "speaker", outcome, reason, targetId: person.id, before,
+  });
+  return { person, outcome, reason };
+}
+
+async function ensureSessionizeForm(db: D1Database, eventId: string, customFields: Record<string, unknown>, now: number): Promise<{ form: FormRow; fields: Map<string, string> }> {
+  const formId = stableImportId("form", eventId);
+  let form = await db.prepare("SELECT * FROM forms WHERE id = ? AND event_id = ?").bind(formId, eventId).first<FormRow>();
+  if (!form) {
+    await db.prepare(
+      `INSERT INTO forms (id, event_id, name, slug, kind, status, welcome_md, per_submitter_limit, min_speakers, max_speakers, max_sponsors, admin_notify_person_ids, turnstile_required, created_at, updated_at)
+       VALUES (?, ?, 'Sessionize import fields', ?, 'session', 'closed', 'Imported fields are retained for organizer review.', 100, 0, 20, 0, '[]', 0, ?, ?)`,
+    ).bind(formId, eventId, `sessionize-import-${hashPart(eventId)}`, now, now).run();
+    form = await db.prepare("SELECT * FROM forms WHERE id = ?").bind(formId).first<FormRow>();
+  }
+  if (!form) throw new Error("import form disappeared");
+  const existing = await db.prepare("SELECT id, key FROM form_fields WHERE form_id = ? ORDER BY position ASC").bind(form.id).all<{ id: string; key: string }>();
+  const fields = new Map(existing.results.map((field) => [field.key, field.id]));
+  let position = existing.results.length;
+  for (const key of Object.keys(customFields)) {
+    const fieldKey = customFieldKey(key);
+    if (fields.has(fieldKey)) continue;
+    const fieldId = stableImportId("field", form.id, fieldKey);
+    await db.prepare(
+      `INSERT INTO form_fields (id, form_id, key, label, help_text, type, required, position, config, condition, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'Imported from Sessionize; retained for organizer review.', 'short_text', 0, ?, '{}', NULL, ?, ?)`,
+    ).bind(fieldId, form.id, fieldKey, key.trim() || fieldKey, position, now, now).run();
+    fields.set(fieldKey, fieldId);
+    position += 1;
+  }
+  return { form, fields };
+}
+
+async function importedSessionRelations(db: D1Database, submissionId: string): Promise<{ participations: ParticipationRow[]; answers: AnswerRow[]; evaluations: EvaluationRow[] }> {
+  const [participations, answers, evaluations] = await Promise.all([
+    db.prepare("SELECT * FROM participations WHERE submission_id = ? AND id LIKE 'part_import_%' ORDER BY id").bind(submissionId).all<ParticipationRow>(),
+    db.prepare("SELECT * FROM submission_answers WHERE submission_id = ? AND id LIKE 'answer_import_%' ORDER BY id").bind(submissionId).all<AnswerRow>(),
+    db.prepare("SELECT * FROM evaluations WHERE submission_id = ? AND id LIKE 'eval_import_%' ORDER BY id").bind(submissionId).all<EvaluationRow>(),
+  ]);
+  return { participations: participations.results, answers: answers.results, evaluations: evaluations.results };
+}
+
+async function speakerForToken(db: D1Database, orgId: string, token: string, speakerMap: Map<string, PersonRow>): Promise<PersonRow | null> {
+  if (speakerMap.has(normalizeEmail(token))) return speakerMap.get(normalizeEmail(token)) ?? null;
+  const email = normalizeEmail(token);
+  if (email.includes("@")) return personByEmail(db, orgId, email);
+  return personByName(db, orgId, token);
+}
+
+async function ensureImportedReviewer(db: D1Database, event: EventRow, email: string, sessionId: string, now: number): Promise<{ person: PersonRow; unattributed: boolean }> {
+  if (email.trim()) {
+    const matched = await personByEmail(db, event.org_id, normalizeEmail(email));
+    if (matched) return { person: matched, unattributed: false };
+  }
+  const id = stableImportId("person_reviewer", event.id, sessionId);
+  const syntheticEmail = `unattributed+${hashPart(`${event.id}|${sessionId}`)}@example.invalid`;
+  let person = await db.prepare("SELECT * FROM people WHERE id = ?").bind(id).first<PersonRow>();
+  if (!person) {
+    await db.prepare(
+      `INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
+       VALUES (?, ?, ?, 'Unattributed Sessionize reviewer', 'Sessionize import', NULL, 'No reviewer email was present in the export.', NULL, '[]', 0, 'marquee', ?, ?)`,
+    ).bind(id, event.org_id, syntheticEmail, now, now).run();
+    person = await db.prepare("SELECT * FROM people WHERE id = ?").bind(id).first<PersonRow>();
+  }
+  if (!person) throw new Error("synthetic reviewer disappeared");
+  return { person, unattributed: true };
+}
+
+async function evaluationRound(db: D1Database, eventId: string, now: number): Promise<{ planId: string; roundId: string }> {
+  const planId = stableImportId("plan", eventId);
+  const roundId = stableImportId("round", eventId);
+  if (!(await db.prepare("SELECT id FROM evaluation_plans WHERE id = ?").bind(planId).first())) {
+    await db.prepare(
+      `INSERT INTO evaluation_plans (id, event_id, name, instructions, scale_min, scale_max, status, created_at, updated_at)
+       VALUES (?, ?, 'Sessionize import evaluation', 'Imported evaluation results; retained for organizer review.', 0, 5, 'closed', ?, ?)`,
+    ).bind(planId, eventId, now, now).run();
+  }
+  if (!(await db.prepare("SELECT id FROM evaluation_rounds WHERE id = ?").bind(roundId).first())) {
+    await db.prepare(
+      `INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, target_reviews_per_submission, created_at, updated_at)
+       VALUES (?, ?, 0, 'Sessionize import results', 'scorecard', 0, 1, ?, ?)`,
+    ).bind(roundId, planId, now, now).run();
+  }
+  return { planId, roundId };
+}
+
+async function importSession(
+  db: D1Database,
+  event: EventRow,
+  row: Record<string, string>,
+  speakerMap: Map<string, PersonRow>,
+  importId: string,
+  rowIndex: number,
+): Promise<{ outcome: "created" | "updated" | "skipped"; evaluation: boolean }> {
+  const externalRef = row.external_ref.trim();
+  const title = row.title.trim();
+  if (!externalRef) throw new Error("session external_ref is required");
+  if (!title) throw new Error("session title is required");
+  const status = canonicalStatus(row.status);
+  if (!status.status) throw new Error("session status is required");
+  const current = await db.prepare("SELECT * FROM submissions WHERE event_id = ? AND external_ref = ?")
+    .bind(event.id, externalRef).first<SubmissionRow>();
+  const relations = current ? await importedSessionRelations(db, current.id) : { participations: [], answers: [], evaluations: [] };
+  const before: ImportSnapshot = current ? {
+    kind: "session", person: null, attachment: null, submission: current,
+    participations: relations.participations, answers: relations.answers, evaluations: relations.evaluations,
+  } : { kind: "session", person: null, attachment: null, submission: null, participations: [], answers: [], evaluations: [] };
+  const now = nowAfter(current?.updated_at);
+  const speakerTokens = splitValues(row.speaker_emails);
+  const speakers: PersonRow[] = [];
+  for (const token of speakerTokens) {
+    const person = await speakerForToken(db, event.org_id, token, speakerMap);
+    if (person && !speakers.some((candidate) => candidate.id === person.id)) speakers.push(person);
+  }
+  if (speakers.length === 0) throw new Error("at least one speaker email or name must match the speakers export");
+  const submitter = speakers[0]!;
+  const track = row.track.trim() ? await db.prepare("SELECT id FROM tracks WHERE event_id = ? AND lower(name) = lower(?)").bind(event.id, row.track.trim()).first<{ id: string }>() : null;
+  const format = row.format.trim() ? await db.prepare("SELECT id FROM formats WHERE event_id = ? AND lower(name) = lower(?)").bind(event.id, row.format.trim()).first<{ id: string }>() : null;
+  const customFields = parseJsonObject(row.custom_fields);
+  let formId = current?.form_id ?? null;
+  let fields = new Map<string, string>();
+  if (Object.keys(customFields).length > 0) {
+    const form = await ensureSessionizeForm(db, event.id, customFields, now);
+    formId = form.form.id;
+    fields = form.fields;
+  }
+  const id = current?.id ?? stableImportId("submission", event.id, externalRef);
+  const next = {
+    formId,
+    title,
+    abstract: row.abstract.trim() || null,
+    status: status.status,
+    formatId: format?.id ?? current?.format_id ?? null,
+    trackId: track?.id ?? current?.primary_track_id ?? null,
+    submitterId: submitter.id,
+  };
+  const changed = !current || current.form_id !== next.formId || current.title !== next.title || current.abstract !== next.abstract || current.status !== next.status || current.format_id !== next.formatId || current.primary_track_id !== next.trackId || current.submitter_person_id !== next.submitterId;
+  if (!current) {
+    await db.prepare(
+      `INSERT INTO submissions (id, event_id, form_id, kind, bypass_evaluation, title, abstract, status, format_id, primary_track_id, origin, vendor_affiliation, wave_id, submitter_person_id, submitted_at, last_saved_at, is_published, external_ref, last_write_source, created_at, updated_at)
+       VALUES (?, ?, ?, 'session', 1, ?, ?, ?, ?, ?, 'import', 'none', NULL, ?, ?, ?, 0, ?, 'marquee', ?, ?)`,
+    ).bind(id, event.id, next.formId, next.title, next.abstract, next.status, next.formatId, next.trackId, next.submitterId, now, now, externalRef, now, now).run();
+  } else if (changed) {
+    await db.prepare(
+      `UPDATE submissions SET form_id = ?, title = ?, abstract = ?, status = ?, format_id = ?, primary_track_id = ?, submitter_person_id = ?, last_write_source = 'marquee', updated_at = ? WHERE id = ? AND event_id = ?`,
+    ).bind(next.formId, next.title, next.abstract, next.status, next.formatId, next.trackId, next.submitterId, now, current.id, event.id).run();
+  }
+  const desiredParticipationIds = new Set<string>();
+  for (const [position, speaker] of speakers.entries()) {
+    const role = position === 0 ? "speaker" : "co_speaker";
+    const participationId = stableImportId("part", id, speaker.id, role);
+    desiredParticipationIds.add(participationId);
+    if (!(await db.prepare("SELECT id FROM participations WHERE id = ?").bind(participationId).first())) {
+      await db.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
+      ).bind(participationId, id, speaker.id, role, position, now, now).run();
+    } else {
+      await db.prepare("UPDATE participations SET person_id = ?, role = ?, position = ?, updated_at = ? WHERE id = ? AND submission_id = ?")
+        .bind(speaker.id, role, position, now, participationId, id).run();
+    }
+  }
+  for (const old of relations.participations) {
+    if (!desiredParticipationIds.has(old.id)) await db.prepare("DELETE FROM participations WHERE id = ? AND submission_id = ?").bind(old.id, id).run();
+  }
+  const desiredAnswerIds = new Set<string>();
+  for (const [key, value] of Object.entries(customFields)) {
+    const fieldId = fields.get(customFieldKey(key));
+    if (!fieldId) continue;
+    const answerId = stableImportId("answer", id, fieldId);
+    desiredAnswerIds.add(answerId);
+    const valueText = textValue(value);
+    if (await db.prepare("SELECT id FROM submission_answers WHERE id = ?").bind(answerId).first()) {
+      await db.prepare("UPDATE submission_answers SET value_text = ?, value_json = NULL, updated_at = ? WHERE id = ? AND submission_id = ?").bind(valueText, now, answerId, id).run();
+    } else {
+      await db.prepare("INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)").bind(answerId, id, fieldId, valueText, now, now).run();
+    }
+  }
+  for (const old of relations.answers) {
+    if (!desiredAnswerIds.has(old.id)) await db.prepare("DELETE FROM submission_answers WHERE id = ? AND submission_id = ?").bind(old.id, id).run();
+  }
+  const score = row.score.trim() ? Number(row.score.trim()) : null;
+  if (row.score.trim() && !Number.isFinite(score)) throw new Error("evaluation score must be numeric");
+  const comment = row.reviewer_comment.trim();
+  let evaluation = false;
+  if (score !== null || comment) {
+    const reviewer = await ensureImportedReviewer(db, event, row.reviewer_email, id, now);
+    const round = await evaluationRound(db, event.id, now);
+    const evaluationId = stableImportId("eval", id, reviewer.person.id);
+    const evaluationComment = reviewer.unattributed ? `[unattributed reviewer] ${comment}`.trim() : comment;
+    evaluation = true;
+    if (await db.prepare("SELECT id FROM evaluations WHERE id = ?").bind(evaluationId).first()) {
+      await db.prepare("UPDATE evaluations SET round_id = ?, reviewer_person_id = ?, score = ?, comment = ?, updated_at = ? WHERE id = ? AND submission_id = ?")
+        .bind(round.roundId, reviewer.person.id, score, evaluationComment, now, evaluationId, id).run();
+    } else {
+      await db.prepare(
+        `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, NULL, ?, 0, ?, ?)`,
+      ).bind(evaluationId, round.roundId, id, reviewer.person.id, score, evaluationComment, now, now).run();
+    }
+    for (const old of relations.evaluations) {
+      if (old.id !== evaluationId) await db.prepare("DELETE FROM evaluations WHERE id = ? AND submission_id = ?").bind(old.id, id).run();
+    }
+  } else {
+    for (const old of relations.evaluations) await db.prepare("DELETE FROM evaluations WHERE id = ? AND submission_id = ?").bind(old.id, id).run();
+  }
+  const currentAfter = await db.prepare("SELECT * FROM submissions WHERE id = ?").bind(id).first<SubmissionRow>();
+  const relationsAfter = await importedSessionRelations(db, id);
+  const sameRelations = JSON.stringify(relations.participations.map(({ created_at: _a, updated_at: _b, ...value }) => value)) === JSON.stringify(relationsAfter.participations.map(({ created_at: _a, updated_at: _b, ...value }) => value))
+    && JSON.stringify(relations.answers.map(({ created_at: _a, updated_at: _b, ...value }) => value)) === JSON.stringify(relationsAfter.answers.map(({ created_at: _a, updated_at: _b, ...value }) => value))
+    && JSON.stringify(relations.evaluations.map(({ created_at: _a, updated_at: _b, ...value }) => value)) === JSON.stringify(relationsAfter.evaluations.map(({ created_at: _a, updated_at: _b, ...value }) => value));
+  const actualChanged = !current || changed || !sameRelations;
+  const outcome = !current ? "created" : actualChanged ? "updated" : "skipped";
+  const reason = [
+    status.note,
+    actualChanged ? "session, relationships, scores, or custom fields reconciled" : "same external_ref and values already present",
+    evaluation ? "evaluation result imported" : null,
+  ].filter(Boolean).join("; ");
+  await saveImportRow(db, {
+    importId, rowIndex, entity: "session", outcome, reason: reason || null, targetId: currentAfter?.id ?? id, before,
+  });
+  return { outcome, evaluation };
+}
+
+async function cleanupImportedPerson(db: D1Database, personId: string): Promise<void> {
+  const references = await db.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM participations WHERE person_id = ?) AS participations,
+       (SELECT COUNT(*) FROM submissions WHERE submitter_person_id = ? OR decided_by_person_id = ?) AS submissions,
+       (SELECT COUNT(*) FROM evaluations WHERE reviewer_person_id = ?) AS evaluations,
+       (SELECT COUNT(*) FROM memberships WHERE person_id = ?) AS memberships`,
+  ).bind(personId, personId, personId, personId, personId).first<{ participations: number; submissions: number; evaluations: number; memberships: number }>();
+  if (!references || Number(references.participations) || Number(references.submissions) || Number(references.evaluations) || Number(references.memberships)) return;
+  await db.prepare("UPDATE people SET headshot_attachment_id = NULL WHERE id = ? AND id LIKE '%_import_%'").bind(personId).run();
+  await db.prepare("DELETE FROM attachments WHERE owner_type = 'person_headshot' AND owner_id = ?").bind(personId).run();
+  await db.prepare("DELETE FROM people WHERE id = ? AND id LIKE '%_import_%'").bind(personId).run();
+}
+
+async function restoreSnapshot(db: D1Database, snapshot: ImportSnapshot): Promise<void> {
+  if (snapshot.kind === "speaker") {
+    if (!snapshot.person) {
+      if (snapshot.attachment) await db.prepare("DELETE FROM attachments WHERE id = ?").bind(snapshot.attachment.id).run();
+      return;
+    }
+    await db.prepare(
+      `UPDATE people SET org_id = ?, email = ?, name = ?, title = ?, company = ?, bio = ?, headshot_attachment_id = ?, social_links = ?, is_demo = ?, last_write_source = ?, updated_at = ? WHERE id = ?`,
+    ).bind(snapshot.person.org_id, snapshot.person.email, snapshot.person.name, snapshot.person.title, snapshot.person.company, snapshot.person.bio, snapshot.person.headshot_attachment_id, snapshot.person.social_links, snapshot.person.is_demo, snapshot.person.last_write_source, snapshot.person.updated_at, snapshot.person.id).run();
+    await db.prepare("DELETE FROM attachments WHERE owner_type = 'person_headshot' AND owner_id = ? AND id LIKE 'attachment_import_%' AND id <> ?")
+      .bind(snapshot.person.id, snapshot.attachment?.id ?? "").run();
+    if (snapshot.attachment) {
+      await db.prepare(
+        `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, sha256, r2_etag, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET event_id = excluded.event_id, owner_type = excluded.owner_type, owner_id = excluded.owner_id, r2_key = excluded.r2_key, filename = excluded.filename, content_type = excluded.content_type, size_bytes = excluded.size_bytes, status = excluded.status, sha256 = excluded.sha256, r2_etag = excluded.r2_etag, updated_at = excluded.updated_at`,
+      ).bind(snapshot.attachment.id, snapshot.attachment.event_id, snapshot.attachment.owner_type, snapshot.attachment.owner_id, snapshot.attachment.r2_key, snapshot.attachment.filename, snapshot.attachment.content_type, snapshot.attachment.size_bytes, snapshot.attachment.status, snapshot.attachment.sha256, snapshot.attachment.r2_etag, snapshot.attachment.created_at, snapshot.attachment.updated_at).run();
+    }
+    return;
+  }
+  if (!snapshot.submission) return;
+  const submission = snapshot.submission;
+  await db.prepare(
+    `UPDATE submissions SET event_id = ?, form_id = ?, kind = ?, bypass_evaluation = ?, title = ?, abstract = ?, status = ?, format_id = ?, primary_track_id = ?, origin = ?, vendor_affiliation = ?, wave_id = ?, submitter_person_id = ?, decided_at = ?, decided_by_person_id = ?, submitted_at = ?, last_saved_at = ?, resume_token_hash = ?, is_published = ?, external_ref = ?, applied_rule_id = ?, last_write_source = ?, created_at = ?, updated_at = ? WHERE id = ?`,
+  ).bind(submission.event_id, submission.form_id, submission.kind, submission.bypass_evaluation, submission.title, submission.abstract, submission.status, submission.format_id, submission.primary_track_id, submission.origin, submission.vendor_affiliation, submission.wave_id, submission.submitter_person_id, submission.decided_at, submission.decided_by_person_id, submission.submitted_at, submission.last_saved_at, submission.resume_token_hash, submission.is_published, submission.external_ref, submission.applied_rule_id, submission.last_write_source, submission.created_at, submission.updated_at, submission.id).run();
+  await db.batch([
+    db.prepare("DELETE FROM participations WHERE submission_id = ? AND id LIKE 'part_import_%'").bind(submission.id),
+    db.prepare("DELETE FROM submission_answers WHERE submission_id = ? AND id LIKE 'answer_import_%'").bind(submission.id),
+    db.prepare("DELETE FROM evaluations WHERE submission_id = ? AND id LIKE 'eval_import_%'").bind(submission.id),
+    ...snapshot.participations.map((row) => db.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, confirmed_at, invited_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET person_id = excluded.person_id, role = excluded.role, position = excluded.position, confirmation_status = excluded.confirmation_status, confirmed_at = excluded.confirmed_at, invited_at = excluded.invited_at, updated_at = excluded.updated_at").bind(row.id, row.submission_id, row.person_id, row.role, row.position, row.confirmation_status, row.confirmed_at, row.invited_at, row.created_at, row.updated_at)),
+    ...snapshot.answers.map((row) => db.prepare("INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET field_id = excluded.field_id, value_text = excluded.value_text, value_json = excluded.value_json, updated_at = excluded.updated_at").bind(row.id, row.submission_id, row.field_id, row.value_text, row.value_json, row.created_at, row.updated_at)),
+    ...snapshot.evaluations.map((row) => db.prepare("INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET round_id = excluded.round_id, reviewer_person_id = excluded.reviewer_person_id, score = excluded.score, comment = excluded.comment, updated_at = excluded.updated_at").bind(row.id, row.round_id, row.submission_id, row.reviewer_person_id, row.recommendation, row.score, row.criteria_scores, row.comment, row.abstained, row.created_at, row.updated_at)),
+  ]);
+}
+
+async function deleteCreatedSubmission(db: D1Database, submissionId: string): Promise<void> {
+  await db.batch([
+    db.prepare("DELETE FROM evaluations WHERE submission_id = ? AND id LIKE 'eval_import_%'").bind(submissionId),
+    db.prepare("DELETE FROM submission_answers WHERE submission_id = ? AND id LIKE 'answer_import_%'").bind(submissionId),
+    db.prepare("DELETE FROM participations WHERE submission_id = ? AND id LIKE 'part_import_%'").bind(submissionId),
+    db.prepare("DELETE FROM submissions WHERE id = ? AND origin = 'import'").bind(submissionId),
+  ]);
+}
+
+async function cleanupImportSetup(db: D1Database, eventId: string): Promise<void> {
+  const roundId = stableImportId("round", eventId);
+  const planId = stableImportId("plan", eventId);
+  const evaluationCount = await db.prepare("SELECT COUNT(*) AS count FROM evaluations WHERE round_id = ?").bind(roundId).first<{ count: number }>();
+  if (Number(evaluationCount?.count ?? 0) > 0) return;
+  await db.batch([
+    db.prepare("DELETE FROM evaluation_rounds WHERE id = ?").bind(roundId),
+    db.prepare("DELETE FROM evaluation_plans WHERE id = ?").bind(planId),
+  ]);
+  const formId = stableImportId("form", eventId);
+  const submissionCount = await db.prepare("SELECT COUNT(*) AS count FROM submissions WHERE form_id = ?").bind(formId).first<{ count: number }>();
+  if (Number(submissionCount?.count ?? 0) === 0) {
+    await db.batch([
+      db.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(formId),
+      db.prepare("DELETE FROM forms WHERE id = ?").bind(formId),
+    ]);
+  }
+}
+
+export function manifestPreview(manifest: SessionizeManifest, mapping?: SessionizeMapping): { sessions: SessionizePreview; speakers: SessionizePreview } {
+  return {
+    sessions: previewCsv("sessions", manifest.sessions_csv, mapping?.sessions),
+    speakers: previewCsv("speakers", manifest.speakers_csv, mapping?.speakers),
+  };
+}
+
+export async function runSessionizeImport(
+  db: D1Database,
+  eventId: string,
+  importId: string,
+  manifest: SessionizeManifest,
+  mapping: SessionizeMapping,
+): Promise<{ counts: ImportRunCounts; rows: ImportRowRow[] }> {
+  const event = await eventFor(db, eventId);
+  const counts: ImportRunCounts = { created: 0, updated: 0, skipped: 0, failed: 0, sessions: 0, speakers: 0, evaluations: 0 };
+  const speakerMap = new Map<string, PersonRow>();
+  const speakerRows = mappedRows("speakers", manifest.speakers_csv, mapping.speakers);
+  for (const [index, row] of speakerRows.entries()) {
+    counts.speakers += 1;
+    try {
+      const result = await importSpeaker(db, event, row, importId, 1_000_000 + index);
+      speakerMap.set(normalizeEmail(row.email), result.person);
+      if (row.external_ref) speakerMap.set(row.external_ref.trim().toLowerCase(), result.person);
+      counts[result.outcome] += 1;
+    } catch (error) {
+      counts.failed += 1;
+      await saveImportRow(db, { importId, rowIndex: 1_000_000 + index, entity: "speaker", outcome: "failed", reason: error instanceof Error ? error.message : "speaker row failed", targetId: null, before: null });
+    }
+  }
+  const sessionRows = mappedRows("sessions", manifest.sessions_csv, mapping.sessions);
+  for (const [index, row] of sessionRows.entries()) {
+    counts.sessions += 1;
+    try {
+      const result = await importSession(db, event, row, speakerMap, importId, index);
+      if (result.evaluation) counts.evaluations += 1;
+      counts[result.outcome] += 1;
+    } catch (error) {
+      counts.failed += 1;
+      await saveImportRow(db, { importId, rowIndex: index, entity: "session", outcome: "failed", reason: error instanceof Error ? error.message : "session row failed", targetId: null, before: null });
+    }
+  }
+  await db.prepare("UPDATE imports SET status = 'completed', updated_at = ? WHERE id = ? AND event_id = ?").bind(Date.now(), importId, eventId).run();
+  const rows = await db.prepare("SELECT * FROM import_rows WHERE import_id = ? ORDER BY row_index").bind(importId).all<ImportRowRow>();
+  return { counts, rows: rows.results };
+}
+
+export async function undoSessionizeImport(db: D1Database, eventId: string, importId: string): Promise<{ undone: number; retained_manifest: boolean }> {
+  await eventFor(db, eventId);
+  const imported = await db.prepare("SELECT id, file_key, status, undone_at FROM imports WHERE id = ? AND event_id = ?").bind(importId, eventId).first<{ id: string; file_key: string; status: string; undone_at: number | null }>();
+  if (!imported) throw new Error("import not found");
+  if (imported.undone_at !== null || imported.status === "undone") return { undone: 0, retained_manifest: true };
+  const rows = await db.prepare("SELECT * FROM import_rows WHERE import_id = ? ORDER BY CASE WHEN entity = 'session' THEN 0 ELSE 1 END, row_index DESC").bind(importId).all<ImportRowRow>();
+  let undone = 0;
+  for (const row of rows.results) {
+    const snapshot = row.before_json ? JSON.parse(row.before_json) as ImportSnapshot : null;
+    const createdMarker = snapshot?.submission === null && snapshot?.person === null;
+    if (!row.target_id || row.outcome === "failed" || (row.outcome === "skipped" && !createdMarker)) continue;
+    if (snapshot && snapshot.submission === null && snapshot.person === null) {
+      if (row.entity === "session") await deleteCreatedSubmission(db, row.target_id);
+      else await cleanupImportedPerson(db, row.target_id);
+    } else if (snapshot) {
+      await restoreSnapshot(db, snapshot);
+    } else if (row.entity === "session") {
+      await deleteCreatedSubmission(db, row.target_id);
+    } else if (row.entity === "speaker") {
+      await cleanupImportedPerson(db, row.target_id);
+    }
+    if (row.entity === "speaker" && snapshot?.person === null) {
+      await cleanupImportedPerson(db, row.target_id);
+    }
+    undone += 1;
+  }
+  const syntheticReviewers = await db.prepare("SELECT id FROM people WHERE id LIKE 'person_reviewer_import_%'").all<{ id: string }>();
+  for (const person of syntheticReviewers.results) await cleanupImportedPerson(db, person.id);
+  await cleanupImportSetup(db, eventId);
+  const now = Date.now();
+  await db.prepare("UPDATE imports SET status = 'undone', undone_at = ?, updated_at = ? WHERE id = ? AND event_id = ?").bind(now, now, importId, eventId).run();
+  return { undone, retained_manifest: true };
+}
+
+export async function readImportManifest(media: R2Bucket, fileKey: string): Promise<SessionizeManifest> {
+  const object = await media.get(fileKey);
+  if (!object) throw new Error("import manifest is missing");
+  const parsed: unknown = JSON.parse(await object.text());
+  if (!parsed || typeof parsed !== "object") throw new Error("import manifest is malformed");
+  const manifest = parsed as Partial<SessionizeManifest>;
+  if (typeof manifest.sessions_csv !== "string" || typeof manifest.speakers_csv !== "string") throw new Error("import manifest is incomplete");
+  return { sessions_csv: manifest.sessions_csv, speakers_csv: manifest.speakers_csv };
+}
+
+export function normalizeMapping(value: Partial<SessionizeMapping> | undefined, sessionsCsv: string, speakersCsv: string): SessionizeMapping {
+  return {
+    sessions: { ...defaultMapping("sessions", parseCsv(sessionsCsv).headers), ...(value?.sessions ?? {}) },
+    speakers: { ...defaultMapping("speakers", parseCsv(speakersCsv).headers), ...(value?.speakers ?? {}) },
+  };
+}

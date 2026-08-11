@@ -1,0 +1,29 @@
+.sessionize-import-page { display: grid; gap: 16px; }
+.sessionize-import-steps { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sessionize-import-step { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); display: grid; gap: 4px; min-height: 82px; padding: 13px 15px; }
+.sessionize-import-step.active { background: var(--accent-soft); border-color: var(--accent); }
+.sessionize-import-step span { color: var(--muted); font: 600 10px/1 var(--mono); }
+.sessionize-import-step strong { font: 600 12px/1.2 var(--mono); }
+.sessionize-import-step small { color: var(--muted); font-size: 10.5px; }
+.sessionize-import-stage { display: grid; gap: 14px; min-height: 520px; }
+.sessionize-upload-grid, .sessionize-mapping-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sessionize-upload-grid { min-height: 240px; }
+.sessionize-stage-actions { align-items: center; display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; }
+.sessionize-mapping-grid { align-items: start; min-height: 520px; }
+.sessionize-mapping-card { min-width: 0; }
+.sessionize-mapping-fields { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sessionize-mapping-fields .field span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sessionize-preview-table, .sessionize-results-table { border: 1px solid var(--line-strong); margin-top: 16px; overflow-x: auto; }
+.sessionize-preview-table table, .sessionize-results-table table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+.sessionize-preview-table th, .sessionize-preview-table td, .sessionize-results-table th, .sessionize-results-table td { border-bottom: 1px solid var(--line); font-size: 10.5px; max-width: 180px; overflow: hidden; padding: 9px 8px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.sessionize-preview-table th, .sessionize-results-table th { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.sessionize-preview-table tr:last-child td, .sessionize-results-table tr:last-child td { border-bottom: 0; }
+.sessionize-import-error { align-items: center; background: var(--danger-soft); border: 1px solid #e6b8b2; border-left: 3px solid var(--danger); border-radius: var(--radius); color: #8f2118; display: flex; flex-wrap: wrap; gap: 10px; padding: 11px 13px; }
+.sessionize-import-error span { color: var(--ink-soft); font-size: 11.5px; }
+.sessionize-count-grid { display: grid; gap: 8px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.sessionize-count { background: var(--sunk); border: 1px solid var(--line); display: grid; gap: 7px; padding: 12px; }
+.sessionize-count span { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.sessionize-count strong { font: 400 25px/1 var(--mono); }
+.sessionize-results-card { min-width: 0; }
+@media (max-width: 900px) { .sessionize-mapping-grid, .sessionize-upload-grid { grid-template-columns: 1fr; } .sessionize-count-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .sessionize-import-steps { grid-template-columns: 1fr; } .sessionize-mapping-fields { grid-template-columns: 1fr; } .sessionize-count-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

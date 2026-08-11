@@ -78,7 +78,7 @@ function DashboardContents({ snapshot, navigate }: { snapshot: DashboardSnapshot
       <div class="dashboard-pipeline">{snapshot.pipeline.map((item) => <PipelineStage key={item.id} item={item} navigate={navigate} />)}</div>
     </section>
 
-    {!hasProgram && <EmptyState title="Your program starts here" copy="The pipeline is ready. Open the submission register to add the first Abstract or Session." action={<Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>} />}
+    {!hasProgram && <EmptyState title="Your program starts here" copy="The pipeline is ready. Add the first session or import a year of conference data from Sessionize." action={<div class="dashboard-empty-actions"><Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button><Button onClick={() => navigate("/import")}>Import from Sessionize</Button></div>} />}
 
     <section class="dashboard-attention" aria-label="Needs attention">
       {attention.next_wave && <DashboardLink href={attention.next_wave.href} navigate={navigate} class="dashboard-attention-item" label={`Open ${attention.next_wave.name}`}>

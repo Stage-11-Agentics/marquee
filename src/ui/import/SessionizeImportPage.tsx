@@ -1,0 +1,150 @@
+import type { JSX } from "preact";
+import { useMemo, useState } from "preact/hooks";
+
+import { Button, Card, CardBody, CardHeader, Chip, PageHeader } from "../shell/components";
+import "./sessionize-import.css";
+
+type ImportStep = "upload" | "mapping" | "results";
+type Preview = {
+  headers: string[];
+  mapped: Record<string, string | null>;
+  rows: Array<Record<string, string>>;
+  missing: string[];
+};
+type ImportSummary = {
+  id: string;
+  status: string;
+  preview?: { sessions: Preview; speakers: Preview };
+  mapping: { sessions: Record<string, string | null>; speakers: Record<string, string | null> };
+};
+type ImportRow = { row_index: number; entity: string; outcome: "created" | "updated" | "skipped" | "failed"; reason: string | null; target_id: string | null };
+type Counts = { created: number; updated: number; skipped: number; failed: number; sessions: number; speakers: number; evaluations: number };
+
+const SESSION_LABELS: Record<string, string> = {
+  external_ref: "External reference", title: "Title", abstract: "Abstract", status: "Status", kind: "Kind",
+  track: "Track", format: "Format", speaker_emails: "Speaker emails", reviewer_email: "Reviewer email",
+  score: "Score", reviewer_comment: "Reviewer comment", custom_fields: "Custom fields",
+};
+const SPEAKER_LABELS: Record<string, string> = {
+  external_ref: "External reference", name: "Name", first_name: "First name", last_name: "Last name",
+  email: "Email", title: "Title", company: "Company", bio: "Bio", headshot_url: "Headshot URL", custom_fields: "Custom fields",
+};
+
+async function jsonRequest<T>(path: string, init: RequestInit): Promise<T> {
+  const response = await fetch(path, init);
+  const body = await response.json().catch(() => ({})) as T & { error?: { message?: string } };
+  if (!response.ok) throw new Error(body.error?.message ?? `The import request failed (${response.status}).`);
+  return body;
+}
+
+function MappingPanel({ title, preview, mapping, labels, onChange }: {
+  title: string;
+  preview: Preview;
+  mapping: Record<string, string | null>;
+  labels: Record<string, string>;
+  onChange: (field: string, value: string | null) => void;
+}): JSX.Element {
+  return <Card class="sessionize-mapping-card">
+    <CardHeader title={title}><Chip tone={preview.missing.length ? "warning" : "success"}>{preview.missing.length ? `${preview.missing.length} fields to review` : "Mapped"}</Chip></CardHeader>
+    <CardBody>
+      <div class="sessionize-mapping-fields">
+        {Object.keys(mapping).map((field) => <label class="field" key={field}>
+          <span>{labels[field] ?? field}</span>
+          <select value={mapping[field] ?? ""} onChange={(event) => onChange(field, (event.currentTarget as HTMLSelectElement).value || null)}>
+            <option value="">— Unmapped —</option>
+            {preview.headers.map((header) => <option value={header} key={header}>{header}</option>)}
+          </select>
+        </label>)}
+      </div>
+      <div class="sessionize-preview-table" aria-label={`${title} sample rows`}>
+        <table><thead><tr>{Object.keys(mapping).slice(0, 6).map((field) => <th key={field}>{labels[field] ?? field}</th>)}</tr></thead><tbody>
+          {preview.rows.map((row, index) => <tr key={index}>{Object.keys(mapping).slice(0, 6).map((field) => <td key={field} title={row[field]}>{row[field] || "—"}</td>)}</tr>)}
+        </tbody></table>
+      </div>
+    </CardBody>
+  </Card>;
+}
+
+export function SessionizeImportPage({ eventId = "evt_aie-ny-2026" }: { eventId?: string }): JSX.Element {
+  const [step, setStep] = useState<ImportStep>("upload");
+  const [sessionsFile, setSessionsFile] = useState<File | null>(null);
+  const [speakersFile, setSpeakersFile] = useState<File | null>(null);
+  const [current, setCurrent] = useState<ImportSummary | null>(null);
+  const [mapping, setMapping] = useState<ImportSummary["mapping"] | null>(null);
+  const [counts, setCounts] = useState<Counts | null>(null);
+  const [rows, setRows] = useState<ImportRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const sessionPreview = current?.preview?.sessions;
+  const speakerPreview = current?.preview?.speakers;
+  const hasMissing = useMemo(() => {
+    const requiredSessions = ["external_ref", "title", "speaker_emails"];
+    const requiredSpeakers = ["external_ref", "name", "email"];
+    return Boolean(
+      sessionPreview?.missing.some((field) => requiredSessions.includes(field))
+      || speakerPreview?.missing.some((field) => requiredSpeakers.includes(field)),
+    );
+  }, [sessionPreview, speakerPreview]);
+
+  const upload = async () => {
+    if (!sessionsFile || !speakersFile) return;
+    setBusy(true); setError(null);
+    try {
+      const result = await jsonRequest<ImportSummary>(`/api/v1/events/${encodeURIComponent(eventId)}/imports`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ source: "sessionize", sessions_csv: await sessionsFile.text(), speakers_csv: await speakersFile.text() }),
+      });
+      setCurrent(result); setMapping(result.mapping); setStep("mapping");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "The export could not be uploaded."); }
+    finally { setBusy(false); }
+  };
+
+  const saveMapping = async (): Promise<boolean> => {
+    if (!current || !mapping) return false;
+    setBusy(true); setError(null);
+    try {
+      const result = await jsonRequest<ImportSummary>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${current.id}/mapping`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(mapping),
+      });
+      setCurrent(result); setMapping(result.mapping); return true;
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "The mapping could not be saved."); return false; }
+    finally { setBusy(false); }
+  };
+
+  const run = async () => {
+    if (!current) return;
+    setBusy(true); setError(null);
+    try {
+      const result = await jsonRequest<{ import: ImportSummary; counts: Counts; rows: ImportRow[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${current.id}/run`, { method: "POST" });
+      setCurrent(result.import); setCounts(result.counts); setRows(result.rows); setStep("results");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "The import could not be run."); }
+    finally { setBusy(false); }
+  };
+
+  const undo = async () => {
+    if (!current || !window.confirm("Undo this import? Only this import's rows will be reversed; the manifest stays available for audit.")) return;
+    setBusy(true); setError(null);
+    try {
+      await jsonRequest<{ undone: number; retained_manifest: true }>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${current.id}/undo`, { method: "POST" });
+      setCounts(null); setRows([]); setCurrent({ ...current, status: "undone" });
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "The import could not be undone."); }
+    finally { setBusy(false); }
+  };
+
+  return <div class="sessionize-import-page">
+    <PageHeader title="Sessionize import" copy="Bring a conference export into the program with a stable mapping preview, reversible outcomes, and no duplicate sessions." />
+    <div class="sessionize-import-steps" aria-label="Import steps">
+      {(["upload", "mapping", "results"] as ImportStep[]).map((name, index) => <div class={`sessionize-import-step ${step === name ? "active" : ""}`} key={name}><span>0{index + 1}</span><strong>{name === "upload" ? "Choose export" : name === "mapping" ? "Map columns" : "Review outcomes"}</strong><small>{name === "upload" ? "Sessions + speakers CSV" : name === "mapping" ? "Preview before writing" : "Run or batch undo"}</small></div>)}
+    </div>
+    {error && <div class="sessionize-import-error" role="alert"><strong>Import needs attention</strong><span>{error}</span></div>}
+    {step === "upload" && <Card class="sessionize-import-stage"><CardHeader title="Choose a Sessionize export"><Chip>Fixture-backed until operator export arrives</Chip></CardHeader><CardBody><div class="sessionize-upload-grid">
+      <label class="field"><span>Sessions CSV</span><input type="file" accept=".csv,text/csv" onChange={(event) => setSessionsFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)} /><small class="field-note">Talks, statuses, tracks, speakers, and evaluation columns.</small></label>
+      <label class="field"><span>Speakers CSV</span><input type="file" accept=".csv,text/csv" onChange={(event) => setSpeakersFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)} /><small class="field-note">Names, normalized email, profile, and optional headshot URL.</small></label>
+    </div><div class="sessionize-stage-actions"><Button variant="primary" disabled={!sessionsFile || !speakersFile || busy} onClick={() => void upload()}>Upload and preview →</Button></div></CardBody></Card>}
+    {step === "mapping" && sessionPreview && speakerPreview && mapping && <div class="sessionize-import-stage"><div class="sessionize-mapping-grid">
+      <MappingPanel title="Sessions" preview={sessionPreview} mapping={mapping.sessions} labels={SESSION_LABELS} onChange={(field, value) => setMapping({ ...mapping, sessions: { ...mapping.sessions, [field]: value } })} />
+      <MappingPanel title="Speakers" preview={speakerPreview} mapping={mapping.speakers} labels={SPEAKER_LABELS} onChange={(field, value) => setMapping({ ...mapping, speakers: { ...mapping.speakers, [field]: value } })} />
+    </div><div class="sessionize-stage-actions"><Button onClick={() => setStep("upload")}>Back</Button><Button variant="primary" disabled={busy || hasMissing} onClick={() => void saveMapping().then((saved) => { if (saved) void run(); })}>Map, import, and review →</Button></div></div>}
+    {step === "results" && <div class="sessionize-import-stage"><Card><CardHeader title="Import outcomes"><div class="head-actions"><Chip tone={current?.status === "undone" ? "warning" : "success"}>{current?.status === "undone" ? "Undone" : "Completed"}</Chip>{current?.status !== "undone" && <Button variant="danger" small disabled={busy} onClick={() => void undo()}>Batch undo</Button>}</div></CardHeader><CardBody><div class="sessionize-count-grid">{counts && Object.entries({ Created: counts.created, Updated: counts.updated, Skipped: counts.skipped, Failed: counts.failed, Evaluations: counts.evaluations }).map(([label, value]) => <div class="sessionize-count" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><p class="subtle">The R2 manifest is retained for audit. A repeated export matches by external reference and normalized email.</p></CardBody></Card><Card class="sessionize-results-card"><CardHeader title="Row detail"><Chip>{rows.length} durable outcomes</Chip></CardHeader><CardBody><div class="sessionize-results-table"><table><thead><tr><th>Row</th><th>Entity</th><th>Outcome</th><th>Reason</th></tr></thead><tbody>{rows.map((row) => <tr key={`${row.entity}-${row.row_index}`}><td>{row.row_index}</td><td>{row.entity}</td><td><Chip tone={row.outcome === "failed" ? "alarm" : row.outcome === "created" ? "success" : row.outcome === "updated" ? "warning" : ""}>{row.outcome}</Chip></td><td>{row.reason ?? "—"}</td></tr>)}</tbody></table></div></CardBody></Card></div>}
+  </div>;
+}
