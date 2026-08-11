@@ -7,7 +7,8 @@
  * a registration here. The pipeline is:
  *
  *   1. request ID / error boundary
- *   2. credential resolution (anonymous is a real principal state)
+ *   2. credential resolution (anonymous is a real principal state; a `public`
+ *      route never rejects a caller over a credential it did not require)
  *   3. rate-limit selection and enforcement
  *   4. route authorization and concealment
  *   5. request validation (zod-openapi's hook, into the one envelope)
@@ -29,7 +30,7 @@ import type { ApiGrant } from "./grants";
 import { assembleApiDocument, registerApiComponents, type ApiDocumentBundle } from "./openapi";
 import { allowAllRateLimiter, enforceRateLimit } from "./rate-limit";
 import type { ApiRouteEntry, ApiRoutePolicy } from "./route";
-import type { ApiEnv, ApiRuntime, Principal } from "./runtime";
+import type { ApiEnv, ApiRuntime, CredentialResolver, Principal } from "./runtime";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
 import { readRequestMeter } from "../lib/observability/request-instrumentation";
 import {
@@ -116,6 +117,42 @@ function setServerTiming(context: Context<ApiEnv>, startedAt: number): void {
   context.header("Server-Timing", parts.join(", "));
 }
 
+/**
+ * Step 2: resolution, which reports what the credential is — never what the
+ * route will do about it. That decision belongs to the policy, one step later.
+ *
+ * A resolver signals a present-but-invalid credential by throwing 401, and on
+ * every route that needs a principal the pipeline lets that 401 stand. A
+ * `public` route is the one place where it must not: such a route serves
+ * callers carrying no credential at all, so a caller carrying a dead one can
+ * only be treated the same way — as anonymous, which is a real principal state
+ * in this pipeline and not the absence of one.
+ *
+ * Without this, a stale `mq_session` cookie locks a browser out of the very
+ * public routes that exist to get it back in — sign-in and sign-out — and the
+ * cookie is HttpOnly, so nothing on the page can clear it. The rejection is
+ * remembered (`credentialRejected`) so those handlers can help the browser
+ * recover instead of merely tolerating it.
+ *
+ * Only a 401 degrades. A resolver failing for any other reason — a 500 out of
+ * D1 — is a broken request, not an anonymous one, and still fails loudly.
+ */
+async function resolvePrincipal(
+  context: Context<ApiEnv>,
+  resolver: CredentialResolver | undefined,
+  policy: ApiRoutePolicy,
+): Promise<Principal> {
+  if (!resolver) return { kind: "anonymous" };
+  try {
+    return await resolver.resolve(context);
+  } catch (error) {
+    const rejected = error instanceof ApiError && error.status === 401;
+    if (!rejected || policy.auth.kind !== "public") throw error;
+    context.set("credentialRejected", true);
+    return { kind: "anonymous" };
+  }
+}
+
 /** Step 4: authorization, with concealment rather than disclosure. */
 function authorize(
   context: Context<ApiEnv>,
@@ -163,9 +200,7 @@ function routeMiddleware(
     context.set("routeTemplate", routeTemplate);
     // 2 — credential resolution.
     const credentialResolver = runtime.credentialResolver ?? context.env.AUTH;
-    const principal: Principal = credentialResolver
-      ? await credentialResolver.resolve(context)
-      : { kind: "anonymous" };
+    const principal = await resolvePrincipal(context, credentialResolver, policy);
     context.set("principal", principal);
     // 3 — rate-limit selection and enforcement (headers land on every response).
     await enforceRateLimit(context, limiter, policy.rateLimit, principal, now);

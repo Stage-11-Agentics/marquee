@@ -72,10 +72,44 @@ const reviewerBoundaryRoute = defineApiRoute(
   },
 );
 
+let publicHandlerCalls = 0;
+let publicPrincipalKinds: string[] = [];
+
+/**
+ * A `public` route is defined by serving callers who present no credential at
+ * all. A caller presenting a dead one is therefore the same caller, and the
+ * pipeline owes it the same answer — the resolver's 401 reports a fact, it does
+ * not decide the outcome.
+ */
+const publicRoute = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/public/credential-resolver-fixture",
+    operationId: "credentialResolverPublicFixture",
+    summary: "Public fixture",
+    policy: {
+      auth: { kind: "public" },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(z.object({ ok: z.literal(true) }), "fixture ok"),
+      ...errorResponses([429, 500]),
+    },
+  },
+  (context) => {
+    publicHandlerCalls += 1;
+    publicPrincipalKinds.push(context.get("principal").kind);
+    return context.json({ ok: true as const }, 200);
+  },
+);
+
 beforeEach(async () => {
   await applyMigrations();
   handlerCalls = 0;
   reviewerHandlerCalls = 0;
+  publicHandlerCalls = 0;
+  publicPrincipalKinds = [];
   const now = Date.now();
   await env.DB.prepare(
     "INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
@@ -112,9 +146,20 @@ beforeEach(async () => {
 });
 
 async function makeRouter() {
-  return createApiRouter([protectedSubmissionsRoute, reviewerBoundaryRoute], {
+  return createApiRouter([protectedSubmissionsRoute, reviewerBoundaryRoute, publicRoute], {
     credentialResolver: createCredentialResolver(),
   });
+}
+
+async function requestPublic(
+  router: Awaited<ReturnType<typeof makeRouter>>,
+  headers?: HeadersInit,
+): Promise<Response> {
+  return router.app.request(
+    `${ORIGIN}/api/v1/public/credential-resolver-fixture`,
+    { headers },
+    env,
+  );
 }
 
 async function request(
@@ -333,6 +378,43 @@ test("CONTRACT · an event-A reviewer cannot read event-B submissions", async ()
   const body = await expectNoSubmissionLeak(response);
   expect(JSON.parse(body).error.code).toBe("forbidden");
   expect(handlerCalls).toBe(0);
+});
+
+test("CONTRACT · a public route never 401s on a present-but-invalid credential", async () => {
+  const expired = await createSession(env.DB, {
+    personId: "per_owner",
+    userAgent: "public-degradation-test",
+    now: Date.now() - SESSION_TTL_MS - 1,
+  });
+  const router = await makeRouter();
+
+  const credentials: HeadersInit[] = [
+    { cookie: "mq_session=tampered-session-id" },
+    { cookie: `mq_session=${expired.id}` },
+    { authorization: "Bearer mq_not_a_real_token" },
+    { authorization: "Bearer not-even-shaped-like-one" },
+  ];
+  for (const headers of credentials) {
+    const response = await requestPublic(router, headers);
+    expect(response.status).toBe(200);
+  }
+
+  expect(publicHandlerCalls).toBe(credentials.length);
+  // Degraded, not merely tolerated: the handler sees anonymous, so nothing
+  // downstream can mistake a dead credential for a live one.
+  expect(new Set(publicPrincipalKinds)).toEqual(new Set(["anonymous"]));
+});
+
+test("CONTRACT · a valid credential on a public route still resolves to its principal", async () => {
+  const session = await createSession(env.DB, {
+    personId: "per_owner",
+    userAgent: "public-live-credential-test",
+  });
+  const router = await makeRouter();
+  const response = await requestPublic(router, { cookie: `mq_session=${session.id}` });
+
+  expect(response.status).toBe(200);
+  expect(publicPrincipalKinds).toEqual(["session"]);
 });
 
 test("CONTRACT · expired and tampered session cookies are rejected", async () => {

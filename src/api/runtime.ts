@@ -47,8 +47,13 @@ export type Principal =
 export interface CredentialResolver {
   /**
    * Resolve the request's credential into a principal. Returning
-   * `{ kind: "anonymous" }` is always safe; throwing `ApiError` (401) rejects
-   * a present-but-invalid credential.
+   * `{ kind: "anonymous" }` is always safe; throwing `ApiError` (401) reports a
+   * present-but-invalid credential.
+   *
+   * A resolver reports; it does not decide. The pipeline honours a 401 on every
+   * route that requires a principal, and ignores it — degrading to anonymous —
+   * on a `public` route, which by definition serves callers who have no
+   * credential at all.
    */
   resolve(context: Context<ApiEnv>): Promise<Principal>;
 }
@@ -90,6 +95,13 @@ export interface ApiRuntime {
 export type ApiVariables = {
   requestId: string;
   principal: Principal;
+  /**
+   * True when the request carried a credential that failed to resolve and the
+   * route's `public` policy degraded it to anonymous. A handler that can help
+   * the caller recover — clearing a dead session cookie, say — reads this
+   * rather than re-deriving "is this credential a corpse?" for itself.
+   */
+  credentialRejected?: boolean;
   /** The composition root's auth middleware runs before the generated API router. */
   auth?: AuthContext;
   /** Request-scoped logger, already bound to this request's correlation id. */
