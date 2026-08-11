@@ -2,7 +2,7 @@ import { chromium } from '@playwright/test';
 const FILE = 'file:///Users/atin/Projects/Stage11/deployments/Marquee/prototypes/pipeline-v1.1/index.html';
 const ROUTES = ['landing','dashboard','board','submissions','forms','evaluation','reviewer','onboarding','agenda','comms','settings','settings/venues','settings/tasks','settings/airtable','settings/api','settings/webhooks','api/docs','import','portal','cfp','publicAgenda','evaluation/ai','conferences/new','submissions/new','submissions/AIE-0027','s/AIE-0001','p/Amara van der Meer'];
 
-const b = await chromium.launch();
+const b = await chromium.launch({executablePath: process.env.CHROME_BIN});
 const page = await b.newPage();
 const errors = [];
 page.on('pageerror', e => errors.push(`${page.url().split('#')[1]||'-'} :: ${e.message}`));

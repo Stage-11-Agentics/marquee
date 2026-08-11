@@ -1,0 +1,6 @@
+Verdict: PASS
+HEAD: ffd84a47cdd1d532ab1eaed940ebcc3fc1111ec4
+System: isolated Wrangler local HTTP Worker with fresh D1 migrations and deterministic seeded data.
+API observed: demo organizer login; GET /api/v1/events/evt_aie-ny-2026 = 200 with details, 4 formats, and 8 tracks; GET /api/v1/events/evt_aie-ny-2026/venues = 200 with 3 buildings and 10 rooms; settings PATCH = 200.
+Browser observed on c11 surface:163: /settings rendered Conference settings, details, formats, tracks, and the full-row Venues and rooms handoff showing 3 buildings · 10 rooms. Editing made Save event settings appear; clicking it produced Conference settings saved while URL remained http://localhost:8787/settings (no reload/navigation). Open Venues → then reached http://localhost:8787/settings/venues, rendering Site map, Buildings, Rooms, map pins, and Room · Building labels.
+Required gate: npm run pr-gate -- --ticket MRQ-10 PASS; 23 Vitest files / 118 tests and 30 node tests passed; trace:ac merged uncovered=0 errors=0.

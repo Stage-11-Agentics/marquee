@@ -25,11 +25,16 @@
       "id": "art_01KZQFHB41FBS4FX2Y9M2RMG00",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQFMJ0YE730Y3EJ4W956THE",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM89295VKTYA5KWTSRZYA",
-  "last_event_id": "ev_01KZQFHB43X40SNA0YPV8TRSZ6",
-  "last_status_changed_at": "2026-08-11T03:33:08Z",
+  "last_event_id": "ev_01KZQFMJ11AH550B0T21C8XYYP",
+  "last_status_changed_at": "2026-08-11T03:59:56Z",
   "linked_files": [],
   "needs_human": null,
   "priority": "medium",
@@ -45,10 +50,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-10",
-  "status": "review",
+  "status": "in_validation",
   "tags": null,
   "title": "Event settings: details, formats, tracks, rooms, buildings",
   "type": "task",
-  "updated_at": "2026-08-11T03:58:22Z",
+  "updated_at": "2026-08-11T04:00:07Z",
   "urgency": null
 }
