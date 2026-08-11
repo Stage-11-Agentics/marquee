@@ -36,14 +36,14 @@ const options = { now: NOW, demoMode: false };
  * that difference, not against the tokens underneath it.
  */
 describe("a failed send is classified into an action", () => {
-  test("a rejected address is that speaker's to fix", () => {
+  test("CONTRACT · a rejected address is that speaker's to fix", () => {
     const verdict = owedVerdict(failedFact("the address was rejected"), options);
     expect(verdict.state).toBe("undelivered");
     expect(verdict.level).toBe("alarm");
     expect(verdict.what_to_do).toMatch(/Correct the address on this speaker's record/);
   });
 
-  test("a spent daily allowance is never filed under the speaker's name", () => {
+  test("CONTRACT · a spent daily allowance is never filed under the speaker's name", () => {
     const verdict = owedVerdict(failedFact("You have reached your daily sending quota"), options);
     expect(verdict.state).toBe("send_blocked");
     expect(verdict.level).toBe("alarm");
@@ -51,13 +51,13 @@ describe("a failed send is classified into an action", () => {
     expect(verdict.what_to_do).not.toMatch(/Correct the address/);
   });
 
-  test("a broken credential reads as the conference-wide stoppage it is", () => {
+  test("CONTRACT · a broken credential reads as the conference-wide stoppage it is", () => {
     const verdict = owedVerdict(failedFact("RESEND_API_KEY is not configured"), options);
     expect(verdict.state).toBe("send_blocked");
     expect(verdict.reason).toMatch(/mail account is not set up/);
   });
 
-  test("an address the provider has suppressed asks for a different address, not a retry", () => {
+  test("CONTRACT · an address the provider has suppressed asks for a different address, not a retry", () => {
     const verdict = owedVerdict(
       failedFact("Resend has suppressed sending to this address because it is on the account-level suppression list"),
       options,
@@ -66,25 +66,25 @@ describe("a failed send is classified into an action", () => {
     expect(verdict.what_to_do).toMatch(/another one for this speaker/);
   });
 
-  test("an unreadable failure stays an address-level unknown rather than guessing", () => {
+  test("CONTRACT · an unreadable failure stays an address-level unknown rather than guessing", () => {
     const verdict = owedVerdict(failedFact("wat"), options);
     expect(verdict.state).toBe("undelivered");
     expect(verdict.reason).toBe("The message did not go out.");
   });
 
-  test("a fact carrying no error text at all still produces a usable row", () => {
+  test("CONTRACT · a fact carrying no error text at all still produces a usable row", () => {
     const verdict = owedVerdict(failedFact(null, { has_error: true }), options);
     expect(verdict.state).toBe("undelivered");
     expect(verdict.what_to_do.length).toBeGreaterThan(0);
   });
 
-  test("no verdict claims the message came back, because nothing comes back to us", () => {
+  test("CONTRACT · no verdict claims the message came back, because nothing comes back to us", () => {
     for (const text of ["the address was rejected", "Too many requests", "wat"]) {
       expect(owedVerdict(failedFact(text), options).reason, text).not.toMatch(/came back/i);
     }
   });
 
-  test("provider text never reaches the organizer", () => {
+  test("CONTRACT · provider text never reaches the organizer", () => {
     const secret = "smtp 550 5.1.1 <ada@example.com> mailbox unavailable";
     const verdict = owedVerdict(failedFact(secret), options);
     expect(`${verdict.reason} ${verdict.what_to_do}`).not.toContain(secret);
@@ -99,13 +99,13 @@ describe("the ledger keeps the two kinds apart", () => {
     failedFact("the address was rejected", { submission_id: "sub-address" }),
   ];
 
-  test("an address failure outranks a conference-wide one — it is the rarer, particular case", () => {
+  test("CONTRACT · an address failure outranks a conference-wide one — it is the rarer, particular case", () => {
     const owed = deriveOwed(rows, options);
     expect(owed[0]?.submission_id).toBe("sub-address");
     expect(owed.map((row) => row.state)).toEqual(["undelivered", "send_blocked", "send_blocked"]);
   });
 
-  test("the reason summary counts each distinct reason instead of collapsing a state", () => {
+  test("CONTRACT · the reason summary counts each distinct reason instead of collapsing a state", () => {
     const summary = summarizeOwedReasons(deriveOwed(rows, options));
     expect(summary).toHaveLength(2);
     expect(summary.map((entry) => entry.count)).toEqual([1, 2]);
@@ -113,7 +113,7 @@ describe("the ledger keeps the two kinds apart", () => {
     expect(summary[1]?.count).toBe(2);
   });
 
-  test("two distinct reasons inside one state are reported separately", () => {
+  test("CONTRACT · two distinct reasons inside one state are reported separately", () => {
     const mixed = deriveOwed([
       failedFact("the address was rejected", { submission_id: "sub-a" }),
       failedFact("on the account-level suppression list", { submission_id: "sub-b" }),
@@ -124,7 +124,7 @@ describe("the ledger keeps the two kinds apart", () => {
     expect(new Set(summary.map((entry) => entry.reason)).size).toBe(2);
   });
 
-  test("the summary order is stable across two reads of the same facts", () => {
+  test("CONTRACT · the summary order is stable across two reads of the same facts", () => {
     const once = summarizeOwedReasons(deriveOwed(rows, options));
     const twice = summarizeOwedReasons(deriveOwed([...rows].reverse(), options));
     expect(once.map((entry) => entry.reason)).toEqual(twice.map((entry) => entry.reason));
