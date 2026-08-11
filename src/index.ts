@@ -5,6 +5,10 @@ import { setSessionCookie } from "./lib/cookies";
 import { runUploadOrphanSweep } from "./lib/r2/orphan-sweep";
 import { apiManifest } from "./routes/_manifest";
 import { uploadsRoutes } from "./routes/uploads.direct";
+import { authMiddleware } from "./lib/auth/auth-middleware";
+import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/reset-consumer";
+import { adminOpsRoutes, RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.endpoints";
+import { authRoutes } from "./routes/auth.endpoints";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -90,12 +94,18 @@ app.get("/__validation/session-cookie", (context) => {
   return context.json({ cookie: "mq_session", status: "set" });
 });
 
-// MRQ-14's upload routes are mounted ahead of the generated API router
-// rather than joined to its glob manifest (deviate-with-flag — see PR body:
-// MRQ-8/M-07 merged mid-implementation and reconciling onto its manifest
-// convention was not done in this pass). Hono matches in registration
-// order, so unmatched paths still fall through to the manifest router below.
+// MRQ-14's upload routes and MRQ-3's auth/admin-ops routes are both mounted
+// ahead of the generated API router rather than joined to its glob manifest
+// (deviate-with-flag on both — see PR bodies: MRQ-8/M-07 merged mid-
+// implementation and reconciling either onto its declarative route-registry
+// convention was not done in this pass; MRQ-59 tracks porting MRQ-14's
+// version back, and MRQ-3's PR asks the Orchestrator whether it folds into
+// the same follow-up). Hono matches in registration order, so unmatched
+// paths still fall through to the manifest router below.
 app.route("/", uploadsRoutes);
+app.use("/api/*", authMiddleware);
+app.route("/api/v1/auth", authRoutes);
+app.route("/api/v1/admin", adminOpsRoutes);
 
 // The API app is built from the generated route manifest. Assembly digests the
 // OpenAPI document, which is async, so it is memoized on first request rather
@@ -115,11 +125,28 @@ app.all("*", (context) => context.env.ASSETS.fetch(context.req.raw));
 
 const worker: ExportedHandler<Env> = {
   fetch: app.fetch,
-  async queue(batch, _env, _context): Promise<void> {
-    console.warn(
-      `No queue handler registered for ${batch.queue}; retrying ${batch.messages.length} messages`,
-    );
-    batch.retryAll();
+  async queue(batch, env, _context): Promise<void> {
+    for (const message of batch.messages) {
+      const body = message.body as { type?: string; job_id?: string };
+      if (body?.type === RESET_DEMO_MESSAGE_TYPE && body.job_id) {
+        try {
+          await runResetJob(env, body.job_id);
+          message.ack();
+        } catch (error) {
+          console.error(`reset_demo job ${body.job_id} failed`, error);
+          message.retry();
+        }
+        continue;
+      }
+      // Real reconcile consumer lands with M-25/M-26; stub-ack for now so the
+      // reset-demo path (which enqueues exactly one of these) doesn't stall.
+      if (body?.type === MIRROR_RECONCILE_MESSAGE_TYPE) {
+        message.ack();
+        continue;
+      }
+      console.warn(`No queue handler registered for message type ${body?.type ?? "unknown"}; retrying`);
+      message.retry();
+    }
   },
   async scheduled(controller, env, _context): Promise<void> {
     if (controller.cron === "30 4 * * *") {
