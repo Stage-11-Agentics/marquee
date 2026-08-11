@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:06:44Z",
+  "created_by": "agent:delegator-mrq-59",
+  "custom_fields": {},
+  "id": "art_01KZQ94XZ7Q26DWHK2FRVRNTWM",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ94XZ7Q26DWHK2FRVRNTWM.md",
+    "size_bytes": 895
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS final Wrangler and curl validation for HEAD b5bb074.",
+  "tags": [],
+  "title": "MRQ-59 final running-system validation",
+  "token_usage": null,
+  "type": "file"
+}

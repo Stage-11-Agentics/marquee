@@ -3,17 +3,53 @@
   "branch_links": [],
   "c11_surface": "surface:132",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-11T01:16:25Z",
   "created_by": "agent:orchestrator",
   "custom_fields": {},
   "description": "Raised at MRQ-14's merge. **Latent gate failure, not cosmetic.**\n\nMRQ-8's route manifest is built by `import.meta.glob(\"./**/*.routes.ts\", { eager: true })` in `src/routes/_manifest.ts`. MRQ-14 hit that glob mid-implementation and named its module **`src/routes/uploads.direct.ts`** \u2014 deliberately not matching `*.routes.ts` \u2014 to keep from breaking the API tests. Its own PR flags this as owed follow-up.\n\n**Why this must be fixed rather than left:** the upload endpoints are `/api/v1/...` POST routes (e.g. `/api/v1/me/uploads/sign`). `check:api`'s parity assertion replays a full-loop Playwright session, collects every non-GET request, and **fails if any path is absent from the public schema**. So the moment an e2e run exercises an upload, `check:api` will fail on paths that are absent purely because the module's filename dodges the glob. Nothing fails today only because e2e does not yet drive uploads \u2014 this is armed, not harmless.\n\nScope:\n- Rename `uploads.direct.ts` \u2192 `uploads.routes.ts` (or otherwise bring it into the glob) and make its route definitions register through the manifest like every other API module.\n- Confirm the served OpenAPI document then contains the upload paths, and that `check:api` parity passes with an e2e run that actually exercises an upload.\n- If any upload route genuinely must stay out of the versioned public schema, that is a **deliberate allowlist entry** alongside SPEC \u00a74.2's three calendar/feed URLs \u2014 an explicit named constant, never a filename that quietly misses a glob.\n\n**Fleet-wide convention this establishes:** API route modules are named `*.routes.ts` so the glob finds them. Exclusion is a decision recorded in an allowlist, never an accident of naming.\n\nDepends on: MRQ-8 (merged), MRQ-14 (merged). Hours: ~1. Workflow: fast-track.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-11T02:09:45Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZQ8TTAP40TDCK74K7KBGXSM",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ8Z8XS7JJ240N4SY1YN2SD",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ94XWCAY42AGNTG799W42P",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ94XZ7Q26DWHK2FRVRNTWM",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ96F63JBK7M9WHHTZMKG29",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQ9AEJXJ703Y7W44RN9XTCJ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQ9AEJXJ703Y7W44RN9XTCH",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZQ68TD08YK1BF1XTH374GP2",
-  "last_event_id": "ev_01KZQ8G3F7305Y4MXB36EQ5X97",
-  "last_status_changed_at": "2026-08-11T01:55:21Z",
+  "last_event_id": "ev_01KZQ9AEJXJ703Y7W44RN9XTCN",
+  "last_status_changed_at": "2026-08-11T02:09:45Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -25,13 +61,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-59",
-  "status": "review",
+  "status": "done",
   "tags": null,
   "title": "Port uploads routes onto the generated route manifest",
   "type": "task",
-  "updated_at": "2026-08-11T01:55:21Z",
+  "updated_at": "2026-08-11T02:09:45Z",
   "urgency": null
 }

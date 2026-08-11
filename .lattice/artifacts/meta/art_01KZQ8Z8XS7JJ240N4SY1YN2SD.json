@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:03:38Z",
+  "created_by": "agent:delegator-mrq-59",
+  "custom_fields": {},
+  "id": "art_01KZQ8Z8XS7JJ240N4SY1YN2SD",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ8Z8XS7JJ240N4SY1YN2SD.md",
+    "size_bytes": 1087
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS wrangler dev and curl validation against commit 404fe67.",
+  "tags": [],
+  "title": "MRQ-59 running-system validation",
+  "token_usage": null,
+  "type": "file"
+}

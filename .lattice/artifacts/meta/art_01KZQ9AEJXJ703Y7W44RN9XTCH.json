@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:09:45Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZQ9AEJXJ703Y7W44RN9XTCH",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ9AEJXJ703Y7W44RN9XTCH.md",
+    "size_bytes": 672
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged as PR #15 (squash). Verified: uploads.direct.ts is now uploads.routes.ts and inside the glob; check:api sees 5 upload/media paths across 8 operations; MRQ-14's AC-231 guardrail tests survive in",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

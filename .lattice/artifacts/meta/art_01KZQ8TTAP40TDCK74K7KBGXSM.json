@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T02:01:12Z",
+  "created_by": "agent:delegator-mrq-59",
+  "custom_fields": {},
+  "id": "art_01KZQ8TTAP40TDCK74K7KBGXSM",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ8TTAP40TDCK74K7KBGXSM.md",
+    "size_bytes": 1415
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS self-review for rebased commit 404fe67; no findings.",
+  "tags": [],
+  "title": "MRQ-59 inline self-review",
+  "token_usage": null,
+  "type": "file"
+}
