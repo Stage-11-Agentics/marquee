@@ -23,7 +23,14 @@ import { REPOSITORY_ROOT, emit, recordSpeedHarness } from "./lib/command.mjs";
  * a red suite should ever mean.
  */
 const BUDGET_MS = 45_000;
-const HARD_LIMIT_MS = 240_000;
+// 240_000 was not generous, it was ~80s of headroom over a suite that runs
+// 145-158s on a CI runner. Two PRs tripped it on one evening with zero failing
+// tests, and a tripped detector reports "timeout" — indistinguishable from a
+// wedged process — so both were re-run rather than read. A detector that fires
+// on the healthy case teaches people to re-run instead of look, which is the
+// one thing it must never do. Ten minutes is unambiguous: nothing but a genuine
+// hang reaches it, and the 45s BUDGET_MS still reports slowness every run.
+const HARD_LIMIT_MS = 600_000;
 const startedAt = performance.now();
 const vitestEntry = resolve(REPOSITORY_ROOT, "node_modules/vitest/vitest.mjs");
 let timedOut = false;
