@@ -2,8 +2,9 @@
 .record-layout { align-items: start; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 330px; }
 .record-main, .record-aside { min-width: 0; }
 .record-summary { display: flex; gap: 18px; justify-content: space-between; }
+.record-summary > div:first-child { min-width: 0; }
 .record-summary h2 { font-size: 18px; line-height: 1.35; margin: 6px 0 9px; }
-.record-summary p { color: var(--ink-soft); font-size: 12.5px; line-height: 1.6; margin: 0; max-width: 760px; white-space: pre-wrap; }
+.record-summary p { color: var(--ink-soft); font-size: 12.5px; line-height: 1.6; margin: 0; max-width: 760px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .record-summary-meta { align-items: flex-end; color: var(--muted); display: flex; flex: 0 0 145px; flex-direction: column; font-size: 10.5px; gap: 6px; text-align: right; }
 .record-meta-grid { border-top: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 20px; padding-top: 14px; }
 .record-meta-grid span { display: grid; gap: 4px; min-width: 0; }
