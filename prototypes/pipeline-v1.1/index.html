@@ -763,7 +763,7 @@
       const state = {
         route: "landing",
         // The fresh-install walk: what an organizer meets on a brand-new install,
-        // from "no events yet" through to an open call for speakers. Entered with
+        // from "no conferences yet" through to an open call for speakers. Entered with
         // ?empty=1 and sticky once entered, so ordinary in-app links stay inside
         // it. The seeded AIE demo is held in setupSnapshot and restored on exit.
         setup: { active:false, steps:{ details:false, taxonomy:false, form:false, evaluation:false, intake:false } },
@@ -854,7 +854,7 @@
           ["Projector","Mics"]
         ],
         roomNotes: [
-          "Mainstage. Confidence monitors downstage; the livestream feed powers the event site.",
+          "Mainstage. Confidence monitors downstage; the livestream feed powers the conference site.",
           "Breakout. Shares a wall with Empire West — avoid amplified sessions in both at once.",
           "Breakout. Livestream is not cabled; record locally and upload after the session.",
           "Photo ID required at the 39th St entrance. Allow ten minutes for building security."
@@ -866,7 +866,7 @@
           {id:4,title:"Upload slides",kind:"File request",description:"Upload the final presentation deck.",due:42}
         ],
         commsTemplates: [
-          {id:"acceptance",name:"Acceptance",subject:"You’re speaking at {{event.name}}",body:"Hi {{speaker.first_name}},\n\nWe’re delighted to accept {{session.title}}. Open your portal to confirm and complete your tasks."},
+          {id:"acceptance",name:"Acceptance",subject:"You’re speaking at {{conference.name}}",body:"Hi {{speaker.first_name}},\n\nWe’re delighted to accept {{session.title}}. Open your portal to confirm and complete your tasks."},
           {id:"rejection",name:"Rejection",subject:"An update on {{session.title}}",body:"Hi {{speaker.first_name}},\n\nThank you for sharing {{session.title}}. We aren’t able to include it in this year’s program."},
           {id:"task-overdue",name:"Task overdue",subject:"AIE NYC: {{task.title}} is overdue",body:"Hi {{speaker.first_name}},\n\nPlease complete {{task.title}} in your speaker portal."}
         ],
@@ -1051,10 +1051,10 @@
       seedAgenda();
 
       const routeNames = {
-        landing: "Demo", settings: "Event settings", dashboard: "Program pipeline", board: "Program board", forms: "Form builder",
+        landing: "Demo", settings: "Conference settings", dashboard: "Program pipeline", board: "Program board", forms: "Form builder",
         cfp: "Public CFP form", portal: "Speaker portal", evaluation: "Evaluation plan", reviewer: "Reviewer queue",
-        submissions: "Abstracts", submissionDetail:"Submission record", submissionNew:"Create submission", eventNew:"Create event",
-        onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Event site", comms:"Communications",
+        submissions: "Abstracts", submissionDetail:"Submission record", submissionNew:"Create submission", eventNew:"Create conference",
+        onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Conference site", comms:"Communications",
         taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", apiTokens:"API tokens",
         apiDocs:"API documentation", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker"
       };
@@ -1121,7 +1121,7 @@
       function showPublishModal(id) {
         const slot=sessionSlot(id), submission=state.submissions.find(item=>item.id===id);
         if(!slot||slot.status==="Published")return;
-        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Publish Session</div><h2>Make ${esc(submission?.title||slot.title)} public?</h2><p>This places the Session on the live event site and exposes its public permalink.</p></div><div class="modal-body"><div class="message-preview"><strong>${esc(slot.day)} · ${esc(slot.time)} · ${esc(slot.room)}</strong><br><span class="subtle">Tracks, speakers, and the latest title and description will become public together.</span></div></div><div class="modal-actions"><button class="button" id="cancel-publish">Keep private</button><button class="button primary" id="confirm-publish">Publish Session</button></div></section></div>`;
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Publish Session</div><h2>Make ${esc(submission?.title||slot.title)} public?</h2><p>This places the Session on the live conference site and exposes its public permalink.</p></div><div class="modal-body"><div class="message-preview"><strong>${esc(slot.day)} · ${esc(slot.time)} · ${esc(slot.room)}</strong><br><span class="subtle">Tracks, speakers, and the latest title and description will become public together.</span></div></div><div class="modal-actions"><button class="button" id="cancel-publish">Keep private</button><button class="button primary" id="confirm-publish">Publish Session</button></div></section></div>`;
         document.getElementById("cancel-publish").onclick=()=>modalRoot.innerHTML="";
         document.getElementById("confirm-publish").onclick=()=>{
           slot.status="Published";
@@ -1140,7 +1140,7 @@
       }
 
       function routeKey(path) {
-        if (/^events\/new$/.test(path)) return "eventNew";
+        if (/^conferences\/new$/.test(path)) return "eventNew";
         if (/^submissions\/new$/.test(path)) return "submissionNew";
         if (/^submissions\/[^/]+$/.test(path)) { state.submissionRecordId = decodeURIComponent(path.split("/")[1]); return "submissionDetail"; }
         if (/^s\/[^/]+$/.test(path)) { state.publicRecordId = decodeURIComponent(path.split("/")[1]); return "publicSession"; }
@@ -1199,8 +1199,8 @@
       function setupStepList() {
         const s = state.setup.steps;
         return [
-          { key:"details",    label:"Create the event",               note:"Name, dates, timezone, and venue",             done:s.details,    route:"events/new", action:"Create event" },
-          { key:"taxonomy",   label:"Add tracks, formats, and rooms", note:"Forms, agenda, and invites all inherit these", done:s.taxonomy,   route:"settings",   action:"Open event settings" },
+          { key:"details",    label:"Create the conference",               note:"Name, dates, timezone, and venue",             done:s.details,    route:"conferences/new", action:"Create conference" },
+          { key:"taxonomy",   label:"Add tracks, formats, and rooms", note:"Forms, agenda, and invites all inherit these", done:s.taxonomy,   route:"settings",   action:"Open conference settings" },
           { key:"form",       label:"Build the call for speakers",    note:"Fields, participants, rules, and routing",     done:s.form,       route:"forms",      action:"Build the form" },
           { key:"evaluation", label:"Plan evaluation",                note:"Scorecard, committee, and review rounds",      done:s.evaluation, route:"evaluation", action:"Plan evaluation" },
           { key:"intake",     label:"Open intake",                    note:"Publish the form and share the public link",   done:s.intake,     route:"forms",      action:"Publish the form" }
@@ -1238,8 +1238,8 @@
           <aside class="sidebar">
             <a class="brand" href="#dashboard"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
             <div class="event-switcher-row">
-              <a class="event-switcher" href="#settings"><small>Event</small><strong>${esc(state.event.name || "No event yet")}</strong></a>
-              <a class="event-add" href="#events/new" title="Create event" aria-label="Create event">＋</a>
+              <a class="event-switcher" href="#settings"><small>Conference</small><strong>${esc(state.event.name || "No conference yet")}</strong></a>
+              <a class="event-add" href="#conferences/new" title="Create conference" aria-label="Create conference">＋</a>
             </div>
             <nav class="nav" aria-label="Program home">${navItem("dashboard","⌂","Program home")}${navItem("board","▥","Program board")}</nav>
             <div class="nav-label">Pipeline</div>
@@ -1260,8 +1260,8 @@
               ${navItem("agenda","▦","Agenda")}
               ${navItem("comms","✉","Communications")}
               ${navItem("portal","○","Speaker portal")}
-              ${navItem("publicAgenda","↗","Event site")}
-              ${navItem("settings","⚙","Event settings")}
+              ${navItem("publicAgenda","↗","Conference site")}
+              ${navItem("settings","⚙","Conference settings")}
             </nav>
             <div class="sidebar-foot">
               <button data-route="api/docs">⌘ API & CLI</button>
@@ -1286,7 +1286,7 @@
       }
 
       function routePath(route) {
-        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"events/new",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
+        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"conferences/new",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
       }
 
       function pageHead(title, copy, actions = "") {
@@ -1296,24 +1296,24 @@
       const TIMEZONES = ["America/New_York","America/Chicago","America/Denver","America/Los_Angeles","Europe/London","Europe/Berlin","Asia/Singapore","Australia/Sydney"];
 
       // The screen that did not exist: a fresh install had no way to make the
-      // event every other screen is scoped to. Two honest doors — start clean, or
+      // conference every other screen is scoped to. Two honest doors — start clean, or
       // bring an in-flight program across from Sessionize.
       function eventNewView() {
         const importing = state.setupSource === "sessionize";
         return shell(`<div class="page narrow">
-          ${pageHead("Create event", "One record, created once. Forms, portals, agenda times, and calendar invites all inherit it.")}
+          ${pageHead("Create conference", "One record, created once. Forms, portals, agenda times, and calendar invites all inherit it.")}
           <div class="setup-choice">
             <button class="choice-card ${importing?"":"active"}" data-setup-source="scratch" aria-pressed="${importing?"false":"true"}">
               <strong>Start from scratch</strong><span>Name the conference and configure tracks, formats, and rooms here.</span>
             </button>
             <button class="choice-card ${importing?"active":""}" data-setup-source="sessionize" aria-pressed="${importing?"true":"false"}">
-              <strong>Import from Sessionize</strong><span>Create the event, then bring an open CFP across with its review history.</span>
+              <strong>Import from Sessionize</strong><span>Create the conference, then bring an open CFP across with its review history.</span>
             </button>
           </div>
-          <section class="card"><div class="card-head"><h2>Event details</h2><span class="subtle">Everything here is editable later in Event settings.</span></div>
+          <section class="card"><div class="card-head"><h2>Conference details</h2><span class="subtle">Everything here is editable later in Conference settings.</span></div>
             <div class="card-body stack">
-              <div class="field"><label for="new-event-name">Event name</label><input id="new-event-name" value="${esc(state.event.name)}" placeholder="AI Engineer New York 2026" autocomplete="off"><span class="field-note">Used in the sidebar, every email subject, the public site, and calendar invites.</span></div>
-              <div class="field"><label for="new-event-tagline">Tagline</label><input id="new-event-tagline" value="${esc(state.event.tagline||"")}" placeholder="Where AI Engineering Meets Wall Street" autocomplete="off"><span class="field-note">Optional · shown on the public event site.</span></div>
+              <div class="field"><label for="new-event-name">Conference name</label><input id="new-event-name" value="${esc(state.event.name)}" placeholder="AI Engineer New York 2026" autocomplete="off"><span class="field-note">Used in the sidebar, every email subject, the public site, and calendar invites.</span></div>
+              <div class="field"><label for="new-event-tagline">Tagline</label><input id="new-event-tagline" value="${esc(state.event.tagline||"")}" placeholder="Where AI Engineering Meets Wall Street" autocomplete="off"><span class="field-note">Optional · shown on the public conference site.</span></div>
               <div class="grid-2">
                 <div class="field"><label for="new-event-start">Starts</label><input id="new-event-start" type="date" value="${esc(state.event.start)}"></div>
                 <div class="field"><label for="new-event-end">Ends</label><input id="new-event-end" type="date" value="${esc(state.event.end)}"></div>
@@ -1325,7 +1325,7 @@
           <div class="setup-actions">
             <span class="subtle">${importing?"You'll land in the Sessionize importer next.":"You'll add tracks, formats, and rooms next."}</span>
             <a class="button" href="#landing">Cancel</a>
-            <button class="button primary" id="create-event">Create event</button>
+            <button class="button primary" id="create-event">Create conference</button>
           </div>
         </div>`);
       }
@@ -1335,7 +1335,7 @@
         const next = steps.findIndex(s=>!s.done);
         return `<section class="card setup-card">
           <div class="card-head">
-            <div><h2>Set up your event</h2><span class="subtle">From a fresh install to an open call for speakers.</span></div>
+            <div><h2>Set up your conference</h2><span class="subtle">From a fresh install to an open call for speakers.</span></div>
             <span class="setup-progress tabular">${done} of ${steps.length}</span>
           </div>
           <div class="card-body setup-steps">
@@ -1361,7 +1361,7 @@
               : "A new install has no program yet. Work the checklist and the pipeline starts filling itself.",
             complete
               ? `<button class="button" data-route="cfp">View public CFP</button><button class="button primary" data-route="submissions">Open submissions</button>`
-              : `<button class="button" data-route="settings">Event settings</button>`
+              : `<button class="button" data-route="settings">Conference settings</button>`
           )}
           ${setupChecklistCard()}
           <section class="card pipeline-card">
@@ -1412,7 +1412,7 @@
       function dashboardView() {
         const counts = pipelineCounts();
         return shell(`<div class="page">
-          ${pageHead("Program pipeline", `Wave 2 closes Friday — ${unreviewedTrackCount("Agents")} abstracts still need review in Agents. Every count opens the work behind it.`, `<button class="button" data-route="settings">Event settings</button><button class="button primary" data-route="submissions">Work the pipeline →</button>`)}
+          ${pageHead("Program pipeline", `Wave 2 closes Friday — ${unreviewedTrackCount("Agents")} abstracts still need review in Agents. Every count opens the work behind it.`, `<button class="button" data-route="settings">Conference settings</button><button class="button primary" data-route="submissions">Work the pipeline →</button>`)}
           <section class="card pipeline-card">
             <div class="pipeline">
               ${pipelineStage("Submitted", counts.Submitted, "+41 this week", "Submitted")}
@@ -1558,21 +1558,21 @@
 
       function settingsView() {
         return shell(`<div class="page">
-          ${pageHead("Event settings", "The event record is inherited by forms, portals, agenda times, and calendar invites.", `<button class="button" id="preview-branding">Preview branding</button><button class="button primary" id="save-settings">Save event settings</button>`)}
-          <nav class="route-tabs"><a class="button active" href="#settings">Event</a><a class="button" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav>
+          ${pageHead("Conference settings", "The conference record is inherited by forms, portals, agenda times, and calendar invites.", `<button class="button" id="preview-branding">Preview branding</button><button class="button primary" id="save-settings">Save conference settings</button>`)}
+          <nav class="route-tabs"><a class="button active" href="#settings">Conference</a><a class="button" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav>
           <div class="grid-2">
-            <section class="card"><div class="card-head"><h2>Event details</h2><span class="chip published"><span class="dot"></span> Published</span></div><div class="card-body stack">
-              <div class="field"><label for="event-name">Event name</label><input id="event-name" value="${esc(state.event.name)}"></div>
+            <section class="card"><div class="card-head"><h2>Conference details</h2><span class="chip published"><span class="dot"></span> Published</span></div><div class="card-body stack">
+              <div class="field"><label for="event-name">Conference name</label><input id="event-name" value="${esc(state.event.name)}"></div>
               <div class="grid-2"><div class="field"><label for="event-start">Starts</label><input id="event-start" type="date" value="${esc(state.event.start)}"></div><div class="field"><label for="event-end">Ends</label><input id="event-end" type="date" value="${esc(state.event.end)}"></div></div>
               <div class="field"><label for="event-venue">Venue</label><input id="event-venue" value="${esc(state.event.venue)}"></div>
-              <div class="field"><label for="event-logo">Event logo</label><input id="event-logo" type="file" accept="image/png,image/jpeg,image/svg+xml"><span class="field-note">PNG, JPEG, or SVG · preview uses the Marquee mark.</span></div>
+              <div class="field"><label for="event-logo">Conference logo</label><input id="event-logo" type="file" accept="image/png,image/jpeg,image/svg+xml"><span class="field-note">PNG, JPEG, or SVG · preview uses the Marquee mark.</span></div>
               <div class="field"><label for="event-timezone">Timezone</label><select id="event-timezone"><option selected>America/New_York</option><option>America/Los_Angeles</option><option>Europe/London</option></select><span class="field-note">Agenda and calendar invites inherit this timezone.</span></div>
             </div></section>
             <section class="card"><div class="card-head"><h2>Formats</h2><button class="button small" id="add-format">+ Add format</button></div><div class="card-body" id="format-settings">
               ${formats.map((f,i) => `<div class="settings-row" data-format-index="${i}"><span class="drag-handle">⋮</span><input aria-label="Format name" data-format-name="${i}" value="${esc(f)}"><input aria-label="Allowed range" data-format-range="${i}" value="${esc(formatRanges[f]||"15–30")}"><label class="field" style="display:flex;align-items:center;gap:4px"><input aria-label="Default duration" data-format-duration="${i}" type="number" min="5" max="180" value="${formatDurations[f]}"><span class="subtle">min</span></label></div>`).join("")}
             </div></section>
             <section class="card"><div class="card-head"><div><h2>Tracks</h2><span class="subtle">Drag to reorder · edit names and colors in place</span></div><button class="button small" id="add-track">+ Add track</button></div><div class="card-body" id="track-settings">${tracks.map((t,i) => `<div class="settings-row" draggable="true" data-track-index="${i}"><button class="drag-button" aria-label="Drag ${esc(t.name)}">⋮⋮</button><input aria-label="Track name" data-track-name="${i}" value="${esc(t.name)}"><input aria-label="Track color" data-track-color="${i}" type="color" value="${t.color}"><span class="chip" style="border-left:3px solid ${t.color}">${i+1}</span></div>`).join("")}</div></section>
-            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Rooms belong to a building; the agenda and the event site show both.</span></div><button class="button small" id="add-building">+ Add building</button></div><div class="card-body">${buildings.map((b,i) => `<div class="building-row"><span class="drag-handle">${i+1}</span><input aria-label="Building name" data-building-name="${b.id}" value="${esc(b.name)}"><input aria-label="Building address" data-building-address="${b.id}" value="${esc(b.address)}" placeholder="Street address, floor, entrance notes"><span class="building-rooms tabular">${roomsInBuilding(b.id)} ${roomsInBuilding(b.id)===1?"room":"rooms"}</span><button class="button small" data-remove-building="${b.id}" ${buildings.length<=1?"disabled":""}>Remove</button></div>`).join("")}</div></section>
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Rooms belong to a building; the agenda and the conference site show both.</span></div><button class="button small" id="add-building">+ Add building</button></div><div class="card-body">${buildings.map((b,i) => `<div class="building-row"><span class="drag-handle">${i+1}</span><input aria-label="Building name" data-building-name="${b.id}" value="${esc(b.name)}"><input aria-label="Building address" data-building-address="${b.id}" value="${esc(b.address)}" placeholder="Street address, floor, entrance notes"><span class="building-rooms tabular">${roomsInBuilding(b.id)} ${roomsInBuilding(b.id)===1?"room":"rooms"}</span><button class="button small" data-remove-building="${b.id}" ${buildings.length<=1?"disabled":""}>Remove</button></div>`).join("")}</div></section>
             <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Rooms</h2><span class="subtle">Capacity, building, AV capability, and the notes an ops lead needs on the day</span></div><button class="button small" id="add-room">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="room-row"><div class="room-row-main"><span class="drag-handle">${i+1}</span><input aria-label="Room name" data-room-name="${i}" value="${esc(r)}"><input aria-label="Room capacity" data-room-capacity="${i}" type="number" min="1" step="1" value="${state.roomCapacities[i]}"><select aria-label="Building" data-room-building="${i}"><option value="">Unassigned</option>${buildings.map(b=>`<option value="${b.id}" ${state.roomBuildings[i]===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}</select><button class="button small" data-remove-room="${i}" ${rooms.length<=1?"disabled":""}>Remove</button></div><div class="room-row-meta"><span class="room-meta-label">AV</span><div class="av-tags">${AV_TAGS.map(tag=>`<button class="av-tag ${(state.roomAV[i]||[]).includes(tag)?"on":""}" data-room-av="${i}" data-av-tag="${esc(tag)}" aria-pressed="${(state.roomAV[i]||[]).includes(tag)?"true":"false"}">${esc(tag)}</button>`).join("")}</div></div><div class="room-row-meta"><span class="room-meta-label">Notes</span><input aria-label="Room notes" data-room-notes="${i}" value="${esc(state.roomNotes[i]||"")}" placeholder="Access, load-in, quirks — shown on the agenda and to speakers"></div></div>`).join("")}</div></section>
           </div>
         </div>`);
@@ -1581,8 +1581,8 @@
       function formsView() {
         const activeForm=state.forms.find(form=>form.id===state.activeFormId)||state.forms[0];
         return shell(`<div class="page">
-          ${pageHead("Forms", `${state.forms.length} event forms · each has its own audience, fields, rules, response state, and public or private link.`, `<button class="button" id="duplicate-form">Duplicate</button><button class="button" id="new-form">+ New form</button><button class="button primary" id="publish-form">Publish changes</button>`)}
-          <section class="form-catalog" aria-label="Event forms">${state.forms.map(form=>`<button class="form-catalog-card ${form.id===state.activeFormId?"active":""}" data-form-id="${form.id}"><span class="chip ${form.status==="Open"?"published":""}">${form.status}</span><strong>${esc(form.name)}</strong><small>${esc(form.detail)}<br>${form.responses.toLocaleString()} ${form.responses===1?"response":"responses"} · collects ${form.target}s</small></button>`).join("")}</section>
+          ${pageHead("Forms", `${state.forms.length} conference forms · each has its own audience, fields, rules, response state, and public or private link.`, `<button class="button" id="duplicate-form">Duplicate</button><button class="button" id="new-form">+ New form</button><button class="button primary" id="publish-form">Publish changes</button>`)}
+          <section class="form-catalog" aria-label="Conference forms">${state.forms.map(form=>`<button class="form-catalog-card ${form.id===state.activeFormId?"active":""}" data-form-id="${form.id}"><span class="chip ${form.status==="Open"?"published":""}">${form.status}</span><strong>${esc(form.name)}</strong><small>${esc(form.detail)}<br>${form.responses.toLocaleString()} ${form.responses===1?"response":"responses"} · collects ${form.target}s</small></button>`).join("")}</section>
           <div class="message-preview" style="margin-bottom:14px"><strong>Editing · ${esc(activeForm.name)}</strong><br><span class="subtle">${esc(activeForm.detail)} · changes and publication are isolated to this form.</span></div>
           <div class="builder">
             <section class="card builder-steps">
@@ -1617,7 +1617,7 @@
         const switcher=`<div class="prototype-state-switch"><span>Prototype state</span>${[["open","Open"],["resumed","Resumed draft"],["limit","At limit"],["closed","Closed"]].map(([id,label])=>`<button class="button small ${state.cfpMode===id?"primary":""}" data-cfp-state="${id}">${label}</button>`).join("")}</div>`;
         let content="";
         if(state.cfpMode==="closed") content=`${switcher}<div class="eyebrow">Call for speakers · closed Sep 12</div><h1>Submissions are closed.</h1><p>The program team is reviewing 1,020 submitted proposals. Existing submitters can still use their private link to view status; organizers may re-open this form without creating a new URL.</p><div class="message-preview"><strong>Already submitted?</strong><br><span class="subtle">Use the private link in your confirmation email to view your proposal and decision status.</span></div><div style="display:flex;gap:8px;margin-top:20px"><button class="button" data-cfp-state="resumed">Open an existing draft</button><a class="button primary" href="#portal">Speaker portal</a></div>`;
-        else if(state.cfpMode==="limit") content=`${switcher}<div class="eyebrow">Call for speakers · submission limit reached</div><h1>You have submitted 3 of 3 proposals.</h1><p>Your existing proposals remain editable until September 12. Withdraw one before starting another; the limit is enforced across every form in this event that collects abstracts.</p><div class="stack"><div class="message-preview"><strong>Reliable multi-agent systems</strong><br><span class="subtle">Submitted · AIE-0027 · Edit</span></div><div class="message-preview"><strong>Evaluation evidence that survives contact with production</strong><br><span class="subtle">Draft · saved 2 hours ago · Resume</span></div><div class="message-preview"><strong>Human escalation as infrastructure</strong><br><span class="subtle">Submitted · AIE-0714 · Edit</span></div></div>`;
+        else if(state.cfpMode==="limit") content=`${switcher}<div class="eyebrow">Call for speakers · submission limit reached</div><h1>You have submitted 3 of 3 proposals.</h1><p>Your existing proposals remain editable until September 12. Withdraw one before starting another; the limit is enforced across every form in this conference that collects abstracts.</p><div class="stack"><div class="message-preview"><strong>Reliable multi-agent systems</strong><br><span class="subtle">Submitted · AIE-0027 · Edit</span></div><div class="message-preview"><strong>Evaluation evidence that survives contact with production</strong><br><span class="subtle">Draft · saved 2 hours ago · Resume</span></div><div class="message-preview"><strong>Human escalation as infrastructure</strong><br><span class="subtle">Submitted · AIE-0714 · Edit</span></div></div>`;
         else content=`${switcher}<div class="eyebrow">${resumed?"Draft restored from private email link · saved 2 hours ago":"Call for speakers · closes Sep 12"}</div><h1>${resumed?"Finish your proposal.":"Share your work with AIE NYC."}</h1><p>We welcome practical, specific sessions for people building and operating AI systems. You can submit without an account and return to a saved draft by email.</p>
           <div class="cfp-progress"><i class="active"></i><i class="active"></i><i class="active"></i><i></i></div>
           <form class="cfp-form" id="cfp-form" novalidate>
@@ -1644,7 +1644,7 @@
       function portalView() {
         const done = state.tasks.filter(t => t.done).length;
         return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>${esc(state.event.name)} · Speaker portal</a><a class="button small" href="#landing">Sign out</a></header><main class="public-body wide">
-          <div class="portal-head"><div><div class="eyebrow">Welcome back</div><h1>Amara van der Meer</h1><span class="subtle">Your status, tasks, profile, and event details in one place.</span></div><div class="portal-progress"><strong style="font-size:12px">${done} of ${state.tasks.length} tasks done</strong><div class="progress-track"><i style="width:${done/state.tasks.length*100}%"></i></div></div></div>
+          <div class="portal-head"><div><div class="eyebrow">Welcome back</div><h1>Amara van der Meer</h1><span class="subtle">Your status, tasks, profile, and conference details in one place.</span></div><div class="portal-progress"><strong style="font-size:12px">${done} of ${state.tasks.length} tasks done</strong><div class="progress-track"><i style="width:${done/state.tasks.length*100}%"></i></div></div></div>
           ${portalSubmissionCard()}
           ${portalDecisionFeedback()}
           <div class="portal-grid">
@@ -1789,9 +1789,9 @@
       }
 
       function openSaveViewModal() {
-        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Save this view</h2><p>Search, filters, sort, and visible-column order are captured for you in ${esc(state.event.name)}.</p></div><div class="modal-body stack"><div class="field"><label for="saved-view-name">View name</label><input id="saved-view-name" value="My triage view"></div><div class="message-preview"><strong>Personal · event-scoped</strong><br><span class="subtle">Other users and events cannot see this view. It restores after reload.</span></div></div><div class="modal-actions"><button class="button" id="cancel-save-view">Cancel</button><button class="button primary" id="confirm-save-view">Save view</button></div></section></div>`;
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Save this view</h2><p>Search, filters, sort, and visible-column order are captured for you in ${esc(state.event.name)}.</p></div><div class="modal-body stack"><div class="field"><label for="saved-view-name">View name</label><input id="saved-view-name" value="My triage view"></div><div class="message-preview"><strong>Personal · event-scoped</strong><br><span class="subtle">Other users and conferences cannot see this view. It restores after reload.</span></div></div><div class="modal-actions"><button class="button" id="cancel-save-view">Cancel</button><button class="button primary" id="confirm-save-view">Save view</button></div></section></div>`;
         document.getElementById("cancel-save-view").onclick=()=>modalRoot.innerHTML="";
-        document.getElementById("confirm-save-view").onclick=()=>{const name=document.getElementById("saved-view-name").value.trim();if(!name)return;const id=`view-${Date.now()}`;state.savedViews.push({id,name,builtIn:false,config:currentSubmissionViewConfig()});state.activeSavedView=id;persistSubmissionPreferences();modalRoot.innerHTML="";toast(`${name} saved for this event`);render();};
+        document.getElementById("confirm-save-view").onclick=()=>{const name=document.getElementById("saved-view-name").value.trim();if(!name)return;const id=`view-${Date.now()}`;state.savedViews.push({id,name,builtIn:false,config:currentSubmissionViewConfig()});state.activeSavedView=id;persistSubmissionPreferences();modalRoot.innerHTML="";toast(`${name} saved for this conference`);render();};
       }
 
       function openManageViewModal() {
@@ -1803,7 +1803,7 @@
       }
 
       function openColumnChooser() {
-        const paint=()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Configure columns</h2><p>Show, hide, and reorder this event’s submissions table. Title is always present.</p></div><div class="modal-body stack">${submissionColumnDefs.map(def=>{const index=state.submissionColumns.indexOf(def.id),visible=index>=0;return `<div class="toggle-line"><label><input type="checkbox" data-column-toggle="${def.id}" ${visible?"checked":""} ${def.required?"disabled":""}> ${esc(def.label)}${def.required?" · required":""}</label><span><button class="button small" data-column-move="up" data-column-id="${def.id}" ${!visible||index===0?"disabled":""}>↑</button> <button class="button small" data-column-move="down" data-column-id="${def.id}" ${!visible||index===state.submissionColumns.length-1?"disabled":""}>↓</button></span></div>`}).join("")}</div><div class="modal-actions"><span class="subtle" style="margin-right:auto">${state.submissionColumns.length} visible · saved per user and event</span><button class="button primary" id="close-columns">Done</button></div></section></div>`;
+        const paint=()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Configure columns</h2><p>Show, hide, and reorder this conference’s submissions table. Title is always present.</p></div><div class="modal-body stack">${submissionColumnDefs.map(def=>{const index=state.submissionColumns.indexOf(def.id),visible=index>=0;return `<div class="toggle-line"><label><input type="checkbox" data-column-toggle="${def.id}" ${visible?"checked":""} ${def.required?"disabled":""}> ${esc(def.label)}${def.required?" · required":""}</label><span><button class="button small" data-column-move="up" data-column-id="${def.id}" ${!visible||index===0?"disabled":""}>↑</button> <button class="button small" data-column-move="down" data-column-id="${def.id}" ${!visible||index===state.submissionColumns.length-1?"disabled":""}>↓</button></span></div>`}).join("")}</div><div class="modal-actions"><span class="subtle" style="margin-right:auto">${state.submissionColumns.length} visible · saved per user and conference</span><button class="button primary" id="close-columns">Done</button></div></section></div>`;
           document.querySelectorAll("[data-column-toggle]").forEach(input=>input.onchange=()=>{const id=input.dataset.columnToggle,index=state.submissionColumns.indexOf(id);if(input.checked&&index<0)state.submissionColumns.push(id);if(!input.checked&&index>=0)state.submissionColumns.splice(index,1);persistSubmissionPreferences();paint();});
           document.querySelectorAll("[data-column-move]").forEach(button=>button.onclick=()=>{const index=state.submissionColumns.indexOf(button.dataset.columnId),target=button.dataset.columnMove==="up"?index-1:index+1;if(index<0||target<0||target>=state.submissionColumns.length)return;[state.submissionColumns[index],state.submissionColumns[target]]=[state.submissionColumns[target],state.submissionColumns[index]];persistSubmissionPreferences();paint();});
           document.getElementById("close-columns").onclick=()=>{modalRoot.innerHTML="";state.activeSavedView="";persistSubmissionPreferences();render();};
@@ -1937,11 +1937,11 @@
       }
 
       function renderMergedTemplate(template) {
-        return esc(template.body).replace(/\n/g,"<br>").replace(/\{\{speaker\.first_name\}\}/g,"Amara").replace(/\{\{event\.name\}\}/g,"AIE NYC 2026").replace(/\{\{session\.title\}\}/g,"Beyond the demo: reliable multi-agent systems").replace(/\{\{task\.title\}\}/g,"Bio + headshot");
+        return esc(template.body).replace(/\n/g,"<br>").replace(/\{\{speaker\.first_name\}\}/g,"Amara").replace(/\{\{conference\.name\}\}/g,"AIE NYC 2026").replace(/\{\{session\.title\}\}/g,"Beyond the demo: reliable multi-agent systems").replace(/\{\{task\.title\}\}/g,"Bio + headshot");
       }
 
       function taskTemplatesView() {
-        return shell(`<div class="page">${pageHead("Task templates", "Every accepted speaker receives the right acknowledgements, forms, and file requests without manual setup.", `<button class="button" data-route="settings">Event settings</button><button class="button primary" id="add-task-template">+ Add task template</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Event</a><a class="button active" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav><section class="card"><div class="card-head"><div><h2>Accepted-speaker task set</h2><span class="subtle">Drag to reorder · due dates are relative to acceptance</span></div><span class="chip">${state.taskTemplates.length} tasks</span></div><div class="card-body" id="task-template-list">${state.taskTemplates.map((t,i)=>`<div class="settings-row" draggable="true" data-task-template="${t.id}"><button class="drag-button">⋮⋮</button><div><input data-task-title="${t.id}" value="${esc(t.title)}"><div class="field-note">${esc(t.description)}</div></div><select data-task-kind="${t.id}">${["Acknowledge","Form","File request"].map(k=>`<option ${k===t.kind?"selected":""}>${k}</option>`).join("")}</select><label class="field" style="display:flex;align-items:center;gap:4px"><input data-task-due="${t.id}" type="number" min="0" value="${t.due}" style="width:62px"><span class="subtle">days</span></label></div>`).join("")}</div></section></div>`);
+        return shell(`<div class="page">${pageHead("Task templates", "Every accepted speaker receives the right acknowledgements, forms, and file requests without manual setup.", `<button class="button" data-route="settings">Conference settings</button><button class="button primary" id="add-task-template">+ Add task template</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Conference</a><a class="button active" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav><section class="card"><div class="card-head"><div><h2>Accepted-speaker task set</h2><span class="subtle">Drag to reorder · due dates are relative to acceptance</span></div><span class="chip">${state.taskTemplates.length} tasks</span></div><div class="card-body" id="task-template-list">${state.taskTemplates.map((t,i)=>`<div class="settings-row" draggable="true" data-task-template="${t.id}"><button class="drag-button">⋮⋮</button><div><input data-task-title="${t.id}" value="${esc(t.title)}"><div class="field-note">${esc(t.description)}</div></div><select data-task-kind="${t.id}">${["Acknowledge","Form","File request"].map(k=>`<option ${k===t.kind?"selected":""}>${k}</option>`).join("")}</select><label class="field" style="display:flex;align-items:center;gap:4px"><input data-task-due="${t.id}" type="number" min="0" value="${t.due}" style="width:62px"><span class="subtle">days</span></label></div>`).join("")}</div></section></div>`);
       }
 
       function importerView() {
@@ -1956,11 +1956,11 @@
       }
 
       function airtableView() {
-        return shell(`<div class="page">${pageHead("Airtable mirror", "D1 stays authoritative. The two-way mirror runs off the request path and makes its health visible.", `<a class="button" href="#settings">Event settings</a><button class="button primary" id="sync-airtable">Sync now</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Event</a><a class="button" href="#settings/tasks">Task templates</a><a class="button active" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav><div class="grid-2"><section class="card"><div class="card-head"><h2>AIE NYC 2026 base</h2><a class="button small" href="https://airtable.com/appAIE2026" target="_blank" rel="noreferrer">Open base ↗</a></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Marquee rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Airtable rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Last successful sync</span><div class="metric" style="font-size:16px">23 sec ago</div></div><div class="metric-box"><span class="eyebrow">Outbox depth</span><div class="metric">0</div></div></div><div class="message-preview" style="margin-top:14px"><strong>Webhook healthy · renews automatically</strong><br><span class="subtle">Expires Aug 14, 2026 · keepalive due in 5 days. You’ll see a warning here 48 hours before expiry.</span></div></div></section><section class="card"><div class="card-head"><h2>Live sync log</h2><span class="chip published">Healthy</span></div><div class="card-body"><div class="live-log" id="airtable-log">${state.airtableLog.map((line,i)=>`<div>${i===state.airtableLog.length-1?"<strong>✓</strong>":"·"} ${esc(line)}</div>`).join("")}</div></div></section></div></div>`);
+        return shell(`<div class="page">${pageHead("Airtable mirror", "D1 stays authoritative. The two-way mirror runs off the request path and makes its health visible.", `<a class="button" href="#settings">Conference settings</a><button class="button primary" id="sync-airtable">Sync now</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Conference</a><a class="button" href="#settings/tasks">Task templates</a><a class="button active" href="#settings/airtable">Airtable</a><a class="button" href="#settings/api">API tokens</a></nav><div class="grid-2"><section class="card"><div class="card-head"><h2>AIE NYC 2026 base</h2><a class="button small" href="https://airtable.com/appAIE2026" target="_blank" rel="noreferrer">Open base ↗</a></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Marquee rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Airtable rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Last successful sync</span><div class="metric" style="font-size:16px">23 sec ago</div></div><div class="metric-box"><span class="eyebrow">Outbox depth</span><div class="metric">0</div></div></div><div class="message-preview" style="margin-top:14px"><strong>Webhook healthy · renews automatically</strong><br><span class="subtle">Expires Aug 14, 2026 · keepalive due in 5 days. You’ll see a warning here 48 hours before expiry.</span></div></div></section><section class="card"><div class="card-head"><h2>Live sync log</h2><span class="chip published">Healthy</span></div><div class="card-body"><div class="live-log" id="airtable-log">${state.airtableLog.map((line,i)=>`<div>${i===state.airtableLog.length-1?"<strong>✓</strong>":"·"} ${esc(line)}</div>`).join("")}</div></div></section></div></div>`);
       }
 
       function apiTokensView() {
-        return shell(`<div class="page">${pageHead("API tokens", "Issue revocable credentials for agents, scripts, and integrations independently of browser sessions.", `<a class="button" href="#api/docs">Read API docs</a><button class="button primary" id="create-token">Create token</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Event</a><a class="button" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button active" href="#settings/api">API tokens</a></nav><section class="card table-card"><div class="table-wrap" style="min-height:300px"><table><thead><tr><th>Name</th><th>Token</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>${state.apiTokens.map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td><code>${esc(t.prefix)}</code></td><td>${esc(t.created)}</td><td>${esc(t.lastUsed)}</td><td><button class="button small danger" data-revoke-token="${t.id}">Revoke</button></td></tr>`).join("")||`<tr><td colspan="5" style="height:180px;text-align:center"><strong>No API tokens</strong><div class="subtle">Create one for your first agent or integration.</div></td></tr>`}</tbody></table></div></section></div>`);
+        return shell(`<div class="page">${pageHead("API tokens", "Issue revocable credentials for agents, scripts, and integrations independently of browser sessions.", `<a class="button" href="#api/docs">Read API docs</a><button class="button primary" id="create-token">Create token</button>`)}<nav class="route-tabs"><a class="button" href="#settings">Conference</a><a class="button" href="#settings/tasks">Task templates</a><a class="button" href="#settings/airtable">Airtable</a><a class="button active" href="#settings/api">API tokens</a></nav><section class="card table-card"><div class="table-wrap" style="min-height:300px"><table><thead><tr><th>Name</th><th>Token</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>${state.apiTokens.map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td><code>${esc(t.prefix)}</code></td><td>${esc(t.created)}</td><td>${esc(t.lastUsed)}</td><td><button class="button small danger" data-revoke-token="${t.id}">Revoke</button></td></tr>`).join("")||`<tr><td colspan="5" style="height:180px;text-align:center"><strong>No API tokens</strong><div class="subtle">Create one for your first agent or integration.</div></td></tr>`}</tbody></table></div></section></div>`);
       }
 
       function apiDocsView() {
@@ -2198,7 +2198,7 @@
       function showUnacceptModal() {
         const s=state.submissions.find(item=>item.id===state.submissionRecordId); if(!s)return;
         const scheduled=state.scheduled.some(item=>item.id===s.id);
-        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow" style="color:var(--danger)">Acceptance reversal</div><h2>Withdraw ${esc(s.title)}?</h2><p>The agenda and public event site always update. Choose what happens to each dependent workflow before confirming.</p></div><div class="modal-body"><div class="toggle-line"><span><strong>Agenda placement + public surfaces</strong><small class="subtle" style="display:block">${scheduled?"Remove the scheduled Session and expose the vacated slot.":"Not currently scheduled."}</small></span><span class="chip overdue">Remove</span></div><div class="toggle-line"><span><strong>Portal tasks</strong><small class="subtle" style="display:block">5 assigned tasks · 2 complete</small></span><select id="cascade-tasks"><option value="cancel">Cancel open tasks</option><option value="retain">Retain for records</option></select></div><div class="toggle-line"><span><strong>Scheduled emails</strong><small class="subtle" style="display:block">2 reminders queued · none delivered</small></span><select id="cascade-emails"><option value="cancel">Cancel queued emails</option><option value="retain">Retain queued emails</option></select></div><div class="toggle-line"><span><strong>Calendar invites</strong><small class="subtle" style="display:block">1 invite already sent</small></span><select id="cascade-calendar"><option value="cancel">Send cancellation</option><option value="retain">Retain invite</option></select></div><div class="field"><label>New outcome</label><select id="cascade-status"><option>Withdrawn</option><option>Rejected</option></select></div></div><div class="modal-actions"><button class="button" id="cancel-modal">Keep accepted</button><button class="button danger" id="confirm-unaccept">Reverse acceptance</button></div></section></div>`;
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow" style="color:var(--danger)">Acceptance reversal</div><h2>Withdraw ${esc(s.title)}?</h2><p>The agenda and public conference site always update. Choose what happens to each dependent workflow before confirming.</p></div><div class="modal-body"><div class="toggle-line"><span><strong>Agenda placement + public surfaces</strong><small class="subtle" style="display:block">${scheduled?"Remove the scheduled Session and expose the vacated slot.":"Not currently scheduled."}</small></span><span class="chip overdue">Remove</span></div><div class="toggle-line"><span><strong>Portal tasks</strong><small class="subtle" style="display:block">5 assigned tasks · 2 complete</small></span><select id="cascade-tasks"><option value="cancel">Cancel open tasks</option><option value="retain">Retain for records</option></select></div><div class="toggle-line"><span><strong>Scheduled emails</strong><small class="subtle" style="display:block">2 reminders queued · none delivered</small></span><select id="cascade-emails"><option value="cancel">Cancel queued emails</option><option value="retain">Retain queued emails</option></select></div><div class="toggle-line"><span><strong>Calendar invites</strong><small class="subtle" style="display:block">1 invite already sent</small></span><select id="cascade-calendar"><option value="cancel">Send cancellation</option><option value="retain">Retain invite</option></select></div><div class="field"><label>New outcome</label><select id="cascade-status"><option>Withdrawn</option><option>Rejected</option></select></div></div><div class="modal-actions"><button class="button" id="cancel-modal">Keep accepted</button><button class="button danger" id="confirm-unaccept">Reverse acceptance</button></div></section></div>`;
         document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
         document.getElementById("confirm-unaccept").onclick=()=>{const result={tasks:document.getElementById("cascade-tasks").value,emails:document.getElementById("cascade-emails").value,calendar:document.getElementById("cascade-calendar").value};s.status=document.getElementById("cascade-status").value;s.accepted=false;s.boardStage="Waved";s.timeInStageHours=1;state.scheduled=state.scheduled.filter(item=>item.id!==s.id);if(result.calendar==="cancel")state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:`${s.speaker.toLowerCase().replace(/[^a-z]+/g,".")}@example.org`,template:"Calendar cancellation",subject:`Cancelled: ${s.title}`,outcome:"Queued",time:"Just now"});modalRoot.innerHTML="";toast(`Acceptance reversed · tasks ${result.tasks}ed · queued emails ${result.emails}ed · calendar ${result.calendar}led`);render();};
       }
@@ -2206,7 +2206,7 @@
       function showEmbedModal() {
         const paint = kind => {
           const gallery = kind === "speakers";
-          modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Embed the event site</h2><p>Filters, configured track colors, and published changes stay live without republishing.</p></div><div class="modal-body"><div class="segment" style="margin-bottom:14px"><button id="embed-agenda" class="${gallery?"":"active"}">Agenda</button><button id="embed-speakers" class="${gallery?"active":""}">Speaker gallery</button></div><div class="field"><label>Embed code</label><textarea id="embed-code" readonly style="font-family:ui-monospace,monospace;font-size:11px">&lt;iframe src=&quot;https://marquee.stage11.dev/aie-nyc-2026/${gallery?"speakers":"agenda"}/embed&quot; title=&quot;AIE NYC 2026 ${gallery?"speakers":"agenda"}&quot; loading=&quot;lazy&quot;&gt;&lt;/iframe&gt;</textarea></div><div class="field"><label>Live preview</label><div style="height:135px;border:1px solid var(--line);border-radius:8px;padding:15px;background:var(--sunk)"><strong>AIE NYC 2026 · ${gallery?"Speakers":"Agenda"}</strong><div class="subtle" style="margin-top:12px">${gallery?`Amara van der Meer · Capital One<br>João García Márquez · Anthropic<br>Fatima Al-Khatib · Mistral AI`:`09:00 · Opening keynote<br>10:00 · Reliable multi-agent systems<br>11:00 · Evaluation infrastructure at scale`}</div></div></div></div><div class="modal-actions"><button class="button" id="close-embed">Close</button><button class="button primary" id="copy-embed">Copy embed code</button></div></section></div>`;
+          modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Embed the conference site</h2><p>Filters, configured track colors, and published changes stay live without republishing.</p></div><div class="modal-body"><div class="segment" style="margin-bottom:14px"><button id="embed-agenda" class="${gallery?"":"active"}">Agenda</button><button id="embed-speakers" class="${gallery?"active":""}">Speaker gallery</button></div><div class="field"><label>Embed code</label><textarea id="embed-code" readonly style="font-family:ui-monospace,monospace;font-size:11px">&lt;iframe src=&quot;https://marquee.stage11.dev/aie-nyc-2026/${gallery?"speakers":"agenda"}/embed&quot; title=&quot;AIE NYC 2026 ${gallery?"speakers":"agenda"}&quot; loading=&quot;lazy&quot;&gt;&lt;/iframe&gt;</textarea></div><div class="field"><label>Live preview</label><div style="height:135px;border:1px solid var(--line);border-radius:8px;padding:15px;background:var(--sunk)"><strong>AIE NYC 2026 · ${gallery?"Speakers":"Agenda"}</strong><div class="subtle" style="margin-top:12px">${gallery?`Amara van der Meer · Capital One<br>João García Márquez · Anthropic<br>Fatima Al-Khatib · Mistral AI`:`09:00 · Opening keynote<br>10:00 · Reliable multi-agent systems<br>11:00 · Evaluation infrastructure at scale`}</div></div></div></div><div class="modal-actions"><button class="button" id="close-embed">Close</button><button class="button primary" id="copy-embed">Copy embed code</button></div></section></div>`;
           document.getElementById("embed-agenda").onclick = () => paint("agenda");
           document.getElementById("embed-speakers").onclick = () => paint("speakers");
           document.getElementById("close-embed").onclick = () => modalRoot.innerHTML = "";
@@ -2247,7 +2247,7 @@
         document.querySelectorAll("[data-setup-source]").forEach(b=>b.addEventListener("click",()=>{ state.setupSource=b.dataset.setupSource; render(); }));
         document.getElementById("create-event")?.addEventListener("click",()=>{
           const nameField=document.getElementById("new-event-name"), name=nameField.value.trim();
-          if(!name){ toast("Give the event a name before creating it"); nameField.focus(); return; }
+          if(!name){ toast("Give the conference a name before creating it"); nameField.focus(); return; }
           state.event = {
             ...state.event, name,
             tagline: document.getElementById("new-event-tagline").value.trim(),
@@ -2312,7 +2312,7 @@
           // The fresh-install walk is a sandbox: it must never persist its event
           // over the seeded demo, or the demo boots as somebody's test conference.
           if (!state.setup.active) { try { localStorage.setItem("marquee-prototype-event",JSON.stringify(state.event)); } catch (_) { } }
-          toast("Event settings saved · agenda and invites updated"); render();
+          toast("Conference settings saved · agenda and invites updated"); render();
         });
         document.getElementById("add-format")?.addEventListener("click",()=>{const name=`New format ${formats.length+1}`;formats.push(name);formatRanges[name]="15–30";formatDurations[name]=20;render();});
         document.getElementById("add-track")?.addEventListener("click",()=>{tracks.push({name:`New track ${tracks.length+1}`,color:"#64748b"});render();});
@@ -2340,12 +2340,12 @@
           if(tracks.length && formats.length && rooms.length)
             completeSetupStep("taxonomy","Tracks, formats, and rooms saved · build the call for speakers next");
         });
-        document.getElementById("preview-branding")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Event branding preview</h2><p>Public form, portal, event site, and calendar invite identity.</p></div><div class="modal-body"><div class="hero-pipeline" style="transform:none"><div class="brand"><span class="brand-mark">M</span><span class="brand-name">${esc(document.getElementById("event-name").value)}</span></div><div class="eyebrow">October 12–14 · ${esc(document.getElementById("event-venue").value)}</div><h2>Fantastic conferences, effortlessly.</h2></div></div><div class="modal-actions"><button class="button primary" id="close-preview">Close preview</button></div></section></div>`;document.getElementById("close-preview").onclick=()=>modalRoot.innerHTML="";});
+        document.getElementById("preview-branding")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Conference branding preview</h2><p>Public form, portal, conference site, and calendar invite identity.</p></div><div class="modal-body"><div class="hero-pipeline" style="transform:none"><div class="brand"><span class="brand-mark">M</span><span class="brand-name">${esc(document.getElementById("event-name").value)}</span></div><div class="eyebrow">October 12–14 · ${esc(document.getElementById("event-venue").value)}</div><h2>Fantastic conferences, effortlessly.</h2></div></div><div class="modal-actions"><button class="button primary" id="close-preview">Close preview</button></div></section></div>`;document.getElementById("close-preview").onclick=()=>modalRoot.innerHTML="";});
       }
 
       function bindForms() {
         document.querySelectorAll("[data-form-id]").forEach(button=>button.onclick=()=>{const form=state.forms.find(item=>item.id===button.dataset.formId);state.activeFormId=form.id;state.formTarget=form.target;state.builderStep=2;render();});
-        document.getElementById("new-form")?.addEventListener("click",()=>{const id=`form-${Date.now()}`;state.forms.push({id,name:`New event form ${state.forms.length+1}`,status:"Draft",target:"Abstract",responses:0,detail:"Private until published"});state.activeFormId=id;state.formTarget="Abstract";toast("New form created · publication is isolated");render();});
+        document.getElementById("new-form")?.addEventListener("click",()=>{const id=`form-${Date.now()}`;state.forms.push({id,name:`New conference form ${state.forms.length+1}`,status:"Draft",target:"Abstract",responses:0,detail:"Private until published"});state.activeFormId=id;state.formTarget="Abstract";toast("New form created · publication is isolated");render();});
         document.getElementById("duplicate-form")?.addEventListener("click",()=>{const source=state.forms.find(form=>form.id===state.activeFormId),copy={...source,id:`copy-${Date.now()}`,name:`${source.name} copy`,status:"Draft",responses:0,detail:"Private copy · unpublished"};state.forms.push(copy);state.activeFormId=copy.id;toast("Form duplicated with fields and rules · responses not copied");render();});
         document.querySelectorAll("[data-cfp-preview]").forEach(button=>button.onclick=()=>{state.cfpMode=button.dataset.cfpPreview;navigate("cfp");});
         document.querySelectorAll("[data-builder-step]").forEach(b=>b.onclick=()=>{state.builderStep=Number(b.dataset.builderStep);render();});
@@ -2407,7 +2407,7 @@
         document.getElementById("download-invite")?.addEventListener("click",()=>downloadText("aie-nyc-session.ics",`BEGIN:VCALENDAR\nVERSION:2.0\nMETHOD:REQUEST\nBEGIN:VEVENT\nSUMMARY:${state.portalSessionTitle}\nDTSTART:20261013T140000Z\nDTEND:20261013T142000Z\nLOCATION:Empire East\nEND:VEVENT\nEND:VCALENDAR`,"text/calendar"));
         document.getElementById("confirm-role")?.addEventListener("click",e=>{e.currentTarget.textContent="Role confirmed ✓";e.currentTarget.disabled=true;toast("Participation confirmed for this speaker role");});
         document.getElementById("decline-role")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Decline this speaker role?</h2><p>The program team will be notified; other roles and submissions are unchanged.</p></div><div class="modal-body field"><label>Optional note</label><textarea placeholder="Tell the program team what changed"></textarea></div><div class="modal-actions"><button class="button" id="cancel-decline">Keep role</button><button class="button danger" id="confirm-decline">Decline role</button></div></section></div>`;document.getElementById("cancel-decline").onclick=()=>modalRoot.innerHTML="";document.getElementById("confirm-decline").onclick=()=>{modalRoot.innerHTML="";toast("Role declined · program team notified");};});
-        document.getElementById("edit-profile")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Edit speaker profile</h2><p>Public speaker surfaces update after save.</p></div><div class="modal-body stack"><div class="grid-2"><div class="field"><label>Title</label><input value="Director of Applied AI"></div><div class="field"><label>Company</label><input value="Capital One"></div></div><div class="field"><label>Biography</label><textarea>Amara builds evaluation and governance systems for AI teams operating in regulated environments.</textarea></div><div class="field"><label>Headshot</label><input type="file" accept="image/*"><div class="message-preview">Crop preview · square safe area · initials placeholder retained until save</div></div><div class="field"><label>Social link</label><input value="https://www.linkedin.com/in/amara-example"></div></div><div class="modal-actions"><button class="button" id="cancel-profile">Cancel</button><button class="button primary" id="save-profile">Save profile</button></div></section></div>`;document.getElementById("cancel-profile").onclick=()=>modalRoot.innerHTML="";document.getElementById("save-profile").onclick=()=>{modalRoot.innerHTML="";toast("Speaker profile saved · event site updated");};});
+        document.getElementById("edit-profile")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Edit speaker profile</h2><p>Public speaker surfaces update after save.</p></div><div class="modal-body stack"><div class="grid-2"><div class="field"><label>Title</label><input value="Director of Applied AI"></div><div class="field"><label>Company</label><input value="Capital One"></div></div><div class="field"><label>Biography</label><textarea>Amara builds evaluation and governance systems for AI teams operating in regulated environments.</textarea></div><div class="field"><label>Headshot</label><input type="file" accept="image/*"><div class="message-preview">Crop preview · square safe area · initials placeholder retained until save</div></div><div class="field"><label>Social link</label><input value="https://www.linkedin.com/in/amara-example"></div></div><div class="modal-actions"><button class="button" id="cancel-profile">Cancel</button><button class="button primary" id="save-profile">Save profile</button></div></section></div>`;document.getElementById("cancel-profile").onclick=()=>modalRoot.innerHTML="";document.getElementById("save-profile").onclick=()=>{modalRoot.innerHTML="";toast("Speaker profile saved · conference site updated");};});
         document.querySelectorAll("[data-handbook]").forEach(b=>b.onclick=()=>{const venue=b.dataset.handbook==="venue";modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div class="eyebrow">Speaker handbook</div><h2>${venue?"Venue, arrival, and green room":"Presentation and A/V guidance"}</h2></div><div class="modal-body"><div class="message-preview" style="line-height:1.7">${venue?"Arrive at the Sheraton New York Times Square 45 minutes before your session. Check in at the program desk, then meet your room producer in the speaker green room on level two.":"Bring a 16:9 deck as PDF and PPTX. Every room provides HDMI and USB-C. Upload the final deck by October 5; the production team will test video and audio."}</div></div><div class="modal-actions"><button class="button primary" id="close-handbook">Done</button></div></section></div>`;document.getElementById("close-handbook").onclick=()=>modalRoot.innerHTML="";});
       }
 
@@ -2489,8 +2489,8 @@
         document.querySelectorAll("[data-trigger]").forEach(b=>b.onclick=()=>{const key=b.dataset.trigger;state.commsTriggers[key]=!state.commsTriggers[key];render();});
         document.querySelectorAll("[data-comms-anchor]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.commsAnchor)?.scrollIntoView({behavior:"smooth"}));
         document.getElementById("save-template")?.addEventListener("click",()=>{const t=state.commsTemplates.find(x=>x.id===state.activeCommsTemplate);t.subject=document.getElementById("template-subject").value;t.body=document.getElementById("template-body").value;toast("Template saved · future triggers use this version");render();});
-        document.getElementById("new-template")?.addEventListener("click",()=>{const id=`custom-${state.commsTemplates.length+1}`;state.commsTemplates.push({id,name:`Custom update ${state.commsTemplates.length-2}`,subject:"An update from {{event.name}}",body:"Hi {{speaker.first_name}},\n\nHere is an update about {{session.title}}."});state.activeCommsTemplate=id;render();});
-        document.getElementById("queue-test-message")?.addEventListener("click",()=>{const t=state.commsTemplates.find(x=>x.id===state.activeCommsTemplate);state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:"amara.vandermeer@example.com",template:t.name,subject:t.subject.replace("{{event.name}}","AIE NYC 2026").replace("{{session.title}}","Beyond the demo"),outcome:"Suppressed · demo mode",time:"Just now"});toast("Rendered test message queued in the demo-safe outbox");render();});
+        document.getElementById("new-template")?.addEventListener("click",()=>{const id=`custom-${state.commsTemplates.length+1}`;state.commsTemplates.push({id,name:`Custom update ${state.commsTemplates.length-2}`,subject:"An update from {{conference.name}}",body:"Hi {{speaker.first_name}},\n\nHere is an update about {{session.title}}."});state.activeCommsTemplate=id;render();});
+        document.getElementById("queue-test-message")?.addEventListener("click",()=>{const t=state.commsTemplates.find(x=>x.id===state.activeCommsTemplate);state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:"amara.vandermeer@example.com",template:t.name,subject:t.subject.replace("{{conference.name}}","AIE NYC 2026").replace("{{session.title}}","Beyond the demo"),outcome:"Suppressed · demo mode",time:"Just now"});toast("Rendered test message queued in the demo-safe outbox");render();});
         document.querySelectorAll("[data-preview-message]").forEach(b=>b.onclick=()=>{const m=state.outbox[Number(b.dataset.previewMessage)];modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div class="eyebrow">${esc(m.id)} · ${esc(m.outcome)}</div><h2>${esc(m.subject)}</h2><p>To ${esc(m.recipient)} · ${esc(m.time)}</p></div><div class="modal-body"><div class="message-preview">Hi Amara,<br><br>This is the fully rendered <strong>${esc(m.template)}</strong> message retained in the Marquee outbox. Merge fields have been resolved for this recipient.<br><br>AIE program team</div></div><div class="modal-actions"><button class="button primary" id="close-message">Done</button></div></section></div>`;document.getElementById("close-message").onclick=()=>modalRoot.innerHTML="";});
       }
 
@@ -2577,10 +2577,10 @@
 
       function emptyStateView(route) {
         const states={
-          landing:["Create your first event","A fresh Marquee install has no events yet. Create one from scratch or import an active program from Sessionize.","Create event","settings"],
-          dashboard:["Your program starts here","Create event details, then open a CFP or import an existing Sessionize program.","Set up the event","settings"],
+          landing:["Create your first conference","A fresh Marquee install has no conferences yet. Create one from scratch or import an active program from Sessionize.","Create conference","settings"],
+          dashboard:["Your program starts here","Create conference details, then open a CFP or import an existing Sessionize program.","Set up the conference","settings"],
           board:["No submissions to board yet","Open a CFP or import an active program; each record will appear in its lifecycle column.","Import from Sessionize","import"],
-          settings:["Name the conference","Add dates, venue, timezone, formats, tracks, and rooms before opening intake.","Create event details","settings"],
+          settings:["Name the conference","Add dates, venue, timezone, formats, tracks, and rooms before opening intake.","Create conference details","settings"],
           forms:["No CFP forms yet","Build an Abstract form for competitive submissions or a Session form for guaranteed programming.","Create a form","forms"],
           cfp:["This call for speakers is not open","Publish a CFP form before sharing this page with submitters.","Open organizer demo","forms"],
           portal:["No speaker work yet","A portal appears after a submission is created. Import from Sessionize or open your CFP.","Import from Sessionize","import"],
@@ -2591,27 +2591,27 @@
           submissionNew:["Create the first program record","Choose Abstract for evaluation or Session to bypass evaluation and reach the agenda.","Create submission","submissions/new"],
           onboarding:["No accepted speakers yet","Accept an Abstract or add an invited Session; Marquee will assign the speaker task set automatically.","Review submissions","submissions"],
           agenda:["Nothing to schedule","Accept an Abstract or create a Session. Accepted-and-unplaced work appears in the pool automatically.","Add a Session","submissions/new"],
-          publicAgenda:["The agenda is not published","Schedule and publish at least one Session before sharing the event site.","Open organizer demo","agenda"],
+          publicAgenda:["The agenda is not published","Schedule and publish at least one Session before sharing the conference site.","Open organizer demo","agenda"],
           comms:["No communication templates","Create a template, then connect it to a lifecycle trigger.","Create a template","comms"],
           taskTemplates:["No speaker task templates","Add acknowledgements, forms, and file requests before the first acceptance.","Add task template","settings/tasks"],
           importer:["Import your active program","Upload Sessionize Sessions and Speakers exports to preserve undecided records and review history.","Start mocked import","import"],
           airtable:["Airtable is not connected","Connect a Team-plan base to start the off-request-path two-way mirror.","Connect Airtable","settings/airtable"],
-          apiTokens:["No API tokens","Create an event-scoped token for your first agent or integration.","Create API token","settings/api"],
-          apiDocs:["API ready for an event","Create an event to populate examples and issue an event-scoped token.","Create event","settings"],
+          apiTokens:["No API tokens","Create a conference-scoped token for your first agent or integration.","Create API token","settings/api"],
+          apiDocs:["API ready for a conference","Create a conference to populate examples and issue an event-scoped token.","Create conference","settings"],
           aiAssist:["AI assistance is off","This optional aid stays absent from the demo path and never changes submission status.","Return to evaluation","evaluation"],
-          publicSession:["Session not found","Only published Sessions have public permalinks; private titles never leak here.","View event site","publicAgenda"],
-          publicSpeaker:["Speaker not found","Public profiles appear only for speakers attached to published Sessions.","View event site","publicAgenda"]
+          publicSession:["Session not found","Only published Sessions have public permalinks; private titles never leak here.","View conference site","publicAgenda"],
+          publicSpeaker:["Speaker not found","Public profiles appear only for speakers attached to published Sessions.","View conference site","publicAgenda"]
         };
         // In the fresh-install walk the empty states *are* the walk, so every
         // action has to be the genuine next step. The stock copy sent three of
         // them to a screen that could not yet do anything — including one that
         // pointed at itself.
         const setupStates = {
-          landing:["Create your first event","A fresh Marquee install has no events yet. Create one from scratch, or import an in-flight program from Sessionize.","Create event","events/new"],
-          dashboard:["Your program starts here","Create the event record first — every form, portal, agenda time, and calendar invite is scoped to it.","Create event","events/new"],
-          settings:["Nothing to configure yet","Tracks, formats, rooms, and buildings all belong to an event. Create one and this screen fills in.","Create event","events/new"],
-          importer:["Create the event first","A Sessionize import needs somewhere to land. Create the event, then bring the export across.","Create event","events/new"],
-          apiDocs:["API ready for an event","Create an event to populate examples and issue an event-scoped token.","Create event","events/new"],
+          landing:["Create your first conference","A fresh Marquee install has no conferences yet. Create one from scratch, or import an in-flight program from Sessionize.","Create conference","conferences/new"],
+          dashboard:["Your program starts here","Create the conference record first — every form, portal, agenda time, and calendar invite is scoped to it.","Create conference","conferences/new"],
+          settings:["Nothing to configure yet","Tracks, formats, rooms, and buildings all belong to a conference. Create one and this screen fills in.","Create conference","conferences/new"],
+          importer:["Create the conference first","A Sessionize import needs somewhere to land. Create the conference, then bring the export across.","Create conference","conferences/new"],
+          apiDocs:["API ready for a conference","Create a conference to populate examples and issue an event-scoped token.","Create conference","conferences/new"],
           forms:["No call for speakers yet","Build an Abstract form for competitive submissions, or a Session form for guaranteed programming.","Create the call for speakers","",'id="setup-create-form"'],
           evaluation:["No evaluation plan","Set the scorecard, the committee, and the review rounds before the first abstracts land.","Create evaluation plan","",'data-setup-complete="evaluation" data-setup-toast="Evaluation plan created · open intake next"']
         };

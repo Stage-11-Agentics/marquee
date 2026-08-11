@@ -30,7 +30,7 @@ flowchart TD
     Forms["#forms<br/>Form builder"]
     Eval["#evaluation<br/>Evaluation plan"]
     Comms["#comms<br/>Communications"]
-    Settings["#settings<br/>Event settings"]
+    Settings["#settings<br/>Conference settings"]
   end
 
   subgraph Reviewer["Reviewer — scoped to assigned tracks"]
@@ -43,7 +43,7 @@ flowchart TD
 
   subgraph Public["Public — server-rendered, no auth"]
     CFP["#cfp<br/>Call for speakers"]
-    Site["#publicAgenda<br/>Event site"]
+    Site["#publicAgenda<br/>Conference site"]
     Session["#s/:id<br/>Session page"]
     Person["#p/:name<br/>Speaker page"]
   end
@@ -60,14 +60,14 @@ flowchart TD
 
 ## 2. Organizer navigation — the sidebar
 
-The sidebar is the organizer's whole map: brand, event switcher, Program home,
+The sidebar is the organizer's whole map: brand, conference switcher, Program home,
 the seven pipeline stages, then the modules. Every module is one click from home.
 
 ```mermaid
 flowchart LR
   subgraph Chrome["Sidebar"]
     direction TB
-    Switch["Event switcher<br/>+ Create event"]
+    Switch["Conference switcher<br/>+ Create conference"]
     Home["Program home"]
     BoardNav["Program board"]
   end
@@ -91,8 +91,8 @@ flowchart LR
     M4["Agenda"]
     M5["Communications"]
     M6["Speaker portal"]
-    M7["Event site"]
-    M8["Event settings"]
+    M7["Conference site"]
+    M8["Conference settings"]
   end
 
   subgraph Foot["Footer"]
@@ -101,7 +101,7 @@ flowchart LR
     F2["Reset demo"]
   end
 
-  Switch --> EventNew["#events/new"]
+  Switch --> EventNew["#conferences/new"]
   Home --> Dash["#dashboard"]
   BoardNav --> Board["#board"]
 
@@ -125,8 +125,8 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  Set["#settings<br/>Event settings"]
-  Set --> Details["Event details<br/>name · dates · timezone · venue · logo"]
+  Set["#settings<br/>Conference settings"]
+  Set --> Details["Conference details<br/>name · dates · timezone · venue · logo"]
   Set --> Formats["Formats<br/>name · range · default duration"]
   Set --> Tracks["Tracks<br/>name · colour · order"]
   Set --> Buildings["Buildings<br/>name · address"]
@@ -170,19 +170,19 @@ flowchart TD
 
 ## 5. The fresh install — cold start to open intake
 
-A brand-new install has no event. This is the walk that creates one, reachable
+A brand-new install has no conference. This is the walk that creates one, reachable
 from `?empty=1` on any route and sticky until exited.
 
 ```mermaid
 flowchart TD
-  Fresh["Fresh install<br/>no events yet"]
-  Fresh --> EventNew["#events/new<br/>Create event"]
+  Fresh["Fresh install<br/>no conferences yet"]
+  Fresh --> EventNew["#conferences/new<br/>Create conference"]
 
   EventNew -->|"start from scratch"| Created
   EventNew -->|"import from Sessionize"| Import["#import<br/>Sessionize importer"]
   Import --> Created
 
-  Created["Event exists<br/>checklist 1 of 5"]
+  Created["Conference exists<br/>checklist 1 of 5"]
   Created --> Tax["#settings<br/>tracks · formats · rooms"]
   Tax --> Form["#forms<br/>build the call for speakers"]
   Form --> Eval["#evaluation<br/>scorecard · committee · rounds"]
@@ -206,7 +206,7 @@ flowchart TD
   CFP --> Draft["Draft autosave<br/>private resume link"]
   CFP --> Submitted["Submission received"]
 
-  Site["#publicAgenda<br/>Event site"]
+  Site["#publicAgenda<br/>Conference site"]
   Site --> Sess["#s/:id<br/>Session page"]
   Site --> Spk["#p/:name<br/>Speaker page"]
   Site --> Embed["Embeds<br/>agenda · speaker gallery"]
@@ -222,7 +222,7 @@ flowchart TD
 | Route | Screen | Seat |
 |---|---|---|
 | `#landing` | Marketing landing | Public |
-| `#events/new` | Create event | Organizer |
+| `#conferences/new` | Create conference | Organizer |
 | `#dashboard` | Program pipeline | Organizer |
 | `#board` | Program board | Organizer |
 | `#submissions` | Abstracts and Sessions | Organizer |
@@ -235,7 +235,7 @@ flowchart TD
 | `#onboarding` | Speaker onboarding — the chase board | Organizer |
 | `#agenda` | Agenda builder | Organizer |
 | `#comms` | Communications | Organizer |
-| `#settings` | Event settings | Organizer |
+| `#settings` | Conference settings | Organizer |
 | `#settings/tasks` | Task templates | Organizer |
 | `#settings/airtable` | Airtable mirror | Organizer |
 | `#settings/api` | API tokens | Organizer |
@@ -243,7 +243,7 @@ flowchart TD
 | `#import` | Sessionize importer | Organizer |
 | `#portal` | Speaker portal | Speaker |
 | `#cfp` | Public call for speakers | Public |
-| `#publicAgenda` | Event site | Public |
+| `#publicAgenda` | Conference site | Public |
 | `#s/:id` | Public session page | Public |
 | `#p/:name` | Public speaker page | Public |
 

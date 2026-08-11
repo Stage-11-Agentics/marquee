@@ -222,7 +222,7 @@ stateDiagram-v2
   Placed --> PublishedItem: publish
   Conflicting --> PublishedItem: conflicts warn, never block
   PublishedItem --> Placed: unpublish
-  state "Published to the event site" as PublishedItem
+  state "Published to the conference site" as PublishedItem
 ```
 
 There is no save button — placement persists as it happens. Five views over the
@@ -265,13 +265,13 @@ stateDiagram-v2
 ## 11. The fresh-install walk
 
 The setup state a brand-new install starts in. Steps complete from **real work**,
-not from visiting the screen: taxonomy ticks when the event genuinely has tracks,
+not from visiting the screen: taxonomy ticks when the conference genuinely has tracks,
 formats, and rooms; intake ticks when a form is genuinely published.
 
 ```mermaid
 stateDiagram-v2
   [*] --> NoEvent: fresh install
-  NoEvent --> Created: create the event
+  NoEvent --> Created: create the conference
   Created --> Configured: tracks, formats, and rooms saved
   Configured --> Formed: call for speakers built
   Formed --> Planned: evaluation planned
@@ -285,12 +285,12 @@ stateDiagram-v2
   Planned --> Seeded
   IntakeOpen --> Seeded
   state "Seeded AIE demo restored" as Seeded
-  state "No event yet" as NoEvent
+  state "No conference yet" as NoEvent
   state "Intake open" as IntakeOpen
 ```
 
 The walk is a sandbox: it holds the seeded demo whole in a snapshot, restores it
-on exit, and never persists its own event over the demo's.
+on exit, and never persists its own conference over the demo's.
 
 ---
 
