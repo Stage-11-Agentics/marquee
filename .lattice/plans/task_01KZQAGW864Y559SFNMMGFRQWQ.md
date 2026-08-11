@@ -30,3 +30,10 @@ Depends on M-57's re-seed. Without it there is nothing to detect and this ticket
 - In scope: M-58/AC-258/AC-259 transit-conflict surfacing and the specified agenda geography presentation.
 - Out of scope: replacing or duplicating MRQ-62 geometry/seed logic, changing speaker task semantics, blocking placement, editing contract documents, or merging the PR.
 - Plan-review stage is skipped per the boot instruction that headless reviews are suspended; any implementation review findings will be resolved inline before validation.
+
+## Investigation findings
+
+- The current MRQ-20 agenda query contains a private `walkingMinutes`/`transitConflict` implementation despite MRQ-62's authoritative `src/lib/venue-geometry.ts`. It will be removed; the adapter will call `getTransitConflicts` and only correlate its returned conflict records to agenda session IDs for the existing conflict projection.
+- `readAgendaSnapshot` is the authoritative agenda conflict read. The dashboard currently has no Conflicts metric; its fourth work-in-motion metric will be replaced with a live count from the shared agenda conflict reader and will link to `/agenda-builder`.
+- Prototype v1.9's day grid adds a fixed-height building band with contiguous room runs and uses bare room names beneath it. Other room surfaces retain their full `Room · Building` label until the later disclosure-fold ticket.
+- Baseline: targeted agenda/dashboard tests and the full hermetic test command passed before edits; the branch is rebased on `forgejo/master @ 07e01396f1a800a17afe0d6952dc0436c626bba5` and `npm ci` has completed.
