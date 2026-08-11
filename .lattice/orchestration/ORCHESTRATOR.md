@@ -46,6 +46,8 @@ What a real guardrail test looks like: it asserts **the status code AND the abse
 
 **When a ticket claims it didn't weaken a prior guardrail, verify:** `git diff forgejo/master...<head> -- <test file>` and expect it empty.
 
+**Some hand-review rituals are now machine-enforced — review the guard, not the count.** MRQ-32's `tests/node/comms.AC-250.test.mjs` asserts exactly one comms send route, no `/messages/send` alias, no direct `api.resend.com` fetch (so nothing bypasses the outbox), and exactly **2** occurrences of `insertOutbox(input, "always_live")`. It counts that precise expression rather than the loose `always_live` string, which would also match the policy comparisons and read 4. When a guard like this exists, the merge check shifts to **diffing the guard file itself and confirming its assertions were not loosened** — a weakened guard is worth more than a weakened implementation, because it silently re-opens everything it covered.
+
 ## Known footguns
 
 | Symptom | Reality |
