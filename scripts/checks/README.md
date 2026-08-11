@@ -10,6 +10,25 @@ npm run pr-gate -- --ticket MRQ-N
 
 Private Forgejo has no CI runner. This command is the merge evidence: Worker/client/test type checks, the production build, design-contract verification, `npm test`, and merged-scope AC tracing. The public GitHub workflow mirrors those fast checks but is not evidence for a private Forgejo PR.
 
+## Public assembly
+
+Build the publishable tree from an explicit ref. The assembler copies only the
+allowlisted product roots, relocates the public seed fixture, scrubs private
+deployment metadata, and can write a parentless commit into the local object
+database without moving a branch:
+
+```sh
+PUBLIC_STAGE="$(mktemp -d)"
+npm run assemble:public -- --repo "$PWD" --ref HEAD --output "$PUBLIC_STAGE" --commit
+```
+
+The JSON result contains the orphan commit and tree IDs. Review the tree, run
+`npm run check:repo -- --repo "$PWD" --ref <commit>`, and update a ref only
+after that review with the explicit `--update-ref` option. The exact denied
+path inventory is exported by `scripts/checks/assemble-public.mjs`; the
+history checker independently walks both the current tree and full commit
+path history.
+
 ## Stable command surface
 
 These thirteen package-script names are immutable: `test`, `e2e`, `check:speed`, `check:seed`, `check:api`, `check:repo`, `check:readme`, `trace:ac`, `check:mirror`, `reset:demo`, `smoke:mail`, `smoke:ics`, and `check:skill-agent`. Later owners replace the file behind a stub; they do not rename or re-register its package script.

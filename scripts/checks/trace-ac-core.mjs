@@ -86,9 +86,13 @@ export function buildCoverage({ criteria, scans, claims, scope }) {
   const uncovered = enforcedIds.filter(
     (id) => criteria.get(id)?.tag === "auto" && coverage.get(id)?.length === 0,
   );
+  const uncoveredPendingOperator = enforcedIds
+    .filter((id) => criteria.get(id)?.tag !== "auto" && coverage.get(id)?.length === 0)
+    .map((id) => ({ id, tag: criteria.get(id)?.tag }));
   return {
     errors,
     uncovered,
+    uncoveredPendingOperator,
     coverage: Object.fromEntries(
       [...criteria].map(([id, criterion]) => [id, { ...criterion, tests: coverage.get(id) }]),
     ),

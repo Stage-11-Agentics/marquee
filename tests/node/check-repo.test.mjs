@@ -66,6 +66,20 @@ test("CONTRACT · repository policy rejects denied content anywhere in history",
   assert.match(result.stdout, /denied-history-path/);
 });
 
+test("CONTRACT · repository policy retains every denied path with duplicate content", async () => {
+  const { repository, binaryDirectory } = await fixture();
+  await mkdir(resolve(repository, "sequence/research/sources"), { recursive: true });
+  const duplicate = "same blob, distinct denied path names\n";
+  await writeFile(resolve(repository, "sequence/research/sources/first.vtt"), duplicate, "utf8");
+  await writeFile(resolve(repository, "sequence/research/sources/second.vtt"), duplicate, "utf8");
+  git(repository, "add", ".");
+  git(repository, "commit", "-qm", "introduce duplicate denied paths");
+  const result = runCheck(repository, binaryDirectory);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /sequence\/research\/sources\/first\.vtt/);
+  assert.match(result.stdout, /sequence\/research\/sources\/second\.vtt/);
+});
+
 test("CONTRACT · repository policy rejects internal publication vocabulary anywhere in history", async () => {
   const { repository, binaryDirectory } = await fixture();
   const deniedMarkers = [

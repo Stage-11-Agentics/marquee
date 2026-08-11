@@ -28,4 +28,5 @@ test("CONTRACT · the AC tracer rejects dynamic, unknown, and struck test titles
 test("CONTRACT · all scope fails uncovered auto criteria but not felt criteria", () => {
   const result = buildCoverage({ criteria: parseEvaluationContract(contract), scans: [], claims: [], scope: "all" });
   assert.deepEqual(result.uncovered, ["AC-1"]);
+  assert.deepEqual(result.uncoveredPendingOperator, [{ id: "AC-2", tag: "felt" }]);
 });

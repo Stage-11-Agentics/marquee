@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-42",
+  "owns": [],
+  "exercises": [],
+  "notes": "MRQ-42 owns no product AC. Merged-scope trace is clean. The all-scope report remains honest about uncovered auto criteria rather than claiming coverage: AC-22, AC-225, AC-226, AC-227, AC-228, AC-229, AC-149, AC-150, AC-151, AC-167, AC-168, AC-169, AC-241, AC-264, AC-265, AC-266, AC-267, AC-268, and AC-269. Uncovered non-auto criteria are named as pending operator evidence: AC-16 (felt), AC-109 (op-assist), and AC-145 (oracle)."
+}
