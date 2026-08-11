@@ -45,10 +45,15 @@
       "id": "art_01KZQ5SGPPCEVEGQ5Y1PSS4ND0",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ66QEW8CTVC55GXHGRMC8J",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM831WTD0XSD2Q84NVJC7",
-  "last_event_id": "ev_01KZQ5SGPPCEVEGQ5Y1PSS4ND4",
+  "last_event_id": "ev_01KZQ66QF08G29Z7JGENEQJ45P",
   "last_status_changed_at": "2026-08-11T01:08:04Z",
   "linked_files": [],
   "priority": "medium",
@@ -75,6 +80,6 @@
   "tags": null,
   "title": "API core, list contract, and OpenAPI assembly",
   "type": "task",
-  "updated_at": "2026-08-11T01:08:04Z",
+  "updated_at": "2026-08-11T01:15:17Z",
   "urgency": null
 }

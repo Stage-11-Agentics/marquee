@@ -30,7 +30,7 @@
 |---|---|---|---|
 | ~~MRQ-8 (M-07)~~ | closed | **done** | **MERGED** PR #7 (c4e34037). `check:api` is real with the N-7 activation rule; AC-105/106/108 tested. **MRQ-9 unblocked.** |
 | MRQ-3 (M-03) | surface:119 | sonnet | **PR #8 open**, rebasing onto post-MRQ-8 master (union conflict in `src/index.ts` + `package.json`). Guardrail test **read and verified by the orchestrator**. |
-| MRQ-14 (M-13) | surface:120 | sonnet | `review`. Guardrail: AC-231 presign fails closed — hand review pending. |
+| ~~MRQ-14 (M-13)~~ | closed | **done** | **MERGED** PR #9 (13c0780a). Guardrail hand-reviewed: AC-231 asserts 403 **and zero side effects** across four fail-closed cases. Follow-up **MRQ-59**. |
 | MRQ-5 (M-04b) | surface:121 | **codex** | Seed pool + evaluation. Carries **B-3 (BLOCKING)**: reviewer membership, track scopes, round-1 assignments, or walkthrough step 8 has no entry. |
 | MRQ-9 (M-08) | surface:122 | **codex** | Submissions list — the first screen a judge drives. Builds on MRQ-8's list contract. |
 
@@ -87,6 +87,12 @@ Bravo sat at **84–85% across four readings between 20:57 and 21:04**, and it d
 **Deliberate call: N was NOT filled to 5.** With a hard wall this close, three tickets finished and merged are worth more than five tickets left half-done — a partial branch at the wall is unmergeable and its work is only recoverable by a future session re-reading it. All three delegators were instead told to cut scope to *mergeable*, run the gate as soon as the core path works, and keep pushing. The one thing explicitly not cuttable: the guardrail proofs (demo login 403s outside `demo_mode`; presign fails closed).
 
 All three inherited-WIP commits are **pushed and verified** against their remote branches, so the wall can only cost in-flight polish, never landed work.
+
+## MRQ-59 raised — a green workaround that armed a gate failure (21:28)
+
+MRQ-14 reported "routing around" MRQ-8's route-manifest glob by naming its module `uploads.direct.ts` instead of `*.routes.ts`. Investigated rather than accepted: the upload endpoints are `/api/v1/...` POSTs, and `check:api`'s parity assertion collects every non-GET request from an e2e replay and **fails on any path absent from the public schema**. So the rename does not avoid a problem — it arms one for whoever first runs an e2e that touches uploads. Nothing fails today only because e2e does not yet exercise them.
+
+Merged anyway (the guardrail work is strong and blocking it would have cost more than it saved), with **MRQ-59** raised to port the module back onto the manifest, and the convention written into the delegator contract: **API route modules are `*.routes.ts`; exclusion is an explicit allowlist entry, never a filename that quietly misses a glob.**
 
 ## AC-214 ruled — not a gap (21:22)
 

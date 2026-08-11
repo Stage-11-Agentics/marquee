@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:120",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 5,
+  "comment_count": 6,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-13 \u2014 Wave 1 (\u00a74)\n\nScope (verbatim): `POST /uploads/sign` \u2192 presigned **PUT against `{account}.r2.cloudflarestorage.com`** (never a custom domain \u2014 trap 9), direct browser PUT with progress, `/complete` with HEAD verify + magic-byte sniff, Images variants for headshots, per-IP/per-submission caps in KV, nightly orphan sweep, separate-origin serving with `Content-Disposition: attachment`. **R2 canonical for media; Airtable only ever receives a public R2 URL (trap 10).** Turnstile is verified before a presign is issued; a magic-byte mismatch rejects **and deletes the object**.\n\nNon-goal (EVALUATION \u00a75): no malware scanning in this window \u2014 separate origin + `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`, documented as an extension point.\n\nFile surface: `src/routes/uploads.routes.ts`, `src/lib/r2/*`\n\nACs: AC-52, AC-146 \u2013 AC-148, **AC-231** (presign gate), **AC-232**\nHours: 5\nWorkflow: inline-full\nShared files: none \u2014 module-local.\nDeps: M-01\nAudit that keys off this ticket: A-7 (public write surface), after M-13/M-14\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T01:16:18Z",
   "evidence_refs": [
     {
       "id": "art_01KZJMN1AJHF8N20CAZTSF2T9F",
@@ -35,11 +35,21 @@
       "id": "art_01KZQ65NZX36C0BJ8W5S6PGE22",
       "role": null,
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQ68K94PW216TZ8FD3EKW7Q",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQ68K94PW216TZ8FD3EKW7P",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8NGV7SK9EVZTXVQWA5A",
-  "last_event_id": "ev_01KZQ65P8E2C3Q4FYEB314MS2B",
-  "last_status_changed_at": "2026-08-11T01:14:43Z",
+  "last_event_id": "ev_01KZQ68K94PW216TZ8FD3EKW7T",
+  "last_status_changed_at": "2026-08-11T01:16:18Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -51,13 +61,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-14",
-  "status": "pr_open",
+  "status": "done",
   "tags": null,
   "title": "Uploads: presign, verify, and serve",
   "type": "task",
-  "updated_at": "2026-08-11T01:14:43Z",
+  "updated_at": "2026-08-11T01:16:18Z",
   "urgency": null
 }

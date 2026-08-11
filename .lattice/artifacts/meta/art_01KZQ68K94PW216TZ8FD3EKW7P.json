@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:16:18Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZQ68K94PW216TZ8FD3EKW7P",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ68K94PW216TZ8FD3EKW7P.md",
+    "size_bytes": 832
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged as PR #9 (squash 13c0780a). GUARDRAIL HAND-REVIEWED BY ORCHESTRATOR: AC-231's fail-closed tests assert BOTH a 403 AND zero side effects (attachments count == 0) across four cases \u2014 missing Turn",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

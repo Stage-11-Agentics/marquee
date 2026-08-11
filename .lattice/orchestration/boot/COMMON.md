@@ -42,6 +42,13 @@ If your implementation must diverge from `SPEC.md` (or any contract doc), implem
 - After implementing: `(cd <worktree> && timeout 600 bash -c "LATTICE_SPAWN_BACKEND=headless lattice code-review MRQ-N --mode single --base forgejo/master --actor agent:delegator-mrq-N-reviewer")`. On RC 124 / empty diff / vacuous output: **own-reviewer fallback** — compute the diff yourself, write a standard-shape review (Verdict PASS / PASS-WITH-NITS / FAIL; findings with file:line), attach `--role review`, note the fallback in your completion comment.
 - Before bumping `pr_open`: a review artifact must exist that postdates this cycle's `→ review` transition, names the reviewed commit (== branch HEAD), and carries a PASS verdict. A dead or stale review does not count.
 
+
+## Route module naming (fleet convention)
+
+API route modules are named **`*.routes.ts`** under `src/routes/`. `src/routes/_manifest.ts` builds the generated manifest with `import.meta.glob("./**/*.routes.ts", { eager: true })`, and `check:api` asserts parity between that manifest, the served OpenAPI document, and the paths an e2e run actually exercises.
+
+**Do not dodge the glob by naming a module something else.** It looks like it works — the API tests go green — and it arms a `check:api` parity failure for whoever runs the e2e that first touches your routes. If a route genuinely must stay out of the versioned public schema, that is an explicit allowlist entry (like SPEC §4.2's three calendar/feed URLs), decided and named, never an accident of filename. (Cost: MRQ-14 shipped `uploads.direct.ts` this way; MRQ-59 exists to port it back.)
+
 ## Before you open a PR: the local gate
 
 Private Forgejo has **no CI runner** — nothing runs your tests after you push, so a broken PR looks identical to a green one. The gate is therefore local and **mandatory**:
