@@ -29,6 +29,7 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "○", group: "modules", sidebar: true, external: true },
   { id: "event-site", path: "/agenda", label: "Event site", icon: "↗", group: "modules", sidebar: true, external: true },
   { id: "settings", path: "/settings", label: "Event settings", icon: "⚙", group: "modules", sidebar: true },
+  { id: "venues", path: "/settings/venues", label: "Venues", icon: "⌖", group: "utility" },
   { id: "submission-detail", path: "/submissions/:id", label: "Submission record", icon: "", group: "utility" },
   { id: "submission-new", path: "/submissions/new", label: "Create submission", icon: "", group: "utility" },
   { id: "task-templates", path: "/settings/tasks", label: "Task templates", icon: "", group: "utility" },

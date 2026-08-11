@@ -8,7 +8,7 @@
     "seed": "node scripts/seed/index.ts",
     "e2e": "node scripts/checks/run-e2e.mjs",
     "check:speed": "node scripts/checks/check-speed.mjs",
-    "check:seed": "node scripts/checks/stub-command.mjs check:seed MRQ-14 \"seed and public API are not implemented\"",
+    "check:seed": "node scripts/checks/check-seed.mjs",
     "check:api": "node scripts/checks/check-api.mjs",
     "check:repo": "node scripts/checks/check-repo.mjs",
     "check:readme": "node scripts/checks/stub-command.mjs check:readme MRQ-57 \"self-host deploy sequence is not implemented\"",

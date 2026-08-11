@@ -10,7 +10,7 @@ function table(ctx: SeedContext, name: string): SeedRow["row"][] {
 
 const ROOM_IDS = [
   "metropolitan-ballroom", "central-park-ballroom", "new-york-ballroom", "expo-stage",
-  "workshop-room-a", "workshop-room-b", "workshop-room-c", "workshop-room-d", "workshop-room-e",
+  "marquis-room-a", "marquis-room-b", "marquis-room-c", "marquis-room-d", "marquis-room-e",
 ].map((name) => seedId("rm", name));
 
 function addConflictParticipation(
@@ -55,8 +55,9 @@ export function run(ctx: SeedContext): void {
     });
   }
 
-  // Two pairs begin together in different rooms. Cross-participations below
-  // make each pair a distinct person double-booking visible on initial load.
+  // Two pairs begin together in different rooms. The first pair now crosses
+  // Sheraton → Marriott so the seeded data produces a live Transit conflict;
+  // the second remains a same-building person double-booking.
   const starts = [
     Date.UTC(2026, 9, 12, 13), Date.UTC(2026, 9, 12, 13),
     Date.UTC(2026, 9, 12, 14), Date.UTC(2026, 9, 12, 14),
@@ -70,7 +71,7 @@ export function run(ctx: SeedContext): void {
 
   accepted.forEach((submission, index) => {
     const workshopParallel = index >= 4 && index < 9;
-    const roomId = workshopParallel ? ROOM_IDS[index]! : ROOM_IDS[index % 4]!;
+    const roomId = workshopParallel ? ROOM_IDS[index]! : index === 1 ? ROOM_IDS[4]! : ROOM_IDS[index % 4]!;
     ctx.add("agenda_items", {
       id: seedId("agi", String(submission.id)),
       event_id: EVENT_ID,

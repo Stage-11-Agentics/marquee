@@ -40,7 +40,7 @@ export const TRACK_IDS = {
 
 export const BUILDING_IDS = {
   sheraton: seedId("bld", "sheraton"),
-  annex: seedId("bld", "workshop-annex"),
+  marquis: seedId("bld", "new-york-marriott-marquis"),
   online: seedId("bld", "online"),
 } as const;
 
@@ -144,15 +144,36 @@ export function run(ctx: SeedContext): void {
     });
   }
 
-  // Amendment 11: the Sheraton-coherent trio (AC-252). The physical venues
-  // share the verified 811 7th Avenue coordinate; Online is intentionally
-  // unpinned because a virtual venue has no honest map position.
-  const buildings: Array<[string, string, string, number, number | null, number | null, number]> = [
-    [BUILDING_IDS.sheraton, "Sheraton New York Times Square", "811 7th Ave, New York, NY 10019", 0, 40.7625188, -73.9814528, 0],
-    [BUILDING_IDS.annex, "Workshop Annex — Lower Conference Level", "811 7th Ave, New York, NY 10019", 1, 40.7625188, -73.9814528, 0],
-    [BUILDING_IDS.online, "Online", "Virtual", 2, null, null, 0],
+  // MRQ-62 / Amendment 14: Sheraton stays primary, while the overflow venue
+  // is a real Midtown conference hotel with an address-derived OSM coordinate.
+  // Online is intentionally unpinned because a virtual venue has no honest
+  // map position. Access notes belong to buildings; room notes stay room-local.
+  const buildings: Array<[
+    string, string, string, number, number | null, number | null, number, string | null,
+  ]> = [
+    [
+      BUILDING_IDS.sheraton,
+      "Sheraton New York Times Square",
+      "811 7th Ave, New York, NY 10019",
+      0,
+      40.7625188,
+      -73.9814528,
+      0,
+      "Photo ID required at the main entrance. Allow ten minutes for building security.",
+    ],
+    [
+      BUILDING_IDS.marquis,
+      "New York Marriott Marquis",
+      "1535 Broadway, New York, NY 10036",
+      1,
+      40.7585971,
+      -73.9861935,
+      3,
+      "Use the Broadway lobby for conference access. Allow three minutes for building security.",
+    ],
+    [BUILDING_IDS.online, "Online", "Virtual", 2, null, null, 0, null],
   ];
-  for (const [id, name, address, position, lat, lng, accessMinutes] of buildings) {
+  for (const [id, name, address, position, lat, lng, accessMinutes, accessNote] of buildings) {
     ctx.add("buildings", {
       id,
       event_id: EVENT_ID,
@@ -162,29 +183,26 @@ export function run(ctx: SeedContext): void {
       lat,
       lng,
       access_minutes: accessMinutes,
+      access_note: accessNote,
       created_at: now,
       updated_at: now,
     });
   }
 
-  // SPEC §6 rooms, each attached to a building. Only the three ballrooms are
-  // verified; other capacities are plausible generics, as §6 intends. The
-  // "Online" room gives the Online building somewhere to hold virtual
-  // sessions — §6's room list omits it, flagged to the Orchestrator.
-  const rooms: Array<[string, string, string, number, number]> = [
-    // [id, building_id, name, capacity, position-within-building]
-    [seedId("rm", "metropolitan-ballroom"), BUILDING_IDS.sheraton, "Metropolitan Ballroom", 2500, 0],
-    [seedId("rm", "central-park-ballroom"), BUILDING_IDS.sheraton, "Central Park Ballroom", 1100, 1],
-    [seedId("rm", "new-york-ballroom"), BUILDING_IDS.sheraton, "New York Ballroom", 1200, 2],
-    [seedId("rm", "expo-stage"), BUILDING_IDS.sheraton, "Expo Stage", 400, 3],
-    [seedId("rm", "workshop-room-a"), BUILDING_IDS.annex, "Workshop Room A", 60, 0],
-    [seedId("rm", "workshop-room-b"), BUILDING_IDS.annex, "Workshop Room B", 60, 1],
-    [seedId("rm", "workshop-room-c"), BUILDING_IDS.annex, "Workshop Room C", 60, 2],
-    [seedId("rm", "workshop-room-d"), BUILDING_IDS.annex, "Workshop Room D", 60, 3],
-    [seedId("rm", "workshop-room-e"), BUILDING_IDS.annex, "Workshop Room E", 60, 4],
-    [seedId("rm", "online"), BUILDING_IDS.online, "Online", 0, 0],
+  const rooms: Array<[string, string, string, number, number, string[], string | null]> = [
+    // [id, building_id, name, capacity, position, AV tags, room note]
+    [seedId("rm", "metropolitan-ballroom"), BUILDING_IDS.sheraton, "Metropolitan Ballroom", 2500, 0, ["Projector", "Confidence monitor", "Mics", "Livestream"], "Main stage. Confidence monitors downstage; the livestream feed powers the conference site."],
+    [seedId("rm", "central-park-ballroom"), BUILDING_IDS.sheraton, "Central Park Ballroom", 1100, 1, ["Projector", "Mics"], "Breakout room. Shares a wall with New York Ballroom; avoid amplified sessions in both at once."],
+    [seedId("rm", "new-york-ballroom"), BUILDING_IDS.sheraton, "New York Ballroom", 1200, 2, ["Projector", "Confidence monitor", "Mics"], "Breakout room. Livestream is not cabled; record locally and upload after the session."],
+    [seedId("rm", "expo-stage"), BUILDING_IDS.sheraton, "Expo Stage", 400, 3, ["Projector", "Mics"], "Expo room. Hard stop at 17:30 for the evening close."],
+    [seedId("rm", "marquis-room-a"), BUILDING_IDS.marquis, "Marquis Room A", 60, 0, ["Projector", "Mics"], "Overflow room. Confirm the presenter handoff with the room producer."],
+    [seedId("rm", "marquis-room-b"), BUILDING_IDS.marquis, "Marquis Room B", 60, 1, ["Projector", "Confidence monitor", "Mics"], "Overflow room. Keep the center aisle clear for production."],
+    [seedId("rm", "marquis-room-c"), BUILDING_IDS.marquis, "Marquis Room C", 60, 2, ["Projector", "Mics"], "Overflow room. Test the presentation input before the session."],
+    [seedId("rm", "marquis-room-d"), BUILDING_IDS.marquis, "Marquis Room D", 60, 3, ["Projector", "Mics", "Livestream"], "Overflow room. Livestream feed is available on request."],
+    [seedId("rm", "marquis-room-e"), BUILDING_IDS.marquis, "Marquis Room E", 60, 4, ["Projector", "Mics"], "Overflow room. Leave the rear service path unobstructed."],
+    [seedId("rm", "online"), BUILDING_IDS.online, "Online", 0, 0, ["Livestream"], "Virtual room; no physical arrival instructions."],
   ];
-  for (const [id, buildingId, name, capacity, position] of rooms) {
+  for (const [id, buildingId, name, capacity, position, avCapabilities, notes] of rooms) {
     ctx.add("rooms", {
       id,
       event_id: EVENT_ID,
@@ -192,8 +210,8 @@ export function run(ctx: SeedContext): void {
       name,
       capacity,
       position,
-      av_capabilities: "[]",
-      notes: null,
+      av_capabilities: JSON.stringify(avCapabilities),
+      notes,
       created_at: now,
       updated_at: now,
     });

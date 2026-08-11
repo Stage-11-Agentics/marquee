@@ -86,7 +86,7 @@ function slotLabel(item: SubmissionListItem): string | null {
     hour: "numeric",
     minute: "2-digit",
   }).format(start);
-  return `${day} · ${time} · ${item.slot.room}`;
+  return `${day} · ${time} · ${item.slot.room} · ${item.slot.building}`;
 }
 
 function queryValue(params: URLSearchParams, key: string, fallback = ""): string {

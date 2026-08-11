@@ -44,11 +44,11 @@ test("AC-8 · the seed defines the four SPEC §6 formats with their exact durati
   }
 });
 
-test("AC-252 · the seed defines the Sheraton-coherent building trio and every room belongs to one", () => {
+test("AC-252 · the seed defines the Sheraton and Marriott building trio and every room belongs to one", () => {
   const buildings = table("buildings");
   assert.deepEqual(buildings.map((row) => row.name), [
     "Sheraton New York Times Square",
-    "Workshop Annex — Lower Conference Level",
+    "New York Marriott Marquis",
     "Online",
   ]);
   for (const building of buildings) {
@@ -73,18 +73,23 @@ test("AC-252 · the seed defines the Sheraton-coherent building trio and every r
   );
 });
 
-test("CONTRACT · seeded physical venues share the real address coordinate and Online stays virtual", () => {
+test("AC-255 · seeded physical venues carry verified coordinates, access, and building notes while Online stays virtual", () => {
   const geography = table("buildings").map((row) => [
     row.name,
     row.lat,
     row.lng,
     row.access_minutes,
+    row.access_note,
   ]);
   assert.deepEqual(geography, [
-    ["Sheraton New York Times Square", 40.7625188, -73.9814528, 0],
-    ["Workshop Annex — Lower Conference Level", 40.7625188, -73.9814528, 0],
-    ["Online", null, null, 0],
+    ["Sheraton New York Times Square", 40.7625188, -73.9814528, 0, "Photo ID required at the main entrance. Allow ten minutes for building security."],
+    ["New York Marriott Marquis", 40.7585971, -73.9861935, 3, "Use the Broadway lobby for conference access. Allow three minutes for building security."],
+    ["Online", null, null, 0, null],
   ]);
+  assert.ok(table("rooms").some((room) => JSON.parse(room.av_capabilities).length > 0), "seeded rooms need AV capabilities");
+  for (const room of table("rooms")) {
+    assert.doesNotMatch(room.notes ?? "", /door|photo.?id|entrance|security/i);
+  }
 });
 
 test("CONTRACT · the accepted core is exactly 60 accepted abstracts over at least 75 people", () => {
