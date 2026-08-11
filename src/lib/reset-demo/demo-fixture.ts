@@ -14,7 +14,7 @@ export const SHIPPED_DEMO_ORGANIZER_PERSON_ID = STAFF_PERSON_ID;
 export const SHIPPED_DEMO_SPEAKER_PERSON_ID = "per_aarush-selvan";
 
 /**
- * Legacy six-row fixture retained for small auth/API contract tests. It is
+ * Legacy seven-row fixture retained for small auth/API contract tests. It is
  * intentionally not used by reseedDemo; production reset always restores the
  * shipped seed above.
  */
@@ -106,6 +106,18 @@ export function demoFixtureRows(now: number): DemoFixtureRow[] {
         "mem_demo_organizer",
         DEMO_ORGANIZATION_ID,
         DEMO_EVENT_ID,
+        DEMO_ORGANIZER_PERSON_ID,
+        now,
+        now,
+      ],
+    },
+    {
+      statement:
+        `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, 'owner', ?, ?)`,
+      bindings: [
+        "mem_demo_organizer_org",
+        DEMO_ORGANIZATION_ID,
         DEMO_ORGANIZER_PERSON_ID,
         now,
         now,

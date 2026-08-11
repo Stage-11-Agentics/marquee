@@ -33,10 +33,23 @@ function membership(ctx: SeedContext, personId: string, role: string): void {
   });
 }
 
+function organizationMembership(ctx: SeedContext, personId: string, role: string): void {
+  ctx.add("memberships", {
+    id: seedId("mem", `${personId}-org-${role}`),
+    org_id: ORG_ID,
+    event_id: null,
+    person_id: personId,
+    role,
+    created_at: ctx.now,
+    updated_at: ctx.now,
+  });
+}
+
 export function run(ctx: SeedContext): void {
   membership(ctx, STAFF_PERSON_ID, "owner");
   membership(ctx, STAFF_PERSON_ID, "program_lead");
   membership(ctx, STAFF_PERSON_ID, "reviewer");
+  organizationMembership(ctx, STAFF_PERSON_ID, "owner");
 
   const acceptedIds = new Set(
     table(ctx, "submissions").filter((row) => row.status === "accepted").map((row) => String(row.id)),
