@@ -68,6 +68,14 @@ Bravo (78% used) is deliberately excluded: it is the pool this orchestrator sess
 
 **Parked-state integrity confirmed:** both remaining tickets' plans are on disk and committed (e9b29c2) — MRQ-8 at 288 lines, MRQ-14 at 118, each carrying its Plan-Review Cycle 1 Resolutions and the orchestrator rulings. The idle codex sessions were closed after that verification; **no re-planning is needed on any harness**, whichever is chosen.
 
+## ⏳ CAPACITY WALL — Bravo, measured 21:02
+
+Bravo went 84% → 85% in ~5 minutes with three delegators: roughly **12 points/hour, so ~75 minutes of runway**, and it does not reset until **Thu Aug 13 05:00 EDT — after the deadline**. Codex is exhausted, Kimi is retired by operator ruling. **Alpha (untouched Max 20x) is the only remaining build capacity in the Constellation.**
+
+**Deliberate call: N was NOT filled to 5.** With a hard wall this close, three tickets finished and merged are worth more than five tickets left half-done — a partial branch at the wall is unmergeable and its work is only recoverable by a future session re-reading it. All three delegators were instead told to cut scope to *mergeable*, run the gate as soon as the core path works, and keep pushing. The one thing explicitly not cuttable: the guardrail proofs (demo login 403s outside `demo_mode`; presign fails closed).
+
+All three inherited-WIP commits are **pushed and verified** against their remote branches, so the wall can only cost in-flight polish, never landed work.
+
 ## Contract drift caught at this tick (20:50)
 
 - **Local master had diverged from the remote with three unpushed commits** — the fleet-switch record, the `event` → `conference` rename (9e8b425), and the venue-map commit (13d37eb). Contract and copy changes that exist on one machine are invisible to every worktree; rebased and pushed (38baff5). **This is the second time an unpushed contract commit was found this run.**
