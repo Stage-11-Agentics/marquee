@@ -51,6 +51,20 @@ noticing — least of all the orchestrator, which is inside its own tick.
 7. **Capacity.** Alpha / Codex position via glideslope. The orchestrator session's own pool is
    the one that ends the run if it empties.
 
+## Reading the board without lying about it
+
+`lattice list` is a snapshot taken against a board the orchestrator rewrites continuously. It
+has disagreed with the forge on three consecutive ticks — a ticket read `pr open` or
+`in progress` that had already merged seconds earlier. **When the board and the forge
+disagree, the forge is truth.** Cross-check any ticket reported as blocked or in-flight
+against `pulls?state=all` before naming it in a report; the same applies to `git status` in
+the root checkout, whose dirty files are usually an agent mid-commit rather than stray edits.
+Read the diff, not the status.
+
+A dependency's *status* is not its *answer*. MRQ-55 is `done` with `needs_human` standing —
+the code half shipped, the question open. Any ticket depending on a spike inherits the
+question, not the checkbox.
+
 ## Reporting shape
 
 Lead with the verdict — moving / degraded / stuck. Then only what changed since the last

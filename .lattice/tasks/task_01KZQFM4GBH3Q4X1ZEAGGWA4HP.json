@@ -10,7 +10,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZQFM4GBH3Q4X1ZEAGGWA4HP",
-  "last_event_id": "ev_01KZQFN2J038FMREZRRX6RN3E8",
+  "last_event_id": "ev_01KZQG1BMYWQTFTDPDEY7RX9NZ",
   "last_status_changed_at": "2026-08-11T03:59:53Z",
   "linked_files": [],
   "priority": "high",
@@ -21,6 +21,13 @@
       "note": null,
       "target_task_id": "task_01KZQFM4DCPZRAV30ZVPECSTWH",
       "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-11T04:07:07Z",
+      "created_by": "agent:claude",
+      "note": null,
+      "target_task_id": "task_01KZJHM9Q27F5F60RPPN93V9X5",
+      "type": "related_to"
     }
   ],
   "reopened_count": 0,
@@ -30,6 +37,6 @@
   "tags": null,
   "title": "Task cancellation and the idempotent acceptance reconciliation",
   "type": "task",
-  "updated_at": "2026-08-11T04:00:24Z",
+  "updated_at": "2026-08-11T04:07:07Z",
   "urgency": null
 }

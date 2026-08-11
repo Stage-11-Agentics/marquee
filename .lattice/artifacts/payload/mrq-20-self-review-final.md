@@ -1,7 +1,7 @@
 # MRQ-20 inline self-review (final rebased head)
 
-Reviewed commit: 340fd5273306e66d4d7567d516b5d651e31f5cea
-Base: forgejo/master @ 750ee7260ad02f021a23a59874ce3fc64de74737
+Reviewed commit: 2718520758136c3d64f0d209ce6de8f5e6012ad0
+Base: forgejo/master @ f83de445392700f8721bcdbccb3b30c345856e00
 Verdict: PASS
 Review mode: inline self-review; headless code review is suspended by the ticket directive.
 
@@ -18,9 +18,7 @@ Scope checked:
 Checks on this exact source tree:
 
 - `git diff --check forgejo/master...HEAD` passed.
-- `npm test` passed: 24 Vitest files / 129 tests and 28 node contract tests; 12.657s, under the 30s budget.
-- Worker, client, and test TypeScript checks passed.
-- Production Worker/client build passed.
-- `npm run check:design` passed.
-- `npm run check:api` passed: OpenAPI 3.1, 47 operations, no findings; CLI parity remains the existing M-38 skip because `cli/` is absent.
-- `npm run trace:ac -- --scope=merged --ticket=MRQ-20` passed: 0 uncovered, 0 errors.
+- `npm run pr-gate -- --ticket MRQ-20` passed in 17.180s: worker/client/test types, production Worker/client build, design contract, hermetic suite, and merged AC trace.
+- The gate's hermetic suite passed: 25 Vitest files / 132 tests and 29 node contract tests, under the 30s budget.
+- The gate's merged AC trace passed: 212 live criteria, 0 uncovered, 0 errors.
+- The earlier `npm run check:api` passed: OpenAPI 3.1, 47 operations, no findings; CLI parity remains the existing M-38 skip because `cli/` is absent.

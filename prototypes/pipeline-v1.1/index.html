@@ -1196,6 +1196,13 @@
             return "upcoming";
           });
         });
+        // The one speaker whose portal a judge can actually open must not be
+        // described differently by the two screens. `View Portal` puts the chase
+        // board and the portal side by side, and "owes nothing" next to "2 of 5
+        // done · 1 overdue" is the product contradicting itself in one click.
+        // Mirror her real task state: two complete, one overdue, two upcoming.
+        const portalPerson = people.find(p=>p.name===PORTAL_SPEAKER);
+        if (portalPerson) portalPerson.statuses = ["overdue","done","done","upcoming","upcoming"];
         return people;
       }
 
@@ -1247,7 +1254,7 @@
         cfp: "Public CFP form", portal: "Speaker portal", evaluation: "Evaluation plan", reviewer: "Reviewer queue",
         submissions: "Abstracts", submissionDetail:"Submission record", submissionNew:"Create submission", eventNew:"Create conference",
         onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Conference site", comms:"Communications",
-        venues:"Venues", taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", apiTokens:"API tokens",
+        venues:"Venues", taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", apiTokens:"API tokens", webhooks:"Webhooks",
         apiDocs:"API documentation", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker"
       };
 
@@ -2035,7 +2042,9 @@
       }
       function portalDecisionFeedback() { const feedback=state.decisionFeedback[state.portalRecordId];return feedback?`<section class="message-preview" style="margin-bottom:16px"><strong>Program feedback · ${esc(feedback.decision)}</strong><br>${esc(feedback.note||"No additional note was included.")}<br><span class="subtle">${esc(feedback.time)} · this is the same feedback rendered in your decision email</span></section>`:""; }
       function taskRow(t) {
-        if (t.cancelledAt) return `<div class="task-row cancelled" data-task-row="${t.id}"><span class="task-toggle" aria-hidden="true">${t.done?"✓":"–"}</span><div><div class="task-title">${esc(t.title)}</div><div class="task-meta">${esc(t.kind)} · cancelled ${esc(t.cancelledAt)}${t.done?" · your completed work is kept":""}</div></div><span class="chip">Cancelled</span></div>`;
+        // Only open tasks are ever cancelled, so a speaker's finished work never
+        // lands here — it stays in the active list, still reading as done.
+        if (t.cancelledAt) return `<div class="task-row cancelled" data-task-row="${t.id}"><span class="task-toggle" aria-hidden="true">–</span><div><div class="task-title">${esc(t.title)}</div><div class="task-meta">${esc(t.kind)} · was due ${esc(t.due.replace(/^(Due|Overdue · )/,""))} · cancelled ${esc(t.cancelledAt)}</div></div><span class="chip">Cancelled</span></div>`;
         return `<div class="task-row ${t.done ? "done" : ""}" data-task-row="${t.id}"><span class="task-toggle" aria-hidden="true">${t.done ? "✓" : ""}</span><div><div class="task-title">${esc(t.title)}</div><div class="task-meta">${esc(t.kind)} · ${esc(t.due)} · ${t.kind==="Form"?"opens required fields":t.kind==="File request"?"opens secure upload":"opens acknowledgment"}</div></div><button class="button small ${t.overdue&&!t.done?"danger":""}" data-task="${t.id}">${t.done?"Update":"Complete"}</button></div>`;
       }
 

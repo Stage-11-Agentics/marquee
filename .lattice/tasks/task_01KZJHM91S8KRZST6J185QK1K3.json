@@ -20,10 +20,15 @@
       "id": "art_01KZQFESKE26ZVM3E044GRXR20",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQFVT1TRWF72XRVG9BC2R0B",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM91S8KRZST6J185QK1K3",
-  "last_event_id": "ev_01KZQFESKHAWEWZT08TCXVF95H",
+  "last_event_id": "ev_01KZQFVT1YA4GHGJXHEYHF9QZ8",
   "last_status_changed_at": "2026-08-11T03:54:45Z",
   "linked_files": [],
   "priority": "medium",
@@ -43,6 +48,6 @@
   "tags": null,
   "title": "Reviewer queue",
   "type": "task",
-  "updated_at": "2026-08-11T03:56:58Z",
+  "updated_at": "2026-08-11T04:04:05Z",
   "urgency": null
 }

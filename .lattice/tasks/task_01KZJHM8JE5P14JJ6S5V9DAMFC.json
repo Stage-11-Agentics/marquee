@@ -15,11 +15,16 @@
       "id": "art_01KZQDWENKZCHP6993FX29W1H9",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQG28PPEGMGXMC0DZ1W0DZD",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8JE5P14JJ6S5V9DAMFC",
-  "last_event_id": "ev_01KZQDWENN98VRP21P7DNAG57A",
-  "last_status_changed_at": "2026-08-11T03:22:27Z",
+  "last_event_id": "ev_01KZQG2E6A5VEYS9KC7YM3DQVK",
+  "last_status_changed_at": "2026-08-11T04:07:42Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +39,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-13",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Form builder, catalog, and condition evaluator",
   "type": "task",
-  "updated_at": "2026-08-11T03:29:29Z",
+  "updated_at": "2026-08-11T04:07:42Z",
   "urgency": null
 }
