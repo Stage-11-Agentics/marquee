@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:122",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 2,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM862JR0BCFKFPFRZTWYW",
-  "last_event_id": "ev_01KZQ69M26S7FJT7TZMXB8T16S",
-  "last_status_changed_at": "2026-08-11T01:16:52Z",
+  "last_event_id": "ev_01KZQ6ATKVVT2W4VVC5J39AZAR",
+  "last_status_changed_at": "2026-08-11T01:17:30Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -42,10 +42,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-9",
-  "status": "planned",
+  "status": "in_progress",
   "tags": null,
   "title": "First loop screen: submissions list",
   "type": "task",
-  "updated_at": "2026-08-11T01:16:52Z",
+  "updated_at": "2026-08-11T01:17:31Z",
   "urgency": null
 }

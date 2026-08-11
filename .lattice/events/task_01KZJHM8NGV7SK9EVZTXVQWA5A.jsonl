@@ -26,3 +26,4 @@
 {"actor":"agent:orchestrator","data":{"from":"pr_open","to":"review"},"id":"ev_01KZQ68K94PW216TZ8FD3EKW7R","schema_version":1,"task_id":"task_01KZJHM8NGV7SK9EVZTXVQWA5A","ts":"2026-08-11T01:16:18Z","type":"status_changed"}
 {"actor":"agent:orchestrator","data":{"artifact_id":"art_01KZQ68K94PW216TZ8FD3EKW7P","role":"review"},"id":"ev_01KZQ68K94PW216TZ8FD3EKW7S","schema_version":1,"task_id":"task_01KZJHM8NGV7SK9EVZTXVQWA5A","ts":"2026-08-11T01:16:18Z","type":"artifact_attached"}
 {"actor":"agent:orchestrator","data":{"from":"review","to":"done"},"id":"ev_01KZQ68K94PW216TZ8FD3EKW7T","schema_version":1,"task_id":"task_01KZJHM8NGV7SK9EVZTXVQWA5A","ts":"2026-08-11T01:16:18Z","type":"status_changed"}
+{"actor":"agent:lattice-auto-review","data":{"artifact_id":"art_01KZQ6EQ160Q91J0J0NMA6SANM","role":"review"},"id":"ev_01KZQ6EQ18KJAT0AS9HFJJ9ZQ9","schema_version":1,"task_id":"task_01KZJHM8NGV7SK9EVZTXVQWA5A","ts":"2026-08-11T01:19:39Z","type":"artifact_attached"}

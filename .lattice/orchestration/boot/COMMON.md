@@ -43,6 +43,19 @@ If your implementation must diverge from `SPEC.md` (or any contract doc), implem
 - Before bumping `pr_open`: a review artifact must exist that postdates this cycle's `→ review` transition, names the reviewed commit (== branch HEAD), and carries a PASS verdict. A dead or stale review does not count.
 
 
+
+## After every rebase onto master: `npm ci`
+
+Worktrees are cut at a point in time and their `node_modules` goes stale the moment another ticket's lockfile lands. A stale install fails as **"cannot find module X"**, which reads exactly like a broken master — it is not. Before you trust a red test after a rebase:
+
+```
+git fetch forgejo && git rebase forgejo/master && npm ci
+```
+
+**Never `npm install --no-save` to get past it.** It papers over the stale install, leaves your tree disagreeing with the committed lockfile, and hides a genuine dependency problem until someone else hits it. (2026-08-10: MRQ-9 reported master as broken because `aws4fetch` "was missing from package.json"; it was present and master passed the full gate in 14.5s on a clean install — the worktree's `node_modules` simply predated MRQ-14's merge.)
+
+If you believe master is genuinely broken, say so to the orchestrator with the exact command and output before working around it. Master being broken blocks the whole fleet, so it is worth ten seconds of confirmation.
+
 ## Route module naming (fleet convention)
 
 API route modules are named **`*.routes.ts`** under `src/routes/`. `src/routes/_manifest.ts` builds the generated manifest with `import.meta.glob("./**/*.routes.ts", { eager: true })`, and `check:api` asserts parity between that manifest, the served OpenAPI document, and the paths an e2e run actually exercises.

@@ -88,6 +88,14 @@ Bravo sat at **84–85% across four readings between 20:57 and 21:04**, and it d
 
 All three inherited-WIP commits are **pushed and verified** against their remote branches, so the wall can only cost in-flight polish, never landed work.
 
+## Master verified green after the MRQ-14 merge (21:34)
+
+MRQ-9 reported master as broken — "imports `aws4fetch` but package.json/lock omit it; npm test, tsc and check:api all fail." **Checked rather than accepted, and the report was wrong:** `aws4fetch` is declared at `package.json:29` and in the lockfile as of MRQ-14's merge commit `13c0780`. A clean `npm ci` + `npm run pr-gate` on `667ffd0` **passes in 14.5 s, all checks green.** The failure was local — MRQ-9's worktree was cut at `5b9199f`, before MRQ-14 merged, so its `node_modules` predated the lockfile.
+
+**My own miss, worth recording:** I merged MRQ-14 without re-running the assembled-tree gate, which I *had* done after the first two merges. Had master genuinely been broken, the whole fleet would have been blocked on it. The gate now runs on master after every merge, not just occasionally.
+
+Both delegators were corrected and the fix written into the contract: **after every rebase, `npm ci`; never `npm install --no-save`**, which papers over a stale install and hides real dependency problems. MRQ-9 was right about one thing and told so: it correctly refused to claim the shared `package.json`.
+
 ## MRQ-59 raised — a green workaround that armed a gate failure (21:28)
 
 MRQ-14 reported "routing around" MRQ-8's route-manifest glob by naming its module `uploads.direct.ts` instead of `*.routes.ts`. Investigated rather than accepted: the upload endpoints are `/api/v1/...` POSTs, and `check:api`'s parity assertion collects every non-GET request from an e2e replay and **fails on any path absent from the public schema**. So the rename does not avoid a problem — it arms one for whoever first runs an e2e that touches uploads. Nothing fails today only because e2e does not yet exercise them.
