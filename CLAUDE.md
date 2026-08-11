@@ -24,23 +24,26 @@ Open-source speaker/session-management platform for conference organizers — St
 
 | Work | Model |
 |---|---|
-| **Build / implementation — the workhorse** | codex **`gpt-5.6-luna`** |
+| **Build / implementation — the workhorse** | codex **`gpt-5.6-luna` at `max` effort** — the ideal, and the default to return to |
 | **Particularly hard build items** | codex **`gpt-5.6-terra`** or **`gpt-5.6-sol`** |
+| **Luna repeatedly at capacity** | temporarily **`gpt-5.6-terra` at `high`** for a couple of agents — a fallback, not a destination |
 | **Planning** | codex **`gpt-5.6-sol`** — or Claude |
 | **Design** | **Claude** |
+
+**Luna at max effort is the preference.** Fall back only when Luna genuinely refuses, and move back the moment it answers again.
 
 Claude delegators run **sonnet**, not opus (operator ruling, same day); opus is reserved for tickets whose contracts every later ticket inherits.
 
 Launch line:
 
 ```
-c11 launch-agent --type codex --model gpt-5.6-luna \
+c11 launch-agent --type codex --model gpt-5.6-luna --effort max \
   --workspace <ws> --pane <pane> --suppressed --prompt-file <boot>
 ```
 
 Three footguns, all hit in this run:
 
-- **Never pass `--effort high`.** `~/.codex/config.toml` sets `model_reasoning_effort = "xhigh"`; an explicit `--effort high` silently *downgrades* below it. Omit the flag and inherit xhigh.
+- **`--effort high` is a downgrade, `--effort max` is the target.** `~/.codex/config.toml` sets `model_reasoning_effort = "xhigh"`, so an explicit `high` silently drops *below* the configured default — that was the original footgun. Passing nothing inherits xhigh; passing `max` is what the operator actually wants for build work (directive 2026-08-10). Only the sanctioned Luna-at-capacity fallback runs `terra` at `high`.
 - **Always pass `--model`.** That config still pins `model = "gpt-5.6-sol"`, so a launch without `--model` quietly gets the wrong model.
 - **Fast service tier is off** — `service_tier = "default"` in `~/.codex/config.toml` (machine-wide; backup at `~/.codex/config.toml.bak-marquee`). `c11 launch-agent` has no passthrough for `-c key=value`, so this has to live in the config rather than the launch line.
 

@@ -25,6 +25,16 @@ noticing — least of all the orchestrator, which is inside its own tick.
    `Selected model is at capacity` (context stays 0%).
 2. **Blockers.** `needs_human` flags, `blocked` status, raised c11 flags, and open PRs —
    especially `mergeable: false` or a `pr_open` that survives two watchdog ticks untouched.
+2b. **Model-at-capacity, every tick (operator directive 2026-08-10).** Read every delegator
+   surface for `Selected model is at capacity` and for the tell that accompanies it — context
+   frozen at 0% with the boot prompt still on screen and no claim on the board. A capacity
+   refusal is indistinguishable from a healthy launch unless you look. Bump anything sitting
+   in that state rather than letting the slot idle.
+   **Model preference:** `gpt-5.6-luna` at **`max`** effort is ideal and is where the fleet
+   should sit. If Luna refuses *repeatedly*, a couple of agents may run `gpt-5.6-terra` at
+   `high` as a temporary fallback — then move back to Luna the moment it answers. A lone
+   `terra high` agent is therefore sanctioned, not drift; a fleet drifting to `terra high` and
+   staying there is worth reporting.
 3. **Orchestrator liveness.** Working / stalled / error-retrying. Context %, cost counter
    moving, and single-turn duration. A turn past ~10 minutes is worth naming; past ~20 is
    worth investigating. Judge liveness by the `Working (Ns)` line and a moving counter, never
