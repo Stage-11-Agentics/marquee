@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:183",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-11T05:42:44Z",
   "created_by": "agent:orchestrator",
@@ -20,21 +20,31 @@
       "id": "art_01KZQSVNWHWGR31M0Z5CATG9GQ",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQSZ2PBZWVNHRZ76DT8JVX5",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQT09M94ESW16B24R4WFB66",
+      "role": null,
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQNGEKSJP5NVT826YR3K0FY",
-  "last_event_id": "ev_01KZQSXJ1PRZZDVQ9400F5WAWB",
-  "last_status_changed_at": "2026-08-11T06:59:48Z",
+  "last_event_id": "ev_01KZQT10875F9A2870DQ1X2K06",
+  "last_status_changed_at": "2026-08-11T07:01:18Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-70",
-  "status": "in_validation",
+  "status": "pr_open",
   "tags": null,
   "title": "Test harness: cut per-file Worker boot so the fast suite stays under budget",
   "type": "task",
-  "updated_at": "2026-08-11T06:59:48Z",
+  "updated_at": "2026-08-11T07:01:41Z",
   "urgency": null
 }
