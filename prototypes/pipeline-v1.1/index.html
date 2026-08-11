@@ -767,6 +767,7 @@
     .impersonation-bar .button:hover { border-color:#6fd3da; color:#6fd3da; }
     .notified-cell { font:400 10px var(--mono); color:var(--muted); white-space:nowrap; }
     .notified-cell.sent { color:var(--ink); }
+    .notified-cell.gap { color:var(--warning); font-weight:600; }
 
     @media (max-width: 1000px) {
       .app-shell { grid-template-columns: 68px minmax(0,1fr); }
@@ -871,6 +872,14 @@
       ];
       const AV_TAGS = ["Projector", "Confidence monitor", "Mics", "Livestream"];
       const PORTAL_SPEAKER = "Amara van der Meer";
+      // A decision is made; the notification is a separate fact. These are the
+      // only three ways ours fails to arrive, and each names its own remedy —
+      // "not notified" with no reason is just a second thing to worry about.
+      const NOTIFY_GAPS = {
+        airtable:       { label:"Changed in Airtable", why:"Status arrived from the Airtable mirror, which deliberately does not run the acceptance cascade.", fix:"Run cascade" },
+        undelivered:    { label:"Not delivered",       why:"The decision email is in the outbox, suppressed by demo mode rather than sent.", fix:"Send now" },
+        "no-recipient": { label:"No valid address",    why:"This record carries no usable speaker email, so nothing could be queued.", fix:"Add an address" }
+      };
       const waveDates = ["Aug 15", "Sep 1", "Sep 15"];
       const formatRanges = { Workshop:"60–120", "Stage Talk":"15–20", Lightning:"5–10", Online:"5–55" };
       const submissionColumnDefs = [
@@ -884,6 +893,7 @@
         {id:"all",name:"All submissions",builtIn:true,config:{search:"",status:"All",type:"All",track:"All",sort:"newest",columns:["type","title","speakers","status","tracks","score","notified"]}},
         {id:"drafts",name:"Drafts needing attention",builtIn:true,config:{search:"",status:"Draft",type:"All",track:"All",sort:"newest",columns:["title","speakers","status","updated","missing"]}},
         {id:"review",name:"Active review",builtIn:true,config:{search:"",status:"In Review",type:"Abstract",track:"All",sort:"planRating",columns:["id","title","speakers","tracks","score","planRating","updated"]}},
+        {id:"not-notified",name:"Decided · not notified",builtIn:true,config:{search:"",status:"NotNotified",type:"All",track:"All",sort:"newest",columns:["id","title","speakers","status","notified","updated"]}},
         {id:"my-finalists",name:"My finalists",builtIn:false,config:{search:"",status:"Waved",type:"All",track:"All",sort:"planRating",columns:["type","title","speakers","tracks","planRating","status"]}}
       ];
 
@@ -976,6 +986,14 @@
           { id: 4, title: "Travel and accommodation", kind: "Form", due: "Due Aug 20", done: false },
           { id: 5, title: "Upload final slides", kind: "File request", due: "Due Oct 5", done: false }
         ],
+        // Set when an acceptance reversal cancels this speaker's outstanding
+        // homework: the reason is stated once, at the submission level, rather
+        // than repeated on every row the speaker no longer has to do.
+        taskCancellation: null,
+        // Events stamped onto a record by consequential actions, newest first.
+        // The reversal and its restoration both land here, so "what happened to
+        // this record" is answerable without reading the outbox.
+        recordEvents: {},
         portalEditing: false,
         portalRecordId: "AIE-0027",
         portalSessionTitle: "Beyond the demo: reliable multi-agent systems",
@@ -1018,6 +1036,16 @@
         importBatch: null,
         airtableLog: ["09:42:17 connected to appAIE2026", "09:42:18 local 1,040 · Airtable 1,040", "09:42:18 outbox clear · mirror healthy"],
         apiTokens: [{id:"tok_92Jf",name:"Agenda publisher",prefix:"mq_live_92Jf…",created:"Aug 8",lastUsed:"2 minutes ago"}],
+        webhooks: [
+          {id:"wh_4a1",url:"https://ops.ai.engineer/hooks/marquee",secret:"whsec_8Kd2…",events:["submission.status_changed","agenda.published"],enabled:true,lastDelivery:"3 min ago"},
+          {id:"wh_9c7",url:"https://hooks.zapier.com/hooks/catch/44119/marquee",secret:"whsec_1Xb9…",events:["submission.created"],enabled:true,lastDelivery:"1 h ago"}
+        ],
+        webhookDeliveries: [
+          {id:"dlv_7f21",event:"agenda.published",url:"ops.ai.engineer",code:200,attempts:1,time:"3 min ago"},
+          {id:"dlv_7f19",event:"submission.status_changed",url:"ops.ai.engineer",code:200,attempts:1,time:"22 min ago"},
+          {id:"dlv_7f04",event:"submission.created",url:"hooks.zapier.com",code:500,attempts:4,time:"1 h ago"},
+          {id:"dlv_7ef8",event:"submission.created",url:"hooks.zapier.com",code:200,attempts:1,time:"1 h ago"}
+        ],
         aiEnabled: false,
         emptyInstall: false,
         event: loadEvent()
@@ -1095,6 +1123,10 @@
             ? [trackName, tracks[(primaryTrackIndex+3)%tracks.length].name, ...(i%40===0?[tracks[(primaryTrackIndex+5)%tracks.length].name]:[])]
             : [trackName];
           const boardStage = i < 26 ? "Published" : i < 32 ? "Scheduled" : i < 92 ? "Accepted" : i < 190 ? "Onboarding" : i < 280 ? "In Review" : i < 630 ? "Submitted" : i < 1000 ? "Waved" : null;
+          // Decided, but the speaker was never told. Airtable inbound deliberately
+          // skips the cascade; a suppressed or failed send leaves the queue; and a
+          // record with no usable address has nowhere to send at all.
+          const notifyGap = accepted && i % 23 === 5 ? ["airtable","undelivered","no-recipient"][Math.floor(i/23) % 3] : null;
           out.push({
             id: `AIE-${String(i + 1).padStart(4,"0")}`,
             title: i===26 ? "Beyond the demo: reliable multi-agent systems" : makeTitle(i), entity, speaker, speakers: coSpeakers,
@@ -1115,12 +1147,16 @@
             planRating: i < 190 ? (3.6 + seededRandom(i + 41) * 1.3).toFixed(1) : (i >= 190 && i < 240 && i % 3 !== 0 ? (2.9 + seededRandom(i + 41) * 1.8).toFixed(1) : "—"),
             // The Notified receipt: when the decision email actually went out.
             // Status change queues it automatically; this answers "did it land, when."
-            notifiedAt: accepted ? `${waveDates[i < 63 ? 0 : i < 126 ? 1 : 2]} · 10:0${(i % 9) + 1}` : (i >= 630 && i < 1000 ? `Sep 16 · 09:${String(10 + (i % 45)).padStart(2,"0")}` : null),
+            notifiedAt: notifyGap ? null : (accepted ? `${waveDates[i < 63 ? 0 : i < 126 ? 1 : 2]} · 10:0${(i % 9) + 1}` : (i >= 630 && i < 1000 ? `Sep 16 · 09:${String(10 + (i % 45)).padStart(2,"0")}` : null)),
+            // The three ways an automatic notification does not arrive. All three
+            // are designed in on purpose, which is exactly why they need a screen:
+            // a decision the speaker has not heard is the organizer's 2am worry.
+            notifyGap,
             externalRef: i % 4 === 1 ? `SZ-${842 + (i % 260)}` : null,
             capacity: entity === "Session" ? [null, 120, 420, null, 210][i % 5] : null,
             submitted: `2026-0${6 + (i % 2)}-${String(2 + (i * 7) % 27).padStart(2,"0")}`,
             updated: i>=1000&&i<1020 ? `${2+(i%11)}h ago` : `${1+(i%29)}d ago`,
-            email: `${speaker.toLowerCase().replace(/[^a-z0-9]+/g,".").replace(/^\.|\.$/g,"")}@example.org`,
+            email: notifyGap === "no-recipient" ? "" : `${speaker.toLowerCase().replace(/[^a-z0-9]+/g,".").replace(/^\.|\.$/g,"")}@example.org`,
             missingFields: i>=1000&&i<1020 ? [["Abstract","Headshot"],["Tracks"],["Biography","Supporting file"],["Format","Biography"]][i%4] : [],
             source: entity === "Session" ? "Admin created" : "Public CFP"
           });
@@ -1353,7 +1389,7 @@
         if (/^submissions\/[^/]+$/.test(path)) { state.submissionRecordId = decodeURIComponent(path.split("/")[1]); return "submissionDetail"; }
         if (/^s\/[^/]+$/.test(path)) { state.publicRecordId = decodeURIComponent(path.split("/")[1]); return "publicSession"; }
         if (/^p\/[^/]+$/.test(path)) { state.publicPersonName = decodeURIComponent(path.slice(2)); return "publicSpeaker"; }
-        return ({"settings/venues":"venues","settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"apiTokens","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer"})[path] || path;
+        return ({"settings/venues":"venues","settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"apiTokens","settings/webhooks":"webhooks","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer"})[path] || path;
       }
 
       function currentRoute() {
@@ -1684,6 +1720,7 @@
             <button class="attention-item" data-scroll-wave><strong>Wave 2 in 6 days</strong><span>${acceptedByWave(2)} accepted · 60 target · open planner</span></button>
             <button class="attention-item" data-unreviewed-track="Agents"><strong>${unreviewedTrackCount("Agents")} unreviewed in Agents</strong><span>${state.submissions.filter(s=>s.status==="In Review"&&(s.tracks||[s.track]).includes("Agents")).length} in review · ${state.submissions.filter(s=>s.status==="Submitted"&&(s.tracks||[s.track]).includes("Agents")).length} waiting for assignment</span></button>
             <button class="attention-item" data-route="onboarding"><strong>${onboardingCounts().overdue} speakers overdue</strong><span>Headshots, agreements, and travel · open chase board</span></button>
+            <button class="attention-item" data-not-notified><strong>${notNotifiedCount()} decided · not notified</strong><span>${notNotifiedCount()?"They have an outcome and have not heard it · open the list":"Every decision has reached its speaker"}</span></button>
           </div>
           <div class="dashboard-grid">
             <section class="card" style="grid-column:1/-1">
@@ -1814,6 +1851,10 @@
           risk:onboardingSpeakers.filter(p=>p.statuses.includes("risk")).length
         };
       }
+      function notNotifiedCount() { return state.submissions.filter(s => s.notifyGap).length; }
+      // A record with no address cannot be notified by any button, so the count
+      // on the action says what will actually happen rather than what we wish did.
+      function sendableGap() { return state.submissions.filter(s => s.notifyGap && s.notifyGap !== "no-recipient").length; }
       function acceptedByWave(wave) { return state.submissions.filter(s => s.accepted && s.wave === wave).length; }
       function unreviewedTrackCount(track) { return state.submissions.filter(s => ["Submitted","In Review"].includes(s.status) && (s.tracks||[s.track]).includes(track)).length; }
       function waveRow(name, date, count, target) {
@@ -1821,7 +1862,7 @@
       }
 
       function settingsTabs(active) {
-        const tabs = [["settings","Conference"],["settings/venues","Venues"],["settings/tasks","Task templates"],["settings/airtable","Airtable"],["settings/api","API tokens"]];
+        const tabs = [["settings","Conference"],["settings/venues","Venues"],["settings/tasks","Task templates"],["settings/airtable","Airtable"],["settings/api","API tokens"],["settings/webhooks","Webhooks"]];
         return `<nav class="route-tabs">${tabs.map(([href,label])=>`<a class="button ${routeKey(href)===active?"active":""}" href="#${href}">${esc(label)}</a>`).join("")}</nav>`;
       }
 
@@ -2102,6 +2143,7 @@
             (state.submissionFilter === "Waved" && s.accepted && s.wave <= 2) ||
             (state.submissionFilter === "Scheduled" && ["Scheduled","Published"].includes(s.status)) ||
             (state.submissionFilter === "Unreviewed" && ["Submitted","In Review"].includes(s.status)) ||
+            (state.submissionFilter === "NotNotified" && !!s.notifyGap) ||
             s.status === state.submissionFilter) &&
           (state.submissionType === "All" || s.entity === state.submissionType) &&
           (state.submissionTrack === "All" || (s.tracks||[s.track]).includes(state.submissionTrack)) &&
@@ -2161,7 +2203,11 @@
         if(column==="planRating")return `<strong class="tabular">${submission.planRating}</strong>`;
         if(column==="tags")return (submission.tags||[]).length?`<div style="display:flex;gap:3px;overflow:hidden">${submission.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>`:`<span class="subtle">—</span>`;
         if(column==="level")return submission.level?`<span class="chip">${esc(submission.level)}</span>`:"—";
-        if(column==="notified")return submission.notifiedAt?`<span class="notified-cell sent" title="Decision email delivered · from this record's outbox entry">✓ ${esc(submission.notifiedAt)}</span>`:`<span class="notified-cell">—</span>`;
+        if(column==="notified"){
+          if(submission.notifiedAt)return `<span class="notified-cell sent" title="Decision email delivered · from this record's outbox entry">✓ ${esc(submission.notifiedAt)}</span>`;
+          if(submission.notifyGap)return `<span class="notified-cell gap" title="${esc(NOTIFY_GAPS[submission.notifyGap].why)}">! ${esc(NOTIFY_GAPS[submission.notifyGap].label)}</span>`;
+          return `<span class="notified-cell">—</span>`;
+        }
         if(column==="submitted")return submission.status==="Draft"?"Not submitted":submission.submitted;
         if(column==="updated")return submission.updated||"Today";
         if(column==="origin")return submission.source;
@@ -2178,7 +2224,9 @@
         const selectedCount = state.selectAllMatching ? all.length : state.selected.size;
         const activeView=state.savedViews.find(view=>view.id===state.activeSavedView),draftCount=state.submissions.filter(item=>item.status==="Draft").length;
         return shell(`<div class="page">
-          ${pageHead(activeView?.id==="drafts"?"Drafts needing attention":"Abstracts & sessions", activeView?.id==="drafts"?`${draftCount} unsubmitted drafts · contact and missing required fields are visible; opening one never submits it.`:`${all.length.toLocaleString()} matching records · rendered 50 at a time for an instant response at full scale.`, `<button class="button" id="export-submissions">Export</button><button class="button primary" data-route="submissions/new" data-create-session>+ Add session</button>`)}
+          ${activeView?.id==="not-notified"
+            ? pageHead("Decided · not notified", `${all.length} record${all.length===1?"":"s"} carry a decision the speaker has not heard. ${sendableGap()} can be sent now; ${all.length-sendableGap()} need an address first.`, `<button class="button" id="export-submissions">Export</button><button class="button primary" id="notify-all" ${sendableGap()?"":"disabled"} style="width:186px">Notify ${sendableGap()} speaker${sendableGap()===1?"":"s"}</button>`)
+            : pageHead(activeView?.id==="drafts"?"Drafts needing attention":"Abstracts & sessions", activeView?.id==="drafts"?`${draftCount} unsubmitted drafts · contact and missing required fields are visible; opening one never submits it.`:`${all.length.toLocaleString()} matching records · rendered 50 at a time for an instant response at full scale.`, `<button class="button" id="export-submissions">Export</button><button class="button primary" data-route="submissions/new" data-create-session>+ Add session</button>`)}
           <section class="card table-card">
             <div class="saved-view-bar"><span class="view-label">Views</span>${state.savedViews.map(view=>`<button class="saved-view ${view.id===state.activeSavedView?"active":""}" data-saved-view="${view.id}">${esc(view.name)}${view.id==="drafts"?` · ${draftCount}`:""}</button>`).join("")}<button class="button small" id="save-current-view">+ Save current</button>${activeView&&!activeView.builtIn?`<button class="button small" id="manage-current-view">Manage</button>`:""}<span class="toolbar-spacer"></span><span class="view-meta">Personal views persist per user · ${esc(state.event.name)}</span></div>
             <div class="toolbar">
@@ -2220,7 +2268,7 @@
         modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Program decision · ${esc(decision)}</div><h2>${esc(decision)} ${esc(submission.title)}?</h2><p>${esc(decision)} maps to ${outcome}. The speaker email and portal render the same feedback after confirmation.</p></div><div class="modal-body stack"><div class="field"><label for="decision-feedback">Feedback for the speaker · optional</label><textarea id="decision-feedback" placeholder="Share useful context with the decision.">${esc(state.decisionFeedback[id]?.note||"")}</textarea></div><div class="message-preview"><strong>Email preview · ${esc(decision)}</strong><br><span class="subtle">Hi ${esc(submission.speaker.split(" ")[0])}, here is an update on “${esc(submission.title)}.” <span id="feedback-preview">Feedback appears here and in the portal.</span></span></div><div class="wave-row"><strong>Lifecycle status</strong><span>${esc(submission.status)} → ${outcome}</span><strong>1 record</strong></div><div class="wave-row"><strong>Email + portal</strong><span>Same rendered feedback</span><strong>Queue</strong></div></div><div class="modal-actions"><button class="button" id="cancel-program-decision">Cancel</button><button class="button primary" id="confirm-program-decision">Confirm ${esc(decision)}</button></div></section></div>`;
         const feedback=document.getElementById("decision-feedback");feedback.oninput=()=>document.getElementById("feedback-preview").textContent=feedback.value||"No additional feedback.";
         document.getElementById("cancel-program-decision").onclick=()=>modalRoot.innerHTML="";
-        document.getElementById("confirm-program-decision").onclick=()=>{const note=feedback.value.trim();state.decisionFeedback[id]={decision,note,time:"Just now"};submission.status=outcome;submission.timeInStageHours=1;if(decision==="Approve"){submission.accepted=true;submission.wave=submission.wave||2;submission.waveDate=submission.waveDate||waveDates[1];submission.boardStage="Accepted";ensureOnboardingSpeaker(submission);}else{submission.accepted=false;submission.boardStage="Waved";if(decision==="Maybe")submission.wave=submission.wave||2;}submission.notifiedAt="Just now";state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:submission.email,template:`Decision · ${decision}`,subject:`An update on ${submission.title}`,outcome:"Queued",time:"Just now"});modalRoot.innerHTML="";toast(`${decision} confirmed · ${outcome.toLowerCase()} · email and portal feedback queued`);render();};
+        document.getElementById("confirm-program-decision").onclick=()=>{const note=feedback.value.trim();state.decisionFeedback[id]={decision,note,time:"Just now"};submission.status=outcome;submission.timeInStageHours=1;if(decision==="Approve"){submission.accepted=true;submission.wave=submission.wave||2;submission.waveDate=submission.waveDate||waveDates[1];submission.boardStage="Accepted";ensureOnboardingSpeaker(submission);const restored=reconcileTaskSet(submission);stampRecord(id,restored?"Speaker tasks restored":"Speaker task set assigned",restored?`${restored} cancelled task${restored===1?"":"s"} reopened with their original due dates · completed tasks were never re-opened`:`Task set assigned from the event's templates`);}else{submission.accepted=false;submission.boardStage="Waved";if(decision==="Maybe")submission.wave=submission.wave||2;}submission.notifiedAt="Just now";state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:submission.email,template:`Decision · ${decision}`,subject:`An update on ${submission.title}`,outcome:"Queued",time:"Just now"});modalRoot.innerHTML="";toast(`${decision} confirmed · ${outcome.toLowerCase()} · email and portal feedback queued`);render();};
       }
 
       function showRecordMessage(id,kind) {
@@ -2250,7 +2298,7 @@
                 <div class="field"><label for="record-external-ref">Client session ID</label><input id="record-external-ref" value="${esc(s.externalRef||"")}" placeholder="e.g. SZ-843 — your registration platform's ID"><span class="field-note">Editable and shown here and in exports · also the idempotent import-match key.</span></div>
                 ${s.entity==="Session"||s.accepted?`<div class="field"><label for="record-capacity">Session capacity</label><input id="record-capacity" type="number" min="0" value="${s.capacity??""}" placeholder="—" style="width:110px"><span class="field-note">Attendee cap for this session · shown while scheduling, checked against the room.</span></div>`:""}
               </div></section>
-              <section class="card"><div class="card-head"><h2>History</h2><button class="button small" data-route="comms">Messages</button></div><div class="card-body">${s.status==="Draft"?`<div class="history-row"><strong>Draft saved</strong><div class="subtle">${esc(s.updated)} · private resume link active</div></div><div class="history-row"><strong>Draft started</strong><div class="subtle">Public CFP · never submitted</div></div>`:`<div class="history-row"><strong>${s.status}</strong><div class="subtle">Wave ${s.wave||"—"} · Aug ${s.accepted?"15":"8"}, 10:04 AM</div></div><div class="history-row"><strong>Promoted to Committee decision</strong><div class="subtle">Aug 7, 4:18 PM · Maya Chen</div></div><div class="history-row"><strong>Routing rule applied</strong><div class="subtle">${esc(s.track)} → Initial screen</div></div><div class="history-row"><strong>Submitted</strong><div class="subtle">${s.submitted} · ${esc(s.source)}</div></div>`}</div></section>
+              <section class="card"><div class="card-head"><h2>History</h2><button class="button small" data-route="comms">Messages</button></div><div class="card-body">${(state.recordEvents[s.id]||[]).map(e=>`<div class="history-row"><strong>${esc(e.title)}</strong><div class="subtle">${esc(e.time)} · ${esc(e.actor)} · ${esc(e.detail)}</div></div>`).join("")}${s.status==="Draft"?`<div class="history-row"><strong>Draft saved</strong><div class="subtle">${esc(s.updated)} · private resume link active</div></div><div class="history-row"><strong>Draft started</strong><div class="subtle">Public CFP · never submitted</div></div>`:`<div class="history-row"><strong>${s.status}</strong><div class="subtle">Wave ${s.wave||"—"} · Aug ${s.accepted?"15":"8"}, 10:04 AM</div></div><div class="history-row"><strong>Promoted to Committee decision</strong><div class="subtle">Aug 7, 4:18 PM · Maya Chen</div></div><div class="history-row"><strong>Routing rule applied</strong><div class="subtle">${esc(s.track)} → Initial screen</div></div><div class="history-row"><strong>Submitted</strong><div class="subtle">${s.submitted} · ${esc(s.source)}</div></div>`}</div></section>
             </aside>
           </div>
         </div>`);
@@ -2330,6 +2378,22 @@
 
       function apiTokensView() {
         return shell(`<div class="page">${pageHead("API tokens", "Issue revocable credentials for agents, scripts, and integrations independently of browser sessions.", `<a class="button" href="#api/docs">Read API docs</a><button class="button primary" id="create-token">Create token</button>`)}${settingsTabs("apiTokens")}<section class="card table-card"><div class="table-wrap" style="min-height:300px"><table><thead><tr><th>Name</th><th>Token</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>${state.apiTokens.map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td><code>${esc(t.prefix)}</code></td><td>${esc(t.created)}</td><td>${esc(t.lastUsed)}</td><td><button class="button small danger" data-revoke-token="${t.id}">Revoke</button></td></tr>`).join("")||`<tr><td colspan="5" style="height:180px;text-align:center"><strong>No API tokens</strong><div class="subtle">Create one for your first agent or integration.</div></td></tr>`}</tbody></table></div></section></div>`);
+      }
+
+      // Outbound webhooks: the other half of "agent-native." The API lets a system
+      // ask; webhooks let Marquee tell. Six event types, an HMAC signature over
+      // id.timestamp.body, and a deliveries log — because an integration that
+      // fails silently is worse than no integration.
+      const WEBHOOK_EVENTS = ["submission.created","submission.status_changed","evaluation.completed","task.completed","agenda.published","speaker.confirmed"];
+      function webhooksView() {
+        return shell(`<div class="page">${pageHead("Webhooks", "Marquee posts a signed payload to your endpoint when something happens here — no polling, no export cron.", `<a class="button" href="#api/docs">Read API docs</a><button class="button primary" id="add-webhook">Add endpoint</button>`)}${settingsTabs("webhooks")}
+          <section class="card table-card"><div class="card-head"><div><h2>Endpoints</h2><span class="subtle">Every delivery is signed <code>HMAC-SHA256</code> over <code>id.timestamp.body</code> · retried with backoff · replay-safe by delivery id</span></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Events</th><th>Status</th><th>Last delivery</th><th></th></tr></thead><tbody>${state.webhooks.map(w=>`<tr><td><strong style="font-size:11px">${esc(w.url)}</strong><div class="wave-date">Signing secret <code>${esc(w.secret)}</code></div></td><td>${w.events.map(e=>`<span class="chip">${esc(e)}</span>`).join(" ")}</td><td><span class="chip ${w.enabled?"published":""}">${w.enabled?"Enabled":"Disabled"}</span></td><td class="tabular">${esc(w.lastDelivery)}</td><td><button class="button small" data-test-webhook="${w.id}">Send test</button></td></tr>`).join("")||`<tr><td colspan="5" style="height:170px;text-align:center"><strong>No endpoints yet</strong><div class="subtle">Add one to receive ${WEBHOOK_EVENTS.length} event types as they happen.</div></td></tr>`}</tbody></table></div>
+          </section>
+          <section class="card table-card"><div class="card-head"><div><h2>Recent deliveries</h2><span class="subtle">A failed delivery is visible here before the integration owner notices</span></div></div>
+            <div class="table-wrap" style="min-height:220px"><table><thead><tr><th>Delivery</th><th>Event</th><th>Endpoint</th><th>Response</th><th>Attempts</th><th>When</th></tr></thead><tbody>${state.webhookDeliveries.map(d=>`<tr><td><code>${esc(d.id)}</code></td><td>${esc(d.event)}</td><td class="subtle">${esc(d.url)}</td><td><span class="chip ${d.code>=200&&d.code<300?"published":"overdue"}">${d.code} ${d.code>=200&&d.code<300?"OK":"Failed"}</span></td><td class="tabular">${d.attempts}</td><td class="subtle">${esc(d.time)}</td></tr>`).join("")}</tbody></table></div>
+          </section>
+        </div>`);
       }
 
       function apiDocsView() {
@@ -2687,12 +2751,66 @@
         document.getElementById("confirm-reject").onclick=()=>{chosen.forEach(s=>{s.status="Rejected";s.accepted=false;s.boardStage="Waved";s.timeInStageHours=1;});state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:"filtered recipients",template:"Rejection",subject:`${chosen.length} rendered rejection messages`,outcome:"Queued",time:"Just now"});state.selected.clear();state.selectAllMatching=false;modalRoot.innerHTML="";toast(`${chosen.length} rejections queued with rendered per-recipient messages`);render();};
       }
 
+      function stampRecord(id, title, detail) {
+        (state.recordEvents[id] = state.recordEvents[id] || []).unshift({ title, detail, time:"Just now", actor:"Maya Chen" });
+      }
+
+      // One idempotent operation, called by every path that makes a submission
+      // accepted — first acceptance, re-acceptance after a reversal, acceptance
+      // after the template set changed. For each template: restore the row if it
+      // exists, create it if it does not. `done` and its completed work are never
+      // in the write set, so finished homework survives by construction rather
+      // than by anybody remembering to preserve it.
+      function reconcileTaskSet(submission) {
+        let restored = 0;
+        if (submission.id === state.portalRecordId) {
+          state.tasks.forEach(t => { if (t.cancelledAt) { delete t.cancelledAt; restored++; } });
+          if (restored) state.taskCancellation = null;
+        }
+        const person = onboardingSpeakers.find(p => p.name === submission.speaker);
+        if (person) person.statuses = person.statuses.map(s => s === "cancelled" ? "upcoming" : s);
+        return restored;
+      }
+
+      // The reversal's other half. Cancelling stamps a time on every open task
+      // and leaves completed ones alone; it never deletes, because "retained for
+      // records" is what a tombstone already gives you.
+      function cancelTaskSet(submission, reason) {
+        let cancelled = 0;
+        if (submission.id === state.portalRecordId) {
+          state.tasks.forEach(t => { if (!t.done && !t.cancelledAt) { t.cancelledAt = "just now"; t.overdue = false; cancelled++; } });
+          if (cancelled) state.taskCancellation = { reason, time:"Just now" };
+        }
+        // A speaker with another accepted Session still owes that Session's work,
+        // so their chase row is only cleared when this was their last one.
+        const person = onboardingSpeakers.find(p => p.name === submission.speaker);
+        if (person && !person.sessions.some(x => x.id !== submission.id && x.accepted)) {
+          person.statuses = person.statuses.map(s => s === "done" ? s : "cancelled");
+        }
+        return cancelled;
+      }
+
       function showUnacceptModal() {
         const s=state.submissions.find(item=>item.id===state.submissionRecordId); if(!s)return;
         const scheduled=state.scheduled.some(item=>item.id===s.id);
-        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow" style="color:var(--danger)">Acceptance reversal</div><h2>Withdraw ${esc(s.title)}?</h2><p>The agenda and public conference site always update. Choose what happens to each dependent workflow before confirming.</p></div><div class="modal-body"><div class="toggle-line"><span><strong>Agenda placement + public surfaces</strong><small class="subtle" style="display:block">${scheduled?"Remove the scheduled Session and expose the vacated slot.":"Not currently scheduled."}</small></span><span class="chip overdue">Remove</span></div><div class="toggle-line"><span><strong>Portal tasks</strong><small class="subtle" style="display:block">5 assigned tasks · 2 complete</small></span><select id="cascade-tasks"><option value="cancel">Cancel open tasks</option><option value="retain">Retain for records</option></select></div><div class="toggle-line"><span><strong>Scheduled emails</strong><small class="subtle" style="display:block">2 reminders queued · none delivered</small></span><select id="cascade-emails"><option value="cancel">Cancel queued emails</option><option value="retain">Retain queued emails</option></select></div><div class="toggle-line"><span><strong>Calendar invites</strong><small class="subtle" style="display:block">1 invite already sent</small></span><select id="cascade-calendar"><option value="cancel">Send cancellation</option><option value="retain">Retain invite</option></select></div><div class="field"><label>New outcome</label><select id="cascade-status"><option>Withdrawn</option><option>Rejected</option></select></div></div><div class="modal-actions"><button class="button" id="cancel-modal">Keep accepted</button><button class="button danger" id="confirm-unaccept">Reverse acceptance</button></div></section></div>`;
+        const isPortal=s.id===state.portalRecordId;
+        const openTasks=isPortal?liveTasks().filter(t=>!t.done).length:3, doneTasks=isPortal?liveTasks().filter(t=>t.done).length:2;
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow" style="color:var(--danger)">Acceptance reversal</div><h2>Withdraw ${esc(s.title)}?</h2><p>The agenda and public conference site always update. Choose what happens to each dependent workflow before confirming.</p></div><div class="modal-body"><div class="toggle-line"><span><strong>Agenda placement + public surfaces</strong><small class="subtle" style="display:block">${scheduled?"Remove the scheduled Session and expose the vacated slot.":"Not currently scheduled."}</small></span><span class="chip overdue">Remove</span></div><div class="toggle-line"><span><strong>Portal tasks</strong><small class="subtle" style="display:block" id="cascade-tasks-note">${openTasks} open · ${doneTasks} complete · completed work is kept either way</small></span><select id="cascade-tasks"><option value="cancel">Cancel open tasks</option><option value="retain">Keep tasks active</option></select></div><div class="toggle-line"><span><strong>Scheduled emails</strong><small class="subtle" style="display:block">2 reminders queued · none delivered</small></span><select id="cascade-emails"><option value="cancel">Cancel queued emails</option><option value="retain">Retain queued emails</option></select></div><div class="toggle-line"><span><strong>Calendar invites</strong><small class="subtle" style="display:block">1 invite already sent</small></span><select id="cascade-calendar"><option value="cancel">Send cancellation</option><option value="retain">Retain invite</option></select></div><div class="field"><label>New outcome</label><select id="cascade-status"><option>Withdrawn</option><option>Rejected</option></select></div></div><div class="modal-actions"><button class="button" id="cancel-modal">Keep accepted</button><button class="button danger" id="confirm-unaccept">Reverse acceptance</button></div></section></div>`;
         document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
-        document.getElementById("confirm-unaccept").onclick=()=>{const result={tasks:document.getElementById("cascade-tasks").value,emails:document.getElementById("cascade-emails").value,calendar:document.getElementById("cascade-calendar").value};s.status=document.getElementById("cascade-status").value;s.accepted=false;s.boardStage="Waved";s.timeInStageHours=1;state.scheduled=state.scheduled.filter(item=>item.id!==s.id);if(result.calendar==="cancel")state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:`${s.speaker.toLowerCase().replace(/[^a-z]+/g,".")}@example.org`,template:"Calendar cancellation",subject:`Cancelled: ${s.title}`,outcome:"Queued",time:"Just now"});modalRoot.innerHTML="";toast(`Acceptance reversed · tasks ${result.tasks}ed · queued emails ${result.emails}ed · calendar ${result.calendar}led`);render();};
+        document.getElementById("confirm-unaccept").onclick=()=>{
+          const result={tasks:document.getElementById("cascade-tasks").value,emails:document.getElementById("cascade-emails").value,calendar:document.getElementById("cascade-calendar").value};
+          const outcome=document.getElementById("cascade-status").value;
+          s.status=outcome;s.accepted=false;s.boardStage="Waved";s.timeInStageHours=1;
+          state.scheduled=state.scheduled.filter(item=>item.id!==s.id);
+          let cancelled=0;
+          if(result.tasks==="cancel"){cancelled=cancelTaskSet(s,`“${s.title}” was ${outcome.toLowerCase()}, so its outstanding tasks were cancelled on ${state.event.name}.`);stampRecord(s.id,"Speaker tasks cancelled",`${cancelled||"All open"} open task${cancelled===1?"":"s"} cancelled · completed tasks kept · no further reminders will be sent`);}
+          else stampRecord(s.id,"Speaker tasks kept active",`Open tasks remain assigned and the speaker keeps receiving reminders`);
+          stampRecord(s.id,`Acceptance reversed · ${outcome}`,`Agenda placement removed · calendar ${result.calendar==="cancel"?"cancellation sent":"invite retained"} · queued emails ${result.emails==="cancel"?"cancelled":"retained"}`);
+          if(result.calendar==="cancel")state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:`${s.speaker.toLowerCase().replace(/[^a-z]+/g,".")}@example.org`,template:"Calendar cancellation",subject:`Cancelled: ${s.title}`,outcome:"Queued",time:"Just now"});
+          modalRoot.innerHTML="";
+          toast(result.tasks==="cancel"?`Acceptance reversed · ${cancelled?`${cancelled} open task${cancelled===1?"":"s"} cancelled`:"open tasks cancelled"} · no further reminders`:`Acceptance reversed · tasks kept active · the speaker is still being chased`);
+          render();
+        };
       }
 
       function showEmbedModal() {
@@ -2792,6 +2910,7 @@
         document.querySelectorAll("[data-attention-filter]").forEach(b=>b.onclick=()=>navigate("submissions",{submissionFilter:b.dataset.attentionFilter,submissionTrack:b.textContent.includes("Agents")?"Agents":"All",submissionPage:1}));
         document.querySelectorAll("[data-unreviewed-track]").forEach(b=>b.onclick=()=>navigate("submissions",{submissionFilter:"Unreviewed",submissionTrack:b.dataset.unreviewedTrack,submissionPage:1}));
         document.querySelector("[data-scroll-wave]")?.addEventListener("click",()=>document.getElementById("wave-planner")?.scrollIntoView({behavior:"smooth"}));
+        document.querySelector("[data-not-notified]")?.addEventListener("click",()=>notNotifiedCount()?navigate("submissions",{submissionFilter:"NotNotified",submissionTrack:"All",submissionPage:1,activeSavedView:"not-notified"}):toast("Every decision has reached its speaker"));
         document.getElementById("export-dashboard")?.addEventListener("click",()=>downloadText("aie-nyc-program-status.csv",`metric,value\nsubmissions,${state.submissions.length}\naccepted,${pipelineCounts().AcceptedTotal}\nscheduled,${pipelineCounts().Scheduled}\noverdue_tasks,${onboardingCounts().overdueTasks}\nconflicts,${getAgendaConflicts().length}\n`,`text/csv`));
         document.querySelectorAll("[data-pacing-axis]").forEach(b=>b.onclick=()=>{state.pacingAxis=b.dataset.pacingAxis;render();});
         const hover=document.getElementById("pacing-hover"), cross=document.getElementById("pacing-cross"), readout=document.getElementById("pacing-readout"), svg=document.getElementById("pacing-svg");
@@ -2998,6 +3117,19 @@
       function bindSubmissions() {
         const rerenderFilter=()=>{state.activeSavedView="";state.selected.clear();state.selectAllMatching=false;state.submissionPage=1;persistSubmissionPreferences();render();};
         document.querySelectorAll("[data-saved-view]").forEach(button=>button.onclick=()=>applySavedView(button.dataset.savedView));
+        // Notifying writes a fresh outbox row against the decision that already
+        // exists. The decision itself is never rewritten — the speaker is told
+        // what was decided, not told a new thing.
+        document.getElementById("notify-all")?.addEventListener("click",()=>{
+          const targets=state.submissions.filter(s=>s.notifyGap&&s.notifyGap!=="no-recipient");
+          targets.forEach(s=>{
+            state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:s.email,template:`Decision · ${s.accepted?"Approve":"Deny"}`,subject:`An update on ${s.title}`,outcome:"Queued",time:"Just now"});
+            stampRecord(s.id,"Decision notified",`Re-sent from Decided · not notified · the original decision row is unchanged`);
+            s.notifiedAt="Just now"; s.notifyGap=null;
+          });
+          toast(`${targets.length} speaker${targets.length===1?"":"s"} notified · ${notNotifiedCount()} still need an address`);
+          render();
+        });
         document.getElementById("save-current-view")?.addEventListener("click",openSaveViewModal);
         document.getElementById("manage-current-view")?.addEventListener("click",openManageViewModal);
         document.getElementById("configure-columns")?.addEventListener("click",openColumnChooser);
@@ -3082,6 +3214,25 @@
       function bindApiTokens() {
         document.getElementById("create-token")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Create API token</h2><p>The secret is shown once. Store it in the client that needs it.</p></div><div class="modal-body field"><label>Token name</label><input id="token-name" value="Conference agent"></div><div class="modal-actions"><button class="button" id="cancel-token">Cancel</button><button class="button primary" id="issue-token">Issue token</button></div></section></div>`;document.getElementById("cancel-token").onclick=()=>modalRoot.innerHTML="";document.getElementById("issue-token").onclick=()=>{const name=document.getElementById("token-name").value||"Untitled token",id=`tok_${Math.random().toString(36).slice(2,6)}`;state.apiTokens.push({id,name,prefix:`mq_live_${id.slice(-4)}…`,created:"Just now",lastUsed:"Never"});modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Copy this token now</h2><p>Marquee will not show the full secret again.</p></div><div class="modal-body"><div class="code-block" id="issued-token">mq_live_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}</div></div><div class="modal-actions"><button class="button primary" id="done-token">I stored it</button></div></section></div>`;document.getElementById("done-token").onclick=()=>{modalRoot.innerHTML="";render();};};});
         document.querySelectorAll("[data-revoke-token]").forEach(b=>b.onclick=()=>{state.apiTokens=state.apiTokens.filter(t=>t.id!==b.dataset.revokeToken);toast("API token revoked · requests using it now fail");render();});
+      }
+
+      function bindWebhooks() {
+        document.getElementById("add-webhook")?.addEventListener("click",()=>{
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Add webhook endpoint</h2><p>The signing secret is shown once. Verify every delivery against it before trusting the payload.</p></div><div class="modal-body stack"><div class="field"><label for="webhook-url">Endpoint URL</label><input id="webhook-url" value="https://" placeholder="https://example.com/hooks/marquee"><div class="field-error" id="webhook-url-error"></div></div><div class="field"><label>Events</label><div class="stack" style="gap:5px">${WEBHOOK_EVENTS.map((e,i)=>`<label class="toggle-line"><span>${esc(e)}</span><input type="checkbox" class="webhook-event" value="${esc(e)}" ${i<2?"checked":""}></label>`).join("")}</div></div></div><div class="modal-actions"><button class="button" id="cancel-webhook">Cancel</button><button class="button primary" id="save-webhook">Add endpoint</button></div></section></div>`;
+          document.getElementById("cancel-webhook").onclick=()=>modalRoot.innerHTML="";
+          document.getElementById("save-webhook").onclick=()=>{
+            const url=document.getElementById("webhook-url").value.trim(), events=[...document.querySelectorAll(".webhook-event:checked")].map(c=>c.value);
+            if(!/^https:\/\/.+\..+/.test(url)){document.getElementById("webhook-url-error").textContent="Enter a full https:// URL we can reach — deliveries are never sent over plain http.";return;}
+            if(!events.length){document.getElementById("webhook-url-error").textContent="Choose at least one event, or the endpoint would never receive anything.";return;}
+            state.webhooks.push({id:`wh_${Math.random().toString(36).slice(2,5)}`,url,secret:`whsec_${Math.random().toString(36).slice(2,6)}…`,events,enabled:true,lastDelivery:"Never"});
+            modalRoot.innerHTML="";toast(`Endpoint added · ${events.length} event type${events.length===1?"":"s"} will be delivered`);render();
+          };
+        });
+        document.querySelectorAll("[data-test-webhook]").forEach(b=>b.onclick=()=>{
+          const w=state.webhooks.find(x=>x.id===b.dataset.testWebhook); if(!w)return;
+          state.webhookDeliveries.unshift({id:`dlv_${Math.random().toString(36).slice(2,6)}`,event:"ping.test",url:w.url.replace(/^https:\/\//,"").split("/")[0],code:200,attempts:1,time:"Just now"});
+          w.lastDelivery="Just now";toast(`Test delivery sent to ${w.url} · signed and logged below`);render();
+        });
       }
 
       function bindApiDocs() { document.getElementById("download-openapi")?.addEventListener("click",()=>downloadText("marquee-openapi.json",JSON.stringify({openapi:"3.1.0",info:{title:"Marquee API",version:"1.0.0"},paths:{"/v1/events/{id}/submissions":{get:{summary:"List submissions"},post:{summary:"Create submission"}},"/v1/submissions/{id}":{patch:{summary:"Update submission"}}}},null,2),"application/json")); }
@@ -3237,7 +3388,7 @@
 
       function render() {
         state.route = currentRoute();
-        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
+        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,webhooks:webhooksView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
         // During the fresh-install walk the dashboard is the setup checklist, and
         // screens with genuinely no data render their empty state; everything else
         // renders for real against the new event.
@@ -3249,7 +3400,7 @@
         bindCommon();
         bindRoomHeads();
         bindMdToolbars();
-        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
+        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,webhooks:bindWebhooks,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
         // The setup dashboard has no binder of its own — bindCommon carries its links.
         if(!showEmpty && binder && !(state.setup.active && state.route === "dashboard")) binder();
         window.scrollTo(0,0);

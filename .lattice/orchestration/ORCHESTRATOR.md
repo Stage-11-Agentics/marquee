@@ -5,10 +5,11 @@ The standing rules for dispatching this run. The tick prompt points here so it s
 ## Every tick
 
 1. **Read state:** `lattice list`, open PRs, `c11 tree --all`. Note what moved since last tick.
-2. **Merge what's ready** (protocol below).
-3. **Refill to N** — merges free slots faster than you expect; check the count, don't assume.
-4. **Verify master isn't ahead of the remote**, then push. `git pull --rebase --autostash forgejo master` always.
-5. Reschedule ~300s while building.
+2. **Sweep every delegator surface for a capacity stall** — `read-screen` each one and look for "Selected model is at capacity" or a surface sitting idle with no "Working". A stalled agent looks exactly like a busy one on the board, so this is a read, never an assumption. Give it a bump: clear any stray keystroke from the input (`ctrl+u`, then `backspace`), then re-prompt it to continue. **If luna max keeps failing, switching a couple of agents to `terra` at `high` effort is authorized** (operator, 2026-08-11) — a running agent at `high` beats a stalled one at `max`. Prefer `terra`/`sol` at max first; drop to `high` only when capacity forces it.
+3. **Merge what's ready** (protocol below).
+4. **Refill to N** — merges free slots faster than you expect; check the count, don't assume.
+5. **Verify master isn't ahead of the remote**, then push. `git pull --rebase --autostash forgejo master` always.
+6. Reschedule ~300s while building.
 
 ## Merge protocol — in order, no shortcuts
 

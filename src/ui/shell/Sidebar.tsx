@@ -8,7 +8,7 @@ function Nav({ label, routes, activeId, navigate }: { label: string; routes: rea
 export function Sidebar({ activeId, eventName, navigate, unavailable }: { activeId?: string; eventName: string; navigate: (target: string) => void; unavailable: (title: string, copy: string) => void }): JSX.Element {
   return <aside class="sidebar">
     <a class="brand" href="/dashboard" onClick={(event) => { event.preventDefault(); navigate("/dashboard"); }}><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
-    <button class="event-switcher" onClick={() => unavailable("Event switcher", "Multiple-event switching arrives with event administration.")}><small>Event</small><strong>{eventName}</strong></button>
+    <button class="event-switcher" onClick={() => unavailable("Conference switcher", "Switching between conferences arrives with conference administration.")}><small>Conference</small><strong>{eventName}</strong></button>
     <Nav label="Program home" routes={routesFor("home")} activeId={activeId} navigate={navigate} />
     <div class="nav-label">Pipeline</div>
     <Nav label="Program lifecycle" routes={routesFor("pipeline")} activeId={activeId} navigate={navigate} />

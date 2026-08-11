@@ -4,6 +4,14 @@ Every lifecycle in the product, and — where it matters — whether a state is
 **stored** or **derived**. Getting that distinction wrong is how a program tool
 starts lying to its operator, so it is called out at each machine.
 
+**The rule this file is read against: every machine draws its reversal edge, or
+says in writing that it has none.** A state map that only draws the paths that
+succeed is a diagram of the demo, not of the product — and it hides exactly the
+states that get discovered late, at the cost of a migration. Two were found that
+way (`sequence/research/state-model-gaps.md`): task cancellation, which §6 had no
+end-state for, and notification, which had no machine at all. Both were promised
+by an acceptance criterion before anything here drew them.
+
 Vocabulary is the organizer's, per `PHILOSOPHY.md` 6: Abstract, Session,
 Speaker, Evaluation plan, Round, Scorecard, Committee, Portal, Task, Agenda.
 
@@ -163,15 +171,42 @@ The moat. An acceptance assigns a task set; the system does the chasing.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Assigned: acceptance cascade assigns the task set
+  [*] --> Assigned: acceptance reconciles the task set
   Assigned --> InProgress: speaker opens the portal
   InProgress --> Complete: acknowledge · form · file upload
   InProgress --> Overdue: due date passes
   Assigned --> Overdue: never started
   Overdue --> Complete: after a nudge
   Complete --> [*]
+
+  Assigned --> Cancelled: un-accept cascade,<br/>cancel branch
+  InProgress --> Cancelled
+  Overdue --> Cancelled
+  Cancelled --> Assigned: re-acceptance restores
+  Complete --> Complete: cancellation never<br/>touches completed work
+
   state "In progress" as InProgress
+  state "Cancelled — stopped mattering" as Cancelled
 ```
+
+**Cancelled is the third outcome, and it is stored as `speaker_tasks.cancelled_at`
+— a nullable timestamp, not a `status` value** (AC-264). Null means the task still
+matters; set means it stopped mattering, and when. The predicate every reader
+shares is `owes = neither done nor cancelled`: a read site that has not been
+converted is loudly wrong in review rather than quietly wrong in production, which
+a third enum value would have inverted.
+
+Three things follow, and all three are the point of the state existing: a
+cancelled task leaves the portal's active list and its progress count, leaves
+every chase-board count and the severity ordering, and is **invisible to the
+`task overdue` trigger** — so nobody is mailed about homework for a talk that no
+longer exists. `completed_at` is never written or cleared by a cancellation.
+
+Re-acceptance does not have its own path. Acceptance runs **one idempotent
+reconciliation** — restore the row if it exists, create it if it does not — so
+first acceptance, re-acceptance after a reversal, and acceptance after the
+template set changed are the same operation, and running it twice changes
+nothing (AC-266).
 
 Three task kinds, each with its own completion payload:
 
@@ -207,6 +242,74 @@ flowchart TD
 
 An inbound mirror write sets the status and stops. Cascading on inbound would
 let a spreadsheet edit mass-mail hundreds of speakers.
+
+### 7b. The un-accept cascade — the same machine, run backwards
+
+Reversal is the edge no competitor ships, and until Amendment 15 it was the edge
+this file did not draw. Each dependent workflow is enumerated in the dialog
+*before* confirmation, and each is decided explicitly rather than by default.
+
+```mermaid
+flowchart TD
+  Rev["Accepted → withdrawn<br/>or rejected"] --> Dialog["Reversal dialog<br/>enumerates every dependent"]
+  Dialog --> Agenda["Agenda + public surfaces<br/>always removed · slot vacated"]
+  Dialog --> T{"Portal tasks"}
+  Dialog --> E{"Queued emails"}
+  Dialog --> C{"Calendar invites"}
+
+  T -->|Cancel open tasks| Tc["cancelled_at stamped<br/>silent · off the chase board"]
+  T -->|Keep tasks active| Tk["still open · still chased"]
+  E -->|Cancel| Ec["queued sends dropped"]
+  E -->|Retain| Ek["queued sends stand"]
+  C -->|Cancel| Cc["METHOD:CANCEL · SEQUENCE+1"]
+  C -->|Retain| Ck["invite stands"]
+
+  Tc --> Hist["Both branches stamped in<br/>record history, attributed"]
+  Tk --> Hist
+```
+
+The two task branches must produce **observably different** states (AC-267).
+Cancelling is not "deleting for tidiness" — the tombstone is what retains the
+record, which is why the branch that once read *"Retain for records"* now reads
+**"Keep tasks active"** and means the speaker is genuinely still being chased.
+
+---
+
+## 7c. Notification — decided is not told
+
+The product's advantage here is that a status change **is** the notification
+(`PHILOSOPHY.md` 2). The honest corollary is that the automatic send has exactly
+three ways not to arrive, all three designed in on purpose — which is precisely
+why they need a screen rather than a comment.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Decided: decision row written
+  Decided --> Queued: cascade enqueues the message
+  Queued --> Sent: consumer delivers
+  Sent --> [*]
+
+  Decided --> NoCascade: status arrived from Airtable<br/>(AC-226 — cascade deliberately skipped)
+  Decided --> NoAddress: no usable speaker email
+  Queued --> Suppressed: demo-safe allowlist
+  Queued --> Failed: provider error
+
+  NoCascade --> Queued: notify from the built-in view
+  Suppressed --> Queued: notify
+  Failed --> Queued: notify
+  NoAddress --> NoAddress: needs an address first
+
+  state "Decided · not notified" as NoCascade
+  state "Decided · not notified" as Suppressed
+  state "Decided · not notified" as Failed
+  state "Decided · no address" as NoAddress
+```
+
+The four unnotified states are **derived, never stored** — `submission_decisions`
+left-joined to `outbox`. Notifying writes a *new* outbox row against the
+*existing* decision row: the speaker is told what was decided, never told a new
+thing (AC-269). `NoAddress` is the one state no button can clear, so it is
+excluded from the notify count rather than silently failing inside it.
 
 ---
 

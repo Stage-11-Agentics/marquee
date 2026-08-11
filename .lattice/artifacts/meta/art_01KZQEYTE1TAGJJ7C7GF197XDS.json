@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T03:48:15Z",
+  "created_by": "agent:delegator-mrq-19",
+  "custom_fields": {},
+  "id": "art_01KZQEYTE1TAGJJ7C7GF197XDS",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQEYTE1TAGJJ7C7GF197XDS.md",
+    "size_bytes": 1235
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS self-review against forgejo/master",
+  "tags": [],
+  "title": "MRQ-19 delegator self-review 6cd1824",
+  "token_usage": null,
+  "type": "note"
+}

@@ -968,3 +968,31 @@ Source: client approval of the v1.3 context-gap audit against `/Users/atin/Downl
 - **AC-263**: With fewer than two pinned buildings, the "· Building" room-label suffix, walking times, Transit conflicts, and the agenda building band are all absent, and the embedded site map renders collapsed. Address, entrance note, and minutes-to-get-in remain present at any building count, including one.
 
 ---
+
+## Amendment 15 — the states a forward-only model forgot (2026-08-10, client-directed)
+
+*Two stories minted: **US-80**, **US-81**. Six criteria minted: **AC-264 – AC-269**. Source: `sequence/research/state-model-gaps.md`, verified against the shipped schema and the v1.7 prototype. Binding prototype v1.8.*
+
+*Why these two exist together: both are the same defect seen twice — the model drew every edge that moves a record forward, and none of the edges that undo, stop, or fail to arrive. AC-123 already required the first; nothing required the second.*
+
+### US-80 · Stop the homework when the talk stops existing *(new, Tier A — insert after US-33)*
+
+**As a** program lead who has reversed an acceptance, **I want** the speaker's outstanding homework to stop existing, **so that** neither of us is chased for work on a talk that is not happening.
+- **AC-264**: Reversing an acceptance and choosing to cancel stamps a cancellation time on every **open** task for that submission. Tasks already complete are untouched — their completion time is never written, cleared, or overwritten by a cancellation, and they still read as done. Nothing is deleted: a cancelled task is a tombstone, which is what "retained for records" already means.
+- **AC-265**: A cancelled task is out of the speaker's **active** task list and out of its progress count, shown instead beneath a stated reason given **once at the submission level** rather than repeated per row; out of the chase board's severity ordering, per-task-type counts, and overdue totals, so a speaker whose only outstanding tasks are cancelled leaves the board; and invisible to every automated trigger and filtered-recipient selector — in particular **no `task overdue` mail is ever sent for a cancelled task**. A speaker who still holds another accepted session keeps their chase row for that session's work.
+- **AC-266**: Acceptance runs **one idempotent task-set reconciliation** — for each template in the assigned set, restore the existing row if there is one, create it if there is not — so first acceptance, re-acceptance after a reversal, and acceptance after the template set changed all take the same path and running it twice changes nothing. Restoration clears the cancellation and preserves the original due date; completed tasks are never re-opened and their completed work is never in the write set.
+- **AC-267**: The reversal dialog's two branches produce observably different states — cancelled-and-silent versus open-and-still-chased — and both, plus any later restoration, appear in the record's history timestamped and attributed. The dialog names which branch it is about to take before it is confirmed.
+
+### US-81 · Find the decision the speaker never heard *(new, Tier A — insert after US-80)*
+
+**As a** program lead, **I want** to see which decisions have not reached their speaker, **so that** I find out before the speaker does.
+- **AC-268**: An immutable built-in view, **Decided · not notified**, lists every submission carrying a decision whose notification has not been sent, and names which of exactly three reasons applies: **changed in Airtable** (the mirror deliberately does not run the acceptance cascade, AC-226), **not delivered** (the message is in the outbox `queued`, `suppressed`, or `failed`, with its reason), or **no valid address** (nothing could be queued). The count also appears on the pipeline dashboard's attention strip; when it is zero the row states that every decision has reached its speaker rather than disappearing.
+- **AC-269**: Notifying from that view is one action. It writes a **new** outbox row against the **existing** decision row and never rewrites the decision, so the speaker is told what was decided rather than told a new thing. Records with no valid address are excluded from the action and the count on the button says so. A record that is decided and notified cannot appear in the view.
+
+---
+
+### Drafted, not minted — the submitter/speaker split
+
+*`US-82` and `AC-270 – AC-272` are drafted in `sequence/research/state-model-gaps.md` Part 2 and are **deliberately unminted** (ruled 2026-08-10): the build is extra credit, and minting would add criteria to every count the auditor reconciles for work that is not scheduled. **AC-223 and AC-224 already specify the correct behaviour** and sit in the post-competition band; the limitation is named in `EVALUATION.md` gate 19 and `SPEC.md` §10 so it is a documented deferral rather than a live discovery. Mint from **AC-270** if the if-capacity band opens.*
+
+---

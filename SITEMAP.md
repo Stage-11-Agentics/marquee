@@ -132,10 +132,13 @@ flowchart LR
   Set --> Buildings["Buildings<br/>name · address"]
   Set --> Rooms["Rooms<br/>capacity · building · AV · notes"]
 
+  Set --> Venues["#settings/venues<br/>Venues — buildings, pins, site map"]
   Set --> Tasks["#settings/tasks<br/>Task templates"]
-  Set --> Air["#settings/airtable<br/>Airtable mirror"]
+  Set --> Air["#settings/airtable<br/>Airtable mirror (inbound)"]
   Set --> Tokens["#settings/api<br/>API tokens"]
+  Set --> Hooks["#settings/webhooks<br/>Outbound webhooks"]
   Tokens --> Docs["#api/docs<br/>API documentation"]
+  Hooks --> Docs
 ```
 
 ---
@@ -236,9 +239,11 @@ flowchart TD
 | `#agenda` | Agenda builder | Organizer |
 | `#comms` | Communications | Organizer |
 | `#settings` | Conference settings | Organizer |
+| `#settings/venues` | Venues — buildings, coordinates, site map | Organizer |
 | `#settings/tasks` | Task templates | Organizer |
-| `#settings/airtable` | Airtable mirror | Organizer |
+| `#settings/airtable` | Airtable mirror (inbound) | Organizer |
 | `#settings/api` | API tokens | Organizer |
+| `#settings/webhooks` | Outbound webhooks — endpoints, test delivery, deliveries log | Organizer |
 | `#api/docs` | API documentation | Organizer |
 | `#import` | Sessionize importer | Organizer |
 | `#portal` | Speaker portal | Speaker |

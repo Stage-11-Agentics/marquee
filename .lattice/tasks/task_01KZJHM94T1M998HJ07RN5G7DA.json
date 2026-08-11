@@ -3,17 +3,38 @@
   "branch_links": [],
   "c11_surface": "surface:148",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-18 \u2014 Wave 1 (\u00a74), walkthrough step 9\n\nScope (verbatim): Select-all-matching as server selector; bulk accept/reject/waitlist/withdraw, **each transition into `accepted|waitlisted|rejected` writing a `submission_decisions` row (feedback null) so bulk and record decisions share one render path**; per-record results; record-owned Approve/Maybe/Deny confirmation **invoking M-52's decision write** (M-52 owns AC-235/236 end to end \u2014 schema use, render-once, portal display, record log \u2014 and M-18 calls it); cascade (status \u2192 portal \u2192 rendered mail \u2192 tasks), CFP stays open.\n\nEvery bulk path goes through M-07's single chunking helper (S-3's verdict); guardrail G11 and audit A-10 drive 150 and 1,000 records against it (trap 11 \u2014 D1's 100-bound-parameter cap).\n\nFile surface: `src/routes/submissions-bulk.routes.ts`, `src/routes/submission-decisions.routes.ts`, `src/jobs/cascade/*`\n\nACs: AC-66 \u2013 AC-69, AC-114 \u2013 AC-117, **AC-243**\nHours: 6\nWorkflow: inline-full\nShared files: none \u2014 module-local. **Do not fork a second decision-write path**; call M-52's.\nDeps: M-11, S-3\nSpeed: AC-69 is AC-sourced for completion; the \u2264100 ms longest-main-thread-task figure is the *proposed instrument* \u2014 measured and reported, not a gate.\nAudit that keys off this ticket: A-10 (bulk-write audit), after M-18\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-11T03:55:23Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZQEYTE1TAGJJ7C7GF197XDS",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQF3GZE194V8CCKKAQS4N63",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZQFBWCGJ447B9BQGD837GB3",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQFBWCGJ447B9BQGD837GB2",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHM94T1M998HJ07RN5G7DA",
-  "last_event_id": "ev_01KZQD4X1A2G6QHSCZF30E0YGY",
-  "last_status_changed_at": "2026-08-11T03:16:37Z",
+  "last_event_id": "ev_01KZQFBWCGJ447B9BQGD837GB6",
+  "last_status_changed_at": "2026-08-11T03:55:23Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -32,13 +53,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-19",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Bulk and record-owned decisions with cascade",
   "type": "task",
-  "updated_at": "2026-08-11T03:16:37Z",
+  "updated_at": "2026-08-11T03:55:23Z",
   "urgency": null
 }
