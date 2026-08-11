@@ -2,13 +2,8 @@ import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse, type ApiRouteEntry } from "../api/route";
-import type { Principal } from "../api/runtime";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
-import {
-  authorizeReviewerScope,
-  reviewerPersonIdForEvent,
-} from "../lib/reviewer-scope";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const planParams = eventParams.extend({ planId: z.string().min(1) });
@@ -16,11 +11,9 @@ const roundParams = eventParams.extend({ roundId: z.string().min(1) });
 const criterionParams = roundParams.extend({ criterionId: z.string().min(1) });
 const committeeParams = eventParams.extend({ committeeId: z.string().min(1) });
 const reviewerScopeParams = committeeParams.extend({ personId: z.string().min(1) });
-const reviewerSubmissionParams = roundParams.extend({ submissionId: z.string().min(1) });
 
 const roundMode = z.enum(["scorecard", "comparison"]);
 const assignmentMode = z.enum(["everyone", "n_per_submission"]);
-const recommendation = z.enum(["approve", "maybe", "deny"]);
 
 const criterionInput = z.object({
   id: z.string().min(1).optional(),
@@ -64,12 +57,6 @@ const assignmentsInput = z.object({
 const promoteInput = z.object({
   preview: z.boolean().default(true),
   submission_ids: z.array(z.string().min(1)).default([]),
-});
-const evaluationInput = z.object({
-  comment: z.string().max(20_000).default(""),
-  criteria_scores: z.record(z.string(), z.number().min(0)).nullable().optional(),
-  recommendation,
-  score: z.number().nullable().optional(),
 });
 
 const listQuery = z.object({
@@ -288,54 +275,6 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
       wide_spread: Number(summary?.wide_spread ?? 0),
     },
   };
-}
-
-async function assignedSubmissionIds(
-  db: D1Database,
-  eventId: string,
-  roundId: string,
-  personId: string,
-): Promise<string[]> {
-  const result = await db.prepare(`
-    SELECT DISTINCT assignment.submission_id
-    FROM round_assignments assignment
-    JOIN submissions submission ON submission.id = assignment.submission_id
-    LEFT JOIN committee_members member
-      ON member.committee_id = assignment.committee_id AND member.person_id = ?
-    WHERE assignment.round_id = ?
-      AND submission.event_id = ?
-      AND assignment.status IN ('assigned', 'complete')
-      AND (assignment.reviewer_person_id = ? OR member.person_id IS NOT NULL)
-    ORDER BY submission.updated_at DESC, submission.id
-  `).bind(personId, roundId, eventId, personId).all<{ submission_id: string }>();
-  return result.results.map((row) => row.submission_id);
-}
-
-async function reviewerQueue(
-  db: D1Database,
-  principal: Principal,
-  eventId: string,
-  roundId: string,
-): Promise<string[]> {
-  const personId = reviewerPersonIdForEvent(principal, eventId);
-  if (personId === null) {
-    await authorizeReviewerScope({ db, principal, eventId, roundId, submissionId: "unknown", operation: "queue" });
-    return [];
-  }
-  const candidates = await assignedSubmissionIds(db, eventId, roundId, personId);
-  const allowed: string[] = [];
-  for (const submissionId of candidates) {
-    try {
-      await authorizeReviewerScope({ db, principal, eventId, roundId, submissionId, operation: "queue" });
-      allowed.push(submissionId);
-    } catch (error) {
-      // Queue membership is the intersection. A direct assignment without a
-      // carried track is filtered out; it must not poison the rest of the queue.
-      if (error instanceof ApiError && error.status === 403) continue;
-      throw error;
-    }
-  }
-  return allowed;
 }
 
 const listPlans = defineApiRoute(
@@ -712,153 +651,6 @@ const promoteRound = defineApiRoute(
   },
 );
 
-const reviewerQueueRoute = defineApiRoute(
-  {
-    method: "get",
-    path: "/api/v1/events/{eventId}/rounds/{roundId}/queue",
-    operationId: "getReviewerQueue",
-    summary: "Read the authenticated reviewer’s authorized queue",
-    tags: ["Reviewer"],
-    request: { params: roundParams },
-    policy: { auth: { kind: "grants", grants: ["review:write"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
-    responses: { 200: ok, ...errors },
-  },
-  async (context) => {
-    const { eventId, roundId } = context.req.valid("param");
-    await roundForEvent(context.env.DB, eventId, roundId);
-    const principal = context.get("principal");
-    const ids = await reviewerQueue(context.env.DB, principal, eventId, roundId);
-    const data = [];
-    for (const submissionId of ids) {
-      await authorizeReviewerScope({ db: context.env.DB, principal, eventId, roundId, submissionId, operation: "queue" });
-      const row = await context.env.DB.prepare(`
-        SELECT submission.id, submission.title, submission.abstract,
-          COALESCE((SELECT json_group_array(json_object('id', track.id, 'name', track.name, 'color', track.color)) FROM submission_tracks carried JOIN tracks track ON track.id = carried.track_id WHERE carried.submission_id = submission.id), '[]') AS tracks
-        FROM submissions submission
-        WHERE submission.id = ? AND submission.event_id = ?
-      `).bind(submissionId, eventId).first<{ id: string; title: string; abstract: string | null; tracks: string }>();
-      if (row) data.push({ ...row, tracks: JSON.parse(row.tracks) as unknown[] });
-    }
-    return context.json({ data, remaining: data.length, total: data.length }, 200);
-  },
-);
-
-const reviewerRecordRoute = defineApiRoute(
-  {
-    method: "get",
-    path: "/api/v1/events/{eventId}/rounds/{roundId}/submissions/{submissionId}",
-    operationId: "getReviewerSubmission",
-    summary: "Read an evaluator-visible submission without identity fields",
-    tags: ["Reviewer"],
-    request: { params: reviewerSubmissionParams },
-    policy: { auth: { kind: "grants", grants: ["review:write"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
-    responses: { 200: ok, ...errors },
-  },
-  async (context) => {
-    const { eventId, roundId, submissionId } = context.req.valid("param");
-    const principal = context.get("principal");
-    await authorizeReviewerScope({ db: context.env.DB, principal, eventId, roundId, submissionId, operation: "record" });
-    const row = await context.env.DB.prepare(`
-      SELECT submission.id, submission.kind, submission.title, submission.abstract,
-        COALESCE((SELECT json_group_array(json_object('id', track.id, 'name', track.name, 'color', track.color)) FROM submission_tracks carried JOIN tracks track ON track.id = carried.track_id WHERE carried.submission_id = submission.id), '[]') AS tracks,
-        COALESCE((SELECT json_group_array(json_object('field_id', answer.field_id, 'value_text', answer.value_text, 'value_json', answer.value_json)) FROM submission_answers answer WHERE answer.submission_id = submission.id), '[]') AS answers
-      FROM submissions submission
-      WHERE submission.id = ? AND submission.event_id = ?
-    `).bind(submissionId, eventId).first<{ id: string; kind: string; title: string; abstract: string | null; tracks: string; answers: string }>();
-    if (!row) throw ApiError.forbidden("reviewer resource is outside your authorized tracks");
-    return context.json({ ...row, tracks: JSON.parse(row.tracks) as unknown[], answers: JSON.parse(row.answers) as unknown[] }, 200);
-  },
-);
-
-const reviewerFilesRoute = defineApiRoute(
-  {
-    method: "get",
-    path: "/api/v1/events/{eventId}/rounds/{roundId}/submissions/{submissionId}/files",
-    operationId: "getReviewerSubmissionFiles",
-    summary: "Read authorized reviewer file metadata",
-    tags: ["Reviewer"],
-    request: { params: reviewerSubmissionParams },
-    policy: { auth: { kind: "grants", grants: ["review:write"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
-    responses: { 200: ok, ...errors },
-  },
-  async (context) => {
-    const { eventId, roundId, submissionId } = context.req.valid("param");
-    const principal = context.get("principal");
-    await authorizeReviewerScope({ db: context.env.DB, principal, eventId, roundId, submissionId, operation: "file" });
-    const files = await context.env.DB.prepare(`
-      SELECT id, filename, content_type, size_bytes, status, created_at
-      FROM attachments
-      WHERE event_id = ? AND owner_type = 'submission_file' AND owner_id = ?
-      ORDER BY created_at, id
-    `).bind(eventId, submissionId).all<Record<string, string | number>>();
-    return context.json({ data: files.results }, 200);
-  },
-);
-
-const reviewerExportRoute = defineApiRoute(
-  {
-    method: "get",
-    path: "/api/v1/events/{eventId}/rounds/{roundId}/export",
-    operationId: "exportReviewerQueue",
-    summary: "Export the authorized reviewer queue",
-    tags: ["Reviewer"],
-    request: { params: roundParams },
-    policy: { auth: { kind: "grants", grants: ["review:write"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
-    responses: { 200: { content: { "text/csv": { schema: z.string() } }, description: "Authorized reviewer CSV" }, ...errors },
-  },
-  async (context) => {
-    const { eventId, roundId } = context.req.valid("param");
-    const principal = context.get("principal");
-    const ids = await reviewerQueue(context.env.DB, principal, eventId, roundId);
-    const lines = ["submission_id,title,abstract"];
-    for (const submissionId of ids) {
-      await authorizeReviewerScope({ db: context.env.DB, principal, eventId, roundId, submissionId, operation: "export" });
-      const row = await context.env.DB.prepare("SELECT id, title, abstract FROM submissions WHERE id = ? AND event_id = ?").bind(submissionId, eventId).first<{ id: string; title: string; abstract: string | null }>();
-      if (row) lines.push([row.id, row.title, row.abstract ?? ""].map(csv).join(","));
-    }
-    return new Response(`${lines.join("\n")}\n`, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": "attachment; filename=review-queue.csv" } });
-  },
-);
-
-function csv(value: string): string {
-  return `"${value.replaceAll('"', '""').replaceAll("\n", " ")}"`;
-}
-
-const writeEvaluationRoute = defineApiRoute(
-  {
-    method: "post",
-    path: "/api/v1/events/{eventId}/rounds/{roundId}/submissions/{submissionId}/evaluations",
-    operationId: "writeReviewerEvaluation",
-    summary: "Save an authorized reviewer recommendation",
-    tags: ["Reviewer"],
-    request: { params: roundParams.extend({ submissionId: z.string().min(1) }), body: { content: { "application/json": { schema: evaluationInput } } } },
-    policy: { auth: { kind: "grants", grants: ["review:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
-    responses: { 200: ok, ...errors },
-  },
-  async (context) => {
-    const { eventId, roundId, submissionId } = context.req.valid("param");
-    const principal = context.get("principal");
-    const authorization = await authorizeReviewerScope({ db: context.env.DB, principal, eventId, roundId, submissionId, operation: "evaluation-write" });
-    const body = context.req.valid("json");
-    const now = Date.now();
-    await context.env.DB.prepare(`
-      INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-      ON CONFLICT(round_id, submission_id, reviewer_person_id) DO UPDATE SET
-        recommendation = excluded.recommendation,
-        score = excluded.score,
-        criteria_scores = excluded.criteria_scores,
-        comment = excluded.comment,
-        updated_at = excluded.updated_at
-    `).bind(
-      crypto.randomUUID(), roundId, submissionId, authorization.personId, body.recommendation, body.score ?? null,
-      body.criteria_scores === undefined || body.criteria_scores === null ? null : JSON.stringify(body.criteria_scores), body.comment, now, now,
-    ).run();
-    await context.env.DB.prepare("UPDATE round_assignments SET status = 'complete', updated_at = ? WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(now, roundId, submissionId, authorization.personId).run();
-    return context.json({ recommendation: body.recommendation, score: body.score ?? null, lifecycle_status_changed: false, saved_at: now }, 200);
-  },
-);
-
 export const apiRoutes = [
   listPlans,
   createPlan,
@@ -872,9 +664,4 @@ export const apiRoutes = [
   replaceReviewerScopes,
   distributeAssignments,
   promoteRound,
-  reviewerQueueRoute,
-  reviewerRecordRoute,
-  reviewerFilesRoute,
-  reviewerExportRoute,
-  writeEvaluationRoute,
 ];

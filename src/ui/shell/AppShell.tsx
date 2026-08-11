@@ -14,6 +14,7 @@ import { EventSettings } from "../settings/EventSettings";
 import { VenuesPage } from "../venues/VenuesPage";
 import { FormsPage } from "../forms/FormsPage";
 import { AgendaPage } from "../agenda/AgendaPage";
+import { ReviewerPage } from "../review/ReviewerPage";
 
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
@@ -40,6 +41,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   const isEvaluation = location.pathname === "/evaluation";
   const isForms = location.pathname === "/forms";
   const isAgenda = location.pathname === "/agenda-builder";
+  if (location.pathname === "/reviewer") return <ReviewerPage />;
   return <>
     <div class="app-shell">
       <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} />

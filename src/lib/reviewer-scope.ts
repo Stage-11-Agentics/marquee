@@ -83,12 +83,14 @@ export async function authorizeReviewerScope(
             LEFT JOIN committee_members member
               ON member.committee_id = assignment.committee_id
              AND member.person_id = ?
+            LEFT JOIN committees committee
+              ON committee.id = assignment.committee_id
             WHERE assignment.round_id = ?
               AND assignment.submission_id = submission.id
               AND assignment.status IN ('assigned', 'complete')
               AND (
                 assignment.reviewer_person_id = ?
-                OR member.person_id IS NOT NULL
+                OR (member.person_id IS NOT NULL AND committee.event_id = submission.event_id)
               )
           )
       ) AS allowed
