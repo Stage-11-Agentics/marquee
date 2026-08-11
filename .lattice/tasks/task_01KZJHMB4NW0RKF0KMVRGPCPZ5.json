@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-40",
   "branch_links": [],
+  "c11_surface": "FCA21CD5-103A-4911-8752-6F35075913B8",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:45Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMB4NW0RKF0KMVRGPCPZ5",
-  "last_event_id": "ev_01KZJHMJHNPDMGBH1DFXBZ4KZT",
-  "last_status_changed_at": "2026-08-09T05:58:45Z",
+  "last_event_id": "ev_01KZQV20DCSKV57YQ2XGWNKGCN",
+  "last_status_changed_at": "2026-08-11T07:19:42Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-40",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "README, self-host path, and extension points",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:53Z",
+  "updated_at": "2026-08-11T07:19:42Z",
   "urgency": null
 }

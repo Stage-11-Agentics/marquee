@@ -28,8 +28,8 @@
     }
   ],
   "id": "task_01KZJHMA06YP5Y3FM4X13C751G",
-  "last_event_id": "ev_01KZQTRBA1Z3TFXDPKTNG7MYZE",
-  "last_status_changed_at": "2026-08-11T07:14:26Z",
+  "last_event_id": "ev_01KZQV3MJJ0VWHXBP87MS23SDK",
+  "last_status_changed_at": "2026-08-11T07:20:36Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -44,10 +44,10 @@
   "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-28",
-  "status": "in_progress",
+  "status": "review",
   "tags": null,
   "title": "Two-round funnel and comparison mode",
   "type": "task",
-  "updated_at": "2026-08-11T07:14:26Z",
+  "updated_at": "2026-08-11T07:20:36Z",
   "urgency": null
 }

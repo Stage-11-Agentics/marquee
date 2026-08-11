@@ -15,10 +15,15 @@
       "id": "art_01KZQPR6MEQDQWG26FJD1W1FYC",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQV58NGCPDSHSN86PWKHFXB",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMA377D1W31X8NY6Q8FPB",
-  "last_event_id": "ev_01KZQTRREPDH1KXN445J57TMJF",
+  "last_event_id": "ev_01KZQV58NK69RPT83Q3JNFRPXG",
   "last_status_changed_at": "2026-08-11T07:14:39Z",
   "linked_files": [],
   "priority": "medium",
@@ -38,6 +43,6 @@
   "tags": null,
   "title": "Quick search",
   "type": "task",
-  "updated_at": "2026-08-11T07:14:39Z",
+  "updated_at": "2026-08-11T07:21:29Z",
   "urgency": null
 }
