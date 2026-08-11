@@ -30,6 +30,7 @@ import { assembleApiDocument, registerApiComponents, type ApiDocumentBundle } fr
 import { allowAllRateLimiter, enforceRateLimit } from "./rate-limit";
 import type { ApiRouteEntry, ApiRoutePolicy } from "./route";
 import type { ApiEnv, ApiRuntime, Principal } from "./runtime";
+import { errorFields, loggerForEnv } from "../lib/observability/log";
 import {
   membershipAllowsGrant,
   roleForEvent,
@@ -37,14 +38,61 @@ import {
 } from "../lib/auth/scope-resolution";
 import type { MembershipRole } from "../db/schema";
 
-function envelopeResponse(context: Context<ApiEnv>, error: ApiError): Response {
+/**
+ * The route as documented (`/api/v1/events/{eventId}/dashboard`), never the raw
+ * URL: a raw URL carries whatever free text a caller put in a query parameter,
+ * which is exactly the sort of thing this layer must not record.
+ */
+function routeTemplateOf(context: Context<ApiEnv>): string {
+  return context.get("routeTemplate") ?? "unmatched";
+}
+
+/**
+ * The single funnel for every enveloped error response — validation failures,
+ * thrown `ApiError`s, unexpected throws, and 404s all pass through here — which
+ * is what makes it the right place to log. The `api_error` line carries the
+ * SAME request id the caller is shown, so the reference code on a support
+ * ticket greps straight to the line that explains it. That correlation existing
+ * at both ends and being used at neither is the defect this ticket was opened
+ * for.
+ */
+function envelopeResponse(
+  context: Context<ApiEnv>,
+  error: ApiError,
+  unexpected?: unknown,
+): Response {
   const requestId = context.get("requestId") ?? "unknown";
+  const fields = errorFields(unexpected === undefined ? error : unexpected);
+  context.get("logger")?.emit("api_error", unexpected === undefined ? "warn" : "error", {
+    method: context.req.method,
+    route: routeTemplateOf(context),
+    status: error.status,
+    code: error.code,
+    expected: unexpected === undefined,
+    error_name: fields.error_name,
+    message: fields.message,
+    // An expected failure is a known outcome with a known cause; a stack on
+    // every 404 is noise that buries the unexpected ones.
+    ...(unexpected === undefined ? {} : { stack: fields.stack }),
+  });
   const response = context.json(error.toEnvelope(requestId), error.status);
   response.headers.set(REQUEST_ID_HEADER, requestId);
   for (const [name, value] of Object.entries(error.headers ?? {})) {
     response.headers.set(name, value);
   }
   return response;
+}
+
+/** One line per completed request: the live p50/p95 source, per route template. */
+function emitRequestLine(context: Context<ApiEnv>, status: number, startedAt: number): void {
+  context.get("logger")?.emit("http_request", status >= 500 ? "warn" : "info", {
+    method: context.req.method,
+    route: routeTemplateOf(context),
+    status,
+    duration_ms: Date.now() - startedAt,
+    principal: context.get("principal")?.kind ?? "unresolved",
+    event_id: context.req.param("eventId"),
+  });
 }
 
 /** Step 4: authorization, with concealment rather than disclosure. */
@@ -84,10 +132,14 @@ function principalHasGrant(
 function routeMiddleware(
   policy: ApiRoutePolicy,
   runtime: ApiRuntime,
+  routeTemplate: string,
 ): MiddlewareHandler<ApiEnv> {
   const now = runtime.now ?? Date.now;
   const limiter = runtime.rateLimiter ?? allowAllRateLimiter(now);
   return async (context, next) => {
+    // The template is recorded before anything can throw, so a request rejected
+    // by rate limiting or authorization still logs which route it was aimed at.
+    context.set("routeTemplate", routeTemplate);
     // 2 — credential resolution.
     const credentialResolver = runtime.credentialResolver ?? context.env.AUTH;
     const principal: Principal = credentialResolver
@@ -166,25 +218,41 @@ export async function createApiRouter(
     },
   });
 
-  // 1 — request ID and the error boundary, ahead of everything else.
+  // 1 — request ID, the request-scoped logger, and the error boundary, ahead of
+  // everything else. One `http_request` line per completed request; the same
+  // correlation id the caller is handed in the envelope and the `X-Request-Id`
+  // header is the id every line about this request carries.
   app.use("*", async (context, next) => {
     const requestId = resolveRequestId(context.req.raw);
     context.set("requestId", requestId);
+    context.set("logger", loggerForEnv(context.env, { requestId }));
     context.set("apiDocument", () => {
       if (!assembled) throw new Error("api document requested before assembly");
       return assembled;
     });
     context.header(REQUEST_ID_HEADER, requestId);
-    await next();
+    const startedAt = Date.now();
+    try {
+      await next();
+      emitRequestLine(context, context.res.status, startedAt);
+    } catch (error) {
+      // The response does not exist yet — `onError` builds it below — so the
+      // status is derived the same way `onError` derives it. Without this the
+      // failing requests, the ones that matter, would be the only ones missing
+      // from the request log.
+      emitRequestLine(context, error instanceof ApiError ? error.status : 500, startedAt);
+      throw error;
+    }
   });
 
   app.onError((error, context) => {
     if (error instanceof ApiError) return envelopeResponse(context, error);
-    // 500s never leak a stack, SQL, bindings, or secrets — only the request id.
-    console.error("api unexpected error", error);
+    // 500s never leak a stack, SQL, bindings, or secrets to the caller — only
+    // the request id. The stack goes to the log line, behind the same id.
     return envelopeResponse(
       context,
       new ApiError("internal_error", "an unexpected error occurred"),
+      error,
     );
   });
 
@@ -199,7 +267,7 @@ export async function createApiRouter(
     // Middleware must be method-scoped: GET/POST pairs such as /org/tokens
     // intentionally carry different rate policies and must not run each
     // other's authorization pipeline.
-    app.on([entry.method.toUpperCase()], routingPath, routeMiddleware(entry.policy, runtime));
+    app.on([entry.method.toUpperCase()], routingPath, routeMiddleware(entry.policy, runtime, entry.path));
     // 6/7 — the handler runs inside the pipeline; `route` and `handler` are the
     // one object the document is generated from, so parity is structural.
     app.openapi(entry.route as never, entry.handler as never);

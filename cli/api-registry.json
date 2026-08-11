@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "e0f85197621d683967e3372fa4dd8eab46a8058f39f6f4a4481230b23d131cd0",
+  "documentSha256": "90cc222812f60eb148a4330f116053293e04b58b2ac287afa36ff705952f59d4",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",
@@ -59,6 +59,7 @@
     "GET /api/v1/public/forms/{slug} getPublicForm",
     "GET /api/v1/public/sessions/{slug} getPublicSession",
     "GET /api/v1/public/speakers/{slug} getPublicSpeaker",
+    "GET /api/v1/telemetry/diagnostics getDiagnostics",
     "PATCH /api/v1/events/{eventId} updateEventSettings",
     "PATCH /api/v1/events/{eventId}/agenda/items/{itemId} updateAgendaItem",
     "PATCH /api/v1/events/{eventId}/formats/{formatId} updateEventFormat",
@@ -124,6 +125,7 @@
     "POST /api/v1/public/forms/{slug}/submissions submitPublicForm",
     "POST /api/v1/public/uploads/{id}/complete completePublicUpload",
     "POST /api/v1/public/uploads/sign signPublicUpload",
+    "POST /api/v1/telemetry/client-errors postClientErrorReport",
     "PUT /api/v1/events/{eventId}/agenda/settings updateAgendaSettings",
     "PUT /api/v1/events/{eventId}/committees/{committeeId}/reviewers/{personId}/tracks replaceReviewerTrackScopes",
     "PUT /api/v1/events/{eventId}/rounds/{roundId}/criteria replaceEvaluationCriteria",

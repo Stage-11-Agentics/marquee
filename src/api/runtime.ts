@@ -10,6 +10,7 @@ import type { MembershipRole, MembershipRow } from "../db/schema";
 import type { ApiGrant } from "./grants";
 import type { ApiDocumentBundle } from "./openapi";
 import type { AuthContext } from "../lib/auth/scope-resolution";
+import type { Logger } from "../lib/observability/log";
 
 /** Anonymous is a real principal state, not the absence of one. */
 export type Principal =
@@ -91,6 +92,10 @@ export type ApiVariables = {
   principal: Principal;
   /** The composition root's auth middleware runs before the generated API router. */
   auth?: AuthContext;
+  /** Request-scoped logger, already bound to this request's correlation id. */
+  logger: Logger;
+  /** OpenAPI-style template of the matched route, set once dispatch selects one. */
+  routeTemplate?: string;
   /**
    * The assembled document, for the meta routes. A function because assembly
    * completes after registration — the two meta handlers are ordinary route
@@ -110,6 +115,8 @@ export interface ApiBindings {
   /** Optional virtual binding for embedders that compose the API directly. */
   AUTH?: CredentialResolver;
   MAIL_QUEUE: Queue<unknown>;
+  /** `debug | info | warn | error`; anything else falls back to `info`. */
+  LOG_LEVEL?: string;
 }
 
 /** The Hono environment every API route and middleware is typed against. */

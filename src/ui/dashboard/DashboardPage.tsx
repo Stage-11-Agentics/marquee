@@ -2,14 +2,25 @@ import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import type { DashboardCount, DashboardSnapshot, DashboardTaskPreview, DashboardWave } from "../../api/dashboard";
+import { apiFetch, backoffDelayMs } from "../shell/api-client";
 import { Button, EmptyState, PageHeader } from "../shell/components";
+import { clientBuildSha } from "../shell/error-reporting";
+import { ErrorBanner, ErrorBoundary, StaleBand } from "../shell/ErrorSurface";
 import { DASHBOARD_REVALIDATE_MS } from "./dashboard-constants";
 import "./dashboard.css";
 
-type LoadState =
-  | { kind: "loading"; snapshot: null }
-  | { kind: "ready"; snapshot: DashboardSnapshot }
-  | { kind: "error"; snapshot: DashboardSnapshot | null; message: string };
+/** The route template, for the log line and the diagnostic report. */
+const DASHBOARD_ROUTE = "/api/v1/events/{eventId}/dashboard";
+
+interface LoadState {
+  /** Last good data. It stays on screen while a refresh is failing. */
+  snapshot: DashboardSnapshot | null;
+  /** When that data was read, so the operator is told how old it is. */
+  loadedAt: number | null;
+  /** The live failure, or null when the last refresh succeeded. */
+  error: unknown;
+  consecutiveFailures: number;
+}
 
 interface Props {
   eventId?: string;
@@ -95,12 +106,17 @@ function DashboardContents({ snapshot, navigate }: { snapshot: DashboardSnapshot
       </DashboardLink>
     </section>
 
+    {/* One boundary per panel: a card that throws while rendering becomes a
+        card-shaped apology, and the three around it keep working. */}
     <div class="dashboard-grid">
+      <ErrorBoundary label="The wave planner">
       <section class="card" id="wave-planner">
         <header class="card-head"><div><h2>Wave planner</h2><span class="subtle">Accept while the CFP stays open</span></div><Button small onClick={() => navigate("/submissions?status=waved")}>Plan next wave</Button></header>
         <div class="card-body dashboard-wave-list">{snapshot.waves.length ? snapshot.waves.map((wave) => <WaveRow key={wave.id} wave={wave} navigate={navigate} />) : <span class="subtle">No decision waves yet.</span>}</div>
       </section>
+      </ErrorBoundary>
 
+      <ErrorBoundary label="Work in motion">
       <section class="card">
         <header class="card-head"><div><h2>Work in motion</h2><span class="subtle">Revalidated every 5 seconds</span></div></header>
         <div class="card-body">
@@ -114,7 +130,9 @@ function DashboardContents({ snapshot, navigate }: { snapshot: DashboardSnapshot
           <div class="dashboard-mix"><span class="eyebrow">Program mix by format</span><div>{snapshot.format_mix.map((item) => <DashboardLink key={item.id} href={item.href} navigate={navigate} class="chip dashboard-mix-link">{item.label} · {formatNumber(item.count)}</DashboardLink>)}</div></div>
         </div>
       </section>
+      </ErrorBoundary>
 
+      <ErrorBoundary label="The speaker task dashboard">
       <section class="card dashboard-task-card">
         <header class="card-head"><div><h2>Speaker task dashboard</h2><span class="subtle">The work organizers need to chase next</span></div><Button small onClick={() => navigate("/submissions?status=onboarding")}>Open onboarding</Button></header>
         <div class="card-body dashboard-task-list">
@@ -123,6 +141,7 @@ function DashboardContents({ snapshot, navigate }: { snapshot: DashboardSnapshot
           </DashboardLink>) : <span class="subtle">No open speaker tasks. The pipeline is clear.</span>}
         </div>
       </section>
+      </ErrorBoundary>
     </div>
   </>;
 }
@@ -134,43 +153,76 @@ function DashboardLoading(): JSX.Element {
 }
 
 export function DashboardPage({ eventId = "evt_aie-ny-2026", navigate }: Props): JSX.Element {
-  const [state, setState] = useState<LoadState>({ kind: "loading", snapshot: null });
+  const [state, setState] = useState<LoadState>({
+    snapshot: null,
+    loadedAt: null,
+    error: null,
+    consecutiveFailures: 0,
+  });
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
+    let timer = 0;
     let controller: AbortController | undefined;
+    // Kept outside state so the scheduler reads the current count without
+    // waiting for a render.
+    let failures = 0;
+
+    const schedule = () => {
+      if (!active) return;
+      // Healthy: the five-second heartbeat. Failing: exponential backoff with
+      // full jitter, so a wounded origin is not hammered by every open tab in
+      // the building in lockstep.
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void load(), backoffDelayMs(failures, DASHBOARD_REVALIDATE_MS));
+    };
+
     const load = async () => {
       controller?.abort();
       const requestController = new AbortController();
       controller = requestController;
       try {
-        const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/dashboard`, { signal: requestController.signal });
-        if (!response.ok) throw new Error(`The dashboard request failed (${response.status}).`);
-        const snapshot = await response.json() as DashboardSnapshot;
-        if (active) setState({ kind: "ready", snapshot });
+        const snapshot = await apiFetch<DashboardSnapshot>(
+          `/api/v1/events/${encodeURIComponent(eventId)}/dashboard`,
+          { signal: requestController.signal, route: DASHBOARD_ROUTE },
+        );
+        if (!active) return;
+        failures = 0;
+        setState({ snapshot, loadedAt: Date.now(), error: null, consecutiveFailures: 0 });
       } catch (error: unknown) {
         if (!active || requestController.signal.aborted) return;
-        setState((current) => ({
-          kind: "error",
-          snapshot: current.snapshot,
-          message: error instanceof Error ? error.message : "The dashboard could not be loaded.",
-        }));
+        failures += 1;
+        // The snapshot is deliberately retained: a failed refresh must never
+        // take away the data the operator was already reading.
+        setState((current) => ({ ...current, error, consecutiveFailures: failures }));
+      } finally {
+        schedule();
       }
     };
+
     void load();
-    const interval = window.setInterval(() => { void load(); }, DASHBOARD_REVALIDATE_MS);
+    // Coming back online is news, not a reason to sit out the backoff.
+    const onOnline = () => { failures = 0; void load(); };
+    window.addEventListener("online", onOnline);
     return () => {
       active = false;
-      window.clearInterval(interval);
+      window.clearTimeout(timer);
       controller?.abort();
+      window.removeEventListener("online", onOnline);
     };
   }, [eventId, reloadKey]);
 
   const hasProgram = state.snapshot?.pipeline.some((item) => item.count > 0) ?? false;
+  const retryNow = () => setReloadKey((value) => value + 1);
+  const stale = state.error !== null && state.loadedAt !== null;
   return <div class="dashboard-page">
     <PageHeader title="Program pipeline" copy="Every count opens the work behind it. The dashboard keeps the operator’s next move in view." actions={<><Button onClick={() => navigate("/settings")}>Conference settings</Button><Button variant={hasProgram || !state.snapshot ? "primary" : ""} onClick={() => navigate("/submissions")}>Work the pipeline →</Button></>} />
-    {state.snapshot ? <DashboardContents snapshot={state.snapshot} navigate={navigate} /> : <DashboardLoading />}
-    {state.kind === "error" && <div class="dashboard-error" role="status"><strong>Dashboard refresh failed</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></div>}
+    <StaleBand ageMs={stale && state.loadedAt !== null ? Date.now() - state.loadedAt : null} retrying={state.error !== null} />
+    {state.error !== null && <ErrorBanner title="Dashboard refresh failed" error={state.error} onRetry={retryNow} route={DASHBOARD_ROUTE} />}
+    <ErrorBoundary label="The pipeline">
+      {state.snapshot ? <DashboardContents snapshot={state.snapshot} navigate={navigate} /> : <DashboardLoading />}
+    </ErrorBoundary>
+    <footer class="dashboard-build"><span class="build-stamp">build {clientBuildSha()}</span></footer>
   </div>;
 }
