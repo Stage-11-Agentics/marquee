@@ -5,7 +5,7 @@ function Nav({ label, routes, activeId, navigate }: { label: string; routes: rea
   return <nav class="nav" aria-label={label}>{routes.map((route) => <a key={route.id} href={route.path} class={activeId === route.id ? "active" : ""} aria-current={activeId === route.id ? "page" : undefined} onClick={(event) => { if (!route.external) { event.preventDefault(); navigate(route.path); } }}><span class="nav-icon" aria-hidden="true">{route.icon}</span><span>{route.label}</span></a>)}</nav>;
 }
 
-export function Sidebar({ activeId, eventName, navigate, unavailable }: { activeId?: string; eventName: string; navigate: (target: string) => void; unavailable: (title: string, copy: string) => void }): JSX.Element {
+export function Sidebar({ activeId, eventName, navigate, unavailable, resetting, onReset }: { activeId?: string; eventName: string; navigate: (target: string) => void; unavailable: (title: string, copy: string) => void; resetting: boolean; onReset: () => void }): JSX.Element {
   return <aside class="sidebar">
     <a class="brand" href="/dashboard" onClick={(event) => { event.preventDefault(); navigate("/dashboard"); }}><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
     <button class="event-switcher" onClick={() => unavailable("Conference switcher", "Switching between conferences arrives with conference administration.")}><small>Conference</small><strong>{eventName}</strong></button>
@@ -16,7 +16,9 @@ export function Sidebar({ activeId, eventName, navigate, unavailable }: { active
     <Nav label="Program modules" routes={routesFor("modules")} activeId={activeId} navigate={navigate} />
     <div class="sidebar-foot">
       <a href="/api/docs">⌘ API &amp; CLI</a>
-      <button onClick={() => unavailable("Reset demo", "The reset endpoint lands with the seeded demo lifecycle.")}>↻ Reset demo</button>
+      <button type="button" class="reset-demo-button" onClick={onReset} disabled={resetting} aria-busy={resetting}>
+        <span class="reset-demo-label">{resetting ? "Resetting…" : "↻ Reset demo"}</span>
+      </button>
     </div>
   </aside>;
 }

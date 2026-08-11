@@ -4,9 +4,7 @@
  * SEED-DATA.md. Nothing here invents contact details for real people.
  */
 
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import sourcePayload from "../../sequence/research/sources/aie-summit-2025-program.json" with { type: "json" };
 
 export interface SourceSpeaker {
   name: string;
@@ -36,23 +34,14 @@ interface SourcePayload {
   sessions: SourceSession[];
 }
 
-const SOURCE_PATH = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "sequence",
-  "research",
-  "sources",
-  "aie-summit-2025-program.json",
-);
 
 let cached: SourcePayload | undefined;
 
 export function loadSource(): SourcePayload {
   if (!cached) {
-    const payload = JSON.parse(readFileSync(SOURCE_PATH, "utf8")) as SourcePayload;
+    const payload = sourcePayload as SourcePayload;
     if (!Array.isArray(payload.sessions) || payload.sessions.length === 0) {
-      throw new Error(`source program at ${SOURCE_PATH} has no sessions`);
+      throw new Error("source program has no sessions");
     }
     cached = payload;
   }

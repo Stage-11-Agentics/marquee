@@ -1,23 +1,49 @@
-/**
- * The M-03 minimal demo fixture: one org, one `demo_mode = 1` event, and the
- * two demo personas (organizer, speaker) the one-click demo login looks up.
- * MRQ-14's authoritative seed extends this module; ids are deterministic so a
- * reseed restores the same rows every time.
- *
- * Addresses use the reserved `.example` TLD — no real email addresses in the
- * public repo.
- */
+import { buildDemoSeedRows } from "./seed-modules";
+import {
+  EVENT_ID,
+  FROZEN_NOW,
+  ORG_ID,
+  STAFF_PERSON_ID,
+} from "../../../scripts/seed/event.ts";
 
+/** Identities used by the shipped full reset seed and route guard. */
+export const SHIPPED_DEMO_ORGANIZATION_ID = ORG_ID;
+export const SHIPPED_DEMO_EVENT_ID = EVENT_ID;
+export const SHIPPED_DEMO_ORGANIZER_PERSON_ID = STAFF_PERSON_ID;
+/** First named accepted-core speaker; stable because the source seed is pinned. */
+export const SHIPPED_DEMO_SPEAKER_PERSON_ID = "per_aarush-selvan";
+
+/**
+ * Legacy six-row fixture retained for small auth/API contract tests. It is
+ * intentionally not used by reseedDemo; production reset always restores the
+ * shipped seed above.
+ */
 export const DEMO_ORGANIZATION_ID = "org_demo";
 export const DEMO_EVENT_ID = "evt_demo";
 export const DEMO_ORGANIZER_PERSON_ID = "per_demo_organizer";
 export const DEMO_SPEAKER_PERSON_ID = "per_demo_speaker";
+export const DEMO_SEED_NOW = FROZEN_NOW;
 
 export interface DemoFixtureRow {
   statement: string;
   bindings: (number | string | null)[];
 }
 
+/**
+ * The complete shipped seed, converted to bound inserts for the one production
+ * reseed path. The row order is the seed-module dependency order.
+ */
+export function shippedDemoFixtureRows(now: number = FROZEN_NOW): DemoFixtureRow[] {
+  return buildDemoSeedRows(now).map(({ table, row }) => {
+    const columns = Object.keys(row);
+    return {
+      statement: `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
+      bindings: columns.map((column) => row[column]!),
+    };
+  });
+}
+
+/** Small fixture for auth/API contract tests; never a production reset source. */
 export function demoFixtureRows(now: number): DemoFixtureRow[] {
   return [
     {

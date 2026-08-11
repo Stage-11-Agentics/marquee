@@ -4,6 +4,8 @@
     "lib": ["ES2024"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
     "types": ["@cloudflare/workers-types", "node"],

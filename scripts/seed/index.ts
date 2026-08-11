@@ -3,9 +3,10 @@
  * Seed orchestrator — `npm run seed`.
  *
  * Orchestration only, by contract: this file discovers its sibling seeders by
- * globbing its own directory, never by naming them. A new per-entity seeder is
- * a new `scripts/seed/<name>.ts` exporting a `SeedModule`; it is picked up with
- * no edit here. `index.ts` itself and `_*.ts` helpers are excluded.
+ * globbing its own directory and verifies the Worker-safe shared manifest.
+ * A new per-entity seeder is a new `scripts/seed/<name>.ts` exporting a
+ * `SeedModule`, plus one explicit manifest entry so reset and CLI cannot drift.
+ * `index.ts` itself and `_*.ts` helpers are excluded.
  *
  * Every seeder appends upsert rows to one shared context. The concatenated SQL
  * is written to a temp file and applied with
@@ -28,13 +29,14 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import type { SeedModule, SeedRow } from "./_sql.ts";
-import { makeContext, upsertStatement } from "./_sql.ts";
+import { upsertStatement } from "./_sql.ts";
 // The frozen demo clock is the spine's own constant (SPEC §6); importing it
 // keeps one definition rather than duplicating the date in two files.
 import { FROZEN_NOW } from "./event.ts";
+import { buildDemoSeedRows, DEMO_SEED_MODULES } from "../../src/lib/reset-demo/seed-modules.ts";
 
 const SEED_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = resolve(SEED_DIRECTORY, "..", "..");
@@ -47,7 +49,7 @@ const HEADER = [
   "",
 ].join("\n");
 
-/** Sibling seeders, discovered rather than named. */
+/** Sibling seeders are discovered for parity with the Worker-safe manifest. */
 export function discoverSeedFiles(): string[] {
   return readdirSync(SEED_DIRECTORY)
     .filter(
@@ -61,26 +63,23 @@ export function discoverSeedFiles(): string[] {
 }
 
 export async function loadSeedModules(): Promise<SeedModule[]> {
-  const modules: SeedModule[] = [];
-  for (const file of discoverSeedFiles()) {
-    const imported: unknown = await import(pathToFileURL(join(SEED_DIRECTORY, file)).href);
-    const candidate = imported as { seed?: SeedModule; default?: SeedModule };
-    const module = candidate.seed ?? candidate.default;
-    if (!module || typeof module.run !== "function") {
-      throw new Error(`scripts/seed/${file} exports no SeedModule (expected \`export const seed\`)`);
-    }
-    modules.push(module);
-  }
-  return modules.sort((left, right) =>
-    left.order === right.order ? left.name.localeCompare(right.name) : left.order - right.order,
+  const discovered = new Set(
+    discoverSeedFiles().map((file) => file.slice(0, -".ts".length)),
   );
+  const manifest = new Set(DEMO_SEED_MODULES.map((module) => module.name));
+  const missing = [...discovered].filter((name) => !manifest.has(name));
+  const stale = [...manifest].filter((name) => !discovered.has(name));
+  if (missing.length || stale.length) {
+    throw new Error(
+      `seed manifest drifted: missing=${missing.sort().join(",") || "none"} stale=${stale.sort().join(",") || "none"}`,
+    );
+  }
+  return [...DEMO_SEED_MODULES];
 }
 
 /** Every row every seeder wants, in dependency order. */
 export async function buildSeedRows(now: number = FROZEN_NOW): Promise<SeedRow[]> {
-  const context = makeContext(now);
-  for (const module of await loadSeedModules()) await module.run(context);
-  return context.rows;
+  return buildDemoSeedRows(now, await loadSeedModules());
 }
 
 export async function buildSeedSql(now: number = FROZEN_NOW): Promise<string> {

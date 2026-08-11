@@ -1,17 +1,55 @@
-# MRQ-72: Reset demo is broken end to end — dead button, minimal-fixture restore, cross-tenant wipe, R2 orphans
+# MRQ-72: Reset demo is broken end to end — implementation plan
 
-WALKTHROUGH-CRITICAL. MRQ-53's reset drill audit found four defects and, per audit discipline, fixed none of them. Read its findings first: they carry file:line and reproductions.
+## Goal
 
-Two of them together are a walkthrough dead end. A judge who makes a mess and presses Reset demo gets NOTHING (the button is dead), and if they reach reset another way they get a HOLLOW demo (restore writes a minimal fixture, not the shipped seed). Reset is the judge's undo button; its failure only shows after someone has already invested twenty minutes, which is the cruellest possible time to discover it.
+Close the walkthrough dead end identified by MRQ-53: the in-product **Reset demo** action must call the real reset operation, and the operation must restore the shipped full demo seed without deleting another tenant's data or leaving demo uploads behind. The proof starts from a deliberately dirty database and checks exact row counts for every table after two consecutive resets.
 
-FOUR DEFECTS, in priority order:
+## Scope and binding constraints
 
-1. DEAD 'Reset demo' BUTTON. src/ui/shell/Sidebar.tsx renders it via unavailable(...) — a placeholder that never calls the reset endpoint. Wire it to the real endpoint, with an honest confirm (this is destructive), a pending state, and an honest result. Elements never jump: reserve the space so the label change does not move the sidebar.
+- Do not edit `SPEC.md`, `EVALUATION.md`, `BUILDPLAN.md`, `DESIGN.md`, `PHILOSOPHY.md`, or `sequence/USER_STORIES.md`; do not add a migration.
+- Preserve the existing FK-safe `WIPE_ORDER` and the MRQ-53 coverage guard. If MRQ-66's migration 0005 lands before this branch is rebased, retain both table sets and place its webhook children before their parents.
+- `src/lib/reset-demo/reseed-demo.ts` remains the only production reseed path. The shared seed builder exists to prevent the CLI seed and reset from drifting; it is not a second reset path.
+- The AC manifest declares `owns: []` and `exercises: ["AC-230"]`; AC-230 remains owned by MRQ-3.
+- Reset writes no mail rows and does not add an `always_live` site. Existing AST/comms guardrails remain unchanged and must pass.
 
-2. MINIMAL-FIXTURE RESTORE. Reset restores a minimal fixture rather than the shipped seed, so after reset the demo is hollow — no 1,000 submissions, no accepted core, no agenda. Restore must reproduce the seeded baseline a judge started from. Prove it by row COUNTS per table before and after, not by a 200.
+## Implementation
 
-3. CROSS-TENANT WIPE. Reset wipes rows it does not own. Single-tenant today makes it survivable, not correct. Scope the wipe to the demo event/org and assert an unrelated tenant's rows are untouched — counts before and after, with a positive control that the demo rows DID go.
+1. **Make the shipped seed available to the Worker and reset.**
+   - Refactor the seed source loader to use the committed public JSON as a bundler-safe module instead of `node:fs` at runtime.
+   - Add one shared, deterministic seed-module manifest/builder used by `npm run seed` and `src/lib/reset-demo/demo-fixture.ts`; retain the CLI's discovery/parity checks so a new seeder cannot silently be omitted.
+   - Convert the builder's rows into bound insert statements for reset. Use the shipped event/org and stable demo owner/speaker personas, including the 1,000 submissions, accepted core, evaluations, agenda, task workload, and all other non-empty seeded tables.
 
-4. R2 ORPHANS. Reset leaves uploaded objects behind. Either delete them under the demo prefix or document deliberately why not. An orphan store grows forever on a public deploy.
+2. **Replace the global wipe with an owned, coherent reset.**
+   - Keep `WIPE_ORDER` as the complete schema table inventory and execute FK-safe, table-specific deletes: direct `event_id`/`org_id` predicates and child-table subqueries through the demo event, org, submissions, forms, rounds, committees, imports, and people.
+   - Preserve unrelated tenant rows as a positive invariant. For control-plane tables without an ownership key, do not make a guessed global delete; filter mirror outbox payloads where ownership is explicit and document/preserve global mirror state.
+   - Delete every object under `uploads/<demo-event-id>/` through the injected R2 binding before deleting attachment rows. A failed object cleanup fails the queue job rather than silently creating more orphans.
+   - Keep reset writes in the existing queue job, enqueue exactly one mirror reconcile message, and retain the demo-safe outbox invariant.
 
-CONSTRAINTS. WIPE_ORDER stays FK-safe and MRQ-53's merged guard (tests/node/reset-wipe-order.test.mjs) asserts it covers every table every migration defines — do not weaken it; extend WIPE_ORDER if you add tables. Reset must leave demo login working; a reset that restores data but breaks the demo persona is still a dead end. Reset twice in a row must be as clean as once. Do not add a migration; 0001-0004 are merged and immutable and MRQ-66 owns 0005.
+3. **Wire the sidebar affordance to the queued endpoint.**
+   - Replace `unavailable(...)` with a destructive confirmation that names the data loss, POSTs `/api/v1/admin/reset-demo`, polls the returned job, and reports authentication/server/timeout failures honestly.
+   - Expose a stable pending/success/error state and disable duplicate clicks. Reserve a fixed sidebar button slot so `Reset demo` → `Resetting…`/result never shifts neighboring elements; refresh the shell after a successful reset so stale in-memory screens are not presented as restored.
+
+4. **Build adversarial proof.**
+   - Extend `tests/integration/reset-demo.test.ts` to seed the full baseline, then dirty it with accepted and rejected decisions, completed speaker work, newly placed/published agenda, queued reminder outbox rows, a saved view, an import and import row, an uploaded demo object/attachment, and session state.
+   - Add an unrelated org/event/person/submission and R2 object as a positive control. Assert dirty demo rows disappear while the unrelated row/object and its counts remain.
+   - Capture expected counts from the deterministic shipped seed and assert a named count for every `WIPE_ORDER` table after reset, plus `demo_mode`, organizer and speaker demo login. Run the complete endpoint/queue reset a second time and require the same counts and login result.
+   - Add/adjust node-level UI/seed assertions as needed, without weakening `reset-wipe-order.test.mjs` or the `comms.AC-250` `always_live` inventory.
+
+## Verification sequence
+
+1. `npm test` while iterating; keep the hermetic suite within its 30s budget.
+2. Run focused reset, seed, UI, R2, and comms tests plus `npm run check:seed` where the local runtime is needed.
+3. Self-review the final diff, attach a post-`review` PASS artifact naming the exact HEAD, and transition through `in_validation` with recorded running-system evidence (button/endpoint flow or an explicit justified N/A if the local environment cannot host the browser).
+4. Run `npm run pr-gate -- --ticket MRQ-72`, paste its result into the completion comment, push `mrq-72-reset-fix`, open the Forgejo PR against `master`, attach its URL, and finish at `pr_open`.
+
+## Non-goals
+
+- No new schema, migration, mirror implementation, deployment, public-site redesign, or unrelated cleanup.
+- No claim that this ticket owns AC-230; it only exercises the existing criterion with stronger reset evidence.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+- **Concern: the full seed currently lives under `scripts/` and its source loader uses Node APIs.** Resolved by moving only the shared loading/build seam to Worker-safe imports and having both the CLI and reset call the same module manifest; no duplicated fixture data or second reset route.
+- **Concern: scoping every table could accidentally turn a global mirror table into a cross-tenant wipe.** Resolved by making ownership predicates explicit per table, filtering only mirror outbox payloads with an explicit demo identity, and preserving ownershipless mirror state rather than guessing.
+- **Concern: R2 cleanup could leave D1 and object storage out of sync on failure.** Resolved by listing/deleting the exact demo prefix before the D1 reset and failing the queue job on a delete error; the test keeps an unrelated prefix as a positive control.
+- **Concern: the existing reset test's `200`-style checks could remain green over the dead path.** Resolved by an end-to-end dirty-state test with per-table expected counts, two reset runs, and post-reset demo login, plus a real sidebar call/pending/result contract.

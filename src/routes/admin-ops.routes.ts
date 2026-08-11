@@ -7,6 +7,7 @@ import type { ApiEnv } from "../api/runtime";
 import type { EventRow } from "../db/schema";
 import { forbidden, getAuth, unauthorized } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
+import { SHIPPED_DEMO_EVENT_ID } from "../lib/reset-demo/demo-fixture";
 import { createResetJob, readResetJob } from "../lib/reset-demo/reset-jobs";
 
 /**
@@ -52,8 +53,8 @@ const enqueueDemoReset = defineApiRoute(
   },
   (async (context: Context<ApiEnv>) => {
     const event = await context.env.DB.prepare(
-      "SELECT * FROM events WHERE demo_mode = 1 ORDER BY created_at ASC LIMIT 1",
-    ).first<EventRow>();
+      "SELECT * FROM events WHERE id = ? AND demo_mode = 1",
+    ).bind(SHIPPED_DEMO_EVENT_ID).first<EventRow>();
     if (!event) {
       return context.json(
         { error: { code: "demo_disabled", message: "Reset is only available in demo mode" } },

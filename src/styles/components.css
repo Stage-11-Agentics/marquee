@@ -16,6 +16,8 @@
 .nav a.active .nav-icon { color: var(--accent); }
 .sidebar-foot { border-top: 1px solid var(--line); display: grid; gap: 2px; margin-top: auto; padding-top: 16px; }
 .sidebar-foot button { background: none; border: 0; border-radius: var(--radius); color: var(--muted); font: 400 11.5px/1.2 var(--mono); padding: 7px 10px; text-align: left; }
+.sidebar-foot .reset-demo-button { align-items: center; display: flex; height: 30px; min-height: 30px; overflow: hidden; white-space: nowrap; width: 100%; }
+.reset-demo-label { display: block; min-width: 12ch; }
 .sidebar-foot button:hover { background: var(--sunk); color: var(--ink); }
 .sidebar-foot a { border-radius: var(--radius); color: var(--muted); font: 400 11.5px/1.2 var(--mono); padding: 7px 10px; }
 .sidebar-foot a:hover { background: var(--sunk); color: var(--ink); }

@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-72",
+  "owns": [],
+  "exercises": ["AC-230"],
+  "notes": "MRQ-72 owns no automatic AC; it exercises AC-230, which remains owned by MRQ-3, with dirty-state reset and login proof."
+}

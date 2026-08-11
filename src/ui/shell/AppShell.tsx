@@ -24,15 +24,69 @@ import { SubmissionRecordPage } from "../submissions/SubmissionRecordPage";
 import { OnboardingPage } from "../onboarding/OnboardingPage";
 import { SessionizeImportPage } from "../import/SessionizeImportPage";
 
+type ResetResponse = {
+  job_id?: unknown;
+  status?: unknown;
+  error?: { message?: unknown };
+};
+
+function resetError(body: ResetResponse | null, fallback: string): Error {
+  const message = body?.error?.message;
+  return new Error(typeof message === "string" && message.length > 0 ? message : fallback);
+}
+
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
   const route = matchRoute(location.pathname, location.search);
   const [overlay, setOverlay] = useState<OverlayState | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [toast, setToast] = useState("");
   const closeOverlay = useCallback(() => setOverlay(null), []);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
   const unavailable = useCallback((title: string, copy: string) => setOverlay({ kind: "modal", title, copy }), []);
+  const resetDemo = useCallback(async () => {
+    if (resetting) return;
+    if (!window.confirm("Reset the demo conference? This removes demo edits, submissions, uploads, and queued work.")) return;
+
+    setResetting(true);
+    setToast("Resetting demo…");
+    try {
+      const response = await fetch("/api/v1/admin/reset-demo", {
+        method: "POST",
+        headers: { accept: "application/json" },
+        cache: "no-store",
+      });
+      const body = await response.json().catch(() => null) as ResetResponse | null;
+      if (!response.ok) throw resetError(body, "Reset request failed (" + response.status + ")");
+      if (typeof body?.job_id !== "string" || body.job_id.length === 0) {
+        throw new Error("Reset request returned no job id");
+      }
+
+      const deadline = Date.now() + 20_000;
+      let status = typeof body.status === "string" ? body.status : "queued";
+      let job: ResetResponse | null = body;
+      while (status !== "done" && Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+        const statusResponse = await fetch(
+          "/api/v1/admin/reset-demo/" + encodeURIComponent(body.job_id),
+          { headers: { accept: "application/json" }, cache: "no-store" },
+        );
+        job = await statusResponse.json().catch(() => null) as ResetResponse | null;
+        if (!statusResponse.ok) throw resetError(job, "Reset status failed (" + statusResponse.status + ")");
+        status = typeof job?.status === "string" ? job.status : "unknown";
+        if (status === "failed") throw resetError(job, "The demo reset job failed");
+      }
+      if (status !== "done") throw new Error("The demo reset timed out after 20 seconds");
+
+      setToast("Demo reset complete. Reloading…");
+      window.setTimeout(() => window.location.reload(), 250);
+    } catch (error) {
+      setResetting(false);
+      setToast("Reset failed: " + (error instanceof Error ? error.message : String(error)));
+    }
+  }, [resetting]);
 
   useEffect(() => {
     const isNonAdminShell = location.pathname === "/portal" || location.pathname === "/reviewer";
@@ -69,7 +123,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   if (location.pathname === "/reviewer") return <ReviewerPage />;
   return <>
     <div class="app-shell">
-      <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} />
+      <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} resetting={resetting} onReset={() => void resetDemo()} />
       <main class="main">
         <Topbar eventName={eventName} routeName={routeName} userInitials={userInitials} openSearch={openSearch} openUser={() => unavailable("Program lead", "Account preferences land with authentication and conference administration.")} />
         <div class="page">
@@ -99,6 +153,6 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
     </div>
     <OverlayHost state={overlay} onClose={closeOverlay} />
     <QuickSearch key={searchOpen ? "open" : "closed"} eventId="evt_aie-ny-2026" open={searchOpen} onClose={closeSearch} navigate={navigate} />
-    <ToastHost />
+    <ToastHost message={toast} />
   </>;
 }

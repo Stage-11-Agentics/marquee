@@ -6,6 +6,7 @@ export const MIRROR_RECONCILE_MESSAGE_TYPE = "mirror_reconcile";
 export interface ResetJobBindings {
   CACHE: KVNamespace;
   DB: D1Database;
+  MEDIA: R2Bucket;
   MIRROR_QUEUE: Queue<unknown>;
 }
 
@@ -21,7 +22,7 @@ export async function runResetJob(
 ): Promise<ReseedResult> {
   await updateResetJob(env.CACHE, jobId, { status: "running" });
   try {
-    const result = await reseedDemo(env.DB);
+    const result = await reseedDemo(env.DB, Date.now(), env.MEDIA);
     await env.MIRROR_QUEUE.send({
       type: MIRROR_RECONCILE_MESSAGE_TYPE,
       reason: "reset_demo",
