@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:37:57Z",
+  "created_by": "agent:auditor-mrq-48",
+  "custom_fields": {},
+  "id": "art_01KZR6D057Q7VSVQSQYBHCS8SW",
+  "model": null,
+  "payload": {
+    "content_type": "application/json",
+    "file": "art_01KZR6D057Q7VSVQSQYBHCS8SW.json",
+    "size_bytes": 13499
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Final local Wrangler/miniflare speed evidence; deployed:false is explicit and MRQ-57 owns remeasurement on Cloudflare.",
+  "tags": [],
+  "title": "MRQ-48 final speed report",
+  "token_usage": null,
+  "type": "file"
+}

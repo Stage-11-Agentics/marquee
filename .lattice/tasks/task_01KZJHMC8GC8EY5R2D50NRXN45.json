@@ -10,10 +10,16 @@
   "custom_fields": {},
   "description": "BUILDPLAN: A-10 \u2014 audit track (\u00a75). **Owned by an auditor who did not write the code.**\n\nScope (verbatim): Bulk-write audit \u2014 every bulk path through the one chunking helper; 150- and 1,000-record drives.\nStarts when (verbatim): After M-18.\n\nTrap 11: D1's 100-bound-parameter cap throws only under real data, only at scale. S-3 settled the pattern, M-07 built the single helper, and this audit proves nothing bypassed it. Guardrail G11 is the 150/1,000-record drive.\n\nACs: \u2014 (underwrites AC-66 \u2013 AC-69)\nHours: 1\nWorkflow: fast-track\nShared files: none \u2014 audit artifact only.\nDeps: M-18\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZR67PFVCE5JY006P61KWDN5",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHMC8GC8EY5R2D50NRXN45",
-  "last_event_id": "ev_01KZR5V83GRHWJ9PE5D9YENH85",
-  "last_status_changed_at": "2026-08-11T10:28:15Z",
+  "last_event_id": "ev_01KZR67PFYKAK830VFY7RHW1MR",
+  "last_status_changed_at": "2026-08-11T10:33:59Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +34,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-52",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Audit \u2014 bulk-write path and chunking",
   "type": "task",
-  "updated_at": "2026-08-11T10:28:15Z",
+  "updated_at": "2026-08-11T10:35:03Z",
   "urgency": null
 }

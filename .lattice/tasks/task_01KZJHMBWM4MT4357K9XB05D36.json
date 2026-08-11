@@ -15,10 +15,15 @@
       "id": "art_01KZR51HMH9RZVTABEFVHFQ5FB",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR6D057Q7VSVQSQYBHCS8SW",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMBWM4MT4357K9XB05D36",
-  "last_event_id": "ev_01KZR54GJXGZZB9P2PF4SFCKQ3",
+  "last_event_id": "ev_01KZR6D059AZ7YQ73ZSAP2V59E",
   "last_status_changed_at": "2026-08-11T10:15:50Z",
   "linked_files": [],
   "priority": "medium",
@@ -38,6 +43,6 @@
   "tags": null,
   "title": "Audit \u2014 speed report, AC-sourced versus objective",
   "type": "task",
-  "updated_at": "2026-08-11T10:15:50Z",
+  "updated_at": "2026-08-11T10:37:57Z",
   "urgency": null
 }
