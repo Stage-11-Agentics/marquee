@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM91S8KRZST6J185QK1K3",
-  "last_event_id": "ev_01KZQCJ7RRV7T9A8T3Q1Q8GM85",
-  "last_status_changed_at": "2026-08-11T03:06:25Z",
+  "last_event_id": "ev_01KZQCVRT29WMY9T5D0PHT6ZHD",
+  "last_status_changed_at": "2026-08-11T03:11:38Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-18",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Reviewer queue",
   "type": "task",
-  "updated_at": "2026-08-11T03:06:25Z",
+  "updated_at": "2026-08-11T03:11:38Z",
   "urgency": null
 }

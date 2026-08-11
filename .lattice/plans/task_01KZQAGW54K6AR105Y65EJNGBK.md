@@ -106,3 +106,5 @@ npm run check:api
 npm run trace:ac -- --ticket MRQ-62
 npm run pr-gate -- --ticket MRQ-62
 ```
+
+## Reset 2026-08-11 by agent:delegator-mrq-62

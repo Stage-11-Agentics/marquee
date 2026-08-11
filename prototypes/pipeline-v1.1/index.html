@@ -793,6 +793,11 @@
       ];
       const formats = ["Workshop", "Stage Talk", "Lightning", "Online"];
       const formatDurations = { Workshop: 90, "Stage Talk": 20, Lightning: 10, Online: 35 };
+      // Tags and Levels are event-level taxonomy exactly like tracks — authored in
+      // Conference settings, offered as form fields, painted as chips on rows.
+      // (Language is deliberately absent: R39, "We only care about English.")
+      const sessionTags = ["Hands-on", "Case study", "Live demo", "Panel", "Research", "First-time speaker"];
+      const levels = ["Introductory", "Intermediate", "Advanced"];
       const firstNames = ["Amara", "João", "Sofía", "Kwame", "Élodie", "Nikhil", "Mei-Ling", "Alejandro", "Fatima", "Ravi", "Noor", "Tobias", "Priyanka", "Mateo", "Zainab", "Léa", "Dmitri", "Ananya", "Oluwaseun", "Hana", "Camille", "Jae-Hyun", "Santiago", "Ifeoma", "Márton", "Aisha", "Casey", "Renée", "Theo", "Mina"];
       const lastNames = ["van der Meer", "O'Connell-Singh", "García Márquez", "Okafor", "Al-Khatib", "Kowalska", "Dela Cruz", "Nwosu", "Sørensen", "Mukherjee", "Hernández-López", "Ben-Ari", "Nakamura", "Björnsdóttir", "Ibrahim", "Petrović", "Cheung", "de la Fontaine", "Wachowski", "Adeyemi"];
       const companies = ["Anthropic", "OpenAI", "Modal", "Mistral AI", "Capital One", "JPMorgan Chase", "Bloomberg", "LangChain", "Weights & Biases", "Hugging Face", "Together AI", "Pinecone", "Baseten", "Replicate", "Writer", "Databricks", "MongoDB", "Google DeepMind", "Microsoft AI", "Redwood Research"];
@@ -824,14 +829,16 @@
       const formatRanges = { Workshop:"60–120", "Stage Talk":"15–20", Lightning:"5–10", Online:"5–55" };
       const submissionColumnDefs = [
         {id:"type",label:"Type"},{id:"id",label:"ID"},{id:"title",label:"Title",required:true},{id:"speakers",label:"Speakers"},
-        {id:"status",label:"Status"},{id:"tracks",label:"Tracks"},{id:"score",label:"Score"},{id:"submitted",label:"Submitted"},
+        {id:"status",label:"Status"},{id:"tracks",label:"Tracks"},{id:"tags",label:"Tags"},{id:"level",label:"Level"},
+        {id:"score",label:"Rating · Initial screen"},{id:"planRating",label:"Rating · Committee decision"},
+        {id:"notified",label:"Notified"},{id:"submitted",label:"Submitted"},
         {id:"updated",label:"Last updated"},{id:"origin",label:"Origin"},{id:"missing",label:"Missing fields"}
       ];
       const defaultSavedViews = [
-        {id:"all",name:"All submissions",builtIn:true,config:{search:"",status:"All",type:"All",track:"All",sort:"newest",columns:["type","title","speakers","status","tracks","score"]}},
+        {id:"all",name:"All submissions",builtIn:true,config:{search:"",status:"All",type:"All",track:"All",sort:"newest",columns:["type","title","speakers","status","tracks","score","notified"]}},
         {id:"drafts",name:"Drafts needing attention",builtIn:true,config:{search:"",status:"Draft",type:"All",track:"All",sort:"newest",columns:["title","speakers","status","updated","missing"]}},
-        {id:"review",name:"Active review",builtIn:true,config:{search:"",status:"In Review",type:"Abstract",track:"All",sort:"score",columns:["id","title","speakers","tracks","score","updated"]}},
-        {id:"my-finalists",name:"My finalists",builtIn:false,config:{search:"",status:"Waved",type:"All",track:"All",sort:"score",columns:["type","title","speakers","tracks","score","status"]}}
+        {id:"review",name:"Active review",builtIn:true,config:{search:"",status:"In Review",type:"Abstract",track:"All",sort:"planRating",columns:["id","title","speakers","tracks","score","planRating","updated"]}},
+        {id:"my-finalists",name:"My finalists",builtIn:false,config:{search:"",status:"Waved",type:"All",track:"All",sort:"planRating",columns:["type","title","speakers","tracks","planRating","status"]}}
       ];
 
       const state = {
@@ -848,7 +855,10 @@
         submissionType: "All",
         submissionTrack: "All",
         submissionSearch: "",
+        submissionSearchOp: "contains",
         submissionSort: "newest",
+        pacingAxis: "days",
+        impersonating: false,
         submissionRecordId: "AIE-0001",
         submissionPage: 1,
         submissionColumns: loadJson("marquee-prototype-columns", ["type","title","speakers","status","tracks","score"]),
@@ -977,7 +987,7 @@
       if(restoredView){const config=restoredView.config;state.submissionSearch=config.search||"";state.submissionFilter=config.status||"All";state.submissionType=config.type||"All";state.submissionTrack=config.track||"All";state.submissionSort=config.sort||"newest";state.submissionColumns=[...(config.columns||state.submissionColumns)];}
 
       function loadEvent() {
-        const fallback = { name: "AIE NYC 2026", start: "2026-10-12", end: "2026-10-14", timezone: "America/New_York", venue: "Sheraton New York Times Square", accent: "Violet" };
+        const fallback = { name: "AIE NYC 2026", start: "2026-10-12", end: "2026-10-14", timezone: "America/New_York", venue: "Sheraton New York Times Square", accent: "Violet", submissionLimit: 3 };
         try { return { ...fallback, ...JSON.parse(localStorage.getItem("marquee-prototype-event") || "{}") }; }
         catch (_) { return fallback; }
       }
@@ -1046,7 +1056,17 @@
             boardStage,
             timeInStageHours: ((i*37)%720)+2,
             format: formats[(i * 3 + 1) % formats.length],
+            level: levels[(i * 7 + 2) % levels.length],
+            tags: i % 3 === 0 ? [sessionTags[(i * 5) % sessionTags.length], ...(i % 9 === 0 ? [sessionTags[(i * 5 + 2) % sessionTags.length]] : [])] : [],
             score: i >= 150 && i < 240 ? (2.8 + seededRandom(i) * 2.1).toFixed(1) : "—",
+            // Committee-round rating exists once a record has cleared the initial
+            // screen — accepted records and the promoted slice of active review.
+            planRating: i < 190 ? (3.6 + seededRandom(i + 41) * 1.3).toFixed(1) : (i >= 190 && i < 240 && i % 3 !== 0 ? (2.9 + seededRandom(i + 41) * 1.8).toFixed(1) : "—"),
+            // The Notified receipt: when the decision email actually went out.
+            // Status change queues it automatically; this answers "did it land, when."
+            notifiedAt: accepted ? `${waveDates[i < 63 ? 0 : i < 126 ? 1 : 2]} · 10:0${(i % 9) + 1}` : (i >= 630 && i < 1000 ? `Sep 16 · 09:${String(10 + (i % 45)).padStart(2,"0")}` : null),
+            externalRef: i % 4 === 1 ? `SZ-${842 + (i % 260)}` : null,
+            capacity: entity === "Session" ? [null, 120, 420, null, 210][i % 5] : null,
             submitted: `2026-0${6 + (i % 2)}-${String(2 + (i * 7) % 27).padStart(2,"0")}`,
             updated: i>=1000&&i<1020 ? `${2+(i%11)}h ago` : `${1+(i%29)}d ago`,
             email: `${speaker.toLowerCase().replace(/[^a-z0-9]+/g,".").replace(/^\.|\.$/g,"")}@example.org`,
