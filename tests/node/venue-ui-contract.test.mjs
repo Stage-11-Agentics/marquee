@@ -4,7 +4,7 @@ import test from "node:test";
 
 const venuesPage = readFileSync(new URL("../../src/ui/venues/VenuesPage.tsx", import.meta.url), "utf8");
 const map = readFileSync(new URL("../../src/ui/venues/VenueMap.tsx", import.meta.url), "utf8");
-const settings = readFileSync(new URL("../../src/ui/venues/SettingsPage.tsx", import.meta.url), "utf8");
+const settings = readFileSync(new URL("../../src/ui/settings/EventSettings.tsx", import.meta.url), "utf8");
 const submissionsPage = readFileSync(new URL("../../src/ui/submissions/SubmissionsPage.tsx", import.meta.url), "utf8");
 
 test("AC-252 · scheduler-facing room labels include their building", () => {

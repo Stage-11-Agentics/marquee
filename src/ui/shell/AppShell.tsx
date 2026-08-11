@@ -10,7 +10,7 @@ import { Topbar } from "./Topbar";
 import { CommsScreen } from "../comms/CommsScreen";
 import { DashboardPage } from "../dashboard/DashboardPage";
 import { EvaluationPage } from "../evaluation/EvaluationPage";
-import { SettingsPage } from "../venues/SettingsPage";
+import { EventSettings } from "../settings/EventSettings";
 import { VenuesPage } from "../venues/VenuesPage";
 
 export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
@@ -47,7 +47,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
             : route?.id === "dashboard" ? <DashboardPage navigate={navigate} />
             : isEvaluation ? <EvaluationPage />
             : route?.id === "venues" ? <VenuesPage />
-            : route?.id === "settings" ? <SettingsPage navigate={navigate} />
+            : route?.id === "settings" ? <EventSettings navigate={navigate} />
             : route?.id === "communications" ? <>
             <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />
             <CommsScreen />
