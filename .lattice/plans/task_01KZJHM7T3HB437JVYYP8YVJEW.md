@@ -20,19 +20,24 @@ Deps: M-04a
 - Worktree: `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-5-seed-pool`
 - Branch: `mrq-5-seed-pool`
 - Planning base: `forgejo/master @ 5b9199f82be79316cbfafce54e00e38d078475f1`
-- MRQ-4 spine retained unchanged: 60 real accepted abstracts, 75 real speakers,
-  deterministic IDs/upserts, taxonomy/venue/waves/forms/task templates, and
-  `SEED-DATA.md`. In particular, do not edit `scripts/seed/index.ts` and do not
-  reintroduce filtering on the capture's unreliable `type` field.
+- MRQ-4 spine retained and extended: 60 real accepted abstracts and 75 real
+  February speakers, plus SPEC §6's A-prime real CODE-2025 roster. Deduplicate
+  trimmed names before allocating IDs/emails, including the measured overlaps;
+  never reintroduce filtering on the capture's unreliable `type` field and never
+  edit `scripts/seed/index.ts`.
 - Baseline `npm test` cannot start because this clean worktree has no
   `node_modules/vitest/vitest.mjs`; install from the lockfile before the first
   post-plan gate, then rerun the baseline suite.
 
 ## Implementation plan
 
-1. Add `scripts/seed/pool.ts` (order 30) for a deterministic 940-submission
-   synthetic pool, bringing the total to exactly 1,000. Preserve the specified
-   60 accepted core and use a status distribution of 550 rejected, 280
+1. Add `scripts/seed/pool.ts` (order 30) for the reconciled, real 89-person CODE
+   2025 roster and a deterministic 940-submission synthetic pool, bringing the
+   total to exactly 1,000. Deduplicate the CODE roster against the February core
+   on trimmed name (plus the documented Aparna spelling correction) before any
+   ID/email allocation, assert one person per human, and never attach these real
+   people to fabricated submissions. Preserve the specified 60 accepted core and
+   use a status distribution of 550 rejected, 280
    in-review, 70 waitlisted, and 40 incomplete drafts. Seed one synthetic
    submitter/participation per pool record, deterministic timestamps and
    `example.com` addresses, no headshot attachment or external image request,
@@ -41,7 +46,8 @@ Deps: M-04a
    submission.
 2. Add `scripts/seed/evaluations.ts` (order 40) for the demo organizer's
    event-scoped `owner`, `program_lead`, and `reviewer` memberships; a `speaker`
-   membership for every person participating in an accepted submission; all
+   membership for every person participating in an accepted submission or the
+   real CODE accepted-speaker roster, reaching at least 150 distinct speakers; all
    eight organizer reviewer-track scopes; the evaluation plan, two rounds,
    rubric and committee/reviewer rows; completed assignments/evaluations with
    score fields null across approve/maybe/deny; and 40 organizer round-1
@@ -88,12 +94,12 @@ Deps: M-04a
    PR against `master` citing M-04b and AC-3/234/245/246/249, attach the URL,
    transition to `pr_open`, and notify workspace:9 surface:60.
 
-## Deviation flag
+## Resolved interpretation
 
-AC-3's `>=150 accepted speakers` clause conflicts with the same binding seed
-contract and handoff that require retaining MRQ-4's exact 60-session/75-speaker
-real accepted core while M-04b adds a 940-row rejected/pending pool, and prohibit
-fabricated accepted people. This implementation preserves the verifiable real
-accepted core and satisfies AC-3's `>=800 submissions` and positive agenda
-density. It will report the remaining 75-accepted-speaker gap to the
-Orchestrator rather than fabricate accepted identities or rewrite MRQ-4.
+The earlier AC-3 deviation was withdrawn after the orchestrator ratified F-2:
+SPEC §6's recommended A-prime seed is the February-2025 accepted core plus the
+real CODE-2025 accepted-speaker roster. The roster count is an evidence output,
+not a target: trust the enumerated/publicly recorded people, deduplicate before
+identity allocation, and never fabricate an accepted identity. The reconciled
+89-person CODE roster overlaps the February core but still produces at least 150
+distinct accepted-speaker memberships.

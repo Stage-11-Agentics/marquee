@@ -3,17 +3,48 @@
   "branch_links": [],
   "c11_surface": "surface:121",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 5,
+  "comment_count": 11,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-04b \u2014 Wave 0 table (\u00a73), runs in parallel with Wave 1's opening tickets\n\nScope (verbatim): The 940-row rejected/pending pool including ~40 incomplete Drafts, multi-track distribution (\u226515%; \u22653 scheduled), participations, tasks, evaluations/recommendations, agenda with **two live double-bookings**, and the deliberate ugliness list. **Seeds the *demo organizer* persona a `reviewer` membership on the demo event, `reviewer_track_scopes` covering every track, and round-1 `round_assignments` over ~40 unreviewed submissions** \u2014 so the Review queue the admin sidebar links opens populated instead of on \"no matching track scope\", and AC-62's 20-advance speed run has material (B-3). Runs in parallel with M-09/M-10; off the CP-1 chain.\n\nDeliberate ugliness (\u00a71.1 / `check:seed`): a speaker on 3 submissions, a 4-person panel, an overdue task set, a live double-booking.\nAmendment 5 fold: multi-track distribution \u226515% with \u22653 accepted-and-scheduled two-track sessions, asserted by `check:seed`.\nAmendment 8 fold: seed obligations for the saved-views/Drafts queue (AC-247\u2013249) land here.\n\nFile surface: `scripts/seed/pool.ts`, `scripts/seed/evaluations.ts`, `scripts/seed/agenda.ts`, `scripts/seed/ugliness.ts`\n\nACs: AC-3, **AC-234, AC-245, AC-246, AC-249**\nHours: 5\nWorkflow: inline-full\nShared files: none \u2014 per-entity seeder files only. **Never edit `scripts/seed/index.ts`** (M-04a owns it; it globs these files).\nDeps: M-04a\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-11T01:43:56Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZQ7CNDYRES0H6Y8TK0TAP03",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ7K8KG9CEC7A9YCB7JRV0K",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ7K9DW7RVQ7S322NNTG7G1",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ7PVFK8QYBMMGK9TC3F9P7",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQ7V6ERXST6D2RSB0K2K1A1",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQ7V6ERXST6D2RSB0K2K1A0",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHM7T3HB437JVYYP8YVJEW",
-  "last_event_id": "ev_01KZQ6T6XFJ8QRFVQ1W2FP8GTN",
-  "last_status_changed_at": "2026-08-11T01:16:53Z",
+  "last_event_id": "ev_01KZQ7V6ERXST6D2RSB0K2K1A4",
+  "last_status_changed_at": "2026-08-11T01:43:56Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -25,13 +56,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-5",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Seed generator \u2014 pool, evaluation, and deliberate ugliness",
   "type": "task",
-  "updated_at": "2026-08-11T01:25:55Z",
+  "updated_at": "2026-08-11T01:43:56Z",
   "urgency": null
 }

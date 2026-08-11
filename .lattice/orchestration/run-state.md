@@ -31,8 +31,13 @@
 | ~~MRQ-8 (M-07)~~ | closed | **done** | **MERGED** PR #7 (c4e34037). `check:api` is real with the N-7 activation rule; AC-105/106/108 tested. **MRQ-9 unblocked.** |
 | ~~MRQ-3 (M-03)~~ | closed | **done** | **MERGED** PR #8 (a8792123). AC-214 enforced at three layers incl. a schema CHECK. Master re-gated green (10.2 s). |
 | ~~MRQ-14 (M-13)~~ | closed | **done** | **MERGED** PR #9 (13c0780a). Guardrail hand-reviewed: AC-231 asserts 403 **and zero side effects** across four fail-closed cases. Follow-up **MRQ-59**. |
-| MRQ-5 (M-04b) | surface:121 | **codex** | Seed pool + evaluation. Carries **B-3 (BLOCKING)**: reviewer membership, track scopes, round-1 assignments, or walkthrough step 8 has no entry. |
-| MRQ-9 (M-08) | surface:122 | **codex** | Submissions list — the first screen a judge drives. Builds on MRQ-8's list contract. |
+| ~~MRQ-5 (M-04b)~~ | closed | **done** | **MERGED** (387b4d1a). **B-3 discharged** — 40 unreviewed round-1 assignments + 8 scopes, so walkthrough step 8 has an entry. 153 accepted speakers, 89 verified CODE, **zero fabricated identities**, privacy scan clean. |
+| ~~MRQ-9 (M-08)~~ | closed | **done** | **MERGED** (b6e442b7). Submissions list live. Its public route carries the `TODO(MRQ-60)` marker. |
+| MRQ-12 (M-11) | surface:126 | **luna xhigh** | Email core + demo-safe outbox. Nothing sends until this lands. |
+| MRQ-60 | surface:127 | **luna xhigh** | Credential resolver. Resolver committed; **re-gate now unblocked by MRQ-9's merge — held from completion until it lands**. |
+| MRQ-7 (M-05b) | surface:130 | **luna xhigh** | Public landing page — the judge's first screen. |
+| MRQ-58 | surface:131 | **luna xhigh** | Venue geography migration (`0002_*`). |
+| MRQ-59 | surface:132 | **luna xhigh** | Port uploads onto the route manifest — disarms the `check:api` failure. |
 
 **Model split rationale:** Bravo is at 84% weekly and resets *after* the deadline, so Opus goes only to the ticket whose contracts every later ticket inherits; Sonnet carries the other two. MRQ-4 proved the Sonnet-implements / stronger-model-reviews pattern works here.
 

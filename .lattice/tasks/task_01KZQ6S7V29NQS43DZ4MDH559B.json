@@ -1,17 +1,30 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-60",
   "branch_links": [],
-  "comment_count": 0,
+  "c11_surface": "surface:127",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-11T01:25:23Z",
   "created_by": "agent:orchestrator",
   "custom_fields": {},
   "description": "**BLOCKING BEFORE THE PUBLIC DEPLOY.** Raised jointly by MRQ-3 (which named it as owed follow-up) and MRQ-9 (which is currently shipping an unauthenticated admin route because of it).\n\n**The gap:** MRQ-3 merged real auth \u2014 magic links, sessions, bearer middleware, scope resolution, per-event reviewer scoping enforced down to a schema CHECK. MRQ-8 merged the API runtime. **They are not wired together.** `src/api/runtime.ts` names M-03 as the ticket expected to supply a `CredentialResolver` adapter; MRQ-3 deferred it as genuine follow-up scope rather than rush it.\n\n**The live consequence:** MRQ-9's `GET /events/:id/submissions` is **temporarily public**. SPEC scopes it to authenticated admins. On the private Forgejo deploy that is survivable; **on the public site it is an unauthenticated endpoint serving every submission in the conference**, including unpublished and rejected ones. That is the exact class of leak AC-214 exists to prevent, arriving through a different door.\n\nScope:\n- Implement the `CredentialResolver` adapter so the API runtime resolves a principal from MRQ-3's session cookie and bearer paths.\n- Reconcile `Principal` / `AuthContext` (they were designed in separate tickets and do not yet agree).\n- Extend `ApiBindings` accordingly; update the ~7 handler schemas that assume an unauthenticated context.\n- **Close MRQ-9's temporary hole:** re-gate `GET /events/:id/submissions` to authenticated admin scope, and convert MRQ-9's \"currently public\" test into one asserting a 401/403 for an unauthenticated caller.\n\nDepends on: MRQ-3 (merged), MRQ-8 (merged), MRQ-9. Hours: ~3. Workflow: inline-full. **Guardrail-adjacent \u2014 orchestrator hand-review at merge, and this ticket must be done before anything is deployed publicly.**",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZQ7SEW1AGDP16YFR5GFWD11",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ7WR96TTR2EE7Z7XWGBEXX",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZQ6S7V29NQS43DZ4MDH559B",
-  "last_event_id": "ev_01KZQ6SP01PHDTZVPV326QQ85P",
-  "last_status_changed_at": "2026-08-11T01:25:23Z",
+  "last_event_id": "ev_01KZQ7X16KK1WV4JQQ81CSMK9S",
+  "last_status_changed_at": "2026-08-11T01:44:56Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +39,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-60",
-  "status": "backlog",
+  "status": "in_validation",
   "tags": null,
   "title": "API credential resolver \u2014 wire merged auth into the API runtime",
   "type": "task",
-  "updated_at": "2026-08-11T01:25:38Z",
+  "updated_at": "2026-08-11T01:44:56Z",
   "urgency": null
 }

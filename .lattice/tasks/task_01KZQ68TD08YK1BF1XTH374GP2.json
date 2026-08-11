@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-59",
   "branch_links": [],
+  "c11_surface": "surface:132",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-11T01:16:25Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZQ68TD08YK1BF1XTH374GP2",
-  "last_event_id": "ev_01KZQ699MFKGNNGY3XW2SD7RMN",
-  "last_status_changed_at": "2026-08-11T01:16:25Z",
+  "last_event_id": "ev_01KZQ7VJQ01X20BX40EEDBM724",
+  "last_status_changed_at": "2026-08-11T01:44:09Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-59",
-  "status": "backlog",
+  "status": "in_progress",
   "tags": null,
   "title": "Port uploads routes onto the generated route manifest",
   "type": "task",
-  "updated_at": "2026-08-11T01:16:41Z",
+  "updated_at": "2026-08-11T01:44:09Z",
   "urgency": null
 }

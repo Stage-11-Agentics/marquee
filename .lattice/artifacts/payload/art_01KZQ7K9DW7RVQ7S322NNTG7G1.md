@@ -1,0 +1,5 @@
+Validated commit: a48cfb3c1efbbb89a29d1b7eaadcaaa9f5f84226
+Base: forgejo/master @ 00069f6456e960470b5f017f3287c42bcb524f4e
+Runtime: fresh ephemeral local D1 at /tmp/mrq-5-validate.koJDBc; migrations/0001_init.sql applied; npm run seed executed twice successfully.
+Live SQL evidence: submissions accepted=60 draft=40 in_review=280 rejected=550 waitlisted=70; accepted speaker memberships=153; duplicate trimmed names=0; organizer unreviewed assignments=40; organizer track scopes=8; recommendations approve=20 maybe=20 deny=20 with numeric score count=0; overdue open tasks=10; scheduled multi-track sessions=3; person/start conflicts=2.
+Static evidence: npm test PASS (14 files, 70 Vitest plus 20 Node tests); tsc PASS for tsconfig.json, tsconfig.test.json, tsconfig.client.json; trace:ac PASS (197 live, 18 test files, 6 claims, 0 uncovered, 0 errors).

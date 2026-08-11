@@ -3,17 +3,43 @@
   "branch_links": [],
   "c11_surface": "surface:122",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 4,
+  "comment_count": 6,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-08 \u2014 Wave 0 (\u00a73), the last ticket before CP-1\n\nScope (verbatim): Server-side filtered/sorted/paginated list at 50/page over the seed, type/status/track filters including Draft, selection state, exact record navigation, empty state, and the stable column registry that M-55 configures. Proves the whole stack end to end on real data.\n\nAmendment 5 fold (AC-240): slot chips (day \u00b7 time \u00b7 room) and the \"Not yet public\" marker land in the submissions list here.\nVocabulary note (SPEC): **`waitlisted` displays as \"Maybe\"** on chips and filters.\n\nFile surface: `src/routes/submissions.routes.ts`, `submissions.queries.ts`, `src/ui/submissions/*`\n\nACs: AC-23, part AC-66, foundation **AC-240, AC-247\u2013249**\nHours: 4\nWorkflow: inline-full\nShared files: none \u2014 module-local. The **column registry** it defines is consumed by M-55; keep it a named module (`src/lib/`-style specific name), never a `utils.ts`.\nDeps: M-04a, M-05a+M-06, M-07\nCP-1 (human-visible checkpoint) closes when this lands: deployed URL, populated, both demo logins land on a real screen, `npm test` green in <30 s, `check:repo` clean; traps 2, 4, 15 closed; felt checkpoint C1 runs.\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-11T01:44:43Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZQ7FZESGA9DMFSQ7EC4VEJ2",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ7P84GR02182E3KSFC654T",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ7THB0E2VSSX063R590Q21",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQ7WMKZQR2NP65067ED15AN",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQ7WMKZQR2NP65067ED15AM",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHM862JR0BCFKFPFRZTWYW",
-  "last_event_id": "ev_01KZQ6R2N36211MP89V0JEFDHG",
-  "last_status_changed_at": "2026-08-11T01:17:30Z",
+  "last_event_id": "ev_01KZQ7WMKZQR2NP65067ED15AR",
+  "last_status_changed_at": "2026-08-11T01:44:43Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -39,13 +65,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-9",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "First loop screen: submissions list",
   "type": "task",
-  "updated_at": "2026-08-11T01:24:45Z",
+  "updated_at": "2026-08-11T01:44:43Z",
   "urgency": null
 }

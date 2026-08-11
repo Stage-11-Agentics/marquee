@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T01:43:35Z",
+  "created_by": "agent:delegator-mrq-9",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/11"
+  },
+  "id": "art_01KZQ7THB0E2VSSX063R590Q21",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "MRQ-9 exact reviewed head af9c9f9",
+  "tags": [],
+  "title": "Forgejo PR #11",
+  "token_usage": null,
+  "type": "reference"
+}

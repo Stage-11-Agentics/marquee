@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-12",
   "branch_links": [],
+  "c11_surface": "surface:126",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM8F91A8TDZSR9FNQ2SNG",
-  "last_event_id": "ev_01KZJHME6RRTCQQA00H5S1JZB6",
-  "last_status_changed_at": "2026-08-09T05:58:42Z",
+  "last_event_id": "ev_01KZQ7BJRVKN4KFAYHMG0F7TKQ",
+  "last_status_changed_at": "2026-08-11T01:35:24Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -33,10 +35,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-12",
-  "status": "backlog",
+  "status": "in_progress",
   "tags": null,
   "title": "Email core and demo-safe outbox",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:48Z",
+  "updated_at": "2026-08-11T01:35:24Z",
   "urgency": null
 }

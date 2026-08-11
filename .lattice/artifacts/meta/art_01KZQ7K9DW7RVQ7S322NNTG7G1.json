@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:39:37Z",
+  "created_by": "agent:delegator-mrq-5",
+  "custom_fields": {},
+  "id": "art_01KZQ7K9DW7RVQ7S322NNTG7G1",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ7K9DW7RVQ7S322NNTG7G1.md",
+    "size_bytes": 853
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Fresh local D1 migration and two idempotent seed applications passed",
+  "tags": [],
+  "title": "Live D1 validation \u2014 a48cfb3c1efb",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:44:43Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZQ7WMKZQR2NP65067ED15AM",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ7WMKZQR2NP65067ED15AM.md",
+    "size_bytes": 427
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged as PR #11 (squash). Secret/privacy scan clean. The temporarily-public route is marked exactly as required \u2014 TODO(MRQ-60) inline at the policy block with auth kind public \u2014 so MRQ-60 can find an",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

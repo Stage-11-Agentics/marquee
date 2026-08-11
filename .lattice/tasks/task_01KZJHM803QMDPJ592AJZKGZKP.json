@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-7",
   "branch_links": [],
+  "c11_surface": "surface:130",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM803QMDPJ592AJZKGZKP",
-  "last_event_id": "ev_01KZJHMDC5REQ9PVYCBVV3D1G0",
-  "last_status_changed_at": "2026-08-09T05:58:42Z",
+  "last_event_id": "ev_01KZQ7SR8QHRHDYZ2EMF3WJ07Z",
+  "last_status_changed_at": "2026-08-11T01:43:09Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -40,10 +42,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-7",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Public landing page with live pipeline preview",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:47Z",
+  "updated_at": "2026-08-11T01:43:09Z",
   "urgency": null
 }
