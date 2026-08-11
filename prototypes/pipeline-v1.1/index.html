@@ -3,8 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Marquee — Pipeline v1.9 prototype</title>
-  <!-- v1.9 (2026-08-11): venue set reconciled with SPEC Amendment 14 and the
+  <title>Marquee — Pipeline v1.10 prototype</title>
+  <!-- v1.10 (2026-08-11): public-widget widening (collaborator note, rubric
+       area "Public Widgets"). The embed dialog grows from two formats to four:
+       Agenda, Sessions (flat filterable list), Speakers (cards or list layout),
+       and Call for speakers (US-16 promoted into scope — live deadline/formats
+       block that flips to closed automatically). Track filter and layout are
+       part of the copyable snippet URL. Controls hold fixed positions across
+       format switches; inapplicable controls disable, never disappear.
+       v1.9 (2026-08-11): venue set reconciled with SPEC Amendment 14 and the
        shipped seed. The 2025 building set (The Times Center, Jay Suites, AWS
        JFK27) was chronologically wrong for a 2026 Sheraton conference and paired
        Sheraton-native room names with 2025 venues. Now: Sheraton New York Times
@@ -2823,15 +2830,35 @@
       }
 
       function showEmbedModal() {
-        const paint = kind => {
-          const gallery = kind === "speakers";
-          modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Embed the conference site</h2><p>Filters, configured track colors, and published changes stay live without republishing.</p></div><div class="modal-body"><div class="segment" style="margin-bottom:14px"><button id="embed-agenda" class="${gallery?"":"active"}">Agenda</button><button id="embed-speakers" class="${gallery?"active":""}">Speaker gallery</button></div><div class="field"><label>Embed code</label><textarea id="embed-code" readonly style="font-family:ui-monospace,monospace;font-size:11px">&lt;iframe src=&quot;https://marquee.stage11.dev/aie-nyc-2026/${gallery?"speakers":"agenda"}/embed&quot; title=&quot;AIE NYC 2026 ${gallery?"speakers":"agenda"}&quot; loading=&quot;lazy&quot;&gt;&lt;/iframe&gt;</textarea></div><div class="field"><label>Live preview</label><div style="height:135px;border:1px solid var(--line);border-radius:8px;padding:15px;background:var(--sunk)"><strong>AIE NYC 2026 · ${gallery?"Speakers":"Agenda"}</strong><div class="subtle" style="margin-top:12px">${gallery?`Amara van der Meer · Capital One<br>João García Márquez · Anthropic<br>Fatima Al-Khatib · Mistral AI`:`09:00 · Opening keynote<br>10:00 · Reliable multi-agent systems<br>11:00 · Evaluation infrastructure at scale`}</div></div></div></div><div class="modal-actions"><button class="button" id="close-embed">Close</button><button class="button primary" id="copy-embed">Copy embed code</button></div></section></div>`;
-          document.getElementById("embed-agenda").onclick = () => paint("agenda");
-          document.getElementById("embed-speakers").onclick = () => paint("speakers");
+        // Four widget formats (AC-217/218, AC-273, AC-274). Controls hold fixed
+        // positions across format switches: inapplicable controls disable, never
+        // disappear (track filter for the CFP block, layout outside Speakers).
+        const embed = { kind: "agenda", track: "", layout: "cards" };
+        const KINDS = [["agenda","Agenda"],["sessions","Sessions"],["speakers","Speakers"],["cfp","Call for speakers"]];
+        const LABEL = { agenda:"Agenda", sessions:"Session list", speakers:"Speaker gallery", cfp:"Call for speakers" };
+        const paint = () => {
+          const k = embed.kind;
+          const params = [];
+          if (embed.track && k !== "cfp") params.push(`track=${encodeURIComponent(embed.track)}`);
+          if (k === "speakers" && embed.layout === "list") params.push("layout=list");
+          const src = `https://marquee.stage11.dev/aie-nyc-2026/${k}/embed${params.length?"?"+params.join("&amp;"):""}`;
+          const trackNote = embed.track && k !== "cfp" ? ` · ${esc(embed.track)}` : "";
+          const preview =
+            k === "speakers" ? (embed.layout === "list"
+              ? `Amara van der Meer — Capital One<br>João García Márquez — Anthropic<br>Fatima Al-Khatib — Mistral AI<br>Casey O'Connell-Singh — Ramp`
+              : `<div style="display:flex;gap:10px">${["Amara van der Meer·Capital One","João García Márquez·Anthropic","Fatima Al-Khatib·Mistral AI"].map(p=>{const[n,c]=p.split("·");return `<div style="flex:1;border:1px solid var(--line);border-radius:6px;padding:8px 10px"><strong style="font-size:11px">${n}</strong><div class="subtle" style="font-size:10px">${c}</div></div>`;}).join("")}</div>`)
+            : k === "sessions" ? `Reliable multi-agent systems · Agents · Thu 10:00<br>Evaluation infrastructure at scale · Evals · Thu 11:00<br>Guardrails for trading agents · AI in Financial Services · Fri 09:30<br>Serving open models on a budget · Open Models · Fri 14:00`
+            : k === "cfp" ? `<strong>Call for speakers is open</strong> · closes Sep 12, 2026<br>Workshop · Stage Talk · Lightning · Online<br><span style="color:var(--accent)">Submit a proposal →</span><br><span style="font-size:10px">Flips to its closed state automatically when the form closes.</span>`
+            : `09:00 · Opening keynote<br>10:00 · Reliable multi-agent systems<br>11:00 · Evaluation infrastructure at scale<br>13:30 · Guardrails for trading agents`;
+          modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Embed the conference site</h2><p>Filters, configured track colors, and published changes stay live without republishing — a source change shows within 60 seconds.</p></div><div class="modal-body"><div class="segment" style="display:flex;margin-bottom:14px">${KINDS.map(([id,label])=>`<button data-embed-kind="${id}" class="${k===id?"active":""}" style="flex:1">${label}</button>`).join("")}</div><div style="display:flex;gap:12px;margin-bottom:14px"><div class="field" style="flex:1;margin:0"><label>Track</label><select id="embed-track" ${k==="cfp"?"disabled":""}><option value="">All tracks</option>${tracks.map(t=>`<option ${embed.track===t.name?"selected":""}>${esc(t.name)}</option>`).join("")}</select><span class="field-note">${k==="cfp"?"Not applicable — the block promotes the whole call":"Limits the embed to one track"}</span></div><div class="field" style="flex:1;margin:0"><label>Layout</label><div class="segment" style="display:flex"><button id="embed-layout-cards" style="flex:1" ${k!=="speakers"?"disabled":""} class="${k==="speakers"&&embed.layout==="cards"?"active":""}">Cards</button><button id="embed-layout-list" style="flex:1" ${k!=="speakers"?"disabled":""} class="${k==="speakers"&&embed.layout==="list"?"active":""}">List</button></div><span class="field-note">${k==="speakers"?"Gallery cards or a compact list":"Applies to the Speakers format"}</span></div></div><div class="field"><label>Embed code</label><textarea id="embed-code" readonly style="font-family:ui-monospace,monospace;font-size:11px">&lt;iframe src=&quot;${src}&quot; title=&quot;AIE NYC 2026 ${LABEL[k].toLowerCase()}&quot; loading=&quot;lazy&quot;&gt;&lt;/iframe&gt;</textarea></div><div class="field"><label>Live preview</label><div style="height:150px;overflow:hidden;border:1px solid var(--line);border-radius:8px;padding:15px;background:var(--sunk)"><strong>AIE NYC 2026 · ${LABEL[k]}${trackNote}</strong><div class="subtle" style="margin-top:12px;line-height:1.7">${preview}</div></div></div></div><div class="modal-actions"><button class="button" id="close-embed">Close</button><button class="button primary" id="copy-embed">Copy embed code</button></div></section></div>`;
+          modalRoot.querySelectorAll("[data-embed-kind]").forEach(b=>b.onclick=()=>{embed.kind=b.dataset.embedKind;paint();});
+          document.getElementById("embed-track").onchange = e => { embed.track = e.target.value; paint(); };
+          document.getElementById("embed-layout-cards").onclick = () => { embed.layout = "cards"; paint(); };
+          document.getElementById("embed-layout-list").onclick = () => { embed.layout = "list"; paint(); };
           document.getElementById("close-embed").onclick = () => modalRoot.innerHTML = "";
-          document.getElementById("copy-embed").onclick = () => { const e=document.getElementById("embed-code"); e.select(); try{navigator.clipboard?.writeText(e.value)}catch(_){ } toast(`${gallery?"Speaker gallery":"Agenda"} embed code copied`); };
+          document.getElementById("copy-embed").onclick = () => { const e=document.getElementById("embed-code"); e.select(); try{navigator.clipboard?.writeText(e.value)}catch(_){ } toast(`${LABEL[k]} embed code copied`); };
         };
-        paint("agenda");
+        paint();
       }
 
       function bindCommon() {

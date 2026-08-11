@@ -332,6 +332,8 @@ The judge's test script is the walkthrough video: someone opens the deployed URL
 - **AC-88** A schedule itinerary and a speaker gallery are both embeddable, filterable by track and status.
 - **AC-89** A change to source data appears in the embed within 60 seconds (against Sessionboard's 60-*minute* refresh).
 - **AC-90** The embed is responsive and inherits configured colors.
+- **AC-273** *(Amendment 18)* A flat **session-list** embed format renders published sessions with title, track, and time, filterable by track and status exactly like the agenda embed, and selectable in the same embed dialog.
+- **AC-274** *(Amendment 18)* The speaker embed offers **cards** and **list** layouts, chosen in the embed dialog and carried in the snippet URL; both layouts satisfy AC-90's responsiveness.
 
 `[R-24]`, dossier Q2 · Source: walkthrough [08:25]; learn.sessionboard.com/sessions/embeds
 
@@ -778,7 +780,7 @@ Modeled where the data model makes it cheap; not built by Wednesday. Ordered rou
 **As a** marketing/web lead, **I want** the open call, deadline, and formats as an embeddable block, **so that** our conference site stays accurate without me editing it.
 - **AC-217** An embeddable "call for speakers" block renders deadline, formats, and a link to the form.
 - **AC-218** The embed reflects the form's close date automatically, including switching to a closed state.
-`[R-24, R-34]`
+`[R-24, R-34]` · **Promoted to live in-scope (Amendment 18, 2026-08-11)** — the CFP block is the third widget family in the embed dialog, alongside agenda/sessions and speakers.
 
 ### US-20 · Submit more than once, up to the limit
 **As a** speaker, **I want** to propose several topics up to the event's cap, **so that** I don't have to guess which one the program wants.
@@ -996,3 +998,15 @@ Source: client approval of the v1.3 context-gap audit against `/Users/atin/Downl
 *`US-82` and `AC-270 – AC-272` are drafted in `sequence/research/state-model-gaps.md` Part 2 and are **deliberately unminted** (ruled 2026-08-10): the build is extra credit, and minting would add criteria to every count the auditor reconciles for work that is not scheduled. **AC-223 and AC-224 already specify the correct behaviour** and sit in the post-competition band; the limitation is named in `EVALUATION.md` gate 19 and `SPEC.md` §10 so it is a documented deferral rather than a live discovery. Mint from **AC-270** if the if-capacity band opens.*
 
 ---
+
+## Amendment 18 — public widgets widened (2026-08-11, client-directed)
+
+*Source: collaborator note relayed 2026-08-11 — the competition rubric weights "Public Widgets" as a joint-heaviest area, while embeds sat in the cuttable Tier B band. Ruled by Atin: protect and widen. Binding prototype **v1.10** (embed dialog, public agenda → `Get embed code`).*
+
+Three moves, no renumbering:
+
+1. **US-16 promoted to live in-scope.** AC-217 and AC-218 (already minted, previously uncounted) enter the live set. The CFP block is the third widget family: it renders deadline, formats, and a form link, and flips to its closed state automatically — the widget a conference site wants *before* the program exists.
+2. **US-58 gains AC-273 and AC-274** — a flat session-list format and a cards/list layout choice on the speaker embed. Together with the shipped agenda and speaker-gallery kinds these cover the incumbent's five embed formats with variants of two renderers.
+3. **AC-87 – AC-90 leave the cuttable band** (recorded in `EVALUATION.md`): MRQ-22 is merged, so a cut would remove working code from a judged area. Q2 closes as resolved-built.
+
+**AC-270 – AC-272 remain reserved** for the drafted submitter/speaker split above; this amendment deliberately mints from **AC-273** so a later if-capacity opening does not collide. Next mint: **AC-275**.
