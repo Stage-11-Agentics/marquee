@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-50",
   "branch_links": [],
+  "c11_surface": "0B35D9AA-3B7F-4E94-A2D8-577798AB4AF6",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHMC2F9XEPBYEHF9JC4V9T",
-  "last_event_id": "ev_01KZJHMKDSJJ6KCQVY467PPMVC",
-  "last_status_changed_at": "2026-08-09T05:58:46Z",
+  "last_event_id": "ev_01KZR2M94TMZ65F558FN2W6MPC",
+  "last_status_changed_at": "2026-08-11T09:32:01Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-50",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Audit \u2014 reviewer anonymity byte-scan",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:54Z",
+  "updated_at": "2026-08-11T09:32:01Z",
   "urgency": null
 }

@@ -1,0 +1,9 @@
+Verdict: PASS
+Reviewed commit: f501cde822d04a1a074504e678574de56108977b
+Scope: tests/integration/auth-demo.test.ts, tests/integration/api/credential-resolver.test.ts, tests/integration/public-site.AC-83-86-240-252-253.test.ts, tests/node/auth-boundary.test.mjs.
+
+Evidence: the diff adds status, response-body, Set-Cookie, before/after auth_sessions-count, replay, expiry, cookie-vs-bearer, and invalid-cookie SSR embed assertions. The AST inventory has positive controls and exactly two createSession callers, one auth_sessions INSERT, one revoke UPDATE, and no expiry extension.
+
+Audit findings routed to the owning implementation seams: (1) src/lib/auth/credential-resolver.ts:20-25 plus src/api/router.ts:92-100 resolve a supplied cookie before public routes; concrete input GET /api/v1/public/embeds/public-conf-agenda with Cookie: mq_session=expired-or-tampered returns 401 instead of anonymous public data, despite src/routes/public.routes.ts:104-110 declaring the embed anonymous-only. (2) src/lib/auth/auth-middleware.ts:78 plus src/lib/auth/scope-resolution.ts:67-74 load all memberships for a cookie person without filtering person.org_id; with a person in org_1, event evt_foreign in org_foreign, and a mismatched org_foreign owner membership, the cookie reaches the protected handler with 200 while an org_1 bearer token for the same person is denied 403. These are findings, not silently fixed in this audit-only ticket.
+
+No auto AC is owned by MRQ-47; no tests/ac-claims/MRQ-47.json was created. Local evidence before final gate: npm test pass, trace:ac merged pass with 0 uncovered and 0 errors.,

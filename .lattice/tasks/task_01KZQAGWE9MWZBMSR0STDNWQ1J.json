@@ -12,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZQAGWE9MWZBMSR0STDNWQ1J",
-  "last_event_id": "ev_01KZR24KGC9M0HVS62DXZ21GJN",
-  "last_status_changed_at": "2026-08-11T09:23:27Z",
+  "last_event_id": "ev_01KZR2Q7ZSZE8D0FW6ZE7YRPZH",
+  "last_status_changed_at": "2026-08-11T09:33:38Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -35,10 +35,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-65",
-  "status": "in_planning",
+  "status": "in_progress",
   "tags": null,
   "title": "Disclosure fold \u2014 hide the comparison, never the instruction",
   "type": "task",
-  "updated_at": "2026-08-11T09:23:27Z",
+  "updated_at": "2026-08-11T09:33:38Z",
   "urgency": null
 }

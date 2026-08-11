@@ -25,3 +25,10 @@
 ## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
 
 Verdict: PASS. Self-review found no untriaged plan defect. The plan covers the complete gated set, the deliberately unprotected autosave exception, conditional-answer consumers including admin create, the presign/write/verify/serve lifecycle, row/object absence assertions, positive controls, key-boundary attacks, caps, report line references, required local gate, validation evidence, and the mandatory PR/status handoff. No production change is pre-authorized; a machine guard is added only if the audit identifies a recurring bypass.
+
+## Operator Ruling Amendment (AUTHORITATIVE)
+
+- The reproduced public-presign Turnstile replay is a real security finding. A single verified token must be single-use on the public presign path; the second attempt must be refused before any new attachment row or object is created.
+- A contained fix in the public presign handler is authorized. Do not change shared upload/auth seams; stop and report if the fix requires them.
+- MRQ-57 real Cloudflare deployment is gated on this fix. The PR body must state that dependency explicitly.
+- The admin hidden-conditional persistence finding is known and remains unfixed in this ticket. Document its `file:line` reproduction, add only a safe isolated guard, and route remediation to the owning ticket at end of run.
