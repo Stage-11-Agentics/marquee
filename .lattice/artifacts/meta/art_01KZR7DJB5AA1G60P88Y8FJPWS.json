@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:55:44Z",
+  "created_by": "agent:auditor-mrq-52",
+  "custom_fields": {},
+  "id": "art_01KZR7DJB5AA1G60P88Y8FJPWS",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR7DJB5AA1G60P88Y8FJPWS.md",
+    "size_bytes": 1312
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: exact-head source guard and runtime audit; two routed D1-cap findings remain explicit",
+  "tags": [],
+  "title": "MRQ-52 self-review",
+  "token_usage": null,
+  "type": "note"
+}

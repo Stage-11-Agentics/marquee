@@ -35,7 +35,7 @@ Add the existing `check:api` command to `scripts/checks/pr-gate.mjs` in the esta
 
 ### 5. Record, do not absorb, routed handoffs
 
-Record the audit handoffs on their target Lattice tickets and leave their owned source files alone: H1 (`check:seed`) to MRQ-23; H2/H3 to MRQ-42; H4 to MRQ-50; H5-H7 to MRQ-51; H8 to MRQ-15 and MRQ-34. In particular, do not edit `scripts/checks/check-seed.mjs` in this ticket while MRQ-23 owns it; the new seed data and targeted database proof must remain compatible with the venue assertions it already contains.
+Record the audit handoffs on their target Lattice tickets: H1 (`check:seed`) to MRQ-23; H2/H3 to MRQ-42; H4 to MRQ-50; H5-H7 to MRQ-51; H8 to MRQ-15 and MRQ-34. MRQ-23 is complete in the current task graph, and the ticket explicitly places the database assertion half in `scripts/checks/seed.ts`; update that helper while leaving `scripts/checks/check-seed.mjs` untouched so its venue assertions survive. Do not absorb the other tickets' owned source changes.
 
 ## Verification sequence
 
@@ -50,7 +50,7 @@ Record the audit handoffs on their target Lattice tickets and leave their owned 
 ## Non-goals and safety constraints
 
 - Do not edit SPEC.md, EVALUATION.md, BUILDPLAN.md, DESIGN.md, PHILOSOPHY.md, USER_STORIES.md, or mint AC IDs.
-- Do not implement MRQ-23/MRQ-42/MRQ-50/MRQ-51/MRQ-15/MRQ-34 handoffs.
+- Do not implement the MRQ-42/MRQ-50/MRQ-51/MRQ-15/MRQ-34 handoffs. The explicit MRQ-23 `scripts/checks/seed.ts` database-proof addition is in scope; `scripts/checks/check-seed.mjs` remains out of scope.
 - Keep all seed data deterministic, demo-safe, and free of secrets, real addresses, internal hostnames, or ticket IDs in shipped files/UI.
 - Use shared condition, auth, list, attachment, and route-manifest seams. Any required contract contradiction will be flagged to the Orchestrator with the chosen behavior and reason.
 - Before every commit, assert the Git root is this worktree. Push the first plan commit and every meaningful follow-up to `forgejo` immediately.

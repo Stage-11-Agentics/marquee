@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:00:02Z",
+  "created_by": "agent:auditor-mrq-53",
+  "custom_fields": {},
+  "id": "art_01KZR7NE1J9EJK6XRYHANNC1AQ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR7NE1J9EJK6XRYHANNC1AQ.md",
+    "size_bytes": 2162
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Local real-worker reset drill, twice-reset vector, browser request trace, and passing PR gate.",
+  "tags": [],
+  "title": "MRQ-53 runtime validation",
+  "token_usage": null,
+  "type": "file"
+}

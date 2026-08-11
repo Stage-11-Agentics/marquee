@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:02:03Z",
+  "created_by": "agent:auditor-mrq-53",
+  "custom_fields": {},
+  "id": "art_01KZR7S4N2WVPEGMN4B2VZ8TRC",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR7S4N2WVPEGMN4B2VZ8TRC.md",
+    "size_bytes": 7335
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS audit diff at rebased HEAD; product findings and exact runtime reproductions retained.",
+  "tags": [],
+  "title": "MRQ-53 self-review after rebase",
+  "token_usage": null,
+  "type": "file"
+}

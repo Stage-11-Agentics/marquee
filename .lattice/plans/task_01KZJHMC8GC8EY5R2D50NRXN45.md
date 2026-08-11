@@ -55,3 +55,5 @@ Plan: filled in by delegator's plan phase
 - Self-review verdict: PASS. The plan covers every named bulk family, both scale drives, real route/job execution, exactly-once outbox/delivery counting, durable completion, deliberate empty selection, positive controls, and a coordinate-independent guard.
 - The helper inventory distinguishes ID-set writes from constant-binding row/batch work; a fixed-binding import loop is not silently treated as a D1 parameter-limit bypass, while any unbounded ID-set statement is a finding.
 - MRQ-52 owns no automatic AC. The claim manifest will state that explicitly and only list ACs actually exercised by the evidence.
+
+## Reset 2026-08-11 by agent:auditor-mrq-52

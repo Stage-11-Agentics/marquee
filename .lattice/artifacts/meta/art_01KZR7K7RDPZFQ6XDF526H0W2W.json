@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T10:58:50Z",
+  "created_by": "agent:auditor-mrq-53",
+  "custom_fields": {},
+  "id": "art_01KZR7K7RDPZFQ6XDF526H0W2W",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR7K7RDPZFQ6XDF526H0W2W.md",
+    "size_bytes": 7073
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS audit diff; four reset-drill findings with local runtime reproductions.",
+  "tags": [],
+  "title": "MRQ-53 self-review",
+  "token_usage": null,
+  "type": "file"
+}

@@ -1,0 +1,7 @@
+HEAD: a3a3de62bc00172090328625571d604fdb79f72b
+
+Verdict: PASS for the audit artifact. The diff adds only tests/node/bulk-paths.AC-66-69.test.mjs and tests/ac-claims/MRQ-52.json; no product code or binding contract changed. The AST/source guard inventories decisions (accept/reject), reminders and recipientsFor, assignment distribution, promotion, category routing, import, the durable bulk audit summary, and the single runBulkByIds definition/calls. It fails on a new direct placeholder expansion and records the two current named findings by operation identity.
+
+Routed findings: src/routes/evaluation.routes.ts:64-69,698-700 leaves assignment submission_ids uncapped and expands one placeholder per selected ID; a real local Worker request with 150 seeded in_review IDs returned HTTP 500 and assignments stayed 200 before/after. src/routes/public-form-routing.ts:190-195 expands one placeholder per category ID; the seeded route passed at its eight-category cardinality, but the unbounded input shape remains a scale risk. Product fixes are outside this audit ticket.
+
+Review checks: node --test tests/node/bulk-paths.AC-66-69.test.mjs PASS; npm run trace:ac -- --ticket MRQ-52 PASS; npm test PASS (67 tests, 20.071s, 30s budget); git diff --check PASS; public-repo hygiene and no auto-AC ownership verified.

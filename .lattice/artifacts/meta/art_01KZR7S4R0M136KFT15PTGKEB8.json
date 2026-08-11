@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T11:02:03Z",
+  "created_by": "agent:auditor-mrq-53",
+  "custom_fields": {},
+  "id": "art_01KZR7S4R0M136KFT15PTGKEB8",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZR7S4R0M136KFT15PTGKEB8.md",
+    "size_bytes": 2358
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Real-worker evidence plus final passing PR gate at rebased HEAD.",
+  "tags": [],
+  "title": "MRQ-53 validation after rebase",
+  "token_usage": null,
+  "type": "file"
+}

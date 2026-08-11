@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:214",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
@@ -15,11 +15,41 @@
       "id": "art_01KZR5G2AM1ZZE3TCHP82S59Z8",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR7K7RDPZFQ6XDF526H0W2W",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR7KFNW6Y8B6M68MQ4P95KY",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR7NE1J9EJK6XRYHANNC1AQ",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR7S4N2WVPEGMN4B2VZ8TRC",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR7S4R0M136KFT15PTGKEB8",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR7SK1SJDE439JRETR12KHF",
+      "role": "validation",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZJHMCBGS36R8WQPA2F4YHQK",
-  "last_event_id": "ev_01KZR5G2AR5SS1J1V1QNRC2ECM",
-  "last_status_changed_at": "2026-08-11T10:21:11Z",
+  "last_event_id": "ev_01KZR7SK1SJDE439JRETR12KHF",
+  "last_status_changed_at": "2026-08-11T10:59:02Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +64,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-53",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Audit \u2014 reset drill",
   "type": "task",
-  "updated_at": "2026-08-11T10:22:09Z",
+  "updated_at": "2026-08-11T11:02:18Z",
   "urgency": null
 }
