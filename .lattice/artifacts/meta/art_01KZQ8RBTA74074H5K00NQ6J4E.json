@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:59:52Z",
+  "created_by": "agent:orchestrator",
+  "custom_fields": {},
+  "id": "art_01KZQ8RBTA74074H5K00NQ6J4E",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ8RBTA74074H5K00NQ6J4E.md",
+    "size_bytes": 544
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged as PR #13 (squash). Verified the thing that mattered: MRQ-2's 0001_init.sql is UNTOUCHED \u2014 this is a clean additive 0002_venue_geography.sql, which is the correct handling of a merged, immutabl",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

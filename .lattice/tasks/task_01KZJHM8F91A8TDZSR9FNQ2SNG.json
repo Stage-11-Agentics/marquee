@@ -15,11 +15,26 @@
       "id": "art_01KZQ8EXA06HQFG17Y0VK0WATQ",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ8JAFM6TPVHNXWTBAEC9YY",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ8PMGCSPTNGG2RKHE2RM5F",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ8Q5GJGBBT1G3NMJT1BKD2",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8F91A8TDZSR9FNQ2SNG",
-  "last_event_id": "ev_01KZQ8EXA3HKK2SMV1FT4FHY6F",
-  "last_status_changed_at": "2026-08-11T01:54:17Z",
+  "last_event_id": "ev_01KZQ8Q5GMWKSR4VF2RG26D7B7",
+  "last_status_changed_at": "2026-08-11T01:56:01Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -41,10 +56,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-12",
-  "status": "review",
+  "status": "in_validation",
   "tags": null,
   "title": "Email core and demo-safe outbox",
   "type": "task",
-  "updated_at": "2026-08-11T01:54:42Z",
+  "updated_at": "2026-08-11T01:59:13Z",
   "urgency": null
 }

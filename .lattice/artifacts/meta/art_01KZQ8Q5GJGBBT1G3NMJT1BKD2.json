@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:59:13Z",
+  "created_by": "agent:delegator-mrq-12",
+  "custom_fields": {},
+  "id": "art_01KZQ8Q5GJGBBT1G3NMJT1BKD2",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ8Q5GJGBBT1G3NMJT1BKD2.md",
+    "size_bytes": 1085
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: mandatory pr-gate and local Wrangler/D1/Queue proof at 643e641",
+  "tags": [],
+  "title": "MRQ-12 validation evidence rebased head",
+  "token_usage": null,
+  "type": "file"
+}

@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:131",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-11T00:49:50Z",
   "created_by": "agent:orchestrator",
   "custom_fields": {},
   "description": "Follow-up migration owed to commit 222a7fe (venue map T1/T3), raised by MRQ-4's delegator at merge.\n\n**The gap:** 222a7fe makes building geography binding for travel-conflict detection \u2014 the agenda must be able to say \"these two sessions are in different buildings N minutes apart, so this is a conflict.\" But `buildings` as shipped in MRQ-2's `0001_init.sql` has only `event_id`, `name`, `address`, `position`. There is no `lat`, no `lng`, and no `access_minutes`.\n\nMRQ-2 is merged and its migration is immutable, so this is a **second migration** (`0002_*.sql`), not an edit to the first. That is the correct outcome \u2014 M-02's \"whole schema in one migration\" guarantee covered the schema as specified at the time; this is new scope arriving after it, not a defect in it.\n\nScope:\n- `0002_venue_geography.sql`: add `buildings.lat REAL`, `buildings.lng REAL`, `buildings.access_minutes INTEGER` (walking/transit minutes between buildings, or a join table if the travel model is pairwise \u2014 read 222a7fe before choosing).\n- Mirror the columns in `src/db/schema.ts`.\n- Seed the three SPEC \u00a76 buildings with real coordinates (Sheraton New York Times Square, the Workshop Annex at the same address, Online as null/virtual).\n- Wire whatever the travel-conflict detector needs to read.\n\nDependencies: MRQ-2 (merged). Coordinate with whichever ticket owns agenda conflict detection so the reader and writer land together. Hours: ~2. Workflow: inline-full.",
-  "done_at": null,
+  "done_at": "2026-08-11T01:59:52Z",
   "evidence_refs": [
     {
       "id": "art_01KZQ88P0JR8RJ24GHRGR2YPHH",
@@ -20,11 +20,26 @@
       "id": "art_01KZQ8F27H2F5DGM770PVZXN5N",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ8JVPHCRCHCXWGZX0P1AW5",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQ8RBTA74074H5K00NQ6J4F",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQ8RBTA74074H5K00NQ6J4E",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQ4R4DC31HN6MERPJ0P20KP",
-  "last_event_id": "ev_01KZQ8F27K9QVE7NMA1ZSQVV01",
-  "last_status_changed_at": "2026-08-11T01:51:37Z",
+  "last_event_id": "ev_01KZQ8RBTA74074H5K00NQ6J4J",
+  "last_status_changed_at": "2026-08-11T01:59:52Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -36,13 +51,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-58",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Venue geography migration \u2014 buildings lat/lng/access_minutes",
   "type": "task",
-  "updated_at": "2026-08-11T01:54:47Z",
+  "updated_at": "2026-08-11T01:59:52Z",
   "urgency": null
 }

@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T01:56:52Z",
+  "created_by": "agent:delegator-mrq-58",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/13"
+  },
+  "id": "art_01KZQ8JVPHCRCHCXWGZX0P1AW5",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "MRQ-58 PR against master",
+  "tags": [],
+  "title": "Forgejo PR #13",
+  "token_usage": null,
+  "type": "reference"
+}
