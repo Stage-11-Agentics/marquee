@@ -377,6 +377,9 @@ export async function recipientsFor(
   const selectedTaskStateCondition = selector.task_state
     ? `AND selected_task.status = '${selector.task_state === "open" ? "open" : "done"}'`
     : "";
+  const selectedTaskCancellationCondition = includeCancelledAt && !selector.task_state
+    ? "AND (selected_task.status <> 'open' OR selected_task.cancelled_at IS NULL)"
+    : "";
   const result = await db
     .prepare(
       `SELECT DISTINCT p.id AS person_id, s.id AS submission_id, part.role, p.email, p.name,
@@ -407,6 +410,7 @@ export async function recipientsFor(
              AND selected_task.submission_id = s.id
              ${selectedTaskStateCondition}
              ${includeCancelledAt && selector.task_state === "open" ? "AND selected_task.cancelled_at IS NULL" : ""}
+             ${selectedTaskCancellationCondition}
          ORDER BY CASE WHEN selected_task.status = 'open' THEN 0 ELSE 1 END,
                   selected_task.due_at ASC, selected_task.id ASC
          LIMIT 1
@@ -432,6 +436,9 @@ export async function recipientsFor(
     const exactPairMode = recipientPairs !== null;
     const taskStateCondition = selector.task_state
       ? `AND selected_task.status = ?${includeCancelledAt && selector.task_state === "open" ? " AND selected_task.cancelled_at IS NULL" : ""}`
+      : "";
+    const taskCancellationCondition = includeCancelledAt && !selector.task_state
+      ? "AND (selected_task.status <> 'open' OR selected_task.cancelled_at IS NULL)"
       : "";
     const fallbackBindings: (string | number)[] = [];
     // The selected-task subquery appears before the outer WHERE in SQL, so
@@ -472,6 +479,7 @@ export async function recipientsFor(
              AND selected_task.person_id = person.id
              AND selected_task.submission_id IS NULL
              ${taskStateCondition}
+             ${taskCancellationCondition}
            ORDER BY CASE WHEN selected_task.status = 'open' THEN 0 ELSE 1 END,
                     selected_task.due_at ASC, selected_task.id ASC
            LIMIT 1

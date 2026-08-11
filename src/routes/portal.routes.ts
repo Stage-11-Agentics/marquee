@@ -140,6 +140,8 @@ type TaskProjection = {
   event_id: string;
   person_id: string;
   submission_id: string | null;
+  submission_title: string | null;
+  submission_status: string | null;
   template_id: string;
   title: string;
   kind: "acknowledge" | "file" | "form";
@@ -147,6 +149,7 @@ type TaskProjection = {
   due_at: number;
   status: "open" | "done";
   completed_at: number | null;
+  cancelled_at: number | null;
   response_json: string | null;
   attachment_id: string | null;
   form_id: string | null;
@@ -587,33 +590,62 @@ function taskPayload(
 }
 
 async function listTasks(db: D1Database, event: EventProjection, personId: string): Promise<Record<string, unknown>[]> {
-  const rows = await db
-    .prepare(
-      `SELECT task.id, task.event_id, task.person_id, task.submission_id, task.template_id,
-         task.title, task.kind, task.description, task.due_at, task.status, task.completed_at,
-         task.response_json, task.attachment_id, template.form_id, template.file_config
-       FROM speaker_tasks task
-       JOIN task_templates template ON template.id = task.template_id AND template.event_id = task.event_id
-       WHERE task.event_id = ? AND task.person_id = ?
-       ORDER BY task.due_at ASC, task.id ASC`,
-    )
-    .bind(event.id, personId)
-    .all<TaskProjection>();
+  const [rows, cancellationAudits] = await Promise.all([
+    db
+      .prepare(
+        `SELECT task.id, task.event_id, task.person_id, task.submission_id,
+           submission.title AS submission_title, submission.status AS submission_status,
+           task.template_id, task.title, task.kind, task.description, task.due_at,
+           task.status, task.completed_at, task.cancelled_at,
+           task.response_json, task.attachment_id, template.form_id, template.file_config
+         FROM speaker_tasks task
+         JOIN task_templates template ON template.id = task.template_id AND template.event_id = task.event_id
+         LEFT JOIN submissions submission ON submission.id = task.submission_id AND submission.event_id = task.event_id
+         WHERE task.event_id = ? AND task.person_id = ?
+         ORDER BY task.due_at ASC, task.id ASC`,
+      )
+      .bind(event.id, personId)
+      .all<TaskProjection>(),
+    db
+      .prepare(
+        `SELECT entity_id AS submission_id, after_json
+         FROM audit_log
+         WHERE event_id = ? AND entity_type = 'submission' AND action = 'submission.tasks_cancelled'
+         ORDER BY created_at DESC, id DESC`,
+      )
+      .bind(event.id)
+      .all<{ submission_id: string; after_json: string | null }>(),
+  ]);
+  const cancellationReasons = new Map<string, string>();
+  for (const audit of cancellationAudits.results) {
+    if (cancellationReasons.has(audit.submission_id)) continue;
+    const reason = parseObject(audit.after_json).reason;
+    if (typeof reason === "string" && reason.length > 0) cancellationReasons.set(audit.submission_id, reason);
+  }
 
   return Promise.all(rows.results.map(async (task) => {
     const fields = task.kind === "form" && task.form_id ? await listFormFields(db, task.form_id) : [];
     const submissionAnswers = await readSubmissionAnswers(db, task.submission_id);
     const responseAnswers = task.kind === "form" ? parseObject(task.response_json) : {};
     const answers = { ...submissionAnswers, ...responseAnswers };
+    const cancelled = task.cancelled_at !== null;
+    const cancelledReason = task.submission_id
+      ? cancellationReasons.get(task.submission_id)
+        ?? (task.submission_status === "rejected" ? "This talk was rejected by the conference." : "This talk was withdrawn from the conference.")
+      : "This task is no longer needed by the conference.";
     return {
       id: task.id,
+      submission_id: task.submission_id,
+      submission_title: task.submission_title,
       title: task.title,
       kind: task.kind,
       description: task.description,
       due_at: task.due_at,
       status: task.status,
       completed_at: task.completed_at,
-      overdue: task.status === "open" && task.due_at < Date.now(),
+      cancelled_at: task.cancelled_at,
+      cancelled_reason: cancelled ? cancelledReason : null,
+      overdue: !cancelled && task.status === "open" && task.due_at < Date.now(),
       payload: taskPayload(task, fields, answers),
     };
   }));
@@ -792,11 +824,13 @@ async function taskFor(db: D1Database, auth: SessionAuth, taskId: string): Promi
   const task = await db
     .prepare(
       `SELECT task.id, task.event_id, task.person_id, task.submission_id, task.template_id,
-         task.title, task.kind, task.description, task.due_at, task.status, task.completed_at,
+         submission.title AS submission_title, submission.status AS submission_status,
+         task.title, task.kind, task.description, task.due_at, task.status, task.completed_at, task.cancelled_at,
          task.response_json, task.attachment_id, template.form_id, template.file_config
        FROM speaker_tasks task
        JOIN events conference ON conference.id = task.event_id AND conference.org_id = ?
        JOIN task_templates template ON template.id = task.template_id AND template.event_id = task.event_id
+       LEFT JOIN submissions submission ON submission.id = task.submission_id AND submission.event_id = task.event_id
        JOIN memberships membership ON membership.event_id = task.event_id
          AND membership.person_id = task.person_id AND membership.role = 'speaker'
        WHERE task.id = ? AND task.person_id = ?`,
@@ -804,6 +838,7 @@ async function taskFor(db: D1Database, auth: SessionAuth, taskId: string): Promi
     .bind(auth.orgId, taskId, auth.personId)
     .first<TaskProjection>();
   if (!task) throw ApiError.notFound("task not found");
+  if (task.cancelled_at !== null) throw ApiError.conflict("this task was cancelled because the talk is no longer active");
   return task;
 }
 
@@ -874,14 +909,17 @@ async function completeTask(
     response = projection.answers as Record<string, unknown>;
   }
 
-  await db
+  const result = await db
     .prepare(
       `UPDATE speaker_tasks
        SET status = 'done', completed_at = ?, response_json = ?, attachment_id = ?, last_write_source = 'marquee', updated_at = ?
-       WHERE id = ? AND event_id = ? AND person_id = ?`,
+       WHERE id = ? AND event_id = ? AND person_id = ? AND cancelled_at IS NULL`,
     )
     .bind(now, JSON.stringify(response), attachmentId, now, task.id, task.event_id, auth.personId)
     .run();
+  if (Number(result?.meta?.changes ?? 0) !== 1) {
+    throw ApiError.conflict("this task was cancelled before completion");
+  }
 
   return {
     id: task.id,

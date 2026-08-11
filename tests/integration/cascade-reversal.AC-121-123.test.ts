@@ -2,9 +2,12 @@ import { SELF } from "cloudflare:test";
 import { beforeAll, expect, test } from "vitest";
 
 import {
+  reconcileTaskSet,
   writeAcceptanceReversal,
   writeSubmissionDecision,
 } from "../../src/jobs/cascade/decisions";
+import { buildIdempotencyKey } from "../../src/jobs/mail/outbox";
+import { enqueueOverdueTaskReminders } from "../../src/jobs/mail/triggers";
 import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.parse("2026-08-20T16:00:00.000Z");
@@ -12,6 +15,8 @@ const ACTOR = { kind: "user" as const, personId: "person-reversal-actor" };
 
 async function seedFixture(): Promise<void> {
   await applyMigrations();
+  const acceptanceCancelKey = await buildIdempotencyKey("acceptance", "sub-cancel", "person-reversal-speaker");
+  const acceptanceRetainKey = await buildIdempotencyKey("acceptance", "sub-retain", "person-reversal-speaker");
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO organizations (id, name, slug, created_at, updated_at)
@@ -99,11 +104,16 @@ async function seedFixture(): Promise<void> {
         ('invite-retain', 'sub-retain', 'person-reversal-speaker', 'uid-retain', 1, 'REQUEST', ?, 'active', ?, ?)`,
     ).bind(NOW, NOW, NOW, NOW, NOW, NOW),
   ]);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE outbox SET idempotency_key = ? WHERE id = 'mail-cancel'").bind(acceptanceCancelKey),
+    env.DB.prepare("UPDATE outbox SET idempotency_key = ? WHERE id = 'mail-retain'").bind(acceptanceRetainKey),
+  ]);
 }
 
 beforeAll(seedFixture);
 
 test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and agenda rows", async () => {
+  const taskCountBefore = await env.DB.prepare("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = 'sub-cancel'").first<{ count: number }>();
   const result = await writeAcceptanceReversal({
     db: env.DB,
     eventId: "evt-reversal",
@@ -132,6 +142,20 @@ test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and
     { id: "task-cancel-done", status: "done", cancelled_at: null, due_at: NOW + 7 * 86_400_000 },
     { id: "task-cancel-open", status: "open", cancelled_at: NOW + 2_000, due_at: NOW + 7 * 86_400_000 },
   ]);
+  const taskCountAfter = await env.DB.prepare("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = 'sub-cancel'").first<{ count: number }>();
+  expect(taskCountAfter?.count).toBe(taskCountBefore?.count);
+  const taskAudit = await env.DB.prepare(
+    `SELECT actor_person_id, actor_kind, created_at, after_json
+     FROM audit_log
+     WHERE event_id = 'evt-reversal' AND entity_id = 'sub-cancel' AND action = 'submission.tasks_cancelled'
+     ORDER BY created_at DESC, id DESC LIMIT 1`,
+  ).first<{ actor_person_id: string; actor_kind: string; created_at: number; after_json: string }>();
+  expect(taskAudit).toMatchObject({ actor_person_id: ACTOR.personId, actor_kind: ACTOR.kind, created_at: NOW + 2_000 });
+  expect(JSON.parse(taskAudit?.after_json ?? "{}")).toMatchObject({
+    choice: "cancel",
+    reason: "This talk was rejected by the conference.",
+    rows: 1,
+  });
   const email = await env.DB.prepare("SELECT status, suppressed_reason FROM outbox WHERE id = 'mail-cancel'").first<{ status: string; suppressed_reason: string | null }>();
   expect(email).toEqual({ status: "suppressed", suppressed_reason: "acceptance_reversed" });
   const agenda = await env.DB.prepare("SELECT id FROM agenda_items WHERE submission_id = 'sub-cancel'").first();
@@ -148,6 +172,21 @@ test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and
   expect(cancelIcs?.ics_body).toContain("UID:uid-cancel\r\n");
   expect(cancelIcs?.ics_body).toContain("SEQUENCE:2\r\n");
 
+  await env.DB.prepare(
+    "UPDATE speaker_tasks SET due_at = ? WHERE id = 'task-retain-open'",
+  ).bind(NOW - 1_000).run();
+  expect(await enqueueOverdueTaskReminders(env.DB, NOW + 2_500)).toBe(1);
+  const overdueRows = await env.DB.prepare(
+    `SELECT entity_id, template_key
+     FROM outbox
+     WHERE event_id = 'evt-reversal' AND template_key = 'task_overdue'
+     ORDER BY entity_id`,
+  ).all<{ entity_id: string; template_key: string }>();
+  expect(overdueRows.results).toEqual([{ entity_id: "task-retain-open", template_key: "task_overdue" }]);
+  const outboxBeforeReaccept = await env.DB.prepare(
+    "SELECT id, idempotency_key, status, updated_at FROM outbox WHERE event_id = 'evt-reversal' ORDER BY id",
+  ).all<Record<string, string | number | null>>();
+
   const reaccepted = await writeSubmissionDecision({
     db: env.DB,
     eventId: "evt-reversal",
@@ -158,8 +197,58 @@ test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and
     now: NOW + 3_000,
   });
   expect(reaccepted).toMatchObject({ outcome: "succeeded", resultingStatus: "accepted", tasksAssigned: 1 });
+  const outboxAfterReaccept = await env.DB.prepare(
+    "SELECT id, idempotency_key, status, updated_at FROM outbox WHERE event_id = 'evt-reversal' ORDER BY id",
+  ).all<Record<string, string | number | null>>();
+  expect(outboxAfterReaccept.results).toEqual(outboxBeforeReaccept.results);
   const restoredTask = await env.DB.prepare("SELECT status, cancelled_at, due_at FROM speaker_tasks WHERE id = 'task-cancel-open'").first<{ status: string; cancelled_at: number | null; due_at: number }>();
   expect(restoredTask).toEqual({ status: "open", cancelled_at: null, due_at: NOW + 7 * 86_400_000 });
+  const restorationAudit = await env.DB.prepare(
+    `SELECT actor_person_id, actor_kind, created_at, after_json
+     FROM audit_log
+     WHERE event_id = 'evt-reversal' AND entity_id = 'sub-cancel' AND action = 'submission.tasks_reconciled'
+     ORDER BY created_at DESC, id DESC LIMIT 1`,
+  ).first<{ actor_person_id: string; actor_kind: string; created_at: number; after_json: string }>();
+  expect(restorationAudit).toMatchObject({ actor_person_id: ACTOR.personId, actor_kind: ACTOR.kind, created_at: NOW + 3_000 });
+  expect(JSON.parse(restorationAudit?.after_json ?? "{}")).toMatchObject({ created: 0, restored: 1, rows: 1 });
+
+  await env.DB.prepare(
+    `INSERT INTO task_templates
+      (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at)
+     VALUES ('template-reconcile', 'evt-reversal', 'New acceptance task', 'acknowledge', 'A newly assigned task.', ?, 1, 1, ?, ?)`,
+  ).bind(NOW + 8 * 86_400_000, NOW + 5_000, NOW + 5_000).run();
+  const outboxBeforeReconcile = await env.DB.prepare(
+    `SELECT id, template_key, entity_id, person_id, status, idempotency_key, updated_at
+     FROM outbox WHERE event_id = 'evt-reversal' ORDER BY id`,
+  ).all<Record<string, string | number | null>>();
+  const firstReconcile = await reconcileTaskSet(env.DB, "evt-reversal", ["sub-cancel"], NOW + 5_000, ACTOR);
+  expect([...firstReconcile.entries()]).toEqual([["sub-cancel", 1]]);
+  const tasksAfterFirstReconcile = await env.DB.prepare(
+    `SELECT id, status, cancelled_at, due_at, updated_at
+     FROM speaker_tasks WHERE submission_id = 'sub-cancel' ORDER BY id`,
+  ).all<Record<string, string | number | null>>();
+  const outboxAfterFirstReconcile = await env.DB.prepare(
+    `SELECT id, template_key, entity_id, person_id, status, idempotency_key, updated_at
+     FROM outbox WHERE event_id = 'evt-reversal' ORDER BY id`,
+  ).all<Record<string, string | number | null>>();
+  expect(outboxAfterFirstReconcile.results).toEqual(outboxBeforeReconcile.results);
+  const secondReconcile = await reconcileTaskSet(env.DB, "evt-reversal", ["sub-cancel"], NOW + 6_000, ACTOR);
+  expect([...secondReconcile.entries()]).toEqual([]);
+  const tasksAfterSecondReconcile = await env.DB.prepare(
+    `SELECT id, status, cancelled_at, due_at, updated_at
+     FROM speaker_tasks WHERE submission_id = 'sub-cancel' ORDER BY id`,
+  ).all<Record<string, string | number | null>>();
+  const outboxAfterSecondReconcile = await env.DB.prepare(
+    `SELECT id, template_key, entity_id, person_id, status, idempotency_key, updated_at
+     FROM outbox WHERE event_id = 'evt-reversal' ORDER BY id`,
+  ).all<Record<string, string | number | null>>();
+  expect(tasksAfterSecondReconcile.results).toEqual(tasksAfterFirstReconcile.results);
+  expect(outboxAfterSecondReconcile.results).toEqual(outboxAfterFirstReconcile.results);
+  const reconciliationAudits = await env.DB.prepare(
+    `SELECT COUNT(*) AS count FROM audit_log
+     WHERE event_id = 'evt-reversal' AND entity_id = 'sub-cancel' AND action = 'submission.tasks_reconciled'`,
+  ).first<{ count: number }>();
+  expect(reconciliationAudits?.count).toBe(2);
 });
 
 test("AC-121, AC-122, AC-123 · retain choices leave every selected row active while removing placement", async () => {
@@ -181,6 +270,18 @@ test("AC-121, AC-122, AC-123 · retain choices leave every selected row active w
   expect(submission).toEqual({ status: "withdrawn", decided_at: NOW + 4_000, decided_by_person_id: ACTOR.personId });
   const task = await env.DB.prepare("SELECT status, cancelled_at FROM speaker_tasks WHERE id = 'task-retain-open'").first<{ status: string; cancelled_at: number | null }>();
   expect(task).toEqual({ status: "open", cancelled_at: null });
+  const retainAudit = await env.DB.prepare(
+    `SELECT actor_person_id, actor_kind, created_at, after_json
+     FROM audit_log
+     WHERE event_id = 'evt-reversal' AND entity_id = 'sub-retain' AND action = 'submission.tasks_retained'
+     ORDER BY created_at DESC, id DESC LIMIT 1`,
+  ).first<{ actor_person_id: string; actor_kind: string; created_at: number; after_json: string }>();
+  expect(retainAudit).toMatchObject({ actor_person_id: ACTOR.personId, actor_kind: ACTOR.kind, created_at: NOW + 4_000 });
+  expect(JSON.parse(retainAudit?.after_json ?? "{}")).toMatchObject({
+    choice: "retain",
+    reason: "Open tasks were kept active after acceptance reversal.",
+    rows: 0,
+  });
   const email = await env.DB.prepare("SELECT status, suppressed_reason FROM outbox WHERE id = 'mail-retain'").first<{ status: string; suppressed_reason: string | null }>();
   expect(email).toEqual({ status: "queued", suppressed_reason: null });
   const invite = await env.DB.prepare("SELECT sequence, last_method, status FROM calendar_invites WHERE id = 'invite-retain'").first<{ sequence: number; last_method: string; status: string }>();

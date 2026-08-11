@@ -522,11 +522,12 @@ async function addDraftMetadata(
 async function listDraftsNeedingAttention(
   database: D1Database,
   filters: SubmissionListFilters,
+  includeCancelledAt = false,
 ): Promise<ListEnvelope<SubmissionListItem>> {
   const page = parsePagination(filters);
   const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "updated");
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
-  const { where, bindings } = filterParts(filters);
+  const { where, bindings } = filterParts(filters, includeCancelledAt);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const rows = await database.prepare(`
     SELECT ${itemSelect(includeVenueDisclosure)},
@@ -556,16 +557,17 @@ export async function listSubmissions(
   database: D1Database,
   filters: SubmissionListFilters,
 ): Promise<ListEnvelope<SubmissionListItem>> {
+  const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
   if (filters.status === "not_notified") return listNotNotifiedSubmissions(database, filters);
   if (filters.status === "draft" && await hasColumns(database, "submissions", ["form_id", "last_saved_at", "submitter_person_id"])) {
-    return listDraftsNeedingAttention(database, filters);
+    return listDraftsNeedingAttention(database, filters, includeCancelledAt);
   }
   const page = parsePagination(filters);
   const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "newest");
   // The shared helper deliberately emits the canonical `id ASC` tie-break.
   // This query joins several id-bearing tables, so qualify that fixed suffix.
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
-  const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
+  const { where, bindings } = filterParts(filters, includeCancelledAt);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
   const data = database.prepare(`

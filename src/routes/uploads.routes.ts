@@ -268,10 +268,10 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
   if (ownerType === "task_upload") {
     const task = await env.DB.prepare(
       `SELECT task.id, task.event_id, task.person_id, template.file_config
-         FROM speaker_tasks task
+        FROM speaker_tasks task
          JOIN task_templates template
            ON template.id = task.template_id AND template.event_id = task.event_id
-        WHERE task.id = ?1 AND template.kind = 'file'`,
+        WHERE task.id = ?1 AND template.kind = 'file' AND task.cancelled_at IS NULL`,
     )
       .bind(ownerId)
       .first<{ id: string; event_id: string; person_id: string; file_config: string | null }>();
@@ -363,10 +363,10 @@ async function handleComplete(context: Context<ApiEnv>) {
   if (row.owner_type === "task_upload") {
     const task = await env.DB.prepare(
       `SELECT template.file_config
-         FROM speaker_tasks task
+        FROM speaker_tasks task
          JOIN task_templates template
            ON template.id = task.template_id AND template.event_id = task.event_id
-        WHERE task.id = ?1 AND task.event_id = ?2 AND template.kind = 'file'`,
+        WHERE task.id = ?1 AND task.event_id = ?2 AND template.kind = 'file' AND task.cancelled_at IS NULL`,
     )
       .bind(row.owner_id, row.event_id)
       .first<{ file_config: string | null }>();

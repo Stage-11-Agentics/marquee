@@ -2,6 +2,7 @@ import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, test } from "vitest";
 
 import { createSession } from "../../../src/lib/auth/auth-sessions";
+import { cancelTaskSet } from "../../../src/jobs/cascade/decisions";
 import { DEMO_EVENT_ID, DEMO_ORGANIZATION_ID, DEMO_SPEAKER_PERSON_ID, demoFixtureRows } from "../../../src/lib/reset-demo/demo-fixture";
 import { applyMigrations } from "../apply-migrations";
 import { verifyAndComplete } from "../../../src/lib/r2/complete";
@@ -225,6 +226,86 @@ describe.sequential("MRQ-16 speaker portal", () => {
     await env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL, due_at = ? WHERE id = 'task-portal-ack'").bind(NOW - 86_400_000).run();
     const refreshed = await portal();
     expect(refreshed.body.tasks.find((task: { id: string }) => task.id === "task-portal-ack")).toMatchObject({ overdue: true, status: "open" });
+  });
+
+  test("AC-264, AC-265 · cancelled tasks leave the portal visible but leave active chase readers", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO speaker_tasks
+          (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status,
+           completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at)
+         VALUES ('task-portal-review-open', ?, ?, ?, 'template-portal-ack', 'Review task', 'acknowledge', 'Review task.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?),
+                ('task-portal-positive-open', ?, ?, 'sub-portal-public', 'template-portal-ack', 'Positive task', 'acknowledge', 'Positive control task.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)`,
+      ).bind(
+        EVENT_ID, SPEAKER_ID, REVIEW_SUBMISSION_ID, NOW - 2_000, NOW, NOW,
+        EVENT_ID, SPEAKER_ID, NOW - 2_000, NOW, NOW,
+      ),
+    ]);
+    const taskCountBefore = await env.DB.prepare("SELECT COUNT(*) AS count FROM speaker_tasks WHERE event_id = ?").bind(EVENT_ID).first<{ count: number }>();
+
+    const boardBeforeResponse = await request(`/api/v1/events/${EVENT_ID}/board?per_page=100`, {}, ownerCookie);
+    expect(boardBeforeResponse.status).toBe(200);
+    const boardBefore = await boardBeforeResponse.json<{ data: Array<{ id: string; stage: string }> }>();
+    expect(boardBefore.data.find((card) => card.id === REVIEW_SUBMISSION_ID)?.stage).toBe("onboarding");
+
+    expect(await cancelTaskSet(env.DB, EVENT_ID, SUBMISSION_ID, NOW + 5_000)).toBe(1);
+    expect(await cancelTaskSet(env.DB, EVENT_ID, REVIEW_SUBMISSION_ID, NOW + 5_000)).toBe(1);
+    const taskCountAfter = await env.DB.prepare("SELECT COUNT(*) AS count FROM speaker_tasks WHERE event_id = ?").bind(EVENT_ID).first<{ count: number }>();
+    expect(taskCountAfter?.count).toBe(taskCountBefore?.count);
+    const activeTaskCounts = await env.DB.prepare(
+      `SELECT submission_id, COUNT(*) AS count
+       FROM speaker_tasks
+       WHERE event_id = ? AND status = 'open' AND cancelled_at IS NULL
+       GROUP BY submission_id ORDER BY submission_id`,
+    ).bind(EVENT_ID).all<{ submission_id: string | null; count: number }>();
+    expect(activeTaskCounts.results).toEqual([
+      { submission_id: "sub-portal-other", count: 1 },
+      { submission_id: "sub-portal-public", count: 1 },
+    ]);
+
+    const portalAfter = await portal();
+    expect(portalAfter.response.status).toBe(200);
+    expect(portalAfter.body.tasks.find((task: { id: string }) => task.id === "task-portal-ack")).toMatchObject({
+      cancelled_at: NOW + 5_000,
+      cancelled_reason: "This talk was withdrawn from the conference.",
+      overdue: false,
+    });
+    expect(portalAfter.body.tasks.find((task: { id: string }) => task.id === "task-portal-positive-open")).toMatchObject({
+      cancelled_at: null,
+      status: "open",
+    });
+    const cancelledCompletion = await request("/api/v1/me/tasks/task-portal-ack/complete", {
+      method: "POST",
+      body: JSON.stringify({ acknowledged: true }),
+    });
+    expect(cancelledCompletion.status).toBe(409);
+    const cancelledTaskAfterAttempt = await env.DB.prepare("SELECT status, cancelled_at FROM speaker_tasks WHERE id = 'task-portal-ack'").first<{ status: string; cancelled_at: number | null }>();
+    expect(cancelledTaskAfterAttempt).toEqual({ status: "open", cancelled_at: NOW + 5_000 });
+
+    const chaseResponse = await request(`/api/v1/events/${EVENT_ID}/onboarding`, {}, ownerCookie);
+    expect(chaseResponse.status).toBe(200);
+    const chase = await chaseResponse.json<{
+      rows: Array<{ person: { id: string }; cells: Record<string, { task_id: string | null; owed: boolean }> }>;
+      metrics: { accepted_speakers: number };
+    }>();
+    const speakerRow = chase.rows.find((row) => row.person.id === SPEAKER_ID);
+    expect(speakerRow).toBeDefined();
+    expect(speakerRow?.cells["template-portal-ack"]).toMatchObject({ task_id: "task-portal-positive-open", owed: true });
+    expect(chase.rows.flatMap((row) => Object.values(row.cells)).some((cell) => cell.task_id === "task-portal-ack")).toBe(false);
+    expect(chase.metrics.accepted_speakers).toBeGreaterThan(0);
+
+    const submissionsResponse = await request(`/api/v1/events/${EVENT_ID}/submissions?status=onboarding&per_page=100`, {}, ownerCookie);
+    expect(submissionsResponse.status).toBe(200);
+    const submissions = await submissionsResponse.json<{ data: Array<{ id: string }> }>();
+    const submissionIds = submissions.data.map((item) => item.id);
+    expect(submissionIds).not.toContain(SUBMISSION_ID);
+    expect(submissionIds).not.toContain(REVIEW_SUBMISSION_ID);
+    expect(submissionIds).toEqual(expect.arrayContaining(["sub-portal-other", "sub-portal-public"]));
+
+    const boardAfterResponse = await request(`/api/v1/events/${EVENT_ID}/board?per_page=100`, {}, ownerCookie);
+    expect(boardAfterResponse.status).toBe(200);
+    const boardAfter = await boardAfterResponse.json<{ data: Array<{ id: string; stage: string }> }>();
+    expect(boardAfter.data.find((card) => card.id === REVIEW_SUBMISSION_ID)?.stage).toBe("accepted");
   });
 
   test("AC-50 · profile editing persists title, company, bio, social links, and headshot reference for any speaker status", async () => {

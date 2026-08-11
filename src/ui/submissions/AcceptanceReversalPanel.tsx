@@ -94,6 +94,7 @@ export function AcceptanceReversalPanel({ eventId, submissionId, onReversed }: P
       <label>Scheduled emails<select aria-label="Scheduled emails" value={choices.emails} onChange={(event) => setChoices({ ...choices, emails: event.currentTarget.value as Choice })}><option value="cancel">Cancel queued emails</option><option value="retain">Retain queued emails</option></select></label>
       <label>Calendar invites<select aria-label="Calendar invites" value={choices.calendar} onChange={(event) => setChoices({ ...choices, calendar: event.currentTarget.value as Choice })}><option value="cancel">Send cancellation</option><option value="retain">Retain invite</option></select></label>
       <label>Resulting status<select aria-label="Resulting status" value={choices.outcome} onChange={(event) => setChoices({ ...choices, outcome: event.currentTarget.value as Choices["outcome"] })}><option value="withdrawn">Withdrawn</option><option value="rejected">Rejected</option></select></label>
+      <div class="reversal-branch-summary" role="status" data-task-branch={choices.tasks}>{choices.tasks === "cancel" ? "Cancel open tasks: unfinished portal work will be cancelled and no longer chased." : "Keep tasks active: unfinished portal work will remain open and continue to be chased."}</div>
       <div class="reversal-modal-actions"><Button variant="ghost" onClick={() => setOpen(false)}>Keep acceptance</Button><Button variant="danger" onClick={() => void apply()} disabled={busy}>{busy ? "Applying…" : "Apply reversal"}</Button></div>
     </div></div>}
   </>;

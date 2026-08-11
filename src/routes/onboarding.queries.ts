@@ -446,7 +446,9 @@ async function listSessions(db: D1Database, eventId: string, personIds: readonly
 
 async function acceptedSpeakerCount(db: D1Database, eventId: string): Promise<number> {
   const row = await db.prepare(
-    "SELECT COUNT(DISTINCT person_id) AS count FROM memberships WHERE event_id = ? AND role = 'speaker'",
+    `SELECT COUNT(DISTINCT person_id) AS count
+     FROM speaker_tasks
+     WHERE event_id = ? AND status = 'open' AND cancelled_at IS NULL`,
   ).bind(eventId).first<{ count: number | null }>();
   return Number(row?.count ?? 0);
 }

@@ -18,6 +18,14 @@ test("AC-123 · reversal dialog names every dependent row set with cancel and re
   assert.match(ui, /Send cancellation/);
   assert.match(ui, /Retain invite/);
   assert.match(ui, /data-row-state/);
+  assert.match(ui, /reversal-branch-summary/);
+  assert.match(ui, /data-task-branch/);
+  assert.match(ui, /unfinished portal work will be cancelled and no longer chased/);
+  assert.match(ui, /unfinished portal work will remain open and continue to be chased/);
+  assert.notEqual(
+    ui.match(/unfinished portal work will be cancelled and no longer chased/)?.[0],
+    ui.match(/unfinished portal work will remain open and continue to be chased/)?.[0],
+  );
   assert.match(ui, /POST/);
   assert.match(route, /scheduled_emails/);
   assert.match(route, /calendar_invites/);

@@ -146,7 +146,9 @@ export const BOARD_STAGE_SQL = `CASE
   WHEN ai.id IS NOT NULL THEN 'scheduled'
   WHEN s.status = 'accepted' AND EXISTS (
     SELECT 1 FROM speaker_tasks onboarding_task
-    WHERE onboarding_task.submission_id = s.id AND onboarding_task.status = 'open'
+    WHERE onboarding_task.submission_id = s.id
+      AND onboarding_task.status = 'open'
+      AND onboarding_task.cancelled_at IS NULL
   ) THEN 'onboarding'
   WHEN s.status = 'accepted' THEN 'accepted'
   WHEN s.status = 'in_review' THEN 'in_review'

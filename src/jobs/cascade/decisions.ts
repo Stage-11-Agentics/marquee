@@ -110,6 +110,12 @@ interface TaskCandidate {
   due_at: number;
 }
 
+function taskCancellationReason(outcome: "withdrawn" | "rejected"): string {
+  return outcome === "withdrawn"
+    ? "This talk was withdrawn from the conference."
+    : "This talk was rejected by the conference.";
+}
+
 const DECISION_TARGETS = {
   accept: { decision: "approve", status: "accepted" },
   waitlist: { decision: "maybe", status: "waitlisted" },
@@ -277,8 +283,11 @@ export async function reconcileTaskSet(
   eventId: Id,
   submissionIds: readonly Id[],
   now: number,
+  actor?: DecisionActor,
 ): Promise<Map<Id, number>> {
   const counts = new Map<Id, number>();
+  const created = new Map<Id, number>();
+  const restoredCounts = new Map<Id, number>();
   if (submissionIds.length === 0) return counts;
   const idsJson = JSON.stringify([...new Set(submissionIds)]);
   const candidates = await db
@@ -310,7 +319,7 @@ export async function reconcileTaskSet(
   for (const candidate of candidates.results) {
     if (candidate.task_id) {
       if (candidate.existing_status === "open" && candidate.existing_cancelled_at !== null) {
-        const restored = await db
+        const restoredResult = await db
           .prepare(
             `UPDATE speaker_tasks
              SET cancelled_at = NULL, updated_at = ?, last_write_source = 'marquee'
@@ -318,8 +327,9 @@ export async function reconcileTaskSet(
           )
           .bind(now, candidate.task_id)
           .run();
-        if (Number(restored?.meta?.changes ?? 0) > 0) {
+        if (Number(restoredResult?.meta?.changes ?? 0) > 0) {
           counts.set(candidate.submission_id, (counts.get(candidate.submission_id) ?? 0) + 1);
+          restoredCounts.set(candidate.submission_id, (restoredCounts.get(candidate.submission_id) ?? 0) + 1);
         }
       }
       continue;
@@ -347,6 +357,24 @@ export async function reconcileTaskSet(
       )
       .run();
     counts.set(candidate.submission_id, (counts.get(candidate.submission_id) ?? 0) + 1);
+    created.set(candidate.submission_id, (created.get(candidate.submission_id) ?? 0) + 1);
+  }
+  if (actor) {
+    for (const submissionId of new Set([...created.keys(), ...restoredCounts.keys()])) {
+      await writeAudit(db, {
+        eventId,
+        actor,
+        action: "submission.tasks_reconciled",
+        entityType: "submission",
+        entityId: submissionId,
+        after: {
+          created: created.get(submissionId) ?? 0,
+          restored: restoredCounts.get(submissionId) ?? 0,
+          rows: counts.get(submissionId) ?? 0,
+        },
+        now,
+      });
+    }
   }
   return counts;
 }
@@ -652,7 +680,8 @@ export async function writeAcceptanceReversal(
   });
   if (changed !== 1) return reversalFailure(submission.id, "submission changed during reversal; retry the confirmed action");
 
-  const tasksCancelled = input.tasks === "cancel"
+  const cancellationReason = input.tasks === "cancel" ? taskCancellationReason(input.outcome) : null;
+  const tasksCancelled = cancellationReason
     ? await cancelTaskSet(input.db, input.eventId, submission.id, now)
     : 0;
   const emailsCancelled = input.emails === "cancel"
@@ -694,6 +723,7 @@ export async function writeAcceptanceReversal(
     tasks_cancelled: tasksCancelled,
     emails_cancelled: emailsCancelled,
     calendar_cancelled: calendarDeliveries.length,
+    task_cancellation_reason: cancellationReason,
   };
   await writeAudit(input.db, {
     eventId: input.eventId,
@@ -711,7 +741,11 @@ export async function writeAcceptanceReversal(
     action: `submission.tasks_${input.tasks === "cancel" ? "cancelled" : "retained"}`,
     entityType: "submission",
     entityId: submission.id,
-    after: { choice: input.tasks, rows: tasksCancelled },
+    after: {
+      choice: input.tasks,
+      reason: cancellationReason ?? "Open tasks were kept active after acceptance reversal.",
+      rows: tasksCancelled,
+    },
     now,
   });
   await writeAudit(input.db, {
@@ -807,7 +841,7 @@ export async function writeSubmissionDecision(
       now,
     });
   const taskCounts = target.status === "accepted"
-    ? await reconcileTaskSet(input.db, input.eventId, [submission.id], now)
+    ? await reconcileTaskSet(input.db, input.eventId, [submission.id], now, input.actor)
     : new Map<Id, number>();
   const decisionId = newUlid(now);
   await insertDecisions(input.db, input.eventId, [{
@@ -950,7 +984,7 @@ export async function writeBulkSubmissionDecisions(
   }
 
   await insertDecisions(input.db, input.eventId, transitions);
-  const taskCounts = await reconcileTaskSet(input.db, input.eventId, acceptedIds, now);
+  const taskCounts = await reconcileTaskSet(input.db, input.eventId, acceptedIds, now, input.actor);
   for (const submission of eligible) {
     const transition = transitions.find((item) => item.submissionId === submission.id);
     if (!target) continue;

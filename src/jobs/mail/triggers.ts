@@ -2,7 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
 import { enqueueOutbox, type EnqueuedOutbox } from "./outbox";
-import { selectPreCloseReminderCandidates } from "./schedule";
+import { selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "./schedule";
 import { findTemplate, TRIGGER_TEMPLATE_KEYS, type MailTemplateKey } from "./templates";
 import type { MergeData } from "./render";
 
@@ -91,6 +91,30 @@ export async function enqueuePreCloseReminderRows(db: D1Database, now = Date.now
 /** AC-127's count-oriented API; repeat scans remain UNIQUE-key idempotent. */
 export async function enqueuePreCloseReminders(db: D1Database, now = Date.now()): Promise<number> {
   const rows = await enqueuePreCloseReminderRows(db, now);
+  return rows.filter((row) => row.inserted).length;
+}
+
+/** AC-125's hourly overdue trigger; cancelled task tombstones never reach the outbox. */
+export async function enqueueOverdueTaskReminderRows(db: D1Database, now = Date.now()): Promise<EnqueuedOutbox[]> {
+  const rows: EnqueuedOutbox[] = [];
+  for (const candidate of await selectOverdueTaskCandidates(db, now)) {
+    const result = await enqueueTrigger({
+      db,
+      eventId: candidate.eventId,
+      templateKey: candidate.templateKey,
+      entityId: candidate.entityId,
+      personId: candidate.personId,
+      toEmail: candidate.toEmail,
+      data: candidate.data,
+      now,
+    });
+    if (result) rows.push(result);
+  }
+  return rows;
+}
+
+export async function enqueueOverdueTaskReminders(db: D1Database, now = Date.now()): Promise<number> {
+  const rows = await enqueueOverdueTaskReminderRows(db, now);
   return rows.filter((row) => row.inserted).length;
 }
 
