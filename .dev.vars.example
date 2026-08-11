@@ -10,3 +10,11 @@ R2_ACCESS_KEY_ID=local-fake-access-key-id
 R2_SECRET_ACCESS_KEY=local-fake-secret-access-key
 UPLOAD_TOKEN_SECRET=local-fake-upload-token-secret
 UPLOAD_RATE_LIMIT_SECRET=local-fake-upload-rate-limit-secret
+
+# Observability. Both are optional and both have safe defaults; they are listed
+# here so the levers docs/OBSERVABILITY.md describes have a visible home.
+# LOG_LEVEL: debug | info | warn | error | silent. Default info.
+LOG_LEVEL=info
+# CLIENT_TELEMETRY: set to 0 and the browser error beacon records nothing,
+# enforced at the endpoint rather than trusted to the client. Default on.
+CLIENT_TELEMETRY=1
