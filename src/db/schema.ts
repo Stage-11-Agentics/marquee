@@ -89,6 +89,15 @@ export const ATTACHMENT_STATUSES = ["pending", "ready"] as const;
 export const OUTBOX_STATUSES = ["queued", "sent", "suppressed", "failed"] as const;
 export const OUTBOX_SEND_POLICIES = ["demo_safe", "always_live"] as const;
 export const CALENDAR_METHODS = ["REQUEST", "CANCEL"] as const;
+export const WEBHOOK_EVENT_TYPES = [
+  "submission.created",
+  "submission.status_changed",
+  "evaluation.completed",
+  "speaker_task.completed",
+  "agenda.published",
+  "speaker.confirmed",
+] as const;
+export const WEBHOOK_DELIVERY_STATUSES = ["queued", "delivered", "failed"] as const;
 export const MIRROR_OPERATIONS = ["upsert", "delete"] as const;
 export const IMPORT_OUTCOMES = ["created", "updated", "skipped", "failed"] as const;
 export const EMBED_KINDS = ["agenda", "speakers"] as const;
@@ -117,6 +126,8 @@ export type AttachmentStatus = (typeof ATTACHMENT_STATUSES)[number];
 export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
 export type OutboxSendPolicy = (typeof OUTBOX_SEND_POLICIES)[number];
 export type CalendarMethod = (typeof CALENDAR_METHODS)[number];
+export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
+export type WebhookDeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
 export type MirrorOperation = (typeof MIRROR_OPERATIONS)[number];
 export type ImportOutcome = (typeof IMPORT_OUTCOMES)[number];
 export type EmbedKind = (typeof EMBED_KINDS)[number];
@@ -557,6 +568,26 @@ export interface MirrorStateRow extends MutableRecord {
   webhook_id: string | null;
 }
 
+export interface WebhookEndpointRow extends ImmutableRecord {
+  enabled: 0 | 1;
+  event_id: Id;
+  events_json: JsonText;
+  last_delivery_at: EpochMilliseconds | null;
+  secret_hash: string;
+  url: string;
+}
+
+export interface WebhookDeliveryRow extends ImmutableRecord {
+  attempts: number;
+  delivered_at: EpochMilliseconds | null;
+  endpoint_id: Id;
+  error: string | null;
+  event_type: WebhookEventType;
+  payload: string;
+  response_code: number | null;
+  status: WebhookDeliveryStatus;
+}
+
 export interface ImportRow extends MutableRecord {
   event_id: Id;
   file_key: string;
@@ -647,10 +678,12 @@ export const CORE_TABLE_NAMES = [
   "embeds",
   "audit_log",
   "event_settings",
+  "webhook_endpoints",
+  "webhook_deliveries",
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 46 as const;
+export const CORE_TABLE_COUNT = 48 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -668,7 +701,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 46>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 48>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -717,6 +750,8 @@ export const CORE_TABLES = {
   task_templates: "task_templates",
   tracks: "tracks",
   waves: "waves",
+  webhook_deliveries: "webhook_deliveries",
+  webhook_endpoints: "webhook_endpoints",
 } as const satisfies { [Table in CoreTableName]: Table };
 
 export interface CoreTableRows {
@@ -766,6 +801,8 @@ export interface CoreTableRows {
   task_templates: TaskTemplateRow;
   tracks: TrackRow;
   waves: WaveRow;
+  webhook_deliveries: WebhookDeliveryRow;
+  webhook_endpoints: WebhookEndpointRow;
 }
 
 type _CoreRowsAreComplete = Assert<Equal<keyof CoreTableRows, CoreTableName>>;
@@ -830,6 +867,8 @@ interface CoreDefaultColumns {
   task_templates: "auto_assign" | "description";
   tracks: never;
   waves: never;
+  webhook_deliveries: "attempts";
+  webhook_endpoints: "enabled";
 }
 
 type GeneratedColumn<Row> = Extract<
@@ -893,3 +932,5 @@ export type ImportRowInsert = CoreInsert<"import_rows">;
 export type EmbedInsert = CoreInsert<"embeds">;
 export type AuditLogInsert = CoreInsert<"audit_log">;
 export type EventSettingInsert = CoreInsert<"event_settings">;
+export type WebhookEndpointInsert = CoreInsert<"webhook_endpoints">;
+export type WebhookDeliveryInsert = CoreInsert<"webhook_deliveries">;

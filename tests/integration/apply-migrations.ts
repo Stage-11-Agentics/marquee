@@ -4,6 +4,7 @@ import migrationSql from "../../migrations/0001_init.sql?raw";
 import venueGeographyMigrationSql from "../../migrations/0002_venue_geography.sql?raw";
 import venueAccessNoteMigrationSql from "../../migrations/0003_building_access_note.sql?raw";
 import calendarReversalMigrationSql from "../../migrations/0004_calendar_reversal.sql?raw";
+import taskCancellationWebhooksMigrationSql from "../../migrations/0005_task_cancellation_webhooks.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -66,6 +67,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(venueGeographyMigrationSql),
     ...splitStatements(venueAccessNoteMigrationSql),
     ...splitStatements(calendarReversalMigrationSql),
+    ...splitStatements(taskCancellationWebhooksMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

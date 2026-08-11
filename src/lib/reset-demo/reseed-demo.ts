@@ -6,6 +6,8 @@ import { demoFixtureRows } from "./demo-fixture";
  * database is the demo.
  */
 export const WIPE_ORDER = [
+  "webhook_deliveries",
+  "webhook_endpoints",
   "submission_decisions",
   "submission_answers",
   "submission_tracks",

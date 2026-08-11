@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-66",
+  "owns": [],
+  "exercises": [],
+  "notes": "M-61 owns no product auto criteria: it supplies the migration seam for AC-241 and AC-264. Downstream behavior tickets own those criteria; this ticket's contract tests cover schema shape, allowlist, and reset ordering only."
+}

@@ -22,6 +22,7 @@ const migrations = readdirSync(join(root, "migrations"))
   .sort()
   .map((name) => readFileSync(join(root, "migrations", name), "utf8"));
 const migration = migrations.join("\n");
+const initialMigration = migrations[0];
 const typeMirror = readFileSync(join(root, "src", "db", "schema.ts"), "utf8");
 
 function runWrangler(args, { expectFailure = false } = {}) {
@@ -123,6 +124,7 @@ function parseMirrorColumns(source) {
   return mapping;
 }
 
+const initialTables = names(/^CREATE TABLE (\w+) \(/gm, initialMigration);
 const expectedTables = names(/^CREATE TABLE (\w+) \(/gm, migration);
 const expectedIndexes = names(/^CREATE (?:UNIQUE )?INDEX (\w+)/gm, migration);
 const expectedTriggers = names(/^CREATE TRIGGER (\w+)/gm, migration);
@@ -147,6 +149,7 @@ const requiredIndexes = [
   "idx_speaker_tasks_event_status_due",
   "idx_speaker_tasks_person_status_due",
   "idx_speaker_tasks_submission_status",
+  "idx_webhook_deliveries_endpoint_created",
   "idx_submission_tracks_track_submission",
   "idx_submissions_event_kind_status",
   "idx_submissions_event_status",
@@ -161,8 +164,10 @@ const requiredIndexes = [
   "uq_submission_tracks_submission_track",
 ];
 
-assert.equal(expectedTables.length, 46, "0001 must define exactly 46 product tables");
-assert.equal(new Set(expectedTables).size, 46, "0001 contains duplicate table names");
+assert.equal(initialTables.length, 46, "0001 must define exactly 46 product tables");
+assert.equal(new Set(initialTables).size, 46, "0001 contains duplicate table names");
+assert.equal(expectedTables.length, 48, "Applied migrations must define exactly 48 product tables");
+assert.equal(new Set(expectedTables).size, 48, "Applied migrations contain duplicate table names");
 for (const index of requiredIndexes) {
   assert.ok(expectedIndexes.includes(index), `Required schema index is missing: ${index}`);
 }
@@ -196,6 +201,9 @@ try {
   ]);
   assert.match(firstApply.stdout, /0001_init\.sql/);
   assert.match(firstApply.stdout, /0002_venue_geography\.sql/);
+  assert.match(firstApply.stdout, /0003_building_access_note\.sql/);
+  assert.match(firstApply.stdout, /0004_calendar_reversal\.sql/);
+  assert.match(firstApply.stdout, /0005_task_cancellation_webhooks\.sql/);
 
   const secondApply = runWrangler([
     "d1",
@@ -265,13 +273,25 @@ try {
   );
   assert.equal(attachmentSha?.not_null, 0, "SPEC Amendment 12 requires nullable sha256");
   assert.equal(attachmentEtag?.not_null, 0, "SPEC Amendment 12 requires nullable r2_etag");
+  const cancelledAt = appliedColumns.find(
+    ({ table_name, column_name }) => table_name === "speaker_tasks" && column_name === "cancelled_at",
+  );
+  assert.equal(cancelledAt?.not_null, 0, "speaker_tasks.cancelled_at must be nullable");
+  const speakerTasksSql = sqlite
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='speaker_tasks'")
+    .get()?.sql;
+  assert.match(
+    speakerTasksSql,
+    /status IN \('open', 'done'\)/,
+    "speaker_tasks status enum must remain open/done",
+  );
 
   const foreignKeyRows = sqlite.prepare(
     "SELECT m.name AS table_name, f.[table] AS parent_table, f.[from] AS child_column, f.[to] AS parent_column " +
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 89, "Expected the exact foreign-key graph");
+  assert.equal(foreignKeyRows.length, 91, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 
@@ -363,6 +383,13 @@ try {
        '["submission1",["s2","s3"]]',1,1);
     INSERT INTO agenda_items VALUES
       ('agenda1','event1','submission1','session',NULL,1000,30,'room1','track1',0,1,1);
+    INSERT INTO webhook_endpoints
+      (id,event_id,url,secret_hash,events_json,created_at)
+      VALUES ('endpoint1','event1','https://hooks.example.test/receive','hash-1',
+       '["submission.created","submission.status_changed","evaluation.completed","speaker_task.completed","agenda.published","speaker.confirmed"]',1);
+    INSERT INTO webhook_deliveries
+      (id,endpoint_id,event_type,payload,status,created_at)
+      VALUES ('delivery1','endpoint1','submission.created','{}','queued',1);
   `);
 
   assert.equal(
@@ -449,6 +476,29 @@ try {
     )[0].count,
     1,
     "A completed file must attach to its submission with the observed R2 ETag",
+  );
+  const endpoint = query(
+    "SELECT enabled,last_delivery_at FROM webhook_endpoints WHERE id='endpoint1'",
+  )[0];
+  assert.deepEqual(endpoint, { enabled: 1, last_delivery_at: null }, "Webhook endpoint defaults drifted");
+  const delivery = query(
+    "SELECT attempts,response_code,error,delivered_at FROM webhook_deliveries WHERE id='delivery1'",
+  )[0];
+  assert.deepEqual(
+    delivery,
+    { attempts: 0, response_code: null, error: null, delivered_at: null },
+    "Webhook delivery defaults drifted",
+  );
+  const webhookPlan = query(
+    "EXPLAIN QUERY PLAN SELECT id FROM webhook_deliveries " +
+      "WHERE endpoint_id='endpoint1' ORDER BY created_at",
+  )
+    .map(({ detail }) => detail)
+    .join("\n");
+  assert.match(
+    webhookPlan,
+    /idx_webhook_deliveries_endpoint_created/,
+    "Webhook delivery log did not use its endpoint/created index",
   );
 
   const reviewerPlan = query(
@@ -563,6 +613,26 @@ try {
     "agenda break shape",
     "INSERT INTO agenda_items VALUES " +
       "('bad-agenda','event1','submission1','break','Break',2000,15,'room1',NULL,0,1,1)",
+  );
+  expectConstraint(
+    "webhook endpoint URL scheme",
+    "INSERT INTO webhook_endpoints (id,event_id,url,secret_hash,events_json,created_at) " +
+      "VALUES ('bad-endpoint-url','event1','http://hooks.example.test','hash','[]',1)",
+  );
+  expectConstraint(
+    "webhook event allowlist",
+    "INSERT INTO webhook_endpoints (id,event_id,url,secret_hash,events_json,created_at) " +
+      "VALUES ('bad-endpoint-event','event1','https://hooks.example.test','hash','[\"person.updated\"]',1)",
+  );
+  expectConstraint(
+    "webhook delivery event allowlist",
+    "INSERT INTO webhook_deliveries (id,endpoint_id,event_type,payload,status,created_at) " +
+      "VALUES ('bad-delivery-event','endpoint1','person.updated','{}','queued',1)",
+  );
+  expectConstraint(
+    "webhook delivery status",
+    "INSERT INTO webhook_deliveries (id,endpoint_id,event_type,payload,status,created_at) " +
+      "VALUES ('bad-delivery-status','endpoint1','submission.created','{}','retrying',1)",
   );
   expectConstraint(
     "API scopes shape",
