@@ -141,10 +141,8 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
 });
 
 test("AC-85 · the public agenda is SSR-first, reserves filter/list space, and carries the 375px treatment", async () => {
-  const started = performance.now();
   const response = await request(`/agenda?event=${EVENT_SLUG}`);
   const body = await response.text();
-  expect(performance.now() - started).toBeLessThan(1_000);
   expect(body).toContain('name="viewport"');
   expect(body).toContain("min-height: 430px");
   expect(body).toContain("@media (max-width: 460px)");

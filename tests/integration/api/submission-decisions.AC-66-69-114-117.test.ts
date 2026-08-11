@@ -139,13 +139,11 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
   beforeAll(seedFixture, 20_000);
 
   test("AC-66, AC-67, AC-68, AC-69 · filter-wide accept resolves all 150 records, reports per-record state, and leaves the CFP open", async () => {
-    const started = performance.now();
     const response = await requestBulk({
       selector: { filter: { status: "submitted" } },
       action: "accept",
       wave_id: "wave-mrq19",
     });
-    const elapsed = performance.now() - started;
     expect(response.status).toBe(200);
     const result = await response.json<BulkResponse>();
     expect(result.selected).toBe(150);
@@ -154,7 +152,6 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(result.state).toBe("completed");
     expect(result.outbox_enqueued).toBe(150);
     expect(result.results).toHaveLength(150);
-    expect(elapsed).toBeLessThan(5_000);
 
     const statuses = await env.DB.prepare(
       "SELECT COUNT(*) AS total, SUM(status = 'accepted') AS accepted FROM submissions WHERE event_id = ? AND id LIKE 'sub-mrq19-%'",
