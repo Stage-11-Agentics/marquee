@@ -9,6 +9,28 @@ off the request path. The API is a first-class product surface, generated from
 the same route definitions that serve the application. It is usable from a
 browser, `curl`, or another program without reverse-engineering the UI.
 
+## Marquee never phones home
+
+You are running a conference, which means you are holding other people's data.
+So this is stated here, in the first thing anyone reads, and not only in a doc
+nobody opens:
+
+**Marquee sends nothing to anyone.** There is no vendor SDK, no error-tracking
+DSN, no analytics script, and no telemetry endpoint that is not your own
+deployment. When a browser hits an error it posts a capped report to *your*
+Worker, which writes one log line and returns — no table, no migration, nothing
+kept.
+
+**A speaker's email address cannot be logged**, because the log builder has no
+field for it. Logs are built from an allowlist, not scrubbed by a denylist:
+routes are recorded as templates, never as raw URLs, and there is no field
+anywhere for a request body, a cookie, an `Authorization` header, or an address.
+
+[`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) lists every event and every
+field, and gives you three off switches. Every error surface also shows a short
+reference code that greps straight to the log line behind it — the support
+handshake is one paste, not a screen-sharing session.
+
 ## Status: local now, hosted after account setup
 
 The local application runs today with Wrangler dev and Miniflare. The recipe
@@ -101,7 +123,9 @@ curl -fsS -b /tmp/marquee-local-cookies.txt \
   | grep -Eq '"total"[[:space:]]*:[[:space:]]*[1-9][0-9]*'
 ```
 
-The first response is `{"service":"marquee","status":"ok"}`. The second
+The first response is `{"service":"marquee","status":"ok",...}` and also names
+the build it is serving, so a bug report is never ambiguous about the version.
+The second
 uses the seeded organizer persona. The third proves that the authenticated
 list contains more than zero records; it is not a test against a hard-coded
 HTML count.
@@ -277,6 +301,7 @@ the existing seam and its tests before introducing a second implementation.
 | API registration | [`src/routes/_manifest.ts`](src/routes/_manifest.ts) | Add a `*.routes.ts` module. The Vite glob updates the manifest and OpenAPI surface; do not hand-edit an import list. |
 | Venue movement | [`src/lib/venue-geometry.ts`](src/lib/venue-geometry.ts) | Reuse the pure haversine/walking/transit helper and keep unpinned buildings honest. |
 | Calendar delivery | [`src/jobs/calendar/ics.ts`](src/jobs/calendar/ics.ts) | Extend the ICS path for calendar clients. Calendar OAuth write is a documented extension point, not a built feature. |
+| Observability | [`src/lib/observability/log.ts`](src/lib/observability/log.ts) | Add an event and its declared fields to the allowlist. A hosted error tracker is a one-function seam in the sink and in `browserSend`; gate it on a DSN so a deployment without one still talks to nobody. See [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md). |
 | Data integrations | D1-backed API and import boundaries | A registration-platform sync and an Airtable mirror are extension points. D1 remains the source of truth; Airtable is a deliberate asynchronous mirror, not a source-of-truth system. Neither integration should be placed on a page read path. |
 
 The three named integrations are intentionally honest: registration-platform
@@ -315,6 +340,10 @@ npm test
 npm run check:api
 npm run check:seed
 npm run check:design
+
+# When something is wrong: the verdict, then the line behind the reference code.
+node cli/marquee.mjs diagnose --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --bundle
+node cli/marquee.mjs logs --tail --request-id 8f2a4c
 ```
 
 The full test harness is intentionally hermetic: it does not contact a

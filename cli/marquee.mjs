@@ -2,6 +2,7 @@
 
 import { COMMAND_REGISTRY, commandsUnder, renderHelp } from "./registry.mjs";
 import { MarqueeClient } from "./client.mjs";
+import { renderDiagnosticBundle, tailLogs } from "./diagnostics.mjs";
 
 const VALUE_OPTIONS = new Set([
   "--url",
@@ -15,8 +16,11 @@ const VALUE_OPTIONS = new Set([
   "--subject",
   "--body",
   "--format",
+  "--request-id",
+  "--level",
+  "--event",
 ]);
-const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue"]);
+const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle"]);
 const LIST_FILTER_KEYS = new Set(["kind", "status", "track", "format", "wave", "task", "placement", "q"]);
 const REMINDER_FILTER_KEYS = new Set([
   "status",
@@ -176,7 +180,7 @@ async function waitForReset(client, jobId) {
   throw new Error(`the event seed reset did not finish within 30 seconds (last status: ${last?.status ?? "unknown"})`);
 }
 
-async function execute(command, arguments_, options, client) {
+async function execute(command, arguments_, options, flags, client) {
   const [root, verb] = command.path;
   if (root === "event" && verb === "seed") {
     const current = await client.get("/api/v1/auth/me");
@@ -196,6 +200,26 @@ async function execute(command, arguments_, options, client) {
   if (root === "event" && verb === "show") {
     const eventId = await resolveEventId(client, command, arguments_, options);
     return client.get(`/api/v1/events/${encodeURIComponent(eventId)}`);
+  }
+
+  // Diagnostics and logs are about the deployment, not about one conference,
+  // so they run before any event ID is resolved.
+  if (root === "diagnose") {
+    const diagnostics = await client.get("/api/v1/telemetry/diagnostics");
+    return flags.has("--bundle")
+      ? { __text: renderDiagnosticBundle(diagnostics), __value: diagnostics }
+      : diagnostics;
+  }
+  if (root === "logs") {
+    if (!flags.has("--tail")) {
+      usageError("marquee logs currently reads the live stream only; pass --tail");
+    }
+    await tailLogs({
+      requestId: option(options, "--request-id"),
+      level: option(options, "--level"),
+      event: option(options, "--event"),
+    });
+    return { streamed: true };
   }
 
   const eventId = await resolveEventId(client, command, arguments_, options);
@@ -239,9 +263,15 @@ async function execute(command, arguments_, options, client) {
   usageError(`unsupported command: ${command.path.join(" ")}`);
 }
 
-function output(value, json, options) {
+function output(value, json) {
   if (value && value.__csv !== undefined && !json) {
     process.stdout.write(`${value.__csv}\n`);
+    return;
+  }
+  // A bundle is meant to be pasted into an issue, so plain mode prints the
+  // pasteable text and --json still yields the machine-readable value.
+  if (value && value.__text !== undefined && !json) {
+    process.stdout.write(`${value.__text}\n`);
     return;
   }
   process.stdout.write(`${JSON.stringify(value && value.__value !== undefined ? value.__value : value, null, json ? 0 : 2)}\n`);
@@ -258,9 +288,13 @@ export async function main(argv = process.argv.slice(2)) {
     process.stdout.write(`${renderHelp(helpPath)}\n`);
     return;
   }
-  const client = new MarqueeClient({ url: option(parsed.options, "--url"), token: option(parsed.options, "--token") });
-  const result = await execute(command, arguments_, parsed.options, client);
-  output(result, parsed.flags.has("--json"), parsed.options);
+  // A local command reads the platform's own log stream and never calls the
+  // API, so it must not demand a URL and a token it will not use.
+  const client = command.local
+    ? undefined
+    : new MarqueeClient({ url: option(parsed.options, "--url"), token: option(parsed.options, "--token") });
+  const result = await execute(command, arguments_, parsed.options, parsed.flags, client);
+  output(result, parsed.flags.has("--json"));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

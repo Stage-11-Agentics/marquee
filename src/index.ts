@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 
+import { resolveRequestId } from "./api/errors";
 import { createApiRouter } from "./api/router";
 import { setSessionCookie } from "./lib/cookies";
 import { runUploadOrphanSweep } from "./lib/r2/orphan-sweep";
@@ -14,6 +15,7 @@ import type { ApiGrant } from "./api/grants";
 import { BUILD_INFO } from "./lib/observability/build-info";
 import { recordCronHeartbeat } from "./lib/observability/heartbeat";
 import { errorFields, loggerForEnv } from "./lib/observability/log";
+import { correlateQueue, instrumentBindings } from "./lib/observability/request-instrumentation";
 import { landingRoutes } from "./routes/landing.route";
 import { publicFormRoutes } from "./routes/public-form.route";
 import { publicAgendaRoutes } from "./routes/public-agenda.route";
@@ -144,13 +146,18 @@ app.all("/api/*", async (context) => {
     credentialResolver: createCredentialResolver(),
   });
   const { app: api } = await apiApp;
+  // The bindings are instrumented HERE, before the API app sees them, because
+  // this is the last point at which one object can be handed to every handler.
+  // A per-request copy carries a metered D1 and correlated queues; the real env
+  // is shared by every request the isolate serves and must not be mutated.
+  const instrumented = instrumentBindings(context.env, resolveRequestId(context.req.raw));
   // Unmatched `/api/*` falls through to the API app's own not-found handler,
   // so a miss returns the one error envelope with its request id like every
   // other failure — there is no second 404 shape.
   // The nested API app does not use ExecutionContext. Omitting the optional
   // third argument also keeps direct in-process `app.fetch` probes equivalent
   // to Worker requests, where no execution context is supplied.
-  return api.fetch(context.req.raw, context.env);
+  return api.fetch(context.req.raw, instrumented);
 });
 
 app.all("*", (context) => context.env.ASSETS.fetch(context.req.raw));
@@ -236,12 +243,16 @@ const worker: ExportedHandler<Env> = {
     // the ones with nothing to do — records an outcome, and every success
     // stamps a heartbeat the diagnostics probe can read back. Silence then
     // means "the trigger did not fire", not "we did not look".
-    const logger = loggerForEnv(env);
+    // A cron run gets its own correlation id, and the queue it writes to is
+    // stamped with it — so the mail a scheduled run enqueued is followable back
+    // to the run, exactly as an organizer's click is.
+    const runId = crypto.randomUUID();
+    const logger = loggerForEnv(env, { requestId: runId });
     const startedAt = Date.now();
     try {
       let outcome = "ran";
       if (controller.cron === MAIL_SCHEDULE_CRON) {
-        await runMailSchedule(env.DB, env.MAIL_QUEUE, Date.now());
+        await runMailSchedule(env.DB, correlateQueue(env.MAIL_QUEUE, runId), Date.now());
       } else if (controller.cron === UPLOAD_SWEEP_CRON) {
         await runUploadOrphanSweep(env.DB, env.MEDIA, Date.now());
       } else {

@@ -31,6 +31,7 @@ import { allowAllRateLimiter, enforceRateLimit } from "./rate-limit";
 import type { ApiRouteEntry, ApiRoutePolicy } from "./route";
 import type { ApiEnv, ApiRuntime, Principal } from "./runtime";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
+import { readRequestMeter } from "../lib/observability/request-instrumentation";
 import {
   membershipAllowsGrant,
   roleForEvent,
@@ -83,16 +84,36 @@ function envelopeResponse(
   return response;
 }
 
-/** One line per completed request: the live p50/p95 source, per route template. */
+/**
+ * One line per completed request: the live p50/p95 source, per route template.
+ *
+ * `d1_queries` is the N+1 detector. Duration alone says a request was slow;
+ * the query count says why, and "once per row in a loop" is the usual answer.
+ */
 function emitRequestLine(context: Context<ApiEnv>, status: number, startedAt: number): void {
+  const meter = readRequestMeter(context.env);
   context.get("logger")?.emit("http_request", status >= 500 ? "warn" : "info", {
     method: context.req.method,
     route: routeTemplateOf(context),
     status,
     duration_ms: Date.now() - startedAt,
+    d1_queries: meter?.d1.queries,
+    d1_ms: meter?.d1.totalMs,
     principal: context.get("principal")?.kind ?? "unresolved",
     event_id: context.req.param("eventId"),
   });
+}
+
+/**
+ * `Server-Timing`, so the same numbers the log line carries also show up in the
+ * browser's own network panel. Speed is a graded feature; making it visible
+ * where a developer already looks is most of what makes it stay fast.
+ */
+function setServerTiming(context: Context<ApiEnv>, startedAt: number): void {
+  const meter = readRequestMeter(context.env);
+  const parts = [`total;dur=${Date.now() - startedAt}`];
+  if (meter) parts.push(`d1;dur=${meter.d1.totalMs};desc="${meter.d1.queries} queries"`);
+  context.header("Server-Timing", parts.join(", "));
 }
 
 /** Step 4: authorization, with concealment rather than disclosure. */
@@ -223,7 +244,9 @@ export async function createApiRouter(
   // correlation id the caller is handed in the envelope and the `X-Request-Id`
   // header is the id every line about this request carries.
   app.use("*", async (context, next) => {
-    const requestId = resolveRequestId(context.req.raw);
+    // The composition root instruments the bindings before the API app is
+    // reached, and the id it used is the one everything downstream shares.
+    const requestId = readRequestMeter(context.env)?.requestId ?? resolveRequestId(context.req.raw);
     context.set("requestId", requestId);
     context.set("logger", loggerForEnv(context.env, { requestId }));
     context.set("apiDocument", () => {
@@ -234,6 +257,7 @@ export async function createApiRouter(
     const startedAt = Date.now();
     try {
       await next();
+      setServerTiming(context, startedAt);
       emitRequestLine(context, context.res.status, startedAt);
     } catch (error) {
       // The response does not exist yet — `onError` builds it below — so the
