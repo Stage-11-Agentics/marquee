@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +7,18 @@ const CHECKS_DIRECTORY = dirname(dirname(fileURLToPath(import.meta.url)));
 
 export const REPOSITORY_ROOT = resolve(CHECKS_DIRECTORY, "../..");
 export const ARTIFACT_DIRECTORY = resolve(REPOSITORY_ROOT, "artifacts/checks");
+const HARNESS_HISTORY_LIMIT = 10;
+
+function currentCommit() {
+  try {
+    return execFileSync("git", ["rev-parse", "--short=12", "HEAD"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    return undefined;
+  }
+}
 
 export function isGateRun(environment = process.env) {
   return environment.MARQUEE_GATE === "1";
@@ -54,11 +67,25 @@ export async function recordSpeedHarness(name, measurement) {
   } catch {
     // pr-gate may be the first command to write the report in a clean tree.
   }
+  const previousMeasurement = current.harness?.[name];
+  const previousHistory = Array.isArray(previousMeasurement?.history)
+    ? previousMeasurement.history
+    : [];
+  const commit = currentCommit();
+  const context = {
+    recordedAt: new Date().toISOString(),
+    ...(commit ? { commit } : {}),
+  };
+  const nextMeasurement = {
+    ...measurement,
+    ...context,
+    history: [...previousHistory, { ...measurement, ...context }].slice(-HARNESS_HISTORY_LIMIT),
+  };
   const next = {
     ...current,
     harness: {
       ...(current.harness ?? {}),
-      [name]: measurement,
+      [name]: nextMeasurement,
     },
   };
   await mkdir(dirname(outputPath), { recursive: true });

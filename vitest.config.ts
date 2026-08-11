@@ -14,7 +14,11 @@ export default defineConfig({
     }),
   ],
   test: {
-    include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
+    name: "worker",
+    // Keep Worker-backed integration tests and the one unit suite that builds
+    // a D1 schema here. Worker-free unit tests run in vitest.node.config.ts so
+    // they do not pay for a Miniflare isolate per file.
+    include: ["tests/integration/**/*.test.ts", "tests/unit/r2/uploads-routes.test.ts"],
     setupFiles: ["./tests/setup.ts"],
     testTimeout: 5_000,
     hookTimeout: 5_000,

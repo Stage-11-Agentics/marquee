@@ -18,7 +18,8 @@
     "tests/**/*.ts",
     "scripts/checks/**/*.mjs",
     "scripts/seed/**/*.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "vitest.node.config.ts"
   ],
   "exclude": ["tests/e2e/**", "tests/node/**"]
 }

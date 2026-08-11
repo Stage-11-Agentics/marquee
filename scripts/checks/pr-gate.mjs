@@ -19,7 +19,7 @@ const checks = [
 ];
 
 const startedAt = performance.now();
-const PR_GATE_BUDGET_MS = 30_000;
+const PR_GATE_BUDGET_MS = 45_000; // 30s suite budget plus production build and three typechecks, outside the inner-loop clock.
 for (const [name, binary, commandArgs] of checks) {
   process.stdout.write(`\n[pr-gate] ${name}\n`);
   const code = await new Promise((resolveExit, reject) => {
