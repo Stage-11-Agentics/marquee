@@ -15,11 +15,16 @@
       "id": "art_01KZQBXY3Y53MHR0Y03MVC0761",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQCM37B1WPMKVVM9JWP3BX7",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQAGW54K6AR105Y65EJNGBK",
-  "last_event_id": "ev_01KZQBXY415HC5RSKPXX23KHNT",
-  "last_status_changed_at": "2026-08-11T02:49:32Z",
+  "last_event_id": "ev_01KZQCMDX0DZEKXMPWNQKSFAJ8",
+  "last_status_changed_at": "2026-08-11T03:07:37Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [
@@ -34,10 +39,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-62",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Venue geography \u2014 access_note, the Venues screen, and a seed that can conflict",
   "type": "task",
-  "updated_at": "2026-08-11T02:55:20Z",
+  "updated_at": "2026-08-11T03:07:37Z",
   "urgency": null
 }

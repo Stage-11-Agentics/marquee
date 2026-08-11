@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-18",
   "branch_links": [],
+  "c11_surface": "surface:147",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM91S8KRZST6J185QK1K3",
-  "last_event_id": "ev_01KZJHMF1C8TQD5P99Y3FZ6P2Z",
-  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "last_event_id": "ev_01KZQCJ7RRV7T9A8T3Q1Q8GM85",
+  "last_status_changed_at": "2026-08-11T03:06:25Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-18",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Reviewer queue",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:49Z",
+  "updated_at": "2026-08-11T03:06:25Z",
   "urgency": null
 }

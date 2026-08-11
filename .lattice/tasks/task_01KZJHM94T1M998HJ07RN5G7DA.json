@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-19",
   "branch_links": [],
+  "c11_surface": "surface:148",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM94T1M998HJ07RN5G7DA",
-  "last_event_id": "ev_01KZJHMF7D4P2H6QYKKS9F4AXX",
-  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "last_event_id": "ev_01KZQCJR97CJCXRR7B5Q3NKTW2",
+  "last_status_changed_at": "2026-08-11T03:06:42Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -33,10 +35,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-19",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Bulk and record-owned decisions with cascade",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:49Z",
+  "updated_at": "2026-08-11T03:06:42Z",
   "urgency": null
 }

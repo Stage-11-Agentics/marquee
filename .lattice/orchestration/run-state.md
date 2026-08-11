@@ -43,20 +43,6 @@
 
 All three inherited uncommitted Kimi work and were briefed with `.lattice/orchestration/boot/HANDOVER.md`: commit the inherited WIP first so it reads as a diff, judge it rather than trust it, rebase onto current master, and push immediately.
 
-### Superseded — resumed on Kimi 2026-08-10 18:35 (autonomous)
-
-| Ticket | Surface | Harness | Note |
-|---|---|---|---|
-| MRQ-8 (M-07) | surface:101 | kimi | API core, critical chain. Resumed against its committed plan — revalidate, do not re-plan. |
-| MRQ-14 (M-13) | surface:102 | kimi | Uploads. Guardrail-adjacent (AC-231) → **never auto-merge**. |
-| MRQ-3 (M-03) | surface:103 | kimi | Auth/demo entry. Guardrail-adjacent (demo login must 403 outside demo_mode) → orchestrator eyes at merge. |
-| MRQ-4 (M-04a) | surface:104 | kimi | Seed spine, fast-track. MRQ-5 extends it. |
-
-
-**S-3 verdict (relay into MRQ-8/M-07's boot prompt):** one JSON ID array + `json_each(?)` — a single write query at both 150 and 1,000 rows, 6 ms median — beats ≤90-binding chunking (12 queries, 8.5 ms). Helper dedupes, no-ops on empty, stringifies once, runs once. Local D1 accepts 100 bindings, rejects 101.
-
-**Held despite zero deps:** MRQ-41/42 (craft/closure — late-band by design), MRQ-43/46 (audits — run near their checkpoints), MRQ-54 (S-1 — its band opens at CP-1 and it needs the operator's Airtable base).
-
 ## ⚠ RESOURCE ESCALATION — harness quota (raised 2026-08-09 02:50)
 
 Measured via glideslope, not estimated. **Codex weekly: 79% consumed, resets Sat Aug 15 — three days AFTER the Wed Aug 12 22:00 PT deadline.** Burn was ~6 points per 30 min at N=5 high-effort, i.e. roughly **90 minutes of runway** for ~50 remaining tickets. Claude Bravo (this session): 76% weekly, resets Thu Aug 13 — also after the deadline. Kimi: 100% spent, but resets **Mon Aug 10 18:20**, before the deadline. **Claude Alpha: ~untouched 20x Max**, but reaching it is a web `/login` only the operator can perform.
@@ -84,14 +70,6 @@ Bravo (78% used) is deliberately excluded: it is the pool this orchestrator sess
 **Dispatch decision:** MRQ-5 and MRQ-9 went to **Codex** (surfaces 121, 122) — it is free, and Bravo is reserved for orchestration plus the two guardrail reviews I said I would do by hand. Kimi is not dead either: its weekly is only 20% and the 5-hour window rolls at 22:20; it was benched on quality, not capacity, and stays benched.
 
 Standing account picture: Bravo 85%, resets Thu 04:59 — **after** the Thu 01:00 deadline, so what is held is all there is. Alpha untouched, still needs the operator's web login. ~49 hours to deadline.
-
-### Superseded — capacity wall (Bravo), measured 21:02
-
-Bravo sat at **84–85% across four readings between 20:57 and 21:04**, and it does not reset until **Thu Aug 13 05:00 EDT — after the deadline**. Runway is therefore **roughly 1–2 hours at three agents**, stated as a range on purpose: the weekly figure is reported in whole percent, so a single 5-minute delta cannot distinguish 6 points/hour from 12. (The first estimate here said "~75 minutes" from exactly such a delta — the same over-precision that produced the withdrawn Kimi 10% figure. Measure over a longer baseline before quoting a number.) The finer-grained 5-hour window moved 6% → 8% in ~4 minutes, implying ~3 hours there, so **the weekly is the binding cap, not the session**. Codex is exhausted, Kimi is retired by operator ruling. **Alpha (untouched Max 20x) is the only remaining build capacity in the Constellation.**
-
-**Deliberate call: N was NOT filled to 5.** With a hard wall this close, three tickets finished and merged are worth more than five tickets left half-done — a partial branch at the wall is unmergeable and its work is only recoverable by a future session re-reading it. All three delegators were instead told to cut scope to *mergeable*, run the gate as soon as the core path works, and keep pushing. The one thing explicitly not cuttable: the guardrail proofs (demo login 403s outside `demo_mode`; presign fails closed).
-
-All three inherited-WIP commits are **pushed and verified** against their remote branches, so the wall can only cost in-flight polish, never landed work.
 
 ## 🔒 MRQ-60 — the auth hole that must close before the public deploy (21:40)
 
@@ -213,6 +191,7 @@ Hourly parked ticks would have cost ~37 wake-ups against **Bravo's remaining 22%
 
 1. ~~`wrangler login`~~ — **DEFERRED by operator 2026-08-09 02:25 ("put demo credentials in, I'll deal with that tomorrow"). Carved out as MRQ-57**; MRQ-1 ships locally-validated with placeholder resource IDs. Everything the operator must do is enumerated in MRQ-57's description. The deployed URL a judge opens comes from MRQ-57, so it cannot slip past Tuesday.
 2. **S-2 oracle (MRQ-55, `needs_human`, code already merged):** open `benevolent.futures@gmail.com` and judge the `[S-2 spike]` triplet — 1/3 should show **Accept/Decline**; 2/3 should **replace** the 15:00 entry with 16:00 (not duplicate); 3/3 should **remove** it. Then supply an Outlook address and an Apple-backed address; re-run is `node send.mjs <address>` from `spikes/s2-ics-clients/`. Sent 06:21 UTC, all three delivered per Resend.
+   **DEFERRED by Atin 2026-08-10, with the Gmail row reassigned to the orchestrator.** Drive that inbox in a browser surface once this session is on Alpha and capture screenshots of (a) whether 1/3 renders Accept/Decline rather than a bare `.ics`, and (b) whether 2/3 replaces 1/3 at 16:00 with no 15:00 duplicate. **Do NOT click Accept without a fresh operator go-ahead — it writes to Atin's real Google Calendar;** if the RSVP half can't be proven without accepting, report that boundary instead of clicking. Outlook and Apple addresses remain operator-only. MRQ-25 is written against this verdict; Gmail alone is a defensible partial for the competition.
 3. Airtable Team + two bases (blocks S-1/MRQ-54, then M-25/M-26); Resend tier check; real Sessionize export (M-30); model credential (M-47).
 
 ## Decision log (append-only)

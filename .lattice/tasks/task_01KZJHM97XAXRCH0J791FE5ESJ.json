@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-20",
   "branch_links": [],
+  "c11_surface": "surface:149",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM97XAXRCH0J791FE5ESJ",
-  "last_event_id": "ev_01KZJHMFADDMJFXF0VM7Y44TR9",
-  "last_status_changed_at": "2026-08-09T05:58:43Z",
+  "last_event_id": "ev_01KZQCHVCFVEEE3PY0KRM4MKCT",
+  "last_status_changed_at": "2026-08-11T03:06:13Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-20",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Agenda: data, pool, placement, and day/list/week/room views",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:49Z",
+  "updated_at": "2026-08-11T03:06:13Z",
   "urgency": null
 }

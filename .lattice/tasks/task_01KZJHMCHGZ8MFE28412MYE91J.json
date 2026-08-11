@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:198",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 4,
+  "comment_count": 5,
   "complexity": null,
   "created_at": "2026-08-09T05:58:47Z",
   "created_by": "agent:orchestrator-intake",
@@ -53,7 +53,7 @@
     }
   ],
   "id": "task_01KZJHMCHGZ8MFE28412MYE91J",
-  "last_event_id": "ev_01KZJKABQBJ0E21M3S6FFXN5HF",
+  "last_event_id": "ev_01KZQCM552QZMDPCXBVZ3AY3RV",
   "last_status_changed_at": "2026-08-09T06:28:15Z",
   "linked_files": [],
   "needs_human": {
@@ -70,6 +70,6 @@
   "tags": null,
   "title": "Spike \u2014 ICS rendering in real mail clients",
   "type": "spike",
-  "updated_at": "2026-08-09T06:28:15Z",
+  "updated_at": "2026-08-11T03:07:28Z",
   "urgency": null
 }
