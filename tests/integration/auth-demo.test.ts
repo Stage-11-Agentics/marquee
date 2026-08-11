@@ -203,7 +203,7 @@ test("CONTRACT · demo login rejects a role with no matching demo persona", asyn
 
 const DEAD_SESSION_COOKIE = "mq_session=sess_from_a_reset_demo";
 
-test("REGRESSION · demo login succeeds for a browser holding a dead session cookie", async () => {
+test("CONTRACT · demo login succeeds for a browser holding a dead session cookie", async () => {
   await seedDemoFixture();
   const before = await authSessionCount();
   const response = await app.request("/api/v1/auth/demo", {
@@ -220,7 +220,7 @@ test("REGRESSION · demo login succeeds for a browser holding a dead session coo
   expect(await authSessionCount()).toBe(before + 1);
 });
 
-test("REGRESSION · an expired session cookie does not block demo login", async () => {
+test("CONTRACT · an expired session cookie does not block demo login", async () => {
   await seedDemoFixture();
   const expired = await createSession(env.DB, {
     personId: DEMO_ORGANIZER_PERSON_ID,
@@ -236,7 +236,7 @@ test("REGRESSION · an expired session cookie does not block demo login", async 
   expect(response.status).toBe(200);
 });
 
-test("REGRESSION · logout is reachable with a dead session cookie and clears it", async () => {
+test("CONTRACT · logout is reachable with a dead session cookie and clears it", async () => {
   // Logout is the escape hatch, and it is public — the same defect blocked the
   // one route that could have unblocked the browser.
   const response = await app.request("/api/v1/auth/logout", {
@@ -248,7 +248,7 @@ test("REGRESSION · logout is reachable with a dead session cookie and clears it
   expect(response.headers.get("set-cookie")).toMatch(/mq_session=;/);
 });
 
-test("REGRESSION · a failed demo login drops the dead cookie so the browser recovers", async () => {
+test("CONTRACT · a failed demo login drops the dead cookie so the browser recovers", async () => {
   // Demo mode is off here, so sign-in cannot replace the cookie itself. The
   // browser must still leave without a corpse in its jar.
   const response = await app.request("/api/v1/auth/demo", {
@@ -261,7 +261,7 @@ test("REGRESSION · a failed demo login drops the dead cookie so the browser rec
   expect(response.headers.get("set-cookie")).toMatch(/mq_session=;/);
 });
 
-test("REGRESSION · degrading to anonymous is scoped to public routes only", async () => {
+test("CONTRACT · degrading to anonymous is scoped to public routes only", async () => {
   // The security property the resolver's 401 exists for is unchanged: a route
   // that requires a principal still rejects a present-but-invalid credential.
   await seedDemoFixture();

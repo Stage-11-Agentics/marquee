@@ -18,7 +18,13 @@ export function parseEvaluationContract(markdown) {
 
 function callName(expression) {
   if (ts.isIdentifier(expression)) return expression.text;
-  if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+  // Read the ROOT of a property access, never the property name. `test.skip(…)`
+  // is a declaration and its root is `test`; `/pattern/.test(value)` is a
+  // RegExp call whose PROPERTY happens to be named `test`, and reading the
+  // property made every such call look like a test with a dynamic title.
+  if (ts.isPropertyAccessExpression(expression)) {
+    return ts.isIdentifier(expression.expression) ? expression.expression.text : undefined;
+  }
   return undefined;
 }
 
