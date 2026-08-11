@@ -35,7 +35,8 @@ const decisionResponseSchema = z
 async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   const auth = getAuth(context);
   if (!auth) throw ApiError.unauthenticated();
-  if (auth.kind === "session") return { kind: "user", personId: auth.personId };
+  const requestId = context.get("requestId") ?? null;
+  if (auth.kind === "session") return { kind: "user", personId: auth.personId, requestId };
   const token = await context.env.DB
     .prepare("SELECT created_by FROM api_tokens WHERE id = ?")
     .bind(auth.tokenId)
@@ -43,7 +44,7 @@ async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   if (!token?.created_by) {
     throw ApiError.unauthenticated("the token issuer is no longer available");
   }
-  return { kind: "api_token", personId: token.created_by };
+  return { kind: "api_token", personId: token.created_by, requestId };
 }
 
 const decideSubmission = defineApiRoute(

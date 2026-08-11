@@ -328,11 +328,16 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
     ).bind(EVENT_ID, SUB_SINGLE, SPEAKER_ID).first<{ id: string; subject: string; text: string; send_policy: string }>();
     expect(message).toMatchObject({ subject: "Hello Demo", text: "Hi Demo,\n\nSingle decision with feedback", send_policy: "demo_safe" });
     const audit = await env.DB.prepare(
-      `SELECT action, entity_id, after_json FROM audit_log
+      `SELECT action, entity_id, after_json, request_id FROM audit_log
        WHERE event_id = ? AND action = 'submission.message_sent' AND entity_id = ?`,
-    ).bind(EVENT_ID, SUB_SINGLE).first<{ action: string; entity_id: string; after_json: string }>();
+    ).bind(EVENT_ID, SUB_SINGLE).first<{ action: string; entity_id: string; after_json: string; request_id: string | null }>();
     expect(audit?.action).toBe("submission.message_sent");
     expect(JSON.parse(audit?.after_json ?? "{}")).toMatchObject({ outbox_id: message?.id, person_id: SPEAKER_ID, template_key: "custom" });
+    // The join this column exists for: the audit row names the same request the
+    // caller was handed, so one id reaches both the change and the log line.
+    const auditRequestId = first.headers.get("x-request-id");
+    expect(auditRequestId).toBeTruthy();
+    expect(audit?.request_id).toBe(auditRequestId);
 
     const repeated = await request(`/api/v1/events/${EVENT_ID}/comms/send`, { method: "POST", body: JSON.stringify(body) }, ownerCookie);
     expect(repeated.status).toBe(202);

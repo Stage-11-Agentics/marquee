@@ -11,6 +11,7 @@ const board = await readFile(new URL("../../src/api/board.ts", import.meta.url),
 const submissions = await readFile(new URL("../../src/routes/submissions.queries.ts", import.meta.url), "utf8");
 const audience = await readFile(new URL("../../src/jobs/mail/audience.ts", import.meta.url), "utf8");
 const portal = await readFile(new URL("../../src/ui/portal/PortalPage.tsx", import.meta.url), "utf8");
+const audit = await readFile(new URL("../../src/lib/audit.ts", import.meta.url), "utf8");
 
 test("AC-264 · cancellation is a timestamp tombstone over open tasks", () => {
   assert.equal((decisions.match(/export async function cancelTaskSet\s*\(/g) ?? []).length, 1);
@@ -51,6 +52,13 @@ test("AC-267 · reversal and reconciliation write actor-and-time history", () =>
   assert.match(decisions, /submission\.acceptance_reversed/);
   assert.match(decisions, /submission\.tasks_\$\{input\.tasks/);
   assert.match(decisions, /submission\.tasks_reconciled/);
-  assert.match(decisions, /actor_person_id/);
-  assert.match(decisions, /created_at/);
+  // The audit INSERT now lives in the one shared writer, so AC-267's guarantee
+  // is checked in two halves: the cascade supplies actor and time, and the
+  // writer binds them to the actor and time columns.
+  assert.match(decisions, /actorPersonId: input\.actor\.personId/);
+  assert.match(decisions, /now: input\.now/);
+  assert.match(audit, /actor_person_id/);
+  assert.match(audit, /created_at/);
+  assert.match(audit, /entry\.actorPersonId,/);
+  assert.match(audit, /entry\.now,/);
 });

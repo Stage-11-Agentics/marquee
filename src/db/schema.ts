@@ -623,6 +623,12 @@ export interface AuditLogRow extends ImmutableRecord {
   entity_id: Id;
   entity_type: string;
   event_id: Id;
+  /**
+   * The request this change came from, joining the domain audit trail to the
+   * operational log. Null means there was no originating request — a cron
+   * sweep, or a row written before the column existed.
+   */
+  request_id: string | null;
 }
 
 export interface EventSettingRow extends MutableRecord {

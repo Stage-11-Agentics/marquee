@@ -12,6 +12,7 @@ import { getAuth } from "../lib/auth/auth-middleware";
 import { projectApplicableAnswers, type FormAnswerValue } from "../lib/form-conditions";
 import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
+import { auditStatement, writeAudit } from "../lib/audit";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
@@ -157,10 +158,11 @@ async function eventFor(db: D1Database, eventId: string): Promise<EventRow> {
 async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   const auth = getAuth(context);
   if (!auth) throw ApiError.unauthenticated();
-  if (auth.kind === "session") return { kind: "user", personId: auth.personId };
+  const requestId = context.get("requestId") ?? null;
+  if (auth.kind === "session") return { kind: "user", personId: auth.personId, requestId };
   const token = await context.env.DB.prepare("SELECT created_by FROM api_tokens WHERE id = ?").bind(auth.tokenId).first<{ created_by: string }>();
   if (!token?.created_by) throw ApiError.unauthenticated("the token issuer is no longer available");
-  return { kind: "api_token", personId: token.created_by };
+  return { kind: "api_token", personId: token.created_by, requestId };
 }
 
 async function audit(
@@ -171,11 +173,17 @@ async function audit(
   actor: DecisionActor,
   after: unknown,
 ): Promise<void> {
-  await db.prepare(`
-    INSERT INTO audit_log
-      (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at)
-    VALUES (?, ?, ?, ?, ?, 'submission', ?, NULL, ?, ?)
-  `).bind(newUlid(), eventId, actor.personId, actor.kind, action, entityId, JSON.stringify(after), Date.now()).run();
+  await writeAudit(db, {
+    eventId,
+    actorKind: actor.kind,
+    actorPersonId: actor.personId,
+    action,
+    entityType: "submission",
+    entityId,
+    after,
+    now: Date.now(),
+    requestId: actor.requestId,
+  });
 }
 
 async function loadRecord(db: D1Database, eventId: string, submissionId: string): Promise<Record<string, unknown>> {
@@ -577,11 +585,17 @@ const createSubmission = defineApiRoute(
         INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).bind(newUlid(), id, answer.field_id, answer.value_text ?? null, answer.value_json === undefined ? null : JSON.stringify(answer.value_json), now, now)),
-      context.env.DB.prepare(`
-        INSERT INTO audit_log
-          (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at)
-        VALUES (?, ?, ?, ?, 'created', 'submission', ?, NULL, ?, ?)
-      `).bind(newUlid(), eventId, actor.personId, actor.kind, id, JSON.stringify({ origin: "admin", kind: body.kind, status, bypass_evaluation: body.kind === "session" || body.bypass_evaluation === true }), now),
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "created",
+        entityType: "submission",
+        entityId: id,
+        after: { origin: "admin", kind: body.kind, status, bypass_evaluation: body.kind === "session" || body.bypass_evaluation === true },
+        now,
+        requestId: actor.requestId,
+      }),
     ];
     try {
       await context.env.DB.batch(statements);

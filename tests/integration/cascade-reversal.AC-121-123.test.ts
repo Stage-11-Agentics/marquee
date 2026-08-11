@@ -11,7 +11,12 @@ import { enqueueOverdueTaskReminders } from "../../src/jobs/mail/triggers";
 import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.parse("2026-08-20T16:00:00.000Z");
-const ACTOR = { kind: "user" as const, personId: "person-reversal-actor" };
+const ACTOR_REQUEST_ID = "req-reversal-fixture";
+const ACTOR = {
+  kind: "user" as const,
+  personId: "person-reversal-actor",
+  requestId: ACTOR_REQUEST_ID,
+};
 
 async function seedFixture(): Promise<void> {
   await applyMigrations();

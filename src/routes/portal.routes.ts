@@ -31,6 +31,7 @@ import {
   projectApplicableAnswers,
 } from "../lib/form-conditions";
 import { listFormFields, type FormFieldView } from "./forms.queries";
+import { auditStatement, writeAudit } from "../lib/audit";
 
 const eventQuery = z.object({ eventId: z.string().min(1).optional() });
 const taskParams = z.object({ taskId: z.string().min(1) });
@@ -435,23 +436,18 @@ async function respondToParticipation(
     throw ApiError.conflict("this role changed before your response was saved");
   }
 
-  await context.env.DB
-    .prepare(
-      `INSERT INTO audit_log
-        (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at)
-       VALUES (?, ?, ?, 'user', ?, 'submission', ?, ?, ?, ?)`,
-    )
-    .bind(
-      crypto.randomUUID(),
-      current.event_id,
-      auth.personId,
-      `participation.${status}`,
-      current.submission_id,
-      JSON.stringify({ participation_id: current.id, role: current.role, confirmation_status: current.confirmation_status }),
-      JSON.stringify({ participation_id: current.id, role: current.role, confirmation_status: status, note: normalizedNote }),
-      now,
-    )
-    .run();
+  await writeAudit(context.env.DB, {
+    eventId: current.event_id,
+    actorKind: "user",
+    actorPersonId: auth.personId,
+    action: `participation.${status}`,
+    entityType: "submission",
+    entityId: current.submission_id,
+    before: { participation_id: current.id, role: current.role, confirmation_status: current.confirmation_status },
+    after: { participation_id: current.id, role: current.role, confirmation_status: status, note: normalizedNote },
+    now,
+    requestId: context.get("requestId") ?? null,
+  });
 
   const next = { ...current, confirmation_status: status, confirmed_at: status === "confirmed" ? now : null };
   const notificationOutboxIds = status === "declined"
@@ -1351,18 +1347,18 @@ const updateSpeakerTalk = defineApiRoute(
         `UPDATE submissions SET title = ?, abstract = ?, search_blob = ?, last_saved_at = ?, last_write_source = 'marquee', updated_at = ?
          WHERE id = ? AND event_id = ?`,
       ).bind(next.title, next.description, `${next.title} ${next.description ?? ""}`.toLowerCase(), now, now, submissionId, current.eventId),
-      context.env.DB.prepare(
-        `INSERT INTO audit_log (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at)
-         VALUES (?, ?, ?, 'user', 'speaker_talk_updated', 'submission', ?, ?, ?, ?)`,
-      ).bind(
-        crypto.randomUUID(),
-        current.eventId,
-        auth.personId,
-        submissionId,
-        JSON.stringify({ title: current.submission.title, description: current.submission.abstract }),
-        JSON.stringify(next),
+      auditStatement(context.env.DB, {
+        eventId: current.eventId,
+        actorKind: "user",
+        actorPersonId: auth.personId,
+        action: "speaker_talk_updated",
+        entityType: "submission",
+        entityId: submissionId,
+        before: { title: current.submission.title, description: current.submission.abstract },
+        after: next,
         now,
-      ),
+        requestId: context.get("requestId") ?? null,
+      }),
     ]);
     return context.json({
       submission: { ...current.submission, ...next, updated_at: now },
