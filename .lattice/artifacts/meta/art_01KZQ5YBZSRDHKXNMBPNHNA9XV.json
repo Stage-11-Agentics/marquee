@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T01:10:43Z",
+  "created_by": "agent:delegator-mrq-3",
+  "custom_fields": {},
+  "id": "art_01KZQ5YBZSRDHKXNMBPNHNA9XV",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQ5YBZSRDHKXNMBPNHNA9XV.md",
+    "size_bytes": 837
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "Validation evidence MRQ-3 @ 8636ecd",
+  "token_usage": null,
+  "type": "file"
+}

@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:120",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 4,
+  "comment_count": 5,
   "complexity": null,
   "created_at": "2026-08-09T05:58:43Z",
   "created_by": "agent:orchestrator-intake",
@@ -20,11 +20,26 @@
       "id": "art_01KZJN2QDWQFBC6YD2P3Z0R9VJ",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ63PRSZJ3P7B60MWBJZ7AV",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQ64BZR6WX7GZ74Q59DQYMH",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQ65NZX36C0BJ8W5S6PGE22",
+      "role": null,
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM8NGV7SK9EVZTXVQWA5A",
-  "last_event_id": "ev_01KZQ4XA2Z2QZD7JR3PKFS5VT2",
-  "last_status_changed_at": "2026-08-10T22:36:27Z",
+  "last_event_id": "ev_01KZQ65P8E2C3Q4FYEB314MS2B",
+  "last_status_changed_at": "2026-08-11T01:14:43Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -39,10 +54,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-14",
-  "status": "in_progress",
+  "status": "pr_open",
   "tags": null,
   "title": "Uploads: presign, verify, and serve",
   "type": "task",
-  "updated_at": "2026-08-11T00:52:40Z",
+  "updated_at": "2026-08-11T01:14:43Z",
   "urgency": null
 }

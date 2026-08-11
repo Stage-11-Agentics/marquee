@@ -29,8 +29,10 @@
 | Ticket | Surface | Model | Note |
 |---|---|---|---|
 | ~~MRQ-8 (M-07)~~ | closed | **done** | **MERGED** PR #7 (c4e34037). `check:api` is real with the N-7 activation rule; AC-105/106/108 tested. **MRQ-9 unblocked.** |
-| MRQ-3 (M-03) | surface:119 | sonnet | Auth/demo entry. Guardrail: demo login must 403 outside `demo_mode`. Hand review. |
-| MRQ-14 (M-13) | surface:120 | sonnet | Uploads. Guardrail: AC-231 presign fails closed. Hand review. |
+| MRQ-3 (M-03) | surface:119 | sonnet | **PR #8 open**, rebasing onto post-MRQ-8 master (union conflict in `src/index.ts` + `package.json`). Guardrail test **read and verified by the orchestrator**. |
+| MRQ-14 (M-13) | surface:120 | sonnet | `review`. Guardrail: AC-231 presign fails closed — hand review pending. |
+| MRQ-5 (M-04b) | surface:121 | **codex** | Seed pool + evaluation. Carries **B-3 (BLOCKING)**: reviewer membership, track scopes, round-1 assignments, or walkthrough step 8 has no entry. |
+| MRQ-9 (M-08) | surface:122 | **codex** | Submissions list — the first screen a judge drives. Builds on MRQ-8's list contract. |
 
 **Model split rationale:** Bravo is at 84% weekly and resets *after* the deadline, so Opus goes only to the ticket whose contracts every later ticket inherits; Sonnet carries the other two. MRQ-4 proved the Sonnet-implements / stronger-model-reviews pattern works here.
 
@@ -68,13 +70,27 @@ Bravo (78% used) is deliberately excluded: it is the pool this orchestrator sess
 
 **Parked-state integrity confirmed:** both remaining tickets' plans are on disk and committed (e9b29c2) — MRQ-8 at 288 lines, MRQ-14 at 118, each carrying its Plan-Review Cycle 1 Resolutions and the orchestrator rulings. The idle codex sessions were closed after that verification; **no re-planning is needed on any harness**, whichever is chosen.
 
-## ⏳ CAPACITY WALL — Bravo, measured 21:02
+## ✅ CAPACITY WALL LIFTED — Codex reset (verified 21:20)
+
+**Codex's weekly pool has reset to 0% — "not started" — a full 20x week, verified independently via glideslope before acting.** My 18:35 note calling Codex "exhausted and unusable until Aug 15" is **stale and withdrawn**; the window rolled early. The rationing built on it (holding MRQ-9 back, refusing to widen past three agents) was correct against the numbers I had and is wrong against these.
+
+**Operator ruling (relayed by Adversary):** take over all remaining Kimi work with Claude, and run **Claude delegators on Sonnet, not Opus**.
+
+**Dispatch decision:** MRQ-5 and MRQ-9 went to **Codex** (surfaces 121, 122) — it is free, and Bravo is reserved for orchestration plus the two guardrail reviews I said I would do by hand. Kimi is not dead either: its weekly is only 20% and the 5-hour window rolls at 22:20; it was benched on quality, not capacity, and stays benched.
+
+Standing account picture: Bravo 85%, resets Thu 04:59 — **after** the Thu 01:00 deadline, so what is held is all there is. Alpha untouched, still needs the operator's web login. ~49 hours to deadline.
+
+### Superseded — capacity wall (Bravo), measured 21:02
 
 Bravo sat at **84–85% across four readings between 20:57 and 21:04**, and it does not reset until **Thu Aug 13 05:00 EDT — after the deadline**. Runway is therefore **roughly 1–2 hours at three agents**, stated as a range on purpose: the weekly figure is reported in whole percent, so a single 5-minute delta cannot distinguish 6 points/hour from 12. (The first estimate here said "~75 minutes" from exactly such a delta — the same over-precision that produced the withdrawn Kimi 10% figure. Measure over a longer baseline before quoting a number.) The finer-grained 5-hour window moved 6% → 8% in ~4 minutes, implying ~3 hours there, so **the weekly is the binding cap, not the session**. Codex is exhausted, Kimi is retired by operator ruling. **Alpha (untouched Max 20x) is the only remaining build capacity in the Constellation.**
 
 **Deliberate call: N was NOT filled to 5.** With a hard wall this close, three tickets finished and merged are worth more than five tickets left half-done — a partial branch at the wall is unmergeable and its work is only recoverable by a future session re-reading it. All three delegators were instead told to cut scope to *mergeable*, run the gate as soon as the core path works, and keep pushing. The one thing explicitly not cuttable: the guardrail proofs (demo login 403s outside `demo_mode`; presign fails closed).
 
 All three inherited-WIP commits are **pushed and verified** against their remote branches, so the wall can only cost in-flight polish, never landed work.
+
+## AC-214 ruled — not a gap (21:22)
+
+MRQ-3 flagged that AC-214 has no `EVALUATION.md` §2 row despite BUILDPLAN citing it. **Ruled: correct as written, no contract change.** AC-214 sits in the post-competition range (§7, AC-170–AC-224) so it has no verifiability row by design — but it is one of exactly two ACs in that range carrying an *enforcement* obligation anyway ("cross-event reviewer access is not inherited; reviewer scope is per event by construction — asserted in `test:` from the first migration"), because it is the one permission bug here that leaks unpublished work. So BUILDPLAN citing it is right and a §2 row would be wrong. MRQ-3 was told to confirm the enforcement test exists and name it in the PR body, and explicitly **not** to add an `ac-claims` entry (that would trip `trace:ac`'s scope check).
 
 ## SPEC Amendment 13 — the rename stops at the wire (21:12)
 

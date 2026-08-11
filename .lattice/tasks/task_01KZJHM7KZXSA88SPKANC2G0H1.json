@@ -15,11 +15,26 @@
       "id": "art_01KZPXGYP7KCSYTE7XTGMWS590",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ5Y3YX7ZQR7EW8B6PX55Q8",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ5YBZSRDHKXNMBPNHNA9XV",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ5ZA928FEWQ9DWFQCVJ166",
+      "role": null,
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM7KZXSA88SPKANC2G0H1",
-  "last_event_id": "ev_01KZQ4W265403SNFJHTCBASMTT",
-  "last_status_changed_at": "2026-08-10T22:38:32Z",
+  "last_event_id": "ev_01KZQ5ZA928FEWQ9DWFQCVJ167",
+  "last_status_changed_at": "2026-08-11T01:10:47Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -34,10 +49,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-3",
-  "status": "in_progress",
+  "status": "in_validation",
   "tags": null,
   "title": "Auth, demo entry, and reset-demo",
   "type": "task",
-  "updated_at": "2026-08-11T00:51:59Z",
+  "updated_at": "2026-08-11T01:11:14Z",
   "urgency": null
 }
