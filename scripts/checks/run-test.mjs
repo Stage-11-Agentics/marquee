@@ -13,6 +13,7 @@ const testEnvironment = {
   ...process.env,
   TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
   TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+  LOG_LEVEL: "silent",
 };
 
 async function runSteps(argumentSets) {
