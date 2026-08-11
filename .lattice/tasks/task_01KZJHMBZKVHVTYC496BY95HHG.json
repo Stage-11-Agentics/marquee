@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:201",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: A-7 \u2014 audit track (\u00a75). **Owned by an auditor who did not write the code.**\n\nScope (verbatim): Public write surface \u2014 Turnstile gating set, upload extension/MIME/magic-byte/caps/serving origin.\nStarts when (verbatim): After M-13/M-14.\n\n**A-7 has ACs behind it: AC-231 and AC-232.** The gated set is draft creation, submit, and every presign; `PATCH \u2026/drafts/:token` autosave requires no Turnstile token but is rejected without a valid resume token and is rate-limited per token. Uploads: disallowed extension and disallowed MIME each refused independently; magic-byte contradiction rejected **and the R2 object deleted** (HEAD 404); per-IP and per-submission caps each 429; served uploads carry `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` from a host that is **not** the app host.\n\nACs: **AC-231, AC-232** (audit evidence; the tests are M-13's and M-14's)\nHours: 2\nWorkflow: fast-track\nShared files: none \u2014 audit artifact only.\nDeps: M-13, M-14\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T09:49:21Z",
   "evidence_refs": [
     {
       "id": "art_01KZR1XN3N5XZBV36KJ8NQR65D",
@@ -30,11 +30,26 @@
       "id": "art_01KZR3BTR5XJGWE4DE41Z6JYW7",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR3J2K73ASDKY6WY6MEPXMJ",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR3M0ARG3BARXFRWN1BY5CN",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZR3M0ARG3BARXFRWN1BY5CM",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMBZKVHVTYC496BY95HHG",
-  "last_event_id": "ev_01KZR3BTR7QNB8JJH9RZHMFVTG",
-  "last_status_changed_at": "2026-08-11T09:44:20Z",
+  "last_event_id": "ev_01KZR3M0ARG3BARXFRWN1BY5CR",
+  "last_status_changed_at": "2026-08-11T09:49:21Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -53,13 +68,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-49",
-  "status": "in_validation",
+  "status": "done",
   "tags": null,
   "title": "Audit \u2014 public write surface and upload safety",
   "type": "task",
-  "updated_at": "2026-08-11T09:44:53Z",
+  "updated_at": "2026-08-11T09:49:21Z",
   "urgency": null
 }

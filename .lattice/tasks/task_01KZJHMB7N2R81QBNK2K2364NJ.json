@@ -15,10 +15,15 @@
       "id": "art_01KZR237VCB7JQHR9SNCY70P1V",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZR3JYFQWN1ZDSNV5K86EZHK",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHMB7N2R81QBNK2K2364NJ",
-  "last_event_id": "ev_01KZR39H5TGJ1P0ECKBP9GHZ9R",
+  "last_event_id": "ev_01KZR3JYFT3FK0CE6HXEQ71B6E",
   "last_status_changed_at": "2026-08-11T09:43:37Z",
   "linked_files": [],
   "priority": "medium",
@@ -30,6 +35,6 @@
   "tags": null,
   "title": "Empty-state pass and craft sweep",
   "type": "task",
-  "updated_at": "2026-08-11T09:43:37Z",
+  "updated_at": "2026-08-11T09:48:46Z",
   "urgency": null
 }

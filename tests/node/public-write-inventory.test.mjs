@@ -27,6 +27,12 @@ function literalText(node) {
   return null;
 }
 
+function tally(calls) {
+  const byFile = new Map();
+  for (const call of calls) byFile.set(call.file, (byFile.get(call.file) ?? 0) + 1);
+  return [...byFile.entries()].map(([file, count]) => ({ file, count })).sort((a, b) => a.file.localeCompare(b.file));
+}
+
 test("CONTRACT · public answer projection and direct answer writers have an explicit AST inventory", async () => {
   const modules = await sourceModules();
   const projectionCalls = [];
@@ -47,27 +53,30 @@ test("CONTRACT · public answer projection and direct answer writers have an exp
     });
   }
 
+  // Keyed on file and count, never on line numbers: an unrelated edit above a
+  // call site shifts every line below it, and a guard that fails on drift gets
+  // silenced rather than heeded. The invariant worth holding is WHICH modules
+  // project answers and HOW MANY times, not where in the file they sit.
   assert.deepEqual(
-    projectionCalls,
+    tally(projectionCalls),
     [
-      { file: "src/routes/portal.routes.ts", line: 509 },
-      { file: "src/routes/portal.routes.ts", line: 737 },
-      { file: "src/routes/public-form.shared.ts", line: 313 },
-      { file: "src/ui/public/form/PublicForm.tsx", line: 116 },
+      { file: "src/routes/portal.routes.ts", count: 2 },
+      { file: "src/routes/public-form.shared.ts", count: 1 },
+      { file: "src/ui/public/form/PublicForm.tsx", count: 1 },
     ],
-    "projection call-site inventory changed; re-audit every consumer before adding or moving a writer",
+    "projection call-site inventory changed; re-audit every consumer before adding or moving a writer. Observed: "
+      + JSON.stringify(projectionCalls),
   );
   assert.deepEqual(
-    directAnswerWriters,
+    tally(directAnswerWriters),
     [
-      { file: "src/lib/sessionize-import.ts", line: 697 },
-      { file: "src/lib/sessionize-import.ts", line: 790 },
-      { file: "src/routes/portal.routes.ts", line: 755 },
-      { file: "src/routes/public-form.shared.ts", line: 351 },
-      { file: "src/routes/submission-record.routes.ts", line: 543 },
-      { file: "src/routes/submission-record.routes.ts", line: 635 },
+      { file: "src/lib/sessionize-import.ts", count: 2 },
+      { file: "src/routes/portal.routes.ts", count: 1 },
+      { file: "src/routes/public-form.shared.ts", count: 1 },
+      { file: "src/routes/submission-record.routes.ts", count: 2 },
     ],
-    "direct submission-answer writer inventory changed; re-audit evaluator coverage and trusted-import exceptions",
+    "direct submission-answer writer inventory changed; re-audit evaluator coverage and trusted-import exceptions. Observed: "
+      + JSON.stringify(directAnswerWriters),
   );
 
   // Positive controls: the inventory must contain both the shared projected
