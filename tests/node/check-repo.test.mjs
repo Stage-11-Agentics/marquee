@@ -65,3 +65,32 @@ test("CONTRACT · repository policy rejects denied content anywhere in history",
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /denied-history-path/);
 });
+
+test("CONTRACT · repository policy rejects internal publication vocabulary anywhere in history", async () => {
+  const { repository, binaryDirectory } = await fixture();
+  const deniedMarkers = [
+    ["forgejo", ".", "stage", "11", ".", "ai"].join(""),
+    ["tail", "net"].join(""),
+    ["Lat", "tice"].join(""),
+    ["dele", "gator"].join(""),
+    ["orches", "trator"].join(""),
+  ];
+  await writeFile(
+    resolve(repository, "internal-notes.md"),
+    `${deniedMarkers.join(" ")}\n`,
+    "utf8",
+  );
+  git(repository, "add", ".");
+  git(repository, "commit", "-qm", "introduce internal publication vocabulary");
+  const result = runCheck(repository, binaryDirectory);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  for (const label of [
+    ["internal Forge", "jo hostname"].join(""),
+    ["tail", "net identifier"].join(""),
+    ["Lat", "tice vocabulary"].join(""),
+    ["dele", "gator vocabulary"].join(""),
+    ["orches", "trator vocabulary"].join(""),
+  ]) {
+    assert.match(result.stdout, new RegExp(label));
+  }
+});
