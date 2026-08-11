@@ -39,13 +39,19 @@ export const PUBLIC_FORM_STYLES = `
 .public-option input { accent-color: var(--accent); }
 .public-file { border: 1px dashed var(--line-strong); padding: 12px; }
 .public-file input { width: 100%; }
-.public-file-existing { color: var(--accent-ink); display: block; font: 500 11px/1.4 var(--mono); margin-top: 8px; overflow-wrap: anywhere; }
+.public-file-existing { color: var(--accent-ink); display: block; font: 500 11px/1.4 var(--mono); margin-top: 8px; min-height: 1.4em; overflow-wrap: anywhere; }
+.public-file-existing:not(.has-file) { color: var(--muted); }
+.public-file-preview { align-items: center; display: flex; gap: 12px; margin-top: 12px; }
+.public-file-crop { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); flex: none; height: 96px; overflow: hidden; width: 96px; }
+.public-file-crop img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.public-file-crop-note { color: var(--muted); font-size: 11px; line-height: 1.45; }
 .public-form-footer { align-items: center; background: var(--sunk); border-top: 1px solid var(--line-strong); display: flex; gap: 14px; justify-content: space-between; padding: 16px 20px; }
 .public-submit { background: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius); color: #fff; font: 600 12px/1 var(--mono); min-height: 42px; padding: 0 17px; }
 .public-submit:hover { background: #095b62; }
 .public-submit:disabled { cursor: not-allowed; opacity: .5; }
 .public-security { color: var(--muted); font-size: 10px; line-height: 1.4; }
-.public-error { background: var(--alarm-wash); border: 1px solid #e6b8b2; color: #7c2018; margin: 16px 20px 0; padding: 12px 14px; font-size: 12px; line-height: 1.5; }
+.public-error { background: var(--alarm-wash); border: 1px solid #e6b8b2; box-sizing: border-box; color: #7c2018; margin: 16px 20px 0; min-height: 60px; padding: 12px 14px; font-size: 12px; line-height: 1.5; visibility: hidden; }
+.public-error.has-message { visibility: visible; }
 .public-confirmation { background: var(--panel); border: 1px solid var(--line-strong); border-top: 3px solid var(--ok); margin-top: 26px; padding: clamp(22px, 5vw, 40px); }
 .public-confirmation h2 { font: 500 clamp(25px, 4vw, 38px)/1.1 var(--mono); letter-spacing: -.04em; margin: 0 0 12px; }
 .public-confirmation p { color: var(--ink-soft); font-size: 14px; line-height: 1.6; margin: 7px 0; }

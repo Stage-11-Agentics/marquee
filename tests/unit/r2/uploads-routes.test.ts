@@ -59,6 +59,23 @@ CREATE TABLE speaker_tasks (
   last_write_source TEXT NOT NULL DEFAULT 'marquee' CHECK (last_write_source IN ('marquee', 'airtable')),
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
+CREATE TABLE forms (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('abstract', 'session')),
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE TABLE form_fields (
+  id TEXT PRIMARY KEY, form_id TEXT NOT NULL, key TEXT NOT NULL, label TEXT NOT NULL,
+  help_text TEXT,
+  type TEXT NOT NULL CHECK (
+    type IN ('short_text', 'long_text', 'single_select', 'multi_select', 'url', 'email', 'file', 'number')
+  ),
+  required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1)),
+  position INTEGER NOT NULL,
+  config TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(config)),
+  condition TEXT CHECK (condition IS NULL OR json_valid(condition)),
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
 CREATE TABLE attachments (
   id TEXT PRIMARY KEY, event_id TEXT NOT NULL,
   owner_type TEXT NOT NULL CHECK (
@@ -104,11 +121,22 @@ async function seedOrgEventDraft(overrides: { draftId: string; resumeToken: stri
     env.DB.prepare(
       `INSERT OR IGNORE INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('person1','org1','p@example.com','Person', ?1, ?1)`,
     ).bind(NOW),
+    // The presign resolves a draft file's accepted types from the form field
+    // it names, so a draft is only presignable through a form that declares
+    // that field. `deck` is what every case below uploads to.
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO forms (id, event_id, name, slug, kind, created_at, updated_at)
+       VALUES (?1, ?2, 'Call for speakers', 'cfp', 'abstract', ?3, ?3)`,
+    ).bind(`form-${overrides.eventId}`, overrides.eventId, NOW),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO form_fields (id, form_id, key, label, type, required, position, config, created_at, updated_at)
+       VALUES (?1, ?2, 'deck', 'Slides', 'file', 0, 0, ?3, ?4, ?4)`,
+    ).bind(`field-deck-${overrides.eventId}`, `form-${overrides.eventId}`, JSON.stringify({ accept: ["application/pdf"] }), NOW),
     env.DB.prepare(
       `INSERT INTO submissions
-        (id, event_id, submitter_person_id, title, kind, status, origin, last_write_source, search_blob, resume_token_hash, created_at, updated_at)
-       VALUES (?1, ?2, 'person1', 'Draft', 'abstract', 'draft', 'public', 'marquee', '', ?3, ?4, ?4)`,
-    ).bind(overrides.draftId, overrides.eventId, resumeHash, NOW),
+        (id, event_id, form_id, submitter_person_id, title, kind, status, origin, last_write_source, search_blob, resume_token_hash, created_at, updated_at)
+       VALUES (?1, ?2, ?5, 'person1', 'Draft', 'abstract', 'draft', 'public', 'marquee', '', ?3, ?4, ?4)`,
+    ).bind(overrides.draftId, overrides.eventId, resumeHash, NOW, `form-${overrides.eventId}`),
   ]);
 }
 

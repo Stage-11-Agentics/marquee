@@ -115,7 +115,14 @@
     // cannot come from .dev.vars, which only forwards declared secrets.
     // Safari and WKWebView reject a Secure cookie on http://. Never "1" on a
     // deployed Worker.
-    "INSECURE_LOCAL_COOKIES": "0"
+    "INSECURE_LOCAL_COOKIES": "0",
+    // Upload bytes through the MEDIA binding instead of a presigned R2 PUT.
+    // The local recipe overrides this with `--var LOCAL_UPLOAD_SHIM:1`, for the
+    // same reason as the line above: a presigned PUT addresses the R2 account's
+    // own S3 endpoint, which a local checkout does not have, so without it every
+    // upload — including the public form's required headshot — dies at the PUT.
+    // Never "1" on a deployed Worker.
+    "LOCAL_UPLOAD_SHIM": "0"
   },
 
   // Values come from ignored .dev.vars locally and Wrangler secrets in production.

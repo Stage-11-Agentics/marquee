@@ -5,10 +5,24 @@ import { isFieldApplicable, projectApplicableAnswers } from "../../../lib/form-c
 import { putFileToR2 } from "../../upload/upload-client";
 import { apiFetch, errorSummary, MarqueeApiError } from "../../shell/api-client";
 import type { PublicFormField, PublicFormState } from "../../../routes/public-form.types";
+import { removeTurnstileWidget, renderTurnstileWidget, resetTurnstileWidget, type TurnstileApi } from "./turnstile";
 
 interface PublicFormProps {
   initial: PublicFormState;
 }
+
+interface TurnstileGlobals {
+  turnstile?: TurnstileApi;
+  marqueeTurnstileCallback?: (token: string) => void;
+  marqueeTurnstileReady?: () => void;
+}
+
+const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=marqueeTurnstileReady";
+
+/** A managed widget can ask the person to click; give them room before giving up. */
+const TURNSTILE_WAIT_MS = 20_000;
+
+const SECURITY_CHECK_UNFINISHED = "The security check did not finish. Complete it at the bottom of this form, then try again; your answers are still here.";
 
 function optionsFor(field: PublicFormField): string[] {
   return Array.isArray(field.config.options)
@@ -77,12 +91,72 @@ export function PublicForm({ initial }: PublicFormProps) {
   const [busy, setBusy] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [filePreviews, setFilePreviews] = useState<Record<string, string>>({});
   const firstRender = useRef(true);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const turnstileHost = useRef<HTMLElement | null>(null);
+  const turnstileWidget = useRef<string | null>(null);
+  const turnstileTokenRef = useRef("");
+  const turnstileWaiters = useRef<Array<(token: string) => void>>([]);
+  const previewUrls = useRef<Record<string, string>>({});
 
+  function receiveTurnstileToken(token: string) {
+    turnstileTokenRef.current = token;
+    setTurnstileToken(token);
+    if (!token) return;
+    const waiting = turnstileWaiters.current;
+    turnstileWaiters.current = [];
+    for (const resolve of waiting) resolve(token);
+  }
+
+  /** Clears the spent token and asks the widget for the next one. Never throws. */
   function resetTurnstile() {
+    turnstileTokenRef.current = "";
     setTurnstileToken("");
-    (window as unknown as { turnstile?: { reset?: () => void } }).turnstile?.reset?.();
+    resetTurnstileWidget((window as unknown as TurnstileGlobals).turnstile, turnstileWidget.current);
+  }
+
+  /**
+   * Retire the widget for good. A submitted form replaces the whole tree with
+   * the confirmation, taking the container with it, and Cloudflare warns about
+   * a widget whose container vanished underneath it — so remove it first,
+   * while it is still there to remove.
+   */
+  function removeTurnstile() {
+    turnstileTokenRef.current = "";
+    setTurnstileToken("");
+    const widget = turnstileWidget.current;
+    turnstileWidget.current = null;
+    removeTurnstileWidget((window as unknown as TurnstileGlobals).turnstile, widget);
+  }
+
+  /**
+   * A Turnstile token is single-use: the server records each one it verifies,
+   * so creating the draft spends the token the upload presign then needs. Ask
+   * the widget for the next one and wait for it rather than sending the person
+   * back to re-pick the same file.
+   */
+  function requestTurnstileToken(): Promise<string | undefined> {
+    if (turnstileTokenRef.current) return Promise.resolve(turnstileTokenRef.current);
+    if (!turnstileWidget.current) return Promise.resolve(undefined);
+    resetTurnstile();
+    return new Promise((resolve) => {
+      let timer = 0;
+      const waiter = (token: string) => {
+        window.clearTimeout(timer);
+        resolve(token);
+      };
+      timer = window.setTimeout(() => {
+        turnstileWaiters.current = turnstileWaiters.current.filter((entry) => entry !== waiter);
+        resolve(undefined);
+      }, TURNSTILE_WAIT_MS);
+      turnstileWaiters.current = [...turnstileWaiters.current, waiter];
+    });
+  }
+
+  /** True once a widget is mounted, i.e. once a token is genuinely obtainable. */
+  function turnstileRequired(): boolean {
+    return Boolean(turnstileWidget.current);
   }
 
   const visibleFields = useMemo(
@@ -91,16 +165,40 @@ export function PublicForm({ initial }: PublicFormProps) {
   );
 
   useEffect(() => {
-    (window as unknown as { marqueeTurnstileCallback?: (token: string) => void }).marqueeTurnstileCallback = setTurnstileToken;
-    if (!state.turnstile_site_key || typeof document === "undefined") return;
-    if (document.querySelector("script[data-public-turnstile]")) return;
-    const script = document.createElement("script");
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    script.async = true;
-    script.defer = true;
-    script.dataset.publicTurnstile = "true";
-    document.head.appendChild(script);
+    if (typeof document === "undefined" || typeof window === "undefined") return;
+    const globals = window as unknown as TurnstileGlobals;
+    globals.marqueeTurnstileCallback = receiveTurnstileToken;
+    const siteKey = state.turnstile_site_key;
+    if (!siteKey) return;
+    let cancelled = false;
+    const mount = () => {
+      if (cancelled || turnstileWidget.current) return;
+      turnstileWidget.current = renderTurnstileWidget(globals.turnstile, turnstileHost.current, {
+        sitekey: siteKey,
+        onToken: receiveTurnstileToken,
+      });
+    };
+    globals.marqueeTurnstileReady = mount;
+    mount();
+    if (!document.querySelector("script[data-public-turnstile]")) {
+      const script = document.createElement("script");
+      script.src = TURNSTILE_SCRIPT_URL;
+      script.async = true;
+      script.defer = true;
+      script.dataset.publicTurnstile = "true";
+      document.head.appendChild(script);
+    }
+    return () => {
+      cancelled = true;
+      const widget = turnstileWidget.current;
+      turnstileWidget.current = null;
+      removeTurnstileWidget(globals.turnstile, widget);
+    };
   }, [state.turnstile_site_key]);
+
+  useEffect(() => () => {
+    for (const url of Object.values(previewUrls.current)) URL.revokeObjectURL(url);
+  }, []);
 
   useEffect(() => {
     const settleFocusedField = () => {
@@ -180,10 +278,15 @@ export function PublicForm({ initial }: PublicFormProps) {
     }
     setBusy(true);
     try {
+      const token = await requestTurnstileToken();
+      if (turnstileRequired() && !token) {
+        setPageError(SECURITY_CHECK_UNFINISHED);
+        return null;
+      }
       const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answers, email, turnstileToken: turnstileToken || undefined }),
+        body: JSON.stringify({ answers, email, turnstileToken: token }),
         route: "/api/v1/public/forms/{slug}/drafts",
       });
       if (!payload || !("state" in payload)) throw new Error("The draft response was unreadable.");
@@ -211,27 +314,40 @@ export function PublicForm({ initial }: PublicFormProps) {
       setAnswers(payload.answers);
       setDirty(false);
     } catch (error: unknown) {
-      setTurnstileToken("");
+      resetTurnstile();
       setPageError(publicErrorMessage(error));
     }
+  }
+
+  /**
+   * Show the chosen image immediately, before any network work — the field
+   * label promises a crop preview before submission, and the person deserves
+   * to see what they picked whether or not the upload then succeeds.
+   */
+  function showLocalPreview(field: PublicFormField, file: File) {
+    if (typeof URL?.createObjectURL !== "function" || !file.type.startsWith("image/")) return;
+    const previous = previewUrls.current[field.key];
+    previewUrls.current = { ...previewUrls.current, [field.key]: URL.createObjectURL(file) };
+    setFilePreviews(previewUrls.current);
+    if (previous) URL.revokeObjectURL(previous);
   }
 
   async function handleFile(field: PublicFormField, file: File | undefined) {
     if (!file) return;
     setPageError(null);
-    const hadDraft = Boolean(state.resume_token && state.draft_id);
+    showLocalPreview(field, file);
     const draftState = await ensureDraft();
     if (!draftState?.resume_token || !draftState.draft_id) return;
-    if (!hadDraft) {
-      resetTurnstile();
-      setPageError("Your draft is saved. Complete the security check again, then choose the file once more.");
-      return;
-    }
     setBusy(true);
     try {
+      const token = await requestTurnstileToken();
+      if (turnstileRequired() && !token) {
+        setPageError("The security check did not finish, so the file was not attached. Complete it at the bottom of this form, then choose the file again; your draft is saved.");
+        return;
+      }
       const signed = await apiFetch<{ attachmentId?: string; completionToken?: string; putUrl?: string; requiredHeaders?: Record<string, string> }>("/api/v1/public/uploads/sign", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ draftId: draftState.draft_id, resumeToken: draftState.resume_token, fieldKey: field.key, turnstileToken: turnstileToken || undefined, filename: file.name, contentType: file.type || "application/octet-stream", sizeBytes: file.size }),
+        body: JSON.stringify({ draftId: draftState.draft_id, resumeToken: draftState.resume_token, fieldKey: field.key, turnstileToken: token, filename: file.name, contentType: file.type || "application/octet-stream", sizeBytes: file.size }),
         route: "/api/v1/public/uploads/sign",
       });
       if (!signed.attachmentId || !signed.completionToken || !signed.putUrl) throw new Error("The upload sign response was unreadable.");
@@ -257,16 +373,21 @@ export function PublicForm({ initial }: PublicFormProps) {
     }
     setBusy(true);
     try {
+      const token = await requestTurnstileToken();
+      if (turnstileRequired() && !token) {
+        setPageError(SECURITY_CHECK_UNFINISHED);
+        return;
+      }
       const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/submissions`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answers, resumeToken: state.resume_token ?? undefined, turnstileToken: turnstileToken || undefined }),
+        body: JSON.stringify({ answers, resumeToken: state.resume_token ?? undefined, turnstileToken: token }),
         route: "/api/v1/public/forms/{slug}/submissions",
       });
       if (!payload || !("state" in payload)) throw new Error("The submission response was unreadable.");
+      removeTurnstile();
       setState(payload);
       setAnswers(payload.answers);
       setDirty(false);
-      resetTurnstile();
     } catch (error: unknown) {
       resetTurnstile();
       const issues = publicValidationIssues(error);
@@ -299,8 +420,13 @@ export function PublicForm({ initial }: PublicFormProps) {
       control = <div class="public-option-list" ref={ref as never}>{options.map((option) => <label class="public-option"><input type="checkbox" checked={selected.includes(option)} onChange={(event) => { const next = (event.currentTarget as HTMLInputElement).checked ? [...selected, option] : selected.filter((item) => item !== option); setAnswer(field.key, next); }} />{option}</label>)}</div>;
     } else if (field.type === "file") {
       const existing = typeof value === "object" && value !== null && "filename" in value ? String((value as { filename: unknown }).filename) : null;
-      const accept = Array.isArray(field.config.accept) ? field.config.accept.join(",") : undefined;
-      control = <div class="public-file"><input id={`public-${field.key}`} ref={ref as never} type="file" accept={accept} onChange={(event) => { void handleFile(field, (event.currentTarget as HTMLInputElement).files?.[0]); }} />{existing && <span class="public-file-existing">Saved file: {existing}</span>}</div>;
+      const acceptList = Array.isArray(field.config.accept) ? field.config.accept.filter((entry): entry is string => typeof entry === "string") : [];
+      const accept = acceptList.length ? acceptList.join(",") : undefined;
+      const takesImage = acceptList.some((entry) => entry.startsWith("image/") || /^\.?(?:jpe?g|png|webp)$/i.test(entry));
+      const preview = filePreviews[field.key];
+      // The preview frame and the status line are always rendered, empty or
+      // not, so choosing a file never shifts the rows underneath it.
+      control = <div class="public-file"><input id={`public-${field.key}`} ref={ref as never} type="file" accept={accept} onChange={(event) => { void handleFile(field, (event.currentTarget as HTMLInputElement).files?.[0]); }} />{takesImage && <div class="public-file-preview"><div class="public-file-crop">{preview ? <img src={preview} alt={`${field.label} crop preview`} /> : null}</div><span class="public-file-crop-note">{preview ? "Crop preview · the square the conference programme shows." : "Choose an image to see its crop preview here."}</span></div>}<span class={`public-file-existing${existing ? " has-file" : ""}`}>{existing ? `Saved file: ${existing}` : "No file attached yet."}</span></div>;
     } else {
       const inputType = field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "number" ? "number" : "text";
       control = <input id={`public-${field.key}`} ref={ref as never} type={inputType} maxLength={maxLength} value={value === undefined || value === null ? "" : String(value)} onBlur={() => { if (dirty) validate(); }} onInput={(event) => { const text = (event.currentTarget as HTMLInputElement).value; setAnswer(field.key, field.type === "number" && text ? Number(text) : text); }} aria-invalid={Boolean(error)} />;
@@ -315,7 +441,7 @@ export function PublicForm({ initial }: PublicFormProps) {
 
   const minimumParticipants = state.form.min_speakers === 1 ? "one participant" : `${state.form.min_speakers} participants`;
   const maximumParticipants = state.form.max_speakers === 1 ? "one participant" : `${state.form.max_speakers} participants`;
-  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && <span>Closes {new Date(state.form.closes_at).toLocaleDateString()}</span>}<span class="public-save-status" aria-live="polite">{state.resume_token ? (dirty ? "Saving…" : state.last_saved_at ? `Saved ${new Date(state.last_saved_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Draft linked") : "Draft saved locally · just now"}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}{pageError && <div class="public-error" role="alert">{pageError}</div>}<form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div><p class="public-participant-limit">Include at least {minimumParticipants}; this conference can review up to {maximumParticipants} on one abstract.</p><div class="public-form-fields">{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} data-callback="marqueeTurnstileCallback" /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></div><div class="public-form-footer"><span class="public-security">Your answers stay here while you work. A resume link goes to the address you enter.</span><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : "Submit abstract"}</button></div></form></main><PublicFooter /></div>;
+  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && <span>Closes {new Date(state.form.closes_at).toLocaleDateString()}</span>}<span class="public-save-status" aria-live="polite">{state.resume_token ? (dirty ? "Saving…" : state.last_saved_at ? `Saved ${new Date(state.last_saved_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Draft linked") : "Draft saved locally · just now"}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}<div class={`public-error${pageError ? " has-message" : ""}`} role={pageError ? "alert" : undefined} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div><p class="public-participant-limit">Include at least {minimumParticipants}; this conference can review up to {maximumParticipants} on one abstract.</p><div class="public-form-fields">{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></div><div class="public-form-footer"><span class="public-security">Your answers stay here while you work. A resume link goes to the address you enter.</span><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : "Submit abstract"}</button></div></form></main><PublicFooter /></div>;
 }
 
 function PublicHeader({ state }: { state: PublicFormState }) {
