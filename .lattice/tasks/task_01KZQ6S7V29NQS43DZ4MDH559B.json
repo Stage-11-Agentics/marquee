@@ -38,8 +38,8 @@
     }
   ],
   "id": "task_01KZQ6S7V29NQS43DZ4MDH559B",
-  "last_event_id": "ev_01KZQ8BKH2DE872DX51RXNP4VA",
-  "last_status_changed_at": "2026-08-11T01:50:24Z",
+  "last_event_id": "ev_01KZQ8DGCY4T414PV85HE9DK88",
+  "last_status_changed_at": "2026-08-11T01:53:56Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -54,10 +54,10 @@
   "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-60",
-  "status": "in_validation",
+  "status": "pr_open",
   "tags": null,
   "title": "API credential resolver \u2014 wire merged auth into the API runtime",
   "type": "task",
-  "updated_at": "2026-08-11T01:52:54Z",
+  "updated_at": "2026-08-11T01:53:56Z",
   "urgency": null
 }

@@ -15,10 +15,15 @@
       "id": "art_01KZQ88P0JR8RJ24GHRGR2YPHH",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZQ8F27H2F5DGM770PVZXN5N",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZQ4R4DC31HN6MERPJ0P20KP",
-  "last_event_id": "ev_01KZQ898P0CQK1MS0QZXEBA045",
+  "last_event_id": "ev_01KZQ8F27K9QVE7NMA1ZSQVV01",
   "last_status_changed_at": "2026-08-11T01:51:37Z",
   "linked_files": [],
   "priority": "medium",
@@ -38,6 +43,6 @@
   "tags": null,
   "title": "Venue geography migration \u2014 buildings lat/lng/access_minutes",
   "type": "task",
-  "updated_at": "2026-08-11T01:51:37Z",
+  "updated_at": "2026-08-11T01:54:47Z",
   "urgency": null
 }
