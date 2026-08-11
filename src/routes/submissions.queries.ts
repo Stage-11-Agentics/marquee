@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import type { D1Database } from "@cloudflare/workers-types";
 
 import type { ListEnvelope } from "../api/list";
 import type {
