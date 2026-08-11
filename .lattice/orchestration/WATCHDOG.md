@@ -16,40 +16,51 @@ noticing — least of all the orchestrator, which is inside its own tick.
   line. A watchdog that files a paragraph every 20 minutes is the process bloat it exists to
   catch.
 
-## The seven checks
+## Two things that are NOT the watchdog's business (operator, 2026-08-11)
+
+- **Context windows.** Delegators are smart enough to manage their own compaction. A high
+  context percentage is not a finding, is not a trigger, and does not go in a report. Do not
+  poll it, do not narrate it.
+- **Quota / capacity load.** Running Luna and Terra hard is fine; the pools are ample. Stop
+  reporting glideslope positions and stop rationing dispatch against them.
+
+The one survivor from that family is the **`Selected model is at capacity` refusal**, which is
+not a quota concern at all — it is a *stall*, a service-side rejection that leaves an agent
+sitting dead while the board says it is working. That check stays (2b).
+
+## The checks
 
 1. **Slots.** How many delegators are actually claimed and progressing, against the target N.
-   Verify by the claim in `lattice list` and a moving context counter — never by a surface
-   existing. Three known ways a launch reports success while the agent never engages: the
-   trust dialog swallowing the argv prompt, a fresh-cwd trust dialog, and
-   `Selected model is at capacity` (context stays 0%).
+   Verify by the claim in `lattice list` and a live `Working (Ns)` indicator — never by a
+   surface existing. Three known ways a launch reports success while the agent never engages:
+   the trust dialog swallowing the argv prompt, a fresh-cwd trust dialog, and a
+   `Selected model is at capacity` refusal.
 2. **Blockers.** `needs_human` flags, `blocked` status, raised c11 flags, and open PRs —
    especially `mergeable: false` or a `pr_open` that survives two watchdog ticks untouched.
-2b. **Model-at-capacity, every tick (operator directive 2026-08-10).** Read every delegator
-   surface for `Selected model is at capacity` and for the tell that accompanies it — context
-   frozen at 0% with the boot prompt still on screen and no claim on the board. A capacity
-   refusal is indistinguishable from a healthy launch unless you look. Bump anything sitting
-   in that state rather than letting the slot idle.
+   On `mergeable: false`, check ancestry (`git merge-base --is-ancestor forgejo/master
+   forgejo/<branch>`) before assuming the async-recompute case: a false there means a real
+   rebase is owed, and polling would wait forever.
+2b. **Model-at-capacity refusal, every tick (operator directive 2026-08-10).** Read every
+   delegator surface for `Selected model is at capacity`, and for its signature — the boot
+   prompt still on screen with no claim on the board. A refusal is indistinguishable from a
+   healthy launch unless you look. Bump anything sitting in that state rather than letting the
+   slot idle.
    **Model preference:** `gpt-5.6-luna` at **`max`** effort is ideal and is where the fleet
    should sit. If Luna refuses *repeatedly*, a couple of agents may run `gpt-5.6-terra` at
    `high` as a temporary fallback — then move back to Luna the moment it answers. A lone
-   `terra high` agent is therefore sanctioned, not drift; a fleet drifting to `terra high` and
-   staying there is worth reporting.
-3. **Orchestrator liveness.** Working / stalled / error-retrying. Context %, cost counter
-   moving, and single-turn duration. A turn past ~10 minutes is worth naming; past ~20 is
-   worth investigating. Judge liveness by the `Working (Ns)` line and a moving counter, never
-   by the placeholder input hint.
+   `terra high` agent is sanctioned, not drift.
+3. **Orchestrator liveness.** Working / stalled / error-retrying. Judge by the `Working (Ns)`
+   line and a moving cost counter, never by the placeholder input hint. A turn past ~10
+   minutes is worth naming; past ~20 is worth investigating.
 4. **Process bloat.** Is the tick spending itself on ceremony rather than dispatch, review,
    and merge? Is the tick prompt growing tick over tick? Standing rules belong in
-   `ORCHESTRATOR.md`, not re-pasted every 20 minutes.
+   `ORCHESTRATOR.md`, not re-pasted every tick.
 5. **Rate.** Done-count delta per hour against tickets remaining and hours to deadline. State
    it as a range; a single short delta on a coarse counter is how this run produced two wrong
    capacity calls (Kimi "10%", Bravo "75 minutes"). Measure over a longer baseline.
 6. **Repo health.** Local `master` == `forgejo/master` (contract commits have stranded
-   unpushed twice this run, invisible to every worktree), no stranded worktrees, no orphan
-   branches, delegator context % (one hit 94% mid-ticket).
-7. **Capacity.** Alpha / Codex position via glideslope. The orchestrator session's own pool is
-   the one that ends the run if it empties.
+   unpushed twice this run, invisible to every worktree), branch work pushed rather than
+   living only on this machine, no orphan branches.
 
 ## Reading the board without lying about it
 
