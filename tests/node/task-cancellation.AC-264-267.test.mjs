@@ -27,7 +27,9 @@ test("AC-265 · every overdue and active-task reader excludes cancellation tombs
   assert.match(schedule, /task\.status = 'open'[\s\S]{0,180}task\.cancelled_at IS NULL/);
   assert.match(triggers, /enqueueOverdueTaskReminderRows/);
   assert.match(consumer, /enqueueOverdueTaskReminderRows\(db, now\)/);
-  assert.match(board, /onboarding_task\.status = 'open'[\s\S]{0,100}onboarding_task\.cancelled_at IS NULL/);
+  // Board stage SQL delegates the cancellation-aware onboarding arm to the
+  // shared predicate; the next assertion pins the actual tombstone clauses.
+  assert.match(board, /submissionStatusPredicate\(\s*"onboarding"[\s\S]{0,100}includeCancelledAt:\s*true/);
   assert.match(submissions, /filtered_task\.status = 'open'[\s\S]{0,120}filtered_task\.cancelled_at IS NULL/);
   assert.match(audience, /candidate\.cancelled_at IS NULL/);
   assert.match(audience, /filtered_task\.cancelled_at IS NULL/);
