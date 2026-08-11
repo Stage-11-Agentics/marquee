@@ -130,12 +130,21 @@ const DECISION_TARGETS = {
   reject: { decision: "deny", status: "rejected" },
 } as const;
 
+/**
+ * Every status an organizer can still decide from. `withdrawn` and `rejected`
+ * are both outcomes the ORGANISER selects in the reversal dialog, not states a
+ * speaker puts themselves into, so neither is terminal: reversing a decision by
+ * mistake, or reconsidering later, has to have a way back. Re-acceptance is
+ * safe to re-run because it reconciles the task set idempotently rather than
+ * reassigning it.
+ */
 const ACTIONABLE_STATUSES = new Set([
   "submitted",
   "in_review",
   "accepted",
   "waitlisted",
   "rejected",
+  "withdrawn",
 ]);
 
 function isValidEmail(value: string): boolean {
