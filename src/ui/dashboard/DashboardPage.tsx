@@ -164,8 +164,9 @@ export function DashboardPage({ eventId = "evt_aie-ny-2026", navigate }: Props):
     };
   }, [eventId, reloadKey]);
 
+  const hasProgram = state.snapshot?.pipeline.some((item) => item.count > 0) ?? false;
   return <div class="dashboard-page">
-    <PageHeader title="Program pipeline" copy="Every count opens the work behind it. The dashboard keeps the operator’s next move in view." actions={<><Button onClick={() => navigate("/settings")}>Conference settings</Button><Button variant="primary" onClick={() => navigate("/submissions")}>Work the pipeline →</Button></>} />
+    <PageHeader title="Program pipeline" copy="Every count opens the work behind it. The dashboard keeps the operator’s next move in view." actions={<><Button onClick={() => navigate("/settings")}>Conference settings</Button><Button variant={hasProgram || !state.snapshot ? "primary" : ""} onClick={() => navigate("/submissions")}>Work the pipeline →</Button></>} />
     {state.snapshot ? <DashboardContents snapshot={state.snapshot} navigate={navigate} /> : <DashboardLoading />}
     {state.kind === "error" && <div class="dashboard-error" role="status"><strong>Dashboard refresh failed</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></div>}
   </div>;

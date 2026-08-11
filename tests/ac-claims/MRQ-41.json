@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-41",
+  "owns": [],
+  "exercises": ["AC-161"],
+  "notes": ["AC-161 is owned by MRQ-40; this craft sweep exercises the shared empty-state and next-action contract without claiming a duplicate owner."]
+}

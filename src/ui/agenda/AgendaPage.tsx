@@ -218,6 +218,7 @@ function AgendaList({
   onDragStart,
   onResize,
   onRoomOpen,
+  onClearFilters,
 }: {
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
@@ -225,6 +226,7 @@ function AgendaList({
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
   onRoomOpen: (roomId: string) => void;
+  onClearFilters: () => void;
 }): JSX.Element {
   return <div class="agenda-list" role="table" aria-label="Scheduled sessions">
     <div class="agenda-list-head" role="row"><span>Day</span><span>Time</span><span>Title</span><span>Speakers</span><span>Track</span><span>Room</span><span>Format</span></div>
@@ -252,7 +254,7 @@ function AgendaList({
         <span class={`agenda-conflict-flag${conflicts.has(session.id) ? "" : " is-placeholder"}`} aria-hidden={!conflicts.has(session.id)} title={conflicts.has(session.id) ? "This placement needs attention" : undefined}>⚠ {conflicts.get(session.id) ?? "Conflict"}</span>
         <span class={`agenda-decline-flag${session.has_declined_participant ? "" : " is-placeholder"}`} aria-hidden={!session.has_declined_participant} title={session.has_declined_participant ? "A speaker role was declined" : undefined}>⚑ Declined role</span>
       </div>
-    </div>) : <div class="agenda-list-empty">No scheduled Sessions match these filters.</div>}
+    </div>) : <div class="agenda-list-empty"><strong>No scheduled Sessions match these filters.</strong><span>Clear the day or track filter to bring scheduled Sessions back into view.</span><Button small variant="primary" onClick={onClearFilters}>Clear filters</Button></div>}
   </div>;
 }
 
@@ -592,7 +594,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     });
   };
   const renderBoard = () => {
-    if (view === "list") return <AgendaList snapshot={snapshot} sessions={visibleSessions} conflicts={conflicts} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} />;
+    if (view === "list") return <AgendaList snapshot={snapshot} sessions={visibleSessions} conflicts={conflicts} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} onClearFilters={() => { setDay("all"); setTrack(""); }} />;
     if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />;
     if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={conflicts} />;
     if (view === "track") return <TrackBoard
@@ -616,10 +618,12 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
       <span class="subtle agenda-status-note">No save button · changes persist as you place</span>
     </div>
     {notice && <div class="agenda-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
-    <div class="agenda-layout">
-      <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} />
-      <section class="card agenda-board" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
-    </div>
+    {snapshot.sessions.length === 0 && snapshot.unscheduled.length === 0
+      ? <EmptyState title="No Sessions are ready for the agenda" copy="Accepted Sessions will appear here when the conference is ready to place them. Open the submission list to check the next candidates." action={<Button variant="primary" onClick={() => window.location.assign("/submissions?status=accepted")}>Open accepted submissions</Button>} />
+      : <div class="agenda-layout">
+        <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} />
+        <section class="card agenda-board" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
+      </div>}
     {activeRoom && <RoomPanel room={activeRoom} onClose={() => setRoomPanelId(null)} />}
     {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} onClose={() => setConflictsOpen(false)} onJump={jumpToSession} />}
   </div>;

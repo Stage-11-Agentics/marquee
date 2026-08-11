@@ -70,10 +70,11 @@
 .switch.on { background: var(--accent-soft); border-color: var(--accent); }
 .switch.on::after { background: var(--accent); transform: translateX(18px); }
 .empty-state { display: grid; min-height: 420px; padding: 48px 24px; place-items: center; text-align: center; }
-.empty-state > div { max-width: 520px; }
+.empty-state > div { align-items: center; display: flex; flex-direction: column; max-width: 520px; }
 .empty-mark { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent-dark); display: grid; font-size: 22px; height: 52px; margin: 0 auto 18px; place-items: center; width: 52px; }
 .empty-state h2 { font-size: 18px; font-weight: 600; margin: 0 0 9px; }
 .empty-state p { color: var(--muted); font-size: 12.5px; line-height: 1.6; margin: 0 auto 20px; }
+.empty-state-action { align-items: center; display: flex; gap: 8px; justify-content: center; min-height: 30px; }
 .instrument { background-color: var(--panel); background-image: linear-gradient(var(--graph) 1px, transparent 1px), linear-gradient(90deg, var(--graph) 1px, transparent 1px); background-size: 8px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius); }
 .metric { font: 400 32px/1 var(--mono); font-variant-numeric: tabular-nums lining-nums; }
 .toast { background: var(--ink); border: 1px solid var(--accent); border-radius: var(--radius); bottom: 20px; color: #dff2f3; font: 400 11.5px/1.4 var(--mono); left: 50%; max-width: min(500px, 88vw); opacity: 0; padding: 10px 13px; pointer-events: none; position: fixed; transform: translate(-50%, 10px); transition: opacity 110ms, transform 110ms; z-index: 1200; }

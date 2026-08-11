@@ -1,7 +1,7 @@
 import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { SubmissionsPage } from "../submissions/SubmissionsPage";
-import { EmptyState, PageHeader } from "./components";
+import { Button, EmptyState, PageHeader } from "./components";
 import { OverlayHost, ToastHost, type OverlayState } from "./OverlayHosts";
 import { matchRoute } from "./route-table";
 import { useBrowserRouter } from "./router";
@@ -92,7 +92,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
             <CommsScreen />
           </> : <>
             <PageHeader title={routeName} copy="The shared Flight Deck shell is installed. This route's product module will replace the honest empty state below." />
-            <EmptyState title={route ? `${route.label} is ready for its module` : "This route is not installed"} copy={route ? "Navigation, layout, overlays, responsive behavior, and accessibility are live; no product data is being simulated." : "Return to Program home or choose a module from the shared navigation."} />
+            <EmptyState title={route ? `${route.label} is ready for its module` : "This route is not installed"} copy={route ? "Navigation, layout, overlays, responsive behavior, and accessibility are live; no product data is being simulated." : "Return to Program home or choose a module from the shared navigation."} action={<Button variant="primary" onClick={() => navigate("/")}>Back to Program home</Button>} />
           </>}
         </div>
       </main>

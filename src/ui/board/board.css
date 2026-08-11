@@ -8,6 +8,7 @@
 .program-board-filter-summary { color: var(--muted); margin-left: auto; min-width: 108px; text-align: right; }
 .program-board-state { align-items: center; color: var(--muted); display: grid; gap: 8px; min-height: 560px; padding: 24px; place-items: center; text-align: center; }
 .program-board-state.error { color: var(--danger); }
+.program-board-card-shell > .program-board-empty-state { border: 0; border-radius: 0; box-shadow: none; min-height: 560px; }
 .program-board-grid { display: grid; grid-template-columns: repeat(7, minmax(210px, 1fr)); min-width: 1490px; }
 .program-board-column { background: var(--panel); border-right: 1px solid var(--line-strong); min-width: 0; }
 .program-board-column:last-child { border-right: 0; }
@@ -23,7 +24,7 @@
 .program-board-card-top, .program-board-card-foot, .program-board-slot { align-items: center; display: flex; gap: 5px; justify-content: space-between; min-width: 0; }
 .program-board-card-top { color: var(--muted); font-size: 9px; }
 .program-board-card-top .chip { flex: 0 0 auto; }
-.program-board-card-title { display: block; font-size: 11.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.program-board-card-title { display: -webkit-box; font-size: 11.5px; line-height: 1.3; min-height: 30px; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .program-board-card-speakers, .program-board-card-foot { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .program-board-card-tracks { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
 .program-board-card-tracks .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }

@@ -353,7 +353,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
 
   if (loading) return <main class="reviewer-surface instrument" aria-busy="true"><div class="reviewer-loading"><span class="eyebrow">Reviewer queue</span><strong>Loading the conference queue…</strong><span class="subtle">Applying your track responsibility before any submission fields load.</span></div></main>;
   if (error && !plan) return <main class="reviewer-surface"><div class="reviewer-frame"><EmptyState title="Reviewer queue unavailable" copy={error} action={<Button variant="primary" onClick={() => void load()}>Try again</Button>} /></div></main>;
-  if (!plan) return <main class="reviewer-surface"><div class="reviewer-frame"><EmptyState title="No review plan" copy="A conference review round has not been configured yet." /></div></main>;
+  if (!plan) return <main class="reviewer-surface"><div class="reviewer-frame"><EmptyState title="No review plan" copy="A conference review round has not been configured yet." action={<Button variant="primary" onClick={exitQueue}>Return to conference</Button>} /></div></main>;
 
   return <main class="reviewer-surface" data-reviewer-surface="true">
     <div class="reviewer-frame">

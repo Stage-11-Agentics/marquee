@@ -1,7 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
-import { PageHeader } from "../shell/components";
+import { EmptyState, PageHeader } from "../shell/components";
 import { DEFAULT_EVENT_ID } from "../venues/venue-writer";
 import "./settings.css";
 
@@ -187,7 +187,7 @@ export function ApiTokensPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
     : state.kind === "error"
       ? <div class="settings-error" role="alert"><strong>Tokens unavailable</strong><span>{state.message}</span><button class="button small" type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry</button></div>
       : state.tokens.length === 0
-        ? <section class="card token-empty"><div><span class="empty-mark" aria-hidden="true">⌘</span><h2>No API tokens yet</h2><p>Create a narrowly scoped token for the CLI or an integration. Secrets are shown once and stored only as hashes.</p><button class="button primary" type="button" onClick={() => setShowCreate(true)}>Create API token</button></div></section>
+        ? <EmptyState class="token-empty" title="No API tokens yet" copy="Create a narrowly scoped token for the CLI or an integration. Secrets are shown once and stored only as hashes." action={<button class="button" type="button" onClick={() => setShowCreate(true)}>Create API token</button>} />
         : <section class="card token-table-card"><div class="table-scroll"><table class="token-table"><thead><tr><th scope="col">Token</th><th scope="col">Named scopes</th><th scope="col">Restriction</th><th scope="col">Created</th><th scope="col">Last used</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>{state.tokens.map((token) => <TokenRow key={token.id} token={token} onRevoke={revokeToken} />)}</tbody></table></div></section>;
 
   return <div class="settings-page api-tokens-page">

@@ -151,6 +151,9 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [audienceLoading, setAudienceLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<SendResult | null>(null);
 
@@ -165,6 +168,8 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
 
   useEffect(() => {
     let cancelled = false;
+    setTemplatesLoading(true);
+    setMessagesLoading(true);
     Promise.all([
       request<{ data: Template[] }>(`/api/v1/events/${eventId}/templates`),
       request<{ data: Message[] }>(`/api/v1/events/${eventId}/outbox`),
@@ -179,9 +184,14 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
       })
       .catch((reason: unknown) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : "Communications is unavailable");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setTemplatesLoading(false);
+        setMessagesLoading(false);
       });
     return () => { cancelled = true; };
-  }, [eventId]);
+  }, [eventId, reloadKey]);
 
   useEffect(() => {
     if (!activeTemplate) return;
@@ -302,7 +312,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
       <div><strong>Demo-safe outbox</strong><span>Messages render and log here. Non-allowlisted addresses are never delivered.</span></div>
       <span class="comms-policy">default: demo_safe</span>
     </div>
-    {error && <div class="inline-error" role="status">{error}</div>}
+    {error && <div class="inline-error" role="alert"><span>{error}</span><button class="button small" type="button" onClick={() => { setError(null); setReloadKey((value) => value + 1); }}>Retry communications</button></div>}
 
     <section class="comms-section panel" aria-labelledby="comms-templates-heading">
       <div class="section-heading"><div><div class="panel-kicker">Templates</div><h2 id="comms-templates-heading">Conference messages</h2></div><span class="section-count">{templates.length || "—"} available</span></div>
@@ -313,7 +323,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
           </button>
           <label class="toggle-control"><input type="checkbox" checked={template.enabled === 1} disabled={busy !== null} onChange={() => void toggleTemplate(template)} /><span>{template.enabled === 1 ? "on" : "off"}</span></label>
         </div>)}
-        {templates.length === 0 && <div class="reserved-copy">Loading the conference template catalog…</div>}
+        {templates.length === 0 && <div class="reserved-copy comms-empty-copy"><span>{templatesLoading ? "Loading the conference template catalog…" : error ? "Templates are unavailable. Retry communications above to try again." : "No conference templates yet. Write a one-off message from Ad-hoc mode."}</span>{!templatesLoading && !error && <button class="button-secondary comms-empty-action" type="button" onClick={() => setMode("adhoc")}>Write an ad-hoc message</button>}</div>}
       </div>
     </section>
 
@@ -355,7 +365,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
     </section>
 
     <section class="comms-section panel" aria-labelledby="comms-filters-heading">
-      <div class="section-heading"><div><div class="panel-kicker">Audience</div><h2 id="comms-filters-heading">Filter the conference recipients</h2></div><span class="section-count">MRQ-8 list contract</span></div>
+      <div class="section-heading"><div><div class="panel-kicker">Audience</div><h2 id="comms-filters-heading">Filter the conference recipients</h2></div><span class="section-count">Server-side list contract</span></div>
       <div class="filter-grid">
         <label>Status<select value={filters.status} onChange={(event) => setFilters({ ...filters, status: (event.currentTarget as HTMLSelectElement).value })}><option value="">Any status</option><option value="submitted">Submitted</option><option value="in_review">In review</option><option value="accepted">Accepted</option><option value="waitlisted">Waitlisted</option><option value="rejected">Rejected</option></select></label>
         <label>Track<input value={filters.track} placeholder="Track ID" onInput={(event) => setFilters({ ...filters, track: (event.currentTarget as HTMLInputElement).value })} /></label>
@@ -368,7 +378,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
     <section class="comms-section panel" aria-labelledby="comms-outbox-heading">
       <div class="section-heading"><div><div class="panel-kicker">Outbox</div><h2 id="comms-outbox-heading">Rendered delivery log</h2></div><span class="section-count">{messages.length} message{messages.length === 1 ? "" : "s"}</span></div>
       <div class="message-list">
-        {messages.length === 0 && <div class="empty-log">No messages yet. The first queued message will appear here with its rendered body and honest delivery outcome.</div>}
+        {messages.length === 0 && <div class="empty-log comms-empty-copy"><span>{messagesLoading ? "Loading the delivery log…" : error ? "The delivery log is unavailable. Retry communications above to try again." : "No messages queued yet. The first queued message will appear here with its rendered body and honest delivery outcome."}</span>{!messagesLoading && !error && <a class="button-secondary comms-empty-action" href="#comms-compose-heading">Compose the first message</a>}</div>}
         {messages.map((message) => <details class="message-row" key={message.id}>
           <summary><div><strong>{message.subject}</strong><span>{message.to_email} · {message.template_key}{message.person_id ? ` · ${message.person_id}` : ""}</span></div><span class={`message-status status-${message.status}`}>{message.status === "suppressed" ? "suppressed · demo mode" : message.status}</span></summary>
           <div class="message-detail"><p>{message.text}</p><small>{message.send_policy} · queued {formatDate(message.created_at)}{message.suppressed_reason ? ` · ${message.suppressed_reason}` : ""}</small></div>

@@ -33,6 +33,8 @@ export const EMBED_STYLES = `
 .embed-speaker small { display: block; margin-top: 12px; color: var(--public-soft); font: 600 9px/1.35 var(--public-mono); }
 .embed-empty { min-height: 170px; display: grid; place-items: center; padding: 25px 16px; color: var(--public-muted); text-align: center; }
 .embed-empty strong { display: block; margin-bottom: 5px; color: var(--public-ink); font: 650 16px/1.2 Georgia, serif; }
+.embed-empty span { display: block; }
+.embed-empty .public-button { margin-top: 14px; }
 .embed-config { width: min(1060px, calc(100% - 32px)); margin: 0 auto; padding: 36px 0 70px; }
 .embed-config-grid { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(0, 1.2fr); gap: 16px; align-items: start; }
 .embed-config-panel { border: 1px solid var(--public-rule); background: var(--public-surface); padding: 18px; }
@@ -92,6 +94,7 @@ function trackChip(track: PublicTrack): JSX.Element {
 export function EmbedPage({ data }: { data: PublicEmbedData }): JSX.Element {
   const accent = data.config.accent ?? data.event.accent ?? "#0b6a72";
   const action = data.kind === "speakers" ? "Speaker gallery" : "Agenda";
+  const hasFilters = Boolean(data.filters.track || data.filters.status);
   return (
     <div class="embed-site" data-embed-kind={data.kind} style={{ "--embed-accent": accent }}>
       <header class="embed-header"><strong>{data.event.name} · {action}</strong><span>Published program</span></header>
@@ -110,11 +113,11 @@ export function EmbedPage({ data }: { data: PublicEmbedData }): JSX.Element {
       {data.kind === "speakers" ? (
         data.speakers.length > 0 ? <section class="embed-speaker-grid" aria-label="Published speakers">
           {data.speakers.map((speaker) => <article class="embed-speaker" key={speaker.id}><h2>{speaker.name}</h2><p>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</p><small>{speaker.sessions.length} {speaker.sessions.length === 1 ? "published session" : "published sessions"}</small></article>)}
-        </section> : <div class="embed-empty"><div><strong>No published speakers match</strong><span>Clear a filter to bring the gallery back into view.</span></div></div>
+        </section> : <div class="embed-empty"><div><strong>{hasFilters ? "No published speakers match" : "No published speakers yet"}</strong><span>{hasFilters ? "Clear a filter to bring the gallery back into view." : "The conference team has not published any speakers yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : "/agenda"}>{hasFilters ? "Show all speakers" : "Open the conference agenda"}</a></div></div>
       ) : (
         data.sessions.length > 0 ? <section class="embed-list" aria-label="Published agenda">
           {data.sessions.map((session) => <article class="embed-session" key={session.id}><time><strong>{session.time}</strong>{session.day}<br />{session.roomLabel}</time><div><h2>{session.title}</h2><p>{session.speakers.map((speaker) => speaker.name).join(" · ") || "—"}</p><div class="embed-tracks">{session.tracks.map(trackChip)}</div></div></article>)}
-        </section> : <div class="embed-empty"><div><strong>No published sessions match</strong><span>Clear a filter to bring the program back into view.</span></div></div>
+        </section> : <div class="embed-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : "/agenda"}>{hasFilters ? "Show full agenda" : "Open the conference agenda"}</a></div></div>
       )}
     </div>
   );

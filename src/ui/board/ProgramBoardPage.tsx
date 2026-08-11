@@ -2,7 +2,7 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
 import type { BoardCard, BoardColumn, BoardFacets, BoardListEnvelope, BoardStage } from "../../api/board";
-import { Button, Card, PageHeader } from "../shell/components";
+import { Button, Card, EmptyState, PageHeader } from "../shell/components";
 import "./board.css";
 
 const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
@@ -113,6 +113,7 @@ export function ProgramBoardPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props
   }, [state]);
 
   const updateFilter = (key: keyof FilterState, value: string) => setFilters((current) => ({ ...current, [key]: value }));
+  const hasFilters = Object.values(filters).some(Boolean);
   const ready = state.kind === "ready" ? state : null;
   return <div class="program-board-page">
     <PageHeader title="Program board" copy={ready ? `${ready.cards.length.toLocaleString()} records · seven stages · read-only record projection.` : "Reading the conference record projection…"} actions={<Button small onClick={() => setFilters(EMPTY_FILTERS)}>Reset filters</Button>} />
@@ -127,7 +128,9 @@ export function ProgramBoardPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props
       </form>
       {state.kind === "loading" && <div class="program-board-state">Loading the program board…</div>}
       {state.kind === "error" && <div class="program-board-state error"><strong>Program board did not load</strong><span>{state.message}</span><Button small onClick={() => setFilters({ ...filters })}>Retry</Button></div>}
-      {ready && <div class="program-board-grid">{ready.columns.map((column) => <VirtualColumn key={column.id} column={column} cards={cardsByStage.get(column.id) ?? []} navigate={navigate} />)}</div>}
+      {ready && ready.cards.length === 0
+        ? <EmptyState class="program-board-empty-state" title={hasFilters ? "No submissions match these filters" : "No submissions on the program board yet"} copy={hasFilters ? "Clear a filter to bring the conference record back into view." : "Add the first Abstract or Session to start moving the conference through its stages."} action={hasFilters ? <Button variant="primary" onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>} />
+        : ready && <div class="program-board-grid">{ready.columns.map((column) => <VirtualColumn key={column.id} column={column} cards={cardsByStage.get(column.id) ?? []} navigate={navigate} />)}</div>}
     </Card>
   </div>;
 }

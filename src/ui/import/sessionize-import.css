@@ -16,6 +16,9 @@
 .sessionize-preview-table, .sessionize-results-table { border: 1px solid var(--line-strong); margin-top: 16px; overflow-x: auto; }
 .sessionize-preview-table table, .sessionize-results-table table { border-collapse: collapse; table-layout: fixed; width: 100%; }
 .sessionize-preview-table th, .sessionize-preview-table td, .sessionize-results-table th, .sessionize-results-table td { border-bottom: 1px solid var(--line); font-size: 10.5px; max-width: 180px; overflow: hidden; padding: 9px 8px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.sessionize-table-empty, .sessionize-results-empty { align-items: start; color: var(--muted); display: grid; gap: 7px; min-height: 116px; padding: 18px 10px; }
+.sessionize-results-empty strong { color: var(--ink-soft); font-size: 12px; }
+.sessionize-table-empty { border-top: 1px solid var(--line); font: 10.5px/1.45 var(--mono); }
 .sessionize-preview-table th, .sessionize-results-table th { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .sessionize-preview-table tr:last-child td, .sessionize-results-table tr:last-child td { border-bottom: 0; }
 .sessionize-import-error { align-items: center; background: var(--danger-soft); border: 1px solid #e6b8b2; border-left: 3px solid var(--danger); border-radius: var(--radius); color: #8f2118; display: flex; flex-wrap: wrap; gap: 10px; padding: 11px 13px; }
@@ -23,7 +26,7 @@
 .sessionize-count-grid { display: grid; gap: 8px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .sessionize-count { background: var(--sunk); border: 1px solid var(--line); display: grid; gap: 7px; padding: 12px; }
 .sessionize-count span { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-.sessionize-count strong { font: 400 25px/1 var(--mono); }
+.sessionize-count strong { font: 400 25px/1 var(--mono); font-variant-numeric: tabular-nums lining-nums; }
 .sessionize-results-card { min-width: 0; }
 @media (max-width: 900px) { .sessionize-mapping-grid, .sessionize-upload-grid { grid-template-columns: 1fr; } .sessionize-count-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .sessionize-import-steps { grid-template-columns: 1fr; } .sessionize-mapping-fields { grid-template-columns: 1fr; } .sessionize-count-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

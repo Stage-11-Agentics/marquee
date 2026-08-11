@@ -54,7 +54,7 @@
 .submitted-col, .updated-col { width: 116px; }
 .origin-col { width: 92px; }
 .missing-col { width: 180px; }
-.table-title { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-title { display: -webkit-box; font-weight: 600; min-height: 2.55em; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .table-title:hover { color: var(--accent-dark); text-decoration: underline; }
 .row-meta { color: var(--muted); display: block; font: 400 9.5px/1.35 var(--mono); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entity-chip { min-width: 70px; }

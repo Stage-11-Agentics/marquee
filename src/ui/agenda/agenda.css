@@ -68,7 +68,9 @@
 .agenda-list-actions { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font: 9px var(--mono); }
 .agenda-list-actions button { width: 18px; height: 18px; padding: 0; border: 1px solid var(--line-strong); background: var(--sunk); color: inherit; font: 12px var(--mono); }
 .agenda-list-actions button:hover { border-color: var(--accent); color: var(--accent-dark); }
-.agenda-list-empty { padding: 60px 20px; text-align: center; color: var(--muted); }
+.agenda-list-empty { align-items: center; display: grid; gap: 8px; min-height: 300px; padding: 60px 20px; place-items: center; text-align: center; color: var(--muted); }
+.agenda-list-empty strong { color: var(--ink-soft); font-size: 12px; }
+.agenda-list-empty span { font: 10.5px/1.45 var(--mono); }
 .agenda-week-grid { display: grid; min-width: 900px; }
 .agenda-week-cell { min-height: 112px; }
 .agenda-room-board { display: grid; gap: 1px; background: var(--line); padding: 1px; min-width: 900px; }

@@ -25,8 +25,8 @@ export function Chip({ tone = "", children }: { tone?: "" | "success" | "warning
   return <span class={`chip ${tone}`.trim()}>{children}</span>;
 }
 
-export function EmptyState({ title, copy, action }: { title: string; copy: string; action?: ComponentChildren }): JSX.Element {
-  return <section class="card empty-state"><div><span class="empty-mark" aria-hidden="true">◇</span><h2>{title}</h2><p>{copy}</p>{action}</div></section>;
+export function EmptyState({ title, copy, action, class: className = "" }: { title: string; copy: string; action?: ComponentChildren; class?: string }): JSX.Element {
+  return <section class={`card empty-state ${className}`.trim()}><div><span class="empty-mark" aria-hidden="true">◇</span><h2>{title}</h2><p>{copy}</p><div class="empty-state-action">{action}</div></div></section>;
 }
 
 export function Switch({ on, label, onClick }: { on: boolean; label: string; onClick?: () => void }): JSX.Element {

@@ -68,6 +68,8 @@ export const PUBLIC_SITE_STYLES = `
 .public-track-chip { display: inline-flex; min-height: 23px; align-items: center; border: 1px solid var(--public-rule); border-left: 3px solid var(--track-color, var(--public-accent)); border-radius: 2px; padding: 3px 6px; color: var(--public-muted); font: 600 9px/1.2 var(--public-mono); }
 .public-empty { min-height: 428px; display: grid; place-items: center; padding: 36px; color: var(--public-muted); text-align: center; }
 .public-empty strong { display: block; margin-bottom: 5px; color: var(--public-ink); font: 650 18px/1.2 Georgia, serif; }
+.public-empty span { display: block; }
+.public-empty .public-button { margin-top: 16px; }
 .public-card { border: 1px solid var(--public-rule); background: var(--public-surface); padding: clamp(20px, 4vw, 36px); }
 .public-card h1 { margin: 13px 0 8px; font: 550 clamp(30px, 5vw, 46px)/1.03 Georgia, serif; letter-spacing: -.035em; }
 .public-card h2 { margin: 0 0 9px; font: 650 15px/1.2 var(--public-mono); letter-spacing: .05em; text-transform: uppercase; }
@@ -169,11 +171,12 @@ function TrackChips({ session }: { session: PublicSession }): JSX.Element {
 
 export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Element {
   const eventQuery = `event=${encodeURIComponent(data.event.slug)}`;
+  const hasFilters = Boolean(data.filters.track || data.filters.q || (data.filters.day && data.filters.day !== "all"));
   return (
     <PublicShell
       event={data.event}
       title="Agenda"
-      actions={<a class="public-button primary" href={`/embed/config?${eventQuery}`}>Get embed code</a>}
+      actions={<a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a>}
     >
       <main class="public-main">
         <div class="public-kicker">{data.event.startsOn} → {data.event.endsOn} · {data.event.venue ?? "Online"}</div>
@@ -218,7 +221,7 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
               <TrackChips session={session} />
             </article>
           )) : (
-            <div class="public-empty"><div><strong>No published sessions match</strong><span>Clear a filter to bring the program back into view.</span></div></div>
+            <div class="public-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/agenda?${eventQuery}` : "/"}>{hasFilters ? "Show full agenda" : "Return to conference"}</a></div></div>
           )}
         </section>
       </main>
