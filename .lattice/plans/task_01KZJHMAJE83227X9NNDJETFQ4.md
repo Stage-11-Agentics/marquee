@@ -56,3 +56,7 @@ Deps: M-08, M-12
 - AC-249: Draft queue exposes count/contact/last-save/applicable missing fields, uses
   `isFieldApplicable()` output, preserves read-only behavior, and fails closed for an
   unauthorized reader without leaking draft content.
+
+## Reset 2026-08-11 by agent:delegator-mrq-34
+
+## Reset 2026-08-11 by agent:delegator-mrq-34

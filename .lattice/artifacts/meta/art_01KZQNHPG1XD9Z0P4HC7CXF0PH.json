@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T05:43:25Z",
+  "created_by": "agent:delegator-mrq-34",
+  "custom_fields": {},
+  "id": "art_01KZQNHPG1XD9Z0P4HC7CXF0PH",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQNHPG1XD9Z0P4HC7CXF0PH.md",
+    "size_bytes": 833
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS review of exact HEAD 69cb987 after final rebase; no findings.",
+  "tags": [],
+  "title": "MRQ-34 self-review PASS @ 69cb987",
+  "token_usage": null,
+  "type": "note"
+}

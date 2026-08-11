@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T05:40:38Z",
+  "created_by": "agent:delegator-mrq-34",
+  "custom_fields": {},
+  "id": "art_01KZQNCKMZ0J69PFV2XM56FRQQ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQNCKMZ0J69PFV2XM56FRQQ.md",
+    "size_bytes": 855
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS review of exact HEAD c2a90e8 after rebase; no findings.",
+  "tags": [],
+  "title": "MRQ-34 self-review PASS @ c2a90e8",
+  "token_usage": null,
+  "type": "note"
+}

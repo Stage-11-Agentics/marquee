@@ -3,13 +3,13 @@
   "branch_links": [],
   "c11_surface": "surface:166",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 11,
+  "comment_count": 12,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
   "created_by": "agent:orchestrator-intake",
   "custom_fields": {},
   "description": "BUILDPLAN: M-24 (Tier B rank 2, US-47) + M-33 (Tier B rank 14, US-36) \u2014 Wave 2 (\u00a75) \u00b7 MERGED at mint (5 h + 5 h = 10 h, at the cap; same ICS module \u2014 M-33's calendar cancellation is literally M-24's `METHOD:CANCEL` path, and splitting them puts one `UID`/`SEQUENCE` lifecycle across two PRs. M-33's second dependency, M-19a, is a Wave 1 ticket and is green before this band opens.)\n\n**M-24 \u2014 Calendar invites** *(written against S-2's verdict, which returned at D+2)* (5 h, ACs AC-95 \u2013 AC-97, deps M-11/S-2)\nScope (verbatim): ICS builder (`METHOD:REQUEST`, `ATTENDEE;RSVP=TRUE`, stable `UID`, `SEQUENCE`, `DTSTAMP`, `VTIMEZONE`+`TZID`, CRLF folding), `multipart/alternative` calendar part, `METHOD:CANCEL`, Add-to-Google and Add-to-Outlook links, `/i/{uid}.ics`, single-send path at \u226410/s.\nTrap 14: the Resend **batch endpoint carries no attachments** \u2014 anything with an ICS goes single-send at \u226410/s. Both paths exist from M-11's first commit.\nAmendment 11 fold (SPEC.md): ICS `LOCATION` renders \"Room \u00b7 Building\" (AC-252).\n\n**M-33 \u2014 Un-accept cascade** (5 h, ACs AC-121 \u2013 AC-124, deps M-24/M-19a)\nScope (verbatim): attributed reversal; agenda/public removal; dependent tasks/mail/invites choices; calendar cancellation.\nAC-123: the reversal dialog enumerates portal tasks, scheduled emails, and calendar invites, each with cancel/retain, and honours the choice.\n\nACs (union): AC-95 \u2013 AC-97, AC-121 \u2013 AC-124 \u00b7 **AC-252** (ICS `LOCATION`)\nHours: 10 (5 + 5)\nWorkflow: sub-agent-full (\u22657 h combined)\nShared files: none \u2014 module-local ICS/cascade modules.\nDeps: M-11, S-2, M-19a\nOracle: AC-95, AC-97, and AC-124 are settled by `oracle: smoke:ics` \u2014 Gmail (mandatory), Outlook, Apple Calendar must show Accept/Decline, a `SEQUENCE+1` must **replace** rather than duplicate, and a `CANCEL` must remove. Golden-file `test:` assertions run every build regardless.\nPlan: filled in by delegator's plan phase",
-  "done_at": null,
+  "done_at": "2026-08-11T05:36:31Z",
   "evidence_refs": [
     {
       "id": "ev_01KZQK3J5DJRSN977DNQCKYB4T",
@@ -55,11 +55,21 @@
       "id": "art_01KZQM1DD4YBKD0779YXF7V0CA",
       "role": null,
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZQN52GXQZZWE3SAN67TWEMZ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZQN52GXQZZWE3SAN67TWEMY",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZJHM9Q27F5F60RPPN93V9X5",
-  "last_event_id": "ev_01KZQM67HD2JAQD9PAZCVD7SMR",
-  "last_status_changed_at": "2026-08-11T05:18:16Z",
+  "last_event_id": "ev_01KZQN52GXQZZWE3SAN67TWEN2",
+  "last_status_changed_at": "2026-08-11T05:36:31Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -85,13 +95,13 @@
       "type": "depends_on"
     }
   ],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-25",
-  "status": "pr_open",
+  "status": "done",
   "tags": null,
   "title": "Calendar invites and the un-accept cascade",
   "type": "task",
-  "updated_at": "2026-08-11T05:19:41Z",
+  "updated_at": "2026-08-11T05:36:31Z",
   "urgency": null
 }

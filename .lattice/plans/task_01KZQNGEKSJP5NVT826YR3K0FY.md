@@ -1,0 +1,11 @@
+# MRQ-70: Test harness: cut per-file Worker boot so the fast suite stays under budget
+
+The hermetic fast suite is the inner-loop clock and is now at 26-28s against a hard 30s budget (scripts/checks/run-test.mjs:54 fails the run above 30_000ms). It ALREADY breached once on 2026-08-11 immediately after the MRQ-25 merge, turning master red under concurrent load; a re-run passed at 27.9s. Every remaining ticket adds integration files, so this is a live blocker on every future merge, not a tidiness item.
+
+MRQ-23 landed the cheap win (batching the 46-table wipe: npm test 23.4s->14.6s, pr-gate 27.5s->21.8s) and NAMED the remaining cost rather than fixing it, which was the right call for that ticket's scope. This ticket is that follow-up.
+
+The cost is per-FILE, not per-test: each integration file boots its own Miniflare Worker isolate via @cloudflare/vitest-pool-workers and applies the 983-line schema once. One file alone takes ~5.4s; ~25 files together take ~12s only because vitest runs them in parallel. Once file count outruns available cores, each new file adds wall-clock directly - which is what we are now seeing.
+
+Options to evaluate and MEASURE before choosing (report an A/B for whichever you take, the way MRQ-23 did): share one schema apply across files rather than per-file; consolidate very small integration files into fewer, larger ones; tune vitest pool/isolate settings; move assertions that do not need a Worker runtime to tests/node (which runs 38 tests in 1.4s).
+
+Do NOT raise the 30s budget. It is a Stage 11 non-negotiable and the number is not the problem. Do NOT weaken or delete existing tests to make the clock - especially the guardrail tests (auth, presign, demo-mode, reviewer isolation, hidden-field persistence, AC-259 transit). Report before/after for npm test and full pr-gate, and add the pr-gate wall-clock trend to speed-report.json alongside the budget MRQ-23 already tracks.
