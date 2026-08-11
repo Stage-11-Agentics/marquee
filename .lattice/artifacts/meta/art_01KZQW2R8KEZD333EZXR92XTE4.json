@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T07:37:35Z",
+  "created_by": "agent:delegator-mrq-28",
+  "custom_fields": {
+    "url": "https://forgejo.stage11.ai/atin/marquee/pulls/38"
+  },
+  "id": "art_01KZQW2R8KEZD333EZXR92XTE4",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open PR against master at exact head d4d7691.",
+  "tags": [],
+  "title": "MRQ-28 Forgejo PR #38",
+  "token_usage": null,
+  "type": "reference"
+}

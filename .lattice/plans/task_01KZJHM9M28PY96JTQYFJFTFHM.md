@@ -86,3 +86,5 @@ Review artifact: `art_01KZQVH38SQ6DBQ2TC71TBETN2` (single-agent implementation r
 6. **MINOR — prototype fidelity:** Resolved by making the four metric tiles actionable, restoring the exact head copy, `N shown · M selected`, wave/session metadata, and the colored Track column. These remain presentation-only; no new lifecycle writer is introduced.
 
 All Cycle-2 findings are triaged above; implementation may proceed against this amended plan.
+
+## Reset 2026-08-11 by agent:delegator-mrq-24

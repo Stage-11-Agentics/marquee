@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T07:36:37Z",
+  "created_by": "agent:delegator-mrq-28",
+  "custom_fields": {},
+  "id": "art_01KZQW0ZV88Q3V4HFT8CGA3YFA",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZQW0ZV88Q3V4HFT8CGA3YFA.md",
+    "size_bytes": 954
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Running Worker fixture, final PR gate, OpenAPI manifest, and AC trace all pass.",
+  "tags": [],
+  "title": "MRQ-28 exact-head validation",
+  "token_usage": null,
+  "type": "note"
+}
