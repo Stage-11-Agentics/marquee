@@ -1,0 +1,104 @@
+/*
+ * Delivery health — Flight Deck instrument panel.
+ *
+ * This screen refreshes under the reader, so every element that can change is
+ * given its space up front: fixed-width status marks, reserved heights for the
+ * lines that swap, tabular figures on every number. Nothing here may move when
+ * a state flips.
+ */
+
+.health-page { display: grid; gap: 14px; }
+
+/* --- status mark: one fixed-width part used by every surface on the screen --- */
+.health-level { align-items: center; display: inline-flex; flex: 0 0 auto; gap: 6px; width: 86px; }
+.health-dot { border-radius: 50%; display: block; flex: 0 0 auto; height: 9px; width: 9px; }
+.health-level-word { font: 600 9px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.level-ok .health-dot { background: var(--ok); }
+.level-ok .health-level-word { color: var(--ok); }
+.level-warn .health-dot { background: var(--warn); }
+.level-warn .health-level-word { color: var(--warn); }
+.level-alarm .health-dot { background: var(--alarm); }
+.level-alarm .health-level-word { color: var(--alarm); }
+.level-unknown .health-dot { background: var(--line-strong); }
+.level-unknown .health-level-word { color: var(--muted); }
+
+/* --- the verdict --- */
+.health-summary { align-items: center; border-left: 3px solid var(--line-strong); display: grid; gap: 14px; grid-template-columns: 86px minmax(0, 1fr) 132px; min-height: 84px; padding: 16px 18px; }
+.health-summary.level-ok { border-left-color: var(--ok); }
+.health-summary.level-warn { border-left-color: var(--warn); background: var(--warning-soft); }
+.health-summary.level-alarm { border-left-color: var(--alarm); background: var(--alarm-wash); }
+.health-summary-body { display: grid; gap: 5px; min-height: 58px; }
+.health-summary-body strong { font: 600 16px/1.25 var(--sans); letter-spacing: -.01em; }
+.health-summary-body span { color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
+.health-checked { color: var(--muted); font: 400 10px/1.3 var(--mono); text-align: right; }
+
+/* --- capability panel: eight rows, always --- */
+.health-capabilities { display: grid; overflow: hidden; }
+.health-capability { align-items: center; border-bottom: 1px solid var(--line); color: inherit; display: grid; gap: 14px; grid-template-columns: 86px minmax(0, 1fr) 18px; min-height: 92px; padding: 13px 18px; text-decoration: none; }
+.health-capability:last-child { border-bottom: 0; }
+.health-capability.is-link:hover { background: var(--accent-soft); }
+.health-capability-body { display: grid; gap: 3px; min-height: 66px; }
+.health-capability-label { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.health-capability-headline { font: 600 13px/1.35 var(--sans); font-variant-numeric: tabular-nums; }
+.health-capability-detail { color: var(--ink-soft); font-size: 11.5px; font-variant-numeric: tabular-nums; line-height: 1.45; min-height: 34px; }
+.health-capability-go { color: var(--muted); font: 400 12px/1 var(--mono); text-align: right; width: 18px; }
+.health-capability.is-link:hover .health-capability-go { color: var(--accent-dark); }
+
+/* --- send allowance --- */
+.health-quota .card-head { align-items: center; }
+.health-quota-figures { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.health-quota-figures > span { display: grid; gap: 5px; }
+.health-quota-figures strong { font: 400 26px/1 var(--mono); font-variant-numeric: tabular-nums lining-nums; letter-spacing: -.045em; }
+.health-quota-bar { background: var(--sunk); border: 1px solid var(--line-strong); display: flex; height: 10px; margin: 14px 0 12px; overflow: hidden; }
+.health-quota-used { background: var(--accent); display: block; height: 100%; }
+.health-quota-claimed { background: repeating-linear-gradient(135deg, var(--line-strong) 0 3px, transparent 3px 6px); display: block; height: 100%; }
+.health-quota.level-warn .health-quota-used { background: var(--warn); }
+.health-quota.level-alarm .health-quota-used { background: var(--alarm); }
+.health-quota-line { font-size: 12px; line-height: 1.55; margin: 0; min-height: 38px; }
+.health-quota-line strong { display: inline; }
+
+/* --- totals strip --- */
+.health-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; }
+.health-total { border-right: 1px solid var(--line); display: grid; gap: 6px; min-height: 88px; padding: 15px 16px; }
+.health-total:last-child { border-right: 0; }
+.health-total strong { font: 400 27px/1 var(--mono); font-variant-numeric: tabular-nums lining-nums; letter-spacing: -.045em; }
+
+/* --- the ledger --- */
+.health-ledger-body { padding: 0; }
+.health-owed-reasons { border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; min-height: 46px; padding: 12px 18px; }
+.health-reason { align-items: center; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: 2px; display: inline-flex; gap: 7px; min-height: 22px; padding: 3px 9px; }
+.health-reason strong { font: 400 11px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.health-reason > span { color: var(--ink-soft); font-size: 10.5px; }
+.health-reason.level-alarm { background: var(--alarm-wash); border-color: #e6b8b2; }
+.health-reason.level-warn { background: var(--warning-soft); border-color: #e3cda2; }
+
+.health-owed-head, .health-owed-row { display: grid; gap: 14px; grid-template-columns: 86px 200px minmax(0, 1fr) 92px 62px; padding: 0 18px; }
+.health-owed-head { border-bottom: 1px solid var(--line-strong); color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .14em; min-height: 32px; align-items: center; text-transform: uppercase; }
+.health-owed-head > span:last-child, .health-owed-age { text-align: right; }
+.health-owed-list { display: grid; }
+.health-owed-row { align-items: center; border-bottom: 1px solid var(--line); color: inherit; min-height: 62px; padding-bottom: 11px; padding-top: 11px; text-decoration: none; }
+.health-owed-row:last-child { border-bottom: 0; }
+.health-owed-row:hover { background: var(--accent-soft); }
+.health-owed-person, .health-owed-reason { display: grid; gap: 3px; min-height: 34px; min-width: 0; }
+.health-owed-person strong, .health-owed-reason strong { font: 600 12px/1.3 var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-owed-person small, .health-owed-reason small { color: var(--muted); font-size: 10.5px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-owed-decision { color: var(--ink-soft); display: grid; font: 400 11px/1.3 var(--mono); gap: 3px; }
+.health-owed-decision small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.health-owed-age { color: var(--ink-soft); font: 400 12px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.health-ledger-clear { color: var(--ink-soft); font-size: 12px; line-height: 1.55; margin: 0; min-height: 40px; padding: 18px; }
+.health-ledger-foot { border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; margin: 0; min-height: 38px; padding: 12px 18px; }
+
+@media (max-width: 1000px) {
+  /* The wide table scrolls inside its own card. The min-width belongs to the
+     rows, never to the box that scrolls them, or the card grows instead. */
+  .health-ledger-body { overflow-x: auto; }
+  .health-owed-head, .health-owed-row { grid-template-columns: 86px 160px minmax(240px, 1fr) 92px 62px; min-width: 720px; }
+}
+
+@media (max-width: 760px) {
+  .health-summary { grid-template-columns: 86px minmax(0, 1fr); }
+  .health-checked { grid-column: 2; text-align: left; }
+  .health-quota-figures, .health-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .health-total:nth-child(2n) { border-right: 0; }
+  .health-total:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
+}

@@ -9,6 +9,7 @@ const quickSearch = readFileSync(new URL("../../src/ui/shell/QuickSearch.tsx", i
 const matcher = readFileSync(new URL("../../src/lib/quick-search.ts", import.meta.url), "utf8");
 const searchRoute = readFileSync(new URL("../../src/routes/search.routes.ts", import.meta.url), "utf8");
 const speed = readFileSync(new URL("../../scripts/checks/speed.ts", import.meta.url), "utf8");
+const deliveryHealthShell = readFileSync(new URL("../../src/ui/health/DeliveryHealthShell.tsx", import.meta.url), "utf8");
 
 const routeRows = [...routeTable.matchAll(/^\s*\{ id: "([^"]+)", path: "([^"]+)"[^\n]*\},?$/gm)].map((match) => ({
   id: match[1],
@@ -19,9 +20,14 @@ const routeRows = [...routeTable.matchAll(/^\s*\{ id: "([^"]+)", path: "([^"]+)"
 test("AC-101 · every AppShell admin route is covered by one shared QuickSearch mount", () => {
   assert.ok(routeRows.length >= 20, "route-table contract should enumerate the installed routes");
   const external = routeRows.filter((row) => row.source.includes("external: true"));
-  assert.deepEqual(external.map((row) => row.id).sort(), ["event-site", "portal"]);
+  assert.deepEqual(external.map((row) => row.id).sort(), ["delivery-health", "event-site", "portal"]);
   const separate = routeRows.filter((row) => row.source.includes("external: true") || row.id === "reviewer");
-  assert.deepEqual(separate.map((row) => row.id).sort(), ["event-site", "portal", "reviewer"]);
+  assert.deepEqual(separate.map((row) => row.id).sort(), ["delivery-health", "event-site", "portal", "reviewer"]);
+  // Delivery health carries the shared chrome itself, so the guarantee holds
+  // there the same way: one shared search mount over the same route table.
+  assert.equal((deliveryHealthShell.match(/<QuickSearch\b/g) ?? []).length, 1);
+  assert.match(deliveryHealthShell, /<Sidebar\b/);
+  assert.match(deliveryHealthShell, /<Topbar\b/);
   const admin = routeRows.filter((row) => !row.source.includes("external: true") && !["api-docs", "reviewer"].includes(row.id));
   assert.equal(admin.length, routeRows.length - external.length - 2);
   assert.match(routeTable, /route\.id !== "reviewer"/);
