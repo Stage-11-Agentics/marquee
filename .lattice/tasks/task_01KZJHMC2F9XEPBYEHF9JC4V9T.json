@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "0B35D9AA-3B7F-4E94-A2D8-577798AB4AF6",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:46Z",
   "created_by": "agent:orchestrator-intake",
@@ -25,10 +25,15 @@
       "id": "art_01KZR452525A0G4SBB3WXE13N6",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZR46W3P8ENWTRRT0J76P1JE",
+      "role": "validation",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZJHMC2F9XEPBYEHF9JC4V9T",
-  "last_event_id": "ev_01KZR452535MQWMZM296BAM70P",
+  "last_event_id": "ev_01KZR46W3P8ENWTRRT0J76P1JE",
   "last_status_changed_at": "2026-08-11T09:58:16Z",
   "linked_files": [],
   "priority": "medium",
@@ -48,6 +53,6 @@
   "tags": null,
   "title": "Audit \u2014 reviewer anonymity byte-scan",
   "type": "task",
-  "updated_at": "2026-08-11T09:58:40Z",
+  "updated_at": "2026-08-11T09:59:39Z",
   "urgency": null
 }
