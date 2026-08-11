@@ -142,7 +142,7 @@ test("CONTRACT · the manifest has one guarded reviewer inventory and guarded wr
     writeReviewerComparison: "authorizeReviewerScope",
     getReviewerSubmission: "authorizeReviewerScope",
     getReviewerSubmissionFiles: "authorizeReviewerScope",
-    exportReviewerQueue: "authorizeReviewerScope",
+    exportReviewerQueue: "reviewerQueue",
     writeReviewerEvaluation: "authorizeReviewerScope",
   };
   for (const route of reviewerRoutes) {
@@ -154,10 +154,13 @@ test("CONTRACT · the manifest has one guarded reviewer inventory and guarded wr
 
   const reviewModule = parsedModules.find(({ module }) => module.path === "src/routes/review.routes.ts");
   assert.ok(reviewModule);
-  for (const helper of ["reviewerQueue", "reviewerQueuePayload", "comparisonQueuePayload"]) {
+  const reviewerQueueBody = functionBody(reviewModule.sourceFile, "reviewerQueue");
+  assert.ok(reviewerQueueBody, "missing reviewer helper reviewerQueue");
+  assert.match(reviewerQueueBody, /authorizeReviewerQueueScope/);
+  for (const helper of ["reviewerQueuePayload", "comparisonQueuePayload"]) {
     const body = functionBody(reviewModule.sourceFile, helper);
     assert.ok(body, `missing reviewer helper ${helper}`);
-    assert.match(body, /authorizeReviewerScope/);
+    assert.match(body, helper === "reviewerQueuePayload" ? /reviewerQueue/ : /authorizeReviewerQueueScope/);
   }
   for (const writer of ["writeReviewerComparison", "writeReviewerEvaluation"]) {
     const route = reviewerRoutes.find(({ operationId }) => operationId === writer);

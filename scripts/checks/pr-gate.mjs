@@ -14,6 +14,7 @@ const checks = [
   ["test types", tsc, ["-p", "tsconfig.test.json", "--noEmit"]],
   ["production build", vite, ["build"]],
   ["design contract", "npm", ["run", "check:design"]],
+  ["API contract", "npm", ["run", "check:api"]],
   ["hermetic fast suite", "npm", ["test"]],
   ["merged AC trace", "npm", ["run", "trace:ac", "--", "--scope=merged", `--ticket=${args.ticket}`]],
 ];

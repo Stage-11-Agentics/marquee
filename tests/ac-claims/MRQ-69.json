@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-69",
+  "owns": [],
+  "exercises": ["AC-3", "AC-22", "AC-25", "AC-62", "AC-119", "AC-133", "AC-234", "AC-244", "AC-246"],
+  "notes": "MRQ-69 owns no new automatic AC. It exercises existing seed, reviewer, answer-projection, admin-record, and queue contracts while remediating the audit findings."
+}

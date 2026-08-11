@@ -116,12 +116,17 @@ function checkDirectSeedShape(rows: Awaited<ReturnType<typeof buildSeedRows>>): 
   const overdueTasks = seedRowsByTable(rows, "speaker_tasks").filter((row) => row.status === "open" && Number(row.due_at) < FROZEN_NOW);
   assert.equal(submissions.length, 1_000, "seed must contain exactly 1,000 submissions");
   assert.equal(submissions.filter((row) => row.status === "accepted").length, 60, "seed must contain 60 accepted submissions");
+  assert.ok(
+    submissions.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length >= 25,
+    "seed must contain at least 25 accepted bypass Sessions",
+  );
   assert.ok(speakerMembers.size >= 150, `seed must expose >=150 accepted speaker memberships, found ${speakerMembers.size}`);
   assert.equal(unreviewed.length, ORGANIZER_UNREVIEWED_ASSIGNMENTS, "organizer round-one assignment count drifted");
   assert.ok(overdueTasks.length >= 10, `seed must contain >=10 overdue open tasks, found ${overdueTasks.length}`);
   return {
     submissions: submissions.length,
     accepted_submissions: submissions.filter((row) => row.status === "accepted").length,
+    accepted_sessions: submissions.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length,
     speaker_memberships: speakerMembers.size,
     organizer_unreviewed_assignments: unreviewed.length,
     overdue_tasks: overdueTasks.length,
@@ -135,6 +140,8 @@ export interface SeedApiEvidence {
   venues: { buildings: number; rooms: number; pinned_buildings: number; online_unpinned: boolean; access_minutes: number };
   agenda: { sessions: number; formats: number; tracks: number; visible_person_conflicts: number; visible_transit_conflicts: number };
   reviewer_queue: { total: number; unreviewed_candidates: number };
+  reviewer_detail: { submission_id: string; populated_fields: number; files: number };
+  database: { submission_answers: number; submission_attachments: number; accepted_sessions: number };
   ugliness: { long_diacritic_names: number; long_titles: number; triple_speaker_submissions: number; four_person_panels: number; overdue_task_preview: number };
   direct_seed: Record<string, number>;
 }
@@ -187,6 +194,38 @@ export async function runSeedApiChecks(runtime: LocalRuntime): Promise<SeedApiEv
   assert.ok(forms.data.some((form) => form.id === "frm_cfp" && form.status === "open"), "public event API must expose the open CFP form");
   assert.ok(dashboard.task_preview.some((task) => Number(task.due_at) < FROZEN_NOW), "dashboard task preview must include an overdue task against the frozen demo clock");
 
+  const firstQueueSubmissionId = String(queue.data[0]?.id ?? "");
+  assert.ok(firstQueueSubmissionId, "reviewer queue must expose a seeded submission for detail proof");
+  const reviewerDetail = await client.json<{
+    id: string;
+    answers: Array<Record<string, unknown>>;
+    fields: Array<Record<string, unknown>>;
+    files: Array<Record<string, unknown>>;
+  }>(`/api/v1/events/${DEMO_EVENT_ID}/rounds/${ROUND_ONE_ID}/submissions/${encodeURIComponent(firstQueueSubmissionId)}`);
+  const populatedFields = reviewerDetail.body.fields.filter((field) =>
+    (field.value_text !== null && field.value_text !== undefined && String(field.value_text).trim() !== "")
+    || (field.value_json !== null && field.value_json !== undefined && String(field.value_json).trim() !== ""),
+  );
+  assert.equal(reviewerDetail.body.id, firstQueueSubmissionId, "reviewer detail must be the seeded queue submission");
+  assert.ok(reviewerDetail.body.answers.length > 0, "seeded reviewer detail must expose answer rows");
+  assert.ok(populatedFields.length >= 4, `seeded reviewer detail must expose populated fields, found ${populatedFields.length}`);
+  assert.ok(reviewerDetail.body.files.length > 0, "seeded reviewer detail must expose an attached file");
+
+  const databaseRow = (await runtime.query(`
+    SELECT
+      (SELECT COUNT(*) FROM submission_answers) AS submission_answers,
+      (SELECT COUNT(*) FROM attachments WHERE owner_type = 'submission_file') AS submission_attachments,
+      (SELECT COUNT(*) FROM submissions WHERE kind = 'session' AND status = 'accepted' AND bypass_evaluation = 1) AS accepted_sessions
+  `))[0] ?? {};
+  const database = {
+    submission_answers: Number(databaseRow.submission_answers ?? 0),
+    submission_attachments: Number(databaseRow.submission_attachments ?? 0),
+    accepted_sessions: Number(databaseRow.accepted_sessions ?? 0),
+  };
+  assert.ok(database.submission_answers > 0, "seed database must contain submission_answers");
+  assert.ok(database.submission_attachments > 0, "seed database must contain submission attachments");
+  assert.ok(database.accepted_sessions >= 25, "seed database must contain at least 25 accepted bypass Sessions");
+
   const names = rows.flatMap((row) => row.speakers.map((speaker) => speaker.name));
   const uniqueSpeakers = new Set(rows.flatMap((row) => row.speakers.map((speaker) => speaker.id)));
   const longNames = new Set(names.filter((name) => name === "Casey O'Connell-Singh" || name === "Mei-Ling de la Fontaine" || /[^\x00-\x7F]/.test(name)));
@@ -221,6 +260,12 @@ export async function runSeedApiChecks(runtime: LocalRuntime): Promise<SeedApiEv
       visible_transit_conflicts: transitConflicts.length,
     },
     reviewer_queue: { total: queue.total, unreviewed_candidates: queue.data.length },
+    reviewer_detail: {
+      submission_id: firstQueueSubmissionId,
+      populated_fields: populatedFields.length,
+      files: reviewerDetail.body.files.length,
+    },
+    database,
     ugliness: {
       long_diacritic_names: longNames.size,
       long_titles: longTitles.length,

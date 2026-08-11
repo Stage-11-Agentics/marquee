@@ -105,6 +105,7 @@ async function stopChild(child: Child): Promise<void> {
 export interface LocalRuntime {
   baseUrl: string;
   persistPath: string;
+  query(command: string): Promise<Array<Record<string, unknown>>>;
   environment: {
     kind: "local-wrangler-dev";
     runtime: "wrangler dev/miniflare";
@@ -150,9 +151,34 @@ export async function withLocalRuntime<T>(callback: (runtime: LocalRuntime) => P
       const detail = workerStderr.trim().slice(-6_000);
       throw new Error(`${error instanceof Error ? error.message : String(error)}${detail ? `\n${detail}` : ""}`);
     });
+    const query = async (command: string): Promise<Array<Record<string, unknown>>> => {
+      const result = await runCommand(WRANGLER, [
+        "d1", "execute", "DB", "--local", "--persist-to", persistPath,
+        "--command", command, "--json",
+      ]);
+      if (result.code !== 0) {
+        const detail = `${result.stdout}\n${result.stderr}`.trim().slice(-6_000);
+        throw new Error(`local D1 query failed (exit ${result.code})${detail ? `\n${detail}` : ""}`);
+      }
+      let payload: unknown;
+      try {
+        payload = JSON.parse(result.stdout) as unknown;
+      } catch (error) {
+        throw new Error(`local D1 query returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      const first = Array.isArray(payload) ? payload[0] : null;
+      if (!first || typeof first !== "object" || (first as { success?: unknown }).success !== true) {
+        throw new Error(`local D1 query was not successful: ${command}`);
+      }
+      const rows = (first as { results?: unknown }).results;
+      if (!Array.isArray(rows)) throw new Error(`local D1 query returned no result set: ${command}`);
+      return rows as Array<Record<string, unknown>>;
+    };
+
     return await callback({
       baseUrl: `http://127.0.0.1:${port}`,
       persistPath,
+      query,
       environment: {
         kind: "local-wrangler-dev",
         runtime: "wrangler dev/miniflare",

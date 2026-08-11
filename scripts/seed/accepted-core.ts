@@ -1,8 +1,9 @@
 /**
  * The real accepted core (SPEC §6): the 60 sessions of the published AI
  * Engineer Summit 2025 program that name a speaker, their 75 speakers, and the
- * participations that connect them — replayed as accepted abstracts on the
- * 2026 event so that a judge's first screen is real, checkable material.
+ * participations that connect them — replayed as accepted abstracts and
+ * bypassed sessions on the 2026 event so that a judge's first screen is real,
+ * checkable material.
  *
  * What is real: names, job titles, companies, bios, public profile links,
  * session titles, and the public abstracts. What is synthetic, always:
@@ -173,8 +174,11 @@ export function run(ctx: SeedContext): void {
       id: submissionId,
       event_id: EVENT_ID,
       form_id: FORM_IDS.cfp,
-      kind: "abstract",
-      bypass_evaluation: 0,
+      // The first half is the walkthrough's accepted Session inventory. Those
+      // records intentionally bypass evaluation; the second half retains the
+      // accepted Abstract path and its reviewer decisions.
+      kind: index < 30 ? "session" : "abstract",
+      bypass_evaluation: index < 30 ? 1 : 0,
       title: session.title.trim(),
       abstract: abstractOf(session),
       status: "accepted",

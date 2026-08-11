@@ -28,7 +28,13 @@ test("AC-3 · the seed has 1,000 submissions and a populated agenda", () => {
   const submissions = table("submissions");
   assert.equal(submissions.length, 1_000);
   assert.equal(submissions.filter((row) => row.status === "accepted").length, 60);
+  assert.ok(submissions.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length >= 25);
   assert.equal(table("agenda_items").filter((row) => row.kind === "session").length, 24);
+
+  const scheduledIds = new Set(table("agenda_items").filter((row) => row.submission_id).map((row) => row.submission_id));
+  const acceptedSessions = submissions.filter((row) => row.status === "accepted" && row.kind === "session");
+  assert.ok(acceptedSessions.some((row) => !scheduledIds.has(row.id)), "accepted Session can_schedule must remain reachable");
+  assert.ok(acceptedSessions.some((row) => scheduledIds.has(row.id) && table("agenda_items").some((item) => item.submission_id === row.id && item.is_published === 0)), "scheduled Session can_publish must remain reachable");
 
   const acceptedSpeakers = new Set(
     table("memberships").filter((row) => row.role === "speaker").map((row) => row.person_id),
@@ -158,7 +164,9 @@ test("CONTRACT · the full seed remains deterministic and public-safe", async ()
     assert.equal(person.headshot_attachment_id, null);
     assert.equal(person.is_demo, 1);
   }
-  assert.equal(table("attachments").length, 0);
+  const submissionFiles = table("attachments").filter((row) => row.owner_type === "submission_file");
+  assert.ok(submissionFiles.length >= 40);
+  assert.ok(submissionFiles.every((row) => row.status === "ready" && row.r2_etag));
   for (const submission of table("submissions").filter((row) => row.status !== "accepted")) {
     assert.match(submission.external_ref, /^synthetic:/);
   }

@@ -14,6 +14,16 @@ export interface ReviewerScopeRequest {
   operation: ReviewerScopeOperation;
 }
 
+export interface ReviewerQueueScopeRequest {
+  db: D1Database;
+  principal: Principal;
+  eventId: string;
+  roundEventId: string;
+  roundId: string;
+  submissionIds: readonly string[];
+  operation: ReviewerScopeOperation;
+}
+
 export interface AuthorizedReviewerScope {
   eventId: string;
   operation: ReviewerScopeOperation;
@@ -68,6 +78,37 @@ interface RoundRow {
   event_id: string;
 }
 
+const REVIEWER_TRACK_SCOPE_SQL = `
+  EXISTS (
+    SELECT 1
+    FROM submission_tracks carried
+    JOIN reviewer_track_scopes scope
+      ON scope.track_id = carried.track_id
+     AND scope.event_id = submission.event_id
+     AND scope.person_id = ?
+    WHERE carried.submission_id = submission.id
+  )
+`;
+
+const REVIEWER_ASSIGNMENT_SCOPE_SQL = `
+  EXISTS (
+    SELECT 1
+    FROM round_assignments assignment
+    LEFT JOIN committee_members member
+      ON member.committee_id = assignment.committee_id
+     AND member.person_id = ?
+    LEFT JOIN committees committee
+      ON committee.id = assignment.committee_id
+    WHERE assignment.round_id = ?
+      AND assignment.submission_id = submission.id
+      AND assignment.status IN ('assigned', 'complete')
+      AND (
+        assignment.reviewer_person_id = ?
+        OR (member.person_id IS NOT NULL AND committee.event_id = submission.event_id)
+      )
+  )
+`;
+
 /**
  * The single reviewer resource-authorization path (AC-246).
  *
@@ -106,31 +147,8 @@ export async function authorizeReviewerScope(
         FROM submissions submission
         WHERE submission.id = ?
           AND submission.event_id = ?
-          AND EXISTS (
-            SELECT 1
-            FROM submission_tracks carried
-            JOIN reviewer_track_scopes scope
-              ON scope.track_id = carried.track_id
-             AND scope.event_id = submission.event_id
-             AND scope.person_id = ?
-            WHERE carried.submission_id = submission.id
-          )
-          AND EXISTS (
-            SELECT 1
-            FROM round_assignments assignment
-            LEFT JOIN committee_members member
-              ON member.committee_id = assignment.committee_id
-             AND member.person_id = ?
-            LEFT JOIN committees committee
-              ON committee.id = assignment.committee_id
-            WHERE assignment.round_id = ?
-              AND assignment.submission_id = submission.id
-              AND assignment.status IN ('assigned', 'complete')
-              AND (
-                assignment.reviewer_person_id = ?
-                OR (member.person_id IS NOT NULL AND committee.event_id = submission.event_id)
-              )
-          )
+        AND ${REVIEWER_TRACK_SCOPE_SQL}
+        AND ${REVIEWER_ASSIGNMENT_SCOPE_SQL}
       ) AS allowed
     `)
     .bind(request.submissionId, request.eventId, personId, personId, request.roundId, personId)
@@ -147,6 +165,55 @@ export async function authorizeReviewerScope(
     roundId: request.roundId,
     submissionId: request.submissionId,
   };
+}
+
+/**
+ * Authorize a candidate set with one round-scoped query per bounded chunk.
+ * Queue reads already loaded and validated the round, so this preserves the
+ * same track and assignment predicate without repeating a round lookup or
+ * issuing one authorization query per card.
+ */
+export async function authorizeReviewerQueueScope(
+  request: ReviewerQueueScopeRequest,
+): Promise<AuthorizedReviewerScope[]> {
+  const personId = reviewerPersonIdForEvent(request.principal, request.eventId);
+  if (personId === null || request.roundEventId !== request.eventId) {
+    throw ApiError.forbidden("reviewer resource is outside your authorized tracks");
+  }
+
+  const submissionIds = [...new Set(request.submissionIds)];
+  const allowed = new Set<string>();
+  // D1's bind limit is finite; the queue is small today, but chunking keeps a
+  // large imported assignment batch from turning authorization into an error.
+  for (let offset = 0; offset < submissionIds.length; offset += 80) {
+    const chunk = submissionIds.slice(offset, offset + 80);
+    const result = await request.db.prepare(`
+      SELECT submission.id
+      FROM submissions submission
+      WHERE submission.event_id = ?
+        AND submission.id IN (${chunk.map(() => "?").join(",")})
+        AND ${REVIEWER_TRACK_SCOPE_SQL}
+        AND ${REVIEWER_ASSIGNMENT_SCOPE_SQL}
+    `).bind(
+      request.eventId,
+      ...chunk,
+      personId,
+      personId,
+      request.roundId,
+      personId,
+    ).all<{ id: string }>();
+    for (const row of result.results) allowed.add(row.id);
+  }
+
+  return submissionIds
+    .filter((submissionId) => allowed.has(submissionId))
+    .map((submissionId) => ({
+      eventId: request.eventId,
+      operation: request.operation,
+      personId,
+      roundId: request.roundId,
+      submissionId,
+    }));
 }
 
 /**

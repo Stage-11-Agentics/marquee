@@ -6,6 +6,7 @@ import type { Principal } from "../api/runtime";
 import { validateComparisonRanking } from "../lib/evaluation-comparisons";
 import {
   authorizeReviewerScope,
+  authorizeReviewerQueueScope,
   reviewerPersonIdForEvent,
 } from "../lib/reviewer-scope";
 
@@ -184,33 +185,34 @@ async function comparisonCandidateIds(
 /**
  * The queue is a materialized view of the shared authorization helper. The
  * candidate query is only an efficient pre-filter; every returned ID still
- * passes authorizeReviewerScope before any evaluator-visible fields load.
+ * passes the shared batch authorization seam before any evaluator-visible
+ * fields load.
  */
 async function reviewerQueue(
   db: D1Database,
   principal: Principal,
   eventId: string,
-  roundId: string,
+  round: RoundRow,
 ): Promise<string[]> {
   const personId = reviewerPersonIdForEvent(principal, eventId);
   if (personId === null) {
-    await authorizeReviewerScope({ db, principal, eventId, roundId, submissionId: "unknown", operation: "queue" });
+    await authorizeReviewerQueueScope({
+      db, principal, eventId, roundEventId: eventId, roundId: round.id, submissionIds: [], operation: "queue",
+    });
     return [];
   }
-  const candidates = await assignedSubmissionIds(db, eventId, roundId, personId);
-  const allowed: string[] = [];
-  for (const submissionId of candidates) {
-    try {
-      await authorizeReviewerScope({ db, principal, eventId, roundId, submissionId, operation: "queue" });
-      allowed.push(submissionId);
-    } catch (error) {
-      // A direct assignment without an intersecting carried track is not a
-      // queue item. It must not prevent other authorized cards from loading.
-      if (error instanceof ApiError && error.status === 403) continue;
-      throw error;
-    }
-  }
-  return allowed;
+  const candidates = await assignedSubmissionIds(db, eventId, round.id, personId);
+  const authorizations = await authorizeReviewerQueueScope({
+    db,
+    principal,
+    eventId,
+    roundEventId: eventId,
+    roundId: round.id,
+    submissionIds: candidates,
+    operation: "queue",
+  });
+  const authorized = new Set(authorizations.map((authorization) => authorization.submissionId));
+  return candidates.filter((submissionId) => authorized.has(submissionId));
 }
 
 async function reviewerTrackScopes(db: D1Database, eventId: string, personId: string): Promise<ScopeRow[]> {
@@ -239,15 +241,16 @@ async function activeRoundForEvent(db: D1Database, eventId: string, principal: P
       const candidates = round.mode === "comparison"
         ? await comparisonCandidateIds(db, eventId, round.id, personId)
         : await assignedSubmissionIds(db, eventId, round.id, personId);
-      for (const submissionId of candidates) {
-        try {
-          await authorizeReviewerScope({ db, principal, eventId, roundId: round.id, submissionId, operation: "queue" });
-          return round;
-        } catch (error) {
-          if (error instanceof ApiError && error.status === 403) continue;
-          throw error;
-        }
-      }
+      const authorizations = await authorizeReviewerQueueScope({
+        db,
+        principal,
+        eventId,
+        roundEventId: eventId,
+        roundId: round.id,
+        submissionIds: candidates,
+        operation: "queue",
+      });
+      if (authorizations.length > 0) return round;
     }
   }
   const round = rounds.results[0];
@@ -255,26 +258,32 @@ async function activeRoundForEvent(db: D1Database, eventId: string, principal: P
   return round;
 }
 
-async function queueRow(db: D1Database, eventId: string, submissionId: string): Promise<QueueRow | null> {
-  const row = await db.prepare(`
-    SELECT submission.id, submission.title, submission.abstract, format.name AS format,
-      COALESCE((
-        SELECT json_group_array(json_object(
-          'id', ordered.id, 'name', ordered.name, 'color', ordered.color, 'is_primary', ordered.is_primary
-        ))
-        FROM (
-          SELECT carried.id, track.name, track.color, carried.is_primary
-          FROM submission_tracks carried
-          JOIN tracks track ON track.id = carried.track_id
-          WHERE carried.submission_id = submission.id
-          ORDER BY carried.is_primary DESC, track.position, track.id
-        ) ordered
-      ), '[]') AS tracks
-    FROM submissions submission
-    LEFT JOIN formats format ON format.id = submission.format_id
-    WHERE submission.id = ? AND submission.event_id = ?
-  `).bind(submissionId, eventId).first<QueueRow>();
-  return row ?? null;
+async function queueRows(db: D1Database, eventId: string, submissionIds: readonly string[]): Promise<Map<string, QueueRow>> {
+  const rows = new Map<string, QueueRow>();
+  const uniqueIds = [...new Set(submissionIds)];
+  for (let offset = 0; offset < uniqueIds.length; offset += 80) {
+    const chunk = uniqueIds.slice(offset, offset + 80);
+    const result = await db.prepare(`
+      SELECT submission.id, submission.title, submission.abstract, format.name AS format,
+        COALESCE((
+          SELECT json_group_array(json_object(
+            'id', ordered.id, 'name', ordered.name, 'color', ordered.color, 'is_primary', ordered.is_primary
+          ))
+          FROM (
+            SELECT carried.id, track.name, track.color, carried.is_primary
+            FROM submission_tracks carried
+            JOIN tracks track ON track.id = carried.track_id
+            WHERE carried.submission_id = submission.id
+            ORDER BY carried.is_primary DESC, track.position, track.id
+          ) ordered
+        ), '[]') AS tracks
+      FROM submissions submission
+      LEFT JOIN formats format ON format.id = submission.format_id
+      WHERE submission.event_id = ? AND submission.id IN (${chunk.map(() => "?").join(",")})
+    `).bind(eventId, ...chunk).all<QueueRow>();
+    for (const row of result.results) rows.set(row.id, row);
+  }
+  return rows;
 }
 
 async function detailRow(db: D1Database, eventId: string, submissionId: string): Promise<DetailRow | null> {
@@ -419,12 +428,12 @@ async function reviewerQueuePayload(
   eventId: string,
   round: RoundRow,
 ): Promise<Record<string, unknown>> {
-  const ids = await reviewerQueue(db, principal, eventId, round.id);
+  const ids = await reviewerQueue(db, principal, eventId, round);
+  const rows = await queueRows(db, eventId, ids);
   const personId = reviewerPersonIdForEvent(principal, eventId);
   const data: Array<Record<string, unknown>> = [];
   for (const [index, submissionId] of ids.entries()) {
-    await authorizeReviewerScope({ db, principal, eventId, roundId: round.id, submissionId, operation: "queue" });
-    const row = await queueRow(db, eventId, submissionId);
+    const row = rows.get(submissionId) ?? null;
     if (row) data.push({ ...row, tracks: parseJsonArray(row.tracks), queue_id: row.id, position: index + 1 });
   }
   return {
@@ -487,25 +496,25 @@ async function comparisonQueuePayload(
   const personId = reviewerPersonIdForEvent(principal, eventId);
   if (personId === null) throw ApiError.forbidden("reviewer resource is outside your authorized tracks");
   const candidates = await comparisonCandidateIds(db, eventId, round.id, personId);
+  const authorizations = await authorizeReviewerQueueScope({
+    db,
+    principal,
+    eventId,
+    roundEventId: eventId,
+    roundId: round.id,
+    submissionIds: candidates,
+    operation: "queue",
+  });
+  const eligibleIds = authorizations.map((authorization) => authorization.submissionId);
+  const rows = await queueRows(db, eventId, eligibleIds.slice(0, 3));
   const data: Array<Record<string, unknown>> = [];
-  let eligibleCount = 0;
-  for (const submissionId of candidates) {
-    try {
-      await authorizeReviewerScope({ db, principal, eventId, roundId: round.id, submissionId, operation: "queue" });
-    } catch (error) {
-      // A scope edit can leave a stale assignment behind. It is not a queue
-      // item and must not prevent other authorized comparison cards loading.
-      if (error instanceof ApiError && error.status === 403) continue;
-      throw error;
-    }
-    eligibleCount += 1;
-    if (data.length === 3) continue;
-    const row = await queueRow(db, eventId, submissionId);
+  for (const submissionId of eligibleIds.slice(0, 3)) {
+    const row = rows.get(submissionId);
     if (row) data.push({ ...row, tracks: parseJsonArray(row.tracks), queue_id: row.id, position: data.length + 1 });
   }
   return {
     data,
-    eligible_count: eligibleCount,
+    eligible_count: eligibleIds.length,
     plan: { id: round.plan_id, name: round.plan_name },
     round: { anonymized: Boolean(round.anonymized), id: round.id, mode: round.mode, name: round.name, position: round.position },
     scopes: await reviewerTrackScopes(db, eventId, personId),
@@ -680,11 +689,12 @@ const reviewerExportRoute = defineApiRoute(
     const { eventId, roundId } = context.req.valid("param");
     context.req.valid("query");
     const principal = context.get("principal");
-    const ids = await reviewerQueue(context.env.DB, principal, eventId, roundId);
+    const round = await roundForEvent(context.env.DB, eventId, roundId);
+    const ids = await reviewerQueue(context.env.DB, principal, eventId, round);
+    const rows = await queueRows(context.env.DB, eventId, ids);
     const lines = ["submission_id,title,abstract,format,tracks"];
     for (const submissionId of ids) {
-      await authorizeReviewerScope({ db: context.env.DB, principal, eventId, roundId, submissionId, operation: "export" });
-      const row = await queueRow(context.env.DB, eventId, submissionId);
+      const row = rows.get(submissionId) ?? null;
       if (row) {
         const tracks = parseJsonArray(row.tracks)
           .map((track) => (track as { name?: string }).name ?? "")

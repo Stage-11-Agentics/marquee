@@ -9,6 +9,7 @@ import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { projectApplicableAnswers, type FormAnswerValue } from "../lib/form-conditions";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -413,7 +414,7 @@ async function validateOwnedIds(
   orgId: string,
   eventId: string,
   body: z.infer<typeof createSubmissionInput>,
-): Promise<{ trackIds: string[]; formatId: string | null; waveId: string | null }> {
+): Promise<{ trackIds: string[]; formatId: string | null; waveId: string | null; answers: AnswerInput[] }> {
   const trackIds = [...new Set([...(body.track_ids ?? body.tracks ?? []), ...(body.primary_track_id ? [body.primary_track_id] : [])])];
   if (trackIds.length > 0) {
     const result = await db.prepare(`SELECT id FROM tracks WHERE event_id = ? AND id IN (${trackIds.map(() => "?").join(",")})`).bind(eventId, ...trackIds).all<{ id: string }>();
@@ -439,20 +440,51 @@ async function validateOwnedIds(
     if (!rule) throw ApiError.unprocessable("routing rule does not belong to this conference", "applied_rule_id");
   }
   const answers = body.answers as AnswerInput[] | undefined;
+  let projectedAnswers: AnswerInput[] = [];
   if (answers?.length) {
     const fields = await db.prepare(`
-      SELECT field.id
+      SELECT field.id, field.key, field.required, field.type, field.config, field.condition
       FROM form_fields field
-      JOIN forms form ON form.id = field.form_id
-      WHERE form.event_id = ? AND field.id IN (${answers.map(() => "?").join(",")})
-    `).bind(eventId, ...answers.map((answer) => answer.field_id)).all<{ id: string }>();
-    if (fields.results.length !== new Set(answers.map((answer) => answer.field_id)).size) throw ApiError.unprocessable("every answer field must belong to this conference", "answers");
+      JOIN forms form ON form.id = field.form_id AND form.event_id = ?
+      WHERE field.form_id = COALESCE(?, (SELECT form_id FROM form_fields WHERE id = ?))
+    `).bind(eventId, body.form_id ?? null, answers[0]!.field_id).all<{
+      id: string;
+      key: string;
+      required: 0 | 1;
+      type: string;
+      config: string | null;
+      condition: string | null;
+    }>();
+    const fieldsById = new Map(fields.results.map((field) => [field.id, field]));
+    const suppliedFields = answers.map((answer) => fieldsById.get(answer.field_id));
+    if (suppliedFields.some((field) => !field)) throw ApiError.unprocessable("every answer field must belong to this form", "answers");
+
+    const rawAnswers: Record<string, unknown> = {};
+    for (const [index, answer] of answers.entries()) {
+      const field = suppliedFields[index]!;
+      rawAnswers[field.key] = answer.value_json === undefined ? answer.value_text ?? null : answer.value_json;
+    }
+    const projection = projectApplicableAnswers(fields.results, rawAnswers);
+    const suppliedKeys = new Set(suppliedFields.map((field) => field!.key));
+    const issues = projection.issues.filter((issue) => suppliedKeys.has(issue.fieldKey));
+    if (issues.length > 0) {
+      throw ApiError.unprocessable("one or more supplied answers are invalid", issues[0]!.fieldKey, issues);
+    }
+    const fieldsByKey = new Map(fields.results.map((field) => [field.key, field]));
+    projectedAnswers = Object.entries(projection.answers).flatMap(([key, value]) => {
+      const field = fieldsByKey.get(key);
+      if (!field) return [];
+      const answer: AnswerInput = { field_id: field.id };
+      if (typeof value === "string") answer.value_text = value;
+      else answer.value_json = value as FormAnswerValue;
+      return [answer];
+    });
   }
   // Keep the event organization in the function signature: it makes the
   // person ownership check below explicit at the call site and prevents a
   // future caller from silently widening the lookup.
   void orgId;
-  return { trackIds, formatId, waveId };
+  return { trackIds, formatId, waveId, answers: projectedAnswers };
 }
 
 const createSubmission = defineApiRoute(
@@ -540,7 +572,7 @@ const createSubmission = defineApiRoute(
         INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
       `).bind(newUlid(), id, trackId, trackId === (body.primary_track_id ?? owned.trackIds[0]) ? 1 : 0, now, now)),
-      ...((body.answers ?? []) as AnswerInput[]).map((answer) => context.env.DB.prepare(`
+      ...owned.answers.map((answer) => context.env.DB.prepare(`
         INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).bind(newUlid(), id, answer.field_id, answer.value_text ?? null, answer.value_json === undefined ? null : JSON.stringify(answer.value_json), now, now)),

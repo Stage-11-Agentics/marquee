@@ -62,6 +62,7 @@ test("CONTRACT · public answer projection and direct answer writers have an exp
     [
       { file: "src/routes/portal.routes.ts", count: 2 },
       { file: "src/routes/public-form.shared.ts", count: 1 },
+      { file: "src/routes/submission-record.routes.ts", count: 1 },
       { file: "src/ui/public/form/PublicForm.tsx", count: 1 },
     ],
     "projection call-site inventory changed; re-audit every consumer before adding or moving a writer. Observed: "

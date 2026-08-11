@@ -92,11 +92,13 @@ test("AC-255 · seeded physical venues carry verified coordinates, access, and b
   }
 });
 
-test("CONTRACT · the accepted core is exactly 60 accepted abstracts over at least 75 people", () => {
+test("CONTRACT · the accepted core is exactly 60 accepted records over at least 75 people", () => {
   const submissions = table("submissions").filter((row) => row.status === "accepted");
   assert.equal(submissions.length, 60);
   assert.equal(submissions.filter((row) => row.status === "accepted").length, 60);
-  assert.equal(submissions.filter((row) => row.kind === "abstract").length, 60);
+  assert.equal(submissions.filter((row) => row.kind === "session").length, 30);
+  assert.equal(submissions.filter((row) => row.kind === "abstract").length, 30);
+  assert.equal(submissions.filter((row) => row.kind === "session" && row.bypass_evaluation === 1).length, 30);
   assert.ok(table("people").length >= 75, `expected >=75 people, got ${table("people").length}`);
 
   // Provenance is unique and traceable back to the published 2025 program.
@@ -190,7 +192,12 @@ test("CONTRACT · no seeded address can ever deliver and no headshot is seeded",
     assert.equal(person.headshot_attachment_id, null, `${person.name} carries a headshot`);
     assert.equal(person.is_demo, 1, `${person.name} is outside reset:demo's scope`);
   }
-  assert.equal(table("attachments").length, 0, "the spine seeds no attachments");
+  const submissionFiles = table("attachments").filter((row) => row.owner_type === "submission_file");
+  assert.ok(submissionFiles.length >= 40, "the spine seeds reviewer submission files");
+  for (const file of submissionFiles) {
+    assert.equal(file.status, "ready");
+    assert.ok(file.r2_etag, `${file.id} must carry a provider completion tag`);
+  }
 });
 
 test("CONTRACT · rebuilding the seed produces byte-identical SQL", async () => {

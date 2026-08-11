@@ -82,7 +82,9 @@ export function run(ctx: SeedContext): void {
       duration_min: workshopParallel ? 90 : 45,
       room_id: roomId,
       track_id: submission.primary_track_id,
-      is_published: 1,
+      // Leave one scheduled Session unpublished so the record exposes the
+      // publish action while the remaining scheduled cards are public.
+      is_published: index === accepted.length - 1 ? 0 : 1,
       created_at: ctx.now,
       updated_at: ctx.now,
     });
