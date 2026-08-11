@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:130",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 2,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
   "created_by": "agent:orchestrator-intake",
@@ -25,10 +25,15 @@
       "id": "ev_01KZQ9NZDM4KC19S9M2DZ8CXP8",
       "role": "validation",
       "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZQ9ZK8Q145MC32JEJHQTA32",
+      "role": "validation",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZJHM803QMDPJ592AJZKGZKP",
-  "last_event_id": "ev_01KZQ9NZDM4KC19S9M2DZ8CXP8",
+  "last_event_id": "ev_01KZQ9ZK8Q145MC32JEJHQTA32",
   "last_status_changed_at": "2026-08-11T02:12:05Z",
   "linked_files": [],
   "priority": "medium",
@@ -62,6 +67,6 @@
   "tags": null,
   "title": "Public landing page with live pipeline preview",
   "type": "task",
-  "updated_at": "2026-08-11T02:16:02Z",
+  "updated_at": "2026-08-11T02:21:17Z",
   "urgency": null
 }

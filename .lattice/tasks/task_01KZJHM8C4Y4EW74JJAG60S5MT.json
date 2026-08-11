@@ -1,6 +1,8 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-11",
   "branch_links": [],
+  "c11_surface": "surface:142",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
   "comment_count": 0,
   "complexity": null,
   "created_at": "2026-08-09T05:58:42Z",
@@ -10,8 +12,8 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM8C4Y4EW74JJAG60S5MT",
-  "last_event_id": "ev_01KZJHME0SAD86E5R0P2N7W63X",
-  "last_status_changed_at": "2026-08-09T05:58:42Z",
+  "last_event_id": "ev_01KZQADTBS8ZB2VKC65S1K5NMF",
+  "last_status_changed_at": "2026-08-11T02:29:03Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -26,10 +28,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-11",
-  "status": "backlog",
+  "status": "in_planning",
   "tags": null,
   "title": "Program dashboard",
   "type": "task",
-  "updated_at": "2026-08-09T05:58:48Z",
+  "updated_at": "2026-08-11T02:29:03Z",
   "urgency": null
 }
