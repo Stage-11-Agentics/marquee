@@ -48,6 +48,12 @@ What a real guardrail test looks like: it asserts **the status code AND the abse
 
 **Some hand-review rituals are now machine-enforced — review the guard, not the count.** MRQ-32's `tests/node/comms.AC-250.test.mjs` asserts exactly one comms send route, no `/messages/send` alias, no direct `api.resend.com` fetch (so nothing bypasses the outbox), and exactly **2** occurrences of `insertOutbox(input, "always_live")`. It counts that precise expression rather than the loose `always_live` string, which would also match the policy comparisons and read 4. When a guard like this exists, the merge check shifts to **diffing the guard file itself and confirming its assertions were not loosened** — a weakened guard is worth more than a weakened implementation, because it silently re-opens everything it covered.
 
+## Open risk to the public push
+
+**`gitleaks` is not installed, so `check:repo`'s secret-scan component has never executed.** `check-repo.mjs:49` turns exit-127 into a `gitleaks-unavailable` *finding* rather than a hard failure, which means every prior clean-ish result was clean only of the Marquee-specific ruleset. **EVALUATION gate 16 claims "zero tokens, keys" over the pushed remote's full history — that claim is currently unverified.** Resolve before the public push: either install gitleaks (operator action) or establish that the local ruleset genuinely covers gate 16 and amend the gate to say so. MRQ-43 is scoping which.
+
+Related and NOT a defect: bare `npm run check:repo` exits 1 demanding explicit `--repo`/`--ref`. That is fail-closed and correct, and it is deliberately absent from `pr-gate` — gates 15 and 16 run it at publish time against the assembled orphan history and the pushed remote, not per-PR.
+
 ## Known footguns
 
 | Symptom | Reality |

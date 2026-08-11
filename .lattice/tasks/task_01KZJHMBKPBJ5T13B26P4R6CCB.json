@@ -10,10 +10,16 @@
   "custom_fields": {},
   "description": "BUILDPLAN: A-3 \u2014 audit track (\u00a75). **Owned by an auditor who did not write the code.**\n\nScope (verbatim): Mail containment \u2014 no module imports Resend but the consumer; **exactly two `send_policy='always_live'` write sites**; all seven triggers + bulk suppressed under demo mode.\nStarts when (verbatim): **From CP-2** (M-11 landed).\n\nThe two legal `always_live` write sites (B-8): the public-form confirmation for an address typed in that request, and the `smoke:mail`/`smoke:ics` harness. A third is a finding, not a judgement call.\nThis is guardrail G3, and trap 3 (Resend Free = 100 sends/day) is why it exists.\n\nACs: \u2014 (protects AC-38's live path and every demo-safe assertion)\nHours: 2\nWorkflow: fast-track\nShared files: none \u2014 audit artifact only.\nDeps: M-11\nPlan: filled in by delegator's plan phase",
   "done_at": null,
-  "evidence_refs": [],
+  "evidence_refs": [
+    {
+      "id": "art_01KZR04E9R7Z40V7JA0AGQY1FS",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZJHMBKPBJ5T13B26P4R6CCB",
-  "last_event_id": "ev_01KZQZZSSX39QHYK8VEXX6J2BB",
-  "last_status_changed_at": "2026-08-11T08:45:53Z",
+  "last_event_id": "ev_01KZR04E9VQZGSMQSENQ68SCCN",
+  "last_status_changed_at": "2026-08-11T08:47:16Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [
@@ -28,10 +34,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-45",
-  "status": "planned",
+  "status": "in_progress",
   "tags": null,
   "title": "Audit \u2014 mail containment and demo-safe suppression",
   "type": "task",
-  "updated_at": "2026-08-11T08:45:53Z",
+  "updated_at": "2026-08-11T08:48:25Z",
   "urgency": null
 }
