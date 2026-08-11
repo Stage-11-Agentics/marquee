@@ -1,0 +1,8 @@
+# Every path in this repo is owned by @BenevolentFutures.
+#
+# Paired with the `main` ruleset's "require code owner review", this means no
+# pull request can merge on approvals alone — a code owner has to sign off,
+# and the code owner is one person. Collaborators can branch, push, open PRs,
+# and review freely; landing anything on main is a manual call.
+
+* @BenevolentFutures
