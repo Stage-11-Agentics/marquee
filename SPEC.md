@@ -697,4 +697,23 @@ Writers: the upload routes in M-13. Readers: the CFP draft-resume path, submissi
 
 ---
 
+## Amendment 13 — the rename stops at the wire (2026-08-10, orchestration)
+
+Raised by MRQ-8 at merge: commit `9e8b425` renamed the organizer's noun **event → conference** in UI copy and app routes, but `SPEC.md` §4.2 and §9 still specify `/api/v1/events/...`, so the rename does not reach the wire surface.
+
+**Ruling: that is correct and deliberate. The wire API keeps `events`.**
+
+- **UI copy and app routes say "conference"** — that is the organizer's language and the only surface a judge reads.
+- **The HTTP API, OpenAPI document, and CLI keep `/api/v1/events/...`**, and the database keeps `event_id`.
+
+Why the rename stops here:
+
+1. MRQ-8 built the generated route manifest, the OpenAPI assembly, and `check:api`'s parity assertion against these paths. Renaming the wire now invalidates all three plus every downstream ticket's assumptions, mid-flight, days before the deadline.
+2. The schema column is `event_id`. Renaming the wire without renaming the schema would produce a *three*-way mismatch (UI "conference" / API "conference" / DB "event") — strictly worse than the current two-way one, where the internal identifier and the wire agree.
+3. No judge-visible benefit. The walkthrough is driven through the UI; the API earns its bonus by existing, being documented, and being honest — not by its noun.
+
+**Known, accepted divergence:** a judge who opens `/api/docs` sees `events` while the interface says "conference". That is a small coherence blemish, recorded here rather than hidden, and it is the cheaper of the two available inconsistencies. Post-competition, the clean fix is to rename schema, wire, and UI together in one migration.
+
+---
+
 *v1.4 contract revision, 2026-08-09; folded against `USER_STORIES.md` Amendments 1–9. Amendments follow that file's rules: **the next criteria append from AC-254**; deletions are struck, never recycled. Next input — client review and sign-off of the v1.4 prototype; only then mint `DESIGN.md` and hand the complete contract to orchestration.*
