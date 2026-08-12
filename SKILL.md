@@ -8,6 +8,15 @@ Use a scoped API token as a bearer credential. Set `MARQUEE_URL` and `MARQUEE_TO
 
 The command registry is:
 
+- `node cli/marquee.mjs setup claim-link`
+- `node cli/marquee.mjs setup health`
+- `node cli/marquee.mjs setup instance`
+- `node cli/marquee.mjs event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz>`
+- `node cli/marquee.mjs forms create <event-id> --set name=<name> --set slug=<slug> --set kind=abstract`
+- `node cli/marquee.mjs forms list <event-id>`
+- `node cli/marquee.mjs evaluation plan <event-id> --set name=<name>`
+- `node cli/marquee.mjs organizers list`
+- `node cli/marquee.mjs organizers invite`
 - `node cli/marquee.mjs event seed`
 - `node cli/marquee.mjs event show <event-id>`
 - `node cli/marquee.mjs event set <event-id> --set <key=value>`
@@ -33,6 +42,50 @@ The command registry is:
 - `node cli/marquee.mjs agenda move <event-id> <item-id> --set starts_at=<ms>`
 - `node cli/marquee.mjs agenda remove <event-id> <item-id>`
 - `node cli/marquee.mjs search <event-id> --query <text>`
+
+## Set up a new instance
+
+This chapter is for a fresh deployment: an empty Cloudflare account and a cloned repository. If `MARQUEE_URL` and `MARQUEE_TOKEN` already work, skip to Seed. Setup is conversational — three questions belong to the operator, so ask them before acting rather than guessing: which domain, whether to seed the demo conference alongside, and whether a Resend API key exists yet.
+
+Preconditions: Node 22.18+, `wrangler` authenticated against the operator's Cloudflare account, Workers Paid enabled. Confirm Workers Paid by creating a paid-only resource, not by reading an API that may lie about it.
+
+1. Create the resources and record their IDs in `wrangler.jsonc`: one D1 database, one R2 media bucket, one KV namespace, four queues. The exact commands are in the README under *Deploy to Cloudflare*; that sequence is the contract, follow it rather than improvising.
+2. Store the secrets with `wrangler secret put`: the Turnstile pair, the R2 signing keys, and the upload secrets. If the operator has no Resend key yet, say so and continue — the instance reports mail as not configured honestly, and warns before intake opens. Never block setup on mail.
+3. Build, migrate, optionally seed, deploy, then verify:
+
+```sh
+npx vite build
+CI=1 npx wrangler d1 migrations apply DB --remote
+npm run seed -- --remote        # only if the operator wants the demo alongside
+npx wrangler deploy
+node cli/marquee.mjs setup health --url "$MARQUEE_URL" --json
+```
+
+`setup health` names the build SHA the deployment is serving; confirm it matches what you shipped. It needs no credential, which is what makes it the first thing you can ask a fresh instance.
+
+4. Print the claim link and hand it to the human:
+
+```sh
+node cli/marquee.mjs setup claim-link --url "$MARQUEE_URL" --json
+```
+
+The response contains a one-time claim URL; you may append `?name=…&email=…` prefill from the operator's git config. **Never open the claim link yourself. Ownership must land on a person, not on an agent.** Tell the operator to open it in a browser; a used link is inert, and re-running this command is the recovery path for a locked-out instance, forever.
+
+5. Wait. When the human has claimed the instance, they hand you a scoped token (Marquee offers to mint one at claim). Export it as `MARQUEE_TOKEN` and verify it with a read before writing anything.
+
+6. Provision the conference through the API, confirming each returned state:
+
+```sh
+node cli/marquee.mjs event create --set name="…" --set starts_on=2027-04-14 --set ends_on=2027-04-15 --set timezone=America/New_York --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs tracks add "$EVENT_ID" --set name=Platform --set color=#3B82F6 --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs formats add "$EVENT_ID" --set name=Talk --set default_duration_min=30 --set min_duration_min=20 --set max_duration_min=45 --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs forms create "$EVENT_ID" --set name="Call for speakers" --set slug=cfp --set kind=abstract --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs evaluation plan "$EVENT_ID" --set name="Program committee" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
+
+Sane defaults are already set — one speaker minimum, format durations prefilled. Change only what the operator asked for. `setup instance` reports mail, uploads, spam protection, and domain, each derived from what is really configured; read it before you report anything about this deployment.
+
+7. **Stop before intake.** Do not publish the call for speakers. Report what you did, the instance status rows (mail included), and where the last step lives: opening intake is the operator's click, from the dashboard, with the consequences on screen.
 
 ## Seed
 

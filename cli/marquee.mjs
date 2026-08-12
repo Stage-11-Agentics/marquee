@@ -234,6 +234,26 @@ async function waitForReset(client, jobId) {
 
 async function execute(command, arguments_, options, flags, client) {
   const [root, verb] = command.path;
+  // Setup runs against an instance that has no credential yet, so these come
+  // before anything that resolves a token or an event.
+  if (root === "setup" && verb === "claim-link") {
+    return client.post("/api/v1/setup/claim-link");
+  }
+  if (root === "setup" && verb === "health") {
+    return client.get("/health");
+  }
+  if (root === "setup" && verb === "instance") {
+    return client.get("/api/v1/instance/status");
+  }
+  if (root === "organizers" && verb === "list") {
+    return client.get("/api/v1/org/members");
+  }
+  if (root === "organizers" && verb === "invite") {
+    return client.post("/api/v1/org/invites");
+  }
+  if (root === "event" && verb === "create") {
+    return client.post("/api/v1/events", requireSetValues(command, options));
+  }
   if (root === "event" && verb === "seed") {
     const current = await client.get("/api/v1/auth/me");
     // The demo reset is destructive to credential rows. A token that already
@@ -329,6 +349,15 @@ async function execute(command, arguments_, options, flags, client) {
       ? client.post(`${base}/schedule`, requireSetValues(command, options))
       : client.post(`${base}/publish`);
   }
+  if (root === "forms" && verb === "list") {
+    return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/forms`);
+  }
+  if (root === "forms" && verb === "create") {
+    return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/forms`, requireSetValues(command, options));
+  }
+  if (root === "evaluation" && verb === "plan") {
+    return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/plans`, requireSetValues(command, options));
+  }
   if (root === "tracks" || root === "formats") {
     const collection = `/api/v1/events/${encodeURIComponent(eventId)}/${root}`;
     if (verb === "list") return client.get(collection);
@@ -396,7 +425,11 @@ export async function main(argv = process.argv.slice(2)) {
   // API, so it must not demand a URL and a token it will not use.
   const client = command.local
     ? undefined
-    : new MarqueeClient({ url: option(parsed.options, "--url"), token: option(parsed.options, "--token") });
+    : new MarqueeClient({
+        url: option(parsed.options, "--url"),
+        token: option(parsed.options, "--token"),
+        requireToken: command.unauthenticated !== true,
+      });
   const result = await execute(command, arguments_, parsed.options, parsed.flags, client);
   output(result, parsed.flags.has("--json"));
 }

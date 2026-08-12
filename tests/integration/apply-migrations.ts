@@ -14,6 +14,7 @@ import criterionKindsMigrationSql from "../../migrations/0009_criterion_kinds.sq
 import boundFormOptionsMigrationSql from "../../migrations/0010_bound_form_options.sql?raw";
 import savedEmbedsMigrationSql from "../../migrations/0010_saved_embeds.sql?raw";
 import evaluationRoundCommitteesMigrationSql from "../../migrations/0010_evaluation_round_committees.sql?raw";
+import coldStartMigrationSql from "../../migrations/0011_cold_start.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -86,6 +87,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(boundFormOptionsMigrationSql),
     ...splitStatements(savedEmbedsMigrationSql),
     ...splitStatements(evaluationRoundCommitteesMigrationSql),
+    ...splitStatements(coldStartMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

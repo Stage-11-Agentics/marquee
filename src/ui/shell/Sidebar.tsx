@@ -9,13 +9,21 @@ export function Sidebar({ activeId, eventName, navigate, resetting, onReset }: {
   return <aside class="sidebar">
     <a class="brand" href="/dashboard" onClick={(event) => { event.preventDefault(); navigate("/dashboard"); }}><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
     {/*
-      This is a caption, not a picker. It was dressed as a control — bordered,
-      hover-lit, two lines — wrapped around a link back to the page you were
-      already on, so it promised a conference switch this build cannot perform.
-      The conference name is worth showing; the affordance was not. When real
-      multi-event lands, a genuine control replaces this element.
+      The name is a caption, not a picker. It was dressed as a control —
+      bordered, hover-lit, two lines — wrapped around a link back to the page
+      you were already on, so it promised a conference switch this build cannot
+      perform. The conference name is worth showing; the affordance was not.
+      When real multi-event lands, a genuine control replaces this element.
+
+      The ＋ beside it is the one thing here that does go somewhere: next year's
+      conference is the cold start most organizers actually live, and it opens
+      the same screen — and therefore the same create endpoint — that setting up
+      by hand uses.
     */}
-    <div class="event-context"><small>Conference</small><strong>{eventName}</strong></div>
+    <div class="event-context-row">
+      <div class="event-context"><small>Conference</small><strong>{eventName}</strong></div>
+      <a class="event-add" href="/conferences/new" title="Create conference" aria-label="Create conference" onClick={(event) => { event.preventDefault(); navigate("/conferences/new"); }}>＋</a>
+    </div>
     <Nav label="Program home" routes={routesFor("home")} activeId={activeId} navigate={navigate} />
     <div class="nav-label">Pipeline</div>
     <Nav label="Program lifecycle" routes={routesFor("pipeline")} activeId={activeId} navigate={navigate} />

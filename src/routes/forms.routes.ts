@@ -6,6 +6,7 @@ import { createListQuerySchema, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { FormFieldRow, FormFieldType, FormRow } from "../db/schema";
+import { writeAudit } from "../lib/audit";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { normalizeFieldConfig, resolveBoundOptions } from "../lib/bound-options";
@@ -517,6 +518,23 @@ async function setFormLifecycle(context: Context<ApiEnv>, eventId: string, formI
   return readFormDetail(context.env.DB, form);
 }
 
+/**
+ * Opening intake on a mail-less instance.
+ *
+ * The organizer is warned once, in the words of what it costs — no submission
+ * confirmations, no decision mail, no calendar invites — and then allowed to
+ * proceed, because they may be handling mail elsewhere and a hard block would
+ * be this product deciding it knows better (ruling D8, AC-285). The
+ * acknowledgment is recorded with its actor and time so the decision is a
+ * matter of record rather than a dialog nobody can prove was shown.
+ *
+ * Nothing here can refuse a publish. The dialog lives in the UI; this route's
+ * only job is to write down what the organizer knew when they pressed it.
+ */
+const publishAcknowledgement = z.object({
+  acknowledge_mail_unconfigured: z.boolean().optional(),
+});
+
 const publishEventForm = defineApiRoute(
   {
     method: "post",
@@ -524,11 +542,38 @@ const publishEventForm = defineApiRoute(
     operationId: "publishEventForm",
     summary: "Open a conference form",
     tags: ["Forms"],
-    request: { params: formParams },
+    request: {
+      params: formParams,
+      body: {
+        required: false,
+        content: { "application/json": { schema: publishAcknowledgement } },
+      },
+    },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
     responses: { 200: jsonResponse(formDetailSchema, "Opened form"), ...errorResponses([401, 403, 404, 409, 422, 500]) },
   },
-  async (context) => context.json(await setFormLifecycle(context, context.req.valid("param").eventId, context.req.valid("param").formId, "open"), 200),
+  async (context) => {
+    const { eventId, formId } = context.req.valid("param");
+    const detail = await setFormLifecycle(context, eventId, formId, "open");
+    const acknowledgement = await context.req
+      .json<z.infer<typeof publishAcknowledgement>>()
+      .catch(() => null);
+    if (acknowledgement?.acknowledge_mail_unconfigured === true) {
+      const auth = getAuth(context);
+      await writeAudit(context.env.DB, {
+        eventId,
+        actorKind: auth?.kind === "token" ? "api_token" : "user",
+        actorPersonId: auth?.kind === "session" ? auth.personId : null,
+        action: "form.published_without_mail",
+        entityType: "form",
+        entityId: formId,
+        after: { acknowledged: true },
+        now: Date.now(),
+        requestId: context.get("requestId") ?? null,
+      });
+    }
+    return context.json(detail, 200);
+  },
 );
 
 const closeEventForm = defineApiRoute(

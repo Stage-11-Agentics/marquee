@@ -45,9 +45,14 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
   const magicMintCalls = modules.flatMap((module) => callSites(module, "mintMagicLink"));
   const magicConsumeCalls = modules.flatMap((module) => callSites(module, "consumeMagicLink"));
 
-  // Positive controls: both intended issuers must remain present before the count can pass.
-  assert.equal(sessionCalls.length, 2, JSON.stringify(sessionCalls));
+  // Positive controls: every intended issuer must remain present before the
+  // count can pass. The cold start widened this set deliberately — a claim or
+  // an organizer invite mints a session from a token that predates its person —
+  // and `instance-claim.ts` is the ONE implementation of that, which is what
+  // AC-282's "the exchange path is the claim exchange path" asserts.
+  assert.equal(sessionCalls.length, 3, JSON.stringify(sessionCalls));
   assert.deepEqual(sessionCalls.map(({ file }) => file), [
+    "src/lib/auth/instance-claim.ts",
     "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
   ]);
@@ -55,6 +60,7 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
     "src/index.ts",
     "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
+    "src/routes/claim.routes.ts",
   ]);
   // The third issuer is the reviewer invitation (MRQ-107, eval §T-A). It is
   // enumerated here rather than excused: an organizer provisioning a reviewer
@@ -63,6 +69,8 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
   // same `purpose: "login"` mint, behind `requireProgram(..., write)`, and
   // refuses any address that resolves to a program-staff seat.
   assert.deepEqual(magicMintCalls.map(({ file }) => file).sort(), [
+    "src/lib/auth/instance-claim.ts",
+    "src/lib/auth/instance-claim.ts",
     "src/routes/auth.routes.ts",
     "src/routes/evaluation.routes.ts",
     "src/routes/public-form.routes.ts",
@@ -73,7 +81,10 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
   // because exchanging a link opens every membership its person carries.
   assert.match(evaluationRoutes.source, /role IN \('owner', 'program_lead', 'ops'\)/);
   assert.match(evaluationRoutes.source, /purpose: "login", redirectTo: "\/reviewer"/);
-  assert.deepEqual(magicConsumeCalls.map(({ file }) => file), ["src/routes/auth.routes.ts"]);
+  assert.deepEqual(magicConsumeCalls.map(({ file }) => file), [
+    "src/lib/auth/instance-claim.ts",
+    "src/routes/auth.routes.ts",
+  ]);
 
   const sessionSource = await readFile(resolve(root, "src/lib/auth/auth-sessions.ts"), "utf8");
   assert.equal((sessionSource.match(/INSERT\s+INTO\s+auth_sessions/gi) ?? []).length, 1);

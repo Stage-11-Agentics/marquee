@@ -1,0 +1,66 @@
+/* Cold-start surfaces: handoff, create conference, the Instance panel, and the
+   Organizers card. Every color is a token so Night re-lights the whole set. */
+
+.setup-page { display: grid; gap: 16px; }
+
+.setup-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.setup-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
+
+/* Reserved height: an error message appearing must not push the button down. */
+.setup-error { min-height: 16px; flex: 1; color: var(--danger); font: 400 11px/1.4 var(--mono); }
+
+.setup-token-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.setup-token { flex: 1; min-width: 240px; min-height: 34px; display: flex; align-items: center; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk); color: var(--ink); font: 400 11.5px/1.5 var(--mono); word-break: break-all; }
+.setup-grants { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }
+
+.setup-doors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.setup-door { display: grid; gap: 8px; align-content: start; text-align: left; padding: 16px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); color: var(--ink); cursor: pointer; }
+.setup-door.primary { border-top: 3px solid var(--accent); }
+.setup-door strong { font-size: 13px; }
+.setup-door span { color: var(--ink-soft); font-size: 11.5px; line-height: 1.55; }
+.setup-door-go { color: var(--accent-dark); font-family: var(--mono); font-size: 11px; }
+
+.instance-rows { display: flex; flex-direction: column; }
+.instance-row { display: grid; grid-template-columns: 160px 118px minmax(0, 1fr) 130px; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.instance-row:last-child { border-bottom: 0; }
+.instance-name { font-size: 12px; }
+.instance-note { color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
+/* The fix column keeps its width whether it holds a button or a dash, so a row
+   flipping to configured never re-flows the rows beside it. */
+.instance-fix { display: flex; justify-content: flex-end; min-width: 130px; }
+.instance-fix-blank { display: inline-block; width: 118px; text-align: center; color: var(--muted); }
+.instance-fix-commands { grid-column: 1 / -1; margin: 6px 0 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk); color: var(--ink); font: 400 11px/1.7 var(--mono); white-space: pre-wrap; word-break: break-all; }
+.instance-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+
+.organizer-rows { display: flex; flex-direction: column; }
+.organizer-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 96px 96px; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.organizer-row:last-child { border-bottom: 0; }
+.organizer-name { display: grid; gap: 2px; font-size: 12px; }
+.organizer-name small { color: var(--muted); font-size: 10.5px; }
+.organizer-email { color: var(--ink-soft); font-size: 11px; word-break: break-all; }
+.organizer-action { display: flex; justify-content: flex-end; min-width: 96px; }
+.organizer-invite { margin-top: 14px; display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--sunk); }
+
+@media (max-width: 900px) {
+  .setup-doors { grid-template-columns: 1fr; }
+  .instance-row { grid-template-columns: 1fr auto; grid-template-areas: "name chip" "note note" "fix fix"; }
+  .instance-name { grid-area: name; }
+  .instance-note { grid-area: note; }
+  .instance-fix { grid-area: fix; justify-content: flex-start; }
+  .organizer-row { grid-template-columns: 1fr auto; }
+  .organizer-email { grid-column: 1 / -1; }
+  .setup-field-row { grid-template-columns: 1fr; }
+}
+
+.setup-steps { display: flex; flex-direction: column; }
+.setup-step { align-items: center; border-bottom: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 24px minmax(0, 1fr) 150px; padding: 10px 0; }
+.setup-step:last-child { border-bottom: 0; }
+.setup-mark { align-items: center; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--muted); display: flex; font: 400 11px/1 var(--mono); height: 22px; justify-content: center; width: 22px; }
+.setup-step.done .setup-mark { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.setup-step-copy { display: grid; gap: 2px; min-width: 0; }
+.setup-step-copy strong { font-size: 12.5px; }
+.setup-step-copy span { color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
+/* Every step's action column is the same width, so ticking one off never
+   shifts the buttons below it. */
+.setup-step > button { justify-self: end; min-width: 150px; }

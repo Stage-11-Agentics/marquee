@@ -2,7 +2,10 @@ import { z } from "@hono/zod-openapi";
 
 import type { EventRow, FormatRow, TrackRow } from "../db/schema";
 import { ApiError } from "../api/errors";
+import { newUlid } from "../api/ids";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { requireOrgAdmin } from "../lib/auth/org-admin";
+import { SHIPPED_DEMO_ORGANIZATION_ID } from "../lib/reset-demo/demo-fixture";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const formatParams = eventParams.extend({ formatId: z.string().min(1) });
@@ -57,6 +60,14 @@ const eventPatch = z.object({
   logo_key: z.string().max(500).nullable().optional(),
   accent: color.nullable().optional(),
 });
+const eventInput = z.object({
+  name: z.string().trim().min(1).max(200),
+  starts_on: date,
+  ends_on: date,
+  timezone: z.string().trim().min(1).max(100),
+  venue: z.string().max(300).nullable().optional(),
+  tagline: z.string().max(500).nullable().optional(),
+});
 const formatInput = z.object({
   name: z.string().trim().min(1).max(160),
   default_duration_min: z.number().int().nonnegative(),
@@ -96,6 +107,42 @@ async function settingsFor(db: D1Database, eventId: string): Promise<{ event: Pu
     ).bind(eventId).all<TrackRow>(),
   ]);
   return { event, formats: formats.results, tracks: tracks.results };
+}
+
+/**
+ * A conference's slug is derived from its name, never typed: it is a URL
+ * segment, and an organizer creating "AI Engineer New York 2027" should not
+ * have to know that. Collisions get a numeric suffix rather than a rejection —
+ * next year's conference is often last year's name.
+ *
+ * Uniqueness is scoped to the organization, matching the index that actually
+ * enforces it (`uq_events_org_slug`). A global lookup would let one org's slug
+ * block every other org's, which is precisely wrong for the self-host cold
+ * start: two instances of this software should be able to run a conference of
+ * the same name without one of them getting `-2` for no reason it can see.
+ */
+export async function uniqueEventSlug(
+  db: D1Database,
+  orgId: string,
+  name: string,
+  now: number,
+): Promise<string> {
+  const base = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "")
+    .slice(0, 60);
+  const stem = base.length > 0 ? base : `conference-${newUlid(now).toLowerCase().slice(0, 8)}`;
+  for (let suffix = 0; suffix < 50; suffix += 1) {
+    const candidate = suffix === 0 ? stem : `${stem}-${suffix + 1}`;
+    const taken = await db
+      .prepare("SELECT 1 AS present FROM events WHERE org_id = ? AND slug = ?")
+      .bind(orgId, candidate)
+      .first();
+    if (!taken) return candidate;
+  }
+  return `${stem}-${newUlid(now).toLowerCase().slice(0, 8)}`;
 }
 
 function assertDateOrder(startsOn: string, endsOn: string): void {
@@ -168,6 +215,69 @@ async function reorderPosition(
   ordered.splice(Math.min(Math.max(requestedPosition, 0), ordered.length), 0, id);
   await assignPositions(db, table, eventId, ordered);
 }
+
+/**
+ * The one endpoint that creates a conference — the screen at
+ * `/conferences/new`, the `＋` beside the switcher, and the CLI's
+ * `event create` all land here, so there is no path by which a conference can
+ * exist that an agent could not have made (AC-279, AC-280).
+ *
+ * Authority is organization-wide, so it is answered here rather than by the
+ * pipeline's `{eventId}` grant check: there is no event yet to be scoped to.
+ */
+const createEvent = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events",
+    operationId: "createEvent",
+    summary: "Create a conference on this instance",
+    tags: ["Event settings"],
+    request: { body: { content: { "application/json": { schema: eventInput } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: {
+      201: jsonResponse(settingsResponse, "The created conference"),
+      ...errorResponses([400, 401, 403, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const auth = requireOrgAdmin(context);
+    const body = context.req.valid("json");
+    assertDateOrder(body.starts_on, body.ends_on);
+    assertTimezone(body.timezone);
+    const now = Date.now();
+    const id = newUlid(now);
+    const slug = await uniqueEventSlug(context.env.DB, auth.orgId, body.name, now);
+    // `demo_mode` is inherited, never asked for. Mail suppression rides this
+    // column (`demoMailWouldBeSuppressed`), so a conference created inside the
+    // demo organization that stored a 0 would send live mail to whatever
+    // address a judge or a demo visitor typed. It is deliberately absent from
+    // `eventInput`: a client that could set it could turn suppression off.
+    //
+    // Inheritance is not total containment, and the carve-out is on purpose:
+    // `always_live` senders (the public form's confirmation, the smoke
+    // harness) short-circuit before this column is read. Forms arriving closed
+    // is the other half of that guard — do not "simplify" either one away.
+    const demoMode = auth.orgId === SHIPPED_DEMO_ORGANIZATION_ID ? 1 : 0;
+    await context.env.DB.prepare(
+      `INSERT INTO events (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, status, demo_mode, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
+    ).bind(
+      id,
+      auth.orgId,
+      body.name,
+      slug,
+      body.tagline ?? null,
+      body.starts_on,
+      body.ends_on,
+      body.timezone,
+      body.venue ?? null,
+      demoMode,
+      now,
+      now,
+    ).run();
+    return context.json({ data: await settingsFor(context.env.DB, id) }, 201);
+  },
+);
 
 const getSettings = defineApiRoute(
   {
@@ -432,6 +542,7 @@ const deleteTrack = defineApiRoute(
 );
 
 export const apiRoutes = [
+  createEvent,
   getSettings,
   updateSettings,
   listFormats,

@@ -27,6 +27,92 @@ const SET_OPTION = {
 
 export const COMMAND_REGISTRY = [
   {
+    path: ["setup", "claim-link"],
+    usage: "marquee setup claim-link",
+    summary: "Print the one-time link that claims an unowned instance.",
+    operations: ["mintInstanceClaimLink"],
+    skill: "setup",
+    // The one command that runs before a credential exists — it is what
+    // produces the human who will issue the first one.
+    unauthenticated: true,
+    options: [],
+  },
+  {
+    path: ["setup", "health"],
+    usage: "marquee setup health",
+    summary: "Confirm the deployment answers, and name the build it is serving.",
+    // No API operation, for the same reason `logs` has none: `/health` is the
+    // deployment's own liveness stamp, not something this conference serves.
+    // It is a command rather than a raw request because the skill teaches one
+    // surface — an agent that drops to curl mid-loop has found a gap (AC-143).
+    operations: [],
+    skill: "setup",
+    unauthenticated: true,
+    options: [],
+  },
+  {
+    path: ["setup", "instance"],
+    usage: "marquee setup instance",
+    summary: "Read what is configured on this deployment, and what is not.",
+    operations: ["getInstanceStatus"],
+    skill: "setup",
+    options: [],
+  },
+  {
+    path: ["event", "create"],
+    usage: "marquee event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz>",
+    summary: "Create a conference on this instance.",
+    operations: ["createEvent"],
+    skill: "setup",
+    set: ["name", "starts_on", "ends_on", "timezone", "venue", "tagline"],
+    options: [SET_OPTION],
+  },
+  {
+    path: ["forms", "create"],
+    usage: "marquee forms create <event-id> --set name=<name> --set slug=<slug> --set kind=abstract",
+    summary: "Draft a call for speakers. It is not published.",
+    operations: ["createEventForm"],
+    skill: "setup",
+    event: true,
+    set: ["name", "slug", "kind", "closes_at", "per_submitter_limit", "min_speakers", "max_speakers", "welcome_md"],
+    options: [SET_OPTION],
+  },
+  {
+    path: ["forms", "list"],
+    usage: "marquee forms list <event-id>",
+    summary: "List the conference's forms and their publication state.",
+    operations: ["listEventForms"],
+    skill: "setup",
+    event: true,
+    options: [],
+  },
+  {
+    path: ["evaluation", "plan"],
+    usage: "marquee evaluation plan <event-id> --set name=<name>",
+    summary: "Create the evaluation plan the review queue reads.",
+    operations: ["createEvaluationPlan"],
+    skill: "setup",
+    event: true,
+    set: ["name", "instructions", "status", "scale_min", "scale_max"],
+    options: [SET_OPTION],
+  },
+  {
+    path: ["organizers", "list"],
+    usage: "marquee organizers list",
+    summary: "List everyone who can run this instance.",
+    operations: ["listOrganizers"],
+    skill: "setup",
+    options: [],
+  },
+  {
+    path: ["organizers", "invite"],
+    usage: "marquee organizers invite",
+    summary: "Mint a one-time invite link for an additional organizer.",
+    operations: ["createOrganizerInvite"],
+    skill: "setup",
+    options: [],
+  },
+  {
     path: ["event", "seed"],
     usage: "marquee event seed",
     summary: "Restore the seeded conference and return its ID.",

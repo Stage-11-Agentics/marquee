@@ -213,8 +213,13 @@ const exchangeMagicLink = defineApiRoute(
         401,
       );
     }
-    const link = await consumeMagicLink(context.env.DB, token);
-    if (!link) {
+    // Sign-in exchanges only person-bound links. `claim` and `org_invite` have
+    // no person yet and are exchanged at `/api/v1/claim`, which is the one
+    // place a session is minted from a token that predates its owner.
+    const link = await consumeMagicLink(context.env.DB, token, Date.now(), {
+      purposes: ["login", "draft_resume", "cospeaker_profile", "task_link"],
+    });
+    if (!link || link.person_id === null) {
       dropRejectedSessionCookie(context);
       return context.json(
         {
