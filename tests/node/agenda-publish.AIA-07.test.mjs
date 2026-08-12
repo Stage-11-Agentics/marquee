@@ -31,7 +31,7 @@ test("CONTRACT · AIA-07 + CFP-15 publication preview and agenda drop targets ex
   assert.match(page, /Publish \$\{selectedCandidates\.length\} to public agenda/);
   assert.match(page, /role="group"\n    aria-label=\{ariaLabel\}\n    data-agenda-drop-target="true"/);
   assert.match(page, /Place Session on/);
-  assert.match(page, /role="region" aria-label="Unscheduled sessions to place"/);
+  assert.match(page, /aria-label="Unscheduled sessions to place"/);
   assert.match(trackBoard, /role="group"\n    aria-label=\{ariaLabel\}\n    data-agenda-drop-target="true"/);
   assert.match(trackBoard, /Place Session in/);
 });

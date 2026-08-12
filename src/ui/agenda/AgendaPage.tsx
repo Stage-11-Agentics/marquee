@@ -469,7 +469,7 @@ function Pool({
     (!track || item.tracks.some((candidate) => candidate.id === track))
     && (!query.trim() || [item.title, item.format ?? "", ...item.speakers.map((speaker) => speaker.name)].some((value) => value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))),
   );
-  return <aside class="card agenda-pool" role="region" aria-label="Unscheduled sessions to place" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop(event as unknown as DragEvent); }}>
+  return <aside class="card agenda-pool" aria-label="Unscheduled sessions to place" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop(event as unknown as DragEvent); }}>
     <header class="card-head"><div><h2>Unscheduled</h2><span class="subtle"><span class="tabular">{snapshot.unscheduled.length}</span> schedulable Sessions ready to place</span></div><Chip>Drag back here to unplace</Chip></header>
     <div class="agenda-pool-search"><input aria-label="Filter Sessions" value={query} placeholder="Filter Sessions" onInput={(event) => setQuery((event.currentTarget as HTMLInputElement).value)} /></div>
     <div class="agenda-pool-list" role="list" aria-label="Accepted sessions not yet placed">{pool.length ? pool.map((item) => <article key={item.submission_id} class="agenda-pool-item" role="listitem" aria-label={`${item.title} · ${item.format ?? "Session"} · ${item.speakers[0]?.name ?? "No speaker"}`} draggable data-pool-id={item.submission_id} style={{ borderLeftColor: poolTrackColor(snapshot, item) }} onDragStart={(event) => onDragStart({ kind: "pool", id: item.submission_id }, event as unknown as DragEvent)}>
