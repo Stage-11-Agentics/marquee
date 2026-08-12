@@ -378,6 +378,7 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
       // addressed, costing a re-query per field.
       setNewFieldLabel("");
       setNewFieldOptions("");
+      setNewFieldSource("");
       setNewFieldRequired(false);
     });
   };
