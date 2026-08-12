@@ -4,6 +4,7 @@ import { renderToString } from "preact-render-to-string";
 
 import { EMBED_KINDS, type EmbedKind } from "../db/schema";
 import type { Env } from "../index";
+import { ICON_LINKS } from "../lib/head-icons";
 import {
   loadPublicEmbed,
   loadPublicEvent,
@@ -62,7 +63,7 @@ function renderEmbedDocument(shell: string, markup: string, script?: string): st
 async function shellFor(context: { env: Env; req: { raw: Request } }): Promise<string> {
   const response = await context.env.ASSETS.fetch(new Request(new URL("/index.html", context.req.raw.url), { method: "GET" }));
   if (response.ok) return response.text();
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Embed</title></head><body><div id="app"></div><script type="module" src="/src/ui/app.tsx"></script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Embed</title>${ICON_LINKS}</head><body><div id="app"></div><script type="module" src="/src/ui/app.tsx"></script></body></html>`;
 }
 
 embedRoutes.get("/embed/config", async (context) => {

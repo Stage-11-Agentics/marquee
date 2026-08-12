@@ -3,6 +3,7 @@ import type { JSX } from "preact";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { ICON_LINKS } from "../lib/head-icons";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
 import { hasSpeakerTaskCancellationColumn, submissionStatusPredicate } from "./submissions.queries";
 
@@ -259,7 +260,7 @@ const LANDING_SCRIPT = `
 })();
 `;
 
-const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Program operations</title></head><body><div id="app"></div></body></html>`;
+const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Program operations</title>${ICON_LINKS}</head><body><div id="app"></div></body></html>`;
 
 export function renderLandingDocument(shell: string, data: LandingData): string {
   const markup = renderToString(<LandingPage data={data} />);
