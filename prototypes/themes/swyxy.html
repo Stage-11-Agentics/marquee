@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<!--
+  Marquee theme round — swyx.io register
+  ──────────────────────────────────────
+  The third register, closest to what an app of his would look like:
+  swyxkit minimalism — indigo-forward (#3730a3, Tailwind indigo-800),
+  system sans, all-lowercase single-word nav, dense high-information
+  lists over cards, minimal chrome, nothing decorative.
+
+  The signature move: the post index — every row is a date, a format
+  emoji, then the title, so the feed self-classifies at a glance. The
+  chase queue and the speaker task dashboard both render as that index.
+
+  The dark-mode control is the lowercase word "dark" sitting in the
+  topbar, exactly like his nav — and here it actually toggles.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>marquee — program pipeline · swyxy theme</title>
+<style>
+  :root {
+    --bg:         #ffffff;
+    --surface:    #ffffff;
+    --sunk:       #f8fafc;
+    --rule:       #e2e8f0;
+    --ink:        #0f172a;
+    --ink-soft:   #334155;
+    --muted:      #64748b;
+    --accent:     #3730a3;
+    --accent-soft:#eef2ff;
+    --warn:       #b45309;
+    --chart-grid: #eef2f6;
+    --chart-prior:#94a3b8;
+  }
+  html.dark {
+    --bg:         #0b1120;
+    --surface:    #0f172a;
+    --sunk:       #111c33;
+    --rule:       #1e293b;
+    --ink:        #e2e8f0;
+    --ink-soft:   #cbd5e1;
+    --muted:      #7d8da5;
+    --accent:     #818cf8;
+    --accent-soft:#1e1b4b;
+    --warn:       #fbbf24;
+    --chart-grid: #17203a;
+    --chart-prior:#475569;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--ink);
+         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  body { margin: 0; min-width: 900px; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+
+  .num { font-variant-numeric: tabular-nums; }
+  .micro { font-size: 11px; color: var(--muted); letter-spacing: .02em; }
+
+  /* ── shell: marquee sidebar, his minimalism — lowercase single ──────
+     ── words, no icons, the "dark" toggle living in the topbar ─────── */
+  .app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+
+  .sidebar {
+    border-right: 1px solid var(--rule); padding: 24px 18px;
+    display: flex; flex-direction: column; gap: 20px; background: var(--surface);
+  }
+  .brand { font-weight: 800; font-size: 17px; letter-spacing: -.02em; }
+  .brand span { color: var(--accent); }
+  .event { display: block; border: 1px solid var(--rule); border-radius: 6px; padding: 9px 12px; }
+  .event small { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .event strong { font-size: 13.5px; font-weight: 600; }
+
+  .nav-label { font-size: 11px; color: var(--muted); margin: 4px 0 2px; }
+  .nav { display: flex; flex-direction: column; }
+  .nav a {
+    padding: 4px 8px; font-size: 13.5px; color: var(--ink-soft); border-radius: 6px;
+  }
+  .nav a:hover { color: var(--accent); background: var(--sunk); }
+  .nav a.active { color: var(--accent); font-weight: 600; background: var(--accent-soft); }
+  .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+  .sidebar-foot button {
+    background: none; border: 1px solid var(--rule); border-radius: 6px;
+    padding: 7px 10px; font-size: 12px; color: var(--muted); text-align: left;
+  }
+  .sidebar-foot button:hover { color: var(--accent); border-color: var(--accent); }
+
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 13px 32px; border-bottom: 1px solid var(--rule);
+    position: sticky; top: 0; background: var(--bg); z-index: 5;
+  }
+  .crumbs { font-size: 13px; color: var(--muted); }
+  .crumbs strong { color: var(--ink); font-weight: 600; }
+  .search {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--rule); border-radius: 6px; padding: 6px 12px;
+    width: 320px; color: var(--muted); font-size: 13px;
+  }
+  .search input { background: none; border: 0; outline: 0; width: 100%; font-size: 13px; }
+  .search input::placeholder { color: var(--muted); }
+  .kbd { font-size: 10px; border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px; color: var(--muted); }
+  .dark-toggle {
+    background: none; border: 0; padding: 0;
+    font-size: 14px; color: var(--ink-soft);
+  }
+  .dark-toggle:hover { color: var(--accent); }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 10.5px; font-weight: 700; background: var(--accent-soft); color: var(--accent);
+  }
+
+  .page { max-width: 1080px; width: 100%; margin: 0 auto; padding: 32px 32px 64px; display: flex; flex-direction: column; gap: 34px; }
+
+  /* ── page head ─────────────────────────────────────────── */
+  .page-head h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 0 0 8px; }
+  .page-head .lede { margin: 0 0 16px; max-width: 640px; font-size: 15px; line-height: 1.6; color: var(--ink-soft); }
+  .page-head .lede strong { color: var(--ink); }
+  .head-actions { display: flex; gap: 10px; }
+  .btn {
+    border: 1px solid var(--rule); background: var(--surface); border-radius: 6px;
+    padding: 8px 14px; font-size: 13.5px; font-weight: 500; color: var(--ink-soft);
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  html.dark .btn.primary { color: #0b1120; }
+  .btn.small { padding: 4px 10px; font-size: 12.5px; }
+
+  /* ── the signature index: date · format emoji · title ──── */
+  .feed-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .feed-head h2 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; margin: 0; }
+  .feed { border-top: 1px solid var(--rule); }
+  .feed-row {
+    display: grid; grid-template-columns: 74px 26px 1fr auto; gap: 12px; align-items: baseline;
+    width: 100%; background: none; border: 0; border-bottom: 1px solid var(--rule);
+    padding: 9px 2px; text-align: left; font-size: 14px;
+  }
+  .feed-row:hover { background: var(--sunk); }
+  .feed-row .date { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .feed-row .emoji { font-size: 13px; }
+  .feed-row .what { color: var(--ink); }
+  .feed-row .what b { font-weight: 600; }
+  .feed-row .what .detail { color: var(--muted); }
+  .feed-row .stat { font-size: 12.5px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .feed-row .stat.warn { color: var(--warn); }
+
+  /* ── pipeline: compact stat strip, no cards ────────────── */
+  .strip { display: grid; grid-template-columns: repeat(7, 1fr); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .stage {
+    background: var(--surface); border: 0; border-right: 1px solid var(--rule);
+    padding: 14px 12px; text-align: left; display: flex; flex-direction: column; gap: 4px;
+  }
+  .stage:last-child { border-right: 0; }
+  .stage:hover { background: var(--sunk); }
+  .stage .name { font-size: 11px; color: var(--muted); }
+  .stage .count { font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: var(--accent); line-height: 1.1; }
+  .stage .delta { font-size: 11px; color: var(--muted); }
+
+  /* ── pacing ────────────────────────────────────────────── */
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .section-head h2 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; margin: 0; }
+  .section-head .sub { font-size: 12.5px; color: var(--muted); }
+  .readout { font-size: 13px; color: var(--ink-soft); margin-bottom: 8px; }
+  .readout strong { color: var(--ink); }
+  .pacing { width: 100%; height: auto; display: block; }
+
+  /* ── two-up: waves + work in motion, dense lists ───────── */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  .kv {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    width: 100%; background: none; border: 0; border-bottom: 1px solid var(--rule);
+    padding: 8px 2px; text-align: left; font-size: 14px;
+  }
+  .kv:hover { background: var(--sunk); }
+  .kv .k { color: var(--ink); }
+  .kv .k .detail { color: var(--muted); font-size: 12.5px; }
+  .kv .v { font-size: 13px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kv .v.muted { color: var(--muted); font-weight: 500; }
+  .bar { display: inline-block; height: 5px; border-radius: 3px; background: var(--accent); vertical-align: middle; margin-right: 8px; }
+  .bar-track { display: inline-block; width: 110px; height: 5px; border-radius: 3px; background: var(--rule); vertical-align: middle; margin-right: 8px; overflow: hidden; }
+  .bar-track i { display: block; height: 100%; background: var(--accent); }
+
+  .badge {
+    position: fixed; right: 14px; bottom: 14px; z-index: 10;
+    font-size: 11px; border: 1px solid var(--rule); border-radius: 6px;
+    background: var(--surface); color: var(--muted); padding: 6px 10px;
+  }
+  .badge:hover { color: var(--accent); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="#">marquee<span>.</span></a>
+
+    <a class="event" href="#">
+      <small>conference</small>
+      <strong>aie nyc 2026</strong>
+    </a>
+
+    <div>
+      <nav class="nav" aria-label="Program home">
+        <a href="#" class="active">home</a>
+        <a href="#">board</a>
+      </nav>
+    </div>
+
+    <div>
+      <div class="nav-label">pipeline</div>
+      <nav class="nav" aria-label="Program lifecycle">
+        <a href="#">submitted</a>
+        <a href="#">in review</a>
+        <a href="#">waved</a>
+        <a href="#">accepted</a>
+        <a href="#">onboarding</a>
+        <a href="#">scheduled</a>
+        <a href="#">published</a>
+      </nav>
+    </div>
+
+    <div>
+      <div class="nav-label">modules</div>
+      <nav class="nav" aria-label="Modules">
+        <a href="#">forms</a>
+        <a href="#">evaluation</a>
+        <a href="#">review</a>
+        <a href="#">agenda</a>
+        <a href="#">comms</a>
+        <a href="#">portal</a>
+        <a href="#">site</a>
+        <a href="#">settings</a>
+      </nav>
+    </div>
+
+    <div class="sidebar-foot">
+      <button>api &amp; cli</button>
+      <button>reset demo</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="crumbs">aie nyc 2026 &nbsp;/&nbsp; <strong>program pipeline</strong></div>
+      <div class="search">
+        <span>⌕</span>
+        <input placeholder="search abstracts, speakers, sessions…" readonly>
+        <span class="kbd">⌘K</span>
+      </div>
+      <button class="dark-toggle" id="dark-toggle">dark</button>
+      <div class="avatar" title="maya chen · program lead">mc</div>
+    </header>
+
+    <div class="page">
+
+  <div class="page-head">
+    <h1>program pipeline</h1>
+    <p class="lede">wave 2 closes friday — <strong>214 abstracts still need review in agents.</strong> every count opens the work behind it.</p>
+    <div class="head-actions">
+      <button class="btn">conference settings</button>
+      <button class="btn primary">work the pipeline →</button>
+    </div>
+  </div>
+
+  <section class="strip" aria-label="Pipeline stages">
+    <button class="stage"><span class="name">submitted</span><span class="count num">350</span><span class="delta">+41 this week</span></button>
+    <button class="stage"><span class="name">in review</span><span class="count num">90</span><span class="delta">62% assigned</span></button>
+    <button class="stage"><span class="name">waved</span><span class="count num">108</span><span class="delta">2 of 3 waves</span></button>
+    <button class="stage"><span class="name">accepted</span><span class="count num">190</span><span class="delta">18.1% of all</span></button>
+    <button class="stage"><span class="name">onboarding</span><span class="count num">61</span><span class="delta">owe tasks · 9 at risk</span></button>
+    <button class="stage"><span class="name">scheduled</span><span class="count num">32</span><span class="delta">158 still unplaced</span></button>
+    <button class="stage"><span class="name">published</span><span class="count num">26</span><span class="delta">3 live conflicts</span></button>
+  </section>
+
+  <section aria-label="Needs attention">
+    <div class="feed-head"><h2>needs attention</h2><span class="micro">4 items · updated just now</span></div>
+    <div class="feed">
+      <button class="feed-row">
+        <span class="date">sep 1</span><span class="emoji">⏰</span>
+        <span class="what"><b>wave 2 in 6 days</b> <span class="detail">— open planner</span></span>
+        <span class="stat">52 / 60 accepted</span>
+      </button>
+      <button class="feed-row">
+        <span class="date">aug 12</span><span class="emoji">📥</span>
+        <span class="what"><b>214 unreviewed in agents</b> <span class="detail">— 90 in review · 124 waiting for assignment</span></span>
+        <span class="stat warn">needs reviewers</span>
+      </button>
+      <button class="feed-row">
+        <span class="date">aug 12</span><span class="emoji">🎤</span>
+        <span class="what"><b>9 speakers overdue</b> <span class="detail">— headshots, agreements, and travel · open chase board</span></span>
+        <span class="stat warn">23 tasks</span>
+      </button>
+      <button class="feed-row">
+        <span class="date">aug 11</span><span class="emoji">✉️</span>
+        <span class="what"><b>14 decided · not notified</b> <span class="detail">— they have an outcome and have not heard it · open the list</span></span>
+        <span class="stat">send mail</span>
+      </button>
+    </div>
+  </section>
+
+  <section aria-label="Submission pacing">
+    <div class="section-head">
+      <h2>submission pacing</h2>
+      <span class="sub">cumulative intake vs the 2025 edition · — 2026 live · – – 2025</span>
+    </div>
+    <div class="readout">t−63 · <strong>2026: 1,040</strong> · 2025 edition: 812 · <strong>+228 vs prior</strong> — on pace, no extension needed</div>
+    <svg class="pacing" viewBox="0 0 1100 232" role="img" aria-label="Cumulative submissions, this edition versus the 2025 edition">
+      <line x1="50" y1="206" x2="982" y2="206" style="stroke:var(--chart-grid)" stroke-width="1"/>
+      <line x1="50" y1="142" x2="982" y2="142" style="stroke:var(--chart-grid)" stroke-width="1"/>
+      <line x1="50" y1="78"  x2="982" y2="78"  style="stroke:var(--chart-grid)" stroke-width="1"/>
+      <line x1="50" y1="14"  x2="982" y2="14"  style="stroke:var(--chart-grid)" stroke-width="1"/>
+      <text x="43" y="209" text-anchor="end" style="font:400 10px system-ui;fill:var(--muted)">0</text>
+      <text x="43" y="145" text-anchor="end" style="font:400 10px system-ui;fill:var(--muted)">400</text>
+      <text x="43" y="81"  text-anchor="end" style="font:400 10px system-ui;fill:var(--muted)">800</text>
+      <text x="43" y="17"  text-anchor="end" style="font:400 10px system-ui;fill:var(--muted)">1.2k</text>
+      <text x="50"    y="224" text-anchor="middle" style="font:400 10px system-ui;fill:var(--muted)">t−90</text>
+      <text x="360.7" y="224" text-anchor="middle" style="font:400 10px system-ui;fill:var(--muted)">t−60</text>
+      <text x="671.3" y="224" text-anchor="middle" style="font:400 10px system-ui;fill:var(--muted)">t−30</text>
+      <text x="982"   y="224" text-anchor="middle" style="font:400 10px system-ui;fill:var(--muted)">event</text>
+      <line x1="671.3" y1="14" x2="671.3" y2="206" style="stroke:var(--rule)" stroke-width="1" stroke-dasharray="2 3"/>
+      <text x="671.3" y="11" text-anchor="middle" style="font:600 9px system-ui;letter-spacing:.08em;fill:var(--muted)">cfp closes</text>
+      <path d="M112.1,206 L205.3,177.2 L308.9,116.4 L360.7,87.6 L464.2,65.2 L567.8,49.2 L671.3,41.2 L774.9,33.2 L878.4,26.8 L982,22"
+            fill="none" style="stroke:var(--chart-prior)" stroke-width="2" stroke-dasharray="5 4"/>
+      <path d="M81.1,206 L132.8,167.6 L174.2,132.4 L236.4,94 L277.8,65.2 L329.6,39.6"
+            fill="none" style="stroke:var(--accent)" stroke-width="2.5"/>
+      <circle cx="329.6" cy="39.6" r="3.5" style="fill:var(--accent)"/>
+      <text x="337.6" y="33" style="font:600 10.5px system-ui;fill:var(--accent)">2026 · 1,040 today</text>
+      <text x="900" y="44" style="font:600 10.5px system-ui;fill:var(--chart-prior)">2025 · 1,150 final</text>
+    </svg>
+  </section>
+
+  <div class="two">
+    <section aria-label="Wave planner">
+      <div class="section-head"><h2>wave planner</h2><button class="btn small">plan next wave</button></div>
+      <button class="kv">
+        <span class="k"><span class="bar-track"><i style="width:100%"></i></span>wave 1 <span class="detail">· aug 15 — sent</span></span>
+        <span class="v muted">48 / 48</span>
+      </button>
+      <button class="kv">
+        <span class="k"><span class="bar-track"><i style="width:87%"></i></span>wave 2 <span class="detail">· sep 1 — closes in 6 days</span></span>
+        <span class="v">52 / 60</span>
+      </button>
+      <button class="kv">
+        <span class="k"><span class="bar-track"><i style="width:0%"></i></span>wave 3 <span class="detail">· sep 15 — planned</span></span>
+        <span class="v muted">0 / 50</span>
+      </button>
+    </section>
+
+    <section aria-label="Work in motion">
+      <div class="section-head"><h2>work in motion</h2><button class="btn small">export</button></div>
+      <button class="kv"><span class="k">reviews done <span class="detail">· of 2,130</span></span><span class="v">1,842</span></button>
+      <button class="kv"><span class="k">tasks overdue <span class="detail">· across 9 speakers</span></span><span class="v">23</span></button>
+      <button class="kv"><span class="k">unscheduled <span class="detail">· accepted sessions</span></span><span class="v">158</span></button>
+      <button class="kv"><span class="k">conflicts <span class="detail">· 5 affected sessions · live</span></span><span class="v">3</span></button>
+      <button class="kv"><span class="k">review pressure <span class="detail">· agents 214 · evals 87 · infra 64 · security 41</span></span><span class="v muted">by track →</span></button>
+    </section>
+  </div>
+
+  <section aria-label="Speaker task dashboard">
+    <div class="feed-head"><h2>speaker tasks</h2><span class="micro">23 overdue across 9 accepted speakers · changes update live</span></div>
+    <div class="feed">
+      <button class="feed-row">
+        <span class="date">aug 08</span><span class="emoji">📄</span>
+        <span class="what"><b>speaker agreement — amara van der meer</b> <span class="detail">· beyond the demo: reliable multi-agent systems · aie-0027</span></span>
+        <span class="stat warn">4 days overdue</span>
+      </button>
+      <button class="feed-row">
+        <span class="date">aug 10</span><span class="emoji">📸</span>
+        <span class="what"><b>high-resolution headshot — joão garcía márquez</b> <span class="detail">· operating low-latency inference platforms</span></span>
+        <span class="stat warn">2 days overdue</span>
+      </button>
+      <button class="feed-row">
+        <span class="date">aug 12</span><span class="emoji">✈️</span>
+        <span class="what"><b>travel and accommodation — oluwaseun o'connell-singh</b> <span class="detail">· ai governance without gridlock</span></span>
+        <span class="stat">due today</span>
+      </button>
+      <button class="feed-row">
+        <span class="date">oct 05</span><span class="emoji">🎞️</span>
+        <span class="what"><b>final slides — mei-ling de la fontaine</b> <span class="detail">· secure tool-using agents in regulated teams</span></span>
+        <span class="stat">due oct 5</span>
+      </button>
+    </div>
+  </section>
+
+    </div>
+  </main>
+</div>
+
+<a class="badge" href="index.html">theme: swyxy · ⌂ picker</a>
+
+<script>
+  // his dark-mode control is just the lowercase word "dark" in the nav —
+  // here it actually toggles, and the word flips like his does.
+  var toggle = document.getElementById('dark-toggle');
+  function sync() { toggle.textContent = document.documentElement.classList.contains('dark') ? 'light' : 'dark'; }
+  toggle.addEventListener('click', function () {
+    document.documentElement.classList.toggle('dark');
+    sync();
+  });
+  // #light / #dark force a mode (handy for linking); otherwise follow the system.
+  var forced = location.hash.replace('#', '');
+  if (forced === 'dark' || (forced !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark');
+  }
+  sync();
+</script>
+
+</body>
+</html>
