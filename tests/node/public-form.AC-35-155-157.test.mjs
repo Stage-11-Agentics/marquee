@@ -28,7 +28,7 @@ test("AC-35 + AC-36 + AC-155 + AC-156 + AC-157 · the public form has a 375px fi
   assert.doesNotMatch(component, /href=\{state\.resume_url\}/);
   assert.match(component, /PATCH/);
   assert.match(component, /Submit abstract/);
-  for (const type of ["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number"]) {
+  for (const type of ["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number", "date"]) {
     assert.match(routes, new RegExp(`\\"${type}\\"`));
   }
 });

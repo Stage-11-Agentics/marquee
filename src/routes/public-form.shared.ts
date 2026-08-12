@@ -310,6 +310,7 @@ export function publicIssueMessage(issue: FormValidationIssue): string {
   if (message.includes("email")) return "Enter an address where the conference team can reach you, then try again.";
   if (message.includes("url")) return "Add a web address beginning with https://, then try again.";
   if (message.includes("number")) return "Enter a number in the range shown, then try again.";
+  if (message.includes("date")) return "Choose a valid date, then try again.";
   if (message.includes("option")) return "Choose an option from the list, then try again.";
   if (message.includes("file")) return "Choose a file of the accepted size and format, then try again.";
   if (message.includes("characters")) return `${issue.message} Then try again.`;

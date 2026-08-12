@@ -140,8 +140,8 @@ describe.sequential("MRQ-13 form builder API", () => {
     expect(missing.status).toBe(404);
   });
 
-  test("AC-18 · the field registry accepts and returns all eight field types", async () => {
-    const types = ["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number"];
+  test("AC-18 · the field registry accepts and returns all nine field types", async () => {
+    const types = ["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number", "date"];
     for (const type of types) {
       const response = await request(`/api/v1/events/${EVENT_ID}/forms/${DRAFT_FORM_ID}/fields`, {
         method: "POST",
