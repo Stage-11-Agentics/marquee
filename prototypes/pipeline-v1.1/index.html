@@ -1261,7 +1261,9 @@
 
       const state = {
         route: "landing",
-        theme: (v => THEMES.some(t=>t.id===v) ? v : "day")(localStorage.getItem("marquee-prototype-theme")),
+        // ?theme= wins for this load only (side-by-side comparison links);
+        // the select still persists choices to localStorage.
+        theme: (v => THEMES.some(t=>t.id===v) ? v : "day")(new URLSearchParams(location.search).get("theme") || localStorage.getItem("marquee-prototype-theme")),
         // The fresh-install walk: what an organizer meets on a brand-new install,
         // from "no conferences yet" through to an open call for speakers. Entered with
         // ?empty=1 and sticky once entered, so ordinary in-app links stay inside
