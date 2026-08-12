@@ -11,7 +11,7 @@ const auth = readFileSync(new URL("../../src/routes/auth.routes.ts", import.meta
 const landing = readFileSync(new URL("../../src/routes/landing.route.tsx", import.meta.url), "utf8");
 const seed = readFileSync(new URL("../../scripts/seed/event.ts", import.meta.url), "utf8");
 
-test("CFP-03 · both shells receive a required API-backed event name", () => {
+test("CONTRACT · CFP-03 both shells receive a required API-backed event name", () => {
   assert.match(app, /useEventName\(\)/);
   assert.match(app, /<AppShell eventName=\{eventName\} \/>/);
   assert.match(app, /<DeliveryHealthShell eventName=\{eventName\} \/>/);
@@ -25,7 +25,7 @@ test("CFP-03 · both shells receive a required API-backed event name", () => {
   assert.doesNotMatch(health, /AIE NYC/);
 });
 
-test("CFP-03 · landing copy and seed vocabulary are truthful", () => {
+test("CONTRACT · CFP-03 landing copy and seed vocabulary are truthful", () => {
   assert.match(landing, /data\.conferenceName/);
   assert.doesNotMatch(landing, /Built for AIE NYC|populated AIE NYC/);
   assert.match(seed, /name: "Call for Speakers"/);

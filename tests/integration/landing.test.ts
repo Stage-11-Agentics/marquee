@@ -68,7 +68,7 @@ test("AC-4 · the landing render has crawlable destinations and no placeholder c
   expect(html).not.toContain("No data");
 });
 
-test("CFP-03 · landing brand copy follows the current conference name", async () => {
+test("CONTRACT · CFP-03 landing brand copy follows the current conference name", async () => {
   await env.DB.prepare("UPDATE events SET name = ? WHERE id = ?").bind("Future Summit 2028", "evt_landing").run();
   const html = renderLandingDocument(SHELL, await loadLandingData(env.DB));
 
