@@ -27,15 +27,14 @@
 .portal-arrival-details dd { color: #d9edf1; font-size: 11px; line-height: 1.45; margin: 0; }
 .portal-arrival-details .portal-arrival-leave { border-top: 1px solid #38515d; margin-top: 3px; padding-top: 10px; }
 .portal-arrival-details .portal-arrival-leave dd { color: #f4fbff; font-weight: 600; }
-.portal-arrival-map-fold { min-height: 142px; }
-.portal-arrival-map-fold summary { align-items: center; background: #162f39; border: 1px solid #38515d; color: #d9edf1; cursor: pointer; display: flex; font: 600 9px/1.2 var(--mono); justify-content: space-between; letter-spacing: .1em; min-height: 34px; padding: 9px 11px; text-transform: uppercase; }
-.portal-arrival-map-fold summary::after { content: "↓"; font-size: 11px; }
-.portal-arrival-map-fold[open] summary::after { content: "↑"; }
-.portal-arrival-map { align-content: center; background: repeating-linear-gradient(0deg, #162f39, #162f39 20px, #193742 21px), repeating-linear-gradient(90deg, transparent, transparent 20px, #193742 21px); border: 1px solid #38515d; display: grid; gap: 5px; min-height: 142px; padding: 16px; place-items: center; text-align: center; }
-.portal-arrival-map::before { border: 1px solid #7698a4; border-radius: 50%; content: ""; display: block; height: 22px; position: relative; width: 22px; }
-.portal-arrival-map.pinned::before { background: #86c4bd; border-color: #d7f3e8; box-shadow: 0 0 0 6px #86c4bd33; }
-.portal-arrival-map span { color: #d9edf1; font: 600 9px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-.portal-arrival-map small { color: #8aa6b5; font: 500 9px/1.4 var(--mono); max-width: 210px; overflow-wrap: anywhere; }
+.portal-arrival-map { background: var(--canvas); border: 1px solid var(--canvas-line); height: 360px; min-height: 360px; overflow: hidden; position: relative; }
+.portal-arrival-map .venue-map-shell { background-color: var(--canvas); background-image: linear-gradient(var(--canvas-line) 1px, transparent 1px), linear-gradient(90deg, var(--canvas-line) 1px, transparent 1px); background-size: 8px 8px; border: 0; height: 360px !important; }
+.portal-arrival-map .venue-map-pin { border-color: var(--canvas); }
+.portal-arrival-map .venue-map-pin-label { background: var(--canvas); border-color: var(--canvas-line); color: var(--canvas-ink); }
+.portal-arrival-map .venue-map-attribution { background: var(--canvas); color: var(--canvas-ink); }
+.portal-arrival-map .venue-map-fallback { background: var(--canvas); }
+.portal-arrival-map.empty { align-items: center; background-image: linear-gradient(var(--canvas-line) 1px, transparent 1px), linear-gradient(90deg, var(--canvas-line) 1px, transparent 1px); background-size: 8px 8px; color: var(--canvas-ink); display: grid; font: 500 10px/1.5 var(--mono); padding: 24px; place-items: center; text-align: center; }
+.portal-arrival-map-directions { bottom: 12px; left: 12px; position: absolute; z-index: 2; }
 .portal-role-responses { border-top: 1px solid #38515d; display: grid; gap: 8px; min-height: 62px; padding-top: 11px; }
 .portal-role-responses-head { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; }
 .portal-role-responses-head span { color: #edf8fb; font: 600 9px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }

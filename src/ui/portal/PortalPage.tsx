@@ -9,6 +9,8 @@ import { formatBytes, validateClientUpload } from "../upload/upload-policy";
 import type { SignedUpload } from "../../lib/r2/protocol";
 import { isFieldApplicable } from "../../lib/form-conditions";
 import { seedId } from "../../lib/ids";
+import type { VenueBuildingInput } from "../../lib/venues";
+import { VenueMap } from "../venues/VenueMap";
 import "./portal.css";
 
 type PortalField = {
@@ -607,11 +609,39 @@ function ParticipationActions({ submission, onRefresh }: { submission: PortalSub
   </div>;
 }
 
+function arrivalVenueBuilding(slot: NonNullable<PortalSubmission["slot"]>): VenueBuildingInput {
+  const { location } = slot;
+  const name = location.building?.trim() || location.address?.trim() || "The conference team has not named this building.";
+  return {
+    id: `portal-arrival-${slot.starts_at}`,
+    name,
+    address: location.address?.trim() ?? "",
+    position: 0,
+    lat: location.lat,
+    lng: location.lng,
+    access_minutes: location.access_minutes,
+    access_note: location.access_note,
+  };
+}
+
+function ArrivalMap({ slot }: { slot: NonNullable<PortalSubmission["slot"]> }): JSX.Element {
+  const { location } = slot;
+  const lat = location.lat;
+  const lng = location.lng;
+  const hasPin = lat !== null && lng !== null;
+  if (!hasPin) return <div class="portal-arrival-map empty" aria-label="No physical location pin available"><span>The conference team has not pinned this building.</span></div>;
+  const directions = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  const building = arrivalVenueBuilding(slot);
+  const venueLabel = building.name;
+  return <div class="portal-arrival-map" aria-label={`Venue map for ${venueLabel}`}>
+    <VenueMap buildings={[building]} />
+    <a class="portal-button portal-arrival-map-directions" href={directions} target="_blank" rel="noreferrer">Directions ↗</a>
+  </div>;
+}
+
 function ArrivalCard({ slot, timezone }: { slot: NonNullable<PortalSubmission["slot"]>; timezone: string }): JSX.Element {
   const { location, arrival } = slot;
   const showBuildingComparison = slot.show_building_comparison;
-  const hasPin = location.lat !== null && location.lng !== null;
-  const directions = hasPin ? `https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}` : null;
   let arrivalCopy = "Arrival timing will appear when this session is placed.";
   if (arrival?.status === "ready" && arrival.leave_by !== null) {
     const movement = [
@@ -630,7 +660,7 @@ function ArrivalCard({ slot, timezone }: { slot: NonNullable<PortalSubmission["s
     arrivalCopy = "Your arrival instructions will appear when the session time is set.";
   }
   return <section class="portal-arrival-card" aria-labelledby={`arrival-heading-${slot.starts_at}`}>
-    <header class="portal-arrival-head"><div><h2 id={`arrival-heading-${slot.starts_at}`}>Where you are speaking</h2><span>{slot.day} · {slot.date} · {slot.time}</span></div>{directions ? <a class="portal-button secondary" href={directions} target="_blank" rel="noreferrer">Directions ↗</a> : null}</header>
+    <header class="portal-arrival-head"><div><h2 id={`arrival-heading-${slot.starts_at}`}>Where you are speaking</h2><span>{slot.day} · {slot.date} · {slot.time}</span></div></header>
     <div class="portal-arrival-body"><dl class="portal-arrival-details">
       <div><dt>Room</dt><dd>{location.room ?? "—"}</dd></div>
       <div><dt>Building</dt><dd>{location.building ?? "No building assigned yet"}</dd></div>
@@ -638,7 +668,7 @@ function ArrivalCard({ slot, timezone }: { slot: NonNullable<PortalSubmission["s
       <div><dt>Getting in</dt><dd>{location.access_note ?? "—"}</dd></div>
       <div><dt>Entry time</dt><dd>{location.access_minutes > 0 ? `${location.access_minutes} min` : "No additional time recorded"}</dd></div>
       <div class="portal-arrival-leave"><dt>Arrival plan</dt><dd>{arrivalCopy}</dd></div>
-    </dl><details class="portal-arrival-map-fold" open={showBuildingComparison}><summary>{showBuildingComparison ? "Venue map" : "Show venue map"}</summary><div class={`portal-arrival-map${hasPin ? " pinned" : ""}`} aria-label={hasPin ? "Pinned venue location" : "No physical location pin available"}><span>{hasPin ? "Pinned venue" : "No map pin"}</span><small>{hasPin ? `${location.lat}, ${location.lng}` : "The conference team has not pinned this building."}</small></div></details></div>
+    </dl><ArrivalMap slot={slot} /></div>
   </section>;
 }
 
