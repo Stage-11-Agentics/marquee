@@ -7,6 +7,7 @@ export { initialsFor, primaryRole, roleLabel };
 
 const AUTH_ME_ROUTE = "/api/v1/auth/me";
 const LOGOUT_ROUTE = "/api/v1/auth/logout";
+export const EVENT_NAME_CHANGED = "marquee:event-name-changed";
 
 /**
  * The demo hands out an owner session and a speaker session from the same
@@ -21,12 +22,29 @@ export interface Identity {
   initials: string;
 }
 
-interface AuthMeResponse {
+export interface AuthMeResponse {
   kind: "session" | "api_token";
   person_id?: string;
   memberships?: { event_id: string | null; role: string }[];
+  demo_event_name?: string | null;
   person_name?: string | null;
   person_email?: string | null;
+}
+
+let authMeRequest: Promise<AuthMeResponse> | null = null;
+
+function loadAuthMe(): Promise<AuthMeResponse> {
+  if (!authMeRequest) {
+    authMeRequest = apiFetch<AuthMeResponse>(AUTH_ME_ROUTE, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+      route: AUTH_ME_ROUTE,
+    }).catch((error: unknown) => {
+      authMeRequest = null;
+      throw error;
+    });
+  }
+  return authMeRequest;
 }
 
 export function useIdentity(): Identity | null {
@@ -35,11 +53,7 @@ export function useIdentity(): Identity | null {
     let cancelled = false;
     void (async () => {
       try {
-        const body = await apiFetch<AuthMeResponse>(AUTH_ME_ROUTE, {
-          headers: { accept: "application/json" },
-          cache: "no-store",
-          route: AUTH_ME_ROUTE,
-        });
+        const body = await loadAuthMe();
         if (cancelled || body.kind !== "session") return;
         const name = body.person_name?.trim() || body.person_email?.trim() || "";
         if (!name) return;
@@ -58,6 +72,35 @@ export function useIdentity(): Identity | null {
     return () => { cancelled = true; };
   }, []);
   return identity;
+}
+
+/**
+ * Shell chrome is mounted before any route module knows the event. Read the
+ * same authenticated boot payload as identity so a renamed conference is
+ * reflected in the breadcrumb and sidebar after the next navigation.
+ */
+export function useEventName(): string | null {
+  const [eventName, setEventName] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const onEventNameChanged = (event: Event) => {
+      const name = (event as CustomEvent<string>).detail;
+      if (typeof name === "string") setEventName(name.trim() || null);
+    };
+    window.addEventListener(EVENT_NAME_CHANGED, onEventNameChanged);
+    void loadAuthMe()
+      .then((body) => {
+        if (!cancelled) setEventName(body.demo_event_name?.trim() || null);
+      })
+      .catch(() => {
+        // The shell stays usable with a neutral label when auth is unavailable.
+      });
+    return () => {
+      cancelled = true;
+      window.removeEventListener(EVENT_NAME_CHANGED, onEventNameChanged);
+    };
+  }, []);
+  return eventName;
 }
 
 export async function signOut(): Promise<void> {

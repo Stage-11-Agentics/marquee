@@ -107,7 +107,7 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
 
   if (!row) {
     return {
-      conferenceName: "AIE NYC 2026",
+      conferenceName: "demo conference",
       counts: EMPTY_COUNTS,
       reviewTrack: "Agents",
       notice: "No demo conference is configured yet.",
@@ -178,7 +178,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
             <a class="button" href="/portal?demo=speaker" data-demo-role="speaker">Enter as speaker</a>
             <a class="button ghost" href="/f/cfp">View public CFP</a>
           </div>
-          <div class="hero-note">No signup. Both demos open populated AIE NYC 2026 workspaces.</div>
+          <div class="hero-note">No signup. Both demos open the populated {data.conferenceName} workspace.</div>
           <div class="demo-status" id="demo-status" role="status" aria-live="polite"></div>
         </div>
 
@@ -201,7 +201,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
 
       <footer class="landing-foot">
         <span>Apache-2.0 · Self-hosted · API-first</span>
-        <span>Built for AIE NYC 2026</span>
+        <span>Built for {data.conferenceName}</span>
       </footer>
     </div>
   );
@@ -291,7 +291,7 @@ landingRoutes.get("/", async (context) => {
       ...errorFields(error),
     });
     data = {
-      conferenceName: "AIE NYC 2026",
+      conferenceName: "demo conference",
       counts: EMPTY_COUNTS,
       reviewTrack: "Agents",
       notice: "The live pipeline preview is unavailable. Try again shortly.",

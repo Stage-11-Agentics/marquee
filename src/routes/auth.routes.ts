@@ -59,6 +59,7 @@ const authMeResponseSchema = z.object({
   memberships: z.array(z.object({ event_id: z.string().nullable(), role: z.string() })).optional(),
   scopes: z.object({ permissions: z.array(z.string()), event_ids: z.array(z.string()) }).optional(),
   demo_event_id: z.string().nullable(),
+  demo_event_name: z.string().nullable(),
   // Who the session belongs to, in the operator's own words. The shell has the
   // person id already; an id is not an answer to "which hat am I wearing", and
   // that is the question a judge asks after switching demo personas.
@@ -301,6 +302,7 @@ const getCurrentAuth = defineApiRoute(
           role: membership.role,
         })),
         demo_event_id: demoEvent?.id ?? null,
+        demo_event_name: demoEvent?.name ?? null,
         person_name: person?.name ?? null,
         person_email: person?.email ?? null,
       }, 200);
@@ -312,6 +314,7 @@ const getCurrentAuth = defineApiRoute(
       event_id: auth.eventId,
       scopes: { permissions: auth.permissions, event_ids: auth.eventIds },
       demo_event_id: demoEvent?.id ?? null,
+      demo_event_name: demoEvent?.name ?? null,
     }, 200);
   }) as never,
 );

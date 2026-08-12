@@ -1,4 +1,5 @@
 import { hydrate, render } from "preact";
+import type { JSX } from "preact";
 import "../styles/tokens.css";
 import "../styles/components.css";
 import { AppShell } from "./shell/AppShell";
@@ -6,6 +7,7 @@ import { installErrorReporting } from "./shell/error-reporting";
 import { DeliveryHealthShell } from "./health/DeliveryHealthShell";
 import { PublicForm } from "./public/form/PublicForm";
 import type { PublicFormState } from "../routes/public-form.types";
+import { useEventName } from "./shell/identity";
 
 const root = document.getElementById("app");
 if (!root) throw new Error("Marquee app root is missing");
@@ -27,11 +29,18 @@ const isPublicPage =
   window.location.pathname.startsWith("/embed/") ||
   /^\/[^/]+\/(?:agenda|speakers)\/embed\/?$/.test(window.location.pathname);
 
+function ShellEntry({ health = false }: { health?: boolean }): JSX.Element {
+  const eventName = useEventName() ?? "Conference";
+  return health
+    ? <DeliveryHealthShell eventName={eventName} />
+    : <AppShell eventName={eventName} />;
+}
+
 if (window.location.pathname.startsWith("/f/")) {
   const stateElement = document.getElementById("public-form-state");
   if (stateElement?.textContent) {
     hydrate(<PublicForm initial={JSON.parse(stateElement.textContent) as PublicFormState} />, root);
   }
 } else if (window.location.pathname === "/delivery-health") {
-  render(<DeliveryHealthShell />, root);
-} else if (!isPublicPage) render(<AppShell />, root);
+  render(<ShellEntry health />, root);
+} else if (!isPublicPage) render(<ShellEntry />, root);

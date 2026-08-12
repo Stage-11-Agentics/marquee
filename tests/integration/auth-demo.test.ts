@@ -327,6 +327,7 @@ async function readMe(cookie: string) {
   const response = await app.request("/api/v1/auth/me", { headers: { cookie } }, env);
   return { status: response.status, body: await response.json<{
     person_id?: string;
+    demo_event_name?: string | null;
     person_name?: string | null;
     person_email?: string | null;
     memberships?: { role: string }[];
@@ -342,6 +343,7 @@ test("CONTRACT · /auth/me names the person behind a session, not just their id"
   // An id is not an answer to "which hat am I wearing".
   expect(body.person_name).toBe("Demo Organizer");
   expect(body.person_email).toBe("organizer@demo.marquee.example");
+  expect(body.demo_event_name).toBe("AIE NYC 2026");
   expect(body.memberships?.[0]?.role).toBe("owner");
 });
 

@@ -13,6 +13,7 @@ const checks = [
   ["client types", tsc, ["-p", "tsconfig.client.json", "--noEmit"]],
   ["test types", tsc, ["-p", "tsconfig.test.json", "--noEmit"]],
   ["production build", vite, ["build"]],
+  ["shell truth", "npm", ["run", "check:shell-truth"]],
   ["design contract", "npm", ["run", "check:design"]],
   ["API contract", "npm", ["run", "check:api"]],
   ["hermetic fast suite", "npm", ["test"]],

@@ -15,6 +15,7 @@
     "check:seed": "node scripts/checks/check-seed.mjs",
     "check:api": "node scripts/checks/check-api.mjs",
     "check:repo": "node scripts/checks/check-repo.mjs",
+    "check:shell-truth": "node scripts/checks/check-shell-truth.mjs",
     "assemble:public": "node scripts/checks/assemble-public.mjs",
     "check:readme": "node scripts/checks/stub-command.mjs check:readme MRQ-57 \"self-host deploy sequence is not implemented\"",
     "trace:ac": "node scripts/checks/trace-ac.mjs",
