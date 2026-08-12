@@ -43,3 +43,14 @@ test("the sort control offers exactly the ids the request can send", async () =>
   const offered = [...block.matchAll(/\["([a-z_]+)", "/g)].map((match) => match[1]);
   assert.deepEqual([...offered].sort(), [...SUBMISSION_SORTS].sort());
 });
+
+test("the client's sort list is the endpoint's own registry, not a copy that can drift", async () => {
+  // Normalising client-side means this list decides what the API is ever asked
+  // for. If the endpoint grew a sort and this list did not, the normaliser would
+  // quietly rewrite that sort to `newest` — a link that silently shows the wrong
+  // order, which is the same class of soft failure this file exists to close.
+  const queries = await readFile(resolve(ROOT, "src/routes/submissions.queries.ts"), "utf8");
+  const registry = queries.slice(queries.indexOf("export const SUBMISSION_SORTS = {"), queries.indexOf("} as const satisfies SortRegistry"));
+  const served = [...registry.matchAll(/^\s{2}([a-z_]+):\s*\{/gm)].map((match) => match[1]);
+  assert.deepEqual([...served].sort(), [...SUBMISSION_SORTS].sort());
+});

@@ -99,13 +99,19 @@ function publicIssueMessage(issue: { message: string }): string {
 }
 
 /**
- * A 409 or a bare 422 carries the one sentence that actually tells the person
- * what to do — "Your abstract limit is full. Use a saved resume link…", "This
- * call for speakers is closed…" — and that sentence is already written for
- * them, not for a log. Replacing it with house copy costs the speaker the only
- * actionable thing in the response, so those statuses pass the server's own
- * words through. The rest stay generic because their server-side text is
- * diagnostic rather than speaker-facing.
+ * A 409, a bare 422, or a 404 carries the one sentence that actually tells the
+ * person what to do — "Your abstract limit is full. Use a saved resume link…",
+ * "This call for speakers is closed…" — and that sentence is already written
+ * for them, not for a log. Replacing it with house copy costs the speaker the
+ * only actionable thing in the response, so those three statuses pass the
+ * server's own words through and keep the house copy as the fallback for a
+ * response that carries no sentence. The rest stay generic because their
+ * server-side text is diagnostic rather than speaker-facing.
+ *
+ * Safe because every 409/422/404 the public form can raise is hand-written
+ * speaker-facing prose (`public-form.routes.ts`); schema validation failures
+ * arrive as 400 from the router's `defaultHook`, and 400 still falls through to
+ * `errorSummary`.
  */
 function publicErrorMessage(error: unknown): string {
   if (!(error instanceof MarqueeApiError)) return errorSummary(error);
