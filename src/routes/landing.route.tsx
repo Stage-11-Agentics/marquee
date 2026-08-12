@@ -186,7 +186,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
           <div class="mini-pipeline">
             <PreviewStage label="Submitted" value={counts.submitted} />
             <PreviewStage label="In review" value={counts.inReview} />
-            <PreviewStage label="Accepted" value={counts.accepted} />
+            <PreviewStage label="Ready to place" value={counts.accepted} />
             <PreviewStage label="Onboarding" value={counts.onboarding} />
             <PreviewStage label="Scheduled" value={counts.scheduled} />
             <PreviewStage label="Published" value={counts.published} />

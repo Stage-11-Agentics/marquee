@@ -31,6 +31,8 @@ export const SUBMISSION_STATUS_FILTERS = [
   "submitted",
   "in_review",
   "accepted",
+  // Persisted in saved-view configs and URLs; means the stored acceptance fact.
+  "accepted_any",
   "waitlisted",
   "rejected",
   "withdrawn",
@@ -132,6 +134,7 @@ export function submissionStatusPredicate(
     AND ${pendingWavePredicate(submission)}`;
   if (status === "unreviewed") return `${submission}.status IN ('submitted', 'in_review')`;
   if (status === "onboarding") return onboardingStagePredicate(submission, agenda, includeCancelledAt);
+  if (status === "accepted_any") return `${submission}.status = 'accepted'`;
   if (status === "accepted") return acceptedStagePredicate(submission, agenda, includeCancelledAt);
   return `${submission}.status = '${status}'`;
 }
@@ -218,7 +221,7 @@ function filterParts(
   else if (filters.status) {
     if (statusSemantics === "stored") {
       clauses.push("s.status = ?");
-      bindings.push(filters.status);
+      bindings.push(filters.status === "accepted_any" ? "accepted" : filters.status);
     } else {
       clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt }));
     }

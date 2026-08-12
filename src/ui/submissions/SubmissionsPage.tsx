@@ -52,20 +52,33 @@ interface SavedView {
 }
 
 const STATUS_OPTIONS = [
-  ["", "All statuses"],
-  ["draft", "Draft"],
-  ["submitted", "Submitted"],
-  ["in_review", "In review"],
-  ["unreviewed", "Unreviewed"],
-  ["waved", "Waved"],
-  ["onboarding", "Onboarding"],
-  ["accepted", "Accepted"],
-  ["waitlisted", "Maybe"],
-  ["rejected", "Rejected"],
-  ["withdrawn", "Withdrawn"],
-  ["scheduled", "Scheduled"],
-  ["published", "Published"],
-  ["not_notified", "Decided · not notified"],
+  {
+    label: "Stored decision facts",
+    options: [
+      ["draft", "Draft"],
+      ["submitted", "Submitted"],
+      ["in_review", "In review"],
+      ["accepted_any", "Accepted (any stage)"],
+      ["waitlisted", "Maybe"],
+      ["rejected", "Rejected"],
+      ["withdrawn", "Withdrawn"],
+    ],
+  },
+  {
+    label: "Pipeline stages",
+    options: [
+      ["unreviewed", "Unreviewed"],
+      ["waved", "Waved"],
+      ["onboarding", "Onboarding"],
+      ["accepted", "Ready to place"],
+      ["scheduled", "Scheduled"],
+      ["published", "Published"],
+    ],
+  },
+  {
+    label: "Attention queue",
+    options: [["not_notified", "Decided · not notified"]],
+  },
 ] as const;
 
 /**
@@ -92,6 +105,7 @@ function statusLabel(status: SubmissionListItem["status"]): string {
   if (status === "waitlisted") return "Maybe";
   if (status === "in_review") return "In review";
   if (status === "unreviewed") return "Unreviewed";
+  if (status === "accepted") return "Ready to place";
   return status[0]!.toUpperCase() + status.slice(1);
 }
 
@@ -584,7 +598,7 @@ export function SubmissionsPage({
       </div>}
       <form class="submissions-toolbar" onSubmit={(event) => { event.preventDefault(); updateQuery({ q: searchDraft.trim(), page: 1 }); }}>
         <label class="search-field"><span class="sr-only">Search submissions</span><input value={searchDraft} onInput={(event) => setSearchDraft(event.currentTarget.value)} placeholder="Search 1,000 submissions…" /><button class="button small" type="submit">Search</button></label>
-        <label><span class="sr-only">Status</span><select value={status} onChange={(event) => updateQuery({ status: event.currentTarget.value, page: 1 })}>{STATUS_OPTIONS.map(([value, label]) => <option value={value}>{label}</option>)}</select></label>
+        <label><span class="sr-only">Status</span><select class={`status-filter ${status ? "has-selection" : "is-default"}`} value={status} onChange={(event) => updateQuery({ status: event.currentTarget.value, page: 1 })}><option value="">All statuses</option>{STATUS_OPTIONS.map((group) => <optgroup label={group.label}>{group.options.map(([value, label]) => <option value={value}>{label}</option>)}</optgroup>)}</select></label>
         <label><span class="sr-only">Type</span><select value={kind} onChange={(event) => updateQuery({ kind: event.currentTarget.value, page: 1 })}><option value="">All types</option><option value="abstract">Abstract</option><option value="session">Session</option></select></label>
         <label><span class="sr-only">Track</span><select value={track} onChange={(event) => updateQuery({ track: event.currentTarget.value, page: 1 })}><option value="">All tracks</option>{[...knownTracks.values()].sort((left, right) => left.name.localeCompare(right.name)).map((itemTrack) => <option value={itemTrack.id}>{itemTrack.name}</option>)}</select></label>
         <span class="toolbar-spacer" />

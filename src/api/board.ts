@@ -28,7 +28,7 @@ export const BOARD_STAGE_LABELS: Record<BoardStage, string> = {
   submitted: "Submitted",
   in_review: "In Review",
   waved: "Waved",
-  accepted: "Accepted",
+  accepted: "Ready to place",
   onboarding: "Onboarding",
   scheduled: "Scheduled",
   published: "Published",

@@ -4,7 +4,7 @@ import { matchRoute, routesFor } from "../../src/ui/shell/route-table";
 
 test("CONTRACT · the sidebar reproduces the binding prototype navigation order", () => {
   expect([...routesFor("home"), ...routesFor("pipeline"), ...routesFor("modules")].map((route) => route.label)).toEqual([
-    "Program home", "Program board", "Submitted", "In review", "Waved", "Accepted", "Onboarding", "Scheduled", "Published",
+    "Program home", "Program board", "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published",
     "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Communications", "Speaker portal", "Conference site", "Conference settings",
     "Delivery health",
   ]);

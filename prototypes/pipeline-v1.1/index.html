@@ -1505,7 +1505,7 @@
               ${pipelineNavItem("Submitted","1","Submitted")}
               ${pipelineNavItem("In review","2","In Review")}
               ${pipelineNavItem("Waved","3","Waved")}
-              ${pipelineNavItem("Accepted","4","Accepted")}
+              ${pipelineNavItem("Ready to place","4","Accepted")}
               ${pipelineNavItem("Onboarding","5","Onboarding","onboarding")}
               ${pipelineNavItem("Scheduled","6","Scheduled")}
               ${pipelineNavItem("Published","7","Published")}
@@ -1625,7 +1625,7 @@
           ${setupChecklistCard()}
           <section class="card pipeline-card">
             <div class="pipeline">
-              ${["Submitted","In Review","Waved","Accepted","Onboarding","Scheduled","Published"].map(name=>
+              ${["Submitted","In Review","Waved","Ready to place","Onboarding","Scheduled","Published"].map(name=>
                 `<div class="pipeline-stage at-zero"><span class="pipeline-name">${name}</span><strong class="pipeline-count">0</strong><span class="pipeline-delta">${complete?"awaiting submissions":"not started"}</span></div>`
               ).join("")}
             </div>
@@ -1656,7 +1656,7 @@
               <div class="mini-pipeline">
                 <div class="mini-stage"><span class="subtle">Submitted</span><strong>350</strong></div>
                 <div class="mini-stage"><span class="subtle">In review</span><strong>90</strong></div>
-                <div class="mini-stage"><span class="subtle">Accepted</span><strong>190</strong></div>
+                <div class="mini-stage"><span class="subtle">Ready to place</span><strong>190</strong></div>
                 <div class="mini-stage"><span class="subtle">Onboarding</span><strong>${onboardingCounts().incomplete}</strong></div>
                 <div class="mini-stage"><span class="subtle">Scheduled</span><strong>32</strong></div>
                 <div class="mini-stage"><span class="subtle">Published</span><strong>26</strong></div>
@@ -1724,7 +1724,7 @@
               ${pipelineStage("Submitted", counts.Submitted, "+41 this week", "Submitted")}
               ${pipelineStage("In Review", counts["In Review"], "62% assigned", "In Review")}
               ${pipelineStage("Waved", acceptedByWave(1) + acceptedByWave(2), "2 of 3 waves", "Waved")}
-              ${pipelineStage("Accepted", counts.AcceptedTotal, `${(counts.AcceptedTotal / state.submissions.length * 100).toFixed(1)}% of all`, "Accepted")}
+              ${pipelineStage("Ready to place", counts.ReadyToPlace, `${(counts.ReadyToPlace / state.submissions.length * 100).toFixed(1)}% of all`, "Accepted")}
               ${pipelineStage("Onboarding", onboardingCounts().incomplete, `owe tasks · ${onboardingCounts().risk} at risk`, "Onboarding", "onboarding")}
               ${pipelineStage("Scheduled", counts.Scheduled, `${counts.AcceptedTotal - counts.Scheduled} still unplaced`, "Scheduled", "submissions", "placed on the working agenda")}
               ${pipelineStage("Published", counts.Published, `${getAgendaConflicts().length} live conflicts`, "Published", "submissions", "live on the public site")}
@@ -1755,7 +1755,7 @@
                 <div class="metric-grid">
                   <button class="metric-box" style="border:0;text-align:left" data-attention-filter="In Review"><span class="eyebrow">Reviews done</span><div class="metric">1,842</div><span class="subtle">of 2,130</span></button>
                   <button class="metric-box" style="border:0;text-align:left" data-route="onboarding"><span class="eyebrow">Tasks overdue</span><div class="metric">${onboardingCounts().overdueTasks}</div><span class="subtle">across ${onboardingCounts().overdue} speakers</span></button>
-                  <button class="metric-box" style="border:0;text-align:left" data-route="agenda"><span class="eyebrow">Unscheduled</span><div class="metric">${counts.AcceptedTotal - counts.Scheduled}</div><span class="subtle">accepted sessions</span></button>
+                  <button class="metric-box" style="border:0;text-align:left" data-route="agenda"><span class="eyebrow">Unscheduled</span><div class="metric">${counts.AcceptedTotal - counts.Scheduled}</div><span class="subtle">accepted Sessions not yet placed</span></button>
                   <button class="metric-box" style="border:0;text-align:left" data-route="agenda"><span class="eyebrow">Conflicts</span><div class="metric" style="color:var(--danger)">${getAgendaConflicts().length}</div><span class="subtle">${agendaConflictIds().size} affected Sessions · live</span></button>
                 </div>
                 <div class="divider"></div>
@@ -1782,7 +1782,7 @@
         {name:"Submitted",hint:"Received and waiting"},
         {name:"In Review",hint:"Committee work underway"},
         {name:"Waved",hint:"Decision wave prepared"},
-        {name:"Accepted",hint:"Decision confirmed"},
+        {name:"Accepted",label:"Ready to place",hint:"Accepted and ready for scheduling"},
         {name:"Onboarding",hint:"Speaker work underway",derived:true,entry:"Open an accepted record to manage speaker tasks and onboarding."},
         {name:"Scheduled",hint:"Placed on working agenda",derived:true,entry:"Open an accepted record, then choose Place on agenda."},
         {name:"Published",hint:"Live on public site",derived:true,entry:"Open a scheduled record, then choose Publish Session."}
@@ -1809,7 +1809,7 @@
         return shell(`<div class="page">
           ${pageHead("Program board", `${matching.length.toLocaleString()} matching submissions across seven lifecycle stages · click any card to open its record and take action.`, `<button class="button" data-route="dashboard">Pipeline dashboard</button><button class="button primary" data-route="submissions">Open list</button>`)}
           <section class="card"><div class="toolbar" aria-label="Program board filters"><input id="board-search" value="${esc(state.boardSearch)}" aria-label="Search board" placeholder="Search title, speaker, ID, or company"><select id="board-type-filter" aria-label="Filter by type">${["All types","Abstracts","Sessions"].map(value=>`<option ${state.boardType===value?"selected":""}>${value}</option>`).join("")}</select><select id="board-track-filter" aria-label="Filter by track"><option>All tracks</option>${tracks.map(t=>`<option ${state.boardTrack===t.name?"selected":""}>${esc(t.name)}</option>`).join("")}</select><select id="board-format-filter" aria-label="Filter by format"><option>All formats</option>${formats.map(f=>`<option ${state.boardFormat===f?"selected":""}>${esc(f)}</option>`).join("")}</select><select id="board-wave-filter" aria-label="Filter by wave">${["All waves","Wave 1","Wave 2","Wave 3","Unwaved"].map(w=>`<option ${state.boardWave===w?"selected":""}>${w}</option>`).join("")}</select><span class="toolbar-spacer"></span><div class="board-filter-summary"><strong>${matching.length.toLocaleString()}</strong> of ${state.submissions.length.toLocaleString()}<button class="button small" id="clear-board-filters">Clear filters</button></div></div><div class="card-body" style="padding:10px"><div class="program-board-shell"><div class="program-board">
-            ${programBoardStages.map(stage=>{const cards=matching.filter(s=>boardStageFor(s)===stage.name);return `<section class="board-column ${stage.derived?"derived":""}" data-board-column="${stage.name}" data-derived="${stage.derived?"true":"false"}"><header class="board-column-head"><div><strong>${stage.name}</strong><small>${stage.hint}</small></div><span class="board-count">${cards.length}</span></header>${stage.derived?`<div class="board-derived-note">${stage.entry}</div>`:""}<div class="board-card-list">${cards.map(boardCard).join("")||`<div class="subtle" style="padding:24px;text-align:center">No matching submissions</div>`}</div></section>`}).join("")}
+            ${programBoardStages.map(stage=>{const cards=matching.filter(s=>boardStageFor(s)===stage.name);return `<section class="board-column ${stage.derived?"derived":""}" data-board-column="${stage.name}" data-derived="${stage.derived?"true":"false"}"><header class="board-column-head"><div><strong>${stage.label||stage.name}</strong><small>${stage.hint}</small></div><span class="board-count">${cards.length}</span></header>${stage.derived?`<div class="board-derived-note">${stage.entry}</div>`:""}<div class="board-card-list">${cards.map(boardCard).join("")||`<div class="subtle" style="padding:24px;text-align:center">No matching submissions</div>`}</div></section>`}).join("")}
           </div></div></div></section>
         </div>`);
       }
@@ -1845,8 +1845,8 @@
       }
 
       function pipelineCounts() {
-        const result = { Submitted: 0, "In Review": 0, Accepted: 0, Scheduled: 0, Published: 0, AcceptedTotal: 0 };
-        state.submissions.forEach(s => { if (result[s.status] !== undefined) result[s.status]++; if (s.accepted) result.AcceptedTotal++; });
+        const result = { Submitted: 0, "In Review": 0, Accepted: 0, Scheduled: 0, Published: 0, AcceptedTotal: 0, ReadyToPlace: 0 };
+        state.submissions.forEach(s => { if (result[s.status] !== undefined) result[s.status]++; if (s.accepted) { result.AcceptedTotal++; if (boardStageFor(s) === "Accepted") result.ReadyToPlace++; } });
         result.Scheduled += result.Published;
         return result;
       }
@@ -2155,7 +2155,9 @@
         const q = state.submissionSearch.trim().toLowerCase();
         let list = state.submissions.filter(s =>
           (state.submissionFilter === "All" ||
-            (state.submissionFilter === "Accepted" && s.accepted) ||
+            (state.submissionFilter === "AcceptedAny" && s.accepted) ||
+            (state.submissionFilter === "Accepted" && boardStageFor(s) === "Accepted") ||
+            (state.submissionFilter === "Onboarding" && boardStageFor(s) === "Onboarding") ||
             (state.submissionFilter === "Waved" && s.accepted && s.wave <= 2) ||
             (state.submissionFilter === "Scheduled" && ["Scheduled","Published"].includes(s.status)) ||
             (state.submissionFilter === "Unreviewed" && ["Submitted","In Review"].includes(s.status)) ||
@@ -2248,7 +2250,7 @@
             <div class="toolbar">
               <select id="search-op" aria-label="Search operator" style="flex:none;width:132px">${["contains","does not contain","starts with"].map(op=>`<option ${state.submissionSearchOp===op?"selected":""}>${op}</option>`).join("")}</select>
               <input id="submission-search" value="${esc(state.submissionSearch)}" placeholder="Search 1,000 submissions…">
-              <select id="status-filter"><option>All</option>${["Draft","Submitted","In Review","Unreviewed","Waved","Accepted","Scheduled","Published","Waitlisted","Rejected","Withdrawn"].map(x=>`<option ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}</select>
+              <select id="status-filter"><option value="All">All statuses</option><optgroup label="Stored decision facts">${["Draft","Submitted","In Review"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}<option value="AcceptedAny" ${state.submissionFilter==="AcceptedAny"?"selected":""}>Accepted (any stage)</option>${["Waitlisted","Rejected","Withdrawn"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x==="Waitlisted"?"Maybe":x}</option>`).join("")}</optgroup><optgroup label="Pipeline stages">${["Unreviewed","Waved","Onboarding"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}<option value="Accepted" ${state.submissionFilter==="Accepted"?"selected":""}>Ready to place</option>${["Scheduled","Published"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}</optgroup><optgroup label="Attention queue"><option value="NotNotified" ${state.submissionFilter==="NotNotified"?"selected":""}>Decided · not notified</option></optgroup></select>
               <select id="type-filter"><option>All</option><option ${state.submissionType==="Abstract"?"selected":""}>Abstract</option><option ${state.submissionType==="Session"?"selected":""}>Session</option></select>
               <select id="track-filter"><option>All</option>${tracks.map(t=>`<option ${state.submissionTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select>
               <span class="toolbar-spacer"></span>
