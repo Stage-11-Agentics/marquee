@@ -71,17 +71,22 @@ Registered in `src/routes/*.route.tsx`, outside the SPA.
 | `/:eventSlug/:kind/embed` | src/routes/embed.route.tsx |
 | `/agenda` | src/routes/public-agenda.route.tsx |
 | `/agenda/agents` | src/routes/public-agenda.route.tsx |
+| `/claim/:token` | src/routes/claim.route.tsx |
 | `/embed/:slug` | src/routes/embed.route.tsx |
 | `/embed/config` | src/routes/embed.route.tsx |
 | `/f/:slug` | src/routes/public-form.route.tsx |
+| `/join/:token` | src/routes/claim.route.tsx |
+| `/login` | src/routes/signin.route.tsx |
 | `/p/:slug` | src/routes/public-agenda.route.tsx |
 | `/s/:slug` | src/routes/public-agenda.route.tsx |
+| `/sign-in` | src/routes/signin.route.tsx |
+| `/signin` | src/routes/signin.route.tsx |
 | `/site` | src/routes/public-agenda.route.tsx |
 | `/speakers` | src/routes/public-agenda.route.tsx |
 
 ## Public-page predicate
 
-`app.tsx` treats a path as public when it is exactly `/`, `/agenda`, `/agenda/agents`, `/speakers`, or begins with `/f/`, `/s/`, `/p/`, `/embed/`, or matches 1 embed pattern.
+`app.tsx` treats a path as public when it is exactly `/`, `/signin`, `/login`, `/sign-in`, `/agenda`, `/agenda/agents`, `/speakers`, or begins with `/claim/`, `/join/`, `/f/`, `/s/`, `/p/`, `/embed/`, or matches 1 embed pattern.
 
 ## Route summary
 
@@ -90,7 +95,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 
 ```text
 ROUTES (real paths, not hash routes):
-  Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /embed/:slug /embed/config /f/:slug /p/:slug /s/:slug /site /speakers
+  Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /claim/:token /embed/:slug /embed/config /f/:slug /join/:token /login /p/:slug /s/:slug /sign-in /signin /site /speakers
   Organizer (admin shell): /people /lists /pipeline /crm /directory /contacts /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /roster /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /import
   Review queue: /reviewer
   Speaker portal: /portal

@@ -23,6 +23,11 @@ installErrorReporting();
 // the admin shell. This also keeps an iframe independent of mq_session.
 const isPublicPage =
   window.location.pathname === "/" ||
+  window.location.pathname === "/signin" ||
+  window.location.pathname === "/login" ||
+  window.location.pathname === "/sign-in" ||
+  window.location.pathname.startsWith("/claim/") ||
+  window.location.pathname.startsWith("/join/") ||
   window.location.pathname.startsWith("/f/") ||
   window.location.pathname === "/agenda" ||
   window.location.pathname === "/agenda/agents" ||
@@ -30,7 +35,7 @@ const isPublicPage =
   window.location.pathname.startsWith("/s/") ||
   window.location.pathname.startsWith("/p/") ||
   window.location.pathname.startsWith("/embed/") ||
-  /^\/[^/]+\/(?:agenda|speakers)\/embed\/?$/.test(window.location.pathname);
+  /^\/[^/]+\/(?:agenda|sessions|speakers|cfp)\/embed\/?$/.test(window.location.pathname);
 
 /**
  * The conference context wraps BOTH render roots, and it has to: the delivery

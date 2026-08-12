@@ -1,10 +1,11 @@
 import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { SubmissionsPage } from "../submissions/SubmissionsPage";
-import { apiFetch, errorSummary } from "./api-client";
+import { apiFetch, errorSummary, onUnauthenticated } from "./api-client";
 import { Button, EmptyState, PageHeader } from "./components";
 import { ErrorBoundary } from "./ErrorSurface";
 import { OverlayHost, TOAST_EVENT, ToastHost, type OverlayState } from "./OverlayHosts";
+import { SessionWall } from "./SessionWall";
 import { matchRoute } from "./route-table";
 import { useBrowserRouter } from "./router";
 import { SeatBlockedPage, useSeat } from "./seat";
@@ -58,6 +59,16 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState("");
   const { seat, blocked } = useSeat();
+  // The portal and the co-speaker page already answer their own 401 in their own
+  // chrome; raising a second wall over theirs would be two answers to one
+  // question. Public pages and the claim pages never mount this shell at all.
+  const wallAllowed = location.pathname !== "/portal" && location.pathname !== "/co-speaker";
+  const [sessionEnded, setSessionEnded] = useState(false);
+  useEffect(() => onUnauthenticated(() => { if (wallAllowed) setSessionEnded(true); }), [wallAllowed]);
+  // Sticky for the session: six failing panels raise one wall, not six.
+  const wall = sessionEnded && wallAllowed
+    ? <SessionWall next={`${location.pathname}${location.search}`} />
+    : null;
   const closeOverlay = useCallback(() => setOverlay(null), []);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
@@ -148,7 +159,10 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   // The handoff is the second half of the claim, not an admin screen: it is
   // reached seconds after a session first exists, before there is a conference
   // to draw navigation around.
-  if (location.pathname === "/handoff") return <HandoffPage navigate={navigate} />;
+  if (location.pathname === "/handoff") return <>
+    <HandoffPage navigate={navigate} />
+    {wall}
+  </>;
   if (location.pathname === "/portal") return <PortalPage />;
   if (location.pathname === "/co-speaker") return <CoSpeakerPage />;
   // The review queue is answered before the layout is drawn, which is exactly
@@ -156,14 +170,20 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   // inside it: a reviewer's one conference has to reach a page the shell never
   // wraps.
   if (location.pathname === "/reviewer") {
-    return eventId === null
-      ? <div class="page"><NoConference navigate={navigate} /></div>
-      : <ReviewerPage eventId={eventId} />;
+    return <>
+      {eventId === null
+        ? <div class="page"><NoConference navigate={navigate} /></div>
+        : <ReviewerPage eventId={eventId} />}
+      {wall}
+    </>;
   }
   // A seat that cannot use this surface gets an answer, not a full organizer
   // navigation drawn around a wall — the seat's own routes are already handled
   // above, so this only ever replaces admin chrome.
-  if (blocked) return <SeatBlockedPage seat={seat} navigate={navigate} />;
+  if (blocked) return <>
+    <SeatBlockedPage seat={seat} navigate={navigate} />
+    {wall}
+  </>;
   return <>
     <div class="app-shell">
       <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} />
@@ -234,5 +254,6 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
     <OverlayHost state={overlay} onClose={closeOverlay} />
     {eventId !== null && <QuickSearch key={searchOpen ? "open" : "closed"} eventId={eventId} open={searchOpen} onClose={closeSearch} navigate={navigate} />}
     <ToastHost message={toast} />
+    {wall}
   </>;
 }

@@ -66,8 +66,11 @@ export const ERROR_TREATMENTS: Readonly<Record<MarqueeErrorCode, ErrorTreatment>
     retryable: false,
   },
   unauthenticated: {
+    // The wall raised over the screen carries the sign-in action and says the
+    // same sentence. A panel behind it repeating the instruction is two answers
+    // to one question, and only one of them has a button.
     sentence: "Your session has expired.",
-    recovery: "Sign in again to pick up where you left off.",
+    recovery: "Nothing you were working on has been lost.",
     retryable: false,
   },
   forbidden: {
@@ -324,6 +327,19 @@ function scopedSignal(callerSignal: AbortSignal | null | undefined): AbortSignal
     : callerSignal;
 }
 
+const unauthenticatedListeners = new Set<() => void>();
+
+/**
+ * Fires when a route says this browser has no session left. The shell listens
+ * so it can raise one wall over the work already on screen rather than letting
+ * every panel fail on its own — the refusal is still thrown to the caller that
+ * asked, exactly as `onForbidden` leaves it.
+ */
+export function onUnauthenticated(listener: () => void): () => void {
+  unauthenticatedListeners.add(listener);
+  return () => { unauthenticatedListeners.delete(listener); };
+}
+
 export async function apiFetch<Result>(
   path: string,
   options: ApiFetchOptions = {},
@@ -349,6 +365,7 @@ export async function apiFetch<Result>(
     const envelope = (await response.json().catch(() => null)) as EnvelopeShape | null;
     const code = codeFromEnvelope(envelope?.error?.code, response.status);
     if (code === "forbidden") for (const listener of forbiddenListeners) listener();
+    if (code === "unauthenticated") for (const listener of unauthenticatedListeners) listener();
     throw noted(new MarqueeApiError({
       code,
       message: asString(envelope?.error?.message) ?? `the request failed with status ${response.status}`,

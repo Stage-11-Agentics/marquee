@@ -155,6 +155,65 @@ const spa = routeTable.map((route) => {
   return { ...route, surface };
 });
 
+/**
+ * A server-rendered page missing from `run_worker_first` never runs.
+ *
+ * The assets router answers first for any path not on that list, so the page
+ * returns 200 with the bare SPA shell — a response that looks alive to a probe
+ * and contains none of the page. Nothing that fetches the app in-process can
+ * see it: the integration suite calls `app.fetch` directly, which never
+ * consults the list. `/claim/:token` shipped that way and served an empty shell
+ * on the deployed Worker until MRQ-133, so this is a lived failure, not a
+ * hypothetical one.
+ */
+function segmentsAgree(patternSegments, pathSegments) {
+  for (let index = 0; index < Math.max(patternSegments.length, pathSegments.length); index += 1) {
+    const patternSegment = patternSegments[index];
+    const pathSegment = pathSegments[index];
+    // Wrangler's `*` spans slashes, so a wildcard in the LAST pattern segment
+    // swallows everything left of the path: `/f/*` covers `/f/:slug`, and
+    // `/agenda*` covers `/agenda/agents`. A `*` in the middle stands for exactly
+    // one segment, so `/*/agenda/embed` does not quietly claim to cover
+    // `/signin`.
+    if (index === patternSegments.length - 1 && patternSegment?.endsWith("*")) {
+      return pathSegment === undefined
+        ? patternSegment === "*"
+        : pathSegment.startsWith(patternSegment.slice(0, -1));
+    }
+    if (patternSegment === undefined || pathSegment === undefined) return false;
+    if (patternSegment === "*") continue;
+    // A Hono parameter stands for any literal, and vice versa.
+    if (pathSegment.startsWith(":")) continue;
+    if (patternSegment.endsWith("*")) {
+      if (!pathSegment.startsWith(patternSegment.slice(0, -1))) return false;
+      continue;
+    }
+    if (patternSegment !== pathSegment) return false;
+  }
+  return true;
+}
+
+async function assetsRouterCoverage(pagePaths) {
+  const config = await readFile(resolve(REPOSITORY_ROOT, "wrangler.jsonc"), "utf8");
+  const block = /"run_worker_first"\s*:\s*\[([\s\S]*?)\]/.exec(config);
+  if (!block) throw new Error("check:routes cannot find run_worker_first in wrangler.jsonc");
+  const patterns = [...block[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  return pagePaths.filter((path) => !patterns.some((pattern) =>
+    segmentsAgree(pattern.split("/"), path.split("/"))));
+}
+
+// A smoke alarm rather than a proof: it catches a page with no plausible
+// pattern at all, which is the failure that has actually shipped twice. It does
+// not verify that a parameterised page is covered for every value the route
+// accepts — `/:eventSlug/:kind/embed` needs one entry per embed kind, and only
+// reading both lists together tells you whether all four are there.
+const uncovered = await assetsRouterCoverage(pages.map((page) => page.path));
+if (uncovered.length > 0) {
+  process.stdout.write(`\nServer-rendered pages the assets router will answer instead of the Worker: ${uncovered.join(" ")}\nAdd them to "run_worker_first" in wrangler.jsonc, or they will serve an empty SPA shell.\n`);
+  emit({ command: "check:routes", status: "fail", reason: "assets_router_shadows_page", uncovered });
+  process.exit(1);
+}
+
 const document = renderDocument({ spa, pages, predicate });
 
 if (args.write) {

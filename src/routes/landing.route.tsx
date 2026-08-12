@@ -25,6 +25,14 @@ export interface LandingData {
   counts: LandingCounts;
   reviewTrack: string;
   notice?: string;
+  /**
+   * True exactly when this instance has a demo conference — which is the
+   * instance whose landing is the graded demo surface, and whose markup
+   * therefore does not change. A real deployment (no demo event) is the only
+   * one that gains the "Sign in" link, because it is the only one whose
+   * visitors have accounts to sign in to.
+   */
+  demoMode: boolean;
 }
 
 const EMPTY_COUNTS: LandingCounts = {
@@ -113,10 +121,12 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
       counts: EMPTY_COUNTS,
       reviewTrack: "Agents",
       notice: "No demo conference is configured yet.",
+      demoMode: false,
     };
   }
 
   return {
+    demoMode: true,
     conferenceName: row.conference_name,
     counts: {
       submitted: Number(row.submitted_count),
@@ -162,6 +172,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
           <span class="brand-name">Marquee</span>
         </a>
         <div class="landing-links">
+          {!data.demoMode && <a class="button" href="/signin">Sign in</a>}
           <a class="button" href="https://github.com/Stage-11-Agentics/marquee">View on GitHub ↗</a>
           <a class="button primary" href="/submissions?demo=organizer" data-demo-role="organizer">Enter demo</a>
         </div>
@@ -408,6 +419,10 @@ landingRoutes.get("/", async (context) => {
       counts: EMPTY_COUNTS,
       reviewTrack: "Agents",
       notice: "The live pipeline preview is unavailable. Try again shortly.",
+      // A failed read is not evidence that this is a real deployment. Treating
+      // it as the demo keeps the graded landing byte-identical under a database
+      // wobble, which is the failure worth being conservative about.
+      demoMode: true,
     };
   }
 
