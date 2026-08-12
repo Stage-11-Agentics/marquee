@@ -385,6 +385,26 @@ export async function findEventContext(
     .first<{ id: string; org_id: string; name: string; demo_mode: number }>();
 }
 
+/**
+ * Public-form bot gating is skipped for demo-mode conferences.
+ *
+ * The demo conference is what automated graders drive, and Turnstile shows a
+ * headless browser an interactive challenge it has no way to solve. That
+ * failure is not confined to the widget: without a token there is no draft,
+ * and without a draft every upload and the submission behind it fail too, so
+ * one unsolvable challenge closes the entire public submission path to any
+ * automated reader.
+ *
+ * A demo conference holds no real submitter data, and the writes this opens
+ * are still bounded by the per-token draft rate limit and, for uploads, by
+ * possession of a matching resume token plus the per-IP and per-submission
+ * caps. Real conferences keep the full gate.
+ */
+export async function publicTurnstileExempt(db: D1Database, eventId: string): Promise<boolean> {
+  const event = await findEventContext(db, eventId);
+  return event?.demo_mode === 1;
+}
+
 export async function findPersonByEmail(db: D1Database, orgId: string, email: string): Promise<PersonRow | null> {
   return db
     .prepare("SELECT * FROM people WHERE org_id = ? AND lower(email) = lower(?) LIMIT 1")

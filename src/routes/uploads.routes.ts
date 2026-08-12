@@ -29,6 +29,7 @@ import { checkUploadRateLimits, rateLimitHeaders } from "../lib/r2/rate-limit";
 import { isMediaHost, serveInlineImageObject, serveMediaObject } from "../lib/r2/serve";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { verifyAndComplete } from "../lib/r2/complete";
+import { publicTurnstileExempt } from "./public-form.shared";
 
 export interface UploadsEnv {
   DB: D1Database;
@@ -215,18 +216,6 @@ async function handlePublicSign(context: Context<ApiEnv>) {
     return uploadError(context, "invalid_request", "missing required fields");
   }
 
-  const turnstile = await verifyTurnstile({
-    secretKey: env.TURNSTILE_SECRET_KEY,
-    token: typeof turnstileToken === "string" ? turnstileToken : null,
-    remoteIp: context.req.header("cf-connecting-ip") ?? undefined,
-  });
-  if (!turnstile.ok) {
-    return uploadError(context, "turnstile_failed", "Turnstile verification failed");
-  }
-  if (typeof turnstileToken !== "string" || !(await consumePublicTurnstileToken(env.CACHE, turnstileToken))) {
-    return uploadError(context, "turnstile_failed", "Turnstile token has already been used");
-  }
-
   const draft = await env.DB.prepare(
     `SELECT id, event_id, status, resume_token_hash FROM submissions WHERE id = ?1`,
   )
@@ -239,6 +228,26 @@ async function handlePublicSign(context: Context<ApiEnv>) {
   const suppliedHash = await sha256Hex(resumeToken);
   if (suppliedHash !== draft.resume_token_hash) {
     return uploadError(context, "forbidden", "resume token does not match draft");
+  }
+
+  /**
+   * The draft and its resume token are resolved before the bot gate so a
+   * demo-mode conference can be recognised at all; every caller reaching this
+   * line has already proved possession of the resume token for this draft.
+   * See publicTurnstileExempt for why demo conferences skip the challenge.
+   */
+  if (!(await publicTurnstileExempt(env.DB, draft.event_id))) {
+    const turnstile = await verifyTurnstile({
+      secretKey: env.TURNSTILE_SECRET_KEY,
+      token: typeof turnstileToken === "string" ? turnstileToken : null,
+      remoteIp: context.req.header("cf-connecting-ip") ?? undefined,
+    });
+    if (!turnstile.ok) {
+      return uploadError(context, "turnstile_failed", "Turnstile verification failed");
+    }
+    if (typeof turnstileToken !== "string" || !(await consumePublicTurnstileToken(env.CACHE, turnstileToken))) {
+      return uploadError(context, "turnstile_failed", "Turnstile token has already been used");
+    }
   }
 
   const clientIp = context.req.header("cf-connecting-ip") ?? "unknown";

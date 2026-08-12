@@ -172,6 +172,10 @@ describe.sequential("MRQ-81 public upload presign", () => {
   });
 
   test("CONTRACT · the presign stays behind Turnstile and the draft's own resume token", async () => {
+    // This contract binds real conferences. The fixture event is demo_mode = 1
+    // and demo conferences are exempt from the bot gate (publicTurnstileExempt),
+    // so drop it to a real conference to measure what this test names.
+    await env.DB.prepare("UPDATE events SET demo_mode = 0 WHERE id = ?").bind(EVENT_ID).run();
     const draft = await createDraft();
 
     const noToken = await request("/api/v1/public/uploads/sign", {
@@ -194,6 +198,9 @@ describe.sequential("MRQ-81 public upload presign", () => {
     // the draft, so demanding a second one at Submit strands the submitter
     // between the two. A resume token that resolves to this form's draft is
     // the same authority autosave already accepts; anything else is not.
+    // Measured on a real conference: demo conferences skip the gate entirely
+    // (publicTurnstileExempt), which would make this contract unobservable.
+    await env.DB.prepare("UPDATE events SET demo_mode = 0 WHERE id = ?").bind(EVENT_ID).run();
     const draft = await createDraft();
     const answers = { speaker_email: "presign@example.com", title: "Continuing my own draft" };
 

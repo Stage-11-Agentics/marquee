@@ -105,7 +105,12 @@ beforeAll(async () => {
 
 const NOW = 1_800_000_000_000;
 
-async function seedOrgEventDraft(overrides: { draftId: string; resumeToken: string; eventId: string }) {
+async function seedOrgEventDraft(overrides: {
+  draftId: string;
+  resumeToken: string;
+  eventId: string;
+  demoMode?: 0 | 1;
+}) {
   const resumeHash = Buffer.from(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(overrides.resumeToken)),
   ).toString("hex");
@@ -116,8 +121,8 @@ async function seedOrgEventDraft(overrides: { draftId: string; resumeToken: stri
     ).bind(NOW),
     env.DB.prepare(
       `INSERT OR IGNORE INTO events (id, org_id, name, slug, status, timezone, starts_on, ends_on, created_at, updated_at, demo_mode)
-       VALUES (?1, 'org1', 'Event', ?1, 'live', 'UTC', '2026-01-01', '2026-01-02', ?2, ?2, 0)`,
-    ).bind(overrides.eventId, NOW),
+       VALUES (?1, 'org1', 'Event', ?1, 'live', 'UTC', '2026-01-01', '2026-01-02', ?2, ?2, ?3)`,
+    ).bind(overrides.eventId, NOW, overrides.demoMode ?? 0),
     env.DB.prepare(
       `INSERT OR IGNORE INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('person1','org1','p@example.com','Person', ?1, ?1)`,
     ).bind(NOW),
@@ -209,6 +214,54 @@ test("AC-231 · public upload presign fails closed when Turnstile rejects a non-
   expect(response.status).toBe(403);
   const attachments = await env.DB.prepare(`SELECT COUNT(*) as n FROM attachments`).first<{ n: number }>();
   expect(attachments?.n).toBe(0);
+});
+
+test("AC-231 · a demo-mode conference presigns without Turnstile, so an automated reader is not locked out of the public form", async () => {
+  await seedOrgEventDraft({
+    draftId: "sub-demo",
+    resumeToken: "tok-demo",
+    eventId: "evt-demo",
+    demoMode: 1,
+  });
+  // Rejecting every token proves the gate was SKIPPED rather than satisfied:
+  // if the exemption were absent this stub would fail the request closed.
+  stubTurnstile(false);
+  const response = await app.fetch(
+    signRequest({
+      draftId: "sub-demo",
+      resumeToken: "tok-demo",
+      fieldKey: "deck",
+      turnstileToken: "",
+      filename: "deck.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 100,
+    }),
+    BASE_ENV,
+  );
+  expect(response.status).toBe(200);
+});
+
+test("AC-231 · a demo-mode presign still requires the draft's own resume token", async () => {
+  await seedOrgEventDraft({
+    draftId: "sub-demo-authz",
+    resumeToken: "tok-demo-authz",
+    eventId: "evt-demo-authz",
+    demoMode: 1,
+  });
+  stubTurnstile(true);
+  const response = await app.fetch(
+    signRequest({
+      draftId: "sub-demo-authz",
+      resumeToken: "not-the-right-token",
+      fieldKey: "deck",
+      turnstileToken: "valid-but-irrelevant",
+      filename: "deck.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 100,
+    }),
+    BASE_ENV,
+  );
+  expect(response.status).toBe(403);
 });
 
 test("AC-231 · one verified Turnstile token mints one presign, then no second row or object", async () => {
