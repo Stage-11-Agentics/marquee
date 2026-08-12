@@ -35,6 +35,7 @@ jobs:
       - run: npx vite build
       - run: npm run check:design
       - run: npm run check:clocks
+      - run: npm run check:schema
       - run: npm test
         # Hang detector, not a speed gate — same reasoning as the job-level
         # limit above. The runner is far smaller than a dev machine, so 5
