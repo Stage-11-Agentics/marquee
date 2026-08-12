@@ -33,7 +33,7 @@ test("CONTRACT · MRQ-99 optional field labels use the parenthesized convention"
   const reviewer = await source("src/ui/review/ReviewerPage.tsx");
 
   assert.match(bulk, /Feedback for the speakers \(optional\)/);
-  assert.match(reviewer, /Scorecard \(optional\)/);
+  assert.match(reviewer, /Overall score \(optional\)/);
   assert.match(reviewer, /Committee note \(optional\)/);
   assert.doesNotMatch(reviewer, /Optional scorecard/);
   assert.doesNotMatch(reviewer, /Optional context for the committee/);
