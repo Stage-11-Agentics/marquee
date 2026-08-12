@@ -6,7 +6,7 @@ import {
 import {
   parseResendDeliveryEvent,
   verifySvixSignature,
-} from "../../src/lib/resend-webhook";
+} from "../../src/lib/inbound-delivery";
 
 const SECRET = "whsec_dGVzdC13ZWJob29rLXNlY3JldA==";
 const SECRET_BYTES = new TextEncoder().encode("test-webhook-secret");

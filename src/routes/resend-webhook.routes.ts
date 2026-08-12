@@ -6,7 +6,7 @@ import {
   applyResendDeliveryEvent,
   parseResendDeliveryEvent,
   verifySvixSignature,
-} from "../lib/resend-webhook";
+} from "../lib/inbound-delivery";
 
 const receivedResponse = z.object({ received: z.literal(true) }).openapi("ResendWebhookReceived");
 
