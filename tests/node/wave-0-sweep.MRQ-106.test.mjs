@@ -28,7 +28,7 @@ test("MRQ-106 · the Ready-to-place escape holds its space before the count arri
 
   // The non-empty half: the note above the table reserves its line and its
   // control from the moment the filter is on, so the table never moves.
-  assert.match(page, /class=\{`accepted-any-note \$\{undercounted \? "visible" : ""\}`\}/);
+  assert.match(page, /acceptedStageFilter && !acceptedStageDeadEnd && <div class=\{`accepted-any-note \$\{undercounted \? "visible" : ""\}`\}/);
   assert.match(page, /"Accepted-count space reserved"/);
   assert.match(styles, /\.accepted-any-note \{[^}]*color: transparent[^}]*min-height: 30px/);
   assert.match(styles, /\.accepted-any-note \.button \{ visibility: hidden; \}/);

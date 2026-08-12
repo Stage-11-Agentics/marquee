@@ -701,8 +701,13 @@ export function SubmissionsPage({
       everybody asks — so the other reading, and the way to it, sit beside the
       count. The line holds its space from the moment the filter is on, so the
       table below it never moves when the count lands.
+
+      Exactly one surface owns this message per state: when the stage list is
+      empty, the table's own 300px empty state carries it instead, where the
+      reader is already looking. Two identical escapes on one screen are not
+      twice as findable, they are noise.
     */}
-    {acceptedStageFilter && <div class={`accepted-any-note ${undercounted ? "visible" : ""}`} role="status">{undercounted
+    {acceptedStageFilter && !acceptedStageDeadEnd && <div class={`accepted-any-note ${undercounted ? "visible" : ""}`} role="status">{undercounted
       ? <><span><strong class="tabular">{envelope?.total.toLocaleString()}</strong> in Ready to place · <strong class="tabular">{acceptedAnyTotal?.toLocaleString()}</strong> accepted overall. Ready to place holds accepted talks whose onboarding tasks are finished.</span><Button small onClick={() => navigate(`/submissions?${acceptedAnyQuery.toString()}`)}>View all accepted</Button></>
       : "Accepted-count space reserved"}</div>}
     {notifiedQueue && <div class={`notify-message ${notifyError || notifyMessage ? "visible" : ""}`} role="status">{notifyError || notifyMessage || "Notification status space reserved"}</div>}
@@ -781,7 +786,7 @@ export function SubmissionsPage({
                   count arriving does not push the controls down under the
                   reader's cursor. Empty is a legitimate resting state: a count
                   that failed to load promises nothing. */}
-              <span class="accepted-escape" data-accepted-escape>{acceptedAnyTotal !== null && acceptedAnyTotal > 0 ? <><strong class="tabular">{acceptedAnyTotal.toLocaleString()}</strong> accepted overall</> : " "}</span>
+              <span class="accepted-escape">{acceptedAnyTotal !== null && acceptedAnyTotal > 0 ? <><strong class="tabular">{acceptedAnyTotal.toLocaleString()}</strong> accepted overall</> : " "}</span>
               <span class="state-row-actions">
                 {/* Rendered in both states and hidden rather than removed, so
                     "Clear filters" does not slide sideways under the pointer
