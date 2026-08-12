@@ -139,6 +139,7 @@ type PortalPerson = {
 };
 
 type PortalSnapshot = {
+  seat: "speaker";
   event: { id: string; name: string; slug: string; timezone: string; status: string };
   venue: { pinned_building_count: number };
   person: PortalPerson;
@@ -146,6 +147,34 @@ type PortalSnapshot = {
   tasks: PortalTask[];
   handbook: { markdown: string };
 };
+
+type SubmitterSubmission = {
+  id: string;
+  title: string;
+  status: string;
+  format: string | null;
+  submitted_at: number | null;
+  updated_at: number;
+  wave_name: string | null;
+  wave_decision_on: string | null;
+  role: string;
+  form_slug: string | null;
+};
+
+/**
+ * The seat of someone who submitted an abstract and holds no speaker role — the
+ * person the public CFP creates. SPEC §10 keeps the submitter and the speaker
+ * distinct on purpose, so this surface carries their submissions and nothing a
+ * speaker seat owns: no tasks, no handbook, no schedule.
+ */
+type SubmitterSnapshot = {
+  seat: "submitter";
+  event: { id: string; name: string; slug: string; timezone: string; status: string };
+  person: { id: string; name: string; email: string };
+  submissions: SubmitterSubmission[];
+};
+
+type AnyPortalSnapshot = PortalSnapshot | SubmitterSnapshot;
 
 type ApiFailure = Error & { status?: number };
 
@@ -736,24 +765,150 @@ function StatusHero({ submission, index, timezone, onRefresh }: { submission: Po
   return <section class={`portal-status-hero ${index > 0 ? "secondary" : ""}`} aria-labelledby={titleId}><span class="eyebrow">{index === 0 ? "Current status" : "Submission status"}</span>{index === 0 ? <h1 id={titleId}>{statusText}</h1> : <h2 id={titleId}>{statusText}</h2>}<div class="portal-status-meta"><div class="portal-status-copy"><strong title={submission.title}>{submission.title}</strong><br />{submission.format} · {submission.wave_decision_on ? `next decision ${submission.wave_decision_on}` : "status is current"}</div>{submission.slot ? <div class="portal-slot"><small>Schedule</small><span>{formatDay(submission.slot.day)} · {submission.slot.date} · {submission.slot.time}</span><span>{submission.slot.room}</span>{!submission.slot.is_published ? <span class="portal-slot-note">Not yet public</span> : null}</div> : <div class="portal-slot"><small>Schedule</small><span>—</span></div>}</div>{submission.slot ? <ArrivalCard slot={submission.slot} timezone={timezone} /> : null}<ParticipationActions submission={submission} onRefresh={onRefresh} /></section>;
 }
 
+/** A `YYYY-MM-DD` decision date, read as a calendar day rather than an instant. */
+function formatCalendarDay(value: string): string {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!parts) return value;
+  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
+    .format(new Date(Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))));
+}
+
+/** What is true of this abstract right now, said the way its author would say it. */
+function submitterHeadline(status: string): string {
+  if (status === "draft") return "Your draft is saved, not yet submitted";
+  if (status === "accepted") return "Your abstract was accepted";
+  if (status === "waitlisted") return "Your abstract is waitlisted";
+  if (status === "rejected") return "Your abstract was not selected";
+  if (status === "withdrawn") return "You withdrew this abstract";
+  if (status === "in_review") return "Your abstract is under review";
+  return "Your abstract is in";
+}
+
+function submitterStatusLabel(status: string): string {
+  return status.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
+
+function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX.Element {
+  return <article class="portal-submitted-row" data-submission-status={submission.status}>
+    <div class="portal-submitted-copy">
+      <strong title={submission.title}>{submission.title}</strong>
+      <span>{submission.format ?? "Format not set"} · {submission.submitted_at === null ? "Not yet submitted" : `Submitted ${formatDate(submission.submitted_at)}`}</span>
+    </div>
+    <span class="portal-submitted-status">{submitterStatusLabel(submission.status)}</span>
+  </article>;
+}
+
+/**
+ * The portal a submitter sees. It exists because the public CFP's confirmation
+ * page invites them here, and a person who has just handed over their work
+ * deserves an answer rather than an error. Every claim on it is one the record
+ * can support: what they sent, where it stands, when they will hear, and where
+ * to write if that date passes in silence.
+ */
+function SubmitterPortal({ snapshot, onSignOut }: { snapshot: SubmitterSnapshot; onSignOut: () => void }): JSX.Element {
+  const [lead] = snapshot.submissions;
+  const decisionOn = snapshot.submissions.map((submission) => submission.wave_decision_on).find((value): value is string => Boolean(value)) ?? null;
+  const waveName = snapshot.submissions.map((submission) => submission.wave_name).find((value): value is string => Boolean(value)) ?? null;
+  const decisionCopy = decisionOn
+    ? `Decisions for ${waveName ?? "this round"} go out by ${formatCalendarDay(decisionOn)}.`
+    : "The program team has not set a decision date for this round yet.";
+  // Only offered while the call is genuinely still open; the server sends null otherwise.
+  const openForm = snapshot.submissions.map((submission) => submission.form_slug).find((value): value is string => Boolean(value)) ?? null;
+  return <div class="portal-shell">
+    <header class="portal-top">
+      <span class="portal-brand">Marquee · Your submission</span>
+      <button type="button" onClick={onSignOut}>Sign out</button>
+    </header>
+    <main class="portal-main">
+      <section class="portal-status-hero" aria-labelledby="portal-status-heading" data-portal-seat="submitter">
+        <span class="eyebrow">Current status</span>
+        <h1 id="portal-status-heading">{submitterHeadline(lead?.status ?? "submitted")}</h1>
+        <div class="portal-status-meta">
+          <div class="portal-status-copy">
+            {lead ? <><strong title={lead.title}>{lead.title}</strong><br /></> : null}
+            {snapshot.event.name} · {decisionCopy}
+          </div>
+        </div>
+      </section>
+      <div class="portal-welcome">
+        <div>
+          <h2>Thank you, {snapshot.person.name}</h2>
+          <p>{snapshot.event.name} · {snapshot.submissions.length} abstract{snapshot.submissions.length === 1 ? "" : "s"} on file</p>
+        </div>
+        <div class="portal-progress">Nothing is waiting on you</div>
+      </div>
+      <div class="portal-grid">
+        <section class="portal-panel" aria-labelledby="next-heading">
+          <header class="portal-panel-head"><h2 id="next-heading">What happens next</h2><span>three steps</span></header>
+          <div class="portal-panel-body">
+            <ol class="portal-next-steps">
+              <li><strong>Review.</strong> The program team reads every abstract. Yours is in the queue — there is no further step for you here.</li>
+              <li><strong>Decision.</strong> {decisionCopy} We write to <strong>{snapshot.person.email}</strong> either way.</li>
+              <li><strong>If it is accepted.</strong> This page becomes your speaker portal — your tasks, profile, headshot, and session time all arrive here.</li>
+            </ol>
+          </div>
+        </section>
+        <section class="portal-panel" aria-labelledby="reach-heading">
+          <header class="portal-panel-head"><h2 id="reach-heading">Getting back here</h2><span>{snapshot.person.email}</span></header>
+          <div class="portal-panel-body">
+            <p class="portal-empty">Bookmark this page. If the link expires, sign in with <strong>{snapshot.person.email}</strong> and you will land right back here.</p>
+            <div class="portal-seat-actions">
+              <a class="portal-button secondary" href="/signin?next=/portal">Sign in with your email</a>
+              {openForm ? <a class="portal-button secondary" href={`/f/${encodeURIComponent(openForm)}`}>Open the call for speakers</a> : null}
+            </div>
+          </div>
+        </section>
+      </div>
+      <section class="portal-panel portal-talks" aria-labelledby="submitted-heading">
+        <header class="portal-panel-head">
+          <h2 id="submitted-heading">What you sent</h2>
+          <span>{snapshot.submissions.length} abstract{snapshot.submissions.length === 1 ? "" : "s"}</span>
+        </header>
+        <div class="portal-panel-body">
+          {snapshot.submissions.length === 0
+            ? <div class="portal-empty">No abstract is on file for this conference yet.{openForm ? <> <a href={`/f/${encodeURIComponent(openForm)}`}>Open the call for speakers</a> to send one.</> : null}</div>
+            : snapshot.submissions.map((submission) => <SubmissionRow key={submission.id} submission={submission} />)}
+        </div>
+      </section>
+      <section class="portal-panel" aria-labelledby="conference-heading">
+        <header class="portal-panel-head"><h2 id="conference-heading">{snapshot.event.name}</h2><span>public pages</span></header>
+        <div class="portal-panel-body">
+          <div class="portal-seat-actions">
+            <a class="portal-button secondary" href="/">Return to conference</a>
+            <a class="portal-button secondary" href="/agenda">View the agenda</a>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>;
+}
+
 function PortalPage(): JSX.Element {
-  const [snapshot, setSnapshot] = useState<PortalSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<AnyPortalSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiFailure | null>(null);
   const refresh = async () => {
-    try { setLoading(true); setError(null); const next = await requestJson<PortalSnapshot>("/api/v1/me/portal"); setSnapshot(next); }
+    try { setLoading(true); setError(null); const next = await requestJson<AnyPortalSnapshot>("/api/v1/me/portal"); setSnapshot(next); }
     catch (caught) { setError(caught as ApiFailure); } finally { setLoading(false); }
   };
   useEffect(() => { void refresh(); }, []);
-  const activeTasks = snapshot?.tasks.filter((task) => task.cancelled_at === null) ?? [];
+  const signOut = async () => {
+    await requestJson("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined);
+    window.location.assign("/");
+  };
+  // Everything below this line belongs to the speaker seat. A submitter reaches
+  // its own surface before any of it is read.
+  const speaker = snapshot?.seat === "submitter" ? null : snapshot ?? null;
+  const activeTasks = speaker?.tasks.filter((task) => task.cancelled_at === null) ?? [];
   const completedTasks = activeTasks.filter((task) => task.status === "done").length;
-  const handbook = useMemo(() => snapshot?.handbook.markdown ?? "", [snapshot?.handbook.markdown]);
+  const handbook = useMemo(() => speaker?.handbook.markdown ?? "", [speaker?.handbook.markdown]);
   if (loading && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-loading">Loading your conference portal…</div></main></div>;
   if (error && !snapshot && error.status === 401) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></div><main class="portal-main"><div class="portal-error"><div><strong>Sign in to open your speaker portal.</strong><p>Your session is missing or has expired.</p><a class="portal-signin" href="/signin?next=/portal">Sign in</a></div></div></main></div>;
   if (error && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-error"><div><strong>We could not load your portal.</strong><p>{error.message}</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
-  if (!snapshot) return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></header><main class="portal-main"><div class="portal-error"><div><strong>No portal data is available.</strong><p>Try loading the speaker workspace again.</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
-  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={async () => { await requestJson("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined); window.location.assign("/"); }}>Sign out</button></header><main class="portal-main">{snapshot.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : snapshot.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={snapshot.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {snapshot.person.name}</h2><p>{snapshot.event.name} · your speaker workspace</p></div><div class="portal-progress">{completedTasks} / {activeTasks.length} tasks complete</div></div><div class="portal-grid"><TasksPanel eventId={snapshot.event.id} tasks={snapshot.tasks} submissions={snapshot.submissions} person={snapshot.person} onRefresh={refresh} /><ProfileEditor eventId={snapshot.event.id} person={snapshot.person} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{snapshot.submissions.length} record{snapshot.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{snapshot.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : snapshot.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{snapshot.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{snapshot.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{snapshot.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
+  if (snapshot && snapshot.seat === "submitter") return <SubmitterPortal snapshot={snapshot} onSignOut={() => void signOut()} />;
+  if (!speaker) return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></header><main class="portal-main"><div class="portal-error"><div><strong>No portal data is available.</strong><p>Try loading the speaker workspace again.</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
+  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={() => void signOut()}>Sign out</button></header><main class="portal-main">{speaker.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : speaker.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={speaker.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {speaker.person.name}</h2><p>{speaker.event.name} · your speaker workspace</p></div><div class="portal-progress">{completedTasks} / {activeTasks.length} tasks complete</div></div><div class="portal-grid"><TasksPanel eventId={speaker.event.id} tasks={speaker.tasks} submissions={speaker.submissions} person={speaker.person} onRefresh={refresh} /><ProfileEditor eventId={speaker.event.id} person={speaker.person} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{speaker.submissions.length} record{speaker.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{speaker.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : speaker.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{speaker.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{speaker.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{speaker.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
 }
 
-export { PortalPage };
-export type { PortalPerson, PortalSubmission, PortalTask };
+export { PortalPage, SubmitterPortal };
+export type { PortalPerson, PortalSubmission, PortalTask, SubmitterSnapshot, SubmitterSubmission };

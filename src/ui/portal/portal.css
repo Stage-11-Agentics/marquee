@@ -207,3 +207,19 @@
    the full version history when the task is open. */
 .portal-task-file { margin-top: 8px; }
 .portal-task-versions { border-bottom: 1px solid var(--rule-soft); margin-bottom: 12px; padding-bottom: 12px; }
+
+/* The submitter seat: a person who has sent an abstract and holds no speaker
+   role yet. Same instruments as the speaker portal, fewer of them — nothing
+   here promises a surface they do not have. */
+.portal-next-steps { counter-reset: step; display: grid; gap: 14px; list-style: none; margin: 0; padding: 0; }
+.portal-next-steps li { color: var(--ink-soft); display: grid; font-size: 12px; gap: 10px; grid-template-columns: 22px minmax(0, 1fr); line-height: 1.55; }
+.portal-next-steps li::before { color: var(--accent-dark); content: counter(step); counter-increment: step; font: 600 10px/22px var(--mono); text-align: center; }
+.portal-next-steps strong { color: var(--ink); }
+.portal-seat-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.portal-seat-actions .portal-button { align-items: center; display: inline-flex; text-decoration: none; }
+.portal-submitted-row { align-items: center; border-bottom: 1px solid var(--rule-soft); display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) 104px; min-height: 60px; padding: 12px 0; }
+.portal-submitted-row:last-child { border-bottom: 0; }
+.portal-submitted-copy { min-width: 0; }
+.portal-submitted-copy strong { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.portal-submitted-copy span { color: var(--muted); font-size: 11px; }
+.portal-submitted-status { color: var(--muted); font: 600 10px/1 var(--mono); letter-spacing: .08em; text-align: right; text-transform: uppercase; }
