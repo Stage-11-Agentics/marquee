@@ -16,7 +16,7 @@ test("AC-61, AC-158, AC-159 · the reviewer surface supports keyboard review at 
   expect(reviewerPageSource).toContain('event.key === "Enter"');
   expect(reviewerPageSource).toContain("A / M / D");
   expect(reviewerPageSource).toContain("Save recommendation & next");
-  expect(reviewerPageSource).toContain("criteria_scores: Object.keys(currentReview.criteria).length");
+  expect(reviewerPageSource).toContain("criteria_scores: Object.keys(review.criteria).length");
   expect(reviewerPageSource).toContain('import "./review.css"');
   expect(reviewerPageSource).toContain("/reviewer/queue");
   expect(reviewerPageSource).not.toContain("/plans");
@@ -68,7 +68,9 @@ test("CONTRACT · MRQ-108 · the reviewer renders the round's own scorecard and 
 
 test("MRQ-110 · reviewer and chair surfaces label recusals and send reminders through their write routes", () => {
   expect(reviewerPageSource).toContain('data-reviewer-control="declare-conflict"');
-  expect(reviewerPageSource).toContain("abstained: recusal.abstained ? 1 : 0");
+  expect(reviewerPageSource).toContain("const commitReview = async");
+  expect(reviewerPageSource).toContain("abstained: review.abstained ? 1 : 0");
+  expect(reviewerPageSource).toContain("review: optimisticReview");
   expect(evaluationPageSource).toContain('`/api/v1/events/${eventId}/rounds/${round.id}/reviewers/${personId}/remind`');
   expect(evaluationPageSource).toContain('"/api/v1/events/{eventId}/rounds/{roundId}/reviewers/{personId}/remind", {');
   expect(evaluationPageSource).toContain('method: "POST"');

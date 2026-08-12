@@ -18,6 +18,8 @@ const PLAN_ID = "plan-evaluation-contract";
 const ROUND_ONE_ID = "round-evaluation-one";
 const ROUND_TWO_ID = "round-evaluation-two";
 const COMMITTEE_ID = "committee-evaluation";
+const OTHER_EVENT_ID = "event-evaluation-other";
+const OTHER_COMMITTEE_ID = "committee-evaluation-other-event";
 
 const ORIGIN = "https://marquee.stage11.dev";
 const COOKIE = `mq_session=${SESSION_ID}`;
@@ -101,8 +103,17 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     const create = await request(`/api/v1/events/${EVENT_ID}/plans`, { method: "POST", body: JSON.stringify({ name: "Open assignment plan", status: "open" }) });
     expect(create.status).toBe(201);
     const plan = await json<{ id: string }>(create);
-    const round = await request(`/api/v1/events/${EVENT_ID}/plans/${plan.id}/rounds`, { method: "POST", body: JSON.stringify({ name: "Round 1", position: 0, mode: "scorecard", target_reviews_per_submission: 1 }) });
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at) VALUES (?, ?, 'Other event', ?, '2026-11-01', '2026-11-02', 'America/New_York', 'live', 0, ?, ?)").bind(OTHER_EVENT_ID, DEMO_ORGANIZATION_ID, OTHER_EVENT_ID, now, now),
+      env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, 'Other event reviewers', ?, ?)").bind(OTHER_COMMITTEE_ID, OTHER_EVENT_ID, now, now),
+    ]);
+    const crossEvent = await request(`/api/v1/events/${EVENT_ID}/plans/${plan.id}/rounds`, { method: "POST", body: JSON.stringify({ name: "Cross-event pool", position: 0, mode: "scorecard", committee_id: OTHER_COMMITTEE_ID, target_reviews_per_submission: 1 }) });
+    expect(crossEvent.status).toBe(404);
+    const round = await request(`/api/v1/events/${EVENT_ID}/plans/${plan.id}/rounds`, { method: "POST", body: JSON.stringify({ name: "Round 1", position: 0, mode: "scorecard", committee_id: COMMITTEE_ID, target_reviews_per_submission: 1 }) });
     expect(round.status).toBe(201);
+    const roundBody = await json<{ rounds: Array<{ committee_id: string | null; name: string }> }>(round);
+    expect(roundBody.rounds.find((item) => item.name === "Round 1")?.committee_id).toBe(COMMITTEE_ID);
     const committee = await request(`/api/v1/events/${EVENT_ID}/committees`, { method: "POST", body: JSON.stringify({ name: "Independent committee" }) });
     expect(committee.status).toBe(201);
     const committeeBody = await json<{ id: string }>(committee);
@@ -152,9 +163,24 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     const pool = await env.DB.prepare("SELECT person_id FROM committee_members WHERE committee_id = ? ORDER BY person_id").bind(COMMITTEE_ID).all<{ person_id: string }>();
     const assigned = await env.DB.prepare("SELECT reviewer_person_id FROM round_assignments WHERE round_id = ? AND submission_id = ? ORDER BY reviewer_person_id").bind(ROUND_ONE_ID, SUBMISSION_COMPARISON_THREE).all<{ reviewer_person_id: string | null }>();
     expect(assigned.results.map((row) => row.reviewer_person_id)).toEqual(pool.results.map((row) => row.person_id));
+
+    const cleared = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}`, { method: "PATCH", body: JSON.stringify({ committee_id: null }) });
+    expect(cleared.status).toBe(200);
+    const noPool = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/assignments`, { method: "POST", body: JSON.stringify({ mode: "n_per_submission", reviewers_per_submission: 1, submission_ids: [SUBMISSION_ID] }) });
+    expect(noPool.status).toBe(422);
+    const restored = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}`, { method: "PATCH", body: JSON.stringify({ committee_id: COMMITTEE_ID }) });
+    expect(restored.status).toBe(200);
   });
 
   test("ABS-12 · declaring a conflict persists an abstention, completes the assignment, and leaves aggregates untouched", async () => {
+    const beforeInvalid = await env.DB.prepare("SELECT COUNT(*) AS count FROM evaluations WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_A_ONLY, ORGANIZER_ID).first<{ count: number }>();
+    const missingRecommendation = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/submissions/${SUBMISSION_A_ONLY}/evaluations`, { method: "POST", body: JSON.stringify({ abstained: 0 }) });
+    expect(missingRecommendation.status).toBe(400);
+    const conflictedRecommendation = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/submissions/${SUBMISSION_A_ONLY}/evaluations`, { method: "POST", body: JSON.stringify({ abstained: 1, recommendation: "approve" }) });
+    expect(conflictedRecommendation.status).toBe(400);
+    const afterInvalid = await env.DB.prepare("SELECT COUNT(*) AS count FROM evaluations WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_A_ONLY, ORGANIZER_ID).first<{ count: number }>();
+    expect(Number(afterInvalid?.count)).toBe(Number(beforeInvalid?.count ?? 0));
+
     const response = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/submissions/${SUBMISSION_A_ONLY}/evaluations`, {
       method: "POST",
       body: JSON.stringify({ abstained: 1, comment: "I have a conflict with this submission." }),
@@ -166,6 +192,15 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect(stored).toEqual({ abstained: 1, recommendation: null, score: null });
     const assignment = await env.DB.prepare("SELECT status FROM round_assignments WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_A_ONLY, ORGANIZER_ID).first<{ status: string }>();
     expect(assignment?.status).toBe("complete");
+
+    const restoredReview = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/submissions/${SUBMISSION_A_ONLY}/evaluations`, { method: "POST", body: JSON.stringify({ abstained: 0, recommendation: "approve", score: 5, criteria_scores: { "criterion-evaluation-fit": 5 } }) });
+    expect(restoredReview.status).toBe(200);
+    const scored = await env.DB.prepare("SELECT abstained, recommendation, score, criteria_scores FROM evaluations WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_A_ONLY, ORGANIZER_ID).first<{ abstained: number; criteria_scores: string | null; recommendation: string | null; score: number | null }>();
+    expect(scored).toMatchObject({ abstained: 0, recommendation: "approve", score: 5, criteria_scores: JSON.stringify({ "criterion-evaluation-fit": 5 }) });
+    const recusedAgain = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/submissions/${SUBMISSION_A_ONLY}/evaluations`, { method: "POST", body: JSON.stringify({ abstained: 1, comment: "The conflict still applies." }) });
+    expect(recusedAgain.status).toBe(200);
+    const clearedAgain = await env.DB.prepare("SELECT abstained, recommendation, score, criteria_scores FROM evaluations WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_A_ONLY, ORGANIZER_ID).first<{ abstained: number; criteria_scores: string | null; recommendation: string | null; score: number | null }>();
+    expect(clearedAgain).toEqual({ abstained: 1, recommendation: null, score: null, criteria_scores: null });
 
     const detail = await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}`);
     const detailBody = await json<{ rounds: Array<{ id: string; progress: { evaluations: number; recusals: number } }>; summary: { evaluations: number; recusals: number } }>(detail);
@@ -197,8 +232,9 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     const firstBody = await json<{ outstanding: number; queued: boolean; outbox_id: string }>(first);
     expect(firstBody.queued).toBe(true);
     expect(firstBody.outstanding).toBeGreaterThan(0);
-    const message = await env.DB.prepare("SELECT template_key, person_id, to_email, text FROM outbox WHERE id = ?").bind(firstBody.outbox_id).first<{ template_key: string; person_id: string; text: string; to_email: string }>();
+    const message = await env.DB.prepare("SELECT entity_id, template_key, person_id, to_email, text FROM outbox WHERE id = ?").bind(firstBody.outbox_id).first<{ entity_id: string; template_key: string; person_id: string; text: string; to_email: string }>();
     expect(message).toMatchObject({ template_key: "reviewer_reminder", person_id: ORGANIZER_ID });
+    expect(message?.entity_id).toMatch(new RegExp(`^${ROUND_ONE_ID}:${ORGANIZER_ID}:\\d{4}-\\d{2}-\\d{2}$`));
     expect(message?.text).toContain(`${firstBody.outstanding} assigned review(s)`);
 
     const duplicate = await request(reminderPath, { method: "POST" });

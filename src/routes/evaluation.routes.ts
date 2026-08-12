@@ -949,9 +949,10 @@ const remindRoundReviewer = defineApiRoute(
     if (!reviewer) throw ApiError.notFound("reviewer not found");
     const outstanding = Math.max(0, Number(reviewer.assigned_count) - Number(reviewer.reviewed_count) - Number(reviewer.recusal_count));
     if (outstanding === 0) throw ApiError.conflict("reviewer has no outstanding assignments");
+    const reminderDay = new Date().toISOString().slice(0, 10);
     const outbox = await enqueueOutbox({
       db: context.env.DB,
-      entityId: `${roundId}:${personId}`,
+      entityId: `${roundId}:${personId}:${reminderDay}`,
       eventId,
       personId: reviewer.id,
       templateKey: "reviewer_reminder",

@@ -107,6 +107,24 @@ export function run(ctx: SeedContext): void {
     }
   }
 
+  ctx.add("committees", {
+    id: COMMITTEE_ID,
+    event_id: EVENT_ID,
+    name: "Program reviewers",
+    created_at: ctx.now,
+    updated_at: ctx.now,
+  });
+  reviewerIds.forEach((personId, index) => {
+    ctx.add("committee_members", {
+      id: seedId("cmm", `${COMMITTEE_ID}-${personId}`),
+      committee_id: COMMITTEE_ID,
+      person_id: personId,
+      role: index === 0 ? "chair" : "reviewer",
+      created_at: ctx.now,
+      updated_at: ctx.now,
+    });
+  });
+
   ctx.add("evaluation_plans", {
     id: PLAN_ID,
     event_id: EVENT_ID,
@@ -125,6 +143,7 @@ export function run(ctx: SeedContext): void {
     name: "Initial review",
     mode: "scorecard",
     anonymized: 1,
+    committee_id: COMMITTEE_ID,
     target_reviews_per_submission: 3,
     opens_at: Date.UTC(2026, 7, 10, 16),
     closes_at: Date.UTC(2026, 7, 28, 16),
@@ -138,6 +157,7 @@ export function run(ctx: SeedContext): void {
     name: "Final selection",
     mode: "scorecard",
     anonymized: 0,
+    committee_id: COMMITTEE_ID,
     target_reviews_per_submission: 3,
     opens_at: Date.UTC(2026, 7, 29, 16),
     closes_at: Date.UTC(2026, 8, 8, 16),
@@ -176,24 +196,6 @@ export function run(ctx: SeedContext): void {
       });
     });
   }
-
-  ctx.add("committees", {
-    id: COMMITTEE_ID,
-    event_id: EVENT_ID,
-    name: "Program reviewers",
-    created_at: ctx.now,
-    updated_at: ctx.now,
-  });
-  reviewerIds.forEach((personId, index) => {
-    ctx.add("committee_members", {
-      id: seedId("cmm", `${COMMITTEE_ID}-${personId}`),
-      committee_id: COMMITTEE_ID,
-      person_id: personId,
-      role: index === 0 ? "chair" : "reviewer",
-      created_at: ctx.now,
-      updated_at: ctx.now,
-    });
-  });
 
   const candidates = table(ctx, "submissions").filter((row) => row.status === "in_review");
   const organizerQueue = candidates.slice(0, ORGANIZER_UNREVIEWED_ASSIGNMENTS);

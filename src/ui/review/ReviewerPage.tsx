@@ -319,41 +319,43 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     requestAnimationFrame(() => cardRef.current?.focus());
   };
 
-  const saveNext = async (): Promise<void> => {
-    if (!current || !roundId || (!currentReview.recommendation && !currentReview.abstained) || saving) return;
+  const commitReview = async (review: ReviewState): Promise<void> => {
+    if (!current || !roundId || saving) return;
     setSaving(true);
     setError(null);
     try {
       await api(`/api/v1/events/${eventId}/rounds/${roundId}/submissions/${current.id}/evaluations`, {
         method: "POST",
         body: JSON.stringify({
-          comment: currentReview.comment,
-          criteria_scores: Object.keys(currentReview.criteria).length ? currentReview.criteria : null,
-          recommendation: currentReview.abstained ? null : currentReview.recommendation,
-          score: currentReview.abstained ? null : currentReview.score,
-          abstained: currentReview.abstained ? 1 : 0,
+          comment: review.comment,
+          criteria_scores: Object.keys(review.criteria).length ? review.criteria : null,
+          recommendation: review.abstained ? null : review.recommendation,
+          score: review.abstained ? null : review.score,
+          abstained: review.abstained ? 1 : 0,
         }),
       });
+      // Keep a failed write from erasing the reviewer's in-progress scorecard.
+      // The draft becomes the submitted state only after the server accepts it.
+      setDrafts((previous) => ({ ...previous, [current.id]: review }));
       const oldIndex = currentIndex;
       const nextQueue = queue.filter((item) => item.id !== current.id);
       const saved = current;
+      const now = Date.now();
+      const optimisticReview: DetailReview = {
+        abstained: review.abstained,
+        actor_id: "",
+        comment: review.comment,
+        created_at: now,
+        criteria_scores: Object.keys(review.criteria).length ? review.criteria : null,
+        decision_proposal: null,
+        recommendation: review.abstained ? null : review.recommendation,
+        score: review.abstained ? null : review.score,
+        updated_at: now,
+      };
       setQueue(nextQueue);
-      const savedAt = Date.now();
-      setCompleted((previous) => [{
-        ...saved,
-        review: {
-          actor_id: "",
-          comment: currentReview.comment,
-          created_at: savedAt,
-          criteria_scores: Object.keys(currentReview.criteria).length ? currentReview.criteria : null,
-          decision_proposal: null,
-          recommendation: currentReview.recommendation,
-          score: currentReview.score,
-          updated_at: savedAt,
-        },
-      }, ...previous.filter((item) => item.id !== saved.id)]);
+      setCompleted((previous) => [{ ...saved, review: optimisticReview }, ...previous.filter((item) => item.id !== saved.id)]);
       setCurrentId(nextQueue[oldIndex]?.id ?? nextQueue[oldIndex - 1]?.id ?? null);
-      setNotice(`${recommendationLabel(currentReview.recommendation)} saved · reopen it any time from Completed`);
+      setNotice(review.abstained ? "Conflict recorded · reopen it any time from Completed" : `${recommendationLabel(review.recommendation)} saved · reopen it any time from Completed`);
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     } finally {
@@ -361,29 +363,14 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     }
   };
 
+  const saveNext = async (): Promise<void> => {
+    if (!currentReview.recommendation || currentReview.abstained) return;
+    await commitReview(currentReview);
+  };
+
   const saveRecusal = async (): Promise<void> => {
-    if (!current || !roundId || saving) return;
-    const recusal: ReviewState = { ...(drafts[current.id] ?? EMPTY_REVIEW), abstained: true, criteria: {}, recommendation: null, score: null };
-    setDrafts((previous) => ({ ...previous, [current.id]: recusal }));
-    setSaving(true);
-    setError(null);
-    try {
-      await api(`/api/v1/events/${eventId}/rounds/${roundId}/submissions/${current.id}/evaluations`, {
-        method: "POST",
-        body: JSON.stringify({ comment: recusal.comment, criteria_scores: Object.keys(recusal.criteria).length ? recusal.criteria : null, recommendation: recusal.recommendation, score: recusal.score, abstained: recusal.abstained ? 1 : 0 }),
-      });
-      const oldIndex = currentIndex;
-      const nextQueue = queue.filter((item) => item.id !== current.id);
-      const saved = current;
-      setQueue(nextQueue);
-      setCompleted((previous) => [{ ...saved, review: null }, ...previous.filter((item) => item.id !== saved.id)]);
-      setCurrentId(nextQueue[oldIndex]?.id ?? nextQueue[oldIndex - 1]?.id ?? null);
-      setNotice("Conflict recorded · reopen it any time from Completed");
-    } catch (reason: unknown) {
-      setError(errorSummary(reason));
-    } finally {
-      setSaving(false);
-    }
+    if (!current) return;
+    await commitReview({ ...(drafts[current.id] ?? EMPTY_REVIEW), abstained: true, criteria: {}, recommendation: null, score: null });
   };
 
   const saveComparison = async (): Promise<void> => {
