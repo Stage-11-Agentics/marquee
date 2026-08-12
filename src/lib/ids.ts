@@ -3,7 +3,7 @@
  *
  * Rows the app writes at runtime use ULIDs (SPEC §2.4); rows the seed writes
  * must instead be stable across re-runs so `npm run seed` stays idempotent.
- * Seed IDs are readable slugs (`evt_aie-ny-2026`, `sub_<session-slug>`),
+ * Seed IDs are readable slugs (`evt_<conference-slug>`, `sub_<session-slug>`),
  * which also makes demo debugging and `external_ref` provenance legible.
  */
 

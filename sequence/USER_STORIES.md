@@ -1017,7 +1017,7 @@ Three moves, no renumbering:
 
 *Four stories minted: **US-83 – US-86**. Thirteen criteria minted: **AC-275 – AC-287**. Source: the cold-start design interview (rulings D1–D8, `prototypes/cold-start/DECISIONS.md`), binding prototype **v1.11**, human-side contract `docs/GETTING-STARTED.md`, agent-side contract `prototypes/cold-start/SKILL-SETUP-CHAPTER.md`.*
 
-*Why these exist: the product's cold start began at "Create the conference," silently presuming a deployed instance, an org row, and an authenticated owner — and the only auth is a magic link that needs mail, which is itself a setup output. Nothing designed how a person becomes the owner, and nothing in the build lets a conference be created at all. These stories are the **post-deadline band**: they join no Wednesday gate count and are built by MRQ-105 after the freeze (see `EVALUATION.md` §2.4).*
+*Why these exist: the product's cold start began at "Create the conference," silently presuming a deployed instance, an org row, and an authenticated owner — and the only auth is a magic link that needs mail, which is itself a setup output. Nothing designed how a person becomes the owner, and nothing in the build lets a conference be created at all. These stories are the **post-deadline band**: they join no Wednesday gate count, and are built by MRQ-105 (see `EVALUATION.md` §2.4). Being outside the gate count is a scoring fact, not a schedule one — nothing about the band gates when it merges.*
 
 *US-82 and AC-270 – AC-272 remain reserved for the submitter/speaker split; this amendment mints stories from **US-83** and criteria from **AC-275**.*
 

@@ -2,7 +2,14 @@ import { z } from "@hono/zod-openapi";
 
 import type { EventRow, FormatRow, TrackRow } from "../db/schema";
 import { ApiError } from "../api/errors";
+import { newUlid } from "../api/ids";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { getAuth } from "../lib/auth/auth-middleware";
+import { requireOrgAdmin } from "../lib/auth/org-admin";
+import { roleForEvent, tokenEventAllowed } from "../lib/auth/scope-resolution";
+import { COPY_SET_KEYS } from "../lib/events/copy-manifest";
+import { planEventCopy, readCopyPlan } from "../lib/events/copy-event";
+import { SHIPPED_DEMO_ORGANIZATION_ID } from "../lib/reset-demo/demo-fixture";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const formatParams = eventParams.extend({ formatId: z.string().min(1) });
@@ -44,6 +51,50 @@ const trackSchema = z.object({
 const settingsResponse = z.object({
   data: z.object({ event: eventSchema, formats: z.array(formatSchema), tracks: z.array(trackSchema) }),
 });
+
+const copySetSchema = z.object(
+  Object.fromEntries(COPY_SET_KEYS.map((key) => [key, z.boolean().optional()])) as Record<
+    (typeof COPY_SET_KEYS)[number],
+    z.ZodOptional<z.ZodBoolean>
+  >,
+);
+
+const listedEventSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  status: z.string(),
+  demo_mode: z.number().int(),
+  starts_on: z.string(),
+  ends_on: z.string(),
+  timezone: z.string(),
+  venue: z.string().nullable(),
+  role: z.string(),
+  submission_count: z.number().int().nonnegative(),
+  past: z.boolean(),
+});
+const eventListResponse = z.object({ data: z.array(listedEventSchema) });
+
+const copyPlanResponse = z.object({
+  data: z.object({
+    event: z.object({ id: z.string(), name: z.string() }),
+    counts: z.record(z.string(), z.number().int().nonnegative()),
+    task_templates_skipped_fixed_due: z.number().int().nonnegative(),
+    requires: z.record(z.string(), z.array(z.string())),
+    reasons: z.record(z.string(), z.string()),
+  }),
+});
+
+const createdEventResponse = z.object({
+  data: z.object({
+    event: eventSchema,
+    formats: z.array(formatSchema),
+    tracks: z.array(trackSchema),
+    copied: z.record(z.string(), z.number().int().nonnegative()).optional(),
+    copied_from: z.string().nullable().optional(),
+    task_templates_skipped_fixed_due: z.number().int().nonnegative().optional(),
+  }),
+});
 const formatResponse = jsonResponse(z.object({ data: formatSchema }), "Conference format");
 const trackResponse = jsonResponse(z.object({ data: trackSchema }), "Conference track");
 
@@ -56,6 +107,21 @@ const eventPatch = z.object({
   venue: z.string().max(300).nullable().optional(),
   logo_key: z.string().max(500).nullable().optional(),
   accent: color.nullable().optional(),
+});
+const eventInput = z.object({
+  name: z.string().trim().min(1).max(200),
+  starts_on: date,
+  ends_on: date,
+  timezone: z.string().trim().min(1).max(100),
+  venue: z.string().max(300).nullable().optional(),
+  tagline: z.string().max(500).nullable().optional(),
+  /**
+   * Next year's conference, made from this year's. Absent, the conference is
+   * created empty; present, the selected structure sets travel with it and the
+   * response reports what did — see `src/lib/events/copy-manifest.ts`.
+   */
+  copy_from: z.string().min(1).optional(),
+  copy: copySetSchema.optional(),
 });
 const formatInput = z.object({
   name: z.string().trim().min(1).max(160),
@@ -96,6 +162,42 @@ async function settingsFor(db: D1Database, eventId: string): Promise<{ event: Pu
     ).bind(eventId).all<TrackRow>(),
   ]);
   return { event, formats: formats.results, tracks: tracks.results };
+}
+
+/**
+ * A conference's slug is derived from its name, never typed: it is a URL
+ * segment, and an organizer creating "AI Engineer New York 2027" should not
+ * have to know that. Collisions get a numeric suffix rather than a rejection —
+ * next year's conference is often last year's name.
+ *
+ * Uniqueness is scoped to the organization, matching the index that actually
+ * enforces it (`uq_events_org_slug`). A global lookup would let one org's slug
+ * block every other org's, which is precisely wrong for the self-host cold
+ * start: two instances of this software should be able to run a conference of
+ * the same name without one of them getting `-2` for no reason it can see.
+ */
+export async function uniqueEventSlug(
+  db: D1Database,
+  orgId: string,
+  name: string,
+  now: number,
+): Promise<string> {
+  const base = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "")
+    .slice(0, 60);
+  const stem = base.length > 0 ? base : `conference-${newUlid(now).toLowerCase().slice(0, 8)}`;
+  for (let suffix = 0; suffix < 50; suffix += 1) {
+    const candidate = suffix === 0 ? stem : `${stem}-${suffix + 1}`;
+    const taken = await db
+      .prepare("SELECT 1 AS present FROM events WHERE org_id = ? AND slug = ?")
+      .bind(orgId, candidate)
+      .first();
+    if (!taken) return candidate;
+  }
+  return `${stem}-${newUlid(now).toLowerCase().slice(0, 8)}`;
 }
 
 function assertDateOrder(startsOn: string, endsOn: string): void {
@@ -168,6 +270,219 @@ async function reorderPosition(
   ordered.splice(Math.min(Math.max(requestedPosition, 0), ordered.length), 0, id);
   await assignPositions(db, table, eventId, ordered);
 }
+
+interface ListedEventRow {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  demo_mode: number;
+  starts_on: string;
+  ends_on: string;
+  timezone: string;
+  venue: string | null;
+}
+
+/** Today in UTC, in the calendar-date shape `starts_on` and `ends_on` are stored in. */
+function todayIso(now: number): string {
+  return new Date(now).toISOString().slice(0, 10);
+}
+
+/**
+ * Every conference in this organization the caller can actually read — the list
+ * the switcher, the create screen's source picker, and `marquee event list` all
+ * render.
+ *
+ * `authenticated` rather than `grants`, and not for convenience: a collection
+ * route has no `{eventId}` segment, and the pipeline resolves a grant against
+ * that parameter (`principalHasGrant`), so a `grants` policy would answer 403
+ * for every caller including the ones who own the place. Authority is therefore
+ * answered here, per row, which is also the only place it can be: the whole
+ * point of this route is that different callers see different conferences.
+ */
+const listEvents = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events",
+    operationId: "listEvents",
+    summary: "List the conferences this credential can read",
+    tags: ["Event settings"],
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(eventListResponse, "Conferences in this organization"), ...errorResponses([401, 429, 500]) },
+  },
+  async (context) => {
+    const auth = getAuth(context);
+    if (!auth) throw ApiError.unauthenticated();
+    const rows = await context.env.DB.prepare(
+      `SELECT id, name, slug, status, demo_mode, starts_on, ends_on, timezone, venue
+       FROM events WHERE org_id = ? ORDER BY starts_on DESC, id`,
+    ).bind(auth.orgId).all<ListedEventRow>();
+
+    const visible = rows.results.flatMap((row) => {
+      // A reviewer's membership never inherits across conferences, so this is
+      // where a reviewer of one event stops seeing the other seven.
+      const role = roleForEvent(auth.memberships, row.id) ?? (auth.kind === "token" ? auth.legacyRole ?? null : null);
+      if (role === null) return [];
+      // An event-restricted token sees only the events it was issued for, even
+      // when the person who issued it can see the whole organization.
+      if (auth.kind === "token" && !tokenEventAllowed(auth, row.id)) return [];
+      return [{ row, role }];
+    });
+
+    // Tallied through the organization rather than through a list of ids: one
+    // bound parameter regardless of how many conferences an organization runs,
+    // where a placeholder per id would meet D1's 100-binding cap eventually and
+    // silently.
+    const counts = new Map<string, number>();
+    if (visible.length > 0) {
+      const tallies = await context.env.DB.prepare(
+        `SELECT event_id, COUNT(*) AS total FROM submissions
+         WHERE event_id IN (SELECT id FROM events WHERE org_id = ?) GROUP BY event_id`,
+      ).bind(auth.orgId).all<{ event_id: string; total: number }>();
+      for (const tally of tallies.results) counts.set(tally.event_id, Number(tally.total));
+    }
+
+    // Upcoming ascending, then past descending: the organizer's next conference
+    // is the one they mean, and last year's is the one they look up.
+    const today = todayIso(Date.now());
+    const data = visible
+      .map((entry) => ({
+        ...entry.row,
+        demo_mode: Number(entry.row.demo_mode),
+        role: entry.role,
+        submission_count: counts.get(entry.row.id) ?? 0,
+        past: entry.row.ends_on < today,
+      }))
+      .sort((left, right) => {
+        if (left.past !== right.past) return left.past ? 1 : -1;
+        const order = left.starts_on < right.starts_on ? -1 : left.starts_on > right.starts_on ? 1 : 0;
+        return left.past ? -order : order;
+      });
+    return context.json({ data }, 200);
+  },
+);
+
+/**
+ * What would travel, before anything does. The create screen renders this as
+ * the copy checklist: real per-set counts, the prerequisites the schema and the
+ * submit path impose on this particular source conference, and the templates
+ * that will be declined because their deadline is a fixed date belonging to the
+ * conference it was set for.
+ */
+const getCopyPlan = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/copy-plan",
+    operationId: "getEventCopyPlan",
+    summary: "Preview what copying this conference would carry",
+    tags: ["Event settings"],
+    request: { params: eventParams },
+    policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(copyPlanResponse, "The copy contract for this conference"), ...errorResponses([401, 403, 404, 429, 500]) },
+  },
+  async (context) => {
+    const plan = await readCopyPlan(context.env.DB, context.req.valid("param").eventId);
+    return context.json({
+      data: {
+        event: plan.event,
+        counts: plan.counts,
+        task_templates_skipped_fixed_due: plan.taskTemplatesSkippedFixedDue,
+        requires: plan.requires,
+        reasons: plan.reasons,
+      },
+    }, 200);
+  },
+);
+
+/**
+ * The one endpoint that creates a conference — the screen at
+ * `/conferences/new`, the `＋` beside the switcher, and the CLI's
+ * `event create` all land here, so there is no path by which a conference can
+ * exist that an agent could not have made (AC-279, AC-280).
+ *
+ * Authority is organization-wide, so it is answered here rather than by the
+ * pipeline's `{eventId}` grant check: there is no event yet to be scoped to.
+ */
+const createEvent = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events",
+    operationId: "createEvent",
+    summary: "Create a conference on this instance",
+    tags: ["Event settings"],
+    request: { body: { content: { "application/json": { schema: eventInput } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: {
+      201: jsonResponse(createdEventResponse, "The created conference"),
+      ...errorResponses([400, 401, 403, 404, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const auth = requireOrgAdmin(context);
+    const body = context.req.valid("json");
+    assertDateOrder(body.starts_on, body.ends_on);
+    assertTimezone(body.timezone);
+    const now = Date.now();
+    const id = newUlid(now);
+    const slug = await uniqueEventSlug(context.env.DB, auth.orgId, body.name, now);
+    // A source conference is addressed by id, and an id from another
+    // organization is not a permission error to explain — it is a conference
+    // this caller has no way of knowing exists.
+    if (body.copy_from !== undefined) {
+      const source = await context.env.DB
+        .prepare("SELECT id FROM events WHERE id = ? AND org_id = ?")
+        .bind(body.copy_from, auth.orgId)
+        .first();
+      if (!source) throw ApiError.notFound("conference not found");
+    }
+    const copy = body.copy_from === undefined
+      ? null
+      : await planEventCopy(context.env.DB, body.copy_from, id, body.copy, now);
+    // `demo_mode` is inherited, never asked for. Mail suppression rides this
+    // column (`demoMailWouldBeSuppressed`), so a conference created inside the
+    // demo organization that stored a 0 would send live mail to whatever
+    // address a judge or a demo visitor typed. It is deliberately absent from
+    // `eventInput`: a client that could set it could turn suppression off.
+    //
+    // Inheritance is not total containment, and the carve-out is on purpose:
+    // `always_live` senders (the public form's confirmation, the smoke
+    // harness) short-circuit before this column is read. Forms arriving closed
+    // is the other half of that guard — do not "simplify" either one away.
+    const demoMode = auth.orgId === SHIPPED_DEMO_ORGANIZATION_ID ? 1 : 0;
+    const insertEvent = context.env.DB.prepare(
+      `INSERT INTO events (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, status, demo_mode, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
+    ).bind(
+      id,
+      auth.orgId,
+      body.name,
+      slug,
+      body.tagline ?? null,
+      body.starts_on,
+      body.ends_on,
+      body.timezone,
+      body.venue ?? null,
+      demoMode,
+      now,
+      now,
+    );
+    // The conference and everything copied into it commit together: a partly
+    // copied conference is worse than none, because it looks finished.
+    await context.env.DB.batch([insertEvent, ...(copy?.statements ?? [])]);
+    return context.json({
+      data: {
+        ...await settingsFor(context.env.DB, id),
+        ...(copy
+          ? {
+            copied: copy.counts,
+            copied_from: body.copy_from ?? null,
+            task_templates_skipped_fixed_due: copy.taskTemplatesSkippedFixedDue,
+          }
+          : {}),
+      },
+    }, 201);
+  },
+);
 
 const getSettings = defineApiRoute(
   {
@@ -432,6 +747,9 @@ const deleteTrack = defineApiRoute(
 );
 
 export const apiRoutes = [
+  listEvents,
+  createEvent,
+  getCopyPlan,
   getSettings,
   updateSettings,
   listFormats,

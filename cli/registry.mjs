@@ -20,12 +20,119 @@ export const GLOBAL_OPTIONS = [
   { name: "--help", description: "Show help for this command." },
 ];
 
+/** The copy sets `POST /events` accepts, mirroring `src/lib/events/copy-manifest.ts`. */
+export const COPY_SETS = ["formats", "tracks", "forms", "task_templates", "email_templates", "evaluation_plan", "venues"];
+
 const SET_OPTION = {
   name: "--set <key=value>",
   description: "Repeatable body field. Values parse as JSON when they can: 30 is a number, null is null, Workshop is a string. Quote to force a string: --set name='\"2026\"'.",
 };
 
 export const COMMAND_REGISTRY = [
+  {
+    path: ["setup", "claim-link"],
+    usage: "marquee setup claim-link",
+    summary: "Print the one-time link that claims an unowned instance.",
+    operations: ["mintInstanceClaimLink"],
+    skill: "setup",
+    // The one command that runs before a credential exists — it is what
+    // produces the human who will issue the first one.
+    unauthenticated: true,
+    options: [],
+  },
+  {
+    path: ["setup", "health"],
+    usage: "marquee setup health",
+    summary: "Confirm the deployment answers, and name the build it is serving.",
+    // No API operation, for the same reason `logs` has none: `/health` is the
+    // deployment's own liveness stamp, not something this conference serves.
+    // It is a command rather than a raw request because the skill teaches one
+    // surface — an agent that drops to curl mid-loop has found a gap (AC-143).
+    operations: [],
+    skill: "setup",
+    unauthenticated: true,
+    options: [],
+  },
+  {
+    path: ["setup", "instance"],
+    usage: "marquee setup instance",
+    summary: "Read what is configured on this deployment, and what is not.",
+    operations: ["getInstanceStatus"],
+    skill: "setup",
+    options: [],
+  },
+  {
+    path: ["event", "create"],
+    usage: "marquee event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz> [--from <event-id>] [--copy <sets>]",
+    summary: "Create a conference on this instance, optionally from an existing one.",
+    operations: ["createEvent"],
+    skill: "setup",
+    set: ["name", "starts_on", "ends_on", "timezone", "venue", "tagline", "copy_from", "copy"],
+    options: [
+      SET_OPTION,
+      // `--from` and `--copy` are sugar over `--set copy_from=` and a JSON
+      // object, because the thing an agent is doing here is "next year's
+      // conference from this year's", and it should read that way on one line.
+      { name: "--from <event-id>", description: "Carry structure from an existing conference." },
+      { name: "--copy <sets>", description: `Comma-separated sets to carry: ${COPY_SETS.join(", ")}. Default with --from: everything but venues.` },
+    ],
+  },
+  {
+    path: ["event", "list"],
+    usage: "marquee event list",
+    summary: "List the conferences this credential can read.",
+    operations: ["listEvents"],
+    // Not a setup verb: setting up an instance happens once, and this is the
+    // command an agent reaches for every time it needs to know which
+    // conference it is working in. It is taught in its own chapter.
+    skill: "conferences",
+    options: [],
+  },
+  {
+    path: ["forms", "create"],
+    usage: "marquee forms create <event-id> --set name=<name> --set slug=<slug> --set kind=abstract",
+    summary: "Draft a call for speakers. It is not published.",
+    operations: ["createEventForm"],
+    skill: "setup",
+    event: true,
+    set: ["name", "slug", "kind", "closes_at", "per_submitter_limit", "min_speakers", "max_speakers", "welcome_md"],
+    options: [SET_OPTION],
+  },
+  {
+    path: ["forms", "list"],
+    usage: "marquee forms list <event-id>",
+    summary: "List the conference's forms and their publication state.",
+    operations: ["listEventForms"],
+    skill: "setup",
+    event: true,
+    options: [],
+  },
+  {
+    path: ["evaluation", "plan"],
+    usage: "marquee evaluation plan <event-id> --set name=<name>",
+    summary: "Create the evaluation plan the review queue reads.",
+    operations: ["createEvaluationPlan"],
+    skill: "setup",
+    event: true,
+    set: ["name", "instructions", "status", "scale_min", "scale_max"],
+    options: [SET_OPTION],
+  },
+  {
+    path: ["organizers", "list"],
+    usage: "marquee organizers list",
+    summary: "List everyone who can run this instance.",
+    operations: ["listOrganizers"],
+    skill: "setup",
+    options: [],
+  },
+  {
+    path: ["organizers", "invite"],
+    usage: "marquee organizers invite",
+    summary: "Mint a one-time invite link for an additional organizer.",
+    operations: ["createOrganizerInvite"],
+    skill: "setup",
+    options: [],
+  },
   {
     path: ["event", "seed"],
     usage: "marquee event seed",
@@ -283,6 +390,101 @@ export const COMMAND_REGISTRY = [
     skill: "triage",
     event: true,
     options: [{ name: "--query <text>", description: "Required; the search text." }],
+  },
+  // People, Lists, and the sourcing pipeline are ORGANIZATION-level: they
+  // outlive any one conference, so none of these commands takes an event ID.
+  {
+    path: ["people", "list"],
+    usage: "marquee people list [--filter key=value]",
+    summary: "List the organization's people, filtered on the server.",
+    operations: ["listOrgPeople"],
+    skill: "people",
+    options: [
+      { name: "--filter <key=value>", description: "Repeat: q, company, title, tag, stage, list_id, event_id." },
+      { name: "--page <n>", description: "One-based result page." },
+      { name: "--per-page <n>", description: "Rows per page, up to 100." },
+      { name: "--sort <key>", description: "name, name_desc, company, newest, updated, or last_contact." },
+    ],
+  },
+  {
+    path: ["people", "show"],
+    usage: "marquee people show <person-id>",
+    summary: "Read one person: identity, tags, notes, connections, and activity.",
+    operations: ["getOrgPerson"],
+    skill: "people",
+    options: [],
+  },
+  {
+    path: ["people", "note"],
+    usage: "marquee people note <person-id> --set body=<text>",
+    summary: "Write an internal note on a person.",
+    operations: ["addOrgPersonNote"],
+    skill: "people",
+    set: ["body"],
+    options: [SET_OPTION],
+  },
+  {
+    path: ["people", "tag"],
+    usage: "marquee people tag <person-id> --set tag=<tag>",
+    summary: "Tag a person.",
+    operations: ["addOrgPersonTag"],
+    skill: "people",
+    set: ["tag"],
+    options: [SET_OPTION],
+  },
+  {
+    path: ["people", "import"],
+    usage: "marquee people import --file <path.csv>",
+    summary: "Import people from a CSV, matched on email so nobody is duplicated.",
+    operations: ["importOrgPeople"],
+    skill: "people",
+    options: [{ name: "--file <path>", description: "Required; the CSV to import." }],
+  },
+  {
+    path: ["people", "email"],
+    usage: "marquee people email --filter person_ids=<a,b> --subject <text> --body <text>",
+    summary: "Email a selection of people through the outbox.",
+    operations: ["sendOrgCommunication"],
+    skill: "people",
+    options: [
+      { name: "--filter <key=value>", description: "Required; person_ids or list_id." },
+      { name: "--subject <text>", description: "Required; pair with --body." },
+      { name: "--body <text>", description: "Required; merge tags such as {{speaker.first_name}} resolve per recipient." },
+    ],
+  },
+  {
+    path: ["lists", "list"],
+    usage: "marquee lists list",
+    summary: "List the organization's saved people Lists.",
+    operations: ["listPersonLists"],
+    skill: "people",
+    options: [],
+  },
+  {
+    path: ["lists", "save"],
+    usage: "marquee lists save --set name=<name> --set kind=<live|fixed>",
+    summary: "Save a filter (live) or a set of people (fixed) as a List.",
+    operations: ["createPersonList"],
+    skill: "people",
+    set: ["name", "kind", "config", "person_ids"],
+    options: [SET_OPTION],
+  },
+  {
+    path: ["pipeline", "board"],
+    usage: "marquee pipeline board",
+    summary: "Read the sourcing pipeline and every card on it.",
+    operations: ["getOrgPipeline"],
+    skill: "people",
+    options: [],
+  },
+  {
+    path: ["pipeline", "move"],
+    usage: "marquee pipeline move <person-id> --set stage=<stage>",
+    summary: "Enroll a prospect, or move their card; the move is recorded with a timestamp.",
+    operations: ["setOrgPersonStage"],
+    skill: "people",
+    set: ["stage", "score", "rationale"],
+    options: [SET_OPTION],
   },
 ];
 

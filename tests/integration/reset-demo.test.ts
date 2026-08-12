@@ -71,6 +71,12 @@ const SEEDED_COUNTS: Record<string, number> = {
   auth_sessions: 0,
   api_tokens: 0,
   memberships: 160,
+  // The annotations log and Lists are org-scoped and organizer-authored, so the
+  // seed ships none of them — but a reset must still sweep them, or a note
+  // would outlive the person it is about.
+  person_list_members: 0,
+  person_lists: 0,
+  person_events: 0,
   people: 1101,
   attachments: 40,
   event_settings: 0,

@@ -6,13 +6,6 @@ the parts most tools skip: how the software learns who its owner is, what
 happens when half of it isn't configured yet, and how the second organizer
 gets in.
 
-> **Status.** This guide documents Marquee's first-run experience as designed
-> in the binding prototype (pipeline v1.11; rulings in
-> `prototypes/cold-start/DECISIONS.md`). The local demo checkout in the
-> README runs today; the claim, handoff, and organizer-invite flows land with
-> the cold-start build. Until then, this is the contract those changes are
-> built to.
-
 Read the short version first:
 
 - **Initial setup is run by an agent.** You tell your coding agent to set up

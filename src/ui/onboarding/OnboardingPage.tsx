@@ -2,13 +2,13 @@ import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import type { OnboardingFilter, OnboardingRow, OnboardingSnapshot, OnboardingSpeakerDetail } from "../../routes/onboarding.queries";
+import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import { formatDueDate } from "../../lib/task-due";
 import { FileVersions } from "../files/FileVersions";
 import "./onboarding.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const CUSTOM_TEMPLATE = "__custom__";
 const FILTER_LABELS: Record<OnboardingFilter, string> = {
   all: "All",
@@ -223,7 +223,7 @@ function ComposeDrawer({ eventId, rows, onClose }: { eventId: string; rows: Onbo
   </aside>;
 }
 
-export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, search = "", navigate }: { eventId?: string; search?: string; navigate?: (target: string) => void }): JSX.Element {
+export function OnboardingPage({ eventId, search = "", navigate }: { eventId: string; search?: string; navigate?: (target: string) => void }): JSX.Element {
   const [filters, setFilters] = useState({ filter: "all" as OnboardingFilter, taskType: "", track: "", search: "" });
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -309,7 +309,7 @@ export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, search = "", naviga
   const clearFilters = () => setFilters({ filter: "all", taskType: "", track: "", search: "" });
 
   return <div class="onboarding-page">
-    <PageHeader title="Onboarding" copy={ready ? `${counts.incomplete} accepted speakers still owe something. The most behind are first; every task and reminder is visible here.` : "Reading the conference chase board…"} actions={<><Button small onClick={() => navigate?.("/import")}>Import speakers</Button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0 || inviteState.kind === "sending"} onClick={() => void inviteSelected()}>{inviteState.kind === "sending" ? "Inviting…" : `Invite to portal (${selectedRows.length})`}</button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0} onClick={(event) => openDrawer({ kind: "compose" }, event.currentTarget)}>{`Send reminder (${selectedRows.length})`}</button></>} />
+    <PageHeader title="Onboarding" copy={ready ? `${counts.incomplete} accepted speakers still owe something. The most behind are first; every task and reminder is visible here.` : "Reading the conference chase board…"} actions={<><AgentBriefLauncher surface="portal" eventId={eventId} small /><Button small onClick={() => navigate?.("/import")}>Import speakers</Button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0 || inviteState.kind === "sending"} onClick={() => void inviteSelected()}>{inviteState.kind === "sending" ? "Inviting…" : `Invite to portal (${selectedRows.length})`}</button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0} onClick={(event) => openDrawer({ kind: "compose" }, event.currentTarget)}>{`Send reminder (${selectedRows.length})`}</button></>} />
     <div class="onboarding-invite-result-slot" aria-live="polite">{inviteState.kind === "success" ? <div class="onboarding-invite-result"><strong>{inviteState.result.message}</strong>{inviteState.result.invites.map((item) => item.magic_link ? <a href={item.magic_link} key={item.outbox_id}>Open {item.name}'s portal link</a> : <span key={item.outbox_id}>{item.name}: outbox row {item.outbox_id} recorded; delivery remains provider-controlled.</span>)}</div> : null}{inviteState.kind === "error" ? <div class="onboarding-inline-error" role="alert">Invitation failed: {inviteState.message}</div> : null}</div>
     {ready ? <>
       <div class="onboarding-metrics" aria-label="Onboarding metrics">

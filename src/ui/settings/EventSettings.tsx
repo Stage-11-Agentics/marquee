@@ -4,7 +4,8 @@ import { useEffect, useState } from "preact/hooks";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
 import { EVENT_NAME_CHANGED } from "../shell/identity";
-import { DEFAULT_EVENT_ID, loadVenueModel } from "../venues/venue-writer";
+import { OrganizersCard } from "../setup/OrganizersCard";
+import { loadVenueModel } from "../venues/venue-writer";
 import type { VenueModel } from "../../lib/venues";
 import "./settings.css";
 
@@ -53,7 +54,7 @@ type LoadState =
   | { kind: "error"; model: SettingsModel | null; message: string };
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   navigate: (target: string) => void;
 }
 
@@ -166,7 +167,7 @@ function TrackRow({
   </article>;
 }
 
-export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): JSX.Element {
+export function EventSettings({ eventId, navigate }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", model: null });
   const [venueCounts, setVenueCounts] = useState<VenueCounts | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -273,6 +274,10 @@ export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
           <header class="card-head"><div><h2>Tracks</h2><span class="subtle">Colors and order carry through the program</span></div><button class="button small" type="button" onClick={() => updateModel((current) => ({ ...current, tracks: [...current.tracks, { id: temporaryId("track"), event_id: eventId, name: "New track", color: "#7C5CFC", position: current.tracks.length, updated_at: 0 }] }))}>+ Add track</button></header>
           <div class="card-body settings-list">{model.tracks.length ? model.tracks.map((track, index) => <TrackRow key={track.id} track={track} index={index} count={model.tracks.length} onChange={(patch) => updateModel((current) => ({ ...current, tracks: current.tracks.map((item) => item.id === track.id ? { ...item, ...patch } : item) }))} onRemove={() => { setRemovedTracks((current) => [...current, track.id]); updateModel((current) => ({ ...current, tracks: current.tracks.filter((item) => item.id !== track.id) })); }} onMove={(delta) => updateModel((current) => reorderTracks(current, moveBy(current.tracks, track.id, delta)))} onDrop={(sourceId) => updateModel((current) => reorderTracks(current, moveItem(current.tracks, sourceId, track.id)))} />) : <div class="settings-list-empty"><strong>No tracks yet</strong><span>Add the first track to carry color and order through the conference program.</span></div>}</div>
         </section>
+
+        {/* Organizers are instance-level people, surfaced here because this is
+            where an organizer already looks for "who else can get in". */}
+        <div class="settings-organizers span-2"><OrganizersCard /></div>
 
         <section class="card settings-venue-link">
           <div><span class="eyebrow">Venues and rooms</span><h2>One place for every door</h2><p class="subtle tabular">{venueCounts ? `${venueCounts.buildings} buildings · ${venueCounts.rooms} rooms` : "Venue counts unavailable"}</p></div>

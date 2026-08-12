@@ -15,6 +15,7 @@ import {
   SHIPPED_DEMO_ORGANIZER_PERSON_ID,
   SHIPPED_DEMO_SPEAKER_PERSON_ID,
 } from "../lib/reset-demo/demo-fixture";
+import { DEMO_EVENT_ORDER, SEEDED_DEMO_EVENT_ID } from "../lib/demo-event";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 
 /**
@@ -213,8 +214,13 @@ const exchangeMagicLink = defineApiRoute(
         401,
       );
     }
-    const link = await consumeMagicLink(context.env.DB, token);
-    if (!link) {
+    // Sign-in exchanges only person-bound links. `claim` and `org_invite` have
+    // no person yet and are exchanged at `/api/v1/claim`, which is the one
+    // place a session is minted from a token that predates its owner.
+    const link = await consumeMagicLink(context.env.DB, token, Date.now(), {
+      purposes: ["login", "draft_resume", "cospeaker_profile", "task_link"],
+    });
+    if (!link || link.person_id === null) {
       dropRejectedSessionCookie(context);
       return context.json(
         {
@@ -385,9 +391,11 @@ async function findDemoPersona(
   return persona ?? null;
 }
 
+/** By identity, never by age — see `src/lib/demo-event.ts`. */
 async function findDemoEvent(db: D1Database): Promise<EventRow | null> {
   const event = await db
-    .prepare("SELECT * FROM events WHERE demo_mode = 1 ORDER BY created_at ASC LIMIT 1")
+    .prepare(`SELECT * FROM events WHERE demo_mode = 1 ${DEMO_EVENT_ORDER}`)
+    .bind(SEEDED_DEMO_EVENT_ID)
     .first<EventRow>();
   return event ?? null;
 }

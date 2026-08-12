@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { SELF } from "cloudflare:test";
 
 import { applyMigrations, env } from "../apply-migrations";
+import {
+  DRAFT_AUTOSAVE_LIMIT,
+  DRAFT_AUTOSAVE_WINDOW_SECONDS,
+  draftAutosaveRateKey,
+} from "../../../src/routes/public-form.routes";
 
 const ORIGIN = "https://marquee.stage11.dev";
 const EVENT_ID = "evt_public_form";
@@ -341,12 +346,24 @@ describe.sequential("MRQ-15 public conference form", () => {
     const stored = await env.DB.prepare("SELECT value_text FROM submission_answers WHERE submission_id = ? AND field_id = 'field_name'").bind(draft.draft_id).first<{ value_text: string }>();
     expect(stored?.value_text).toBe("Draft Speaker");
 
-    let rateLimited = false;
-    for (let index = 0; index < 35; index += 1) {
-      const response = await request(`/api/v1/public/forms/public-cfp/drafts/${draft.resume_token}`, { method: "PATCH", body: JSON.stringify({ answers: { speaker_name: "Draft Speaker" } }) });
-      if (response.status === 429) { rateLimited = true; break; }
+    // Seed the autosave counter to its limit rather than spending it with a
+    // burst. Spending it needs DRAFT_AUTOSAVE_LIMIT + 1 requests inside one
+    // fixed window, which races the window boundary: a boundary mid-burst
+    // resets the count so neither side trips, and on a loaded machine the burst
+    // outlasts the window and the limiter can never fire at all.
+    //
+    // Both the current and the next window are seeded, so a boundary crossing
+    // between seeding and the request lands on a window that is also at limit.
+    const now = Date.now();
+    for (const at of [now, now + DRAFT_AUTOSAVE_WINDOW_SECONDS * 1000]) {
+      await env.CACHE.put(
+        await draftAutosaveRateKey(draft.resume_token, at),
+        String(DRAFT_AUTOSAVE_LIMIT),
+        { expirationTtl: DRAFT_AUTOSAVE_WINDOW_SECONDS * 3 },
+      );
     }
-    expect(rateLimited).toBe(true);
+    const limited = await request(`/api/v1/public/forms/public-cfp/drafts/${draft.resume_token}`, { method: "PATCH", body: JSON.stringify({ answers: { speaker_name: "Draft Speaker" } }) });
+    expect(limited.status).toBe(429);
   });
 
   test("AC-34 + AC-37 + AC-38 + AC-39 + AC-234 · confirmation, tracks, participants, limit, close, and reopen are real states", async () => {

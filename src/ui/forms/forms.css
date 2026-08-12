@@ -151,3 +151,10 @@
 .forms-bound-note a { font: 600 10.5px/1.2 var(--mono); }
 .forms-bound-values { display: flex; flex-wrap: wrap; gap: 5px; }
 .forms-bound-values .chip { font-size: 10px; }
+/* Opening intake without mail: warned once, never blocked (AC-285). */
+.forms-mail-warning { align-items: center; background: var(--backdrop); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 400; }
+.forms-mail-warning-card { background: var(--panel); border: 1px solid var(--line-strong); border-top: 3px solid var(--warning-line); border-radius: var(--radius); display: grid; gap: 10px; max-width: 520px; padding: 22px; }
+.forms-mail-warning-card h2 { font: 500 19px/1.2 var(--mono); letter-spacing: -.03em; margin: 0; }
+.forms-mail-warning-card p { color: var(--ink-soft); font-size: 12.5px; line-height: 1.6; margin: 0; }
+.forms-mail-warning-card ul { color: var(--ink-soft); display: grid; font-size: 12.5px; gap: 4px; line-height: 1.6; margin: 0; padding-left: 18px; }
+.forms-mail-warning-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }

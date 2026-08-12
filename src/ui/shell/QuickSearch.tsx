@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { SearchResult } from "../../api/search";
 import { apiFetch, errorSummary } from "./api-client";
+import { useEventContext } from "./event-context";
 import { useDialogLifecycle } from "./OverlayHosts";
 import "./quick-search.css";
 
@@ -27,6 +28,7 @@ function readSearchResponse(body: unknown): SearchResponse {
 }
 
 export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.Element | null {
+  const { events, switchEvent } = useEventContext();
   const dialogRef = useDialogLifecycle(open, onClose);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -98,6 +100,23 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     navigate(result.href);
   };
 
+  /**
+   * Switching conferences from the search everyone already reaches for, rather
+   * than a second chord to learn. These rows are rendered from the conference
+   * list the shell already holds, so they answer instantly and they answer even
+   * when the server-side search finds nothing — which is the common case when
+   * you are typing the name of a conference you are not currently in.
+   */
+  const trimmed = query.trim().toLowerCase();
+  const eventMatches = trimmed.length === 0
+    ? []
+    : events.filter((event) => event.id !== eventId && event.name.toLowerCase().includes(trimmed));
+  const switchTo = (targetId: string) => {
+    onClose();
+    switchEvent(targetId);
+    navigate("/dashboard");
+  };
+
   return <div class="quick-search-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
     <section ref={dialogRef} class="modal quick-search-dialog" role="dialog" aria-modal="true" aria-label="Search everything" tabIndex={-1}>
       <div class="quick-search-input-wrap">
@@ -125,10 +144,25 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
         data-search-painted-query={paintedQuery}
         data-search-state={state}
       >
+        {eventMatches.map((event) => <button
+          type="button"
+          role="option"
+          aria-label={`Conference: ${event.name}`}
+          class="quick-search-result"
+          data-search-result
+          data-result-type="Conference"
+          data-switch-event={event.id}
+          key={`event-${event.id}`}
+          onClick={() => switchTo(event.id)}
+        >
+          <span class="quick-search-result-type">Conference</span>
+          <span class="quick-search-result-copy"><strong>Switch to {event.name}</strong><small>{event.submission_count} submissions · every list and search rescopes</small></span>
+          <kbd>⏎</kbd>
+        </button>)}
         {state === "loading" && <div class="quick-search-status" role="status" aria-live="polite"><strong>Searching the conference</strong><span>Reading abstracts, sessions, speakers, and forms…</span></div>}
         {state === "error" && <div class="quick-search-status" role="alert"><strong>Search needs attention</strong><span>{errorMessage || "Try that query again."}</span></div>}
         {state === "idle" && <div class="quick-search-status"><strong>Search the conference</strong><span>Type a partial or misspelled name, title, or record ID.</span></div>}
-        {state === "ready" && results.length === 0 && <div class="quick-search-status"><strong>No results for “{query}”</strong><span>Try an Abstract, Session, Speaker, Form, or record ID.</span></div>}
+        {state === "ready" && results.length === 0 && eventMatches.length === 0 && <div class="quick-search-status"><strong>No results for “{query}”</strong><span>Try an Abstract, Session, Speaker, Form, or record ID.</span></div>}
         {state === "ready" && results.length > 0 && results.map((result, index) => <button
           type="button"
           role="option"

@@ -15,11 +15,11 @@ import type {
 import { AGENDA_VIEWS, durationIsAllowed, MAX_BATCH_PUBLISH_IDS, viewNames } from "../../api/agenda";
 import { displayRoomLabel, showsBuildingComparison, showsBuildingComparisonCount, visibleVenueConflicts } from "../../lib/venue-disclosure";
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import { localParts, sessionDay, sessionTime, TIME_SLOTS, TrackBoard } from "./track-board";
 import "./agenda.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const DAY_MS = 86_400_000;
 const AGENDA_ROUTE = "/api/v1/events/{eventId}/agenda";
 const AGENDA_ITEMS_ROUTE = "/api/v1/events/{eventId}/agenda/items";
@@ -27,7 +27,7 @@ const AGENDA_ITEM_ROUTE = "/api/v1/events/{eventId}/agenda/items/{itemId}";
 const AGENDA_PUBLISH_ROUTE = "/api/v1/events/{eventId}/agenda/publish";
 
 interface Props {
-  eventId?: string;
+  eventId: string;
 }
 
 interface DayOption {
@@ -589,7 +589,7 @@ function PublicationPanel({
   </section>;
 }
 
-export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
+export function AgendaPage({ eventId }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", snapshot: null });
   const [view, setView] = useState<AgendaView>("day");
   const [day, setDay] = useState("");
@@ -798,7 +798,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
   };
 
   return <div class="agenda-page">
-    <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Drag accepted Sessions into a day, time, and room. Format defaults set duration; live conflicts warn without blocking.`} actions={<Button variant="danger" onClick={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</Button>} />
+    <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Drag accepted Sessions into a day, time, and room. Format defaults set duration; live conflicts warn without blocking.`} actions={<><AgentBriefLauncher surface="agenda" eventId={eventId} /><Button variant="danger" onClick={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</Button></>} />
     {publicationNotice && <div class="agenda-notice agenda-publication-success" role="status"><span>Published <strong class="tabular">{publicationNotice.count}</strong> Session{publicationNotice.count === 1 ? "" : "s"} to the public agenda.</span><span class="agenda-notice-actions"><a href={publicationNotice.publicAgendaUrl}>View public agenda ↗</a><button type="button" onClick={() => setPublicationNotice(null)} aria-label="Dismiss publication confirmation">×</button></span></div>}
     <PublicationPanel
       publication={snapshot.publication}

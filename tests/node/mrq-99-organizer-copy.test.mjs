@@ -7,14 +7,19 @@ const source = async (path) => readFile(new URL(path, root), "utf8");
 
 test("CONTRACT · MRQ-99 organizer copy removes the sidebar dead end", async () => {
   const sidebar = await source("src/ui/shell/Sidebar.tsx");
+  const switcher = await source("src/ui/shell/EventSwitcher.tsx");
   const appShell = await source("src/ui/shell/AppShell.tsx");
 
-  // MRQ-99 removed a switcher that opened an "unavailable" overlay. MRQ-106
-  // finished the job: the conference name is a caption now, not a control that
-  // navigates to the page you are already on. The dead end stays dead, and it
-  // does not come back as a link either.
-  assert.match(sidebar, /<div class="event-context"><small>Conference<\/small>/);
-  assert.doesNotMatch(sidebar, /event-switcher/);
+  // MRQ-99 removed a switcher that opened an "unavailable" overlay, and MRQ-106
+  // demoted what was left to a caption. What both were protecting is the rule
+  // that survives: a control here must not promise something the build cannot
+  // do, and must never be a link back to the page you are already on. The name
+  // is a control again — it opens a real list of real conferences — so the rule
+  // is asserted rather than the shape it once forced.
+  assert.match(switcher, /<button[\s\S]*?class="event-context event-switcher"/);
+  assert.match(switcher, /aria-haspopup="listbox"/);
+  assert.doesNotMatch(switcher, /<a[^>]*class="event-context/);
+  assert.doesNotMatch(switcher, /unavailable\s*\(/);
   assert.doesNotMatch(sidebar, /unavailable\s*\(/);
   assert.doesNotMatch(appShell, /unavailable\s*=\s*useCallback/);
 });

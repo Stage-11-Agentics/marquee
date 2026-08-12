@@ -7,7 +7,9 @@ import type { ApiEnv } from "../api/runtime";
 import type { EventRow } from "../db/schema";
 import { forbidden, getAuth, unauthorized } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
+import { requireOrgOwner } from "../lib/auth/org-admin";
 import { SHIPPED_DEMO_EVENT_ID } from "../lib/reset-demo/demo-fixture";
+import { removeDemoData } from "../lib/reset-demo/remove-demo";
 import { createResetJob, readResetJob } from "../lib/reset-demo/reset-jobs";
 
 /**
@@ -113,6 +115,52 @@ const getDemoResetJob = defineApiRoute(
   }) as never,
 );
 
+/**
+ * Removing the demo is the mirror image of resetting it, and just as narrow:
+ * `is_demo` scope only, never the organization the operator's own conference
+ * may share with it. Idempotent, so the confirm dialog is safe to press twice
+ * (AC-286).
+ */
+const removeDemoConference = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/admin/remove-demo",
+    operationId: "removeDemoConference",
+    summary: "Remove the seeded demo conference and its people",
+    description:
+      "Deletes every row scoped by demo_mode or is_demo, leaving the organization and every non-demo row untouched. Running it on an instance with no demo is a no-op.",
+    tags: ["Admin"],
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: {
+      200: jsonResponse(
+        z.object({
+          ok: z.literal(true),
+          removed_events: z.number(),
+          removed_people: z.number(),
+          removed_objects: z.number(),
+        }),
+        "The demo is gone; a second call reports zero.",
+      ),
+      ...errorResponses([401, 403, 429, 500]),
+    },
+  },
+  (async (context: Context<ApiEnv>) => {
+    requireOrgOwner(context);
+    const environment = context.env as unknown as Env;
+    const result = await removeDemoData(context.env.DB, environment.MEDIA);
+    context.header("Cache-Control", "no-store");
+    return context.json(
+      {
+        ok: true as const,
+        removed_events: result.removedEvents,
+        removed_people: result.removedPeople,
+        removed_objects: result.removedObjects,
+      },
+      200,
+    );
+  }) as never,
+);
+
 function passesLocalValidation(context: Context<ApiEnv>): boolean {
   const expected = (context.env as unknown as Env).LOCAL_VALIDATION_TOKEN;
   return (
@@ -130,4 +178,4 @@ function passesSessionScope(
   return authHasRole(auth, "program_lead", eventId);
 }
 
-export const apiRoutes = [enqueueDemoReset, getDemoResetJob];
+export const apiRoutes = [enqueueDemoReset, getDemoResetJob, removeDemoConference];
