@@ -47,6 +47,8 @@ const submissionAgentReviewSchema = z.object({
   id: z.string(),
   name: z.string(),
   score: z.number().nullable(),
+  /** The chair's value when one governs; the seat's own `score` stands otherwise. */
+  override_score: z.number().nullable(),
   recommendation: z.string().nullable(),
   comment: z.string().nullable(),
 });

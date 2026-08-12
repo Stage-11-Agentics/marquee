@@ -57,6 +57,8 @@ interface EvaluationEvidence {
   override_comment: string | null;
   override_at: number | null;
   override_person_name: string | null;
+  scale_min: number | null;
+  scale_max: number | null;
 }
 interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; reviewers: Assignment[]; evaluations: Array<{ abstained: boolean; score: number | null; recommendation: string | null; comment: string; reviewer_kind: "human" | "agent" }>; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
 interface RecordData {
@@ -130,22 +132,30 @@ function scoreText(score: number | null): string {
  * their reasoning — and, when a chair has overridden it, the governing value
  * with the superseded one still legible underneath.
  *
- * The override control is a fixed-height panel whether or not an override
- * exists, so recording one never shifts the rows below it.
+ * The Override chip and the Clear button each hold a reserved slot, so toggling
+ * an override never moves the controls beside them. The row itself does grow by
+ * the superseded line when an override exists, and by the form while it is
+ * open — both are the operator's own action, not a shift under their cursor.
  */
-function EvaluationEvidenceRow({ evaluation, canOverride, busy, onOverride, onClear }: {
+function EvaluationEvidenceRow({ evaluation, canOverride, busy, error, onOverride, onClear }: {
   evaluation: EvaluationEvidence;
   canOverride: boolean;
   busy: boolean;
-  onOverride: (evaluation: EvaluationEvidence, score: number, comment: string) => Promise<void>;
-  onClear: (evaluation: EvaluationEvidence) => Promise<void>;
+  error: string;
+  onOverride: (evaluation: EvaluationEvidence, score: number, comment: string) => Promise<boolean>;
+  onClear: (evaluation: EvaluationEvidence) => Promise<boolean>;
 }): JSX.Element {
   const overridden = evaluation.override_score !== null;
   const [open, setOpen] = useState(false);
   const [draftScore, setDraftScore] = useState(String(evaluation.override_score ?? evaluation.score ?? ""));
   const [draftComment, setDraftComment] = useState(evaluation.override_comment ?? "");
   const parsed = Number(draftScore);
-  const submittable = draftScore.trim() !== "" && Number.isFinite(parsed);
+  // The plan's own scale, so an out-of-range value is refused where it is typed
+  // rather than by the server after the fact.
+  const { scale_min: scaleMin, scale_max: scaleMax } = evaluation;
+  const inRange = (scaleMin === null || parsed >= scaleMin) && (scaleMax === null || parsed <= scaleMax);
+  const submittable = draftScore.trim() !== "" && Number.isFinite(parsed) && inRange;
+  const scaleHint = scaleMin !== null && scaleMax !== null ? `${scaleMin}–${scaleMax}` : null;
   return <div class="record-answer record-evaluation">
     <small>
       {evaluation.round_name} · Scorecard · <ReviewerName name={evaluation.reviewer_name} kind={evaluation.reviewer_kind} />
@@ -164,11 +174,24 @@ function EvaluationEvidenceRow({ evaluation, canOverride, busy, onOverride, onCl
         ? <form class="evaluation-override-form" onSubmit={(event) => {
             event.preventDefault();
             if (!submittable) return;
-            void onOverride(evaluation, parsed, draftComment).then(() => setOpen(false));
+            void onOverride(evaluation, parsed, draftComment).then((saved) => { if (saved) setOpen(false); });
           }}>
-            <label class="field"><span>Override score</span><input type="number" step="0.1" required value={draftScore} aria-label={`Override score for ${evaluation.reviewer_name}`} onInput={(event) => setDraftScore(event.currentTarget.value)} /></label>
+            <label class="field">
+              <span>Override score{scaleHint ? ` · ${scaleHint}` : ""}</span>
+              <input
+                type="number"
+                step="0.1"
+                required
+                min={scaleMin ?? undefined}
+                max={scaleMax ?? undefined}
+                value={draftScore}
+                aria-label={`Override score for ${evaluation.reviewer_name}`}
+                onInput={(event) => setDraftScore(event.currentTarget.value)}
+              />
+            </label>
             <label class="field"><span>Why</span><input value={draftComment} aria-label={`Reason for overriding ${evaluation.reviewer_name}`} onInput={(event) => setDraftComment(event.currentTarget.value)} /></label>
             <div class="record-action-row">
+              <span class={`record-inline-message ${error ? "error" : ""}`} role={error ? "alert" : undefined}>{error || (scaleHint && !inRange && draftScore.trim() !== "" ? `This plan scores ${scaleHint}.` : "")}</span>
               <Button small variant="ghost" type="button" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
               <Button small variant="primary" type="submit" disabled={busy || !submittable}>Save override</Button>
             </div>
@@ -201,6 +224,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [messageError, setMessageError] = useState("");
   const [messageNotice, setMessageNotice] = useState("");
   const [resendNotice, setResendNotice] = useState("");
+  const [overrideError, setOverrideError] = useState("");
   const [participantMode, setParticipantMode] = useState<"existing" | "new">("existing");
   const [participantRole, setParticipantRole] = useState<string>("co_speaker");
   const [participantQuery, setParticipantQuery] = useState("");
@@ -361,13 +385,34 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const overridePath = (evaluation: EvaluationEvidence): string =>
     `/../../rounds/${encodeURIComponent(evaluation.round_id)}/submissions/${encodeURIComponent(submissionId)}/evaluations/${encodeURIComponent(evaluation.id)}/override`;
 
-  const overrideScore = async (evaluation: EvaluationEvidence, score: number, comment: string) => {
-    await act(`override-${evaluation.id}`, overridePath(evaluation), { method: "PUT", body: JSON.stringify({ score, comment: comment.trim() || undefined }) }, OVERRIDE_ROUTE);
+  /**
+   * The override is the one control on this page that submits a number the
+   * operator typed, so it is the one whose failure is ordinary rather than
+   * exceptional. It reports inline and leaves the record standing: `act` swaps
+   * the whole page for "Record unavailable", which is the right answer for a
+   * dead link and the wrong one for "that score is off the plan's scale".
+   */
+  const writeOverride = async (evaluation: EvaluationEvidence, init: RequestInit): Promise<boolean> => {
+    setBusy(`override-${evaluation.id}`);
+    setOverrideError("");
+    try {
+      await apiFetch<unknown>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${overridePath(evaluation)}`,
+        { ...init, headers: { "content-type": "application/json" }, route: OVERRIDE_ROUTE },
+      );
+      reload();
+      return true;
+    } catch (error: unknown) {
+      setOverrideError(errorSummary(error));
+      return false;
+    } finally { setBusy(""); }
   };
 
-  const clearOverride = async (evaluation: EvaluationEvidence) => {
-    await act(`override-${evaluation.id}`, overridePath(evaluation), { method: "DELETE" }, OVERRIDE_ROUTE);
-  };
+  const overrideScore = async (evaluation: EvaluationEvidence, score: number, comment: string): Promise<boolean> =>
+    writeOverride(evaluation, { method: "PUT", body: JSON.stringify({ score, comment: comment.trim() || undefined }) });
+
+  const clearOverride = async (evaluation: EvaluationEvidence): Promise<boolean> =>
+    writeOverride(evaluation, { method: "DELETE" });
 
   /**
    * One editor, two doors. A Draft saves through the drafts endpoint, which
@@ -482,7 +527,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           </form>}
         </CardBody></Card>
         <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
-        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
+        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} error={busy === `override-${evaluation.id}` ? "" : overrideError} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
         <Card><CardHeader title="History"><span class="subtle">Every change, who made it, and when.</span></CardHeader><CardBody><ContentHistory entries={record.history} onRestore={record.actions.can_restore_content ? ((entryId) => void restoreVersion(entryId, isLivePublicly)) : undefined} busy={Boolean(busy)} label={statusLabel} moment={moment} livePublicly={isLivePublicly} /></CardBody></Card>
       </div>
       <aside class="record-aside stack">

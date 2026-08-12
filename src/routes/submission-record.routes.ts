@@ -600,7 +600,11 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
         evaluation.reviewer_person_id, person.name AS reviewer_name, person.kind AS reviewer_kind, evaluation.recommendation,
         evaluation.score, evaluation.comment, evaluation.criteria_scores, evaluation.abstained, evaluation.updated_at,
         evaluation.override_score, evaluation.override_comment, evaluation.override_at,
-        evaluation.override_person_id, overrider.name AS override_person_name
+        evaluation.override_person_id, overrider.name AS override_person_name,
+        -- The plan's scale travels with the evaluation so the override control
+        -- can bound its own input. Without it the only way to learn the range
+        -- is to submit an out-of-range value and be refused.
+        plan.scale_min, plan.scale_max
       FROM evaluations evaluation
       JOIN evaluation_rounds round ON round.id = evaluation.round_id
       JOIN evaluation_plans plan ON plan.id = round.plan_id
