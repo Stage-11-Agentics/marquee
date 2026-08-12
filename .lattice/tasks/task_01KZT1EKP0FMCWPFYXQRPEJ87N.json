@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-mrq-97",
   "branch_links": [],
-  "comment_count": 4,
+  "comment_count": 5,
   "complexity": null,
   "created_at": "2026-08-12T03:49:56Z",
   "created_by": {
@@ -29,7 +29,7 @@
     }
   ],
   "id": "task_01KZT1EKP0FMCWPFYXQRPEJ87N",
-  "last_event_id": "ev_01KZT2PGMDY473KYS3RYY69KGE",
+  "last_event_id": "ev_01KZT2YMQQW73QR1PDBPV2D6WY",
   "last_status_changed_at": "2026-08-12T04:11:42Z",
   "linked_files": [],
   "priority": "critical",
@@ -41,6 +41,6 @@
   "tags": null,
   "title": "Accepting a talk removes it from the Accepted filter \u2014 \"Accepted\" is a transient stage masquerading as a status",
   "type": "bug",
-  "updated_at": "2026-08-12T04:11:43Z",
+  "updated_at": "2026-08-12T04:16:09Z",
   "urgency": null
 }
