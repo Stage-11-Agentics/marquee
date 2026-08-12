@@ -73,6 +73,12 @@ export function run(ctx: SeedContext): void {
   const acceptedIds = new Set(
     table(ctx, "submissions").filter((row) => row.status === "accepted").map((row) => String(row.id)),
   );
+  // Agenda deliberately schedules the first 24 accepted rows. The next
+  // Wave-1 row is therefore a real accepted Session with a sent wave, no
+  // agenda slot, and no pending wave; closing its seeded tasks makes the
+  // derived Ready to place stage genuinely reachable.
+  const acceptedRows = table(ctx, "submissions").filter((row) => row.status === "accepted");
+  const readyToPlaceSubmissionId = String(acceptedRows[24]?.id ?? "");
   const acceptedParticipations = table(ctx, "participations").filter(
     (row) => acceptedIds.has(String(row.submission_id)),
   );
@@ -93,9 +99,10 @@ export function run(ctx: SeedContext): void {
   ] as const;
   [...firstAcceptedSubmission].sort(([left], [right]) => left.localeCompare(right)).forEach(
     ([personId, submissionId], personIndex) => {
+      const readyToPlace = submissionId === readyToPlaceSubmissionId;
       requiredTemplates.forEach(([templateId, title, kind], templateIndex) => {
         const overdue = templateIndex === 0 && personIndex < 10;
-        const done = !overdue && (personIndex + templateIndex) % 5 === 0;
+        const done = readyToPlace || (!overdue && (personIndex + templateIndex) % 5 === 0);
         const dueAt = overdue
           ? ctx.now - (personIndex + 1) * 24 * 60 * 60 * 1000
           : ctx.now + (templateIndex === 0 ? 16 : 11) * 24 * 60 * 60 * 1000;
@@ -136,9 +143,9 @@ export function run(ctx: SeedContext): void {
             kind: "acknowledge",
             description,
             due_at: ctx.now + 9 * 24 * 60 * 60 * 1000,
-            status: "open",
-            completed_at: null,
-            response_json: null,
+            status: readyToPlace ? "done" : "open",
+            completed_at: readyToPlace ? ctx.now - 60 * 60 * 1000 : null,
+            response_json: readyToPlace ? JSON.stringify({ demo: "completed" }) : null,
             attachment_id: null,
             last_write_source: "marquee",
             created_at: ctx.now,

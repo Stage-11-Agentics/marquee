@@ -38,6 +38,65 @@ function addConflictParticipation(
   });
 }
 
+/**
+ * Keep the organizer-facing confirmation states visible in the seeded agenda.
+ * One person intentionally holds two roles on the same Session: the existing
+ * moderator role is confirmed, while a reused speaker slot is declined. The
+ * agenda's derived flag therefore inspects a second role even though the first
+ * role is confirmed, while the record still shows both role responses. A
+ * separate co-speaker slot is moved from a multi-speaker Session and remains
+ * pending on that Session. Reusing slots keeps the seeded table cardinalities
+ * stable for reset-demo's baseline contract.
+ */
+function addConfirmationCoverage(ctx: SeedContext, accepted: SeedRow["row"][]): void {
+  const submissionId = String(accepted[1]?.id ?? "");
+  const targetRows = table(ctx, "participations").filter((row) => row.submission_id === submissionId);
+  const confirmedModerator = targetRows.find(
+    (row) => row.id === seedId("par", "agenda-conflict-one")
+      && row.role === "moderator"
+      && row.confirmation_status === "confirmed",
+  );
+  const declinedRole = targetRows.find((row) => row.position === 1 && row.role === "co_speaker");
+  if (!confirmedModerator || !declinedRole) {
+    throw new Error("agenda confirmation coverage needs the first conflict's moderator and speaker slots");
+  }
+
+  declinedRole.person_id = confirmedModerator.person_id;
+  declinedRole.role = "speaker";
+  declinedRole.confirmation_status = "declined";
+  declinedRole.confirmed_at = null;
+  declinedRole.invited_at = ctx.now;
+  declinedRole.updated_at = ctx.now;
+
+  // Keep a second declined response on the other conflict Session so the
+  // organizer sees more than a single exceptional confirmation in the demo.
+  const secondDeclinedRole = table(ctx, "participations").find(
+    (row) => row.id === seedId("par", "agenda-conflict-two") && row.role === "moderator",
+  );
+  if (!secondDeclinedRole) throw new Error("agenda confirmation coverage needs a second declined role");
+  secondDeclinedRole.confirmation_status = "declined";
+  secondDeclinedRole.confirmed_at = null;
+  secondDeclinedRole.invited_at = ctx.now;
+  secondDeclinedRole.updated_at = ctx.now;
+
+  const targetPeople = new Set(targetRows.map((row) => String(row.person_id)));
+  const pendingSource = table(ctx, "participations").find((row) => {
+    if (!accepted.some((submission) => String(submission.id) === String(row.submission_id))) return false;
+    if (String(row.submission_id) === submissionId || row.role !== "co_speaker") return false;
+    if (targetPeople.has(String(row.person_id))) return false;
+    return table(ctx, "participations").filter((candidate) => candidate.submission_id === row.submission_id).length > 1;
+  });
+  if (!pendingSource) throw new Error("agenda confirmation coverage needs a distinct pending participant");
+
+  pendingSource.submission_id = submissionId;
+  pendingSource.role = "co_speaker";
+  pendingSource.position = targetRows.length;
+  pendingSource.confirmation_status = "pending";
+  pendingSource.confirmed_at = null;
+  pendingSource.invited_at = ctx.now;
+  pendingSource.updated_at = ctx.now;
+}
+
 export function run(ctx: SeedContext): void {
   const accepted = table(ctx, "submissions").filter((row) => row.status === "accepted").slice(0, 24);
   if (accepted.length < 24) throw new Error("agenda needs at least 24 accepted submissions");
@@ -107,6 +166,7 @@ export function run(ctx: SeedContext): void {
 
   addConflictParticipation(ctx, String(accepted[0]!.id), String(accepted[1]!.id), "one");
   addConflictParticipation(ctx, String(accepted[2]!.id), String(accepted[3]!.id), "two");
+  addConfirmationCoverage(ctx, accepted);
 }
 
 export const seed: SeedModule = { name: "agenda", order: 50, run };
