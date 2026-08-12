@@ -13,7 +13,7 @@ import { SpeakerFilesPanel } from "../../src/ui/speakers/SpeakerFilesPanel";
  * a sighted organizer saw a gap. Whatever the panel is fetching, it says so.
  */
 
-test("REGRESSION · MRQ-138 — the Speaker files region is never an empty labelled void", () => {
+test("CONTRACT · MRQ-138 — the Speaker files region is never an empty labelled void", () => {
   const html = renderToString(h(SpeakerFilesPanel, { eventId: "evt_1", personId: "per_1" }));
   expect(html).toContain('aria-label="Speaker files"');
   // The old placeholder rendered exactly this and nothing more.

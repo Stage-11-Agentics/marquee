@@ -29,6 +29,7 @@ const ORGANIZER = "per_mrq138_organizer";
 const PRIYA = "per_mrq138_priya";
 const MARCUS = "per_mrq138_marcus";
 const ORGANIZER_SESSION = "sess_mrq138_organizer";
+const PRIYA_SESSION = "sess_mrq138_priya";
 const PRIYA_SUBMISSION = "sub_mrq138_priya";
 const SLIDES_TEMPLATE = "tpl_mrq138_slides";
 const PRIYA_SLIDES_TASK = "task_mrq138_priya_slides";
@@ -78,6 +79,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq138_priya', ?, ?, ?, 'speaker', ?, ?)").bind(ORG_ID, PRIYA, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq138_marcus', ?, ?, ?, 'speaker', ?, ?)").bind(ORG_ID, MARCUS, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(ORGANIZER_SESSION, ORGANIZER, NOW + DAY, NOW, NOW),
+    env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'speaker', ?, 'fixture', NULL, ?, ?)").bind(PRIYA_SESSION, PRIYA, NOW + DAY, NOW, NOW),
     env.DB.prepare("INSERT INTO forms (id, event_id, name, slug, kind, status, closes_at, created_at, updated_at) VALUES (?, ?, 'Call for Proposals', 'cfp', 'session', 'open', NULL, ?, ?)").bind(FORM_ID, EVENT_ID, NOW, NOW),
     env.DB.prepare(`INSERT INTO submissions (id, event_id, form_id, kind, title, abstract, status, origin, submitter_person_id, search_blob, created_at, updated_at)
       VALUES (?, ?, ?, 'session', 'Taming 40-Minute CI', 'An abstract', 'accepted', 'public', ?, 'Taming 40-Minute CI', ?, ?)`).bind(PRIYA_SUBMISSION, EVENT_ID, FORM_ID, PRIYA, NOW, NOW),
@@ -96,7 +98,7 @@ beforeEach(async () => {
     .bind(SLIDES_ATTACHMENT, NOW - DAY, PRIYA_SLIDES_TASK).run();
 });
 
-test("REGRESSION · MRQ-138 — the speaker record can name the headshot the speaker uploaded, when it arrived, and where to open it", async () => {
+test("CONTRACT · MRQ-138 — the speaker record can name the headshot the speaker uploaded, when it arrived, and where to open it", async () => {
   const snapshot = await snapshotFor(PRIYA);
   const headshot = snapshot.groups.find((group) => group.kind === "headshot");
   expect(headshot, "the profile photo must appear on the organizer's record, not only as an avatar").toBeDefined();
@@ -107,7 +109,7 @@ test("REGRESSION · MRQ-138 — the speaker record can name the headshot the spe
   expect(headshot!.versions.latest_source).toBe("pointer");
 });
 
-test("REGRESSION · MRQ-138 — requested deliverables appear on the same record, with their session and due date", async () => {
+test("CONTRACT · MRQ-138 — requested deliverables appear on the same record, with their session and due date", async () => {
   const snapshot = await snapshotFor(PRIYA);
   const deliverable = snapshot.groups.find((group) => group.id === PRIYA_SLIDES_TASK);
   expect(deliverable).toBeDefined();
@@ -121,7 +123,7 @@ test("REGRESSION · MRQ-138 — requested deliverables appear on the same record
   expect(snapshot).toMatchObject({ expected: 1, received: 1, link_policy: "unauthenticated-capability-url" });
 });
 
-test("REGRESSION · MRQ-138 — a speaker who has sent nothing still gets a row that says so", async () => {
+test("CONTRACT · MRQ-138 — a speaker who has sent nothing still gets a row that says so", async () => {
   const snapshot = await snapshotFor(MARCUS);
   expect(snapshot.groups).toHaveLength(1);
   expect(snapshot.groups[0].kind).toBe("headshot");
@@ -130,7 +132,18 @@ test("REGRESSION · MRQ-138 — a speaker who has sent nothing still gets a row 
   expect(snapshot).toMatchObject({ expected: 0, received: 0 });
 });
 
-test("REGRESSION · MRQ-138 — the route is organizer-only and 404s for a stranger to this conference", async () => {
+test("CONTRACT · MRQ-138 — the route is organizer-only and 404s for a stranger to this conference", async () => {
   expect((await speakerFiles(PRIYA, "")).status).toBe(401);
   expect((await speakerFiles("per_mrq138_nobody")).status).toBe(404);
+});
+
+test("CONTRACT · MRQ-138 — a speaker cannot read another speaker's files", async () => {
+  // The route hands out capability URLs: anyone holding one can fetch the
+  // object. So the grant that guards it is load-bearing, and the assertion
+  // that would catch a future policy edit is this one, not the 401 above.
+  // A speaker seat holds speaker:write and no program:read.
+  expect((await speakerFiles(MARCUS, PRIYA_SESSION)).status).toBe(403);
+  // Not even their own — this is the organizer's view of a person, and the
+  // speaker's own files live on the portal behind /api/v1/me.
+  expect((await speakerFiles(PRIYA, PRIYA_SESSION)).status).toBe(403);
 });

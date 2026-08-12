@@ -58,10 +58,9 @@ export function SpeakerFilesPanel({ eventId, personId }: { eventId: string; pers
         : `${files.received} of ${files.expected} requested file${files.expected === 1 ? "" : "s"} received.`}
     </p> : null}
 
-    {files && files.groups.length === 0
-      ? <p class="speaker-empty-line">This speaker has not sent anything yet, and nothing has been requested.</p>
-      : null}
-
+    {/* No "nothing here" branch: the profile-photo row is always present, and
+        its own empty copy is the honest answer for a speaker who has sent
+        nothing. A second empty state would be unreachable. */}
     {files ? <div class="speaker-files-groups">
       {files.groups.map((group) => <div class="speaker-files-group" key={`${group.kind}:${group.id}`}>
         <div class="speaker-files-group-head">
@@ -71,7 +70,9 @@ export function SpeakerFilesPanel({ eventId, personId }: { eventId: string; pers
               ? "Cancelled request"
               : group.due_at !== null
                 ? `Due ${formatDue(group.due_at)}`
-                : "Uploaded by the speaker"}
+                // Reads true whether or not a photo is on file; "Uploaded by
+                // the speaker" contradicts the empty copy directly below it.
+                : "Speaker-provided"}
             {group.session ? ` · ${group.session.title}` : ""}
           </span>
         </div>
