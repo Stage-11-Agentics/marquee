@@ -20,9 +20,9 @@ const routeRows = [...routeTable.matchAll(/^\s*\{ id: "([^"]+)", path: "([^"]+)"
 test("AC-101 · every AppShell admin route is covered by one shared QuickSearch mount", () => {
   assert.ok(routeRows.length >= 20, "route-table contract should enumerate the installed routes");
   const external = routeRows.filter((row) => row.source.includes("external: true"));
-  assert.deepEqual(external.map((row) => row.id).sort(), ["delivery-health", "event-site", "portal", "system-health"]);
+  assert.deepEqual(external.map((row) => row.id).sort(), ["delivery-health", "embeds", "event-site", "portal", "system-health"]);
   const separate = routeRows.filter((row) => row.source.includes("external: true") || row.id === "reviewer");
-  assert.deepEqual(separate.map((row) => row.id).sort(), ["delivery-health", "event-site", "portal", "reviewer", "system-health"]);
+  assert.deepEqual(separate.map((row) => row.id).sort(), ["delivery-health", "embeds", "event-site", "portal", "reviewer", "system-health"]);
   // Delivery health carries the shared chrome itself, so the guarantee holds
   // there the same way: one shared search mount over the same route table.
   assert.equal((deliveryHealthShell.match(/<QuickSearch\b/g) ?? []).length, 1);
