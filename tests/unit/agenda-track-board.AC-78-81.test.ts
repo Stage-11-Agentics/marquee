@@ -114,6 +114,8 @@ describe("MRQ-21 track agenda surface", () => {
       session: agentsSession,
       onDragStart: () => undefined,
       onResize: () => undefined,
+      onMove: () => undefined,
+      onUnplace: () => undefined,
       onRoomOpen: () => undefined,
       conflicts: new Map([[agentsSession.id, "Conflict" as const]]),
     }));
