@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { BOUND_SOURCE_LABELS, boundSourceOf } from "../../../lib/bound-options";
 import { isFieldApplicable, projectApplicableAnswers } from "../../../lib/form-conditions";
 import { putFileToR2 } from "../../upload/upload-client";
 import { apiFetch, errorSummary, MarqueeApiError } from "../../shell/api-client";
@@ -23,6 +24,21 @@ const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api
 const TURNSTILE_WAIT_MS = 20_000;
 
 const SECURITY_CHECK_UNFINISHED = "The security check did not finish. Complete it at the bottom of this form, then try again; your answers are still here.";
+
+/**
+ * A saved draft can hold a choice that has since been renamed or removed in
+ * Conference settings. The select simply drops it, so without this the
+ * submitter sees an empty answer they know they filled in, and a validation
+ * error against a list that no longer mentions their choice.
+ */
+function retiredAnswers(field: PublicFormField, value: unknown): string[] {
+  if (!boundSourceOf(field)) return [];
+  const options = optionsFor(field);
+  const chosen = Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : typeof value === "string" && value ? [value] : [];
+  return chosen.filter((entry) => !options.includes(entry));
+}
 
 function optionsFor(field: PublicFormField): string[] {
   return Array.isArray(field.config.options)
@@ -484,8 +500,10 @@ export function PublicForm({ initial }: PublicFormProps) {
   function renderField(field: PublicFormField) {
     const value = answers[field.key];
     const error = errors[field.key];
+    const retired = retiredAnswers(field, value);
     const ref = (node: HTMLElement | null) => { fieldRefs.current[field.key] = node; };
     const options = optionsFor(field);
+    const boundSource = boundSourceOf(field);
     const maxLength = maxLengthFor(field);
     const characterCount = typeof value === "string" ? value.length : 0;
     const label = <label for={`public-${field.key}`}>{field.label} {field.required ? <em>required</em> : <em>optional</em>}</label>;
@@ -512,7 +530,12 @@ export function PublicForm({ initial }: PublicFormProps) {
       const inputType = field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
       control = <input id={`public-${field.key}`} ref={ref as never} type={inputType} maxLength={maxLength} value={value === undefined || value === null ? "" : String(value)} onBlur={handleFieldBlur} onInput={(event) => { const text = (event.currentTarget as HTMLInputElement).value; setAnswer(field.key, field.type === "number" && text ? Number(text) : text); }} aria-invalid={Boolean(error)} />;
     }
-    return <div class={`public-field${error ? " has-error" : ""}`} data-field-key={field.key} data-field-type={field.type} key={field.key}>{label}{note}{control}{counter}<div class={`public-field-error${error ? " has-message" : ""}`} role={error ? "alert" : undefined} aria-hidden={!error}>{error ?? " "}</div></div>;
+    const retiredNote = retired.length
+      ? <div class="public-field-retired" role="status">{retired.length === 1 ? `"${retired[0]}" is no longer offered` : `${retired.map((entry) => `"${entry}"`).join(", ")} are no longer offered`} — choose from the current list.</div>
+      : boundSource && options.length === 0
+        ? <div class="public-field-retired" role="status">No {BOUND_SOURCE_LABELS[boundSource].toLowerCase()} are configured for this conference yet. Contact the conference team.</div>
+        : null;
+    return <div class={`public-field${error ? " has-error" : ""}`} data-field-key={field.key} data-field-type={field.type} key={field.key}>{label}{note}{control}{retiredNote}{counter}<div class={`public-field-error${error ? " has-message" : ""}`} role={error ? "alert" : undefined} aria-hidden={!error}>{error ?? " "}</div></div>;
   }
 
   const closed = state.state === "closed" || state.state === "at_limit" || state.state === "submitted";

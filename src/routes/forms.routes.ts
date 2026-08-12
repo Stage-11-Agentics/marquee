@@ -5,14 +5,16 @@ import { ApiError } from "../api/errors";
 import { createListQuerySchema, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
-import type { FormFieldRow, FormRow } from "../db/schema";
+import type { FormFieldRow, FormFieldType, FormRow } from "../db/schema";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
+import { normalizeFieldConfig, resolveBoundOptions } from "../lib/bound-options";
 import { parseFormCondition } from "../lib/form-conditions";
 import {
   FORM_SORTS,
   countFormResponses,
   findForm,
+  type FormFieldView,
   listFormAdmins,
   listFormFields,
   listForms,
@@ -244,8 +246,22 @@ function conditionJson(value: unknown): string | null {
   return JSON.stringify(value);
 }
 
-function configJson(value: unknown): string {
-  return JSON.stringify(value ?? {});
+/**
+ * A bound field stores its source, never a copy of the options. Storing both
+ * would reintroduce the snapshot binding exists to remove: the copy survives
+ * the next rename in Conference settings and the field starts offering an
+ * option the submit path will refuse.
+ */
+function fieldConfigJson(value: unknown, type: FormFieldType): string {
+  const result = normalizeFieldConfig((value ?? {}) as Record<string, unknown>, type);
+  if ("error" in result) throw ApiError.unprocessable(result.error, "config");
+  return JSON.stringify(result.config);
+}
+
+/** Answer with the options a caller will actually be held to at submit time. */
+async function fieldResponse(db: D1Database, eventId: string, row: FormFieldRow): Promise<FormFieldView> {
+  const [resolved] = await resolveBoundOptions(db, eventId, [normalizeField(row)]);
+  return resolved;
 }
 
 async function normalizeFieldPositions(db: D1Database, formId: string): Promise<void> {
@@ -588,14 +604,15 @@ const createFormField = defineApiRoute(
         context.env.DB.prepare(
           `INSERT INTO form_fields (id, form_id, key, label, help_text, type, required, position, config, condition, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).bind(id, formId, body.key, body.label, body.help_text ?? null, body.type, body.required ? 1 : 0, position, configJson(body.config), condition, now, now),
+        ).bind(id, formId, body.key, body.label, body.help_text ?? null, body.type, body.required ? 1 : 0, position, fieldConfigJson(body.config, body.type), condition, now, now),
       ]);
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
       throw ApiError.conflict("a field with that key already exists in this form");
     }
     const field = await context.env.DB.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ?").bind(id, formId).first<FormFieldRow>();
     if (!field) throw new Error("created form field disappeared");
-    return context.json(normalizeField(field), 201);
+    return context.json(await fieldResponse(context.env.DB, eventId, field), 201);
   },
 );
 
@@ -608,7 +625,7 @@ const updateFormField = defineApiRoute(
     tags: ["Forms"],
     request: { params: fieldParams, body: { content: { "application/json": { schema: patchFieldSchema } } } },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
-    responses: { 200: jsonResponse(formFieldSchema, "Updated field"), ...errorResponses([400, 401, 403, 404, 409, 500]) },
+    responses: { 200: jsonResponse(formFieldSchema, "Updated field"), ...errorResponses([400, 401, 403, 404, 409, 422, 500]) },
   },
   async (context) => {
     const { eventId, formId, fieldId } = context.req.valid("param");
@@ -617,12 +634,18 @@ const updateFormField = defineApiRoute(
     const updates: string[] = [];
     const values: (string | number | null)[] = [];
     const set = (column: string, value: string | number | null) => { updates.push(`${column} = ?`); values.push(value); };
+    const nextType = body.type ?? current.type;
     if (body.key !== undefined) set("key", body.key);
     if (body.label !== undefined) set("label", body.label);
     if (body.help_text !== undefined) set("help_text", body.help_text);
     if (body.type !== undefined) set("type", body.type);
     if (body.required !== undefined) set("required", body.required ? 1 : 0);
-    if (body.config !== undefined) set("config", configJson(body.config));
+    // A type change is part of the same config contract. Re-normalize the
+    // stored config even when the caller omitted it, so a bound select cannot
+    // silently become a non-select while retaining an unusable source.
+    if (body.config !== undefined || body.type !== undefined) {
+      set("config", fieldConfigJson(body.config ?? normalizeField(current).config, nextType));
+    }
     if (body.condition !== undefined) set("condition", conditionJson(body.condition));
     if (updates.length > 0) {
       updates.push("updated_at = ?");
@@ -635,7 +658,7 @@ const updateFormField = defineApiRoute(
     }
     const field = await context.env.DB.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ?").bind(fieldId, formId).first<FormFieldRow>();
     if (!field) throw ApiError.notFound("form field not found");
-    return context.json(normalizeField(field), 200);
+    return context.json(await fieldResponse(context.env.DB, eventId, field), 200);
   },
 );
 

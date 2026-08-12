@@ -17,9 +17,12 @@ test("AC-234 · the seeded CFP exposes the complete participant, file, track, an
     "supporting_file", "vendor_content", "vendor_product",
   ]);
 
+  const format = fields.find((field) => field.key === "format");
+  assert.deepEqual(JSON.parse(format.config), { source: "formats" });
+
   const tracks = fields.find((field) => field.key === "tracks");
   assert.deepEqual(JSON.parse(tracks.config), {
-    options: ["AI in Financial Services", "Agents", "Evals", "Infra", "Open Models", "RAG/Retrieval", "Security", "Leadership"],
+    source: "tracks",
     minItems: 1,
   });
   assert.equal(fields.find((field) => field.key === "headshot").required, 1);

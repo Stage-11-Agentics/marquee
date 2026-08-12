@@ -33,6 +33,7 @@ export const PUBLIC_FORM_STYLES = `
 .public-field label em { color: var(--muted); font-size: 11px; font-style: normal; font-weight: 400; }
 .public-field-note, .public-field-counter { color: var(--muted); font-size: 11px; line-height: 1.45; }
 .public-field-counter { font-family: var(--mono); }
+.public-field-retired { color: var(--warning, var(--alarm)); font-size: 12px; line-height: 1.45; }
 .public-field input:not([type=checkbox]):not([type=radio]), .public-field textarea, .public-field select { background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); box-sizing: border-box; font-size: 14px; min-height: 42px; min-width: 0; outline: none; padding: 10px 11px; width: 100%; }
 .public-field textarea { min-height: 118px; resize: vertical; }
 .public-field input:focus, .public-field textarea:focus, .public-field select:focus { border-color: var(--accent); outline: 2px solid var(--accent-soft); outline-offset: 1px; }
