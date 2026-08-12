@@ -1,7 +1,7 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:codex-cli",
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": "medium",
   "created_at": "2026-08-12T05:16:01Z",
   "created_by": {
@@ -18,18 +18,18 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZT6C84EZX7Q0NB5N0FTYXFR",
-  "last_event_id": "ev_01KZT6C84GSWHBCSHPWWX1MXFP",
-  "last_status_changed_at": "2026-08-12T05:16:01Z",
+  "last_event_id": "ev_01KZT6RN0F09ETWZMF810Q50EM",
+  "last_status_changed_at": "2026-08-12T05:22:47Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-100",
-  "status": "backlog",
+  "status": "in_progress",
   "tags": null,
   "title": "Three pipeline stages are empty in seed data \u2014 no submitted, no withdrawn, no genuinely ready-to-place submission",
   "type": "bug",
-  "updated_at": "2026-08-12T05:16:01Z",
+  "updated_at": "2026-08-12T05:22:47Z",
   "urgency": null
 }

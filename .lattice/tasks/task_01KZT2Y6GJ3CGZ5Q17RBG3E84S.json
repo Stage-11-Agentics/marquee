@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:338",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 8,
+  "comment_count": 9,
   "complexity": null,
   "created_at": "2026-08-12T04:15:55Z",
   "created_by": {
@@ -17,7 +17,7 @@
   },
   "custom_fields": {},
   "description": "The submissions list \u2014 the organizer's main working surface \u2014 jumps when it loads,\nmakes you wait, and prints a count that is not true. Operator feedback from the live\nsite, 2026-08-11/12. Five related complaints, one page, one PR.\n\n## 1. The page shakes on every view switch\n\n*\"when I click on like different one view \u2014 like when I click all submissions, when\nit's loading, it shrinks just a little bit and the whole thing shakes, and then\nwhenever it loads everything appears at once.\"*\n\nThe table card carries `aria-busy` while loading (`SubmissionsPage.tsx:558`) but the\nlayout does not hold its shape: rows vanish, the card collapses toward its empty\nheight, then 50 rows snap back in. This violates the standing **elements never jump**\nrule \u2014 interactive elements stay fixed across state changes; reserve the space.\n\nHold the frame across the whole load. The row area keeps its height, the toolbar and\nsaved-view strip do not move, and content arrives without a reflow. The page has an\nestablished habit of reserving space for exactly this reason \u2014 see the\n`\"Selection space reserved\"`, `\"Export status space reserved\"`, and\n`\"Bulk action status space reserved\"` placeholders already in the file. Extend that\ndiscipline to the table body rather than inventing a new mechanism.\n\n## 2. It should not feel like it is loading at all\n\n*\"let's make it so that we do not need to have any latency on loading. It should be\nlightning fast if we can. Now let's not go over the top and don't over architect\nthings.\"*\n\nTake the operator's constraint seriously: **no new caching layer, no state library,\nno speculative prefetch framework.** Speed here is mostly about not throwing away\nwhat you already have. Cheap, high-yield moves, roughly in order:\n\n- Keep the previous result rendered while the next one is in flight, instead of\n  dropping to an empty state. Most \"latency\" the operator feels is the blank gap.\n- Do not refetch what has not changed \u2014 switching a view that resolves to the same\n  query should not round-trip.\n- Make sure the 50-row page really is the query's limit end to end, and that filter\n  changes cancel superseded requests rather than racing them.\n\nMeasure before and after and put the numbers in the PR. `npm run check:speed` exists;\nuse it if it fits. **Speed is a graded feature (R7)** \u2014 a slow list is a defect.\n\n## 3. Search as you type\n\n*\"Can we have progressive search happen as you type if we do it elegantly. Again,\nmaybe this is a stretch goal.\"*\n\nTreated as in scope but lowest priority \u2014 **land 1, 2 and 4 first; drop this if it\nputs them at risk.** Debounce (the public agenda already uses 180ms for the same\npurpose), cancel superseded requests, never let an older response overwrite a newer\none, and keep focus and caret position stable. If typing makes the page jump, it is\nworse than the button. The existing submit button stays for keyboard/no-JS users.\n\n## 4. The search placeholder states a number that is not true\n\n`SubmissionsPage.tsx:586` hardcodes `placeholder=\"Search 1,000 submissions\u2026\"` while\nthe summary line 34 lines above reports the real `envelope.total` \u2014 which the operator\nsaw as **1,002**. A literal baked in at build time will drift from reality forever.\nUse the real count, and handle the pre-load case without flicker (**elements never\njump** applies to the placeholder too \u2014 do not let it change width as the count arrives).\n\n## 5. The search field is too small\n\n*\"the font on Search abstracts, speakers etc. in the text bar cuts off too early,\nthen that search bar could be bigger.\"*\n\nThe placeholder truncates before it finishes. Give the field room to show its full\nplaceholder at the page's normal widths \u2014 this is the primary control on the primary\nscreen and it is currently the narrowest thing in the toolbar. Check the toolbar's\nflex behavior in `src/ui/submissions/*.css` rather than hardcoding a width, and verify\nat a few realistic window sizes.\n\n## 6. Saved views: how do you get back to one?\n\n*\"for the save current view, how do you go back to those saved views\"*\n\nThey do exist \u2014 the `saved-view-strip` chips at `SubmissionsPage.tsx:559-573`, above\nthe toolbar. The operator saved a view and could not find their way back to it, so\n**the feature works and the affordance does not communicate.** Diagnose before\nredesigning: confirm a newly saved view actually appears in the strip immediately\n(if it does not, that is a bug and it is the real answer here). If it does appear,\nthe problem is that \"Save current view\" gives no feedback and the strip does not read\nas the place saved views live. Make the save confirm itself and make the strip\nlegible as a destination. Do not build a second saved-views UI.\n\n## Ownership boundary \u2014 read this\n\n**MRQ-97** is concurrently rewriting the status vocabulary on this same page.\n\n- **You do not own:** `src/routes/submissions.queries.ts`, the `STATUS_OPTIONS`\n  constant, or the status `<select>` and its styling. Leave them exactly as you find\n  them; if your work forces a change there, coordinate in a Lattice comment first.\n- **You own:** the loading/skeleton behavior, the table frame, the search field, the\n  placeholder count, the saved-view strip, and toolbar layout.\n- Expect to rebase on MRQ-97. Keep your diff tight so that is cheap.\n\n## Constraints\n\n- Flight Deck aesthetic per `DESIGN.md`; reuse existing classes and tokens.\n- **Elements never jump** is the through-line of this entire ticket.\n- Work in your own git worktree. **Never** branch, stash, or clean in the primary\n  checkout \u2014 see `CLAUDE.md`, \"The primary checkout is the Lattice board's home\".\n- No auto-deploy: validate locally, do not run `wrangler deploy`. See `DEPLOY.md`.\n- Suite budget 45s, gate budget 120s.\n\n## Acceptance\n\n- Switching between views and filters produces **no visible layout shift** \u2014 verify\n  by recording the transition, not by reasoning about the CSS.\n- The list keeps showing content while the next query is in flight; no blank gap.\n- Measured improvement in perceived and actual load time, numbers in the PR.\n- The search placeholder shows the real record count and matches the summary line.\n- The search field shows its full placeholder without truncation at normal widths.\n- Saving a view visibly confirms, and the saved view is reachable afterward.\n- If search-as-you-type ships: no dropped keystrokes, no out-of-order results, no\n  focus loss, no jump.\n- Validated locally with browser automation, screenshots/recording in the PR.\n- `npm test` green within budget; PR open against `Stage-11-Agentics/marquee` `main`.",
-  "done_at": null,
+  "done_at": "2026-08-12T05:21:24Z",
   "evidence_refs": [
     {
       "id": "art_01KZT3GRAE7WRNBXEQRBBCA7VK",
@@ -68,21 +68,31 @@
       "id": "ev_01KZT6ADF8B6H3M11Y6Q7VJW0P",
       "role": "validation",
       "source_type": "comment"
+    },
+    {
+      "id": "art_01KZT6J2Q1A2WX5JF782XNTJX3",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT6P2RK57Q4X146KJBNRM5S",
+      "role": "review",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZT2Y6GJ3CGZ5Q17RBG3E84S",
-  "last_event_id": "ev_01KZT6ADF8B6H3M11Y6Q7VJW0P",
-  "last_status_changed_at": "2026-08-12T05:12:31Z",
+  "last_event_id": "ev_01KZT6P3PRV28KKV8FTHFFH3YQ",
+  "last_status_changed_at": "2026-08-12T05:21:24Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
-  "reopened_count": 2,
+  "reopened_count": 3,
   "schema_version": 1,
   "short_id": "MRQ-98",
-  "status": "pr_open",
+  "status": "done",
   "tags": null,
   "title": "Submissions list jumps on every view switch, feels slow, and its search placeholder states a count that is not true",
   "type": "bug",
-  "updated_at": "2026-08-12T05:15:01Z",
+  "updated_at": "2026-08-12T05:21:24Z",
   "urgency": null
 }

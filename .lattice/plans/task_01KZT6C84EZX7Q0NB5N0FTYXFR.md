@@ -78,13 +78,36 @@ Ready to place is fine if it reads naturally, since it is a real working queue.
 - AC-4 · Running the seed twice in a row produces identical row counts.
 - AC-5 · Landing-page pipeline counts show non-zero for Submitted and Ready to
   place.
+- AC-6 · Seeded agenda confirmations include at least one `declined` participant,
+  at least one `pending` participant, and a multi-role agenda case whose
+  `has_declined_participant` projection is true.
 
 ## Verification
 
 Reseed locally, then load the running app in a browser and screenshot the
 sidebar pipeline with **Submitted**, **Ready to place**, **Onboarding** and the
-Withdrawn filter each showing rows. A passing test alone does not close this —
-the defect is that the app *looks* empty.
+Withdrawn filter each showing rows. Also open an agenda/session surface that
+visibly exposes the declined participant treatment and the pending confirmation
+state. A passing test alone does not close this — the defect is that the app
+*looks* empty.
+
+## Implementation plan
+
+- Work only in `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-100-seed-coverage`.
+- Add deterministic, realistic seed upserts for one submitted submission, one
+  withdrawn submission, one accepted submission that has no agenda slot/open
+  speaker task/pending wave, and confirmation rows covering confirmed, declined,
+  and pending states. Include a multi-role agenda participant with one confirmed
+  role and one declined role so `has_declined_participant` is true.
+- Preserve every existing seeded ID/title and the existing accepted core. Extend
+  seed-focused tests and `SEED-DATA.md` only as needed; do not touch the UI,
+  submission query, or migrations named above.
+- Verify stored statuses and the accepted-stage predicate against the seeded
+  database, run the seed twice and compare row counts, then run `npm test` and
+  the MRQ-100 PR gate within their budgets. Reseed and validate the actual local
+  app in c11's embedded browser, capturing the three pipeline filters plus the
+  declined and pending confirmation treatment.
+- Push the branch and open a GitHub PR; do not deploy or apply remote migrations.
 
 ## File ownership
 

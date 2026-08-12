@@ -2,7 +2,7 @@
   "agent_type": "intake",
   "base_name": "intake",
   "framework": "claude-code",
-  "last_active": "2026-08-12T05:16:01Z",
+  "last_active": "2026-08-12T05:22:26Z",
   "model": "claude-opus-5",
   "name": "intake-1",
   "parent": "human:atin",
