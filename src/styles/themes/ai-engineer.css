@@ -1,0 +1,236 @@
+/* ══ AI Engineer (register theme) ════════════════════════════════════════
+   Strict monochrome, terminal chrome. Design contract:
+   prototypes/themes/ai-engineer.html (header comment). Plus Jakarta Sans for
+   headings over Inter body, per the AIE brand guidelines; the palette is the
+   guidelines' neutral core — pure white, pure black, measured greys, no
+   chroma anywhere (track colors stay: they are the organizer's data and paint
+   borders, never text). The personality lives in terminal chrome: the search
+   field is a `>_` prompt, CTAs are bracketed shell tokens, sections carry
+   zero-padded indices, the chase queue renders as shell output, wave progress
+   as ASCII bars, the pipeline as big-number stat blocks, and task rows as
+   date— timeline entries.
+
+   Divergence from the preview, by the contrast floor: the preview's `faint`
+   #8a8a8a measures 3.5:1 — below the 4.5:1 floor — so micro-labels here use
+   --muted #545454 (7.6:1). Decorative greys (grid lines, the ASCII bar's dim
+   track) keep the light values; they carry no text.
+
+   Contrast, measured (WCAG relative luminance), floor 4.5:1:
+     ink        #000000 on face     21.0:1 · ink-soft #333333  12.6:1
+     muted      #545454 on face      7.6:1 · on sunk #f7f7f7    7.1:1
+     on-accent  #ffffff on black    21.0:1 · chip inks on wash 14.5–15.3:1
+     canvas-ink #eeeeee on canvas   16.3:1 · danger ink on wash 17.5:1
+   ═══════════════════════════════════════════════════════════════════════ */
+html[data-theme="ai-engineer"] {
+  --bg:            #ffffff;
+  --surface:       #ffffff;
+  --surface-sunk:  #f7f7f7;
+  --graph:         #f2f2f2;
+
+  --ink:           #000000;
+  --ink-soft:      #333333;
+  --muted:         #545454;
+  --rule:          #dddddd;
+  --rule-soft:     #e5e5e5;
+
+  --accent:        #000000;
+  --accent-ink:    #000000;
+  --accent-wash:   #f0f0f0;
+
+  --ok:            #1a1a1a;   /* monochrome status: weight and invert carry it*/
+  --warn:          #1a1a1a;
+  --alarm:         #000000;
+  --alarm-wash:    #eaeaea;
+
+  --display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --sans: "Inter", system-ui, sans-serif;
+
+  /* Aliases and extensions — the same names the day block defines. */
+  --warning-soft: #f0f0f0;
+  --success-soft: #f0f0f0;
+  --canvas: #111111;
+  --canvas-line: #333333;
+  --canvas-ink: #eeeeee;
+
+  --accent-hover: #333333;
+  --on-accent: #ffffff;
+  --success-ink: #1a1a1a;
+  --success-line: #cccccc;
+  --danger-ink: #1a1a1a;
+  --danger-line: #bbbbbb;
+  --warning-line: #cccccc;
+  --warning-ink: #1a1a1a;
+  --on-ink: #ffffff;          /* inverse chrome is black                      */
+  --backdrop: rgba(0, 0, 0, .4);
+  --break-tint: #6e6e6e;
+}
+
+/* ── chrome: the >_ mark, Jakarta headings, mono micro-labels ──────────── */
+html[data-theme="ai-engineer"] .brand-mark {
+  background: var(--ink);
+  border: 0;
+  color: #ffffff;
+  font-size: 0;               /* the shipped "M" yields to the shell prompt */
+  font-weight: 700;
+}
+html[data-theme="ai-engineer"] .brand-mark::after {
+  content: ">_";
+  font-size: 11px;
+}
+html[data-theme="ai-engineer"] .brand-name {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  text-transform: none;
+}
+
+html[data-theme="ai-engineer"] .search-glyph {
+  color: var(--ink);
+  font-family: var(--mono);
+  font-weight: 700;
+}
+html[data-theme="ai-engineer"] .global-search button {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+html[data-theme="ai-engineer"] .theme-switch select { text-transform: none; }
+
+html[data-theme="ai-engineer"] .top-user {
+  background: var(--surface);
+  border-color: var(--ink);
+  font-weight: 700;
+}
+
+html[data-theme="ai-engineer"] .page-head h1 {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+}
+html[data-theme="ai-engineer"] .card-head h2,
+html[data-theme="ai-engineer"] .card-head h3 {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  text-transform: none;
+}
+
+/* CTAs as bracketed shell tokens — on the dashboard and in the shell foot,
+   where the register's chrome lives. */
+html[data-theme="ai-engineer"] .dashboard-page .button::before { content: ">"; }
+html[data-theme="ai-engineer"] .dashboard-page .button::after { content: "<"; }
+
+/* ── pipeline: big-number stat blocks ──────────────────────────────────── */
+html[data-theme="ai-engineer"] .dashboard-pipeline-card {
+  background-image: none;
+  border-color: var(--ink);
+}
+html[data-theme="ai-engineer"] .dashboard-pipeline {
+  border-image: none;
+  border-top: 0;
+}
+html[data-theme="ai-engineer"] .dashboard-pipeline-stage { background: var(--surface); }
+html[data-theme="ai-engineer"] .dashboard-pipeline-stage:hover { background: var(--surface-sunk); }
+html[data-theme="ai-engineer"] .dashboard-pipeline-count {
+  font-family: var(--display);
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+}
+html[data-theme="ai-engineer"] .dashboard-pipeline-note { color: var(--muted); }
+
+/* ── cards: zero-padded section indices ────────────────────────────────── */
+html[data-theme="ai-engineer"] .dashboard-grid { counter-reset: register-section; }
+html[data-theme="ai-engineer"] .dashboard-grid > .card { counter-increment: register-section; }
+html[data-theme="ai-engineer"] .dashboard-grid > .card .card-head > div::before {
+  color: var(--muted);
+  content: counter(register-section, decimal-leading-zero);
+  display: block;
+  font: 400 10px/1 var(--mono);
+  letter-spacing: .1em;
+  margin-bottom: 5px;
+}
+
+/* ── attention: the chase queue as shell output ────────────────────────── */
+html[data-theme="ai-engineer"] .register-terminal {
+  background: var(--surface);
+  border: 1px solid var(--ink);
+}
+html[data-theme="ai-engineer"] .register-terminal-bar {
+  align-items: center;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--muted);
+  display: flex;
+  font: 400 10px/1 var(--mono);
+  gap: 8px;
+  letter-spacing: .1em;
+  padding: 8px 14px;
+  text-transform: uppercase;
+}
+html[data-theme="ai-engineer"] .register-term-row {
+  align-items: baseline;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule-soft);
+  color: inherit;
+  display: flex;
+  font: 400 12.5px/1.5 var(--mono);
+  gap: 14px;
+  padding: 10px 14px;
+  text-align: left;
+  text-decoration: none;
+  width: 100%;
+}
+html[data-theme="ai-engineer"] .register-term-row:last-child { border-bottom: 0; }
+html[data-theme="ai-engineer"] .register-term-row:hover { background: var(--surface-sunk); }
+html[data-theme="ai-engineer"] .register-term-prompt { color: var(--ink); font-weight: 700; }
+html[data-theme="ai-engineer"] .register-term-cmd { color: var(--ink); font-weight: 700; white-space: nowrap; }
+html[data-theme="ai-engineer"] .register-term-arrow { color: var(--muted); }
+html[data-theme="ai-engineer"] .register-term-out { color: var(--ink-soft); }
+html[data-theme="ai-engineer"] .register-term-out strong { color: var(--ink); }
+html[data-theme="ai-engineer"] .register-term-flag { color: var(--muted); font-size: 10.5px; margin-left: auto; white-space: nowrap; }
+
+/* ── waves: ASCII progress bars ────────────────────────────────────────── */
+html[data-theme="ai-engineer"] .dashboard-wave-row { grid-template-columns: 150px 1fr; }
+html[data-theme="ai-engineer"] .register-wave-ascii {
+  color: var(--ink);
+  display: block;
+  font: 400 12px/1.4 var(--mono);
+  letter-spacing: .05em;
+  white-space: pre;
+}
+html[data-theme="ai-engineer"] .register-wave-ascii .dim { color: #c4c4c4; } /* decorative track, no text duty */
+html[data-theme="ai-engineer"] .register-wave-meta {
+  color: var(--muted);
+  display: block;
+  font: 400 10.5px/1.4 var(--mono);
+  margin-top: 3px;
+}
+html[data-theme="ai-engineer"] .dashboard-wave-row strong { font-family: var(--display); }
+
+/* ── tasks: timeline entries with the date— trope ──────────────────────── */
+html[data-theme="ai-engineer"] .dashboard-task-row {
+  grid-template-columns: 108px 180px minmax(0, 1fr) 170px 112px;
+}
+html[data-theme="ai-engineer"] .register-when {
+  color: var(--muted);
+  font: 400 11px/1.4 var(--mono);
+  white-space: nowrap;
+}
+/* Overdue is an inverted token: black key, white text. */
+html[data-theme="ai-engineer"] .chip.alarm {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+}
+
+/* ── work in motion: big-number stat blocks ────────────────────────────── */
+html[data-theme="ai-engineer"] .dashboard-metric strong {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+}

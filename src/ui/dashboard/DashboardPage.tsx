@@ -1,14 +1,27 @@
-import type { ComponentChildren, JSX } from "preact";
+import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
-import type { DashboardCount, DashboardSnapshot, DashboardTaskPreview, DashboardWave } from "../../api/dashboard";
+import type { DashboardCount, DashboardSnapshot, DashboardWave } from "../../api/dashboard";
 import { apiFetch, backoffDelayMs } from "../shell/api-client";
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { clientBuildSha } from "../shell/error-reporting";
 import { ErrorBanner, ErrorBoundary, StaleBand } from "../shell/ErrorSurface";
+import { chromeFor, useThemeId } from "../shell/register";
 import { InstancePanel } from "../setup/InstancePanel";
 import { SetupChecklistCard } from "../setup/SetupChecklistCard";
 import { DASHBOARD_REVALIDATE_MS } from "./dashboard-constants";
+import { DashboardLink, dueLabel, formatNumber, formatWaveDate } from "./shared";
+import {
+  AsciiWaveRows,
+  BottleneckDeco,
+  BOTTLENECK_CAPTION,
+  FeedAttention,
+  FeedTaskRows,
+  KvMetrics,
+  KvWaveRows,
+  TerminalAttention,
+  TimelineTaskRows,
+} from "./register-variants";
 import "./dashboard.css";
 
 /** The route template, for the log line and the diagnostic report. */
@@ -29,44 +42,13 @@ interface Props {
   navigate: (target: string) => void;
 }
 
-function formatNumber(value: number): string {
-  return value.toLocaleString("en-US");
-}
-
 function dashboardMetricLabel(metric: DashboardCount): string {
   const noun = metric.id === "conflicts" ? "active conflicts" : "matching submissions";
   return `Open ${metric.label}: ${formatNumber(metric.count)} ${noun}`;
 }
 
-function formatWaveDate(value: string): string {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(
-    new Date(`${value}T12:00:00`),
-  );
-}
-
-function dueLabel(task: DashboardTaskPreview): string {
-  if (task.overdue) {
-    const days = Math.max(1, Math.floor((Date.now() - task.due_at) / 86_400_000));
-    return `${days} day${days === 1 ? "" : "s"} overdue`;
-  }
-  return `Due ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(task.due_at))}`;
-}
-
-function DashboardLink({ href, navigate, class: className, children, label }: {
-  href: string;
-  navigate: (target: string) => void;
-  class: string;
-  children: ComponentChildren;
-  label?: string;
-}): JSX.Element {
-  return <a class={className} href={href} aria-label={label} onClick={(event) => {
-    event.preventDefault();
-    navigate(href);
-  }}>{children}</a>;
-}
-
-function PipelineStage({ item, navigate }: { item: DashboardCount; navigate: Props["navigate"] }): JSX.Element {
-  return <DashboardLink href={item.href} navigate={navigate} class="dashboard-pipeline-stage" label={`Open ${item.label}: ${formatNumber(item.count)} matching submissions`}>
+function PipelineStage({ item, navigate, pinch = false }: { item: DashboardCount; navigate: Props["navigate"]; pinch?: boolean }): JSX.Element {
+  return <DashboardLink href={item.href} navigate={navigate} class={`dashboard-pipeline-stage${pinch ? " register-pinch" : ""}`} label={`Open ${item.label}: ${formatNumber(item.count)} matching submissions`}>
     <span class="dashboard-pipeline-name">{item.label}</span>
     <strong class="dashboard-pipeline-count">{formatNumber(item.count)}</strong>
     <span class="dashboard-pipeline-note">{item.note} →</span>
@@ -91,6 +73,10 @@ function DashboardContents({ snapshot, navigate, eventId }: { snapshot: Dashboar
   // asking is a dashboard nobody reads — so the checklist and the Instance panel
   // appear exactly while they are the operator's next move.
   const inSetup = !hasProgram;
+  // Register chrome: palette themes get DEFAULT_CHROME, so every section
+  // below renders exactly the Flight Deck markup for Day/Night; register
+  // themes swap in their tropes, all wired to the same snapshot.
+  const chrome = chromeFor(useThemeId());
   return <>
     {inSetup && <ErrorBoundary label="Conference setup">
       <SetupChecklistCard eventId={eventId} navigate={navigate} />
@@ -99,12 +85,16 @@ function DashboardContents({ snapshot, navigate, eventId }: { snapshot: Dashboar
       <InstancePanel />
     </ErrorBoundary>}
     <section class="card instrument dashboard-pipeline-card" aria-label="Seven-stage program pipeline">
-      <div class="dashboard-pipeline">{snapshot.pipeline.map((item) => <PipelineStage key={item.id} item={item} navigate={navigate} />)}</div>
+      {chrome.pipelineDeco === "bottleneck" && <BottleneckDeco />}
+      <div class="dashboard-pipeline">{snapshot.pipeline.map((item) => <PipelineStage key={item.id} item={item} navigate={navigate} pinch={chrome.pipelineDeco === "bottleneck" && item.id === "accepted"} />)}</div>
+      {chrome.pipelineDeco === "bottleneck" && <div class="register-pipeline-caption">{BOTTLENECK_CAPTION}</div>}
     </section>
 
     {!hasProgram && <EmptyState title="Your program starts here" copy="The pipeline is ready. Add the first session or import a year of conference data from Sessionize." action={<div class="dashboard-empty-actions"><Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button><Button onClick={() => navigate("/import")}>Import from Sessionize</Button></div>} />}
 
-    <section class="dashboard-attention" aria-label="Needs attention">
+    {chrome.attention === "terminal" ? <TerminalAttention snapshot={snapshot} navigate={navigate} />
+    : chrome.attention === "feed" ? <FeedAttention snapshot={snapshot} navigate={navigate} />
+    : <section class="dashboard-attention" aria-label="Needs attention">
       {attention.next_wave && <DashboardLink href={attention.next_wave.href} navigate={navigate} class="dashboard-attention-item" label={`Open ${attention.next_wave.name}`}>
         <strong>{attention.next_wave.name} planned</strong><span>{formatNumber(attention.next_wave.accepted_count)} accepted · {formatNumber(attention.next_wave.target_count)} target · open planner</span>
       </DashboardLink>}
@@ -117,7 +107,7 @@ function DashboardContents({ snapshot, navigate, eventId }: { snapshot: Dashboar
       <DashboardLink href={attention.decided_not_notified.href} navigate={navigate} class="dashboard-attention-item" label={`Open ${formatNumber(attention.decided_not_notified.count)} decided submissions not notified`}>
         <strong>{formatNumber(attention.decided_not_notified.count)} decisions not notified</strong><span>{attention.decided_not_notified.note}</span>
       </DashboardLink>
-    </section>
+    </section>}
 
     {/* One boundary per panel: a card that throws while rendering becomes a
         card-shaped apology, and the three around it keep working. */}
@@ -125,7 +115,11 @@ function DashboardContents({ snapshot, navigate, eventId }: { snapshot: Dashboar
       <ErrorBoundary label="The wave planner">
       <section class="card" id="wave-planner">
         <header class="card-head"><div><h2>Wave planner</h2><span class="subtle">Accept while the CFP stays open</span></div><Button small onClick={() => navigate("/submissions?status=waved")}>Plan next wave</Button></header>
-        <div class="card-body dashboard-wave-list">{snapshot.waves.length ? snapshot.waves.map((wave) => <WaveRow key={wave.id} wave={wave} navigate={navigate} />) : <span class="subtle">No decision waves yet.</span>}</div>
+        <div class="card-body dashboard-wave-list">{snapshot.waves.length
+          ? chrome.waves === "ascii" ? <AsciiWaveRows waves={snapshot.waves} navigate={navigate} />
+          : chrome.waves === "kv" ? <KvWaveRows waves={snapshot.waves} navigate={navigate} />
+          : snapshot.waves.map((wave) => <WaveRow key={wave.id} wave={wave} navigate={navigate} />)
+          : <span class="subtle">No decision waves yet.</span>}</div>
       </section>
       </ErrorBoundary>
 
@@ -133,6 +127,7 @@ function DashboardContents({ snapshot, navigate, eventId }: { snapshot: Dashboar
       <section class="card">
         <header class="card-head"><div><h2>Work in motion</h2><span class="subtle">Revalidated every 5 seconds</span></div></header>
         <div class="card-body">
+          {chrome.metrics === "kv" ? <KvMetrics snapshot={snapshot} navigate={navigate} /> : <>
           <div class="dashboard-metric-grid">
             {snapshot.metrics.map((metric) => <DashboardLink key={metric.id} href={metric.href} navigate={navigate} class="dashboard-metric" label={dashboardMetricLabel(metric)}>
               <span class="eyebrow">{metric.label}</span><strong>{formatNumber(metric.count)}</strong><span class="subtle">{metric.note}</span>
@@ -141,6 +136,7 @@ function DashboardContents({ snapshot, navigate, eventId }: { snapshot: Dashboar
           <div class="divider" />
           <div class="dashboard-mix"><span class="eyebrow">Review pressure by track</span><div>{snapshot.track_pressure.map((item) => <DashboardLink key={item.id} href={item.href} navigate={navigate} class="chip dashboard-mix-link">{item.label} · {formatNumber(item.count)}</DashboardLink>)}</div></div>
           <div class="dashboard-mix"><span class="eyebrow">Program mix by format</span><div>{snapshot.format_mix.map((item) => <DashboardLink key={item.id} href={item.href} navigate={navigate} class="chip dashboard-mix-link">{item.label} · {formatNumber(item.count)}</DashboardLink>)}</div></div>
+          </>}
         </div>
       </section>
       </ErrorBoundary>
@@ -149,9 +145,13 @@ function DashboardContents({ snapshot, navigate, eventId }: { snapshot: Dashboar
       <section class="card dashboard-task-card">
         <header class="card-head"><div><h2>Speaker task dashboard</h2><span class="subtle">The work organizers need to chase next</span></div><Button small onClick={() => navigate("/submissions?status=onboarding")}>Open onboarding</Button></header>
         <div class="card-body dashboard-task-list">
-          {snapshot.task_preview.length ? snapshot.task_preview.map((task) => <DashboardLink key={`${task.submission_id}-${task.task_title}`} href={task.href} navigate={navigate} class="dashboard-task-row" label={`Open ${task.person_name}'s ${task.task_title}`}>
-            <strong>{task.person_name}</strong><span title={task.submission_title}>{task.submission_title}</span><span class="subtle">{task.task_title}</span><span class={`chip ${task.overdue ? "alarm" : ""}`}>{dueLabel(task)}</span>
-          </DashboardLink>) : <span class="subtle">No open speaker tasks. The pipeline is clear.</span>}
+          {snapshot.task_preview.length
+            ? chrome.tasks === "timeline" ? <TimelineTaskRows tasks={snapshot.task_preview} navigate={navigate} />
+            : chrome.tasks === "feed" ? <FeedTaskRows tasks={snapshot.task_preview} navigate={navigate} />
+            : snapshot.task_preview.map((task) => <DashboardLink key={`${task.submission_id}-${task.task_title}`} href={task.href} navigate={navigate} class="dashboard-task-row" label={`Open ${task.person_name}'s ${task.task_title}`}>
+              <strong>{task.person_name}</strong><span title={task.submission_title}>{task.submission_title}</span><span class="subtle">{task.task_title}</span><span class={`chip ${task.overdue ? "alarm" : ""}`}>{dueLabel(task)}</span>
+            </DashboardLink>)
+            : <span class="subtle">No open speaker tasks. The pipeline is clear.</span>}
         </div>
       </section>
       </ErrorBoundary>

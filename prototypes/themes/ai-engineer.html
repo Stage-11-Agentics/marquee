@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<!--
+  Marquee theme round — AI Engineer register
+  ──────────────────────────────────────────
+  Type: Plus Jakarta Sans for headings, Inter for titles/body — both free
+  on Google Fonts, exactly per the AIE brand guidelines.
+
+  Palette: deliberately neutral and high-contrast — pure white #FFFFFF,
+  pure black #000000, #E5E5E5 / #DDDDDD, #333333 / #4A4A4A. No chroma;
+  the guidelines keep the core neutral.
+
+  Site tropes (where the personality lives): terminal chrome — the search
+  field is prefixed with a literal >_ prompt, CTAs are wrapped in angle
+  brackets (>label<); zero-padded section indices (01, 02, 03); timeline
+  entries as "date—"; big-number stat blocks; a company logo wall as
+  social proof. The chase queue renders as shell output; wave progress
+  renders as ASCII bars.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marquee — Program pipeline · AI Engineer theme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:            #ffffff;
+    --surface:       #ffffff;
+    --sunk:          #f7f7f7;
+    --rule:          #e5e5e5;
+    --rule-strong:   #dddddd;
+
+    --ink:           #000000;
+    --ink-soft:      #333333;
+    --muted:         #4a4a4a;
+    --faint:         #8a8a8a;
+
+    --head: "Plus Jakarta Sans", system-ui, sans-serif;
+    --body: "Inter", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--ink); font-family: var(--body); -webkit-font-smoothing: antialiased; }
+  body { margin: 0; min-width: 1100px; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+
+  .num { font-family: var(--head); font-variant-numeric: tabular-nums; }
+  .micro {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint);
+  }
+
+  /* ── shell ─────────────────────────────────────────────── */
+  .app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+
+  .sidebar {
+    border-right: 1px solid var(--rule); padding: var(--s5) var(--s4);
+    display: flex; flex-direction: column; gap: var(--s5);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 28px; height: 28px; background: var(--ink); color: #fff;
+    display: grid; place-items: center;
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+  }
+  .brand-name { font-family: var(--head); font-weight: 800; font-size: 17px; letter-spacing: -.01em; }
+  .event { display: block; border: 1px solid var(--rule-strong); padding: 10px 12px; }
+  .event small { display: block; margin-bottom: 4px; }
+  .event strong { font-family: var(--head); font-weight: 700; font-size: 13.5px; }
+
+  .nav-label { margin: var(--s3) 0 var(--s1); }
+  .nav { display: flex; flex-direction: column; }
+  .nav a {
+    display: flex; gap: 10px; align-items: baseline; padding: 5px 8px;
+    font-size: 13.5px; color: var(--muted); font-weight: 500;
+    border-left: 2px solid transparent;
+  }
+  .nav a .nav-icon { font-family: var(--mono); font-size: 10px; color: var(--faint); width: 14px; }
+  .nav a:hover { color: var(--ink); }
+  .nav a.active { color: var(--ink); font-weight: 600; border-left-color: var(--ink); background: var(--sunk); }
+  .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+  .sidebar-foot button {
+    background: none; border: 1px solid var(--rule-strong); padding: 8px 10px;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em;
+    color: var(--muted); text-align: left;
+  }
+  .sidebar-foot button:hover { color: var(--ink); border-color: var(--ink); }
+
+  .main { display: flex; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; gap: var(--s4);
+    padding: 14px var(--s6); border-bottom: 1px solid var(--rule);
+  }
+  .crumbs { font-size: 13.5px; color: var(--faint); }
+  .crumbs strong { color: var(--ink); font-weight: 600; }
+
+  /* terminal chrome: the search field is a shell prompt */
+  .search {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--rule-strong); padding: 7px 12px; width: 360px;
+    background: var(--sunk);
+  }
+  .prompt { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink); }
+  .search input { background: none; border: 0; outline: 0; width: 100%; font-family: var(--mono); font-size: 12px; }
+  .search input::placeholder { color: var(--faint); }
+  .kbd { font-family: var(--mono); font-size: 9.5px; border: 1px solid var(--rule-strong); padding: 2px 5px; color: var(--faint); background: #fff; }
+  .avatar {
+    width: 30px; height: 30px; display: grid; place-items: center;
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    border: 1px solid var(--ink);
+  }
+
+  .page { padding: var(--s6) var(--s6) var(--s7); display: flex; flex-direction: column; gap: var(--s5); max-width: 1280px; width: 100%; }
+
+  /* ── page head ─────────────────────────────────────────── */
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s5); }
+  .page-head h1 {
+    font-family: var(--head); font-weight: 800; font-size: 34px;
+    letter-spacing: -.03em; margin: 0 0 10px;
+  }
+  .page-head p { margin: 0; max-width: 620px; font-size: 15px; line-height: 1.55; color: var(--ink-soft); }
+  .page-head p strong { color: var(--ink); }
+  .head-actions { display: flex; gap: 10px; }
+
+  /* CTAs as bracketed shell tokens */
+  .btn {
+    border: 1px solid var(--rule-strong); background: #fff; padding: 10px 14px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft);
+  }
+  .btn:hover { border-color: var(--ink); color: var(--ink); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 700; }
+  .btn.small { padding: 6px 10px; font-size: 10.5px; }
+
+  /* ── pipeline strip: big-number stat blocks ────────────── */
+  .stats { border: 1px solid var(--ink); display: grid; grid-template-columns: repeat(7, 1fr); }
+  .stat {
+    padding: 22px 14px 18px; border-right: 1px solid var(--rule);
+    display: flex; flex-direction: column; gap: 10px; text-align: left;
+    background: #fff; border-top: 0; border-bottom: 0; border-left: 0;
+  }
+  .stat:last-child { border-right: 0; }
+  .stat:hover { background: var(--sunk); }
+  .stat .stat-name { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+  .stat .stat-count { font-family: var(--head); font-weight: 800; font-size: 38px; letter-spacing: -.03em; line-height: 1; }
+  .stat .stat-delta { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  /* ── attention strip: the chase queue as shell output ──── */
+  .terminal { border: 1px solid var(--ink); background: #fff; }
+  .terminal-bar {
+    display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+    border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 10px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--faint);
+  }
+  .term-row {
+    display: flex; align-items: baseline; gap: 14px; width: 100%;
+    background: none; border: 0; border-bottom: 1px solid var(--rule);
+    padding: 10px 14px; text-align: left; font-family: var(--mono); font-size: 12.5px;
+  }
+  .term-row:last-child { border-bottom: 0; }
+  .term-row:hover { background: var(--sunk); }
+  .term-row .cmd { color: var(--ink); font-weight: 700; white-space: nowrap; }
+  .term-row .arrow { color: var(--faint); }
+  .term-row .out { color: var(--ink-soft); }
+  .term-row .flag { margin-left: auto; color: var(--faint); font-size: 10.5px; }
+
+  /* ── cards with zero-padded indices ────────────────────── */
+  .grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: var(--s4); align-items: start; }
+  .card { border: 1px solid var(--rule-strong); background: var(--surface); }
+  .card.span { grid-column: 1 / -1; }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
+    padding: 14px 18px; border-bottom: 1px solid var(--rule);
+  }
+  .card-head .idx { font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: .1em; display: block; margin-bottom: 5px; }
+  .card-head h2 { font-family: var(--head); font-weight: 700; font-size: 15px; letter-spacing: -.01em; margin: 0 0 4px; }
+  .card-head .sub { font-size: 12.5px; color: var(--muted); }
+  .card-body { padding: 18px; }
+
+  /* pacing chart */
+  .readout { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); margin-bottom: 12px; }
+  .readout strong { color: var(--ink); }
+  .pacing { width: 100%; height: auto; display: block; }
+
+  /* wave planner: ASCII progress bars */
+  .wave-row {
+    display: grid; grid-template-columns: 130px 1fr; gap: 16px; align-items: center;
+    padding: 13px 0; border-bottom: 1px solid var(--rule);
+  }
+  .wave-row:last-child { border-bottom: 0; }
+  .wave-row strong { font-family: var(--head); font-size: 13.5px; font-weight: 700; }
+  .wave-date { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .wave-ascii { font-family: var(--mono); font-size: 12px; letter-spacing: .05em; white-space: pre; color: var(--ink); }
+  .wave-ascii .dim { color: var(--rule-strong); }
+  .wave-meta { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+
+  /* work in motion: big-number stat blocks */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin-bottom: 18px; }
+  .metric { background: #fff; border: 0; padding: 16px 14px; text-align: left; display: flex; flex-direction: column; gap: 8px; }
+  .metric:hover { background: var(--sunk); }
+  .metric .value { font-family: var(--head); font-weight: 800; font-size: 30px; letter-spacing: -.03em; line-height: 1; }
+  .metric .sub { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--rule-strong); background: #fff; padding: 6px 12px;
+    font-family: var(--mono); font-size: 10.5px; color: var(--ink-soft);
+  }
+  .chip:hover { border-color: var(--ink); color: var(--ink); }
+  .chip b { color: var(--ink); }
+
+  /* speaker tasks: timeline entries, date—em-dash trope */
+  .task-row {
+    display: grid; grid-template-columns: 110px 190px 1fr 180px 110px; gap: 14px; align-items: center;
+    width: 100%; background: none; border: 0; border-bottom: 1px solid var(--rule);
+    padding: 12px 18px; text-align: left;
+  }
+  .task-row:hover { background: var(--sunk); }
+  .task-row .when { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .task-row strong { font-size: 13.5px; font-weight: 600; }
+  .task-row .title { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-row .task { font-size: 12.5px; color: var(--ink-soft); }
+  .due {
+    justify-self: end; font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em;
+    text-transform: uppercase; border: 1px solid var(--rule-strong); padding: 4px 8px; color: var(--muted);
+  }
+  .due.overdue { border-color: var(--ink); background: var(--ink); color: #fff; }
+  .due.soon { border-color: var(--ink); color: var(--ink); }
+
+  /* logo wall */
+  .wall { border: 1px solid var(--rule-strong); padding: 20px 18px; }
+  .wall .wall-items {
+    display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: baseline; margin-top: 12px;
+    font-family: var(--head); font-weight: 700; font-size: 14px; letter-spacing: .02em;
+    color: #b5b5b5; text-transform: uppercase;
+  }
+  .wall .wall-items span { white-space: nowrap; }
+
+  .badge {
+    position: fixed; right: 14px; bottom: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .08em;
+    border: 1px solid var(--rule-strong); background: #fff; color: var(--muted);
+    padding: 7px 11px;
+  }
+  .badge:hover { color: var(--ink); border-color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="#">
+      <span class="brand-mark">&gt;_</span>
+      <span class="brand-name">Marquee</span>
+    </a>
+
+    <a class="event" href="#">
+      <small class="micro">Conference</small>
+      <strong>AIE NYC 2026</strong>
+    </a>
+
+    <div>
+      <nav class="nav" aria-label="Program home">
+        <a href="#" class="active"><span class="nav-icon">⌂</span><span>Program home</span></a>
+        <a href="#"><span class="nav-icon">▥</span><span>Program board</span></a>
+      </nav>
+    </div>
+
+    <div>
+      <div class="nav-label micro">Pipeline</div>
+      <nav class="nav" aria-label="Program lifecycle">
+        <a href="#"><span class="nav-icon">01</span><span>Submitted</span></a>
+        <a href="#"><span class="nav-icon">02</span><span>In review</span></a>
+        <a href="#"><span class="nav-icon">03</span><span>Waved</span></a>
+        <a href="#"><span class="nav-icon">04</span><span>Accepted</span></a>
+        <a href="#"><span class="nav-icon">05</span><span>Onboarding</span></a>
+        <a href="#"><span class="nav-icon">06</span><span>Scheduled</span></a>
+        <a href="#"><span class="nav-icon">07</span><span>Published</span></a>
+      </nav>
+    </div>
+
+    <div>
+      <div class="nav-label micro">Modules</div>
+      <nav class="nav" aria-label="Modules">
+        <a href="#"><span class="nav-icon">□</span><span>CFP forms</span></a>
+        <a href="#"><span class="nav-icon">◇</span><span>Evaluation plan</span></a>
+        <a href="#"><span class="nav-icon">✓</span><span>Review queue</span></a>
+        <a href="#"><span class="nav-icon">▦</span><span>Agenda</span></a>
+        <a href="#"><span class="nav-icon">✉</span><span>Communications</span></a>
+        <a href="#"><span class="nav-icon">○</span><span>Speaker portal</span></a>
+        <a href="#"><span class="nav-icon">↗</span><span>Conference site</span></a>
+        <a href="#"><span class="nav-icon">⚙</span><span>Settings</span></a>
+      </nav>
+    </div>
+
+    <div class="sidebar-foot">
+      <button>&gt;_ api &amp; cli</button>
+      <button>↻ reset demo</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="crumbs">AIE NYC 2026 &nbsp;/&nbsp; <strong>Program home</strong></div>
+      <div class="search">
+        <span class="prompt">&gt;_</span>
+        <input placeholder="search abstracts, speakers, sessions…" readonly>
+        <span class="kbd">⌘K</span>
+      </div>
+      <button class="btn small">&gt;view portal&lt;</button>
+      <div class="avatar" title="Maya Chen · Program lead">MC</div>
+    </header>
+
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <h1>Program pipeline</h1>
+          <p>Wave 2 closes Friday — <strong>214 abstracts still need review in Agents.</strong> Every count opens the work behind it.</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn">&gt;conference settings&lt;</button>
+          <button class="btn primary">&gt;work the pipeline&lt;</button>
+        </div>
+      </div>
+
+      <section class="stats" aria-label="Pipeline stages">
+        <button class="stat"><span class="stat-name">Submitted</span><span class="stat-count num">350</span><span class="stat-delta">+41 this week</span></button>
+        <button class="stat"><span class="stat-name">In Review</span><span class="stat-count num">90</span><span class="stat-delta">62% assigned</span></button>
+        <button class="stat"><span class="stat-name">Waved</span><span class="stat-count num">108</span><span class="stat-delta">2 of 3 waves</span></button>
+        <button class="stat"><span class="stat-name">Accepted</span><span class="stat-count num">190</span><span class="stat-delta">18.1% of all</span></button>
+        <button class="stat"><span class="stat-name">Onboarding</span><span class="stat-count num">61</span><span class="stat-delta">owe tasks · 9 at risk</span></button>
+        <button class="stat"><span class="stat-name">Scheduled</span><span class="stat-count num">32</span><span class="stat-delta">158 still unplaced</span></button>
+        <button class="stat"><span class="stat-name">Published</span><span class="stat-count num">26</span><span class="stat-delta">3 live conflicts</span></button>
+      </section>
+
+      <section class="terminal" aria-label="Needs attention">
+        <div class="terminal-bar">marquee — chase queue · 4 items</div>
+        <button class="term-row"><span class="prompt">&gt;_</span><span class="cmd">wave2.status</span><span class="arrow">→</span><span class="out"><strong>52/60 accepted · closes in 6 days</strong> — open planner</span><span class="flag">[wave-planner]</span></button>
+        <button class="term-row"><span class="prompt">&gt;_</span><span class="cmd">review --track=agents</span><span class="arrow">→</span><span class="out"><strong>214 unreviewed</strong> — 90 in review · 124 waiting for assignment</span><span class="flag">[review]</span></button>
+        <button class="term-row"><span class="prompt">&gt;_</span><span class="cmd">speakers --overdue</span><span class="arrow">→</span><span class="out"><strong>9 speakers</strong> — headshots, agreements, and travel</span><span class="flag">[onboarding]</span></button>
+        <button class="term-row"><span class="prompt">&gt;_</span><span class="cmd">notify --pending</span><span class="arrow">→</span><span class="out"><strong>14 decided · not notified</strong> — they have an outcome and have not heard it</span><span class="flag">[comms]</span></button>
+      </section>
+
+      <div class="grid">
+        <section class="card span">
+          <div class="card-head">
+            <div>
+              <span class="idx">01</span>
+              <h2>Submission pacing</h2>
+              <span class="sub">Cumulative intake vs the 2025 edition, aligned by days before the event · — 2026 live · – – 2025 edition</span>
+            </div>
+            <button class="btn small">&gt;days before event&lt;</button>
+          </div>
+          <div class="card-body">
+            <div class="readout">T−63 · <strong>2026: 1,040</strong> · 2025 edition: 812 · <strong>+228 vs prior</strong> — on pace, no extension needed</div>
+            <svg class="pacing" viewBox="0 0 1100 232" role="img" aria-label="Cumulative submissions, this edition versus the 2025 edition">
+              <line x1="50" y1="206" x2="982" y2="206" stroke="#e5e5e5" stroke-width="1"/>
+              <line x1="50" y1="142" x2="982" y2="142" stroke="#e5e5e5" stroke-width="1"/>
+              <line x1="50" y1="78"  x2="982" y2="78"  stroke="#e5e5e5" stroke-width="1"/>
+              <line x1="50" y1="14"  x2="982" y2="14"  stroke="#e5e5e5" stroke-width="1"/>
+              <text x="43" y="209" text-anchor="end" style="font:400 9px var(--mono);fill:#8a8a8a">0</text>
+              <text x="43" y="145" text-anchor="end" style="font:400 9px var(--mono);fill:#8a8a8a">400</text>
+              <text x="43" y="81"  text-anchor="end" style="font:400 9px var(--mono);fill:#8a8a8a">800</text>
+              <text x="43" y="17"  text-anchor="end" style="font:400 9px var(--mono);fill:#8a8a8a">1.2k</text>
+              <text x="50"    y="224" text-anchor="middle" style="font:400 9px var(--mono);fill:#8a8a8a">T−90</text>
+              <text x="360.7" y="224" text-anchor="middle" style="font:400 9px var(--mono);fill:#8a8a8a">T−60</text>
+              <text x="671.3" y="224" text-anchor="middle" style="font:400 9px var(--mono);fill:#8a8a8a">T−30</text>
+              <text x="982"   y="224" text-anchor="middle" style="font:400 9px var(--mono);fill:#8a8a8a">EVENT</text>
+              <line x1="671.3" y1="14" x2="671.3" y2="206" stroke="#dddddd" stroke-width="1" stroke-dasharray="2 3"/>
+              <text x="671.3" y="11" text-anchor="middle" style="font:600 8px var(--mono);letter-spacing:.1em;fill:#8a8a8a">CFP CLOSES</text>
+              <path d="M112.1,206 L205.3,177.2 L308.9,116.4 L360.7,87.6 L464.2,65.2 L567.8,49.2 L671.3,41.2 L774.9,33.2 L878.4,26.8 L982,22"
+                    fill="none" stroke="#b5b5b5" stroke-width="2" stroke-dasharray="5 4"/>
+              <path d="M81.1,206 L132.8,167.6 L174.2,132.4 L236.4,94 L277.8,65.2 L329.6,39.6"
+                    fill="none" stroke="#000000" stroke-width="2.5"/>
+              <circle cx="329.6" cy="39.6" r="3.5" fill="#000000"/>
+              <text x="337.6" y="33" style="font:600 10px var(--mono);fill:#000000">2026 · 1,040 TODAY</text>
+              <text x="900" y="44" style="font:600 10px var(--mono);fill:#8a8a8a">2025 · 1,150 FINAL</text>
+            </svg>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <span class="idx">02</span>
+              <h2>Wave planner</h2>
+              <span class="sub">Accept while the CFP stays open</span>
+            </div>
+            <button class="btn small">&gt;plan next wave&lt;</button>
+          </div>
+          <div class="card-body" style="padding-top:6px;padding-bottom:6px">
+            <div class="wave-row">
+              <div><strong>Wave 1</strong><div class="wave-date">2026-08-15—sent</div></div>
+              <div>
+                <div class="wave-ascii">[████████████]<span class="dim"></span> 100%</div>
+                <div class="wave-meta">48 accepted · 48 target</div>
+              </div>
+            </div>
+            <div class="wave-row">
+              <div><strong>Wave 2</strong><div class="wave-date">2026-09-01—closes in 6 days</div></div>
+              <div>
+                <div class="wave-ascii">[██████████<span class="dim">░░</span>] 87%</div>
+                <div class="wave-meta">52 accepted · 60 target</div>
+              </div>
+            </div>
+            <div class="wave-row">
+              <div><strong>Wave 3</strong><div class="wave-date">2026-09-15—planned</div></div>
+              <div>
+                <div class="wave-ascii">[<span class="dim">░░░░░░░░░░░░</span>] 0%</div>
+                <div class="wave-meta">0 accepted · 50 target</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <span class="idx">03</span>
+              <h2>Work in motion</h2>
+              <span class="sub">Updated just now</span>
+            </div>
+            <button class="btn small">&gt;export&lt;</button>
+          </div>
+          <div class="card-body">
+            <div class="metrics">
+              <button class="metric"><span class="micro">Reviews done</span><span class="value num">1,842</span><span class="sub">of 2,130</span></button>
+              <button class="metric"><span class="micro">Tasks overdue</span><span class="value num">23</span><span class="sub">across 9 speakers</span></button>
+              <button class="metric"><span class="micro">Unscheduled</span><span class="value num">158</span><span class="sub">accepted sessions</span></button>
+              <button class="metric"><span class="micro">Conflicts</span><span class="value num">3</span><span class="sub">5 affected sessions · live</span></button>
+            </div>
+            <div class="micro" style="margin-bottom:10px">Review pressure by track</div>
+            <div class="chips">
+              <button class="chip">agents · <b>214</b></button>
+              <button class="chip">evals · <b>87</b></button>
+              <button class="chip">infra · <b>64</b></button>
+              <button class="chip">security · <b>41</b></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card span">
+          <div class="card-head">
+            <div>
+              <span class="idx">04</span>
+              <h2>Speaker task dashboard</h2>
+              <span class="sub">23 overdue tasks across 9 accepted speakers · changes update live</span>
+            </div>
+            <button class="btn small">&gt;open onboarding&lt;</button>
+          </div>
+          <div>
+            <button class="task-row">
+              <span class="when">2026-08-08—</span>
+              <strong>Amara van der Meer</strong>
+              <span class="title">Beyond the demo: reliable multi-agent systems</span>
+              <span class="task">Speaker agreement</span>
+              <span class="due overdue">4 days overdue</span>
+            </button>
+            <button class="task-row">
+              <span class="when">2026-08-10—</span>
+              <strong>João García Márquez</strong>
+              <span class="title">Operating low-latency inference platforms</span>
+              <span class="task">High-resolution headshot</span>
+              <span class="due overdue">2 days overdue</span>
+            </button>
+            <button class="task-row">
+              <span class="when">2026-08-12—</span>
+              <strong>Oluwaseun O'Connell-Singh</strong>
+              <span class="title">AI governance without gridlock</span>
+              <span class="task">Travel and accommodation</span>
+              <span class="due soon">Due today</span>
+            </button>
+            <button class="task-row">
+              <span class="when">2026-10-05—</span>
+              <strong>Mei-Ling de la Fontaine</strong>
+              <span class="title">Secure tool-using agents in regulated teams</span>
+              <span class="task">Final slides</span>
+              <span class="due">Due Oct 5</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="wall span">
+          <span class="micro">05 — On the 2026 program</span>
+          <div class="wall-items">
+            <span>Jane Street</span><span>BlackRock</span><span>Bloomberg</span><span>Morgan Stanley</span><span>Datadog</span><span>Anthropic</span><span>OpenAI</span><span>Vercel</span><span>Cloudflare</span><span>Modal</span>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<a class="badge" href="index.html">theme: ai engineer · ⌂ picker</a>
+
+</body>
+</html>

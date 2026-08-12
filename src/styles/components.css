@@ -83,7 +83,7 @@ button.event-context:hover, button.event-context[aria-expanded="true"] { backgro
 .shortcut { background: var(--panel); border: 1px solid var(--line-strong); border-radius: 2px; font: 600 9.5px/1 var(--mono); padding: 2px 5px; pointer-events: none; position: absolute; right: 7px; top: 6px; }
 .theme-switch { align-items: center; display: flex; flex: 0 0 auto; gap: 6px; }
 .theme-switch .glyph { color: var(--muted); font-size: 12px; text-align: center; width: 14px; }
-.theme-switch select { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font: 600 10px/1 var(--mono); height: 30px; letter-spacing: .06em; outline: none; padding: 0 6px; text-transform: uppercase; width: 96px; }
+.theme-switch select { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font: 600 10px/1 var(--mono); height: 30px; letter-spacing: .06em; outline: none; padding: 0 6px; text-transform: uppercase; width: 118px; }
 .theme-switch select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .top-identity { display: grid; flex: 0 0 168px; gap: 2px; justify-items: end; overflow: hidden; width: 168px; }
 .top-identity strong { color: var(--ink); font-size: 11.5px; font-weight: 600; letter-spacing: -.01em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
