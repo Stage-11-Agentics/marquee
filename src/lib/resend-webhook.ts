@@ -56,7 +56,8 @@ export async function verifySvixSignature(input: {
   if (!secret?.startsWith("whsec_")) return false;
   if (!headers.id || !headers.signature) return false;
 
-  const timestamp = timestampSeconds(headers.timestamp);
+  const timestampValue = headers.timestamp;
+  const timestamp = timestampSeconds(timestampValue);
   if (timestamp === null) return false;
 
   const nowSeconds = Math.floor((input.nowMs ?? Date.now()) / 1000);
@@ -66,7 +67,10 @@ export async function verifySvixSignature(input: {
   const secretBytes = decodeBase64(secret.slice("whsec_".length));
   if (!secretBytes) return false;
 
-  const signedContent = `${headers.id}.${timestamp}.${body}`;
+  // Svix signs the header value verbatim. Keep the parsed number only for the
+  // freshness check so a syntactically valid timestamp is not re-serialized
+  // before signature verification.
+  const signedContent = `${headers.id}.${timestampValue}.${body}`;
   const candidates = headers.signature
     .trim()
     .split(/\s+/)
