@@ -43,6 +43,18 @@ A collaborator works through it, so it is where the work has to live.
   there too.
 - PRs via `gh pr create --repo Stage-11-Agentics/marquee --base main`. No token handling —
   `gh` is already authenticated.
+- **A reviewed, green PR should be merged — by you, now.** Once a code review has happened
+  and the gate is green, merging is the expected next step, not a decision to escalate. Do
+  not park finished work behind a human who has not been asked for anything. Merging does
+  not deploy (`DEPLOY.md`), so the cost of merging is low and the cost of parking is not:
+  an open PR rots against a `main` that several agents are moving, and the agent who
+  rebases it later is rarely the one who understood it.
+  - "Reviewed" means someone other than the author actually read the diff — a review agent
+    or a human. Your own confidence is not a review, and neither is a green gate.
+  - Merge your own PR once that review exists. Waiting for the reviewer to also press the
+    button just adds a second round trip.
+  - Do not merge on a red gate, on unresolved review comments, or when the PR says it is
+    waiting on something. Say what is blocking it instead.
 - **Private stays private.** What gets published is a separate, curated artifact: the orphan
   branch `mrq-42-assembly` (tip `f4240644`), which carries the app tree without `sequence/`
   internals, `OPERATOR-PRECONDITIONS.md`, or the `.lattice` board. **Never push `main` to a
