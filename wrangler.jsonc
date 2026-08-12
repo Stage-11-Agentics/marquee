@@ -67,7 +67,15 @@
       "/*/cfp/embed",
       "/i/*"
     ],
-    "not_found_handling": "single-page-application"
+    // "none", not "single-page-application". SPA handling answered EVERY asset
+    // miss with index.html under a 200, so the site had no 404 at all: a dead
+    // link, a typo and a real page were indistinguishable to anything reading a
+    // status code, and only a byte count could tell them apart. "none" sends the
+    // miss to the Worker instead, where `app.all("*")` asks the SPA's own route
+    // table whether the path is a page and answers 200 or 404 accordingly
+    // (src/routes/not-found.route.tsx). Real assets are still served here,
+    // before the Worker runs — only misses travel.
+    "not_found_handling": "none"
   },
 
   "d1_databases": [

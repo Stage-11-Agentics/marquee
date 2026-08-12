@@ -63,6 +63,13 @@ function ShellBody({ health }: { health: boolean }): JSX.Element {
     : <AppShell eventName={eventName} />;
 }
 
+// A server-rendered answer that owns its own document marks its root. The 404
+// page is the first: it is served at an arbitrary URL, so no path predicate can
+// recognise it, and mounting the admin shell over it would replace an honest
+// answer with "Route not found" under a session-expired modal — on the one page
+// most likely to be reached by someone with no session at all.
+const isServerRenderedPage = root.dataset.marqueePage !== undefined;
+
 if (window.location.pathname.startsWith("/f/")) {
   const stateElement = document.getElementById("public-form-state");
   if (stateElement?.textContent) {
@@ -70,4 +77,4 @@ if (window.location.pathname.startsWith("/f/")) {
   }
 } else if (window.location.pathname === "/delivery-health") {
   render(<ShellEntry health />, root);
-} else if (!isPublicPage) render(<ShellEntry />, root);
+} else if (!isPublicPage && !isServerRenderedPage) render(<ShellEntry />, root);
