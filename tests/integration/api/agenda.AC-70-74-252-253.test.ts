@@ -46,7 +46,7 @@ async function seedFixture(): Promise<void> {
 describe.sequential("MRQ-20 agenda API", () => {
   beforeAll(seedFixture, 10_000);
 
-  test("AIA-07 · batch publish previews only scheduled accepted Sessions and mirrors both publication flags", async () => {
+  test("CONTRACT · AIA-07 batch publish previews only scheduled accepted Sessions and mirrors both publication flags", async () => {
     const initial = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
     const initialBody = await initial.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string; title: string; room: string; building: string; speakers: Array<{ name: string }> }> } }>();
     expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 1 });
