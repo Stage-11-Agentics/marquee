@@ -18,7 +18,12 @@ const SUB_TWO_ROLES = "sub-mrq38-two-roles";
 const SUB_SINGLE = "sub-mrq38-single";
 const SUB_NO_FEEDBACK = "sub-mrq38-no-feedback";
 const BULK_IDS = ["sub-mrq38-bulk-1", "sub-mrq38-bulk-2", "sub-mrq38-bulk-3"];
-const NOW = Date.UTC(2026, 7, 11, 15, 0, 0);
+// Anchored to the real clock. Fixtures here are written as offsets from NOW
+// ("expires in a day", "due tomorrow") but the code under test reads the real
+// Date.now(), so a hardcoded anchor silently changes what those offsets mean as
+// the wall clock passes them — sessions expire and windows close with no commit
+// behind the failure. Only the anchor moves.
+const NOW = Date.now();
 
 let speakerCookie = "";
 let otherSpeakerCookie = "";

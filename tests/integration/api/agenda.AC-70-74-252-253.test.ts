@@ -7,7 +7,12 @@ import { applyMigrations } from "../apply-migrations";
 const ORIGIN = "https://marquee.stage11.dev";
 const SESSION_ID = "sess-agenda-organizer";
 const COOKIE = `mq_session=${SESSION_ID}`;
-const NOW = Date.UTC(2026, 9, 12, 13);
+// Anchored to the real clock. Fixtures here are written as offsets from NOW
+// ("expires in a day", "due tomorrow") but the code under test reads the real
+// Date.now(), so a hardcoded anchor silently changes what those offsets mean as
+// the wall clock passes them — sessions expire and windows close with no commit
+// behind the failure. Only the anchor moves.
+const NOW = Date.now();
 
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);

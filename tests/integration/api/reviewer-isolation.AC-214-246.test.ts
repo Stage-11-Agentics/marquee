@@ -4,7 +4,12 @@ import { beforeAll, describe, expect, test } from "vitest";
 import { applyMigrations, env } from "../apply-migrations";
 
 const ORIGIN = "https://marquee.example";
-const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
+// Anchored to the real clock. Fixtures here are written as offsets from NOW
+// ("expires in a day", "due tomorrow") but the code under test reads the real
+// Date.now(), so a hardcoded anchor silently changes what those offsets mean as
+// the wall clock passes them — sessions expire and windows close with no commit
+// behind the failure. Only the anchor moves.
+const NOW = Date.now();
 const ORG_ID = "org-reviewer-boundary";
 const OTHER_ORG_ID = "org-reviewer-other";
 const EVENT_A = "event-reviewer-a";

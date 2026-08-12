@@ -3,7 +3,14 @@ import { beforeEach, expect, test } from "vitest";
 import { app, type Env } from "../../../src/index";
 import { applyMigrations, env } from "../apply-migrations";
 
+// The fixture clock stays absolute here on purpose: this suite asserts ZIP
+// entry names built from the session's weekday and time ("Thu-1400-..."), which
+// a moving anchor would change every day.
 const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
+// The session row is the one fixture that cannot be absolute. Auth compares
+// expires_at against the real Date.now(), so an absolute expiry turns this whole
+// suite into 401s the moment the wall clock passes it.
+const SESSION_EXPIRES_AT = Date.now() + 86_400_000;
 const ORIGIN = "https://marquee.stage11.dev";
 const ORG_ID = "org_mrq117";
 const EVENT_ID = "evt_mrq117";
@@ -69,7 +76,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'organizer@example.com', 'Priya Raman', '[]', 0, ?, ?)").bind(PERSON_ID, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'other@example.com', 'Other Speaker', '[]', 0, ?, ?)").bind(OTHER_PERSON_ID, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('membership_mrq117', ?, ?, ?, 'owner', ?, ?)").bind(ORG_ID, PERSON_ID, EVENT_ID, NOW, NOW),
-    env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(AUTH_SESSION, PERSON_ID, NOW + 86_400_000, NOW, NOW),
+    env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(AUTH_SESSION, PERSON_ID, SESSION_EXPIRES_AT, NOW, NOW),
     env.DB.prepare(`INSERT INTO submissions
       (id, event_id, form_id, kind, title, abstract, status, origin, submitter_person_id, search_blob, created_at, updated_at)
       VALUES (?, ?, NULL, 'session', 'Taming 40-Minute CI', 'An abstract', 'accepted', 'admin', ?, 'Taming 40-Minute CI', ?, ?)`).bind(SESSION_ID, EVENT_ID, PERSON_ID, NOW, NOW),
