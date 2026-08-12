@@ -42,6 +42,7 @@ async function request(path: string, init: RequestInit = {}, session = AUTH_SESS
 
 async function storeAttachment(id: string, key: string, content: string): Promise<void> {
   const object = await env.MEDIA.put(key, content);
+  if (!object) throw new Error(`R2 did not store ${key}`);
   await env.DB.prepare(
     `INSERT INTO attachments
       (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, sha256, r2_etag, created_at, updated_at)
