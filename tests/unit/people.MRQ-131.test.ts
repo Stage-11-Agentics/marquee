@@ -197,10 +197,14 @@ test("CONTRACT · MRQ-131 · People is org-level in the nav, above the conferenc
   for (const path of ["/people", "/crm", "/directory", "/contacts"]) {
     expect(routeTable).toMatch(new RegExp(`path: "${path}"`));
   }
-  // The Organization group is rendered BEFORE the conference caption.
+  // The Organization group is rendered BEFORE the conference boundary. That
+  // boundary is the switcher now rather than a caption — the element moved into
+  // its own component when it became a real control, and the rule it has to
+  // satisfy is unchanged: a person belongs to the organization, so People is
+  // above the line where the conference scope begins.
   const organizationAt = sidebar.indexOf('routesFor("organization")');
-  const captionAt = sidebar.indexOf('class="event-context"');
-  expectOk(organizationAt > 0 && captionAt > 0 && organizationAt < captionAt);
+  const conferenceBoundaryAt = sidebar.indexOf("<EventSwitcher");
+  expectOk(organizationAt > 0 && conferenceBoundaryAt > 0 && organizationAt < conferenceBoundaryAt);
 });
 
 test("CONTRACT · MRQ-131 · the area's language is People and List, never CRM or Segment", () => {

@@ -33,7 +33,7 @@ function Field({ label, children, className = "" }: { label: string; children: J
   return <label class={`venue-field ${className}`}><span>{label}</span>{children}</label>;
 }
 
-export function VenuesPage({ eventId }: { eventId?: string }): JSX.Element {
+export function VenuesPage({ eventId }: { eventId: string }): JSX.Element {
   const [model, setModel] = useState<VenueModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);

@@ -35,7 +35,7 @@ export interface ListEnvelope {
 }
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   search: string;
   navigate: (target: string, options?: NavigationOptions) => void;
   /** Deterministic SSR/test seam; production always loads through the API. */
@@ -242,7 +242,7 @@ function SkeletonRow({ columns }: { columns: readonly SubmissionColumnId[] }): J
 }
 
 export function SubmissionsPage({
-  eventId = "evt_aie-ny-2026",
+  eventId,
   search,
   navigate,
   initialEnvelope,

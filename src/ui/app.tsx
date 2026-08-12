@@ -8,6 +8,7 @@ import { DeliveryHealthShell } from "./health/DeliveryHealthShell";
 import { PublicForm } from "./public/form/PublicForm";
 import type { PublicFormState } from "../routes/public-form.types";
 import { useEventName } from "./shell/identity";
+import { EventProvider, useEventContext } from "./shell/event-context";
 
 const root = document.getElementById("app");
 if (!root) throw new Error("Marquee app root is missing");
@@ -30,8 +31,22 @@ const isPublicPage =
   window.location.pathname.startsWith("/embed/") ||
   /^\/[^/]+\/(?:agenda|speakers)\/embed\/?$/.test(window.location.pathname);
 
+/**
+ * The conference context wraps BOTH render roots, and it has to: the delivery
+ * health pages are a separate root entirely, and `AppShell` answers the portal,
+ * co-speaker and reviewer routes before it draws its own layout. A provider
+ * mounted inside that layout would reach neither.
+ */
 function ShellEntry({ health = false }: { health?: boolean }): JSX.Element {
-  const eventName = useEventName() ?? "Conference";
+  return <EventProvider><ShellBody health={health} /></EventProvider>;
+}
+
+function ShellBody({ health }: { health: boolean }): JSX.Element {
+  const { event } = useEventContext();
+  // The boot payload still names the demo conference, which is what keeps the
+  // sidebar from flashing a placeholder while the events list is in flight.
+  const bootName = useEventName();
+  const eventName = event?.name ?? bootName ?? "Conference";
   return health
     ? <DeliveryHealthShell eventName={eventName} />
     : <AppShell eventName={eventName} />;

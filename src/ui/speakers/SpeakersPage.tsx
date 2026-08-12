@@ -8,7 +8,6 @@ import { SpeakerAvatar } from "./SpeakerAvatar";
 import { SpeakerRecord, SpeakerStatusBadge } from "./SpeakerRecord";
 import "./speakers.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const STATUS_FILTERS: Array<{ key: SpeakerStatus | "all"; label: string }> = [
   { key: "all", label: "All" },
   { key: "pending", label: "Pending" },
@@ -87,11 +86,11 @@ function AddSpeakerPanel({
 }
 
 export function SpeakersPage({
-  eventId = DEFAULT_EVENT_ID,
+  eventId,
   search = "",
   navigate,
 }: {
-  eventId?: string;
+  eventId: string;
   search?: string;
   navigate?: (target: string) => void;
 }): JSX.Element {

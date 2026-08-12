@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
 import { dateInputFromDueAt, dueAtFromDateInput, formatDueDate } from "../../lib/task-due";
-import { DEFAULT_EVENT_ID } from "../venues/venue-writer";
 import "./settings.css";
 
 const BYTES_PER_MB = 1024 * 1024;
@@ -85,7 +84,7 @@ type LoadState =
   | { kind: "error"; templates: TaskTemplate[]; message: string };
 
 interface Props {
-  eventId?: string;
+  eventId: string;
 }
 
 interface Draft {
@@ -271,7 +270,7 @@ function FileTemplateRow({
   </div>;
 }
 
-export function TaskTemplatesPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
+export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", templates: [] });
   const [assignments, setAssignments] = useState<SpeakerTask[]>([]);
   const [assignees, setAssignees] = useState<Assignee[]>([]);

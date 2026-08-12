@@ -9,7 +9,6 @@ import { ContentHistory } from "../history/ContentHistory";
 import { decidedNote, headerChipTone, moment, statusLabel } from "./record-copy";
 import "./record.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const SUBMISSION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}";
 const DECISION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/decision";
 const SCHEDULE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/schedule";
@@ -42,7 +41,7 @@ interface RecordData {
   actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_edit_content: boolean; can_restore_content: boolean };
 }
 
-interface Props { eventId?: string; submissionId: string; navigate: (target: string) => void; }
+interface Props { eventId: string; submissionId: string; navigate: (target: string) => void; }
 
 type LoadState = { kind: "loading" } | { kind: "error"; message: string; notFound: boolean } | { kind: "ready"; record: RecordData };
 
@@ -87,7 +86,7 @@ function FileAnswer({ label, file }: { label: string; file: FileAnswerView }): J
   </div>;
 }
 
-export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId, navigate }: Props): JSX.Element {
+export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState("");

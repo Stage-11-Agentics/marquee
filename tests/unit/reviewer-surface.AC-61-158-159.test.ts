@@ -25,7 +25,9 @@ test("AC-61, AC-158, AC-159 · the reviewer surface supports keyboard review at 
   expect(reviewerPageSource).not.toContain('href="/evaluation');
 
   expect(shellSource).toContain('location.pathname === "/reviewer"');
-  expect(shellSource).toContain("return <ReviewerPage />");
+  // Answered before the layout is drawn, and scoped: the reviewer's one
+  // conference reaches a page the shell never wraps.
+  expect(shellSource).toContain("<ReviewerPage eventId={eventId} />");
 });
 
 test("AC-158 + AC-159 · the mobile reviewer keeps thumb controls and a stable blind shell", () => {

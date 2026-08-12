@@ -7,7 +7,6 @@ import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
 import { useIdentity } from "../shell/identity";
 import "./review.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 
 interface Scope {
   color: string;
@@ -189,7 +188,7 @@ function recommendationLabel(value: ReviewState["recommendation"]): string {
   return "Choose one recommendation";
 }
 
-export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string }): JSX.Element {
+export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
   // Anonymity runs one way: the reviewer must not see the speaker. Hiding the
   // reviewer from themselves buys nothing and costs attribution — every review
   // recorded here lands under this name on the organizer's record, so the name

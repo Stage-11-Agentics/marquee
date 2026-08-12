@@ -74,7 +74,7 @@ interface ListResponse {
 }
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   search?: string;
 }
 
@@ -263,7 +263,7 @@ function Preview({ fields, answers, onAnswer }: { fields: FormField[]; answers: 
   </div>;
 }
 
-export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): JSX.Element {
+export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
   const [catalog, setCatalog] = useState<FormSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<FormDetail | null>(null);

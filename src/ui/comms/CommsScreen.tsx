@@ -72,7 +72,6 @@ interface Filters {
   task_state: "" | "open" | "done";
 }
 
-const EVENT_ID = "evt_aie-ny-2026";
 const TRIGGER_KEYS = [
   "submission_confirmation",
   "form_closing_reminder",
@@ -132,7 +131,7 @@ function formatDate(value: number): string {
   return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.Element {
+export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [audience, setAudience] = useState<AudienceResult>({ data: [], page: 1, per_page: 100, total: 0, total_pages: 0 });

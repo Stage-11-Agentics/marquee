@@ -7,7 +7,16 @@ import { promisify } from "node:util";
 import { REPOSITORY_ROOT } from "./lib/command.mjs";
 
 const execFileAsync = promisify(execFile);
-const FORBIDDEN_LITERAL = ["AIE", "NYC", "2026"].join(" ");
+/**
+ * Two literals, one scanner. The conference NAME must not be written into the
+ * shell, and neither must its ID: a page that defaults to the seeded
+ * conference's id renders conference A's data while the organizer is standing
+ * in conference B, which is worse than a page that renders nothing.
+ *
+ * Both are allowed in the seed and its fixtures, which is where the seeded
+ * conference is supposed to be named.
+ */
+const FORBIDDEN_LITERALS = [["AIE", "NYC", "2026"].join(" "), ["evt", "aie-ny-2026"].join("_")];
 const SOURCE_ROOTS = ["src/", "scripts/", "cli/"];
 
 function isSeedOrFixture(path) {
@@ -25,13 +34,15 @@ const matches = [];
 
 for (const path of paths) {
   const source = await readFile(`${REPOSITORY_ROOT}/${path}`, "utf8");
-  if (source.includes(FORBIDDEN_LITERAL)) matches.push(path);
+  for (const literal of FORBIDDEN_LITERALS) {
+    if (source.includes(literal)) matches.push({ path, literal });
+  }
 }
 
 const result = {
   check: "shell-truth",
   status: matches.length === 0 ? "pass" : "fail",
-  forbidden_literal: FORBIDDEN_LITERAL,
+  forbidden_literals: FORBIDDEN_LITERALS,
   scanned_files: paths.length,
   matches,
   allowed: ["scripts/seed/**", "**/*fixture*"],

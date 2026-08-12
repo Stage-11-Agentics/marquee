@@ -21,7 +21,6 @@ import { BulkExportDialog } from "./BulkExportDialog";
 import { FileVersions } from "./FileVersions";
 import "./files.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const ROUTE = "/api/v1/events/{eventId}/files";
 const STATE_LABELS: Record<FileStateFilter, string> = {
   all: "All deliverables",
@@ -109,7 +108,7 @@ function FileRow({ eventId, row, selected, onToggle }: { eventId: string; row: F
   </>;
 }
 
-export function FilesPage({ eventId = DEFAULT_EVENT_ID, navigate }: { eventId?: string; navigate?: (target: string) => void }): JSX.Element {
+export function FilesPage({ eventId, navigate }: { eventId: string; navigate?: (target: string) => void }): JSX.Element {
   const [filters, setFilters] = useState({ state: "all" as FileStateFilter, taskType: "", search: "" });
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());

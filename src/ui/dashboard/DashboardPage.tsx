@@ -25,7 +25,7 @@ interface LoadState {
 }
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   navigate: (target: string) => void;
 }
 
@@ -165,7 +165,7 @@ function DashboardLoading(): JSX.Element {
   </section>;
 }
 
-export function DashboardPage({ eventId = "evt_aie-ny-2026", navigate }: Props): JSX.Element {
+export function DashboardPage({ eventId, navigate }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({
     snapshot: null,
     loadedAt: null,
