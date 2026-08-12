@@ -119,7 +119,9 @@ export const PUBLIC_SITE_STYLES = `
 .public-profile { display: flex; align-items: flex-start; gap: 14px; }
 .public-avatar { --avatar-size: 48px; width: var(--avatar-size); height: var(--avatar-size); display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--public-rule); background: var(--public-accent-wash); color: var(--public-accent); font: 700 12px/1 var(--public-mono); object-fit: cover; }
 .public-speaker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
-.public-directory-filters { grid-template-columns: minmax(0, 1fr); }
+.public-directory-filters { grid-template-columns: minmax(0, 1fr) auto; }
+.public-directory-actions { display: flex; gap: 8px; }
+
 .public-directory-card { display: flex; align-items: flex-start; gap: 13px; min-height: 132px; border: 1px solid var(--public-rule); background: var(--public-surface); padding: 16px; }
 .public-directory-card:hover, .public-directory-card:focus-visible { border-color: var(--public-accent); background: var(--public-accent-wash); outline: none; }
 .public-directory-card .public-avatar { --avatar-size: 56px; font-size: 13px; }
@@ -995,12 +997,26 @@ export function PublicSpeakerDirectoryPage({ data }: { data: PublicSpeakerDirect
             <p>Meet the people shaping this conference. Open a profile to see their published sessions.</p>
           </div>
         </div>
+        {/*
+          Nothing on this page ever ran this search but the browser's implicit
+          form submission on Enter — the page's one script is the attendee
+          schedule's and never touches the directory — invisible unless
+          you already knew to press it. A visitor typed a surname, watched the
+          grid not move, and reasonably concluded the box was decorative. The
+          agenda's own search does narrow as you type, which makes the silence
+          here read as broken rather than as "press Enter". Give the form the
+          control it always needed; the filtering behind it works.
+        */}
         <form class="public-filters public-directory-filters" method="get" action="/speakers">
           <input type="hidden" name="event" value={data.event.slug} />
           <label>
             <span class="sr-only">Search speakers</span>
             <input class="public-search" name="q" value={data.filters.q ?? ""} placeholder="Search speakers or companies" aria-label="Search speakers or companies" />
           </label>
+          <div class="public-directory-actions">
+            <button class="public-button primary" type="submit">Search</button>
+            {data.filters.q ? <a class="public-button" href={`/speakers?event=${encodeURIComponent(data.event.slug)}`}>Clear</a> : null}
+          </div>
         </form>
         {data.speakers.length > 0 ? (
           <section class="public-speaker-grid" aria-label="Published speakers">
