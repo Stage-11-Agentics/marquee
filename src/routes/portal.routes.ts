@@ -23,6 +23,7 @@ import {
   type ArrivalSession,
 } from "../lib/venue-geometry";
 import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
+import { listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
 import { readTaskFileConfig } from "../lib/task-template-config";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
@@ -245,6 +246,14 @@ function statusLabel(status: string): string {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+/**
+ * The media origin is a Worker binding rather than an API binding, exactly as
+ * `uploads.routes.ts` treats it.
+ */
+function portalMediaOrigin(context: import("hono").Context<ApiEnv>): string {
+  return (context.env as unknown as { MEDIA_PUBLIC_ORIGIN?: string }).MEDIA_PUBLIC_ORIGIN ?? "";
 }
 
 function isSessionAuth(auth: AuthContext | null): auth is SessionAuth {
@@ -700,6 +709,7 @@ function taskPayload(
   task: TaskProjection,
   fields: FormFieldView[],
   answers: Record<string, unknown>,
+  versions: FileVersionList | null,
 ): Record<string, unknown> {
   if (task.kind === "acknowledge") {
     return { kind: task.kind, acknowledged: parseObject(task.response_json).acknowledged === true };
@@ -709,11 +719,17 @@ function taskPayload(
     const policy = policyFor("task_upload", config);
     const editedConfig = readTaskFileConfig(task.file_config);
     const accept = editedConfig?.accept ?? policy?.rules.map((rule) => rule.extension) ?? [];
+    // The speaker needs to see WHAT they uploaded, not just that something
+    // happened: a bare checkmark is indistinguishable from a lost file.
     return {
       kind: task.kind,
       attachment_id: task.attachment_id,
       accept,
       max_bytes: editedConfig?.maxBytes ?? policy?.maxBytes ?? null,
+      versions: versions?.versions ?? [],
+      latest: versions?.latest ?? null,
+      version_count: versions?.version_count ?? 0,
+      latest_source: versions?.latest_source ?? "pointer",
     };
   }
   const projection = projectApplicableAnswers(fields, answers);
@@ -737,7 +753,7 @@ function taskPayload(
   };
 }
 
-async function listTasks(db: D1Database, event: EventProjection, personId: string): Promise<Record<string, unknown>[]> {
+async function listTasks(db: D1Database, event: EventProjection, personId: string, mediaPublicOrigin: string): Promise<Record<string, unknown>[]> {
   const [rows, cancellationAudits] = await Promise.all([
     db
       .prepare(
@@ -771,6 +787,14 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
     if (typeof reason === "string" && reason.length > 0) cancellationReasons.set(audit.submission_id, reason);
   }
 
+  // One batched read for every file task on the page rather than one per row.
+  const versionsByTask = await listVersionsForOwners(
+    db,
+    "task_upload",
+    rows.results.filter((task) => task.kind === "file").map((task) => task.id),
+    mediaPublicOrigin,
+  );
+
   return Promise.all(rows.results.map(async (task) => {
     const fields = task.kind === "form" && task.form_id ? await listFormFields(db, task.form_id) : [];
     const submissionAnswers = await readSubmissionAnswers(db, task.submission_id);
@@ -795,7 +819,7 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
       cancelled_at: task.cancelled_at,
       cancelled_reason: cancelled ? cancelledReason : null,
       overdue: !cancelled && task.status === "open" && task.due_at < Date.now(),
-      payload: taskPayload(task, fields, answers),
+      payload: taskPayload(task, fields, answers, versionsByTask.get(task.id) ?? null),
     };
   }));
 }
@@ -905,12 +929,12 @@ async function talkIsEditable(db: D1Database, eventId: string, submissionId: str
   return row.form_status === "open" && (row.closes_at === null || row.closes_at > Date.now());
 }
 
-async function portalSnapshot(db: D1Database, auth: SessionAuth, requestedEventId?: string) {
+async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrigin: string, requestedEventId?: string) {
   const event = await speakerEvent(db, auth, requestedEventId);
   const person = await personFor(db, auth.personId);
   const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount] = await Promise.all([
     listSubmissions(db, event, auth.personId),
-    listTasks(db, event, auth.personId),
+    listTasks(db, event, auth.personId, mediaPublicOrigin),
     primaryBuildingFor(db, event.id),
     pinnedBuildingCountFor(db, event.id),
   ]);
@@ -1229,7 +1253,7 @@ const getPortal = defineApiRoute(
   async (context) => {
     const auth = requireUnscopedSpeakerSession(context);
     const query = context.req.valid("query");
-    return context.json(await portalSnapshot(context.env.DB, auth, query.eventId), 200);
+    return context.json(await portalSnapshot(context.env.DB, auth, portalMediaOrigin(context), query.eventId), 200);
   },
 );
 

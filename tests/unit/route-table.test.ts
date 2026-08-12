@@ -5,9 +5,16 @@ import { matchRoute, routesFor } from "../../src/ui/shell/route-table";
 test("CONTRACT · the sidebar reproduces the binding prototype navigation order", () => {
   expect([...routesFor("home"), ...routesFor("pipeline"), ...routesFor("modules")].map((route) => route.label)).toEqual([
     "Program home", "Program board", "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published",
-    "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Communications", "Speaker portal", "Conference site", "Conference settings",
+    "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Files", "Communications", "Speaker portal", "Conference site", "Conference settings",
     "Speaker follow-ups",
   ]);
+});
+
+test("CONTRACT · MRQ-115 — the files library is reachable by the noun an organizer searches for", () => {
+  // CNT-S3 step 5 enumerates the labels an operator (and the eval agent) will
+  // look for. "Files" is one of them, spelled exactly; a cleverer name here is
+  // a screen nobody finds.
+  expect(matchRoute("/files")).toMatchObject({ id: "files", label: "Files", group: "modules", sidebar: true });
 });
 
 test("AC-1 · speaker follow-ups and system health are real external destinations in their binding groups", () => {

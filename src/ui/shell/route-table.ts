@@ -25,6 +25,9 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "evaluation", path: "/evaluation", label: "Evaluation plan", icon: "◇", group: "modules", sidebar: true },
   { id: "reviewer", path: "/reviewer", label: "Review queue", icon: "✓", group: "modules", sidebar: true },
   { id: "agenda", path: "/agenda-builder", label: "Agenda", icon: "▦", group: "modules", sidebar: true },
+  // "Files" verbatim: this is the noun an organizer reaches for when they want
+  // the deck, and renaming it to something cleverer only makes it unfindable.
+  { id: "files", path: "/files", label: "Files", icon: "▤", group: "modules", sidebar: true },
   { id: "communications", path: "/communications", label: "Communications", icon: "✉", group: "modules", sidebar: true },
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "○", group: "modules", sidebar: true, external: true },
   { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "modules", sidebar: true, external: true },

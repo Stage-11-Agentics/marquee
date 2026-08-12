@@ -182,6 +182,19 @@ export const COMMAND_REGISTRY = [
     ],
   },
   {
+    path: ["files", "list"],
+    usage: "marquee files list <event-id> --state <name>",
+    summary: "List every requested deliverable with its speaker, session, and version history.",
+    operations: ["listConferenceFiles"],
+    skill: "chase",
+    event: true,
+    options: [
+      { name: "--state <name>", description: "all, uploaded, missing, or overdue." },
+      { name: "--task <template-id>", description: "Restrict to one file task." },
+      { name: "--search <text>", description: "Match filename, speaker, or session." },
+    ],
+  },
+  {
     path: ["remind"],
     usage: "marquee remind <event-id> --filter <key=value> (--template <key> | --subject <s> --body <b>)",
     summary: "Queue a templated or caller-composed reminder.",

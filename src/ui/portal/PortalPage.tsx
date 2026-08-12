@@ -11,6 +11,8 @@ import { isFieldApplicable } from "../../lib/form-conditions";
 import { seedId } from "../../lib/ids";
 import type { VenueBuildingInput } from "../../lib/venues";
 import { MAP_HEIGHT, VenueMap } from "../venues/VenueMap";
+import { FileVersions } from "../files/FileVersions";
+import type { FileVersion, FileVersionList } from "../../lib/files/versions";
 import "./portal.css";
 
 type PortalField = {
@@ -43,6 +45,10 @@ type PortalTask = {
     kind: string;
     acknowledged?: boolean;
     attachment_id?: string | null;
+    versions?: FileVersion[];
+    latest?: FileVersion | null;
+    version_count?: number;
+    latest_source?: "pointer" | "recency";
     accept?: string[];
     max_bytes?: number | null;
     form_id?: string | null;
@@ -318,10 +324,11 @@ function GenericTaskSurface({ task, onComplete }: { task: PortalTask; onComplete
 
   if (task.kind === "file") {
     const accept = task.payload.accept?.map((item) => item.startsWith(".") ? item : `.${item}`).join(",") || undefined;
+    const hasVersions = (task.payload.version_count ?? 0) > 0;
     return <form onSubmit={submit}>
-      <div class="portal-task-field"><label for={`file-${task.id}`}>Upload file</label><input id={`file-${task.id}`} type="file" accept={accept} onChange={(event) => { setFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null); setError(null); setCanRetry(false); }} /><small>{accept ? `Accepted: ${accept}` : "Choose the file requested by the conference."}{task.payload.max_bytes ? ` · Limit: ${formatBytes(task.payload.max_bytes)}` : ""}</small></div>
+      <div class="portal-task-field"><label for={`file-${task.id}`}>{hasVersions ? "Upload a new version" : "Upload file"}</label><input id={`file-${task.id}`} type="file" accept={accept} onChange={(event) => { setFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null); setError(null); setCanRetry(false); }} /><small>{accept ? `Accepted: ${accept}` : "Choose the file requested by the conference."}{task.payload.max_bytes ? ` · Limit: ${formatBytes(task.payload.max_bytes)}` : ""}{hasVersions ? " · Your earlier upload is kept as a previous version." : ""}</small></div>
       {progress ? <div class="portal-upload-progress" role="status" aria-live="polite"><div><span>Uploading · {progress.total > 0 ? Math.round(progress.loaded / progress.total * 100) : 0}%</span><span>{formatBytes(progress.loaded)} / {formatBytes(progress.total)}</span></div><progress max={progress.total} value={progress.loaded} /></div> : null}
-      <div class="portal-payload-actions"><span class="portal-payload-error">{error ?? (canRetry ? "The file is still selected. Retry when ready." : "")}</span><span class="portal-upload-actions">{canAbort ? <button class="portal-button secondary" type="button" onClick={() => abortUpload.current?.()}>Cancel upload</button> : null}<button class="portal-button" type="submit" disabled={busy}>{busy ? "Uploading…" : canRetry ? "Retry upload" : "Upload and complete"}</button></span></div>
+      <div class="portal-payload-actions"><span class="portal-payload-error">{error ?? (canRetry ? "The file is still selected. Retry when ready." : "")}</span><span class="portal-upload-actions">{canAbort ? <button class="portal-button secondary" type="button" onClick={() => abortUpload.current?.()}>Cancel upload</button> : null}<button class="portal-button" type="submit" disabled={busy}>{busy ? "Uploading…" : canRetry ? "Retry upload" : hasVersions ? "Upload new version" : "Upload and complete"}</button></span></div>
     </form>;
   }
 
@@ -521,18 +528,45 @@ function FormField({ field, value, onChange }: { field: PortalField; value: unkn
   return <div class="portal-task-field"><label for={`field-${field.key}`}>{label}</label><input id={`field-${field.key}`} type={inputType} value={value === null || value === undefined ? "" : String(value)} onInput={(event) => onChange((event.currentTarget as HTMLInputElement).value)} /><small>{field.help_text ?? ""}</small></div>;
 }
 
+/**
+ * The portal renders the same version list the organizer sees, from the same
+ * derivation. `latest_source` is carried rather than assumed so the two
+ * surfaces cannot drift into disagreeing about which upload is current.
+ */
+function versionListFor(task: PortalTask): FileVersionList | null {
+  if (task.kind !== "file") return null;
+  const versions = task.payload.versions ?? [];
+  if (versions.length === 0) return null;
+  return {
+    owner_type: "task_upload",
+    owner_id: task.id,
+    versions,
+    latest: task.payload.latest ?? versions.find((version) => version.is_latest) ?? null,
+    version_count: task.payload.version_count ?? versions.length,
+    latest_source: task.payload.latest_source ?? "pointer",
+  };
+}
+
 function TaskRow({ task, submissions, person, onComplete }: { task: PortalTask; submissions: PortalSubmission[]; person: PortalPerson; onComplete: () => Promise<void> }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const submission = task.submission_id ? submissions.find((item) => item.id === task.submission_id) ?? null : null;
+  const versions = versionListFor(task);
   return <article class={`portal-task-row ${expanded ? "is-expanded" : ""}`}>
     <span class={`portal-task-mark ${task.status === "done" ? "done" : ""}`} aria-label={task.status === "done" ? "Complete" : "Open"}>{task.status === "done" ? "✓" : "·"}</span>
     <div>
       <h3 class="portal-task-title" title={task.title}>{task.title}</h3>
       <p class="portal-task-description">{task.description || "—"}</p>
       <div class="portal-task-meta"><span>{task.kind}</span><span>due {formatDate(task.due_at)}</span>{task.overdue && task.status === "open" ? <span class="overdue">overdue</span> : null}</div>
+      {/* Named in the collapsed row on purpose: a checkmark alone is not
+          evidence, and the speaker should never have to open anything to
+          confirm which file the conference is holding. */}
+      {versions ? <div class="portal-task-file"><FileVersions list={versions} compact /></div> : null}
     </div>
     <button class="portal-task-action" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{task.status === "done" ? (expanded ? "Close" : "View") : (expanded ? "Close" : "Complete")}</button>
-    {expanded ? <div class="portal-task-payload"><TaskSurface task={task} submission={submission} person={person} onComplete={onComplete} /></div> : null}
+    {expanded ? <div class="portal-task-payload">
+      {versions ? <div class="portal-task-versions"><FileVersions list={versions} /></div> : null}
+      <TaskSurface task={task} submission={submission} person={person} onComplete={onComplete} />
+    </div> : null}
   </article>;
 }
 
