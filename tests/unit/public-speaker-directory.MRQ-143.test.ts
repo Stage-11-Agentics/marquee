@@ -52,8 +52,9 @@ test("CONTRACT · MRQ-143 · public speaker directory orders by surname and pres
         bio: null,
         headshotUrl: null,
         socialLinks: [],
+        sessionCount: 1,
       })),
-      filters: { q: null },
+      filters: { q: null, view: "gallery" },
     },
   }));
   expect([...html.matchAll(/<h2[^>]*>([^<]+)<\/h2>/g)].map((match) => match[1])).toEqual(ordered.map((speaker) => speaker.name));

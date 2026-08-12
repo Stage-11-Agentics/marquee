@@ -15,6 +15,7 @@ import { PUBLIC_SCHEDULE_SCRIPT } from "../ui/public/agenda/schedule-script";
 import {
   PUBLIC_AGENDA_SCRIPT,
   PUBLIC_SITE_STYLES,
+  PUBLIC_SPEAKER_SCRIPT,
   PublicAgendaPage,
   PublicAgentsPage,
   PublicNotFoundPage,
@@ -124,6 +125,7 @@ publicAgendaRoutes.get("/speakers", async (context) => {
   const data = await loadPublicSpeakerDirectory(context.env.DB, {
     eventSlug: query.event ?? query.event_slug,
     q: query.q,
+    view: query.view,
   });
   const shell = await assetShell(context.env.ASSETS, context.req.raw);
   if (!data) return notFoundDocument(shell);
@@ -157,6 +159,6 @@ publicAgendaRoutes.get("/p/:slug", async (context) => {
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicSpeakerPage event={result.event} venue={result.venue} speaker={result.speaker} />),
-    { title: result.speaker.name, script: PUBLIC_SCHEDULE_SCRIPT },
+    { title: result.speaker.name, script: `${PUBLIC_SCHEDULE_SCRIPT}\n${PUBLIC_SPEAKER_SCRIPT}` },
   ));
 });
