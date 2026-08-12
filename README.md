@@ -79,10 +79,14 @@ cp .dev.vars.example .dev.vars
 published always-pass Turnstile pair and fake local R2 signing values. Never
 copy those values into a hosted Worker.
 
+One copy is not enough on its own — step 2 places a second one where Wrangler
+actually reads it.
+
 ### 2. Build the Worker and prepare local D1
 
 ```sh
 npx vite build
+cp .dev.vars dist/marquee/.dev.vars
 CI=1 npx wrangler d1 migrations apply DB --local --persist-to .wrangler/marquee-local
 npm run seed -- --persist-to .wrangler/marquee-local
 ```
@@ -90,6 +94,16 @@ npm run seed -- --persist-to .wrangler/marquee-local
 The build emits `dist/marquee/wrangler.json`, which is the local config used by
 the next command. The seed is deterministic and idempotent; it creates the
 synthetic AIE NYC sample, not real attendee or speaker data.
+
+**`wrangler dev` reads `.dev.vars` from beside the config file, not from the
+repository root** — hence the copy above, which has to come after the build that
+creates the directory. The Cloudflare Vite plugin points Wrangler at the
+generated `dist/marquee/wrangler.json`, so that is the directory it searches.
+
+Skip the copy and the Worker starts with an empty Turnstile site key: the widget
+never initialises, and the first save on the public call for speakers fails with
+`403 — Complete the security check`. That reads like a bug in the form rather
+than a missing file, which is what makes it worth spelling out.
 
 ### 3. Start the local Worker for development
 
@@ -173,6 +187,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+cp .dev.vars dist/marquee/.dev.vars
 CI=1 npx wrangler d1 migrations apply DB --local --persist-to "$state_dir"
 npm run seed -- --persist-to "$state_dir"
 npx wrangler dev \
