@@ -3,7 +3,7 @@ import { renderToString } from "preact-render-to-string";
 import { describe, expect, test } from "vitest";
 
 import type { AgendaSession, AgendaSnapshot } from "../../src/api/agenda";
-import { generateAgendaGridSlots } from "../../src/lib/agenda-grid";
+import { generateAgendaGridSlots, type AgendaGridSlot } from "../../src/lib/agenda-grid";
 import { ConflictPanel, SessionTile } from "../../src/ui/agenda/AgendaPage";
 import { TIME_SLOTS, TrackBoard, type TrackDay } from "../../src/ui/agenda/track-board";
 
@@ -69,7 +69,7 @@ const sessions = [agentsSession, infraSession];
 
 function boardMarkup(
   boardSessions: readonly AgendaSession[] = sessions,
-  slots = undefined,
+  slots: readonly AgendaGridSlot[] | undefined = undefined,
 ): string {
   return renderToString(h(TrackBoard, {
     snapshot,
