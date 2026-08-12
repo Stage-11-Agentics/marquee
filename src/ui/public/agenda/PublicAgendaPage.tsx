@@ -1041,8 +1041,14 @@ export function PublicSpeakerDirectoryPage({ data }: { data: PublicSpeakerDirect
 
 export function PublicSpeakerPage({ event, venue, speaker }: { event: PublicEvent; venue: PublicVenueDisclosure; speaker: PublicSpeaker }): JSX.Element {
   const venueName = venue.buildingName ?? event.venue ?? "Online";
+  const eventQuery = `event=${encodeURIComponent(event.slug)}`;
   return (
-    <PublicShell event={event} title="Speaker" schedule={countOnlySchedule(event)} actions={<a class="public-button" href={`/agenda?event=${encodeURIComponent(event.slug)}`}>← Agenda</a>}>
+    <PublicShell
+      event={event}
+      title="Speaker"
+      schedule={countOnlySchedule(event)}
+      actions={<><a class="public-button" href={`/speakers?${eventQuery}`}>← Speakers</a><a class="public-button" href={`/agenda?${eventQuery}`}>← Agenda</a></>}
+    >
       <main class="public-main">
         <article class="public-card">
           <div class="public-kicker">{venueName}</div>
