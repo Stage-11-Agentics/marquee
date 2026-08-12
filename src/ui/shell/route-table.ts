@@ -85,6 +85,7 @@ export const routeTable: readonly RouteDefinition[] = [
   // settings path working for anything that already links to it.
   { id: "task-templates", path: "/settings/tasks", label: "Task templates", icon: "", group: "utility" },
   { id: "api-tokens", path: "/settings/api", label: "API tokens", icon: "", group: "utility" },
+  { id: "webhooks", path: "/settings/webhooks", label: "Webhooks", icon: "", group: "utility" },
   { id: "api-docs", path: "/api/docs", label: "API & CLI", icon: "⌘", group: "utility" },
   { id: "import", path: "/import", label: "Import speakers", icon: "", group: "utility" },
 ] as const;
