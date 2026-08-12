@@ -9,6 +9,7 @@ import auditRequestIdMigrationSql from "../../migrations/0006_audit_log_request_
 import embedWidgetKindsMigrationSql from "../../migrations/0007_embed_widget_kinds.sql?raw";
 import formFieldDatesMigrationSql from "../../migrations/0008_form_field_dates.sql?raw";
 import criterionKindsMigrationSql from "../../migrations/0009_criterion_kinds.sql?raw";
+import evaluationRoundCommitteesMigrationSql from "../../migrations/0010_evaluation_round_committees.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -76,6 +77,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(embedWidgetKindsMigrationSql),
     ...splitStatements(formFieldDatesMigrationSql),
     ...splitStatements(criterionKindsMigrationSql),
+    ...splitStatements(evaluationRoundCommitteesMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

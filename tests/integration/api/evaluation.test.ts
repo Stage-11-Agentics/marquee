@@ -134,6 +134,64 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect(body.committees[0]?.members[0]?.progress).toBeGreaterThanOrEqual(0);
   });
 
+  test("ABS-02 · a round carries its own committee pool and distribution can use that persisted pool", async () => {
+    const patched = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ committee_id: COMMITTEE_ID }),
+    });
+    expect(patched.status).toBe(200);
+    const plan = await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}`);
+    const planBody = await json<{ rounds: Array<{ committee_id: string | null; id: string }> }>(plan);
+    expect(planBody.rounds.find((round) => round.id === ROUND_ONE_ID)?.committee_id).toBe(COMMITTEE_ID);
+
+    const distributed = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/assignments`, {
+      method: "POST",
+      body: JSON.stringify({ mode: "n_per_submission", reviewers_per_submission: 1, submission_ids: [SUBMISSION_COMPARISON_THREE] }),
+    });
+    expect(distributed.status).toBe(200);
+  });
+
+  test("ABS-12 · declaring a conflict persists an abstention, completes the assignment, and leaves aggregates untouched", async () => {
+    const response = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/submissions/${SUBMISSION_A_ONLY}/evaluations`, {
+      method: "POST",
+      body: JSON.stringify({ abstained: 1, comment: "I have a conflict with this submission." }),
+    });
+    expect(response.status).toBe(200);
+    expect(await json<{ abstained: boolean; recommendation: null; score: null }>(response)).toMatchObject({ abstained: true, recommendation: null, score: null });
+
+    const stored = await env.DB.prepare("SELECT abstained, recommendation, score FROM evaluations WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_A_ONLY, ORGANIZER_ID).first<{ abstained: number; recommendation: string | null; score: number | null }>();
+    expect(stored).toEqual({ abstained: 1, recommendation: null, score: null });
+    const assignment = await env.DB.prepare("SELECT status FROM round_assignments WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_A_ONLY, ORGANIZER_ID).first<{ status: string }>();
+    expect(assignment?.status).toBe("complete");
+
+    const detail = await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}`);
+    const detailBody = await json<{ rounds: Array<{ id: string; progress: { evaluations: number; recusals: number } }>; summary: { evaluations: number; recusals: number } }>(detail);
+    expect(detailBody.rounds.find((round) => round.id === ROUND_ONE_ID)?.progress.recusals).toBeGreaterThanOrEqual(1);
+    expect(detailBody.summary.recusals).toBeGreaterThanOrEqual(1);
+    expect(detailBody.summary.evaluations).toBeGreaterThanOrEqual(0);
+  });
+
+  test("ABS-09 · reviewer reminders use a narrow idempotent reviewer outbox path", async () => {
+    const assigned = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/assignments`, {
+      method: "POST",
+      body: JSON.stringify({ submission_id: SUBMISSION_COMPARISON_THREE, reviewer_person_id: ORGANIZER_ID }),
+    });
+    expect([200, 201]).toContain(assigned.status);
+    const reminderPath = `/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/reviewers/${ORGANIZER_ID}/remind`;
+    const first = await request(reminderPath, { method: "POST" });
+    expect(first.status).toBe(202);
+    const firstBody = await json<{ outstanding: number; queued: boolean; outbox_id: string }>(first);
+    expect(firstBody.queued).toBe(true);
+    expect(firstBody.outstanding).toBeGreaterThan(0);
+    const message = await env.DB.prepare("SELECT template_key, person_id, to_email, text FROM outbox WHERE id = ?").bind(firstBody.outbox_id).first<{ template_key: string; person_id: string; text: string; to_email: string }>();
+    expect(message).toMatchObject({ template_key: "reviewer_reminder", person_id: ORGANIZER_ID });
+    expect(message?.text).toContain(`${firstBody.outstanding} assigned review(s)`);
+
+    const duplicate = await request(reminderPath, { method: "POST" });
+    expect(duplicate.status).toBe(202);
+    expect((await json<{ queued: boolean }>(duplicate)).queued).toBe(false);
+  });
+
   test("AC-98 · exactly two ordered rounds can carry independent modes and scorecards", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}`);
     const body = await json<{ rounds: Array<{ position: number; mode: string; name: string }> }>(response);

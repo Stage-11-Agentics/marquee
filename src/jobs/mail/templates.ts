@@ -14,10 +14,13 @@ export const TRIGGER_TEMPLATE_KEYS = [
 ] as const;
 
 export const SUPPORT_TEMPLATE_KEYS = ["reminder_generic", "custom"] as const;
+/** Reviewer reminders use a direct reviewer recipient, not the speaker audience engine. */
+export const REVIEWER_TEMPLATE_KEYS = ["reviewer_reminder"] as const;
 export const AUTH_TEMPLATE_KEYS = ["magic_link_login", "draft_resume", "task_link"] as const;
 export const MAIL_TEMPLATE_KEYS = [
   ...TRIGGER_TEMPLATE_KEYS,
   ...SUPPORT_TEMPLATE_KEYS,
+  ...REVIEWER_TEMPLATE_KEYS,
   ...AUTH_TEMPLATE_KEYS,
 ] as const;
 
@@ -79,6 +82,11 @@ export const DEFAULT_TEMPLATES: Record<MailTemplateKey, DefaultTemplate> = {
     name: "Custom message",
     subject: "A message from the conference team",
     body_md: "Hi {{speaker.first_name}},\n\n{{message.body}}",
+  },
+  reviewer_reminder: {
+    name: "Reviewer reminder",
+    subject: "Reminder: {{round.name}} has {{review.outstanding}} reviews waiting",
+    body_md: "Hi {{reviewer.first_name}},\n\nYou have {{review.outstanding}} assigned review(s) waiting in the {{round.name}} round. Please open your reviewer queue when you have a moment.",
   },
   magic_link_login: {
     name: "Magic link sign-in",

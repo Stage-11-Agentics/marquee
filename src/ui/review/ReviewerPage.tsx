@@ -71,6 +71,7 @@ interface ReviewerPlan {
 }
 
 interface ReviewState {
+  abstained: boolean;
   comment: string;
   /** Keyed by criterion id; a rating is a number, a dropdown or free text a string. */
   criteria: Record<string, number | string>;
@@ -96,6 +97,7 @@ interface DetailFile {
 }
 
 interface DetailReview {
+  abstained: boolean;
   actor_id: string;
   comment: string;
   created_at: number;
@@ -134,7 +136,7 @@ interface SubmissionDetail {
   vendor_affiliation: string;
 }
 
-const EMPTY_REVIEW: ReviewState = { comment: "", criteria: {}, recommendation: null, score: null };
+const EMPTY_REVIEW: ReviewState = { abstained: false, comment: "", criteria: {}, recommendation: null, score: null };
 
 const DEFAULT_SCALE_MIN = 1;
 const DEFAULT_SCALE_MAX = 5;
@@ -268,7 +270,14 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
 
   const updateReview = (patch: Partial<ReviewState>): void => {
     if (!current) return;
-    setDrafts((previous) => ({ ...previous, [current.id]: { ...(previous[current.id] ?? EMPTY_REVIEW), ...patch } }));
+    setDrafts((previous) => ({
+      ...previous,
+      [current.id]: {
+        ...(previous[current.id] ?? EMPTY_REVIEW),
+        ...patch,
+        ...(patch.recommendation ? { abstained: false } : {}),
+      },
+    }));
   };
 
   /** An emptied dropdown or textarea records nothing rather than an empty string. */
@@ -311,7 +320,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
   };
 
   const saveNext = async (): Promise<void> => {
-    if (!current || !roundId || !currentReview.recommendation || saving) return;
+    if (!current || !roundId || (!currentReview.recommendation && !currentReview.abstained) || saving) return;
     setSaving(true);
     setError(null);
     try {
@@ -319,9 +328,10 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
         method: "POST",
         body: JSON.stringify({
           comment: currentReview.comment,
-          criteria_scores: Object.keys(currentReview.criteria).length ? currentReview.criteria : null,
-          recommendation: currentReview.recommendation,
-          score: currentReview.score,
+          criteria_scores: currentReview.abstained ? null : (Object.keys(currentReview.criteria).length ? currentReview.criteria : null),
+          recommendation: currentReview.abstained ? null : currentReview.recommendation,
+          score: currentReview.abstained ? null : currentReview.score,
+          abstained: currentReview.abstained ? 1 : 0,
         }),
       });
       const oldIndex = currentIndex;
@@ -344,6 +354,29 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
       }, ...previous.filter((item) => item.id !== saved.id)]);
       setCurrentId(nextQueue[oldIndex]?.id ?? nextQueue[oldIndex - 1]?.id ?? null);
       setNotice(`${recommendationLabel(currentReview.recommendation)} saved · reopen it any time from Completed`);
+    } catch (reason: unknown) {
+      setError(errorSummary(reason));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveRecusal = async (): Promise<void> => {
+    if (!current || !roundId || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api(`/api/v1/events/${eventId}/rounds/${roundId}/submissions/${current.id}/evaluations`, {
+        method: "POST",
+        body: JSON.stringify({ comment: currentReview.comment, criteria_scores: null, recommendation: null, score: null, abstained: 1 }),
+      });
+      const oldIndex = currentIndex;
+      const nextQueue = queue.filter((item) => item.id !== current.id);
+      const saved = current;
+      setQueue(nextQueue);
+      setCompleted((previous) => [{ ...saved, review: null }, ...previous.filter((item) => item.id !== saved.id)]);
+      setCurrentId(nextQueue[oldIndex]?.id ?? nextQueue[oldIndex - 1]?.id ?? null);
+      setNotice("Conflict recorded · reopen it any time from Completed");
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     } finally {
@@ -480,7 +513,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
               </div>)}
             </div>}
             <label class="review-comment"><span>Committee note (optional)</span><textarea data-reviewer-control="comment" value={currentReview.comment} placeholder="Context for the committee" onInput={(event) => updateReview({ comment: (event.currentTarget as HTMLTextAreaElement).value })} /></label>
-            <button type="button" class="button primary reviewer-save" data-reviewer-control="save-next" disabled={!currentReview.recommendation || saving} onClick={() => void saveNext()}>{saving ? "Saving…" : "Save recommendation & next →"}</button>
+            <div class="review-save-actions"><button type="button" class="button primary reviewer-save" data-reviewer-control="save-next" disabled={!currentReview.recommendation || saving} onClick={() => void saveNext()}>{saving ? "Saving…" : "Save recommendation & next →"}</button><button type="button" class="button reviewer-conflict" data-reviewer-control="declare-conflict" disabled={saving} onClick={() => void saveRecusal()}>Declare conflict</button></div>
             <p class="review-shortcuts">Keyboard: <span class="tabular">A M D</span> recommendation · <span class="tabular">1–5</span> score · <span class="tabular">Enter</span> save &amp; next</p>
           </CardBody>
         </Card>
@@ -494,7 +527,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
           {completed.map((item) => <button type="button" class="reviewer-completed-row" key={item.id} onClick={() => void openDetailFor(item.id)}>
             <span class="completed-mark" aria-hidden="true">✓</span>
             <span class="completed-title">{item.title}</span>
-            <span class="chip">{item.review ? recommendationLabel(item.review.recommendation) : "Recorded"}</span>
+            <span class="chip">{item.review?.abstained ? "Conflict" : item.review ? recommendationLabel(item.review.recommendation) : "Recorded"}</span>
             <span class="completed-open">Reopen →</span>
           </button>)}
         </div>
@@ -515,7 +548,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
               <div class="review-field"><dt>Biography</dt><dd>{detail.blind_mode ? <span class="blind-redaction">Redacted in anonymous review</span> : detail.identity?.bio ?? "Not recorded"}</dd></div>
             </dl></section>
             <section class="reviewer-detail-section"><h3>Attached files · {detail.files.length}</h3>{detail.files.length ? <div class="review-file-list">{detail.files.map((file) => <div class="review-file-row" key={file.id}><span class="review-file-icon">{file.content_type.split("/").pop()?.toUpperCase() ?? "FILE"}</span><div><strong>{file.filename}</strong><span>{file.content_type} · {formatFileSize(file.size_bytes)}</span></div><Chip tone={file.status === "ready" ? "success" : "warning"}>{file.status === "ready" ? "Available" : "Processing"}</Chip></div>)}</div> : <p class="subtle">No files attached to this submission.</p>}</section>
-            {detail.review && <section class="reviewer-detail-section"><h3>Your saved review</h3><div class="saved-review"><strong>{recommendationLabel(detail.review.recommendation)}</strong><span>{detail.review.comment || "No committee note."}</span><small>Saved by reviewer <span class="tabular">{detail.review.actor_id}</span> · {new Date(detail.review.updated_at).toLocaleString()}</small></div>
+            {detail.review && <section class="reviewer-detail-section"><h3>{detail.review.abstained ? "Conflict recorded" : "Your saved review"}</h3><div class="saved-review"><strong>{detail.review.abstained ? "Declared conflict" : recommendationLabel(detail.review.recommendation)}</strong><span>{detail.review.comment || "No committee note."}</span><small>Saved by reviewer <span class="tabular">{detail.review.actor_id}</span> · {new Date(detail.review.updated_at).toLocaleString()}</small></div>
               {detail.review.criteria_scores && Object.keys(detail.review.criteria_scores).length > 0 && <dl class="review-field-grid saved-criteria" data-saved-criteria>
                 {Object.entries(detail.review.criteria_scores).map(([criterionId, value]) => <div class="review-field" key={criterionId}>
                   <dt>{criteria.find((criterion) => criterion.id === criterionId)?.name ?? criterionId}</dt>

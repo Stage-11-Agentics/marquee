@@ -6,6 +6,9 @@ import { defineApiRoute, errorResponses, jsonResponse, type ApiRouteEntry } from
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { comparisonWinCounts, validateComparisonRanking } from "../lib/evaluation-comparisons";
+import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { enqueueOutbox } from "../jobs/mail/outbox";
+import { mergeDataForReviewerReminder } from "../jobs/mail/merge-data";
 import { reviewerCanBeAssignedToSubmission } from "../lib/reviewer-scope";
 import { parseCriterionOptions } from "../lib/rubric-criteria";
 import { selectSubmissionIds, submissionFilterSchema } from "./submissions.queries";
@@ -94,6 +97,7 @@ function normalizeCriteria(criteria: ReadonlyArray<CriterionInput>): NormalizedC
 
 const roundInput = z.object({
   anonymized: z.boolean().default(false),
+  committee_id: z.string().min(1).nullable().optional(),
   closes_at: z.number().int().nullable().optional(),
   criteria: z.array(criterionInput).optional(),
   mode: roundMode.default("scorecard"),
@@ -106,6 +110,7 @@ const roundInput = z.object({
 /** Round PATCH deliberately omits position and criteria: evidence survives settings edits. */
 const roundPatch = z.object({
   anonymized: z.boolean().optional(),
+  committee_id: z.string().min(1).nullable().optional(),
   closes_at: z.number().int().nullable().optional(),
   mode: roundMode.optional(),
   name: z.string().trim().min(1).max(160).optional(),
@@ -128,7 +133,7 @@ const committeeInput = z.object({ name: z.string().trim().min(1).max(160) });
 const memberInput = z.object({ person_id: z.string().min(1), role: z.string().trim().min(1).max(80).default("reviewer") });
 const scopeInput = z.object({ track_ids: z.array(z.string().min(1)).min(1) });
 const distributionAssignmentsInput = z.object({
-  committee_id: z.string().min(1),
+  committee_id: z.string().min(1).optional(),
   mode: assignmentMode,
   reviewer_person_ids: z.array(z.string().min(1)).min(1).optional(),
   submission_ids: z.array(z.string().min(1)).min(1).optional(),
@@ -169,6 +174,7 @@ interface PlanRow {
 
 interface RoundRow {
   anonymized: 0 | 1;
+  committee_id: string | null;
   closes_at: number | null;
   id: string;
   mode: "scorecard" | "comparison";
@@ -233,7 +239,7 @@ async function planForEvent(db: D1Database, eventId: string, planId: string): Pr
 async function roundForEvent(db: D1Database, eventId: string, roundId: string): Promise<RoundRow> {
   const round = await db.prepare(`
     SELECT round.id, round.plan_id, round.position, round.name, round.mode,
-      round.anonymized, round.target_reviews_per_submission, round.opens_at, round.closes_at
+      round.anonymized, round.committee_id, round.target_reviews_per_submission, round.opens_at, round.closes_at
     FROM evaluation_rounds round
     JOIN evaluation_plans plan ON plan.id = round.plan_id
     WHERE round.id = ? AND plan.event_id = ?
@@ -293,7 +299,7 @@ async function reviewersForCommittee(db: D1Database, committeeId: string): Promi
 async function planDetail(db: D1Database, eventId: string, planId: string): Promise<Record<string, unknown>> {
   const plan = await planForEvent(db, eventId, planId);
   const roundsResult = await db.prepare(
-    "SELECT id, plan_id, position, name, mode, anonymized, target_reviews_per_submission, opens_at, closes_at FROM evaluation_rounds WHERE plan_id = ? ORDER BY position, id",
+    "SELECT id, plan_id, position, name, mode, anonymized, committee_id, target_reviews_per_submission, opens_at, closes_at FROM evaluation_rounds WHERE plan_id = ? ORDER BY position, id",
   ).bind(plan.id).all<RoundRow>();
   const rounds = [];
   for (const round of roundsResult.results) {
@@ -302,8 +308,9 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
       db.prepare(`
       SELECT
         COUNT(DISTINCT assignment.submission_id) AS assigned_submissions,
-        COUNT(DISTINCT evaluation.submission_id) AS reviewed_submissions,
-        COUNT(evaluation.id) AS evaluations,
+        COUNT(DISTINCT CASE WHEN evaluation.abstained = 0 THEN evaluation.submission_id END) AS reviewed_submissions,
+        COUNT(DISTINCT CASE WHEN evaluation.abstained = 0 THEN evaluation.id END) AS evaluations,
+        COUNT(DISTINCT CASE WHEN evaluation.abstained = 1 THEN evaluation.id END) AS recusals,
         (SELECT COUNT(*) FROM submissions submission WHERE submission.event_id = ? AND submission.status IN ('submitted', 'in_review') AND submission.bypass_evaluation = 0) AS submission_count
       FROM round_assignments assignment
       LEFT JOIN evaluations evaluation
@@ -329,6 +336,7 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
         reviewed_submissions: Number(progress?.reviewed_submissions ?? 0),
         submission_count: Number(progress?.submission_count ?? 0),
         comparisons: Number(comparisonCount?.count ?? 0),
+        recusals: Number(progress?.recusals ?? 0),
       },
       promotions: promotions.results,
     });
@@ -362,11 +370,12 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
   }
 
   const summary = await db.prepare(`
-    SELECT COUNT(evaluation.id) AS evaluations,
-      COUNT(DISTINCT evaluation.submission_id) AS submissions_with_reviews,
-      MAX(evaluation.score) AS highest_score,
-      COUNT(DISTINCT CASE WHEN evaluation.score IS NOT NULL AND evaluation.score != (
-        SELECT AVG(other.score) FROM evaluations other WHERE other.round_id = evaluation.round_id AND other.score IS NOT NULL
+    SELECT COUNT(CASE WHEN evaluation.abstained = 0 THEN evaluation.id END) AS evaluations,
+      COUNT(CASE WHEN evaluation.abstained = 1 THEN evaluation.id END) AS recusals,
+      COUNT(DISTINCT CASE WHEN evaluation.abstained = 0 THEN evaluation.submission_id END) AS submissions_with_reviews,
+      MAX(CASE WHEN evaluation.abstained = 0 THEN evaluation.score END) AS highest_score,
+      COUNT(DISTINCT CASE WHEN evaluation.abstained = 0 AND evaluation.score IS NOT NULL AND evaluation.score != (
+        SELECT AVG(other.score) FROM evaluations other WHERE other.round_id = evaluation.round_id AND other.abstained = 0 AND other.score IS NOT NULL
       ) THEN evaluation.submission_id END) AS wide_spread
     FROM evaluations evaluation
     JOIN evaluation_rounds round ON round.id = evaluation.round_id
@@ -382,6 +391,7 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
       highest_score: summary?.highest_score === null || summary?.highest_score === undefined ? null : Number(summary.highest_score),
       submissions_with_reviews: Number(summary?.submissions_with_reviews ?? 0),
       wide_spread: Number(summary?.wide_spread ?? 0),
+      recusals: Number(summary?.recusals ?? 0),
     },
   };
 }
@@ -435,11 +445,12 @@ const createPlan = defineApiRoute(
       "INSERT INTO evaluation_plans (id, event_id, name, instructions, scale_min, scale_max, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(planId, eventId, body.name, body.instructions, body.scale_min ?? null, body.scale_max ?? null, body.status, now, now)];
     for (const [index, round] of (body.rounds ?? []).entries()) {
+      if (round.committee_id) await committeeForEvent(context.env.DB, eventId, round.committee_id);
       const roundId = crypto.randomUUID();
       const position = round.position ?? index;
       statements.push(context.env.DB.prepare(
-        "INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, target_reviews_per_submission, opens_at, closes_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).bind(roundId, planId, position, round.name, round.mode, round.anonymized ? 1 : 0, round.target_reviews_per_submission, round.opens_at ?? null, round.closes_at ?? null, now, now));
+        "INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, committee_id, target_reviews_per_submission, opens_at, closes_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).bind(roundId, planId, position, round.name, round.mode, round.anonymized ? 1 : 0, round.committee_id ?? null, round.target_reviews_per_submission, round.opens_at ?? null, round.closes_at ?? null, now, now));
       for (const criterion of normalizeCriteria(round.criteria ?? [])) {
         statements.push(context.env.DB.prepare(
           "INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -513,6 +524,7 @@ const addRound = defineApiRoute(
     requireProgram(context, eventId, true);
     await planForEvent(context.env.DB, eventId, planId);
     const body = context.req.valid("json");
+    if (body.committee_id) await committeeForEvent(context.env.DB, eventId, body.committee_id);
     if (body.criteria) assertCriteriaTotal(body.criteria);
     const count = await context.env.DB.prepare("SELECT COUNT(*) AS count FROM evaluation_rounds WHERE plan_id = ?").bind(planId).first<{ count: number }>();
     if (Number(count?.count ?? 0) >= 2) throw ApiError.unprocessable("an evaluation plan has exactly one or two rounds", "position");
@@ -522,8 +534,8 @@ const addRound = defineApiRoute(
     const now = Date.now();
     const roundId = crypto.randomUUID();
     const statements = [context.env.DB.prepare(
-      "INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, target_reviews_per_submission, opens_at, closes_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).bind(roundId, planId, position, body.name, body.mode, body.anonymized ? 1 : 0, body.target_reviews_per_submission, body.opens_at ?? null, body.closes_at ?? null, now, now)];
+      "INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, committee_id, target_reviews_per_submission, opens_at, closes_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).bind(roundId, planId, position, body.name, body.mode, body.anonymized ? 1 : 0, body.committee_id ?? null, body.target_reviews_per_submission, body.opens_at ?? null, body.closes_at ?? null, now, now)];
     for (const criterion of normalizeCriteria(body.criteria ?? [])) statements.push(context.env.DB.prepare(
       "INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(criterion.id ?? crypto.randomUUID(), roundId, criterion.name, criterion.kind, criterion.options, criterion.scale_min, criterion.scale_max, criterion.weight_pct, criterion.position, now, now));
@@ -549,6 +561,7 @@ const updateRound = defineApiRoute(
     requireProgram(context, eventId, true);
     const current = await roundForEvent(context.env.DB, eventId, roundId);
     const body = context.req.valid("json");
+    if (body.committee_id) await committeeForEvent(context.env.DB, eventId, body.committee_id);
     const opensAt = body.opens_at === undefined ? current.opens_at : body.opens_at;
     const closesAt = body.closes_at === undefined ? current.closes_at : body.closes_at;
     if (opensAt !== null && closesAt !== null && opensAt !== undefined && closesAt !== undefined && opensAt > closesAt) {
@@ -565,6 +578,7 @@ const updateRound = defineApiRoute(
     }
     if (body.opens_at !== undefined) { updates.push("opens_at = ?"); values.push(body.opens_at); }
     if (body.closes_at !== undefined) { updates.push("closes_at = ?"); values.push(body.closes_at); }
+    if (body.committee_id !== undefined) { updates.push("committee_id = ?"); values.push(body.committee_id); }
     updates.push("updated_at = ?");
     values.push(Date.now(), roundId, eventId);
     await context.env.DB.prepare(`
@@ -766,8 +780,10 @@ const distributeAssignments = defineApiRoute(
       ).bind(id, roundId, body.submission_id, body.reviewer_person_id, now, now).run();
       return context.json({ id, round_id: roundId, submission_id: body.submission_id, reviewer_person_id: body.reviewer_person_id, status: "assigned", created: true }, 201);
     }
-    await committeeForEvent(context.env.DB, eventId, body.committee_id);
-    const committeeReviewers = await reviewersForCommittee(context.env.DB, body.committee_id);
+    const committeeId = body.committee_id ?? round.committee_id;
+    if (!committeeId) throw ApiError.unprocessable("select a reviewer pool for this round", "committee_id");
+    await committeeForEvent(context.env.DB, eventId, committeeId);
+    const committeeReviewers = await reviewersForCommittee(context.env.DB, committeeId);
     const reviewers = body.reviewer_person_ids
       ? committeeReviewers.filter((reviewer) => body.reviewer_person_ids?.includes(reviewer.id))
       : committeeReviewers;
@@ -841,7 +857,12 @@ const listRoundAssignments = defineApiRoute(
            AND covered.reviewer_person_id = assignment.reviewer_person_id) AS assigned_count,
         (SELECT COUNT(*) FROM evaluations evaluation
          WHERE evaluation.round_id = assignment.round_id
-           AND evaluation.reviewer_person_id = assignment.reviewer_person_id) AS reviewed_count
+           AND evaluation.reviewer_person_id = assignment.reviewer_person_id
+           AND evaluation.abstained = 0) AS reviewed_count,
+        (SELECT COUNT(*) FROM evaluations evaluation
+         WHERE evaluation.round_id = assignment.round_id
+           AND evaluation.reviewer_person_id = assignment.reviewer_person_id
+           AND evaluation.abstained = 1) AS recusal_count
       FROM round_assignments assignment
       LEFT JOIN people person ON person.id = assignment.reviewer_person_id
       WHERE ${clauses.join(" AND ")}
@@ -851,7 +872,74 @@ const listRoundAssignments = defineApiRoute(
       ...row,
       assigned_count: Number(row.assigned_count ?? 0),
       reviewed_count: Number(row.reviewed_count ?? 0),
+      recusal_count: Number(row.recusal_count ?? 0),
+      outstanding_count: Math.max(0, Number(row.assigned_count ?? 0) - Number(row.reviewed_count ?? 0) - Number(row.recusal_count ?? 0)),
     })) }, 200);
+  },
+);
+
+const remindRoundReviewer = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/rounds/{roundId}/reviewers/{personId}/remind",
+    operationId: "remindRoundReviewer",
+    summary: "Queue a reviewer reminder for outstanding assignments",
+    tags: ["Evaluation"],
+    request: { params: roundParams.extend({ personId: z.string().min(1) }) },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 202: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, roundId, personId } = context.req.valid("param");
+    requireProgram(context, eventId, true);
+    const round = await roundForEvent(context.env.DB, eventId, roundId);
+    const reviewer = await context.env.DB.prepare(`
+      SELECT person.id, person.name, person.email,
+        (SELECT COUNT(*) FROM round_assignments assignment
+         WHERE assignment.round_id = ? AND assignment.reviewer_person_id = person.id) AS assigned_count,
+        (SELECT COUNT(*) FROM evaluations evaluation
+         WHERE evaluation.round_id = ? AND evaluation.reviewer_person_id = person.id AND evaluation.abstained = 0) AS reviewed_count,
+        (SELECT COUNT(*) FROM evaluations evaluation
+         WHERE evaluation.round_id = ? AND evaluation.reviewer_person_id = person.id AND evaluation.abstained = 1) AS recusal_count
+      FROM people person
+      JOIN memberships membership
+        ON membership.person_id = person.id
+       AND membership.event_id = ?
+       AND membership.role = 'reviewer'
+      WHERE person.id = ?
+    `).bind(roundId, roundId, roundId, eventId, personId).first<{
+      assigned_count: number;
+      email: string;
+      id: string;
+      name: string;
+      recusal_count: number;
+      reviewed_count: number;
+    }>();
+    if (!reviewer) throw ApiError.notFound("reviewer not found");
+    const outstanding = Math.max(0, Number(reviewer.assigned_count) - Number(reviewer.reviewed_count) - Number(reviewer.recusal_count));
+    if (outstanding === 0) throw ApiError.conflict("reviewer has no outstanding assignments");
+    const outbox = await enqueueOutbox({
+      db: context.env.DB,
+      entityId: `${roundId}:${personId}`,
+      eventId,
+      personId: reviewer.id,
+      templateKey: "reviewer_reminder",
+      toEmail: reviewer.email,
+      data: mergeDataForReviewerReminder({
+        email: reviewer.email,
+        name: reviewer.name,
+        outstanding,
+        roundName: round.name,
+      }),
+    });
+    if (outbox.inserted) await enqueueMailMessage(context.env.MAIL_QUEUE, outbox.id);
+    return context.json({
+      outbox_id: outbox.id,
+      outstanding,
+      queued: outbox.inserted,
+      reviewer_id: reviewer.id,
+      round_id: round.id,
+    }, 202);
   },
 );
 
@@ -1085,6 +1173,7 @@ export const apiRoutes = [
   replaceReviewerScopes,
   distributeAssignments,
   listRoundAssignments,
+  remindRoundReviewer,
   removeRoundAssignment,
   promoteRound,
   listRoundComparisons,

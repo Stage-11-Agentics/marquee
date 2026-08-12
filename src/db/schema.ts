@@ -429,6 +429,7 @@ export interface EvaluationPlanRow extends MutableRecord {
 
 export interface EvaluationRoundRow extends MutableRecord {
   anonymized: 0 | 1;
+  committee_id: Id | null;
   closes_at: EpochMilliseconds | null;
   mode: EvaluationRoundMode;
   name: string;

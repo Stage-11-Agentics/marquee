@@ -56,6 +56,8 @@
 .evaluation-alert.success { background: var(--success-soft); border-color: #b6dcc7; color: #0c6b41; }
 .evaluation-alert.alarm { background: var(--danger-soft); border-color: #e6b8b2; color: #8f2118; }
 .evaluation-alert button { background: none; border: 0; color: inherit; font-size: 17px; line-height: 1; }
+.round-recusal-status { color: var(--danger, #8f2118); font: 11px/1.4 var(--mono); min-height: 16px; }
+.committee-person-action { align-items: center; display: flex; justify-content: flex-end; min-width: 88px; }
 .inline-empty { align-items: start; color: var(--muted); display: grid; font-size: 12px; gap: 12px; min-height: 58px; padding: 10px 0; }
 .eval-dialog-backdrop { align-items: center; background: rgba(16, 24, 32, .46); display: grid; inset: 0; padding: 18px; place-items: center; position: fixed; z-index: 600; }
 .eval-dialog { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); max-height: calc(100vh - 36px); max-width: 620px; overflow: auto; width: 100%; }
