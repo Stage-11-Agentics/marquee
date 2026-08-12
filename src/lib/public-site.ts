@@ -298,6 +298,27 @@ function eventDays(event: PublicEvent): PublicDay[] {
   return days;
 }
 
+/**
+ * Every facet accepts an id or a display name — `?track=Agents` and
+ * `?track=trk_agents` both narrow the list — so the value handed back to the
+ * controls has to be resolved to the id the `<option>`s carry. Without this a
+ * shared name-form link filters the agenda while the select still reads
+ * "All tracks", and the control describes a view nobody is looking at. An
+ * unresolvable value is returned untouched: it matches no option, which is the
+ * honest rendering of a facet that matched nothing.
+ */
+function canonicalFacet(
+  value: string | null | undefined,
+  options: readonly { id: string; name: string }[],
+): string | null {
+  const wanted = value?.trim().toLocaleLowerCase();
+  if (!wanted) return null;
+  const match = options.find(
+    (option) => option.id.toLocaleLowerCase() === wanted || option.name.toLocaleLowerCase() === wanted,
+  );
+  return match?.id ?? value?.trim() ?? null;
+}
+
 function zonedParts(timestamp: number, timezone: string): { date: string; time: string } {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
@@ -659,6 +680,7 @@ export async function loadPublicAgenda(
   const query = sessionRowsQuery(event, filters);
   const rows = await database.prepare(query.sql).bind(...query.bindings).all<PublicSessionRow>();
   const allSessions = toPublicSessions(rows.results, event, venue.showComparison);
+  const days = eventDays(event);
   const selectedDay = filters.allDays || !filters.day || filters.day === "all" ? null : filters.day;
   const sessions = selectedDay
     ? allSessions.filter((session) => session.date === selectedDay || session.day === selectedDay)
@@ -666,16 +688,16 @@ export async function loadPublicAgenda(
   return {
     event,
     venue,
-    days: eventDays(event),
+    days,
     tracks: catalog,
     formats,
     rooms,
     sessions,
     filters: {
-      day: selectedDay ?? "all",
-      track: filters.track ?? null,
-      format: filters.format ?? null,
-      room: filters.room ?? null,
+      day: canonicalFacet(selectedDay, days.map((day) => ({ id: day.id, name: day.label }))) ?? "all",
+      track: canonicalFacet(filters.track, catalog),
+      format: canonicalFacet(filters.format, formats),
+      room: canonicalFacet(filters.room, rooms),
       q: filters.q?.trim() || null,
       status: filters.status ?? null,
     },
@@ -947,7 +969,15 @@ export async function loadPublicEmbed(
     sessions: agenda.sessions,
     speakers: [...speakersById.values()].sort((left, right) => left.name.localeCompare(right.name)),
     cfp: null,
-    filters: { track, format, room, status, layout: resolved.kind === "speakers" ? layout : null },
+    // The agenda resolved these against the catalogs, so a name-form value
+    // reaches the embed's controls as the id its options carry.
+    filters: {
+      track: agenda.filters.track,
+      format: agenda.filters.format,
+      room: agenda.filters.room,
+      status,
+      layout: resolved.kind === "speakers" ? layout : null,
+    },
   };
 }
 
