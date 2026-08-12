@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { publicSessionCalendar } from "../lib/public-calendar";
 import {
   loadPublicAgenda,
   loadPublicEmbed,
@@ -80,6 +81,52 @@ const getPublicSession = defineApiRoute(
   },
 );
 
+/**
+ * The extension sits on a STATIC final segment, not on the parameter.
+ * `{slug}.ics` would be registered as the Hono pattern `:slug.ics`, which is a
+ * parameter literally named `slug.ics` that matches any single segment — it
+ * would shadow `GET /api/v1/public/sessions/{slug}` above and fail its own
+ * parameter validation. `/{slug}/calendar.ics` is unambiguous, and calendar
+ * clients still get the extension they sniff for.
+ */
+const getPublicSessionCalendar = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/public/sessions/{slug}/calendar.ics",
+    operationId: "getPublicSessionCalendar",
+    summary: "Download a published session as a calendar file",
+    description: "Anonymous single-session VCALENDAR (METHOD:PUBLISH) for the published session permalink.",
+    tags: ["Public"],
+    request: { params: publicSlugParams, query: publicQuery },
+    policy: { auth: { kind: "public" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: {
+      200: { content: { "text/calendar": { schema: z.string() } }, description: "The session as a VCALENDAR" },
+      ...errorResponses([404, 429, 500]),
+    },
+  },
+  async (context) => {
+    const query = context.req.valid("query");
+    const result = await loadPublicSession(
+      context.env.DB,
+      context.req.valid("param").slug,
+      query.event ?? query.event_slug,
+    );
+    if (!result) throw ApiError.notFound("public session not found");
+    const body = publicSessionCalendar({
+      calendarName: result.session.title,
+      event: result.event,
+      now: Date.now(),
+      origin: new URL(context.req.url).origin,
+      sessions: [result.session],
+    });
+    return context.body(body, 200, {
+      "Cache-Control": "public, max-age=300",
+      "Content-Disposition": `attachment; filename="${encodeURIComponent(result.session.slug)}.ics"`,
+      "Content-Type": "text/calendar; charset=utf-8",
+    }) as never;
+  },
+);
+
 const getPublicSpeaker = defineApiRoute(
   {
     method: "get",
@@ -144,4 +191,10 @@ const getPublicEmbed = defineApiRoute(
   },
 );
 
-export const apiRoutes = [getPublicAgenda, getPublicSession, getPublicSpeaker, getPublicEmbed];
+export const apiRoutes = [
+  getPublicAgenda,
+  getPublicSession,
+  getPublicSessionCalendar,
+  getPublicSpeaker,
+  getPublicEmbed,
+];

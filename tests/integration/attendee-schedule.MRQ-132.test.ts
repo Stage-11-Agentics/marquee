@@ -1,0 +1,427 @@
+import { beforeEach, expect, test } from "vitest";
+
+import { app, type Env } from "../../src/index";
+import { applyMigrations, env } from "./apply-migrations";
+
+const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
+const EVENT_ID = "evt_mrq132_sched";
+const EVENT_SLUG = "sched-conf";
+
+/**
+ * Real-ugly data on purpose: commas and semicolons are RFC 5545 separators, the
+ * em dash and diacritics are multi-octet (line folding counts octets, not
+ * characters), and the abstract carries hard newlines. A calendar file that
+ * only survives pretty titles is not a calendar file.
+ */
+const TORTURE_TITLE = 'Rooms, Agents; Tools — Žofia\'s "Live" Demo';
+const TORTURE_ABSTRACT = "First line, with a comma.\nSecond line; with a semicolon.\r\nThird line — Žofia, Dele, and the Ășes.";
+
+const SHELL = `<!doctype html><html><head><title>Marquee</title></head><body><div id="app"></div></body></html>`;
+const assets = { fetch: async () => new Response(SHELL, { headers: { "content-type": "text/html" } }) } as unknown as Fetcher;
+
+function runtimeEnv(): Env {
+  return { ...env, ASSETS: assets } as unknown as Env;
+}
+
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  return app.request(path, init, runtimeEnv());
+}
+
+/** Every physical line of a VCALENDAR is CRLF-terminated and at most 75 octets. */
+function icsLines(body: string): string[] {
+  expect(body.endsWith("\r\n")).toBe(true);
+  const lines = body.slice(0, -2).split("\r\n");
+  const encoder = new TextEncoder();
+  for (const line of lines) expect(encoder.encode(line).byteLength).toBeLessThanOrEqual(75);
+  return lines;
+}
+
+/** Undo RFC 5545 folding so a property value can be asserted whole. */
+function unfold(body: string): string {
+  return body.replaceAll("\r\n ", "");
+}
+
+beforeEach(async () => {
+  await applyMigrations();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
+      .bind("org_mrq132", "Schedule Conference", "schedule-conference", NOW, NOW),
+    env.DB.prepare(`INSERT INTO events (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, accent, status, demo_mode, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', 1, ?, ?)`)
+      .bind(EVENT_ID, "org_mrq132", "Schedule Conference 2026", EVENT_SLUG, "A published program", "2026-10-13", "2026-10-15", "America/New_York", "Sheraton", "#0b6a72", NOW, NOW),
+    env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind("track-agents", EVENT_ID, "Agents", "#db4c3f", 0, NOW, NOW),
+    env.DB.prepare("INSERT INTO formats (id, event_id, name, default_duration_min, min_duration_min, max_duration_min, position, created_at, updated_at) VALUES (?, ?, ?, 45, 30, 60, ?, ?, ?)")
+      .bind("format-talk", EVENT_ID, "Talk", 0, NOW, NOW),
+    env.DB.prepare("INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_note, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)")
+      .bind("building-sheraton", EVENT_ID, "Sheraton", "811 7th Ave, New York, NY 10019", 40.7648, -73.9808, "Photo ID required at the main entrance.", NOW, NOW),
+    env.DB.prepare("INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_note, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)")
+      .bind("building-marquis", EVENT_ID, "Marriott Marquis", "1535 Broadway, New York, NY 10036", 40.7590, -73.9855, "Use the Broadway lobby.", NOW, NOW),
+    env.DB.prepare("INSERT INTO rooms (id, event_id, building_id, name, capacity, position, created_at, updated_at) VALUES (?, ?, ?, ?, 300, ?, ?, ?)")
+      .bind("room-metropolitan", EVENT_ID, "building-sheraton", "Metropolitan Ballroom", 0, NOW, NOW),
+    env.DB.prepare("INSERT INTO rooms (id, event_id, building_id, name, capacity, position, created_at, updated_at) VALUES (?, ?, ?, ?, 120, ?, ?, ?)")
+      .bind("room-marquis-b", EVENT_ID, "building-marquis", "Marquis Room B", 1, NOW, NOW),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)")
+      .bind("person-priya", "org_mrq132", "priya@example.com", "Priya Raghunathan", "Chief Scientist", "Continual AI", "Keynote biography", NOW, NOW),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)")
+      .bind("person-zofia", "org_mrq132", "zofia@example.com", "Žofia Königová", "Staff Engineer", "Ledger Labs", "Torture biography", NOW, NOW),
+    // Keynote — Tuesday 09:00 EDT.
+    env.DB.prepare(`INSERT INTO submissions (id, event_id, kind, title, abstract, status, format_id, primary_track_id, origin, submitter_person_id, search_blob, created_at, updated_at)
+      VALUES (?, ?, 'abstract', ?, ?, 'accepted', ?, ?, 'public', ?, ?, ?, ?)`)
+      .bind("sub-keynote", EVENT_ID, "The Year Agents Went to Work", "A keynote abstract.", "format-talk", "track-agents", "person-priya", "The Year Agents Went to Work Priya", NOW, NOW),
+    // The ruled conflict pair — Wednesday 14:00 and 14:30, different buildings.
+    env.DB.prepare(`INSERT INTO submissions (id, event_id, kind, title, abstract, status, format_id, primary_track_id, origin, submitter_person_id, search_blob, created_at, updated_at)
+      VALUES (?, ?, 'abstract', ?, ?, 'accepted', ?, ?, 'public', ?, ?, ?, ?)`)
+      .bind("sub-memory", EVENT_ID, "Memory Architectures", "A memory abstract.", "format-talk", "track-agents", "person-priya", "Memory Architectures Priya", NOW, NOW),
+    env.DB.prepare(`INSERT INTO submissions (id, event_id, kind, title, abstract, status, format_id, primary_track_id, origin, submitter_person_id, search_blob, created_at, updated_at)
+      VALUES (?, ?, 'abstract', ?, ?, 'accepted', ?, ?, 'public', ?, ?, ?, ?)`)
+      .bind("sub-judges", EVENT_ID, TORTURE_TITLE, TORTURE_ABSTRACT, "format-talk", "track-agents", "person-zofia", "Judges Zofia", NOW, NOW),
+    // Accepted but never published to the agenda: must not appear anywhere public.
+    env.DB.prepare(`INSERT INTO submissions (id, event_id, kind, title, abstract, status, format_id, primary_track_id, origin, submitter_person_id, search_blob, created_at, updated_at)
+      VALUES (?, ?, 'abstract', ?, ?, 'accepted', ?, ?, 'public', ?, ?, ?, ?)`)
+      .bind("sub-unpublished", EVENT_ID, "Unpublished Session", "Not on the public agenda.", "format-talk", "track-agents", "person-priya", "Unpublished Session", NOW, NOW),
+    env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)")
+      .bind("st-keynote", "sub-keynote", "track-agents", NOW, NOW),
+    env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)")
+      .bind("st-memory", "sub-memory", "track-agents", NOW, NOW),
+    env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)")
+      .bind("st-judges", "sub-judges", "track-agents", NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, 'confirmed', ?, ?)")
+      .bind("par-keynote", "sub-keynote", "person-priya", NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, 'confirmed', ?, ?)")
+      .bind("par-memory", "sub-memory", "person-priya", NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, 'confirmed', ?, ?)")
+      .bind("par-judges", "sub-judges", "person-zofia", NOW, NOW),
+    env.DB.prepare(`INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
+      VALUES (?, ?, ?, 'session', ?, 45, ?, ?, 1, ?, ?)`)
+      .bind("agenda-keynote", EVENT_ID, "sub-keynote", Date.UTC(2026, 9, 13, 13), "room-metropolitan", "track-agents", NOW, NOW),
+    env.DB.prepare(`INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
+      VALUES (?, ?, ?, 'session', ?, 45, ?, ?, 1, ?, ?)`)
+      .bind("agenda-memory", EVENT_ID, "sub-memory", Date.UTC(2026, 9, 14, 18), "room-metropolitan", "track-agents", NOW, NOW),
+    env.DB.prepare(`INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
+      VALUES (?, ?, ?, 'session', ?, 45, ?, ?, 1, ?, ?)`)
+      .bind("agenda-judges", EVENT_ID, "sub-judges", Date.UTC(2026, 9, 14, 18, 30), "room-marquis-b", "track-agents", NOW, NOW),
+    env.DB.prepare(`INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
+      VALUES (?, ?, ?, 'session', ?, 45, ?, ?, 0, ?, ?)`)
+      .bind("agenda-unpublished", EVENT_ID, "sub-unpublished", Date.UTC(2026, 9, 15, 14), "room-metropolitan", "track-agents", NOW, NOW),
+  ]);
+});
+
+test("CONTRACT · MRQ-132 a published session downloads as a calendar file the extension-suffixed sibling route cannot shadow", async () => {
+  const response = await request(`/api/v1/public/sessions/the-year-agents-went-to-work/calendar.ics?event=${EVENT_SLUG}`);
+  const body = await response.text();
+
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toContain("text/calendar");
+  expect(response.headers.get("content-disposition")).toContain("the-year-agents-went-to-work.ics");
+
+  const lines = icsLines(body);
+  expect(lines[0]).toBe("BEGIN:VCALENDAR");
+  expect(lines.at(-1)).toBe("END:VCALENDAR");
+  expect(lines).toContain("METHOD:PUBLISH");
+  expect(lines).toContain("TZID:America/New_York");
+  expect(lines.filter((line) => line === "BEGIN:VEVENT")).toHaveLength(1);
+  expect(lines).toContain("UID:sub-keynote@marquee.stage11.dev");
+  // 13:00 UTC in October is 09:00 in New York — a floating local time with a TZID.
+  expect(lines).toContain("DTSTART;TZID=America/New_York:20261013T090000");
+  expect(lines).toContain("DTEND;TZID=America/New_York:20261013T094500");
+  expect(unfold(body)).toContain("LOCATION:Metropolitan Ballroom · Sheraton\\, 811 7th Ave\\, New York\\, NY 10019");
+
+  // The JSON sibling still answers on the bare slug; the ICS route does not eat it.
+  const json = await request(`/api/v1/public/sessions/the-year-agents-went-to-work?event=${EVENT_SLUG}`);
+  expect(json.status).toBe(200);
+  expect(json.headers.get("content-type")).toContain("application/json");
+  expect(await json.json<{ session: { id: string } }>()).toMatchObject({ session: { id: "sub-keynote" } });
+});
+
+test("CONTRACT · MRQ-132 calendar text is RFC 5545-escaped and folded, and unpublished sessions have no calendar at all", async () => {
+  const response = await request(`/api/v1/public/sessions/rooms-agents-tools-zofia-s-live-demo/calendar.ics?event=${EVENT_SLUG}`);
+  const body = await response.text();
+  expect(response.status).toBe(200);
+  const whole = unfold(icsLines(body).join("\r\n"));
+
+  expect(whole).toContain('SUMMARY:Rooms\\, Agents\\; Tools — Žofia\'s "Live" Demo');
+  // Hard newlines become the literal escape, never a real line break mid-property.
+  expect(whole).toContain("\\nSecond line\\; with a semicolon.\\nThird line");
+  expect(whole).toContain("DESCRIPTION:With Žofia Königová.");
+
+  const unpublished = await request(`/api/v1/public/sessions/unpublished-session/calendar.ics?event=${EVENT_SLUG}`);
+  expect(unpublished.status).toBe(404);
+  expect(await unpublished.json<{ error: { code: string } }>()).toMatchObject({ error: { code: "not_found" } });
+
+  const unknown = await request(`/api/v1/public/sessions/no-such-session/calendar.ics?event=${EVENT_SLUG}`);
+  expect(unknown.status).toBe(404);
+});
+
+test("AC-83 · MRQ-132 every card ships a star in a reserved slot and the interval hooks a conflict is made of", async () => {
+  const response = await request(`/agenda?event=${EVENT_SLUG}`);
+  const body = await response.text();
+  expect(response.status).toBe(200);
+
+  // The keynote starts 13:00 UTC and runs 45 minutes.
+  expect(body).toContain(`data-public-session-start="${Date.UTC(2026, 9, 13, 13)}"`);
+  expect(body).toContain(`data-public-session-end="${Date.UTC(2026, 9, 13, 13) + 45 * 60_000}"`);
+  expect(body).toContain('data-public-session-room="Metropolitan Ballroom · Sheraton"');
+  expect(body).toContain('data-public-session-speakers="Priya Raghunathan"');
+  // State-unknown until the browser answers, in a slot that already exists.
+  expect(body).toContain('data-schedule-star="sub-keynote" aria-pressed="false"');
+  expect(body.match(/class="star-btn"/g) ?? []).toHaveLength(3);
+  // One tap from everywhere: the segmented pair and its fixed-width count.
+  expect(body).toContain('data-schedule-view="agenda"');
+  expect(body).toContain('data-schedule-view="mine"');
+  expect(body).toContain('<span class="count num" data-schedule-count="true">0</span>');
+  expect(body).toContain(`href="/agenda/agents?event=${EVENT_SLUG}"`);
+});
+
+test("CONTRACT · MRQ-132 the itinerary view is a URL, ignores facets, and reserves every slot the script fills", async () => {
+  // A facet in the URL must not survive into the itinerary: an itinerary built
+  // from a filtered program would count a fraction of the attendee's picks.
+  const response = await request(`/agenda?event=${EVENT_SLUG}&view=mine&day=2026-10-13&track=track-agents&q=memory`);
+  const body = await response.text();
+  expect(response.status).toBe(200);
+  expect(body).toContain("<h1>My schedule</h1>");
+  expect(body).toContain("Your itinerary · Schedule Conference 2026");
+  expect(body).toContain('data-schedule-summary="true" hidden');
+  expect(body).toContain('data-schedule-glance="true" hidden');
+  expect(body).toContain('data-schedule-empty="true" hidden');
+  expect(body).toContain("Nothing starred yet");
+  expect(body).toContain('data-schedule-sheet="phone"');
+  expect(body).toContain('data-schedule-sheet="share"');
+  expect(body).toContain('data-schedule-sheet="brief"');
+  // Every published session is present for the script to filter down to.
+  expect(body).toContain('data-public-session-id="sub-keynote"');
+  expect(body).toContain('data-public-session-id="sub-memory"');
+  expect(body).toContain('data-public-session-id="sub-judges"');
+  expect(body).not.toContain('data-public-session-id="sub-unpublished"');
+  expect(body).toContain("needs JavaScript");
+
+  // The agenda view keeps its facets exactly as before.
+  const filtered = await request(`/agenda?event=${EVENT_SLUG}&q=memory`);
+  const filteredBody = await filtered.text();
+  expect(filteredBody).toContain('data-public-session-id="sub-memory"');
+  expect(filteredBody).not.toContain('data-public-session-id="sub-keynote"');
+});
+
+test("CONTRACT · MRQ-132 the agent guide is a page an agent can fetch, not a dialog it cannot open", async () => {
+  const response = await request(`/agenda/agents?event=${EVENT_SLUG}`);
+  const body = await response.text();
+  expect(response.status).toBe(200);
+  expect(body).toContain("<h1>For agents</h1>");
+  // Every endpoint of the loop, named on the page a human is pointed at.
+  expect(body).toContain("POST /api/v1/public/schedules");
+  expect(body).toContain("GET  /api/v1/public/schedules/{code}");
+  expect(body).toContain("PUT  /api/v1/public/schedules/{code}");
+  expect(body).toContain("/api/v1/public/schedules/{code}/calendar.ics");
+  expect(body).toContain("/api/v1/public/sessions/{slug}/calendar.ics");
+  expect(body).toContain("X-Schedule-Write-Key");
+  // The card hook contract is documented where an agent driving the UI looks.
+  expect(body).toContain("data-public-session-id");
+  expect(body).toContain("data-schedule-star");
+
+  const missingEvent = await request("/agenda/agents?event=no-such-event");
+  expect(missingEvent.status).toBe(404);
+});
+
+interface CreatedSchedule {
+  code: string;
+  writeKey: string;
+  urls: { share: string; sync: string; webcal: string; ics: string; json: string };
+  sessions: Array<{ id: string }>;
+  overlaps: Array<[string, string]>;
+}
+
+async function createSchedule(sessionIds: string[]): Promise<Response> {
+  return request("/api/v1/public/schedules", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventSlug: EVENT_SLUG, sessionIds }),
+  });
+}
+
+test("CONTRACT · MRQ-132 a set of sessions becomes a code, and the code answers with every URL it powers", async () => {
+  const created = await createSchedule(["sub-memory", "sub-keynote"]);
+  expect(created.status).toBe(201);
+  const payload = await created.json<CreatedSchedule>();
+
+  // ≥64 bits of entropy, in an alphabet that survives being read aloud.
+  expect(payload.code).toMatch(/^MQ-[0-9A-HJKMNP-TV-Z]{13}$/);
+  expect(payload.writeKey).toMatch(/^[0-9a-f]{32}$/);
+  // Self-describing: an agent never string-builds one of these.
+  expect(payload.urls.share).toContain(`/agenda?event=${EVENT_SLUG}&sched=${payload.code}`);
+  expect(payload.urls.sync).toBe(`${payload.urls.share}#k=${payload.writeKey}`);
+  expect(payload.urls.webcal).toBe(`webcal://localhost/api/v1/public/schedules/${payload.code}/calendar.ics`);
+  expect(payload.urls.ics).toContain(`/api/v1/public/schedules/${payload.code}/calendar.ics`);
+  // Time order, not the order they were starred in.
+  expect(payload.sessions.map((session) => session.id)).toEqual(["sub-keynote", "sub-memory"]);
+
+  const read = await request(payload.urls.json.replace("http://localhost", ""));
+  expect(read.status).toBe(200);
+  const view = await read.json<CreatedSchedule & { event: { slug: string } }>();
+  expect(view.event.slug).toBe(EVENT_SLUG);
+  expect(view.sessions.map((session) => session.id)).toEqual(["sub-keynote", "sub-memory"]);
+  // The read side never carries the key, in any form.
+  expect(JSON.stringify(view)).not.toContain(payload.writeKey);
+
+  const unknown = await request("/api/v1/public/schedules/MQ-0000000000000");
+  expect(unknown.status).toBe(404);
+  const malformed = await request("/api/v1/public/schedules/not-a-code");
+  expect(malformed.status).toBe(400);
+});
+
+test("CONTRACT · MRQ-132 the code reads, the key writes, and neither can reach another conference's sessions", async () => {
+  const created = await createSchedule(["sub-keynote"]);
+  const { code, writeKey } = await created.json<CreatedSchedule>();
+
+  const wrongKey = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": "0".repeat(32) },
+    body: JSON.stringify({ sessionIds: ["sub-memory"] }),
+  });
+  expect(wrongKey.status).toBe(403);
+  const stillOriginal = await request(`/api/v1/public/schedules/${code}`);
+  expect((await stillOriginal.json<CreatedSchedule>()).sessions.map((session) => session.id)).toEqual(["sub-keynote"]);
+
+  const updated = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: ["sub-memory", "sub-judges"] }),
+  });
+  expect(updated.status).toBe(200);
+  expect((await updated.json<CreatedSchedule>()).sessions.map((session) => session.id)).toEqual(["sub-memory", "sub-judges"]);
+
+  // Unstarring everything is a legitimate state, not an error.
+  const emptied = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: [] }),
+  });
+  expect(emptied.status).toBe(200);
+  expect((await emptied.json<CreatedSchedule>()).sessions).toEqual([]);
+
+  // A session that is not published is not a session.
+  const unpublished = await createSchedule(["sub-unpublished"]);
+  expect(unpublished.status).toBe(422);
+  expect(await unpublished.text()).toContain("not published");
+
+  const overLimit = await createSchedule(Array.from({ length: 201 }, (_, index) => `sub-${index}`));
+  expect(overLimit.status).toBe(400);
+});
+
+test("CONTRACT · MRQ-132 overlaps are computed server-side so an agent never re-derives interval maths", async () => {
+  // 14:00–14:45 and 14:30–15:15 overlap; the 09:00 keynote clashes with neither.
+  const created = await createSchedule(["sub-keynote", "sub-memory", "sub-judges"]);
+  const payload = await created.json<CreatedSchedule>();
+  expect(payload.overlaps).toEqual([["sub-memory", "sub-judges"]]);
+
+  const read = await request(`/api/v1/public/schedules/${payload.code}`);
+  expect((await read.json<CreatedSchedule>()).overlaps).toEqual([["sub-memory", "sub-judges"]]);
+});
+
+test("CONTRACT · MRQ-132 a refusal names the unpublishable ids machine-readably, so a stale star is recoverable", async () => {
+  const created = await createSchedule(["sub-keynote", "sub-memory"]);
+  const { code, writeKey } = await created.json<CreatedSchedule>();
+
+  // The organiser pulls a talk an attendee had already starred.
+  await env.DB.prepare("UPDATE agenda_items SET is_published = 0 WHERE id = ?").bind("agenda-memory").run();
+
+  const stale = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: ["sub-keynote", "sub-memory"] }),
+  });
+  expect(stale.status).toBe(422);
+  const envelope = await stale.json<{ error: { field: string; details: { unknownSessionIds: string[] } } }>();
+  expect(envelope.error.field).toBe("sessionIds");
+  // Naming them in prose is not enough: a client has to be able to drop
+  // exactly these and carry on rather than being stuck forever.
+  expect(envelope.error.details.unknownSessionIds).toEqual(["sub-memory"]);
+
+  const pruned = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: ["sub-keynote"] }),
+  });
+  expect(pruned.status).toBe(200);
+
+  const creation = await createSchedule(["sub-keynote", "sub-memory"]);
+  expect(creation.status).toBe(422);
+  expect((await creation.json<{ error: { details: { unknownSessionIds: string[] } } }>()).error.details.unknownSessionIds)
+    .toEqual(["sub-memory"]);
+});
+
+test("CONTRACT · MRQ-132 the feed is live, and an unknown code is a 404 rather than an empty calendar", async () => {
+  const created = await createSchedule(["sub-keynote"]);
+  const { code, writeKey } = await created.json<CreatedSchedule>();
+
+  const first = await request(`/api/v1/public/schedules/${code}/calendar.ics`);
+  const firstBody = await first.text();
+  expect(first.status).toBe(200);
+  expect(first.headers.get("content-type")).toContain("text/calendar");
+  const firstLines = icsLines(firstBody);
+  expect(firstLines).toContain("METHOD:PUBLISH");
+  expect(firstLines).toContain("X-WR-CALNAME:My Schedule Conference 2026 schedule");
+  expect(firstLines.filter((line) => line === "BEGIN:VEVENT")).toHaveLength(1);
+  expect(firstLines).toContain("UID:sub-keynote@marquee.stage11.dev");
+
+  await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: ["sub-keynote", "sub-memory", "sub-judges"] }),
+  });
+  const second = await request(`/api/v1/public/schedules/${code}/calendar.ics`);
+  const secondLines = icsLines(await second.text());
+  expect(secondLines.filter((line) => line === "BEGIN:VEVENT")).toHaveLength(3);
+  expect(secondLines).toContain("UID:sub-judges@marquee.stage11.dev");
+
+  // An emptied schedule is still a valid calendar — it is simply empty.
+  await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: [] }),
+  });
+  const emptyFeed = await request(`/api/v1/public/schedules/${code}/calendar.ics`);
+  const emptyLines = icsLines(await emptyFeed.text());
+  expect(emptyFeed.status).toBe(200);
+  expect(emptyLines[0]).toBe("BEGIN:VCALENDAR");
+  expect(emptyLines).not.toContain("BEGIN:VEVENT");
+
+  // A wrong code must not look like an empty schedule.
+  const missing = await request("/api/v1/public/schedules/MQ-0000000000000/calendar.ics");
+  expect(missing.status).toBe(404);
+  expect(await missing.text()).not.toContain("BEGIN:VCALENDAR");
+});
+
+test("CONTRACT · MRQ-132 codes and keys are drawn fresh every time", async () => {
+  const codes = new Set<string>();
+  const keys = new Set<string>();
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const payload = await (await createSchedule(["sub-keynote"])).json<CreatedSchedule>();
+    codes.add(payload.code);
+    keys.add(payload.writeKey);
+  }
+  expect(codes.size).toBe(8);
+  expect(keys.size).toBe(8);
+});
+
+test("AC-240, AC-252, AC-253 · MRQ-132 the session page offers the calendar three ways and directions an attendee can walk", async () => {
+  const response = await request(`/s/memory-architectures?event=${EVENT_SLUG}`);
+  const body = await response.text();
+
+  expect(response.status).toBe(200);
+  expect(body).toContain('href="/api/v1/public/sessions/memory-architectures/calendar.ics?event=sched-conf"');
+  expect(body).toContain("Add to calendar (.ics)");
+  expect(body).toContain("https://calendar.google.com/calendar/render");
+  expect(body).toContain("https://outlook.office.com/calendar/0/deeplink/compose");
+  expect(body).toContain("Getting there");
+  expect(body).toContain("https://www.google.com/maps/dir/?api=1&amp;destination=Sheraton%2C%20811%207th%20Ave%2C%20New%20York%2C%20NY%2010019");
+  expect(body).toContain("811 7th Ave, New York, NY 10019");
+  // The entrance note is speaker-facing operator data (AC-240/252/253) and stays
+  // off every public surface, including the anonymous JSON.
+  expect(body).not.toContain("Photo ID required");
+  const feed = await request(`/api/v1/public/agenda?event=${EVENT_SLUG}`);
+  expect(await feed.text()).not.toContain("Photo ID required");
+
+  // The star and the way back, both on the page the decision happens on.
+  expect(body).toContain('data-schedule-star="sub-memory"');
+  expect(body).toContain(`<a class="back-link" data-schedule-back="true" href="/agenda?event=${EVENT_SLUG}">← Agenda</a>`);
+});

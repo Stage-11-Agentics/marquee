@@ -1,7 +1,7 @@
 # Marquee — Design Language
 
 **Status:** Converged, client-loved, binding. Minted 2026-08-09 at the close of tone-prototype.
-**Binding visual contract:** `prototypes/pipeline-v1.1/index.html` at **v1.11** (v1.11 adds the theme system: Day default + Night, machinery for arbitrary themes) (the v1.4 converged structure reskinned to Flight Deck at v1.5, a real cold start at v1.6, geography at v1.7, the Sessionboard gap-analysis fold at v1.8, the Amendment 14 venue set at v1.9). The build reproduces it one-to-one; every designed control ships. Divergences are legal only where SPEC marks them `[beyond … prototype — acknowledged divergence]`.
+**Binding visual contract:** `prototypes/pipeline-v1.1/index.html` at **v1.11** (v1.11 adds the theme system: Day default + Night, machinery for arbitrary themes) (the v1.4 converged structure reskinned to Flight Deck at v1.5, a real cold start at v1.6, geography at v1.7, the Sessionboard gap-analysis fold at v1.8, the Amendment 14 venue set at v1.9). The build reproduces it one-to-one; every designed control ships. Divergences are legal only where SPEC marks them `[beyond … prototype — acknowledged divergence]`. Areas reached without a session extend v1.11 in their own files: the sign-in door and the session wall in `prototypes/signin/index.html` (MRQ-133, 2026-08-12).
 
 ## The direction, and how it was found
 

@@ -43,8 +43,12 @@ function MappingPanel({ title, preview, mapping, labels, onChange, note }: {
   onChange: (field: string, value: string | null) => void;
   note?: string;
 }): JSX.Element {
+  // An export that was never supplied has no fields to review. Counting its
+  // unmapped fields warns about a file the organizer deliberately left out, and
+  // reads as a problem to fix right beside the note saying it is not one.
+  const supplied = preview.headers.length > 0;
   return <Card class="sessionize-mapping-card">
-    <CardHeader title={title}><Chip tone={preview.missing.length ? "warning" : "success"}>{preview.missing.length ? `${preview.missing.length} fields to review` : "Mapped"}</Chip></CardHeader>
+    <CardHeader title={title}><Chip tone={!supplied ? "" : preview.missing.length ? "warning" : "success"}>{!supplied ? "Not supplied" : preview.missing.length ? `${preview.missing.length} fields to review` : "Mapped"}</Chip></CardHeader>
     <CardBody>
       {note ? <p class="field-note">{note}</p> : null}
       <div class="sessionize-mapping-fields">

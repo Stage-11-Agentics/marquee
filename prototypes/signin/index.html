@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Marquee — Sign in (prototype)</title>
+<!--
+  Marquee — the sign-in door, Flight Deck.
+
+  Minted 2026-08-12 alongside MRQ-133, which builds it. Records the design the
+  operator ratified in session that day: /signin is the universal door for every
+  seat, and a 401 on a live screen raises a wall over the work rather than
+  navigating away from it.
+
+  Ordering note, stated plainly rather than implied: every other prototype in
+  this folder preceded its build. This one did not. The design was ratified in
+  dialogue, MRQ-133 implemented it, and this file was authored against the
+  shipped page so the binding contract and the product agree. The CSS below is
+  lifted verbatim from src/routes/signin.route.tsx and src/styles/*.css — if the
+  two ever drift, the product is the thing that moved, and one of them is wrong.
+
+  Six states, hash-routed. Self-contained: no CDN, no build step, file:// safe.
+-->
+<style>
+/* ---------------------------------------------------------------------------
+   TOKEN BLOCK — canonical Flight Deck, from prototypes/skins/skin-c.html
+   --------------------------------------------------------------------------- */
+:root {
+  --bg:            #eaeef2;
+  --surface:       #ffffff;
+  --surface-sunk:  #f4f7f9;
+  --graph:         #e3e9ee;
+
+  --ink:           #101820;
+  --ink-soft:      #2c3a46;
+  --muted:         #57646f;
+  --rule:          #c8d2da;
+  --rule-soft:     #dde4ea;
+
+  --accent:        #0b6a72;
+  --accent-ink:    #084f55;
+  --accent-wash:   #e2f0f1;
+
+  --ok:            #0f7a4a;
+  --warn:          #8a5c00;
+  --alarm:         #b02a1f;
+  --alarm-wash:    #fbe9e7;
+
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --radius:  3px;
+  --hair:    1px;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  --shadow:  none;
+}
+/* Compatibility aliases, from src/styles/tokens.css */
+:root {
+  --panel: var(--surface);
+  --sunk: var(--surface-sunk);
+  --line: var(--rule-soft);
+  --line-strong: var(--rule);
+  --accent-soft: var(--accent-wash);
+  --accent-dark: var(--accent-ink);
+  --danger: var(--alarm);
+  --danger-soft: var(--alarm-wash);
+  --warning: var(--warn);
+  --warning-soft: #fdf1dd;
+  --warning-line: #d8b45e;
+  --warning-ink: #6a4700;
+  --success: var(--ok);
+}
+
+* { box-sizing: border-box; }
+html { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+body { margin: 0; min-width: 320px; }
+button, input, select, textarea { color: inherit; font: inherit; }
+
+/* --- shared component rules, from src/styles/components.css ---------------- */
+.brand { align-items: center; display: flex; gap: 10px; padding: 0; text-decoration: none; color: inherit; }
+.brand-mark { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent-dark); display: grid; flex: 0 0 28px; font: 600 13px/1 var(--mono); height: 28px; place-items: center; width: 28px; }
+.brand-name { font: 600 13px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; }
+.button { align-items: center; background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); cursor: pointer; display: inline-flex; font: 600 11.5px/1 var(--mono); gap: 7px; justify-content: center; letter-spacing: .02em; min-height: 30px; padding: 7px 12px; text-decoration: none; transition: background 110ms, color 110ms, border-color 110ms; white-space: nowrap; }
+.button:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.button.primary:hover { background: #095b62; border-color: #095b62; color: #fff; }
+.subtle { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.eyebrow { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.modal-backdrop { background: rgba(16, 24, 32, .46); inset: 0; position: fixed; z-index: 500; display: grid; padding: 18px; place-items: center; }
+.modal { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); max-height: calc(100vh - 36px); overflow: auto; width: min(540px, 100%); }
+.modal-head { border-bottom: 1px solid var(--line); padding: 18px 20px 12px; }
+.modal-head h2 { font-size: 16px; margin: 0 0 7px; }
+.modal-head p { color: var(--ink-soft); font-size: 12px; line-height: 1.55; margin: 0; }
+.modal-actions { background: var(--sunk); border-top: 1px solid var(--line-strong); display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px; }
+
+/* --- the page, verbatim from src/routes/signin.route.tsx ------------------- */
+.signin-shell { min-height: 100vh; background: var(--bg); display: grid; grid-template-rows: auto 1fr; }
+.signin-top { padding: 20px clamp(20px,5vw,70px); border-bottom: 1px solid var(--line); background: var(--panel); }
+.signin-top .brand { padding: 0; }
+.signin-main { display: grid; place-items: start center; align-content: start; gap: 16px; padding: clamp(28px,6vw,64px) 20px; }
+.signin-card { width: min(620px,100%); background: var(--panel); border: 1px solid var(--line-strong); border-top: 3px solid var(--accent); border-radius: var(--radius); padding: clamp(20px,4vw,30px); }
+.signin-card.secondary { border-top-color: var(--line-strong); }
+.signin-body h1 { font: 500 clamp(24px,3.4vw,34px)/1.1 var(--mono); letter-spacing: -.04em; margin: 6px 0 12px; }
+.signin-lede { color: var(--ink-soft); font-size: 14px; line-height: 1.65; margin: 0 0 22px; }
+.signin-reason { border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--sunk); padding: 10px 12px; font-size: 12px; color: var(--ink-soft); line-height: 1.6; margin: 0 0 18px; }
+.signin-callout { border: 1px solid var(--warning-line); border-left: 3px solid var(--warning-line); border-radius: var(--radius); background: var(--warning-soft); color: var(--warning-ink); padding: 10px 12px; font-size: 11.5px; line-height: 1.6; margin: 0 0 18px; display: grid; gap: 6px; }
+.signin-callout code { font-family: var(--mono); word-break: break-all; }
+.signin-form { display: grid; gap: 16px; }
+.signin-field { display: grid; gap: 6px; font-size: 12px; }
+.signin-field input { min-height: 38px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk); color: var(--ink); font: 400 13px/1.4 var(--sans); }
+.signin-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.signin-actions-pair { display: flex; gap: 8px; }
+.signin-status { min-height: 16px; flex: 1; color: var(--ink-soft); font: 400 11px/1.4 var(--mono); }
+.signin-status.is-error { color: var(--danger); }
+.signin-link { margin-top: 18px; border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--sunk); padding: 10px 12px; display: grid; gap: 6px; }
+.signin-link a { font: 400 11.5px/1.6 var(--mono); color: var(--accent-dark); word-break: break-all; }
+.signin-demo .eyebrow { color: var(--accent-dark); }
+.signin-demo-lede { color: var(--ink-soft); font-size: 13px; line-height: 1.6; margin: 8px 0 16px; }
+.signin-demo-doors { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+@media (max-width: 520px) { .signin-actions { flex-direction: column; align-items: stretch; } .signin-actions-pair { flex-direction: column; } .signin-actions .button { width: 100%; } .signin-demo-doors .button { width: 100%; } }
+
+/* --- prototype-only chrome: the badge, the state switcher, the mock screen -- */
+.proto-ribbon { position: fixed; top: 0; right: 0; z-index: 900; background: var(--alarm); color: #fff; font: 600 9px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; padding: 7px 12px; border-bottom-left-radius: var(--radius); pointer-events: none; }
+.proto-states { position: fixed; bottom: 0; left: 0; right: 0; z-index: 800; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line-strong); }
+.proto-states .eyebrow { margin-right: 4px; }
+.proto-states a { font: 600 10.5px/1 var(--mono); text-decoration: none; color: var(--ink-soft); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 6px 9px; background: var(--panel); }
+.proto-states a[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.proto-note { position: fixed; bottom: 46px; left: 12px; right: 12px; z-index: 800; margin: 0 auto; width: min(900px, calc(100% - 24px)); background: var(--sunk); border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 8px 11px; color: var(--ink-soft); font: 400 11.5px/1.55 var(--sans); }
+body { padding-bottom: 104px; }
+[hidden] { display: none !important; }
+
+/* The mock organizer screen the wall is raised over. Enough to read as work in
+   progress behind the wall; deliberately not a second copy of the real shell. */
+.mock-shell { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100vh; background: var(--bg); }
+.mock-side { background: var(--panel); border-right: 1px solid var(--line-strong); padding: 16px 12px; }
+.mock-side .brand { padding: 2px 8px 21px; }
+.mock-nav { display: grid; gap: 2px; }
+.mock-nav span { font: 600 11px/1 var(--mono); color: var(--muted); padding: 8px 9px; border-radius: var(--radius); }
+.mock-nav span.on { background: var(--accent-soft); color: var(--accent-dark); }
+.mock-main { display: grid; grid-template-rows: 52px 1fr; min-width: 0; }
+/* The right padding clears the fixed PROTOTYPE ribbon, which would otherwise
+   sit on top of the conference name. */
+.mock-top { display: flex; align-items: center; justify-content: space-between; padding: 0 188px 0 18px; background: var(--panel); border-bottom: 1px solid var(--line-strong); font: 600 11.5px/1 var(--mono); color: var(--ink-soft); }
+.mock-body { padding: 18px; display: grid; gap: 12px; align-content: start; }
+.mock-card { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); }
+.mock-card header { border-bottom: 1px solid var(--line); padding: 11px 14px; font: 600 11.5px/1 var(--mono); }
+.mock-row { display: grid; grid-template-columns: minmax(0,1fr) 92px 104px; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; align-items: center; }
+.mock-row:last-child { border-bottom: 0; }
+.mock-row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mock-row .m { font: 400 11px/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<div class="proto-ribbon">Prototype — mock data</div>
+
+<!-- ========================= STATE: the door ============================= -->
+<div class="signin-shell" data-state="default expired no-mail demo">
+  <header class="signin-top">
+    <a class="brand" href="#default" aria-label="Marquee home">
+      <span class="brand-mark">M</span>
+      <span class="brand-name">Marquee</span>
+    </a>
+  </header>
+  <main class="signin-main">
+    <section class="signin-card">
+      <div class="signin-body">
+        <div class="eyebrow">Sign in</div>
+        <h1>Sign in to Marquee</h1>
+        <p class="signin-lede">
+          No password, ever. Give the address your conference knows you by and a one-time link
+          arrives by email. It works once and expires in fifteen minutes.
+        </p>
+
+        <div class="signin-reason" role="status" data-only="expired">
+          <strong>Link expired.</strong> That sign-in link had already been used or had passed its
+          fifteen minutes. Request a new one below.
+        </div>
+
+        <div class="signin-callout" data-only="no-mail">
+          <strong>This deployment cannot send mail yet.</strong> A link requested here will not
+          arrive. Configure the sender and it will:
+          <code>npx wrangler secret put RESEND_API_KEY</code>
+        </div>
+
+        <form class="signin-form" id="signin-form">
+          <label class="signin-field" for="signin-email">
+            <span>Email</span>
+            <input id="signin-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@yourconference.org" required />
+          </label>
+          <div class="signin-actions">
+            <span class="signin-status" id="signin-status" role="status" aria-live="polite"></span>
+            <button class="button primary" type="submit" id="signin-submit">Email me a sign-in link</button>
+          </div>
+        </form>
+
+        <div class="signin-link" id="signin-link" hidden>
+          <span class="subtle">Demo mode · the link that would have been emailed</span>
+          <a id="signin-link-anchor" href="#default">Open your sign-in link</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="signin-card secondary" data-only="demo">
+      <div class="signin-demo">
+        <div class="eyebrow">Demo conference</div>
+        <p class="signin-demo-lede">
+          This deployment runs a populated demo. Open it in any seat — each one is a real session,
+          not a preview.
+        </p>
+        <div class="signin-demo-doors">
+          <button class="button" type="button" data-demo="organizer">Enter as organizer</button>
+          <button class="button" type="button" data-demo="reviewer">Enter as reviewer</button>
+          <button class="button" type="button" data-demo="speaker">Enter as speaker</button>
+        </div>
+        <span class="signin-status" id="demo-status" role="status" aria-live="polite"></span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ===================== STATE: already signed in ======================== -->
+<div class="signin-shell" data-state="signed-in" hidden>
+  <header class="signin-top">
+    <a class="brand" href="#default" aria-label="Marquee home">
+      <span class="brand-mark">M</span>
+      <span class="brand-name">Marquee</span>
+    </a>
+  </header>
+  <main class="signin-main">
+    <section class="signin-card">
+      <div class="signin-body">
+        <div class="eyebrow">Already signed in</div>
+        <h1>You are signed in</h1>
+        <p class="signin-lede">Signed in as Priya Ramanathan-Okonkwo · priya@aiengineer.foundation</p>
+        <div class="signin-reason" role="status">
+          <strong>Link expired.</strong> That sign-in link had already been used or had passed its
+          fifteen minutes. This browser is still signed in, so carry on.
+        </div>
+        <div class="signin-actions">
+          <span class="signin-status"></span>
+          <div class="signin-actions-pair">
+            <button class="button" type="button">Sign out</button>
+            <a class="button primary" href="#wall">Continue</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ===================== STATE: the 401 wall ============================= -->
+<div data-state="wall" hidden>
+  <div class="mock-shell" aria-hidden="true">
+    <aside class="mock-side">
+      <a class="brand" href="#default"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
+      <nav class="mock-nav">
+        <span>Program home</span>
+        <span>Program board</span>
+        <span class="on">Submitted</span>
+        <span>In review</span>
+        <span>Accepted</span>
+        <span>Onboarding</span>
+      </nav>
+    </aside>
+    <div class="mock-main">
+      <div class="mock-top"><span>Abstracts &amp; sessions</span><span class="subtle">AIE NYC 2026</span></div>
+      <div class="mock-body">
+        <div class="mock-card">
+          <header>Submitted · 214</header>
+          <div class="mock-row"><span class="t">Shipping agents that survive contact with production</span><span class="m">Agents</span><span class="m">Stage Talk</span></div>
+          <div class="mock-row"><span class="t">Evals nobody runs: the honest state of LLM measurement</span><span class="m">Evals</span><span class="m">Workshop</span></div>
+          <div class="mock-row"><span class="t">Retrieval at a bank — what compliance actually asked for</span><span class="m">RAG</span><span class="m">Stage Talk</span></div>
+          <div class="mock-row"><span class="t">Small models, big margins: inference economics in 2026</span><span class="m">Infra</span><span class="m">Lightning</span></div>
+          <div class="mock-row"><span class="t">Þórunn Guðmundsdóttir on open-weight licensing traps</span><span class="m">Open Models</span><span class="m">Stage Talk</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop">
+    <section class="modal" role="dialog" aria-modal="true" aria-label="Your session ended" tabindex="-1">
+      <header class="modal-head">
+        <div>
+          <div class="eyebrow">Session</div>
+          <h2>Your session ended.</h2>
+          <p>Sign in again and you will come back to this page.</p>
+        </div>
+      </header>
+      <footer class="modal-actions">
+        <a class="button" href="#default">Return to home</a>
+        <a class="button primary" href="#default">Sign in</a>
+      </footer>
+    </section>
+  </div>
+</div>
+
+<p class="proto-note" id="proto-note"></p>
+
+<nav class="proto-states" aria-label="Prototype states">
+  <span class="eyebrow">State</span>
+  <a href="#default">Door</a>
+  <a href="#expired">Spent link</a>
+  <a href="#no-mail">No mail</a>
+  <a href="#demo">Demo instance</a>
+  <a href="#signed-in">Signed in</a>
+  <a href="#wall">401 wall</a>
+</nav>
+
+<script>
+(() => {
+  const NOTES = {
+    "default":   "The door as a real conference sees it. One field, one action, one promise. The acknowledgement is always generic — the page must never become an oracle for which addresses exist.",
+    "expired":   "Reached by clicking a spent or expired link in an email. The API returns its JSON envelope to API clients and redirects a browser here, so a human never meets a raw error body.",
+    "no-mail":   "A deployment with no sender configured, derived from the environment rather than a stored flag. The form stays — the truth goes above it. A page that promises undeliverable mail is how a self-hoster gets locked out of their own conference.",
+    "demo":      "A demo instance. The three seats are real sessions, and the requested link is rendered on screen so the whole speaker-auth loop is walkable in ten seconds without an inbox. Submit the form to see it.",
+    "signed-in": "Arriving with a live session. No form is drawn: the page says who you are and gets out of the way. The reason banner rewords itself for someone who is already in.",
+    "wall":      "A 401 on a live screen. The wall is raised over the work rather than navigating away from it — the list is still there behind it, and Sign in carries a ?next= back to this exact path."
+  };
+  const STATES = Object.keys(NOTES);
+  const panels = Array.from(document.querySelectorAll("[data-state]"));
+  const note = document.getElementById("proto-note");
+
+  function render() {
+    const state = (location.hash || "#default").slice(1);
+    const active = STATES.includes(state) ? state : "default";
+    for (const panel of panels) {
+      panel.hidden = !panel.getAttribute("data-state").split(" ").includes(active);
+    }
+    for (const only of document.querySelectorAll("[data-only]")) {
+      only.hidden = only.getAttribute("data-only") !== active;
+    }
+    for (const link of document.querySelectorAll(".proto-states a")) {
+      link.setAttribute("aria-current", link.getAttribute("href") === "#" + active ? "true" : "false");
+    }
+    note.textContent = NOTES[active];
+    // The on-screen link belongs to the demo state alone; leaving it visible
+    // after a state change would advertise a door the other states don't have.
+    if (active !== "demo") document.getElementById("signin-link").hidden = true;
+  }
+
+  window.addEventListener("hashchange", render);
+
+  // The acknowledgement is the server's, verbatim, and identical for an address
+  // that exists and one that does not.
+  const ACK = "If that address is registered, a sign-in link is on its way.";
+  const form = document.getElementById("signin-form");
+  const status = document.getElementById("signin-status");
+  const linkBlock = document.getElementById("signin-link");
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const demo = (location.hash || "#default").slice(1) === "demo";
+    status.textContent = "Requesting a sign-in link…";
+    window.setTimeout(() => {
+      status.textContent = ACK;
+      if (demo) linkBlock.hidden = false;
+    }, 260);
+  });
+
+  const demoStatus = document.getElementById("demo-status");
+  for (const door of document.querySelectorAll("[data-demo]")) {
+    door.addEventListener("click", () => {
+      demoStatus.textContent = "Prototype — not wired. In the product this opens a real "
+        + door.getAttribute("data-demo") + " session.";
+    });
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

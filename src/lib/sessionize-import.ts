@@ -288,6 +288,12 @@ function csvRow(line: string): string[] {
 
 /** Parse RFC-4180-style CSV, including quoted commas, newlines and quotes. */
 export function parseCsv(text: string): CsvTable {
+  // A document with nothing in it has no header row. Without this, the empty
+  // string parsed to a single nameless column, which read downstream as "this
+  // export has one header I cannot recognise" rather than "there is no export
+  // here" — and the sessions half of a speakers-only import is exactly that
+  // empty string. See the mapping step's required-field check.
+  if (text.trim() === "") return { headers: [], rows: [] };
   const rows: string[][] = [];
   let current = "";
   let quoted = false;

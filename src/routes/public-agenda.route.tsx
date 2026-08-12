@@ -6,14 +6,17 @@ import type { Env } from "../index";
 import { ICON_LINKS } from "../lib/head-icons";
 import {
   loadPublicAgenda,
+  loadPublicEvent,
   loadPublicSession,
   loadPublicSpeaker,
   loadPublicSpeakerDirectory,
 } from "../lib/public-site";
+import { PUBLIC_SCHEDULE_SCRIPT } from "../ui/public/agenda/schedule-script";
 import {
   PUBLIC_AGENDA_SCRIPT,
   PUBLIC_SITE_STYLES,
   PublicAgendaPage,
+  PublicAgentsPage,
   PublicNotFoundPage,
   PublicSessionPage,
   PublicSpeakerPage,
@@ -74,23 +77,45 @@ publicAgendaRoutes.get("/site", (context) => {
   return context.redirect(`/agenda${url.search}`, 302);
 });
 
+/**
+ * `?view=mine` is the same page with a different question asked of it, so it is
+ * a URL rather than a client-only mode: linkable, back-button-correct, and
+ * server-rendered with the WHOLE program. The starred set is on the device, so
+ * the server cannot filter it — and a facet-filtered itinerary would count and
+ * chart a fraction of the attendee's picks while claiming to be their schedule.
+ */
 publicAgendaRoutes.get("/agenda", async (context) => {
   const query = context.req.query();
+  const view = query.view === "mine" ? "mine" : "agenda";
   const data = await loadPublicAgenda(context.env.DB, {
     eventSlug: query.event ?? query.event_slug,
-    day: query.day,
-    track: query.track,
-    format: query.format,
-    room: query.room,
-    q: query.q,
+    day: view === "mine" ? undefined : query.day,
+    allDays: view === "mine",
+    track: view === "mine" ? undefined : query.track,
+    format: view === "mine" ? undefined : query.format,
+    room: view === "mine" ? undefined : query.room,
+    q: view === "mine" ? undefined : query.q,
   });
   const shell = await assetShell(context.env.ASSETS, context.req.raw);
   if (!data) return notFoundDocument(shell);
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(
     shell,
-    renderToString(<PublicAgendaPage data={data} />),
-    { title: "Agenda", script: PUBLIC_AGENDA_SCRIPT },
+    renderToString(<PublicAgendaPage data={data} view={view} />),
+    { title: view === "mine" ? "My schedule" : "Agenda", script: `${PUBLIC_AGENDA_SCRIPT}\n${PUBLIC_SCHEDULE_SCRIPT}` },
+  ));
+});
+
+publicAgendaRoutes.get("/agenda/agents", async (context) => {
+  const query = context.req.query();
+  const event = await loadPublicEvent(context.env.DB, query.event ?? query.event_slug);
+  const shell = await assetShell(context.env.ASSETS, context.req.raw);
+  if (!event) return notFoundDocument(shell);
+  context.header("Cache-Control", "public, max-age=300");
+  return context.html(renderPublicDocument(
+    shell,
+    renderToString(<PublicAgentsPage event={event} origin={new URL(context.req.url).origin} />),
+    { title: "For agents", script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });
 
@@ -106,7 +131,7 @@ publicAgendaRoutes.get("/speakers", async (context) => {
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicSpeakerDirectoryPage data={data} />),
-    { title: "Speakers" },
+    { title: "Speakers", script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });
 
@@ -118,8 +143,8 @@ publicAgendaRoutes.get("/s/:slug", async (context) => {
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(
     shell,
-    renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} />),
-    { title: result.session.title },
+    renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} origin={new URL(context.req.url).origin} />),
+    { title: result.session.title, script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });
 
@@ -132,6 +157,6 @@ publicAgendaRoutes.get("/p/:slug", async (context) => {
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicSpeakerPage event={result.event} venue={result.venue} speaker={result.speaker} />),
-    { title: result.speaker.name },
+    { title: result.speaker.name, script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });

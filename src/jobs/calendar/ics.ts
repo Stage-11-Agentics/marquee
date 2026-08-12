@@ -263,6 +263,68 @@ export function buildCalendarIcs(input: CalendarEventInput): string {
   return `${lines.map(foldIcsLine).join(CRLF)}${CRLF}`;
 }
 
+export interface PublishedCalendarEvent {
+  description?: string | null;
+  durationMin: number;
+  location: string;
+  startsAt: number;
+  title: string;
+  uid: string;
+  url: string;
+}
+
+/**
+ * A published VCALENDAR: no attendee, no organizer RSVP, `METHOD:PUBLISH`.
+ *
+ * The invite builder above answers a different question — it addresses one
+ * person and asks them to respond. A downloaded session, and a subscribed
+ * personal schedule, are neither addressed nor answerable: they are a
+ * read-only feed a calendar client renders. Both are the same document with a
+ * different number of VEVENTs, so one builder serves the `.ics` download and
+ * the live webcal feed and they can never drift apart.
+ */
+export function buildPublishedCalendar(input: {
+  calendarName: string;
+  dtstamp: number | Date;
+  events: readonly PublishedCalendarEvent[];
+  timezone: string;
+}): string {
+  const stamp = utcStamp(input.dtstamp);
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "PRODID:-//Stage 11//Marquee//EN",
+    "VERSION:2.0",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${escapeIcsText(input.calendarName)}`,
+    `X-WR-TIMEZONE:${escapeIcsText(input.timezone)}`,
+    ...vtimezone(input.timezone),
+    ...input.events.flatMap((event) => {
+      if (!Number.isInteger(event.durationMin) || event.durationMin <= 0) {
+        throw new Error("calendar duration must be a positive integer");
+      }
+      const end = event.startsAt + event.durationMin * 60_000;
+      return [
+        "BEGIN:VEVENT",
+        `UID:${escapeIcsText(event.uid)}`,
+        `DTSTAMP:${stamp}`,
+        "SEQUENCE:0",
+        `DTSTART;TZID=${input.timezone}:${localDateTime(event.startsAt, input.timezone)}`,
+        `DTEND;TZID=${input.timezone}:${localDateTime(end, input.timezone)}`,
+        `SUMMARY:${escapeIcsText(event.title)}`,
+        `DESCRIPTION:${escapeIcsText(event.description?.trim() || event.title)}`,
+        `LOCATION:${escapeIcsText(event.location)}`,
+        `URL:${event.url}`,
+        "STATUS:CONFIRMED",
+        "TRANSP:OPAQUE",
+        "END:VEVENT",
+      ];
+    }),
+    "END:VCALENDAR",
+  ];
+  return `${lines.map(foldIcsLine).join(CRLF)}${CRLF}`;
+}
+
 export function buildCalendarLinks(input: {
   description?: string;
   durationMin: number;
