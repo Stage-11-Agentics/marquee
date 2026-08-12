@@ -132,7 +132,7 @@ describe("MRQ-103 · theme system", () => {
 });
 
 describe("theme round · register themes", () => {
-  test("registry carries ids, picker labels, and kinds for both theme classes", () => {
+  test("CONTRACT · registry carries ids, picker labels, and kinds for both theme classes", () => {
     expect(THEMES.map((theme) => theme.id)).toEqual(["day", "night", "latent-space", "ai-engineer", "swyxy"]);
     expect(THEMES.map((theme) => theme.kind)).toEqual(["palette", "palette", "register", "register", "register"]);
     const labels = Object.fromEntries(THEMES.map((theme) => [theme.id, theme.label]));
@@ -146,7 +146,7 @@ describe("theme round · register themes", () => {
     expect(isThemeId("swyx")).toBe(false);
   });
 
-  test("a register theme sets the attribute its stylesheet keys on and round-trips through storage", () => {
+  test("CONTRACT · a register theme sets the attribute its stylesheet keys on and round-trips through storage", () => {
     writeTheme("latent-space");
     expect(currentAttribute()).toBe("latent-space");
     expect(storage.store.get(THEME_STORAGE_KEY)).toBe("latent-space");
@@ -156,14 +156,14 @@ describe("theme round · register themes", () => {
     expect(readTheme()).toBe("ai-engineer");
   });
 
-  test("swyxy light is the attribute-less default inside the theme, mirroring Day's rule", () => {
+  test("CONTRACT · swyxy light is the attribute-less default inside the theme, mirroring Day's rule", () => {
     writeTheme("swyxy");
     expect(currentAttribute()).toBe("swyxy");
     expect(readSwyxyMode()).toBe("light");
     expect(currentSwyxyMode()).toBeUndefined();
   });
 
-  test("the dark word flips swyxy to its dark palette and persists as the one theme choice", () => {
+  test("CONTRACT · the dark word flips swyxy to its dark palette and persists as the one theme choice", () => {
     writeTheme("swyxy");
     writeSwyxyMode("dark");
     expect(currentSwyxyMode()).toBe("dark");
@@ -178,7 +178,7 @@ describe("theme round · register themes", () => {
     expect(currentSwyxyMode()).toBe("dark");
   });
 
-  test("switching away from swyxy clears the mode attribute; corrupt mode storage falls back to light", () => {
+  test("CONTRACT · switching away from swyxy clears the mode attribute; corrupt mode storage falls back to light", () => {
     writeTheme("swyxy");
     writeSwyxyMode("dark");
     writeTheme("night");
@@ -187,7 +187,7 @@ describe("theme round · register themes", () => {
     expect(readSwyxyMode()).toBe("light");
   });
 
-  test("mode storage that throws still yields light rather than an exception, and unpersistable flips still apply", () => {
+  test("CONTRACT · mode storage that throws still yields light rather than an exception, and unpersistable flips still apply", () => {
     storage.throwOn = "get";
     expect(() => readSwyxyMode()).not.toThrow();
     expect(readSwyxyMode()).toBe("light");
@@ -196,7 +196,7 @@ describe("theme round · register themes", () => {
     expect(currentSwyxyMode()).toBe("dark");
   });
 
-  test("the pre-paint script stamps the mode and loads register fonts, so the first paint is already the register", () => {
+  test("CONTRACT · the pre-paint script stamps the mode and loads register fonts, so the first paint is already the register", () => {
     const shell = readFileSync(resolve(root, "index.html"), "utf8");
     expect(shell).toContain(SWYXY_MODE_STORAGE_KEY);
     expect(shell).toContain("swyxyMode");
