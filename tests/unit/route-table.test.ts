@@ -33,7 +33,7 @@ test("AC-106 · API tokens and the sidebar API docs link resolve as real routes"
   expect(matchRoute("/api/docs")?.id).toBe("api-docs");
 });
 
-test("EMB-15 · organizer embeds are discoverable at the mandated builder route", () => {
+test("CONTRACT · EMB-15 · organizer embeds are discoverable at the mandated builder route", () => {
   expect(matchRoute("/embed/config")).toMatchObject({ id: "embeds", label: "Embeds", external: true });
 });
 

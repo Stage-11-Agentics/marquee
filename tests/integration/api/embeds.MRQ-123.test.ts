@@ -28,7 +28,7 @@ beforeEach(async () => {
   ]);
 });
 
-test("EMB-15 · saved embeds require organizer grants and return named, toggleable code", async () => {
+test("CONTRACT · EMB-15 · saved embeds require organizer grants and return named, toggleable code", async () => {
   const unauthenticated = await request(`/api/v1/events/${EVENT_ID}/embeds`, {}, "");
   expect(unauthenticated.status).toBe(401);
 
@@ -62,7 +62,7 @@ test("EMB-15 · saved embeds require organizer grants and return named, toggleab
   ]);
 });
 
-test("EMB-15 · XML is not advertised and invalid saved output is rejected", async () => {
+test("CONTRACT · EMB-15 · XML is not advertised and invalid saved output is rejected", async () => {
   const response = await request(`/api/v1/events/${EVENT_ID}/embeds`, {
     method: "POST",
     headers: { "content-type": "application/json" },

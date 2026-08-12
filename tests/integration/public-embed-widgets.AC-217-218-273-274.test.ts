@@ -163,7 +163,7 @@ test("AC-274 · the speakers embed offers cards and list layouts carried in the 
   expect(configDefaultBody).not.toContain("layout=list");
 });
 
-test("EMB-15 · the public iCal output is a published-only calendar feed", async () => {
+test("CONTRACT · EMB-15 · the public iCal output is a published-only calendar feed", async () => {
   const response = await request(`/embed/${EVENT_SLUG}-sessions.ics?event=${EVENT_SLUG}`);
   const body = await response.text();
   expect(response.status).toBe(200);
