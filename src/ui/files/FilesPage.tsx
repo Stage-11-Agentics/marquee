@@ -148,7 +148,7 @@ export function FilesPage({ eventId = DEFAULT_EVENT_ID, navigate }: { eventId?: 
     <PageHeader
       title="Files"
       copy={ready
-        ? `${metrics.received} of ${metrics.expected} requested deliverables are in. Every upload keeps its history; the current version is the one the speaker uploaded last.`
+        ? `Received ${metrics.received} of ${metrics.expected} requested deliverables. Every upload keeps its history; the current version is the one the speaker uploaded last.`
         : "Reading every deliverable the conference has asked for…"}
     />
     {ready ? <>
