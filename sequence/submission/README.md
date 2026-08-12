@@ -9,6 +9,13 @@ Every factual claim in this pack was verified against the deployed site
 (build `1f53732201aa`) on 2026-08-12. If a deploy lands after that, re-run the
 checks each file cites — most are one `curl`.
 
+**The judge-facing one-pager** lives at
+[`public/submission/index.html`](../../public/submission/index.html) so the
+deployment serves it: **https://marquee.stage11.dev/submission/** — the same
+verified fact set as the files below, with deep links into every feature.
+That URL is the thing to paste wherever the form wants "anything else we
+should see."
+
 | File | What it answers |
 |---|---|
 | [IDENTITY.md](IDENTITY.md) | Name, one-liner, 50/150/300-word descriptions |
