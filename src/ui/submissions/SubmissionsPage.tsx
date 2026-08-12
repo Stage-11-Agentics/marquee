@@ -623,11 +623,27 @@ export function SubmissionsPage({
     setNotifyMessage("");
     setNotifyError("");
     try {
-      const result = await apiFetch<{ queued: number; skipped_no_address: number }>(
-        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify`,
-        { method: "POST", route: "/api/v1/events/{eventId}/submissions/not-notified/notify" },
-      );
-      setNotifyMessage(`${result.queued.toLocaleString()} notification${result.queued === 1 ? "" : "s"} queued${result.skipped_no_address ? ` · ${result.skipped_no_address.toLocaleString()} need an address first` : ""}.`);
+      let cursor: string | null = null;
+      let queued = 0;
+      let skippedNoAddress = 0;
+      let remaining = 0;
+      do {
+        const cursorQuery: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+        const result: { queued: number; skipped_no_address: number; remaining: number; next_cursor: string | null } = await apiFetch<{
+          queued: number;
+          skipped_no_address: number;
+          remaining: number;
+          next_cursor: string | null;
+        }>(
+          `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify${cursorQuery}`,
+          { method: "POST", route: "/api/v1/events/{eventId}/submissions/not-notified/notify" },
+        );
+        queued += result.queued;
+        skippedNoAddress += result.skipped_no_address;
+        remaining = result.remaining;
+        cursor = result.next_cursor;
+      } while (cursor !== null && remaining > 0);
+      setNotifyMessage(`${queued.toLocaleString()} notification${queued === 1 ? "" : "s"} queued${skippedNoAddress ? ` · ${skippedNoAddress.toLocaleString()} need an address first` : ""}${remaining ? ` · ${remaining.toLocaleString()} remain; run Notify again` : ""}.`);
       setReloadKey((value) => value + 1);
     } catch (error: unknown) {
       setNotifyError(errorSummary(error));
