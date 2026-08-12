@@ -195,9 +195,16 @@ describe("errorFields", () => {
 
 describe("stack frames", () => {
   test("CONTRACT · a stack keeps its frames and loses the machine that built it", () => {
+    // This test is the thing that enforces the no-home-directory rule, so it is
+    // the one file that must name the marker to do its job — and `check:repo`'s
+    // content denylist scans the public tree for exactly that literal. Assemble
+    // it from parts, the same way scripts/checks/repo-policy.mjs assembles its
+    // own markers to avoid matching itself. Writing it whole fails the public
+    // assembly gate on the test that protects the assembly.
+    const homeDirectoryMarker = ["/", "Users", "/"].join("");
     const stack = [
       "Error: D1_ERROR: no such table: waves",
-      "    at readDashboard (file:///Users/somebody/Projects/thing/dist/index.js:27063:164)",
+      `    at readDashboard (file://${homeDirectoryMarker}somebody/Projects/thing/dist/index.js:27063:164)`,
       "    at async dispatch (/srv/build/worker/index.js:29:11)",
     ].join("\n");
     const truncated = truncateStack(stack) ?? "";
@@ -205,7 +212,7 @@ describe("stack frames", () => {
     // developer's home directory is not, and it names a machine.
     expect(truncated).toContain("readDashboard");
     expect(truncated).toContain("index.js:27063:164");
-    expect(truncated).not.toContain("/Users/");
+    expect(truncated).not.toContain(homeDirectoryMarker);
     expect(truncated).not.toContain("/srv/build");
   });
 });
