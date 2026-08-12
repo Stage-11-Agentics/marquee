@@ -266,14 +266,23 @@ describe("theme round · register themes", () => {
     // Structure tokens are what keep a register recognisably Marquee. A
     // register may move colour and type; moving --radius in the token block
     // reshapes every card, button and input in the product at once.
+    // Every scoped block, not just the first: a dark-mode-only override like
+    // html[data-theme="swyxy"][data-swyxy-mode="dark"] is exactly where this
+    // would reappear, and it is the 25th block in that file, not the 1st.
+    const STRUCTURE = ["--radius", "--shadow", "--hair", "--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
     for (const theme of THEMES) {
       if (theme.kind !== "register") continue;
       const sheet = readFileSync(resolve(root, `src/styles/themes/${theme.id}.css`), "utf8");
-      const block = sheet.match(/html\[data-theme="[^"]+"\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
-      for (const token of ["--radius", "--space", "--hairline", "--shadow"]) {
-        expect(block, `${theme.id} overrides the structure token ${token}`).not.toMatch(
-          new RegExp(`^\\s*${token}\\s*:`, "m"),
-        );
+      const blocks = [...sheet.matchAll(/html\[data-theme="[^"]+"\][^{]*\{([\s\S]*?)\n\}/g)].map((m) => m[1]);
+      // A parse that finds nothing must fail loudly rather than pass vacuously —
+      // otherwise reformatting a stylesheet silently retires the guard.
+      expect(blocks.length, `${theme.id}: no scoped blocks parsed`).toBeGreaterThan(0);
+      for (const block of blocks) {
+        for (const token of STRUCTURE) {
+          expect(block, `${theme.id} overrides the structure token ${token}`).not.toMatch(
+            new RegExp(`^\\s*${token}\\s*:`, "m"),
+          );
+        }
       }
     }
   });

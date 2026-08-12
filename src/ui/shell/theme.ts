@@ -81,12 +81,17 @@ export function readTheme(): ThemeId {
  * live subscriber to a comparison link's override and make the switcher inert.
  */
 export function domTheme(): ThemeId {
+  // No document at all — a server render, or a component test outside jsdom.
+  // Day is the honest answer there, and the guard keeps this a rendered
+  // default rather than a ReferenceError.
+  if (typeof document === "undefined") return "day";
   const attribute = document.documentElement.dataset.theme;
   return isThemeId(attribute) ? attribute : "day";
 }
 
 /** swyxy's mode as worn, for the same reason as `domTheme`. */
 export function domSwyxyMode(): SwyxyMode {
+  if (typeof document === "undefined") return "light";
   return document.documentElement.dataset.swyxyMode === "dark" ? "dark" : "light";
 }
 
