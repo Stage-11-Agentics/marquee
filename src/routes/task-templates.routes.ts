@@ -46,7 +46,6 @@ const speakerTaskSchema = z.object({
   template_id: z.string(),
   title: z.string(),
   kind: taskKind,
-  description: z.string(),
   due_at: z.number(),
   status: z.enum(["open", "done"]),
   completed_at: z.number().nullable(),
@@ -121,7 +120,6 @@ interface SpeakerTaskQueryRow {
   template_id: string;
   title: string;
   kind: "acknowledge" | "file" | "form";
-  description: string;
   due_at: number;
   status: "open" | "done";
   completed_at: number | null;
@@ -670,7 +668,7 @@ const listSpeakerTasks = defineApiRoute(
     const { eventId } = context.req.valid("param");
     await eventExists(context.env.DB, eventId);
     const rows = await context.env.DB.prepare(
-      `SELECT task.id, task.template_id, task.title, task.kind, task.description, task.due_at,
+      `SELECT task.id, task.template_id, task.title, task.kind, task.due_at,
               task.status, task.completed_at, task.cancelled_at, task.submission_id,
               person.id AS person_id, person.name AS person_name, person.email AS person_email,
               submission.title AS submission_title
@@ -686,7 +684,6 @@ const listSpeakerTasks = defineApiRoute(
         template_id: row.template_id,
         title: row.title,
         kind: row.kind,
-        description: row.description,
         due_at: Number(row.due_at),
         status: row.status,
         completed_at: row.completed_at === null ? null : Number(row.completed_at),

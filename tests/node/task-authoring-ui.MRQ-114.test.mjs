@@ -70,6 +70,16 @@ test("CONTRACT · MRQ-114 · draft edits compose instead of overwriting each oth
   assert.match(page, /onChange\(\(previous\) => previous\.includes\(personId\)/);
 });
 
+test("CONTRACT · MRQ-114 · the speaker picker is searchable, and Select all means what is shown", () => {
+  // The seeded conference has 1,097 assignable people. An unsearchable column
+  // of that many checkboxes is not a multi-select, and "Select all" quietly
+  // assigning a task to a thousand speakers is worse than useless.
+  assert.match(page, /class="task-assignee-search"/);
+  assert.match(page, /Search speakers by name, company, or email/);
+  assert.match(page, /visible\.map\(\(person\) => person\.id\)/);
+  assert.match(page, /\{visible\.map\(\(person\)/);
+});
+
 test("CONTRACT · MRQ-114 · the task name cannot collapse out of its row", () => {
   // `.settings-row-heading` is a flex line built for two items and `strong`
   // carries `overflow: hidden`, which zeroes a flex item's automatic minimum

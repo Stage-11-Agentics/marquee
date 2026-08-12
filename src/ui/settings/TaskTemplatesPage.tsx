@@ -165,25 +165,38 @@ function AssigneePicker({
   onChange: (update: (previous: readonly string[]) => string[]) => void;
   idPrefix: string;
 }): JSX.Element {
+  const [query, setQuery] = useState("");
   const selectedSet = new Set(selected);
   const toggle = (personId: string): void => {
     onChange((previous) => previous.includes(personId) ? previous.filter((id) => id !== personId) : [...previous, personId]);
   };
+  // A real conference has a thousand people in this list. Scrolling to find two
+  // of them by eye is not a control, it is a punishment — and "Select all"
+  // means all of the people you are looking at, not all thousand.
+  const needle = query.trim().toLowerCase();
+  const visible = needle === ""
+    ? assignees
+    : assignees.filter((person) => `${person.name} ${person.email} ${person.company ?? ""}`.toLowerCase().includes(needle));
+
   return <div class="task-assignee-picker">
     <div class="task-assignee-head">
       <span class="eyebrow">Assign to speakers</span>
       <span class="task-assignee-count tabular">{selected.length} selected</span>
-      <button class="button small" type="button" onClick={() => onChange(() => assignees.map((person) => person.id))} disabled={assignees.length === 0 || selected.length === assignees.length}>Select all</button>
+      <button class="button small" type="button" onClick={() => onChange((previous) => [...new Set([...previous, ...visible.map((person) => person.id)])])} disabled={visible.length === 0 || visible.every((person) => selectedSet.has(person.id))}>Select all</button>
       <button class="button small" type="button" onClick={() => onChange(() => [])} disabled={selected.length === 0}>Clear</button>
     </div>
     {assignees.length === 0
       ? <p class="task-assignee-empty">No speakers yet. Add speakers or accept a session, then assign this task to them.</p>
-      : <div class="task-assignee-list" role="group" aria-label="Speakers">
-        {assignees.map((person) => <label class="task-assignee-option" key={person.id}>
-          <input type="checkbox" id={`${idPrefix}-${person.id}`} checked={selectedSet.has(person.id)} onChange={() => toggle(person.id)} />
-          <span><strong>{person.name}</strong><small>{person.company || person.email}</small></span>
-        </label>)}
-      </div>}
+      : <>
+        <input class="task-assignee-search" type="search" value={query} placeholder="Search speakers by name, company, or email" aria-label="Search speakers" onInput={(event) => { const value = event.currentTarget.value; setQuery(value); }} />
+        <p class="task-assignee-empty tabular">{needle === "" ? `${assignees.length} speaker${assignees.length === 1 ? "" : "s"}` : `${visible.length} of ${assignees.length} match “${query.trim()}”`}</p>
+        <div class="task-assignee-list" role="group" aria-label="Speakers">
+          {visible.map((person) => <label class="task-assignee-option" key={person.id}>
+            <input type="checkbox" id={`${idPrefix}-${person.id}`} checked={selectedSet.has(person.id)} onChange={() => toggle(person.id)} />
+            <span><strong>{person.name}</strong><small>{person.company || person.email}</small></span>
+          </label>)}
+        </div>
+      </>}
   </div>;
 }
 
