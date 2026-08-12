@@ -29,3 +29,6 @@ SPK-06 (w2), SPK-03 (w2), plus coverage protection for SPK-07/09 + CNT-02/03 (th
 - The speakers-only path must skip session loops rather than manufacture sessions, while a real sessions CSV continues to require its existing session identity/title/speaker-email mappings. `external_ref` remains an optional match key, never a required synthetic value.
 - UI controls reserve their result area and use the exact rubric nouns; no route is exposed unless the underlying flow is live.
 
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+- The first gate pass identified two contract guards: direct portal-route magic-link minting would create a third enumerated auth writer, and a dynamic `IN (...)` placeholder list needed a D1-cap classification. Resolved by routing organizer invites through the shared `mintPortalMagicLink` helper over the canonical writer and using JSON1 `json_each(?)` for the bounded person-ID set. Static guards pass with no allowlist edits.
