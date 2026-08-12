@@ -41,12 +41,23 @@
 .onboarding-matrix tbody tr:hover { background: color-mix(in srgb, var(--accent-wash) 42%, transparent); }
 .onboarding-select-column { padding-left: 12px !important; width: 38px; }
 .onboarding-action-column { text-align: right !important; width: 76px; }
+/*
+  Every other column in this fixed-layout table states a width, so the speaker
+  column was the one that absorbed the shortfall — at nine task templates it
+  collapsed to 60px while the button inside it held a 180px floor, and the name
+  and company line printed straight across the track beside it. The matrix is
+  built to scroll (the wrap is overflow-x: auto); it is not built to overlap.
+  A stated width keeps the column out of that role, and the floor comes off the
+  button so nothing inside a cell can outgrow the cell again.
+*/
+.onboarding-speaker-column { width: 220px; }
+.onboarding-matrix tbody th.onboarding-speaker-column { overflow: hidden; }
 .onboarding-track-column { width: 138px; }
 .onboarding-track { align-items: center; display: flex; font: 10px/1.25 var(--mono); gap: 5px; white-space: nowrap; }
 .onboarding-track + .onboarding-track { margin-top: 4px; }
 .onboarding-track i { border-radius: 50%; display: inline-block; flex: 0 0 7px; height: 7px; width: 7px; }
 .onboarding-muted { color: var(--muted); font: 10px/1.25 var(--mono); }
-.onboarding-speaker-link { align-items: center; background: transparent; border: 0; color: inherit; display: flex; gap: 9px; min-width: 180px; padding: 0; text-align: left; width: 100%; }
+.onboarding-speaker-link { align-items: center; background: transparent; border: 0; color: inherit; display: flex; gap: 9px; min-width: 0; padding: 0; text-align: left; width: 100%; }
 .onboarding-row-avatar, .onboarding-avatar { align-items: center; background: var(--accent-wash); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; flex: 0 0 30px; font: 600 9px/1 var(--mono); height: 30px; justify-content: center; width: 30px; }
 .onboarding-row-avatar, .onboarding-avatar { overflow: hidden; }
 .onboarding-row-avatar img, .onboarding-avatar img { display: block; height: 100%; object-fit: cover; width: 100%; }
