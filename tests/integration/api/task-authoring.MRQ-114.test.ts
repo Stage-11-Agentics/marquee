@@ -233,6 +233,44 @@ test("CONTRACT · MRQ-114 · a moved deadline reaches the speakers who still owe
   expect(marcus).toMatchObject({ title: "Complete bio and profile", due_at: SLIDES_DUE, status: "done" });
 });
 
+test("CONTRACT · MRQ-114 · editing an offset task recomputes each deadline from that assignment, not from the edit", async () => {
+  const created = await postJson(`/api/v1/events/${EVENT_ID}/task-templates`, { name: "Confirm participation", kind: "acknowledge", due_offset_days: 10, assign_to: [PRIYA_ID, MARCUS_ID] });
+  const templateId = (await responseJson<CreateResponse>(created)).data.id;
+  // Backdate one assignment so the two rows have genuinely different anchors.
+  const oldAnchor = Date.now() - 30 * 86_400_000;
+  await env.DB.prepare("UPDATE speaker_tasks SET created_at = ? WHERE template_id = ? AND person_id = ?").bind(oldAnchor, templateId, PRIYA_ID).run();
+
+  const patched = await patchJson(`/api/v1/events/${EVENT_ID}/task-templates/${templateId}`, { name: "Confirm participation now", due_offset_days: 20 });
+  expect(patched.status).toBe(200);
+
+  const rows = await env.DB.prepare("SELECT person_id, created_at, due_at FROM speaker_tasks WHERE template_id = ?").bind(templateId)
+    .all<{ person_id: string; created_at: number; due_at: number }>();
+  for (const row of rows.results) {
+    expect(row.due_at).toBe(row.created_at + 20 * 86_400_000);
+  }
+  // Priya's older anchor must still produce the earlier deadline — a rename
+  // must never hand every speaker a fresh extension.
+  const priya = rows.results.find((row) => row.person_id === PRIYA_ID);
+  const marcus = rows.results.find((row) => row.person_id === MARCUS_ID);
+  expect((priya as { due_at: number }).due_at).toBeLessThan((marcus as { due_at: number }).due_at);
+});
+
+test("CONTRACT · MRQ-114 · switching deadline mode clears the other column instead of tripping the CHECK", async () => {
+  const created = await postJson(`/api/v1/events/${EVENT_ID}/task-templates`, { name: "Sign speaker release form", kind: "acknowledge", due_at: SLIDES_DUE });
+  const templateId = (await responseJson<CreateResponse>(created)).data.id;
+
+  const toOffset = await patchJson(`/api/v1/events/${EVENT_ID}/task-templates/${templateId}`, { due_offset_days: 30 });
+  expect(toOffset.status).toBe(200);
+  expect((await responseJson<{ data: TemplateBody }>(toOffset)).data).toMatchObject({ due_at: null, due_offset_days: 30 });
+
+  const backToDate = await patchJson(`/api/v1/events/${EVENT_ID}/task-templates/${templateId}`, { due_at: HEADSHOT_DUE });
+  expect(backToDate.status).toBe(200);
+  expect((await responseJson<{ data: TemplateBody }>(backToDate)).data).toMatchObject({ due_at: HEADSHOT_DUE, due_offset_days: null });
+
+  const both = await patchJson(`/api/v1/events/${EVENT_ID}/task-templates/${templateId}`, { due_at: SLIDES_DUE, due_offset_days: 7 });
+  expect(both.status).toBe(422);
+});
+
 test("CONTRACT · MRQ-114 · a file-config-only PATCH still works and leaves the rest of the template alone", async () => {
   const created = await postJson(`/api/v1/events/${EVENT_ID}/task-templates`, { name: "Upload Session Presentation", kind: "file", due_at: SLIDES_DUE });
   const templateId = (await responseJson<CreateResponse>(created)).data.id;

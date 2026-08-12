@@ -541,11 +541,22 @@ const updateTaskTemplate = defineApiRoute(
     ];
 
     if (nextName !== template.name || nextDescription !== template.description || dueProvided) {
-      statements.push(context.env.DB.prepare(
-        `UPDATE speaker_tasks
-         SET title = ?, description = ?, due_at = ?, updated_at = ?, last_write_source = 'marquee'
-         WHERE template_id = ? AND status = 'open' AND cancelled_at IS NULL`,
-      ).bind(nextName, nextDescription, resolveTaskDueAt({ due_at: nextDueAt, due_offset_days: nextOffset }, now), now, templateId));
+      // A fixed date is the same instant for everyone who owes the task. An
+      // offset is not: it counts from each assignment, so the deadline is
+      // recomputed against each row's own `created_at` rather than against the
+      // moment of this edit — otherwise editing the wording of a task would
+      // quietly hand every speaker a fresh extension.
+      statements.push(nextDueAt !== null
+        ? context.env.DB.prepare(
+          `UPDATE speaker_tasks
+           SET title = ?, description = ?, due_at = ?, updated_at = ?, last_write_source = 'marquee'
+           WHERE template_id = ? AND status = 'open' AND cancelled_at IS NULL`,
+        ).bind(nextName, nextDescription, nextDueAt, now, templateId)
+        : context.env.DB.prepare(
+          `UPDATE speaker_tasks
+           SET title = ?, description = ?, due_at = created_at + ?, updated_at = ?, last_write_source = 'marquee'
+           WHERE template_id = ? AND status = 'open' AND cancelled_at IS NULL`,
+        ).bind(nextName, nextDescription, (nextOffset ?? 0) * 86_400_000, now, templateId));
     }
 
     await context.env.DB.batch(statements);

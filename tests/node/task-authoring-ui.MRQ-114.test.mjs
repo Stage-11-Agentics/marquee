@@ -59,6 +59,20 @@ test("CONTRACT · MRQ-114 · the page reads assignments and assignable people fr
   assert.match(page, /row\.status === "done" \? "Complete" : "Pending"/);
 });
 
+test("CONTRACT · MRQ-114 · every surface renders a task deadline as the same calendar day", () => {
+  // `formatDate` in these pages reads the browser's local zone, so an instant
+  // near a day boundary shows one date to the organizer and another to a
+  // speaker east of them. Task due dates go through the shared UTC formatter
+  // instead — the portal and the chase board must agree with the page that
+  // authored the date.
+  const portal = fs.readFileSync(path.join(root, "src/ui/portal/PortalPage.tsx"), "utf8");
+  const onboarding = fs.readFileSync(path.join(root, "src/ui/onboarding/OnboardingPage.tsx"), "utf8");
+  for (const [name, source] of [["portal", portal], ["onboarding", onboarding]]) {
+    assert.match(source, /import \{ formatDueDate \} from "\.\.\/\.\.\/lib\/task-due";/, `${name} does not use the shared due-date formatter`);
+    assert.doesNotMatch(source, /formatDate\((?:task|cell)\.due_at\)/, `${name} still formats a due date in local time`);
+  }
+});
+
 test("CONTRACT · MRQ-114 · state changes reserve their space instead of moving the page", () => {
   assert.match(styles, /\.task-notice-slot[^\n]*min-height: 20px/);
   assert.match(styles, /\.task-compose-error[^\n]*min-height: 17px/);

@@ -124,3 +124,23 @@ Self-review, inline (COMMON.md inline-full: self-review the plan or spawn one re
 5. **`position` on create.** `MAX(position)+1` read-then-write races under concurrent creates. `position` has no UNIQUE constraint and the list orders by `position, id`, so a tie is cosmetically stable. **Resolution:** accepted as-is; no locking.
 
 6. **Response-shape compatibility.** MRQ-96's integration test asserts the existing GET/PATCH shapes. **Resolution:** all new fields are additive and all new PATCH body fields optional; the MRQ-96 suite runs unchanged as the compatibility gate, not a rewritten copy of it.
+
+---
+
+## Plan-Review Cycle 2 Resolutions (AUTHORITATIVE)
+
+Lattice auto-fired plan review (`art_01KZTDNCRM5G5NGMYNEMF59Q8P`) — verdict **PASS**, five MINOR findings. All five triaged; two required code changes.
+
+1. **Offset anchor for ad-hoc assignment was undefined.** *Already resolved as recommended:* `resolveTaskDueAt` (src/lib/task-due.ts) defines it as `now + offset_days`, documented at the helper, and it is the single path both assignment doors take. No change.
+
+2. **Offset-mode propagation had no per-row anchor.** *Real gap, fixed.* PATCH previously recomputed `now + offset` for every open row, which meant editing a task's wording silently handed every speaker a fresh extension. Now: a fixed date writes the same literal to every open row; an offset recomputes against **each row's own `created_at`** — the anchor that row was actually assigned on. Covered by "editing an offset task recomputes each deadline from that assignment, not from the edit".
+
+3. **PATCH merged-state CHECK validation.** *Already correct:* setting one deadline mode nulls the other, both in one body is a 422, and `assertDeadline` runs on the merged values before the write. Added the missing regression test ("switching deadline mode clears the other column instead of tripping the CHECK") rather than changing behaviour.
+
+4. **End-of-day UTC renders as the next day on surfaces that format locally.** *Real cross-surface lie, fixed.* Confirmed by grep: `PortalPage.tsx:162` and `OnboardingPage.tsx:65` both format with the browser's local zone, so a Berlin speaker would read "May 2" for the deadline the organizer typed as May 1. Rather than move the stored instant (any instant renders as two different calendar days somewhere), the three task-due-date call sites now share `formatDueDate` from `src/lib/task-due.ts`. Three one-line changes, no behavioural change to any other date on those pages. Locked by a node test that fails if a due date goes back to the local formatter.
+
+5. **Ticket says "title", endpoint takes `template_id`.** *No code change* — `speaker_tasks.template_id` is `NOT NULL`, so a titled ad-hoc task without a template is impossible without a migration the ticket does not authorize. Create-with-`assign_to` makes it one atomic action from the operator's side. Carried into the PR body as a named deviation.
+
+## Code review: fell back to self-review
+
+The auto-fired code review (`lattice code-review`, single mode) **timed out after 600s** under fleet load (1-min load average 199 at the time). Per COMMON.md's timebox rule the fallback is a self-review, recorded below and attached with `--role review`.

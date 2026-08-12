@@ -9,6 +9,7 @@ import { formatBytes, validateClientUpload } from "../upload/upload-policy";
 import type { SignedUpload } from "../../lib/r2/protocol";
 import { isFieldApplicable } from "../../lib/form-conditions";
 import { seedId } from "../../lib/ids";
+import { formatDueDate } from "../../lib/task-due";
 import type { VenueBuildingInput } from "../../lib/venues";
 import { MAP_HEIGHT, VenueMap } from "../venues/VenueMap";
 import "./portal.css";
@@ -529,7 +530,7 @@ function TaskRow({ task, submissions, person, onComplete }: { task: PortalTask; 
     <div>
       <h3 class="portal-task-title" title={task.title}>{task.title}</h3>
       <p class="portal-task-description">{task.description || "—"}</p>
-      <div class="portal-task-meta"><span>{task.kind}</span><span>due {formatDate(task.due_at)}</span>{task.overdue && task.status === "open" ? <span class="overdue">overdue</span> : null}</div>
+      <div class="portal-task-meta"><span>{task.kind}</span><span>due {formatDueDate(task.due_at)}</span>{task.overdue && task.status === "open" ? <span class="overdue">overdue</span> : null}</div>
     </div>
     <button class="portal-task-action" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{task.status === "done" ? (expanded ? "Close" : "View") : (expanded ? "Close" : "Complete")}</button>
     {expanded ? <div class="portal-task-payload"><TaskSurface task={task} submission={submission} person={person} onComplete={onComplete} /></div> : null}
