@@ -26,7 +26,7 @@ test("CONTRACT · the speaker directory's search form can be submitted without g
   assert.match(form, /class="public-search" name="q"/);
   // A filtered directory needs a way back to the whole list; the page has no
   // script to clear it with.
-  assert.match(form, /data\.filters\.q \? <a class="public-button" href=\{`\/speakers\?event=/);
+  assert.match(form, /data\.filters\.q \? <a class="public-button" href=\{directoryHref\(listView \? "list" : "gallery"\)\}>Clear/);
 });
 
 test("CONTRACT · the directory filter row makes room for its control", async () => {
