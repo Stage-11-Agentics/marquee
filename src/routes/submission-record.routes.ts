@@ -699,10 +699,17 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       // derives to `scheduled` and a stage test would happily publish it to
       // the public site.
       can_publish: slot !== null && !slot.is_published && row.status === "accepted",
-      // Both halves must hold: an editable status AND the grant to write it.
-      // The UI renders the content editor and the restore control from this
-      // one field, so neither can appear over a write the server would refuse.
-      can_edit_content: canWriteProgram && (EDITABLE_CONTENT_STATUSES as readonly string[]).includes(row.status),
+      // The UI renders the content editor and the restore control from this one
+      // field, so it must answer exactly what the write routes enforce — which
+      // is not one policy but two. Drafts go to `patchDraft`, gated on
+      // `requireDraftRead`; reaching this projection for a draft has already
+      // satisfied it, and form admins legitimately edit drafts with no
+      // membership role at all (AC-247–249). Everything past Draft goes to
+      // `updateSubmissionContent`, which requires `program:write`. Demanding
+      // the grant on both would quietly take draft editing away from the
+      // people the drafts queue exists for.
+      can_edit_content: (EDITABLE_CONTENT_STATUSES as readonly string[]).includes(row.status)
+        && (row.status === "draft" || canWriteProgram),
     },
   };
 }

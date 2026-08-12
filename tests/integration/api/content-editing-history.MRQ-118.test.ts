@@ -390,3 +390,20 @@ test("MRQ-118: an uneditable status closes the editor even for a full organizer"
   const record = await readRecord("sub-118-closed") as unknown as { actions: { can_edit_content: boolean } };
   expect(record.actions.can_edit_content).toBe(false);
 });
+
+test("AC-247-249 · MRQ-118: a draft stays editable for a principal without program:write", async () => {
+  // Drafts save through `patchDraft`, which is gated on requireDraftRead — not
+  // on program:write. Gating the shared editor on the grant alone would remove
+  // a shipped capability from the people the drafts queue exists for.
+  await insertSubmission("sub-118-draft-ops", "draft");
+  const response = await requestAs(OPS_SESSION_ID, `/api/v1/events/${EVENT_ID}/submissions/sub-118-draft-ops`);
+  expect(response.status).toBe(200);
+  const view = await response.json() as { actions: { can_edit_content: boolean } };
+  expect(view.actions.can_edit_content).toBe(true);
+
+  const saved = await requestAs(OPS_SESSION_ID, `/api/v1/events/${EVENT_ID}/submissions/sub-118-draft-ops`, {
+    method: "PATCH",
+    body: JSON.stringify({ title: "Draft edited without program:write" }),
+  });
+  expect(saved.status).toBe(200);
+});
