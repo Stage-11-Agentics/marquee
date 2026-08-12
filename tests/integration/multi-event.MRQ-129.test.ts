@@ -288,6 +288,14 @@ test("CONTRACT · MRQ-129 the reset sweeps the demo organization, and the demo o
   const identity = await me.json() as { demo_event_id: string };
   expect(identity.demo_event_id).toBe(SHIPPED_DEMO_EVENT_ID);
 
+  // The front door asks the same question and must not get a different answer:
+  // a visitor arriving at the landing page was being shown the name and the
+  // zeroes of a conference somebody else created ten minutes earlier.
+  const landing = await request("/");
+  const html = await landing.text();
+  expect(html).toContain("AI Engineer New York 2026");
+  expect(html).not.toContain("Forward Summit 2028");
+
   const uploadKey = `uploads/${createdId}/task_upload/deck.pdf`;
   await env.MEDIA.put(uploadKey, "not really a deck");
 

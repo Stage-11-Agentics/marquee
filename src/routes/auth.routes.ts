@@ -12,10 +12,10 @@ import { createSession, revokeSession, SESSION_TTL_MS } from "../lib/auth/auth-s
 import {
   DEMO_ORGANIZER_PERSON_ID,
   DEMO_SPEAKER_PERSON_ID,
-  SHIPPED_DEMO_EVENT_ID,
   SHIPPED_DEMO_ORGANIZER_PERSON_ID,
   SHIPPED_DEMO_SPEAKER_PERSON_ID,
 } from "../lib/reset-demo/demo-fixture";
+import { DEMO_EVENT_ORDER, SEEDED_DEMO_EVENT_ID } from "../lib/demo-event";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 
 /**
@@ -391,28 +391,11 @@ async function findDemoPersona(
   return persona ?? null;
 }
 
-/**
- * The demo conference, resolved by identity rather than by age.
- *
- * This one row names the conference in the shell caption, supplies the CLI's
- * default event, and seeds the browser's event selection — so "whichever demo
- * conference is oldest" was a load-bearing guess. It was also wrong in the
- * documented production path: `npm run seed` stamps every row with a frozen
- * clock set in the future, so a conference created today sorts BEFORE the
- * seeded one and quietly becomes "the demo" for the whole product. Now that a
- * created conference inherits `demo_mode = 1`, that is one create away.
- *
- * The seeded id is the answer whenever it exists. The age ordering survives
- * only as the fallback for an instance whose demo is not the shipped fixture.
- */
+/** By identity, never by age — see `src/lib/demo-event.ts`. */
 async function findDemoEvent(db: D1Database): Promise<EventRow | null> {
-  const seeded = await db
-    .prepare("SELECT * FROM events WHERE id = ? AND demo_mode = 1")
-    .bind(SHIPPED_DEMO_EVENT_ID)
-    .first<EventRow>();
-  if (seeded) return seeded;
   const event = await db
-    .prepare("SELECT * FROM events WHERE demo_mode = 1 ORDER BY created_at ASC LIMIT 1")
+    .prepare(`SELECT * FROM events WHERE demo_mode = 1 ${DEMO_EVENT_ORDER}`)
+    .bind(SEEDED_DEMO_EVENT_ID)
     .first<EventRow>();
   return event ?? null;
 }
