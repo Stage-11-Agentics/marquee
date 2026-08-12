@@ -328,7 +328,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
         method: "POST",
         body: JSON.stringify({
           comment: currentReview.comment,
-          criteria_scores: currentReview.abstained ? null : (Object.keys(currentReview.criteria).length ? currentReview.criteria : null),
+          criteria_scores: Object.keys(currentReview.criteria).length ? currentReview.criteria : null,
           recommendation: currentReview.abstained ? null : currentReview.recommendation,
           score: currentReview.abstained ? null : currentReview.score,
           abstained: currentReview.abstained ? 1 : 0,
