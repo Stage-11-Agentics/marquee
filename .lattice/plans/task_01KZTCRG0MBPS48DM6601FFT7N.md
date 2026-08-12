@@ -3,8 +3,8 @@
 ## Contract and base
 
 - Ticket: MRQ-116 / CNT-05 (w2), with CNT-S3 as the adversarial scenario.
-- The branch was cut from `github/main` because `github/mrq-115-files-library` was absent at planning time. Record the base as `github/main @ 23a06b040fd76678a135b27ed401a7ea70ea0754`.
-- Before implementation, poll for the parent ref and rebase this branch onto it. While the parent is unmerged use `git rebase --onto github/mrq-115-files-library 23a06b040fd76678a135b27ed401a7ea70ea0754 mrq-116-file-comments`; after the parent is squash-merged, use the COMMON.md `--onto github/main <parent-tip-sha>` form. Re-run `npm ci` after either rebase.
+- The branch was cut from `github/main` because `github/mrq-115-files-library` was absent at planning time. The exact cut point is `github/main @ 23a06b0b28473edbd9d5feeea1a8d5ae32dc1a80`.
+- Before implementation, poll for the parent ref and rebase this branch onto it. While the parent is unmerged use `git rebase --onto github/mrq-115-files-library 23a06b0b28473edbd9d5feeea1a8d5ae32dc1a80 mrq-116-file-comments`; after the parent is squash-merged, use the COMMON.md `--onto github/main <parent-tip-sha>` form. Re-run `npm ci` after either rebase.
 
 ## Scope
 
@@ -15,6 +15,8 @@ Implement a real, event-scoped comment thread for each file deliverable slot. Th
 3. Add authenticated API routes in a new `*.routes.ts` module: speaker read/write for the current task, and organizer read/write for the Files library's event-scoped deliverable slot. Both use the shared helper and return comments with stable ordering, author name, author role, and nullable version metadata. Keep API route naming in the generated manifest and expose useful OpenAPI schemas.
 4. Extend the speaker portal task projection and add a compact `FileComments` UI in the file-task row: visible `Comments` heading, existing thread, author name + role, version chip when present, and a real submit control with pending/error/empty states. Preserve layout space so submitting a comment does not make adjacent controls jump. Speaker writes use the current task and may tag its selected attachment.
 5. After rebasing onto MRQ-115, mount the same thread in the organizer Files row expansion/detail surface. Make the slot anchor explicit in the UI, show old version chips after a replacement upload, and let the organizer reply without opening a second attachment-specific thread. Keep all F1 version-list ownership intact and avoid changes to F1's attachment query semantics.
+
+The parent UI/API contract is frozen: consume `listVersionsFor`/`listVersionsForOwners` and `FileVersions` from MRQ-115; do not redefine `FileVersion`, add CSS imports for its consumer, or write attachment SQL. The organizer Files API returns rows keyed by speaker-task ID with versions inline, and the Files page owns the per-row selection column. Comments mount around those surfaces.
 
 ## Non-goals and collision boundaries
 
