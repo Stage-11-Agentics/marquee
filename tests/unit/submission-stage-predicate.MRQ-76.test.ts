@@ -87,7 +87,7 @@ function seedFixture(): void {
   );
 }
 
-function idsFor(status: (typeof STAGES)[number]): string[] {
+function idsFor(status: (typeof STAGES)[number] | "accepted_any"): string[] {
   const predicate = submissionStatusPredicate(status, { includeCancelledAt: true });
   return (database.prepare(`
     SELECT s.id
@@ -116,4 +116,9 @@ test("CONTRACT · MRQ-76 shared stage predicates classify the fixture into disti
   };
   for (const stage of STAGES) expect(idsFor(stage), stage).toEqual(expected[stage]);
   expect(idsFor("waved")).not.toEqual(idsFor("accepted"));
+});
+
+test("CONTRACT · accepted_any is the stored fact across every derived lifecycle stage", () => {
+  seedFixture();
+  expect(idsFor("accepted_any")).toEqual(["accepted", "onboarding", "published", "scheduled", "waved"]);
 });

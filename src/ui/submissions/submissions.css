@@ -33,6 +33,8 @@
 .submissions-toolbar { align-items: center; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; gap: 7px; min-height: 54px; padding: 9px 11px; }
 .submissions-toolbar input, .submissions-toolbar select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font-size: 11.5px; height: 32px; outline: 0; padding: 0 9px; }
 .submissions-toolbar input:focus, .submissions-toolbar select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.submissions-toolbar .status-filter.is-default { border-color: var(--line-strong); color: var(--muted); font-weight: 600; }
+.submissions-toolbar .status-filter.has-selection { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); font-weight: 600; }
 .search-field { display: flex; min-width: min(330px, 35vw); }
 .search-field input { border-radius: var(--radius) 0 0 var(--radius); min-width: 0; width: 100%; }
 .search-field .button { border-left: 0; border-radius: 0 var(--radius) var(--radius) 0; }

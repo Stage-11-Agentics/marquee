@@ -2,15 +2,15 @@ import { z } from "@hono/zod-openapi";
 
 import { createListQuerySchema, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { SUBMISSION_LIST_STATUSES } from "../api/submissions";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import {
   listSubmissions,
   SUBMISSION_SORTS,
-  SUBMISSION_STATUS_FILTERS,
   submissionFilterSchema,
 } from "./submissions.queries";
 
-const submissionStatusSchema = z.enum(SUBMISSION_STATUS_FILTERS);
+const submissionListItemStatusSchema = z.enum(SUBMISSION_LIST_STATUSES);
 const submissionTrackSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -47,7 +47,7 @@ const submissionListItemSchema = z.object({
   id: z.string(),
   kind: z.enum(["abstract", "session"]),
   title: z.string(),
-  status: submissionStatusSchema,
+  status: submissionListItemStatusSchema,
   format_id: z.string().nullable(),
   format: z.string().nullable(),
   speakers: z.array(submissionSpeakerSchema),

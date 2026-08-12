@@ -1,16 +1,20 @@
-export type SubmissionListStatus =
-  | "draft"
-  | "submitted"
-  | "in_review"
-  | "accepted"
-  | "waitlisted"
-  | "rejected"
-  | "withdrawn"
-  | "waved"
-  | "unreviewed"
-  | "onboarding"
-  | "scheduled"
-  | "published";
+/** Row statuses are derived output; filter-only tokens such as accepted_any stay out. */
+export const SUBMISSION_LIST_STATUSES = [
+  "draft",
+  "submitted",
+  "in_review",
+  "accepted",
+  "waitlisted",
+  "rejected",
+  "withdrawn",
+  "waved",
+  "unreviewed",
+  "onboarding",
+  "scheduled",
+  "published",
+] as const;
+
+export type SubmissionListStatus = (typeof SUBMISSION_LIST_STATUSES)[number];
 
 export interface SubmissionTrackListItem {
   id: string;

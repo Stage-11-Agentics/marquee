@@ -635,7 +635,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     </div>
     {notice && <div class="agenda-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
     {snapshot.sessions.length === 0 && snapshot.unscheduled.length === 0
-      ? <EmptyState title="No Sessions are ready for the agenda" copy="Accepted Sessions will appear here when the conference is ready to place them. Open the submission list to check the next candidates." action={<Button variant="primary" onClick={() => window.location.assign("/submissions?status=accepted")}>Open accepted submissions</Button>} />
+      ? <EmptyState title="No Sessions are ready for the agenda" copy="Accepted Sessions will appear here when the conference is ready to place them. Open the submission list to check the next candidates." action={<Button variant="primary" onClick={() => window.location.assign("/submissions?status=accepted_any&placement=unplaced")}>Open accepted submissions</Button>} />
       : <div class="agenda-layout">
         <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} />
         <section class="card agenda-board" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
