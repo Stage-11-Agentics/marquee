@@ -20,6 +20,9 @@ export const GLOBAL_OPTIONS = [
   { name: "--help", description: "Show help for this command." },
 ];
 
+/** The copy sets `POST /events` accepts, mirroring `src/lib/events/copy-manifest.ts`. */
+export const COPY_SETS = ["formats", "tracks", "forms", "task_templates", "email_templates", "evaluation_plan", "venues"];
+
 const SET_OPTION = {
   name: "--set <key=value>",
   description: "Repeatable body field. Values parse as JSON when they can: 30 is a number, null is null, Workshop is a string. Quote to force a string: --set name='\"2026\"'.",
@@ -60,12 +63,30 @@ export const COMMAND_REGISTRY = [
   },
   {
     path: ["event", "create"],
-    usage: "marquee event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz>",
-    summary: "Create a conference on this instance.",
+    usage: "marquee event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz> [--from <event-id>] [--copy <sets>]",
+    summary: "Create a conference on this instance, optionally from an existing one.",
     operations: ["createEvent"],
     skill: "setup",
-    set: ["name", "starts_on", "ends_on", "timezone", "venue", "tagline"],
-    options: [SET_OPTION],
+    set: ["name", "starts_on", "ends_on", "timezone", "venue", "tagline", "copy_from", "copy"],
+    options: [
+      SET_OPTION,
+      // `--from` and `--copy` are sugar over `--set copy_from=` and a JSON
+      // object, because the thing an agent is doing here is "next year's
+      // conference from this year's", and it should read that way on one line.
+      { name: "--from <event-id>", description: "Carry structure from an existing conference." },
+      { name: "--copy <sets>", description: `Comma-separated sets to carry: ${COPY_SETS.join(", ")}. Default with --from: everything but venues.` },
+    ],
+  },
+  {
+    path: ["event", "list"],
+    usage: "marquee event list",
+    summary: "List the conferences this credential can read.",
+    operations: ["listEvents"],
+    // Not a setup verb: setting up an instance happens once, and this is the
+    // command an agent reaches for every time it needs to know which
+    // conference it is working in. It is taught in its own chapter.
+    skill: "conferences",
+    options: [],
   },
   {
     path: ["forms", "create"],

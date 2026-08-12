@@ -42,7 +42,7 @@ const LEVEL_WORD: Record<HealthLevel, string> = {
 };
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   navigate: (target: string) => void;
   mode?: HealthPageMode;
 }
@@ -267,7 +267,7 @@ function TotalsStrip({ snapshot }: { snapshot: DeliveryHealthSnapshot }): JSX.El
   </section>;
 }
 
-export function DeliveryHealthPage({ eventId = "evt_aie-ny-2026", navigate, mode = "speaker-followups" }: Props): JSX.Element {
+export function DeliveryHealthPage({ eventId, navigate, mode = "speaker-followups" }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ snapshot: null, loadedAt: null, error: null, consecutiveFailures: 0 });
   const [reloadKey, setReloadKey] = useState(0);
 

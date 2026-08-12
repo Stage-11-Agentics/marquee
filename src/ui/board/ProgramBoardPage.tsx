@@ -6,7 +6,6 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, EmptyState, PageHeader } from "../shell/components";
 import "./board.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const PAGE_SIZE = 100;
 const CARD_HEIGHT = 132;
 
@@ -16,7 +15,7 @@ type LoadState =
   | { kind: "ready"; cards: BoardCard[]; columns: BoardColumn[]; facets: BoardFacets };
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   navigate: (target: string) => void;
 }
 
@@ -88,7 +87,7 @@ async function readBoard(eventId: string, filters: FilterState, signal: AbortSig
   return { kind: "ready", cards, columns: first?.columns ?? [], facets: first?.facets ?? { tracks: [], formats: [], waves: [] } };
 }
 
-export function ProgramBoardPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props): JSX.Element {
+export function ProgramBoardPage({ eventId, navigate }: Props): JSX.Element {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const filterIdentity = JSON.stringify(filters);

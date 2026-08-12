@@ -5,7 +5,7 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
 import { EVENT_NAME_CHANGED } from "../shell/identity";
 import { OrganizersCard } from "../setup/OrganizersCard";
-import { DEFAULT_EVENT_ID, loadVenueModel } from "../venues/venue-writer";
+import { loadVenueModel } from "../venues/venue-writer";
 import type { VenueModel } from "../../lib/venues";
 import "./settings.css";
 
@@ -54,7 +54,7 @@ type LoadState =
   | { kind: "error"; model: SettingsModel | null; message: string };
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   navigate: (target: string) => void;
 }
 
@@ -167,7 +167,7 @@ function TrackRow({
   </article>;
 }
 
-export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): JSX.Element {
+export function EventSettings({ eventId, navigate }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", model: null });
   const [venueCounts, setVenueCounts] = useState<VenueCounts | null>(null);
   const [dirty, setDirty] = useState(false);

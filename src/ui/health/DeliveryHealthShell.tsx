@@ -7,6 +7,8 @@ import { QuickSearch } from "../shell/QuickSearch";
 import { Sidebar } from "../shell/Sidebar";
 import { Topbar } from "../shell/Topbar";
 import { useIdentity } from "../shell/identity";
+import { useEventContext } from "../shell/event-context";
+import { NoConference } from "../shell/NoConference";
 import { matchRoute } from "../shell/route-table";
 import { DeliveryHealthPage } from "./DeliveryHealthPage";
 import { runDemoReset } from "./demo-reset";
@@ -17,10 +19,11 @@ import { runDemoReset } from "./demo-reset";
  * client-side push, so every sidebar destination resolves the same way it does
  * anywhere else — there is no dead end on either page.
  */
-export function DeliveryHealthShell({
-  eventName,
-  eventId = "evt_aie-ny-2026",
-}: { eventName: string; eventId?: string }): JSX.Element {
+export function DeliveryHealthShell({ eventName }: { eventName: string }): JSX.Element {
+  // A separate render root, which is why the conference context lives in
+  // `ShellEntry`: this page is one of the surfaces a provider mounted inside
+  // `AppShell` would never reach.
+  const { eventId } = useEventContext();
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const identity = useIdentity();
@@ -65,13 +68,15 @@ export function DeliveryHealthShell({
         <div class="page">
           {/* The shell's own boundary, as the admin shell keeps: a screen that
               throws on its first render must not take navigation down with it. */}
-          <ErrorBoundary label={route?.label ?? "Speaker follow-ups"}>
-            <DeliveryHealthPage eventId={eventId} navigate={navigate} mode={mode} />
+          <ErrorBoundary label={route?.label ?? "Speaker follow-ups"} key={eventId ?? "no-conference"}>
+            {eventId === null
+              ? <NoConference navigate={navigate} />
+              : <DeliveryHealthPage eventId={eventId} navigate={navigate} mode={mode} />}
           </ErrorBoundary>
         </div>
       </main>
     </div>
-    <QuickSearch key={searchOpen ? "open" : "closed"} eventId={eventId} open={searchOpen} onClose={() => setSearchOpen(false)} navigate={navigate} />
+    {eventId !== null && <QuickSearch key={searchOpen ? "open" : "closed"} eventId={eventId} open={searchOpen} onClose={() => setSearchOpen(false)} navigate={navigate} />}
     <ToastHost message={toast} />
   </>;
 }

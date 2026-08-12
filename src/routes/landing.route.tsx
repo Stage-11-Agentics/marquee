@@ -4,6 +4,7 @@ import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
 import { instanceIsUnclaimed } from "../lib/auth/instance-claim";
+import { DEMO_EVENT_ORDER, SEEDED_DEMO_EVENT_ID } from "../lib/demo-event";
 import { ICON_LINKS } from "../lib/head-icons";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
 import { hasSpeakerTaskCancellationColumn, submissionStatusPredicate } from "./submissions.queries";
@@ -76,8 +77,7 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
          SELECT id, name, updated_at
          FROM events
          WHERE demo_mode = 1
-         ORDER BY created_at ASC
-         LIMIT 1
+         ${DEMO_EVENT_ORDER}
        )
        SELECT
          demo.name AS conference_name,
@@ -104,6 +104,7 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
            ORDER BY position ASC LIMIT 1) AS review_track
        FROM demo`,
     )
+    .bind(SEEDED_DEMO_EVENT_ID)
     .first<LandingRow>();
 
   if (!row) {
