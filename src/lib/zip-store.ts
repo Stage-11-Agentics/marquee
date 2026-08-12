@@ -45,7 +45,9 @@ const crcTable = (() => {
 
 export function crc32(bytes: Uint8Array, previous = 0): number {
   let value = (previous ^ UINT32_MAX) >>> 0;
-  for (const byte of bytes) value = crcTable[(value ^ byte) & 0xff]! ^ (value >>> 8);
+  for (let index = 0; index < bytes.length; index += 1) {
+    value = crcTable[(value ^ bytes[index]!) & 0xff]! ^ (value >>> 8);
+  }
   return (value ^ UINT32_MAX) >>> 0;
 }
 
@@ -171,10 +173,14 @@ export async function writeZipStore(
     const reader = entry.body.getReader();
     let crc = 0;
     let size = 0;
+    let finished = false;
     try {
       while (true) {
         const result = await reader.read();
-        if (result.done) break;
+        if (result.done) {
+          finished = true;
+          break;
+        }
         const chunk = result.value;
         if (chunk.byteLength === 0) continue;
         size += chunk.byteLength;
@@ -183,6 +189,7 @@ export async function writeZipStore(
         await write(chunk);
       }
     } finally {
+      if (!finished) await reader.cancel().catch(() => undefined);
       reader.releaseLock();
     }
     await write(dataDescriptor(crc, size));

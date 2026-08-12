@@ -10,7 +10,7 @@ import { createZipStoreStream, type ZipStoreEntry } from "../lib/zip-store";
 interface ExportEnv {
   DB: D1Database;
   MEDIA: R2Bucket;
-  MEDIA_PUBLIC_ORIGIN: string;
+  MEDIA_PUBLIC_ORIGIN?: string;
 }
 
 interface ExportTaskRow {
@@ -40,10 +40,10 @@ const exportRequest = z.object({
   message: "task_ids must not contain duplicates",
   path: ["task_ids"],
 });
-interface ExportRequest {
-  task_ids: string[];
-  grouping: "session" | "speaker";
-}
+type ExportRequest = z.infer<typeof exportRequest>;
+
+const QUERY_CHUNK_SIZE = 80;
+const MAX_ZIP_BYTES = 0xffffffff - (4 * 1024 * 1024);
 
 function bindings(context: { env: ApiEnv["Bindings"] }): ExportEnv {
   return context.env as unknown as ExportEnv;
@@ -86,39 +86,53 @@ function missingLine(row: ExportTaskRow, reason: string): string {
   return `${sessionFolder(row)} · ${row.title} — ${reason}`;
 }
 
+function chunks<T>(values: readonly T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) result.push([...values.slice(index, index + size)]);
+  return result;
+}
+
 async function taskRowsFor(
   db: D1Database,
   eventId: string,
   taskIds: readonly string[],
 ): Promise<ExportTaskRow[]> {
-  const rows = await db.prepare(
-    `SELECT task.id, task.event_id, task.person_id, person.name AS speaker_name,
-            task.submission_id, submission.title AS session_title,
-            agenda.starts_at, room.name AS room_name, event.timezone,
-            task.title
-       FROM speaker_tasks task
-       JOIN events event ON event.id = task.event_id
-       JOIN people person ON person.id = task.person_id
-       LEFT JOIN submissions submission
-         ON submission.id = task.submission_id AND submission.event_id = task.event_id
-       LEFT JOIN agenda_items agenda
-         ON agenda.submission_id = task.submission_id AND agenda.event_id = task.event_id
-       LEFT JOIN rooms room ON room.id = agenda.room_id AND room.event_id = task.event_id
-      WHERE task.event_id = ? AND task.kind = 'file'
-        AND task.id IN (${taskIds.map(() => "?").join(",")})
-      ORDER BY task.id`,
-  ).bind(eventId, ...taskIds).all<ExportTaskRow>();
-  if (rows.results.length !== taskIds.length) throw ApiError.notFound("one or more selected deliverables are unavailable");
-  return rows.results;
+  const rows: ExportTaskRow[] = [];
+  for (const chunk of chunks(taskIds, QUERY_CHUNK_SIZE)) {
+    const result = await db.prepare(
+      `SELECT task.id, task.event_id, task.person_id, person.name AS speaker_name,
+              task.submission_id, submission.title AS session_title,
+              agenda.starts_at, room.name AS room_name, event.timezone,
+              task.title
+         FROM speaker_tasks task
+         JOIN events event ON event.id = task.event_id
+         JOIN people person ON person.id = task.person_id
+         LEFT JOIN submissions submission
+           ON submission.id = task.submission_id AND submission.event_id = task.event_id
+         LEFT JOIN agenda_items agenda
+           ON agenda.submission_id = task.submission_id AND agenda.event_id = task.event_id
+         LEFT JOIN rooms room ON room.id = agenda.room_id AND room.event_id = task.event_id
+        WHERE task.event_id = ? AND task.kind = 'file'
+          AND task.id IN (${chunk.map(() => "?").join(",")})
+        ORDER BY task.id`,
+    ).bind(eventId, ...chunk).all<ExportTaskRow>();
+    rows.push(...result.results);
+  }
+  if (rows.length !== taskIds.length) throw ApiError.notFound("one or more selected deliverables are unavailable");
+  return rows.sort((left, right) => left.id.localeCompare(right.id));
 }
 
 async function attachmentObjectsFor(db: D1Database, eventId: string, attachmentIds: readonly string[]): Promise<Map<string, AttachmentObjectRow>> {
   if (attachmentIds.length === 0) return new Map();
-  const rows = await db.prepare(
-    `SELECT id, r2_key, r2_etag FROM attachments
-      WHERE event_id = ? AND status = 'ready' AND id IN (${attachmentIds.map(() => "?").join(",")})`,
-  ).bind(eventId, ...attachmentIds).all<AttachmentObjectRow>();
-  return new Map(rows.results.map((row) => [row.id, row]));
+  const rows: AttachmentObjectRow[] = [];
+  for (const chunk of chunks(attachmentIds, QUERY_CHUNK_SIZE)) {
+    const result = await db.prepare(
+      `SELECT id, r2_key, r2_etag FROM attachments
+        WHERE event_id = ? AND status = 'ready' AND id IN (${chunk.map(() => "?").join(",")})`,
+    ).bind(eventId, ...chunk).all<AttachmentObjectRow>();
+    rows.push(...result.results);
+  }
+  return new Map(rows.map((row) => [row.id, row]));
 }
 
 function latestFor(taskId: string, versions: Map<string, { versions: FileVersion[] }>): FileVersion | null {
@@ -133,13 +147,13 @@ async function handleExport(context: Context<ApiEnv>): Promise<Response> {
   if (!eventId) throw ApiError.badRequest("conference id is required");
   const request = context.req.valid("json" as never) as ExportRequest;
   const env = bindings(context);
-  const taskIds = [...new Set(request.task_ids)];
+  const taskIds = [...new Set(request.task_ids as string[])];
   const rows = await taskRowsFor(env.DB, eventId, taskIds);
   const versionLists = await listVersionsForOwners(
     env.DB,
     "task_upload",
     taskIds,
-    env.MEDIA_PUBLIC_ORIGIN,
+    env.MEDIA_PUBLIC_ORIGIN ?? "",
   );
   const latest = new Map<string, FileVersion | null>(rows.map((row) => [row.id, latestFor(row.id, versionLists)]));
   const attachmentIds = rows.flatMap((row) => {
@@ -147,33 +161,46 @@ async function handleExport(context: Context<ApiEnv>): Promise<Response> {
     return version ? [version.attachment_id] : [];
   });
   const objects = await attachmentObjectsFor(env.DB, eventId, attachmentIds);
-  const manifest: string[] = [];
-  const entries: ZipStoreEntry[] = [];
-
-  for (const row of rows) {
+  const estimatedBytes = rows.reduce((total, row) => {
     const version = latest.get(row.id);
-    if (!version) {
-      manifest.push(missingLine(row, "no completed upload"));
-      continue;
-    }
-    const attachment = objects.get(version.attachment_id);
-    if (!attachment) {
-      manifest.push(missingLine(row, "the latest upload record is unavailable"));
-      continue;
-    }
-    const object = await env.MEDIA.get(attachment.r2_key);
-    if (!object || (attachment.r2_etag !== null && object.etag !== attachment.r2_etag)) {
-      manifest.push(missingLine(row, "the latest upload bytes are unavailable"));
-      continue;
-    }
-    if (!object.body) {
-      manifest.push(missingLine(row, "the latest upload has no readable body"));
-      continue;
-    }
-    entries.push({ path: archivePath(row, request.grouping, version.filename), body: object.body });
+    return version && objects.has(version.attachment_id) ? total + version.size_bytes : total;
+  }, 0);
+  if (estimatedBytes > MAX_ZIP_BYTES) {
+    throw ApiError.unprocessable("this selection is too large for one ZIP; export it in two passes");
   }
+  const manifest: string[] = [];
+  const entries = (async function* (): AsyncGenerator<ZipStoreEntry> {
+    for (const row of rows) {
+      const version = latest.get(row.id);
+      if (!version) {
+        manifest.push(missingLine(row, "no completed upload"));
+        continue;
+      }
+      const attachment = objects.get(version.attachment_id);
+      if (!attachment) {
+        manifest.push(missingLine(row, "the latest upload record is unavailable"));
+        continue;
+      }
+      let object: R2ObjectBody | null = null;
+      try {
+        object = await env.MEDIA.get(attachment.r2_key);
+      } catch {
+        object = null;
+      }
+      if (!object || (attachment.r2_etag !== null && object.etag !== attachment.r2_etag)) {
+        manifest.push(missingLine(row, "the latest upload bytes are unavailable"));
+        continue;
+      }
+      if (!object.body) {
+        manifest.push(missingLine(row, "the latest upload has no readable body"));
+        continue;
+      }
+      yield { path: archivePath(row, request.grouping, version.filename), body: object.body };
+    }
+  })();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const timezone = rows[0]?.timezone ?? "UTC";
+  const today = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: timezone }).format(new Date());
   const filename = `deliverables-${request.grouping}-${today}.zip`;
   const response = new Response(createZipStoreStream(entries, { missing: manifest }), {
     status: 200,
@@ -199,10 +226,10 @@ const exportFiles = defineApiRoute(
       params: exportParams,
       body: { content: { "application/json": { schema: exportRequest } } },
     },
-    policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "import" }, concurrency: "none" },
     responses: {
       200: { content: { "application/zip": { schema: z.any() } }, description: "A streamed ZIP-STORE archive of current deliverables." },
-      ...errorResponses([400, 401, 403, 404, 429, 500]),
+      ...errorResponses([400, 401, 403, 404, 422, 429, 500]),
     },
   },
   handleExport as never,

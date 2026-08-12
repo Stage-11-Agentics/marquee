@@ -16,6 +16,8 @@ const TASK_ID = "task_mrq117";
 const MISSING_TASK_ID = "task_mrq117_missing";
 const OLD_ATTACHMENT_ID = "attachment_mrq117_old";
 const LATEST_ATTACHMENT_ID = "attachment_mrq117_latest";
+const BUILDING_ID = "building_mrq117";
+const ROOM_ID = "room_mrq117";
 
 function runtimeEnv(): Env {
   return {
@@ -53,12 +55,21 @@ beforeEach(async () => {
     env.DB.prepare(`INSERT INTO events
       (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, status, demo_mode, created_at, updated_at)
       VALUES (?, ?, 'Other Conference', 'other-conference', NULL, '2026-10-12', '2026-10-13', 'America/New_York', NULL, 'live', 0, ?, ?)`).bind(EVENT_OTHER_ID, ORG_ID, NOW, NOW),
+    env.DB.prepare(`INSERT INTO buildings
+      (id, event_id, name, address, position, created_at, updated_at)
+      VALUES (?, ?, 'ZIP Building', '1 Main Street', 0, ?, ?)`).bind(BUILDING_ID, EVENT_ID, NOW, NOW),
+    env.DB.prepare(`INSERT INTO rooms
+      (id, event_id, building_id, name, capacity, position, created_at, updated_at)
+      VALUES (?, ?, ?, 'Studio A', 100, 0, ?, ?)`).bind(ROOM_ID, EVENT_ID, BUILDING_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'organizer@example.com', 'Priya Raman', '[]', 0, ?, ?)").bind(PERSON_ID, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('membership_mrq117', ?, ?, ?, 'owner', ?, ?)").bind(ORG_ID, PERSON_ID, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(AUTH_SESSION, PERSON_ID, NOW + 86_400_000, NOW, NOW),
     env.DB.prepare(`INSERT INTO submissions
       (id, event_id, form_id, kind, title, abstract, status, origin, submitter_person_id, search_blob, created_at, updated_at)
       VALUES (?, ?, NULL, 'session', 'Taming 40-Minute CI', 'An abstract', 'accepted', 'admin', ?, 'Taming 40-Minute CI', ?, ?)`).bind(SESSION_ID, EVENT_ID, PERSON_ID, NOW, NOW),
+    env.DB.prepare(`INSERT INTO agenda_items
+      (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
+      VALUES ('agenda_mrq117', ?, ?, 'session', ?, 30, ?, 0, ?, ?)`).bind(EVENT_ID, SESSION_ID, NOW + 2 * 60 * 60_000, ROOM_ID, NOW, NOW),
     env.DB.prepare(`INSERT INTO task_templates
       (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
       VALUES (?, ?, 'Upload slides', 'file', 'Final deck', ?, NULL, NULL, NULL, 0, 1, ?, ?)`).bind(TEMPLATE_ID, EVENT_ID, NOW, NOW, NOW),
@@ -89,6 +100,29 @@ test("CONTRACT · CNT-14 · export includes the pointer-selected latest and a mi
   expect(text).not.toContain("old.pdf");
   expect(text).toContain("Upload Final Headshot");
   expect(text).toContain("no completed upload");
+  expect(text).toContain("Thu-1400-Studio_A_Priya_Raman/latest.pdf");
+
+  const speakerResponse = await request(`/api/v1/events/${EVENT_ID}/files/export`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ task_ids: [TASK_ID], grouping: "speaker" }),
+  });
+  expect(speakerResponse.status).toBe(200);
+  const speakerText = new TextDecoder().decode(new Uint8Array(await speakerResponse.arrayBuffer()));
+  expect(speakerText).toContain("Priya_Raman/Thu-1400-Studio_A_Priya_Raman/latest.pdf");
+});
+
+test("CONTRACT · CNT-14 · export follows the pointer even when an older ready version is current", async () => {
+  await env.DB.prepare("UPDATE speaker_tasks SET attachment_id = ? WHERE id = ?").bind(OLD_ATTACHMENT_ID, TASK_ID).run();
+  const response = await request(`/api/v1/events/${EVENT_ID}/files/export`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ task_ids: [TASK_ID], grouping: "session" }),
+  });
+  expect(response.status).toBe(200);
+  const text = new TextDecoder().decode(new Uint8Array(await response.arrayBuffer()));
+  expect(text).toContain("old.pdf");
+  expect(text).not.toContain("latest.pdf");
 });
 
 test("CONTRACT · CNT-14 · export refuses an unauthenticated or cross-event selection", async () => {

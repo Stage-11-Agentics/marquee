@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "35de43cf8c1174b7dd8253a3eb3d820bf86b569bdd9f1ec918f74229803ce6dd",
+  "documentSha256": "345a4b0d8bdecac468e8ed226aff734601af62cd3fca9b0016766499765d4f0f",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",
@@ -96,6 +96,7 @@
     "POST /api/v1/events/{eventId}/comms/preview previewCommunication",
     "POST /api/v1/events/{eventId}/comms/send sendCommunication",
     "POST /api/v1/events/{eventId}/files/{taskId}/comments addOrganizerFileComment",
+    "POST /api/v1/events/{eventId}/files/export exportDeliverableFiles",
     "POST /api/v1/events/{eventId}/formats createEventFormat",
     "POST /api/v1/events/{eventId}/forms createEventForm",
     "POST /api/v1/events/{eventId}/forms/{formId}/admins addFormAdmin",
