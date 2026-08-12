@@ -138,6 +138,11 @@ async function seedFixture(): Promise<void> {
       `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, r2_etag, created_at, updated_at)
        VALUES ('attachment-portal-file', ?, 'task_upload', 'task-portal-file', 'uploads/portal/deck.pdf', 'deck.pdf', 'application/pdf', 10, 'ready', 'etag', ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, r2_etag, created_at, updated_at)
+       VALUES ('attachment-portal-headshot', ?, 'person_headshot', ?, 'uploads/portal/headshot.png', 'robin-headshot.png', 'image/png', 12, 'ready', 'headshot-etag', ?, ?)`,
+    ).bind(EVENT_ID, SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("UPDATE people SET headshot_attachment_id = 'attachment-portal-headshot' WHERE id = ?").bind(SPEAKER_ID),
   ]);
 
   const speakerSession = await createSession(env.DB, { personId: SPEAKER_ID, roleHint: "speaker", userAgent: "portal-test", now: NOW });
@@ -220,6 +225,14 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(form.status).toBe(200);
     const { body } = await portal();
     expect(body.tasks.filter((task: { id: string }) => task.id.startsWith("task-portal-") && task.id !== "task-portal-other").every((task: { status: string }) => task.status === "done")).toBe(true);
+  });
+
+  test("SPK-10 · the speaker record returns pointer-based profile and task file histories", async () => {
+    const response = await request(`/api/v1/events/${EVENT_ID}/onboarding/speakers/${SPEAKER_ID}`, {}, ownerCookie);
+    expect(response.status).toBe(200);
+    const body = await response.json<{ files: { profile: { latest: { filename: string; is_latest: boolean } | null; version_count: number }; tasks: Array<{ task_id: string; list: { latest: { filename: string; is_latest: boolean } | null } }> } }>();
+    expect(body.files.profile).toMatchObject({ version_count: 1, latest: { filename: "robin-headshot.png", is_latest: true } });
+    expect(body.files.tasks.find((task) => task.task_id === "task-portal-file")?.list.latest).toMatchObject({ filename: "deck.pdf", is_latest: true });
   });
 
   test("AC-48, AC-91, AC-92, AC-94, AC-148 · completed portal work updates organizer attention and the chase matrix", async () => {
