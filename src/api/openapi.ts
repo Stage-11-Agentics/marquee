@@ -98,8 +98,9 @@ const DOCUMENT_CONFIG = {
       "that exact tag in `If-Match`, and a stale tag is refused `409` with the current tag in the",
       "`ETag` response header. No operation other than the two agenda item mutations takes",
       "`If-Match`. Several mutations still refuse a concurrent change on their own terms — agenda",
-      "publication, submission decisions, participation responses, and task completion each answer",
-      "`409` when the record moved underneath the request — so a `409` is worth handling on any write.",
+      "publication, participation responses, and task completion answer `409` when the record",
+      "moved underneath the request; submission decisions refuse the same stale write with `422` —",
+      "so a `409` or `422` is worth handling on any write.",
     ].join("\n"),
   },
   servers: [
