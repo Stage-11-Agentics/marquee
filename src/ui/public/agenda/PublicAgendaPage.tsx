@@ -49,8 +49,8 @@ export const PUBLIC_SITE_STYLES = `
 .public-heading h1 { margin: 0 0 7px; font: 550 clamp(30px, 5vw, 44px)/1.02 Georgia, serif; letter-spacing: -.035em; }
 .public-heading p { max-width: 660px; margin: 0; color: var(--public-muted); }
 .public-filters { min-height: 58px; display: grid; grid-template-columns: auto minmax(150px, 190px) minmax(190px, 1fr); align-items: center; gap: 9px; margin-bottom: 14px; padding: 9px; border: 1px solid var(--public-rule); background: var(--public-surface); }
-.public-days { min-height: 38px; display: inline-flex; align-items: stretch; gap: 4px; }
-.public-days button { flex: 0 0 72px; width: 72px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-sunk); color: var(--public-muted); font: 650 10px/1 var(--public-mono); }
+.public-days { min-height: 38px; display: inline-flex; align-items: stretch; gap: 4px; max-width: 100%; overflow-x: auto; }
+.public-days button { flex: 0 0 72px; width: 72px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-sunk); color: var(--public-muted); font: 650 10px/1 var(--public-mono); white-space: nowrap; }
 .public-days button.active { border-color: var(--public-accent); background: var(--public-accent-wash); color: var(--public-accent); }
 .public-select, .public-search { width: 100%; min-width: 0; height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 0 9px; font-size: 12px; }
 .public-search::placeholder { color: var(--public-muted); }
@@ -94,7 +94,6 @@ export const PUBLIC_SITE_STYLES = `
   .public-heading .public-button { margin-top: 15px; }
   .public-filters { grid-template-columns: 1fr 1fr; }
   .public-days { grid-column: 1 / -1; width: 100%; }
-  .public-days button { flex: 1; width: auto; }
   .public-agenda-row { grid-template-columns: 86px minmax(0, 1fr); gap: 10px; }
   .public-track-list { grid-column: 2; justify-content: flex-start; }
 }
@@ -114,7 +113,11 @@ export const PUBLIC_AGENDA_SCRIPT = `
 (() => {
   const form = document.querySelector('[data-public-agenda-filters]');
   if (!form) return;
-  const submit = () => form.requestSubmit ? form.requestSubmit() : form.submit();
+  const submit = () => {
+    const activeDay = form.querySelector('button[name="day"].active');
+    if (form.requestSubmit) form.requestSubmit(activeDay instanceof HTMLButtonElement ? activeDay : undefined);
+    else form.submit();
+  };
   form.querySelectorAll('select').forEach((control) => control.addEventListener('change', submit));
   const search = form.querySelector('[name="q"]');
   let timer;
@@ -139,12 +142,11 @@ export function PublicShell({
   return (
     <div class="public-site" data-public-page={title.toLowerCase().replaceAll(" ", "-")}>
       <header class="public-top">
-        <a class="public-brand" href="/" aria-label={`${event.name} home`}>
+        <a class="public-brand" href="/" aria-label={`${event.name} — Marquee home`}>
           <span class="public-mark">M</span><span>{event.name}</span>
         </a>
         <div class="public-top-actions">
           {actions}
-          <a class="public-button" href="/">Organizer demo</a>
         </div>
       </header>
       {children}

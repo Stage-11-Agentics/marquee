@@ -170,7 +170,15 @@ test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an e
   expect(defaultBody).toContain(PUBLIC_TITLE);
   expect(defaultBody).toContain(PRIVATE_TITLE);
   expect(defaultBody).toContain('name="day" value="all" class="active" role="tab" aria-selected="true"');
-  expect(defaultBody).toContain('class="public-brand" href="/"');
+  expect(defaultBody).toContain('class="public-brand" href="/" aria-label="Public Conference 2026 — Marquee home"');
+  expect(defaultBody).toContain('form.requestSubmit(activeDay instanceof HTMLButtonElement ? activeDay : undefined)');
+  expect(defaultBody).not.toContain(">Organizer demo</a>");
+
+  const dayAndSearch = await request(`/agenda?event=${EVENT_SLUG}&day=2026-10-13&q=Private`);
+  const dayAndSearchBody = await dayAndSearch.text();
+  expect(dayAndSearch.status).toBe(200);
+  expect(dayAndSearchBody).toContain(PRIVATE_TITLE);
+  expect(dayAndSearchBody).not.toContain(PUBLIC_TITLE);
 
   const api = await request(`/api/v1/public/agenda?event=${EVENT_SLUG}&day=all`);
   const payload = await api.json<{ filters: { day: string }; sessions: Array<{ title: string }> }>();

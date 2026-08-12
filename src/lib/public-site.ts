@@ -79,7 +79,7 @@ export interface PublicAgendaData {
   tracks: PublicTrack[];
   sessions: PublicSession[];
   filters: {
-    day: string | null;
+    day: string;
     track: string | null;
     q: string | null;
     status: string | null;
