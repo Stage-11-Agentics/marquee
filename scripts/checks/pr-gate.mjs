@@ -16,6 +16,7 @@ const checks = [
   ["shell truth", "npm", ["run", "check:shell-truth"]],
   ["design contract", "npm", ["run", "check:design"]],
   ["API contract", "npm", ["run", "check:api"]],
+  ["route map", "npm", ["run", "check:routes"]],
   ["hermetic fast suite", "npm", ["test"]],
   ["merged AC trace", "npm", ["run", "trace:ac", "--", "--scope=merged", `--ticket=${args.ticket}`]],
 ];

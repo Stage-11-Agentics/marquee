@@ -1,5 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
+import { listVersionsFor, listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
+
 export const ONBOARDING_FILTERS = ["all", "overdue", "incomplete", "risk"] as const;
 export type OnboardingFilter = (typeof ONBOARDING_FILTERS)[number];
 
@@ -60,6 +62,7 @@ export interface OnboardingRow {
     title: string | null;
     company: string | null;
     bio: string | null;
+    headshot_attachment_id: string | null;
   };
   wave: { id: string; name: string } | null;
   tracks: OnboardingTrack[];
@@ -113,6 +116,7 @@ interface SpeakerBaseRow {
   title: string | null;
   company: string | null;
   bio: string | null;
+  headshot_attachment_id: string | null;
   last_contact: number | null;
 }
 
@@ -322,6 +326,7 @@ function buildRows(
         title: person.title,
         company: person.company,
         bio: person.bio,
+        headshot_attachment_id: person.headshot_attachment_id,
       },
       wave: personSessions[0]?.wave ?? null,
       tracks,
@@ -390,12 +395,14 @@ async function listTemplates(db: D1Database, eventId: string): Promise<Onboardin
 async function listPeople(db: D1Database, eventId: string): Promise<SpeakerBaseRow[]> {
   const result = await db.prepare(
     `SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
+            person.headshot_attachment_id,
             MAX(outbox.created_at) AS last_contact
      FROM memberships membership
      JOIN people person ON person.id = membership.person_id
      LEFT JOIN outbox ON outbox.event_id = membership.event_id AND outbox.person_id = person.id
      WHERE membership.event_id = ? AND membership.role = 'speaker'
-     GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio
+     GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio,
+              person.headshot_attachment_id
      ORDER BY person.name COLLATE NOCASE, person.id ASC`,
   ).bind(eventId).all<SpeakerBaseRow>();
   return result.results.map((row) => ({ ...row, last_contact: row.last_contact === null ? null : Number(row.last_contact) }));
@@ -544,6 +551,10 @@ export interface OnboardingSpeakerDetail {
     created_at: number;
     sent_at: number | null;
   }>;
+  files: {
+    profile: FileVersionList;
+    tasks: Array<{ task_id: string; title: string; list: FileVersionList }>;
+  };
 }
 
 export async function getOnboardingSpeaker(
@@ -551,22 +562,32 @@ export async function getOnboardingSpeaker(
   eventId: string,
   personId: string,
   now = Date.now(),
+  mediaPublicOrigin = "",
 ): Promise<OnboardingSpeakerDetail | null> {
   const person = await db.prepare(
     `SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
+            person.headshot_attachment_id,
             MAX(outbox.created_at) AS last_contact
      FROM memberships membership
      JOIN people person ON person.id = membership.person_id
      LEFT JOIN outbox ON outbox.event_id = membership.event_id AND outbox.person_id = person.id
      WHERE membership.event_id = ? AND membership.person_id = ? AND membership.role = 'speaker'
-     GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio`,
+     GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio,
+              person.headshot_attachment_id`,
   ).bind(eventId, personId).first<SpeakerBaseRow>();
   if (!person) return null;
-  const [templates, taskRows, sessions] = await Promise.all([
+  const [templates, taskRows, sessions, profileFiles] = await Promise.all([
     listTemplates(db, eventId),
     listTasks(db, eventId, [personId]),
     listSessions(db, eventId, [personId]),
+    listVersionsFor(db, "person_headshot", personId, mediaPublicOrigin),
   ]);
+  const taskFileLists = await listVersionsForOwners(
+    db,
+    "task_upload",
+    taskRows.filter((task) => task.kind === "file").map((task) => task.id),
+    mediaPublicOrigin,
+  );
   const templatesById = new Map(templates.map((template) => [template.id, template]));
   const assignedTemplateIds = new Set(taskRows.map((task) => task.template_id));
   const tasks = [
@@ -590,10 +611,17 @@ export async function getOnboardingSpeaker(
       title: person.title,
       company: person.company,
       bio: person.bio,
+      headshot_attachment_id: person.headshot_attachment_id,
     },
     sessions: sessions.get(personId) ?? [],
     tasks,
     last_contact: person.last_contact === null ? null : Number(person.last_contact),
     messages: messages.results,
+    files: {
+      profile: profileFiles,
+      tasks: taskRows
+        .filter((task) => task.kind === "file")
+        .map((task) => ({ task_id: task.id, title: task.title, list: taskFileLists.get(task.id)! })),
+    },
   };
 }

@@ -117,8 +117,12 @@ export function PublicForm({ initial }: PublicFormProps) {
   const [turnstileToken, setTurnstileToken] = useState("");
   const [dirty, setDirty] = useState(false);
   const [filePreviews, setFilePreviews] = useState<Record<string, string>>({});
+  const [draftEmailPrompt, setDraftEmailPrompt] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const firstRender = useRef(true);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const draftEmailRef = useRef<HTMLInputElement | null>(null);
+  const preserveDraftOnBlur = useRef(false);
   const turnstileHost = useRef<HTMLElement | null>(null);
   const turnstileWidget = useRef<string | null>(null);
   const turnstileTokenRef = useRef("");
@@ -296,11 +300,12 @@ export function PublicForm({ initial }: PublicFormProps) {
     if (state.resume_token && state.draft_id) return state;
     const email = answerEmail(answers);
     if (!email) {
-      setPageError("Enter your contact address before saving a draft; the conference team uses it for your resume link.");
-      const field = fieldRefs.current.speaker_email;
-      field?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setDraftEmailPrompt(true);
+      setPageError(null);
+      window.setTimeout(() => draftEmailRef.current?.focus(), 0);
       return null;
     }
+    setDraftEmailPrompt(false);
     setBusy(true);
     try {
       const token = await requestTurnstileToken();
@@ -327,6 +332,17 @@ export function PublicForm({ initial }: PublicFormProps) {
     } finally { setBusy(false); }
   }
 
+  async function saveDraft() {
+    preserveDraftOnBlur.current = true;
+    window.setTimeout(() => { preserveDraftOnBlur.current = false; }, 500);
+    setPageError(null);
+    if (state.resume_token && state.draft_id) {
+      await autosave();
+      return;
+    }
+    await ensureDraft();
+  }
+
   async function autosave() {
     if (!state.resume_token || !state.draft_id || busy) return;
     try {
@@ -341,6 +357,30 @@ export function PublicForm({ initial }: PublicFormProps) {
     } catch (error: unknown) {
       resetTurnstile();
       setPageError(publicErrorMessage(error));
+    }
+  }
+
+  async function copyResumeLink() {
+    if (!state.resume_url) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(state.resume_url);
+      } else {
+        const input = document.createElement("textarea");
+        input.value = state.resume_url;
+        input.setAttribute("readonly", "true");
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        const copied = document.execCommand("copy");
+        input.remove();
+        if (!copied) throw new Error("Clipboard copy was not available.");
+      }
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 2500);
+    } catch {
+      setCopyState("failed");
     }
   }
 
@@ -425,6 +465,22 @@ export function PublicForm({ initial }: PublicFormProps) {
     } finally { setBusy(false); }
   }
 
+  function handleFieldBlur(event: FocusEvent) {
+    const next = event.relatedTarget;
+    if (next instanceof HTMLElement && next.closest("[data-save-draft]")) {
+      preserveDraftOnBlur.current = true;
+      return;
+    }
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      const draftSave = preserveDraftOnBlur.current
+        || (active instanceof HTMLElement && Boolean(active.closest("[data-save-draft]")));
+      preserveDraftOnBlur.current = false;
+      if (draftSave || !dirty) return;
+      validate();
+    }, 0);
+  }
+
   function renderField(field: PublicFormField) {
     const value = answers[field.key];
     const error = errors[field.key];
@@ -437,7 +493,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     const counter = maxLength !== undefined ? <div class="public-field-counter" aria-live="polite">{characterCount}/{maxLength} characters</div> : null;
     let control;
     if (field.type === "long_text") {
-      control = <textarea id={`public-${field.key}`} ref={ref as never} maxLength={maxLength} value={typeof value === "string" ? value : ""} onBlur={() => { if (dirty) validate(); }} onInput={(event) => setAnswer(field.key, (event.currentTarget as HTMLTextAreaElement).value)} aria-invalid={Boolean(error)} />;
+      control = <textarea id={`public-${field.key}`} ref={ref as never} maxLength={maxLength} value={typeof value === "string" ? value : ""} onBlur={handleFieldBlur} onInput={(event) => setAnswer(field.key, (event.currentTarget as HTMLTextAreaElement).value)} aria-invalid={Boolean(error)} />;
     } else if (field.type === "single_select") {
       control = <select id={`public-${field.key}`} ref={ref as never} value={typeof value === "string" ? value : ""} onChange={(event) => setAnswer(field.key, (event.currentTarget as HTMLSelectElement).value)} aria-invalid={Boolean(error)}><option value="">Choose one</option>{options.map((option) => <option value={option}>{option}</option>)}</select>;
     } else if (field.type === "multi_select") {
@@ -454,7 +510,7 @@ export function PublicForm({ initial }: PublicFormProps) {
       control = <div class="public-file"><input id={`public-${field.key}`} ref={ref as never} type="file" accept={accept} onChange={(event) => { void handleFile(field, (event.currentTarget as HTMLInputElement).files?.[0]); }} />{takesImage && <div class="public-file-preview"><div class="public-file-crop">{preview ? <img src={preview} alt={`${field.label} crop preview`} /> : null}</div><span class="public-file-crop-note">{preview ? "Crop preview · the square the conference programme shows." : "Choose an image to see its crop preview here."}</span></div>}<span class={`public-file-existing${existing ? " has-file" : ""}`}>{existing ? `Saved file: ${existing}` : "No file attached yet."}</span></div>;
     } else {
       const inputType = field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
-      control = <input id={`public-${field.key}`} ref={ref as never} type={inputType} maxLength={maxLength} value={value === undefined || value === null ? "" : String(value)} onBlur={() => { if (dirty) validate(); }} onInput={(event) => { const text = (event.currentTarget as HTMLInputElement).value; setAnswer(field.key, field.type === "number" && text ? Number(text) : text); }} aria-invalid={Boolean(error)} />;
+      control = <input id={`public-${field.key}`} ref={ref as never} type={inputType} maxLength={maxLength} value={value === undefined || value === null ? "" : String(value)} onBlur={handleFieldBlur} onInput={(event) => { const text = (event.currentTarget as HTMLInputElement).value; setAnswer(field.key, field.type === "number" && text ? Number(text) : text); }} aria-invalid={Boolean(error)} />;
     }
     return <div class={`public-field${error ? " has-error" : ""}`} data-field-key={field.key} data-field-type={field.type} key={field.key}>{label}{note}{control}{counter}<div class={`public-field-error${error ? " has-message" : ""}`} role={error ? "alert" : undefined} aria-hidden={!error}>{error ?? " "}</div></div>;
   }
@@ -465,8 +521,13 @@ export function PublicForm({ initial }: PublicFormProps) {
   }
 
   const minimumParticipants = state.form.min_speakers === 1 ? "one participant" : `${state.form.min_speakers} participants`;
-  const maximumParticipants = state.form.max_speakers === 1 ? "one participant" : `${state.form.max_speakers} participants`;
-  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && <span>{state.state === "closed" ? `Closed ${new Date(state.form.closes_at).toLocaleDateString()}` : `Closes ${new Date(state.form.closes_at).toLocaleDateString()}`}</span>}<span class="public-save-status" aria-live="polite">{state.resume_token ? (dirty ? "Saving…" : state.last_saved_at ? `Saved ${new Date(state.last_saved_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Draft linked") : "Draft saved locally · just now"}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}<div class={`public-error${pageError ? " has-message" : ""}`} role={pageError ? "alert" : undefined} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div><p class="public-participant-limit">Include at least {minimumParticipants}; this conference can review up to {maximumParticipants} on one abstract.</p><fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset><div class="public-form-footer"><span class="public-security">{closed ? "This form is not accepting answers right now, so its fields are closed for editing." : "Your answers stay here while you work. A resume link goes to the address you enter."}</span><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : "Submit abstract"}</button></div></form></main><PublicFooter /></div>;
+  const saveStatus = busy
+    ? "Saving…"
+    : state.resume_token
+      ? (dirty ? "Saving…" : state.last_saved_at ? `Saved ${new Date(state.last_saved_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Draft linked")
+      : "";
+  const resumePath = state.resume_url ? resumeLinkPath(state.resume_url) : null;
+  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && <span>{state.state === "closed" ? `Closed ${new Date(state.form.closes_at).toLocaleDateString()}` : `Closes ${new Date(state.form.closes_at).toLocaleDateString()}`}</span>}<span class={`public-save-status${saveStatus ? " has-value" : ""}`} aria-live="polite" aria-hidden={!saveStatus}>{saveStatus}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}<div class={`public-error${pageError ? " has-message" : ""}`} role={pageError ? "alert" : undefined} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div><p class="public-participant-limit">Include at least {minimumParticipants}; this form has one optional co-speaker slot.</p><fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset>{state.resume_url && <div class="public-draft-resume" role="status"><strong>Private resume link</strong><span>Keep this link to return to this draft. It is also sent to your contact address.</span><div class="public-draft-resume-actions"><a class="public-resume-link" href={resumePath ?? "#"}>{resumePath}</a><button class="public-copy-link" type="button" onClick={() => { void copyResumeLink(); }}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy resume link"}</button></div></div>}<div class="public-form-footer"><div class="public-form-footer-copy">{draftEmailPrompt && !state.resume_token && !closed && <div class="public-draft-email"><label for="public-draft-email">Contact address for your resume link</label><input id="public-draft-email" ref={draftEmailRef} type="email" value={answerEmail(answers)} onInput={(event) => setAnswer("speaker_email", (event.currentTarget as HTMLInputElement).value)} /><span>We will send a private link here so you can return to this draft.</span></div>}<span class="public-security">{closed ? "This form is not accepting answers right now, so its fields are closed for editing." : "Your answers stay here while you work. A resume link goes to the address you enter."}</span></div><div class="public-form-actions"><button class="public-save-draft" type="button" data-save-draft onMouseDown={() => { preserveDraftOnBlur.current = true; }} onClick={() => { void saveDraft(); }} disabled={busy || closed}>Save draft</button><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : "Submit abstract"}</button></div></div></form></main><PublicFooter /></div>;
 }
 
 function PublicHeader({ state }: { state: PublicFormState }) {
