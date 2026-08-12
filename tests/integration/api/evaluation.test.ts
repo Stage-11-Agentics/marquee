@@ -544,4 +544,38 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     const round = body.rounds.find((item) => item.id === ROUND_ONE_ID);
     expect(round).toMatchObject({ name: "Initial Review", opens_at: Date.UTC(2026, 7, 1), closes_at: Date.UTC(2026, 9, 15), anonymized: true });
   });
+
+  test("CONTRACT · ABS-06 · creating a committee attaches it to unassigned rounds without replacing an explicit pool", async () => {
+    const explicitPool = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ committee_id: COMMITTEE_ID }),
+    });
+    expect(explicitPool.status).toBe(200);
+
+    const before = await env.DB.prepare(`
+      SELECT round.id
+      FROM evaluation_rounds round
+      JOIN evaluation_plans plan ON plan.id = round.plan_id
+      WHERE plan.event_id = ? AND round.committee_id IS NULL
+      ORDER BY round.id
+    `).bind(EVENT_ID).all<{ id: string }>();
+    expect(before.results.length).toBeGreaterThan(0);
+
+    const created = await request(`/api/v1/events/${EVENT_ID}/committees`, {
+      method: "POST",
+      body: JSON.stringify({ name: "V2-3 automatic pool" }),
+    });
+    expect(created.status).toBe(201);
+    const body = await json<{ id: string; attached_rounds: Array<{ id: string; name: string; position: number }> }>(created);
+    expect(body.attached_rounds.map((round) => round.id).sort()).toEqual(before.results.map((round) => round.id).sort());
+
+    const after = await env.DB.prepare(`
+      SELECT round.id, round.committee_id
+      FROM evaluation_rounds round
+      JOIN evaluation_plans plan ON plan.id = round.plan_id
+      WHERE plan.event_id = ?
+    `).bind(EVENT_ID).all<{ committee_id: string | null; id: string }>();
+    expect(after.results.find((round) => round.id === ROUND_ONE_ID)?.committee_id).toBe(COMMITTEE_ID);
+    expect(after.results.filter((round) => before.results.some((item) => item.id === round.id)).every((round) => round.committee_id === body.id)).toBe(true);
+  });
 });

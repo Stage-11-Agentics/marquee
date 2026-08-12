@@ -128,6 +128,14 @@ interface AgentSeatResult {
   track_ids: string[];
 }
 
+interface CreatedCommitteeResult {
+  attached_rounds: Array<{ id: string; name: string; position: number }>;
+  event_id: string;
+  id: string;
+  members: CommitteeMember[];
+  name: string;
+}
+
 interface EvaluationPageProps {
   eventId: string;
 }
@@ -378,13 +386,24 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
   const createCommittee = async (event: Event): Promise<void> => {
     event.preventDefault();
     try {
-      await api(`/api/v1/events/${eventId}/committees`, "/api/v1/events/{eventId}/committees", { method: "POST", body: JSON.stringify({ name: committeeName }) });
+      const created = await api<CreatedCommitteeResult>(`/api/v1/events/${eventId}/committees`, "/api/v1/events/{eventId}/committees", { method: "POST", body: JSON.stringify({ name: committeeName }) });
       setDialog(null);
-      setNotice("Committee created · add reviewers to begin assignment");
+      const roundLabels = created.attached_rounds.map((round) => `Round ${round.position + 1}`);
+      const roundSummary = roundLabels.length === 1
+        ? roundLabels[0]
+        : roundLabels.length === 2
+          ? `${roundLabels[0]} and ${roundLabels[1]}`
+          : `${roundLabels.slice(0, -1).join(", ")}, and ${roundLabels[roundLabels.length - 1]}`;
+      setNotice(roundLabels.length ? `Committee created · set as the reviewer pool for ${roundSummary}.` : "Committee created · add reviewers to begin assignment.");
       await load();
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     }
+  };
+
+  const focusReviewerPool = (roundId: string): void => {
+    setDialog(null);
+    document.getElementById(`round-${roundId}-reviewer-pool`)?.focus();
   };
 
   const openInvite = (): void => {
@@ -592,7 +611,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
       <div class="wave-date"><span class="tabular">{round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations}</span> complete · <span class="tabular">{Math.max(0, round.progress.assigned_submissions * round.target_reviews_per_submission - (round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations))}</span> remaining</div>
       <div class="round-recusal-status">{round.progress.recusals === 1 ? "1 recusal · needs reassignment" : round.progress.recusals > 1 ? `${round.progress.recusals} recusals · needs reassignment` : "\u00a0"}</div>
       <div class="round-meta"><span>{round.anonymized ? "Anonymous review" : "Identity visible"}</span><span class="tabular">{formatDate(round.opens_at)} → {formatDate(round.closes_at)}</span></div>
-      <label class="round-setting"><span>Reviewer pool</span><select aria-label={`Round ${index + 1} reviewer pool`} value={round.committee_id ?? ""} onChange={(event) => void updateRound(round, { committee_id: (event.currentTarget as HTMLSelectElement).value || null })}><option value="">No pool selected</option>{plan?.committees.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label class="round-setting"><span>Reviewer pool</span><select id={`round-${round.id}-reviewer-pool`} aria-label={`Round ${index + 1} reviewer pool`} value={round.committee_id ?? ""} onChange={(event) => void updateRound(round, { committee_id: (event.currentTarget as HTMLSelectElement).value || null })}><option value="">No pool selected</option>{plan?.committees.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     </div>
   ) : (
     <div class="round-card round-empty" key={`empty-${index}`}><span class="eyebrow">Round {index + 1}</span><strong>Not configured</strong><span class="subtle">Add the next ordered round from the plan controls.</span></div>
@@ -621,6 +640,9 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
   if (loading) return <div class="evaluation-loading instrument"><span class="eyebrow">Evaluation plan</span><strong>Loading conference review machinery…</strong><span class="subtle">Reading rounds, committees, and reviewer coverage.</span></div>;
   if (error && !plan) return <EmptyState title="Evaluation data unavailable" copy={error} action={<Button variant="primary" onClick={() => void load()}>Try again</Button>} />;
   if (!plan) return <EmptyState title="No evaluation plan" copy="Set the scorecard, committee, and two review rounds before assigning abstracts." action={<Button variant="primary" onClick={() => setDialog("plan")}>Create evaluation plan</Button>} />;
+
+  const selectedAssignmentRound = plan.rounds.find((round) => round.id === (assignmentRoundId ?? firstRound?.id));
+  const selectedAssignmentCommittee = selectedAssignmentRound ? committeeForRound(selectedAssignmentRound) : undefined;
 
   return <>
     <PageHeader title="Evaluation plan" copy="Evaluation is open. Add an Agent evaluator seat with its own credential, prompt, and rubric, then let the committee decide." actions={<>
@@ -697,7 +719,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
       <footer><Button type="button" onClick={() => { setDialog(null); setScorecardRoundId(null); }}>Cancel</Button><Button type="submit" variant="primary" disabled={!weightsValid || criteria.some((item) => !item.name.trim())}>Save scorecard</Button></footer>
     </form></div>}
     {dialog === "committee" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={createCommittee}><header><span class="eyebrow">Program committee</span><h2>Manage committee</h2></header><div class="eval-dialog-body"><label class="field">Committee name<input value={committeeName} onInput={(event) => setCommitteeName((event.currentTarget as HTMLInputElement).value)} /></label><div class="message-preview">Reviewer rows carry explicit track responsibilities. Scope changes recalculate queue membership without replacing completed reviews.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save committee</Button></footer></form></div>}
-    {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round assignments</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Round<select value={assignmentRoundId ?? firstRound?.id ?? ""} onChange={(event) => setAssignmentRoundId((event.currentTarget as HTMLSelectElement).value)}>{plan.rounds.map((round) => <option key={round.id} value={round.id}>{round.position + 1} · {round.name}</option>)}</select></label><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label><div class="message-preview">Assignments belong to the selected round. Re-running distribution is idempotent and never replaces completed review or comparison evidence.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!plan.rounds.some((round) => round.id === (assignmentRoundId ?? firstRound?.id) && Boolean(round.committee_id))}>Distribute</Button></footer></form></div>}
+    {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round assignments</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Round<select value={assignmentRoundId ?? firstRound?.id ?? ""} onChange={(event) => setAssignmentRoundId((event.currentTarget as HTMLSelectElement).value)}>{plan.rounds.map((round) => { const roundCommittee = committeeForRound(round); return <option key={round.id} value={round.id}>{round.position + 1} · {round.name} · {roundCommittee ? `ready · ${roundCommittee.name}` : "needs reviewer pool"}</option>; })}</select></label><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label>{selectedAssignmentRound && (selectedAssignmentCommittee ? <div class="message-preview" role="status">Ready · {selectedAssignmentRound.name} uses {selectedAssignmentCommittee.name}.</div> : <div class="message-preview" role="status">Pick a reviewer pool in this round's card above — {selectedAssignmentRound.name} has none. <Button type="button" small variant="ghost" onClick={() => focusReviewerPool(selectedAssignmentRound.id)}>Pick a reviewer pool</Button></div>)}<div class="message-preview">Assignments belong to the selected round. Re-running distribution is idempotent and never replaces completed review or comparison evidence.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!selectedAssignmentCommittee}>Distribute</Button></footer></form></div>}
     {dialog === "invite" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={inviteReviewer}>
       <header><span class="eyebrow">{committee?.name ?? "Program committee"}</span><h2>Invite reviewer</h2></header>
       <div class="eval-dialog-body">
