@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
-import type { EventRow, MembershipRole, PersonRow } from "../db/schema";
+import type { EventRow, MembershipRole, MembershipRow, PersonRow } from "../db/schema";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import { clearSessionCookie, setSessionCookie } from "../lib/cookies";
@@ -9,13 +9,15 @@ import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail
 import { getAuth, unauthorized } from "../lib/auth/auth-middleware";
 import { consumeMagicLink, mintMagicLink } from "../lib/auth/magic-links";
 import { createSession, revokeSession, SESSION_TTL_MS } from "../lib/auth/auth-sessions";
+import { loadMembershipsForOrg } from "../lib/auth/scope-resolution";
+import { pickOutboxEventId, rolesOf, signinRedirect } from "../lib/auth/signin-destination";
+import { findDemoEvent } from "../lib/demo-event";
 import {
   DEMO_ORGANIZER_PERSON_ID,
   DEMO_SPEAKER_PERSON_ID,
   SHIPPED_DEMO_ORGANIZER_PERSON_ID,
   SHIPPED_DEMO_SPEAKER_PERSON_ID,
 } from "../lib/reset-demo/demo-fixture";
-import { DEMO_EVENT_ORDER, SEEDED_DEMO_EVENT_ID } from "../lib/demo-event";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 
 /**
@@ -36,6 +38,25 @@ function dropRejectedSessionCookie(context: Context<ApiEnv>): void {
   if (context.get("credentialRejected")) clearSessionCookie(context);
 }
 
+/**
+ * A spent magic link, answered in the shape the caller can read.
+ *
+ * Every emailed sign-in link is opened by a browser navigation, and a browser
+ * given `{"error":{"code":"magic_link_invalid",…}}` renders that JSON to a
+ * human — which is what marquee.stage11.dev did to anyone who clicked a link
+ * sixteen minutes late. A navigation therefore lands on the door instead, with
+ * a reason it can state. API clients keep the 401 envelope byte-for-byte: they
+ * are the callers for whom a redirect would be the unreadable answer.
+ */
+function rejectMagicLink(context: Context<ApiEnv>, message: string): Response {
+  dropRejectedSessionCookie(context);
+  context.header("Cache-Control", "no-store");
+  if ((context.req.header("accept") ?? "").includes("text/html")) {
+    return context.redirect("/signin?reason=expired", 302);
+  }
+  return context.json({ error: { code: "magic_link_invalid", message } }, 401);
+}
+
 const roleSchema = z.enum(["organizer", "reviewer", "speaker"]);
 const authErrorSchema = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
@@ -49,7 +70,13 @@ const demoResponseSchema = z.object({
 });
 const magicLinkRequestSchema = z.object({
   email: z.string().min(1),
-  event_id: z.string().min(1),
+  /**
+   * Optional: `/signin` is a universal door and its visitor has no event in
+   * hand. Absent, the person is resolved by email across `people` — the
+   * deliberate single-org shortcut this deployment already takes for org-level
+   * writes (MRQ-131). Multi-org disambiguation is explicitly a later ticket.
+   */
+  event_id: z.string().min(1).optional(),
   redirect_to: z.string().optional(),
 });
 const magicLinkResponseSchema = z.object({
@@ -139,7 +166,10 @@ const requestMagicLink = defineApiRoute(
       "Always returns a generic response; demo mode additionally returns the link on screen.",
     tags: ["Auth"],
     request: { body: { content: { "application/json": { schema: magicLinkRequestSchema } } } },
-    policy: { auth: { kind: "public" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    // This route sends mail. `send` is the bucket that means that, and it is
+    // the one that stops the door being a mail cannon aimed at any address
+    // someone can guess.
+    policy: { auth: { kind: "public" }, rateLimit: { bucket: "send" }, concurrency: "none" },
     responses: {
       200: jsonResponse(magicLinkResponseSchema, "The request was accepted."),
       400: jsonResponse(authErrorSchema, "The request is missing required fields."),
@@ -148,22 +178,27 @@ const requestMagicLink = defineApiRoute(
   },
   (async (context: Context<ApiEnv>) => {
     const body = await context.req.json<z.infer<typeof magicLinkRequestSchema>>();
-    const event = await context.env.DB.prepare("SELECT * FROM events WHERE id = ?")
-      .bind(body.event_id)
-      .first<EventRow>();
+    const now = Date.now();
+    const person = await findPersonForSignin(context.env.DB, body.email, body.event_id);
     let onScreenLink: string | undefined;
 
-    if (event) {
-      const person = await context.env.DB.prepare(
-        "SELECT * FROM people WHERE org_id = ? AND email = ?",
-      )
-        .bind(event.org_id, body.email.trim().toLowerCase())
-        .first<PersonRow>();
-      if (person) {
+    // Every branch below falls through to the same generic acknowledgement. No
+    // path may differ by a byte on whether the address exists, whether the
+    // instance has an event, or whether a link was minted just now — the answer
+    // is an acknowledgement, never an oracle.
+    if (person && !(await hasFreshLoginLink(context.env.DB, person.id, now))) {
+      const memberships = await loadMembershipsForOrg(context.env.DB, person.id, person.org_id);
+      const event = await attributionEvent(context.env.DB, person, memberships, body.event_id);
+      // `outbox.event_id` is NOT NULL. An org with no event at all therefore has
+      // nowhere to file the mail, so nothing is minted and nothing is enqueued —
+      // and no link appears on screen to compensate for the mail that is not
+      // coming.
+      if (event) {
         const link = await mintMagicLink(context.env.DB, {
           personId: person.id,
           purpose: "login",
-          redirectTo: body.redirect_to ?? "/",
+          redirectTo: signinRedirect(body.redirect_to, rolesOf(memberships)),
+          now,
         });
         const url = new URL(context.req.url);
         const absoluteLink = `${url.origin}/api/v1/auth/exchange?token=${link.token}`;
@@ -200,20 +235,17 @@ const exchangeMagicLink = defineApiRoute(
     request: { query: z.object({ token: z.string().min(1) }) },
     policy: { auth: { kind: "public" }, rateLimit: { bucket: "read" }, concurrency: "none" },
     responses: {
-      302: { description: "Redirects to the magic link's requested destination." },
+      302: {
+        description:
+          "Redirects to the magic link's requested destination — or, for a browser navigation with a spent link, to /signin?reason=expired.",
+      },
       401: jsonResponse(authErrorSchema, "The magic link is missing, expired, or already used."),
       ...errorResponses([429, 500]),
     },
   },
   (async (context: Context<ApiEnv>) => {
     const token = context.req.query("token");
-    if (!token) {
-      dropRejectedSessionCookie(context);
-      return context.json(
-        { error: { code: "magic_link_invalid", message: "Missing token" } },
-        401,
-      );
-    }
+    if (!token) return rejectMagicLink(context, "Missing token");
     // Sign-in exchanges only person-bound links. `claim` and `org_invite` have
     // no person yet and are exchanged at `/api/v1/claim`, which is the one
     // place a session is minted from a token that predates its owner.
@@ -221,16 +253,7 @@ const exchangeMagicLink = defineApiRoute(
       purposes: ["login", "draft_resume", "cospeaker_profile", "task_link"],
     });
     if (!link || link.person_id === null) {
-      dropRejectedSessionCookie(context);
-      return context.json(
-        {
-          error: {
-            code: "magic_link_invalid",
-            message: "This sign-in link has expired or was already used",
-          },
-        },
-        401,
-      );
+      return rejectMagicLink(context, "This sign-in link has expired or was already used");
     }
     const roleHint = (() => {
       if (link.purpose !== "cospeaker_profile") return "login";
@@ -391,13 +414,76 @@ async function findDemoPersona(
   return persona ?? null;
 }
 
-/** By identity, never by age — see `src/lib/demo-event.ts`. */
-async function findDemoEvent(db: D1Database): Promise<EventRow | null> {
-  const event = await db
-    .prepare(`SELECT * FROM events WHERE demo_mode = 1 ${DEMO_EVENT_ORDER}`)
-    .bind(SEEDED_DEMO_EVENT_ID)
-    .first<EventRow>();
-  return event ?? null;
+/** One unused, unexpired login link per person per minute. */
+const LOGIN_LINK_COOLDOWN_MS = 60_000;
+
+/**
+ * Who is asking, when the caller may not have said which conference.
+ *
+ * With an `event_id` the lookup stays scoped to that event's organization,
+ * exactly as it always has. Without one — the universal `/signin` door — the
+ * oldest matching row wins, which is the single-org shortcut this deployment
+ * already takes elsewhere and the only answer that is stable under a retry.
+ */
+async function findPersonForSignin(
+  db: D1Database,
+  email: string,
+  eventId: string | undefined,
+): Promise<PersonRow | null> {
+  const address = email.trim().toLowerCase();
+  if (eventId !== undefined) {
+    const event = await db.prepare("SELECT * FROM events WHERE id = ?").bind(eventId).first<EventRow>();
+    if (!event) return null;
+    const scoped = await db
+      .prepare("SELECT * FROM people WHERE org_id = ? AND email = ?")
+      .bind(event.org_id, address)
+      .first<PersonRow>();
+    return scoped ?? null;
+  }
+  const person = await db
+    .prepare("SELECT * FROM people WHERE email = ? ORDER BY created_at ASC, id ASC LIMIT 1")
+    .bind(address)
+    .first<PersonRow>();
+  return person ?? null;
+}
+
+/**
+ * A live link already in flight means this request mints nothing.
+ *
+ * The response is identical either way, so a caller learns nothing from the
+ * cooldown; what it stops is a public route with an email field turning into a
+ * way to post sixty messages a minute into somebody's inbox.
+ */
+async function hasFreshLoginLink(db: D1Database, personId: string, now: number): Promise<boolean> {
+  const recent = await db
+    .prepare(
+      `SELECT id FROM magic_links
+        WHERE person_id = ? AND purpose = 'login' AND used_at IS NULL
+          AND expires_at > ? AND created_at > ?
+        LIMIT 1`,
+    )
+    .bind(personId, now, now - LOGIN_LINK_COOLDOWN_MS)
+    .first<{ id: string }>();
+  return recent !== null;
+}
+
+/** Which conference the mail is filed against; see `pickOutboxEventId`. */
+async function attributionEvent(
+  db: D1Database,
+  person: PersonRow,
+  memberships: readonly MembershipRow[],
+  requestedEventId: string | undefined,
+): Promise<EventRow | null> {
+  if (requestedEventId !== undefined) {
+    return (await db.prepare("SELECT * FROM events WHERE id = ?").bind(requestedEventId).first<EventRow>()) ?? null;
+  }
+  const orgEvents = await db
+    .prepare("SELECT id, created_at FROM events WHERE org_id = ?")
+    .bind(person.org_id)
+    .all<{ id: string; created_at: number }>();
+  const eventId = pickOutboxEventId(memberships, orgEvents.results);
+  if (!eventId) return null;
+  return (await db.prepare("SELECT * FROM events WHERE id = ?").bind(eventId).first<EventRow>()) ?? null;
 }
 
 export const apiRoutes = [
