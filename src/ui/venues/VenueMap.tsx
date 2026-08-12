@@ -6,7 +6,7 @@ import type { VenueBuildingInput } from "../../lib/venues";
 
 const TILE_SIZE = 256;
 const ZOOM = 16;
-const MAP_HEIGHT = 360;
+export const MAP_HEIGHT = 360;
 const PLANE_WIDTH = 1120;
 
 interface ProjectedPoint {
@@ -28,7 +28,7 @@ function tileUrl(x: number, y: number): string {
   return `https://tile.openstreetmap.org/${ZOOM}/${x}/${y}.png`;
 }
 
-export function VenueMap({ buildings }: { buildings: readonly VenueBuildingInput[] }): JSX.Element {
+export function VenueMap({ buildings, ariaLabel = "Conference site map" }: { buildings: readonly VenueBuildingInput[]; ariaLabel?: string }): JSX.Element {
   const [tilesFailed, setTilesFailed] = useState(false);
   const pinned = buildings.filter((building) => building.lat !== null && building.lng !== null);
   if (pinned.length === 0) {
@@ -64,7 +64,7 @@ export function VenueMap({ buildings }: { buildings: readonly VenueBuildingInput
     }
   }
 
-  return <div class={`venue-map-shell ${tilesFailed ? "tiles-failed" : ""}`} style={{ height: `${MAP_HEIGHT}px` }} aria-label="Conference site map">
+  return <div class={`venue-map-shell ${tilesFailed ? "tiles-failed" : ""}`} style={{ height: `${MAP_HEIGHT}px` }} aria-label={ariaLabel}>
     <div class="venue-map-plane" style={{ width: `${PLANE_WIDTH}px`, height: `${MAP_HEIGHT}px` }}>
       {tiles}
       <svg class="venue-map-overlay" width={PLANE_WIDTH} height={MAP_HEIGHT} aria-hidden="true">{lines}</svg>

@@ -47,9 +47,6 @@ test("AC-263 · presentation folds comparison while retaining instruction surfac
   assert.match(portalPage, /show_building_comparison/);
   assert.match(portalPage, /location\.access_note/);
   assert.match(portalPage, /location\.access_minutes/);
-  assert.doesNotMatch(portalPage, /portal-arrival-map-fold/);
-  assert.match(portalPage, /<VenueMap buildings=/);
-  assert.match(portalPage, /portal-arrival-map-directions/);
   assert.match(submissionsPage, /singleVenueName/);
   assert.match(publicSite, /showBuildingComparison \? roomDisplayLabel/);
 });

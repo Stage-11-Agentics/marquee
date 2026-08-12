@@ -10,7 +10,7 @@ import type { SignedUpload } from "../../lib/r2/protocol";
 import { isFieldApplicable } from "../../lib/form-conditions";
 import { seedId } from "../../lib/ids";
 import type { VenueBuildingInput } from "../../lib/venues";
-import { VenueMap } from "../venues/VenueMap";
+import { MAP_HEIGHT, VenueMap } from "../venues/VenueMap";
 import "./portal.css";
 
 type PortalField = {
@@ -629,12 +629,14 @@ function ArrivalMap({ slot }: { slot: NonNullable<PortalSubmission["slot"]> }): 
   const lat = location.lat;
   const lng = location.lng;
   const hasPin = lat !== null && lng !== null;
-  if (!hasPin) return <div class="portal-arrival-map empty" aria-label="No physical location pin available"><span>The conference team has not pinned this building.</span></div>;
+  const mapHeight = `${MAP_HEIGHT}px`;
+  const mapStyle = { height: mapHeight, minHeight: mapHeight };
+  if (!hasPin) return <div class="portal-arrival-map empty" role="group" aria-label="Venue map unavailable" style={mapStyle}><span>The conference team has not pinned this building.</span></div>;
   const directions = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
   const building = arrivalVenueBuilding(slot);
   const venueLabel = building.name;
-  return <div class="portal-arrival-map" aria-label={`Venue map for ${venueLabel}`}>
-    <VenueMap buildings={[building]} />
+  return <div class="portal-arrival-map" role="group" aria-label={`Venue map for ${venueLabel}`} style={mapStyle}>
+    <VenueMap ariaLabel={`Map of ${venueLabel}`} buildings={[building]} />
     <a class="portal-button portal-arrival-map-directions" href={directions} target="_blank" rel="noreferrer">Directions ↗</a>
   </div>;
 }

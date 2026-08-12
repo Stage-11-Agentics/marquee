@@ -27,14 +27,14 @@
 .portal-arrival-details dd { color: #d9edf1; font-size: 11px; line-height: 1.45; margin: 0; }
 .portal-arrival-details .portal-arrival-leave { border-top: 1px solid #38515d; margin-top: 3px; padding-top: 10px; }
 .portal-arrival-details .portal-arrival-leave dd { color: #f4fbff; font-weight: 600; }
-.portal-arrival-map { background: var(--canvas); border: 1px solid var(--canvas-line); height: 360px; min-height: 360px; overflow: hidden; position: relative; }
-.portal-arrival-map .venue-map-shell { background-color: var(--canvas); background-image: linear-gradient(var(--canvas-line) 1px, transparent 1px), linear-gradient(90deg, var(--canvas-line) 1px, transparent 1px); background-size: 8px 8px; border: 0; height: 360px !important; }
+.portal-arrival-map { background: var(--canvas); border: 1px solid var(--canvas-line); overflow: hidden; position: relative; }
+.portal-arrival-map .venue-map-shell { background-color: var(--canvas); background-image: linear-gradient(var(--canvas-line) 1px, transparent 1px), linear-gradient(90deg, var(--canvas-line) 1px, transparent 1px); background-size: 8px 8px; border: 0; }
 .portal-arrival-map .venue-map-pin { border-color: var(--canvas); }
 .portal-arrival-map .venue-map-pin-label { background: var(--canvas); border-color: var(--canvas-line); color: var(--canvas-ink); }
 .portal-arrival-map .venue-map-attribution { background: var(--canvas); color: var(--canvas-ink); }
 .portal-arrival-map .venue-map-fallback { background: var(--canvas); }
 .portal-arrival-map.empty { align-items: center; background-image: linear-gradient(var(--canvas-line) 1px, transparent 1px), linear-gradient(90deg, var(--canvas-line) 1px, transparent 1px); background-size: 8px 8px; color: var(--canvas-ink); display: grid; font: 500 10px/1.5 var(--mono); padding: 24px; place-items: center; text-align: center; }
-.portal-arrival-map-directions { bottom: 12px; left: 12px; position: absolute; z-index: 2; }
+.portal-arrival-map-directions { left: 12px; position: absolute; top: 12px; z-index: 2; }
 .portal-role-responses { border-top: 1px solid #38515d; display: grid; gap: 8px; min-height: 62px; padding-top: 11px; }
 .portal-role-responses-head { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; }
 .portal-role-responses-head span { color: #edf8fb; font: 600 9px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
