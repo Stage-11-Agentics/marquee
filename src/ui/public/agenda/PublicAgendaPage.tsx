@@ -1070,15 +1070,33 @@ export function PublicSpeakerPage({ event, venue, speaker }: { event: PublicEven
   );
 }
 
-export function PublicNotFoundPage(): JSX.Element {
+export interface PublicNotFoundCopy {
+  heading?: string;
+  detail?: string;
+  actionLabel?: string;
+  actionHref?: string;
+}
+
+/**
+ * One 404 card, two callers. A bad slug on a public route is a dead end inside
+ * the program; an unrecognised URL is a dead end in the product. They say
+ * different true things and offer different ways back, but they must not look
+ * like two different products — so the copy is a parameter and the card is not.
+ */
+export function PublicNotFoundPage({
+  heading = "That public page is unavailable.",
+  detail = "The program only exposes published sessions and their speakers.",
+  actionLabel = "View the agenda",
+  actionHref = "/agenda",
+}: PublicNotFoundCopy = {}): JSX.Element {
   return (
     <div class="public-site public-not-found">
       <main class="public-card">
         <div>
           <strong>404</strong>
-          <h1>That public page is unavailable.</h1>
-          <p>The program only exposes published sessions and their speakers.</p>
-          <a class="public-button primary" href="/agenda">View the agenda</a>
+          <h1>{heading}</h1>
+          <p>{detail}</p>
+          <a class="public-button primary" href={actionHref}>{actionLabel}</a>
         </div>
       </main>
     </div>

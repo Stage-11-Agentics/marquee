@@ -24,6 +24,7 @@ import { publicAgendaRoutes } from "./routes/public-agenda.route";
 import { embedRoutes } from "./routes/embed.route";
 import { calendarRoutes } from "./routes/calendar.route";
 import skill from "../SKILL.md?raw";
+import { serveAssetOrNotFound } from "./routes/not-found.route";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -173,7 +174,11 @@ app.all("/api/*", async (context) => {
   return api.fetch(context.req.raw, instrumented);
 });
 
-app.all("*", (context) => context.env.ASSETS.fetch(context.req.raw));
+// Not `ASSETS.fetch` alone. With `not_found_handling: "none"` in wrangler.jsonc
+// an asset miss reaches this Worker instead of being answered with the SPA
+// shell under a 200, and this handler is where the site finally decides whether
+// a path is a page. See src/routes/not-found.route.tsx.
+app.all("*", serveAssetOrNotFound);
 
 const worker: ExportedHandler<Env> = {
   fetch: app.fetch,
