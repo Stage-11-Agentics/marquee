@@ -1,0 +1,29 @@
+.history-list { display: grid; gap: 8px; }
+
+/* Two fixed columns: the fact, and an action slot that exists whether or not
+   the row has a control. A restore that appeared and disappeared with the
+   row's state would move every row beneath it. */
+.history-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  column-gap: 10px;
+  display: grid;
+  grid-template-columns: 1fr 190px;
+  padding: 6px 0;
+}
+
+.history-fact { align-items: center; display: grid; gap: 7px; grid-template-columns: 1fr auto auto; }
+.history-fact strong, .history-fact span, .history-fact time { font-size: 10.5px; }
+.history-fact span, .history-fact time { color: var(--muted); }
+
+/* Fixed height and right alignment so "Restore this version" swapping for
+   "Confirm / Cancel" changes nothing about the row's geometry. */
+.history-action { display: flex; gap: 6px; justify-content: flex-end; min-height: 26px; align-items: center; }
+.history-confirm { display: flex; gap: 6px; }
+
+.history-preview {
+  color: var(--muted);
+  font-size: 10px;
+  grid-column: 1 / -1;
+  padding-top: 2px;
+}

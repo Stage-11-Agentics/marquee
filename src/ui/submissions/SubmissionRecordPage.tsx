@@ -5,6 +5,7 @@ import { formatFileSize, type FileAnswerView } from "../../lib/file-answers";
 import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader } from "../shell/components";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
+import { ContentHistory } from "../history/ContentHistory";
 import { decidedNote, headerChipTone, moment, statusLabel } from "./record-copy";
 import "./record.css";
 
@@ -16,6 +17,16 @@ const PUBLISH_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/publi
 const ASSIGNMENT_ROUTE = "/api/v1/events/{eventId}/rounds/{roundId}/assignments";
 const ASSIGNMENT_DELETE_ROUTE = "/api/v1/events/{eventId}/rounds/{roundId}/assignments/{assignmentId}";
 const COMMS_SEND_ROUTE = "/api/v1/events/{eventId}/comms/send";
+const CONTENT_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/content";
+const CONTENT_RESTORE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/content/restore";
+
+/**
+ * The statuses whose content the record editor offers. Mirrors the server's
+ * allowlist (`submission-record.routes.ts`) so the editor is never rendered
+ * over a write that would come back 409 — an editable-looking field that
+ * cannot save is worse than no field.
+ */
+const EDITABLE_CONTENT_STATUSES = ["draft", "submitted", "in_review", "accepted", "waitlisted"];
 
 interface Participant { id: string; person_id: string; name: string; email: string; company: string | null; role: string; confirmation_status: "pending" | "confirmed" | "declined"; confirmed_at: number | null; invited_at: number | null; }
 interface Reviewer { id: string; name: string; company: string | null; track_ids: string[]; }
@@ -34,7 +45,7 @@ interface RecordData {
   evaluations: Array<{ round_id: string; round_name: string; reviewer_name: string; recommendation: string | null; score: number | null; comment: string }>;
   comparisons: Array<{ round_id: string; round_name: string; reviewer_name: string; ranking: unknown; submission_ids: string[] }>;
   evaluation: { rounds: Round[]; reviewer_options: Reviewer[] };
-  history: Array<{ action: string; actor_kind: string; created_at: number; after_json: unknown }>;
+  history: Array<{ id: string; action: string; actor_kind: string | null; actor_name: string | null; created_at: number; before: unknown; after: unknown; restorable: boolean }>;
   actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean };
 }
 
@@ -47,6 +58,17 @@ type LoadState = { kind: "loading" } | { kind: "error"; message: string; notFoun
  * would have worked the first time. */
 function isNotFound(error: unknown): boolean {
   return error instanceof MarqueeApiError && error.code === "not_found";
+}
+
+/**
+ * What saving actually does, said in the header rather than discovered after.
+ * The three cases are genuinely different consequences, and a single generic
+ * line would be wrong in two of them.
+ */
+function contentNote(record: RecordData): string {
+  if (record.status === "draft") return "Saving keeps this record in Draft.";
+  if (record.slot?.is_published) return "This Session is live on the public site.";
+  return "Changes are recorded in the history below.";
 }
 
 function answerText(answer: RecordData["answers"][number]): string {
@@ -78,6 +100,7 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
   const [busy, setBusy] = useState("");
   const [draftTitle, setDraftTitle] = useState("");
   const [draftAbstract, setDraftAbstract] = useState("");
+  const [contentConfirming, setContentConfirming] = useState(false);
   const [selectedReviewers, setSelectedReviewers] = useState<Record<string, string>>({});
   const [schedule, setSchedule] = useState({ starts_at: "", duration_min: "30", room_id: "", track_id: "" });
   const [decisionRequest, setDecisionRequest] = useState<"approve" | "maybe" | "deny" | null>(null);
@@ -147,20 +170,49 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
     await act(`remove-${assignmentId}`, `/../../rounds/${encodeURIComponent(roundId)}/assignments/${encodeURIComponent(assignmentId)}`, { method: "DELETE" }, ASSIGNMENT_DELETE_ROUTE);
   };
 
-  const saveDraft = async (event: Event) => {
+  /**
+   * One editor, two doors. A Draft saves through the drafts endpoint, which
+   * owns the form-answer semantics and the form-admin permission; everything
+   * else saves through the content endpoint, which requires program:write.
+   * Both write the same audited before/after row, so the history reads the
+   * same either way.
+   */
+  const isDraftRecord = state.kind === "ready" && state.record.status === "draft";
+
+  const saveContent = async (event: Event, confirmPublished: boolean) => {
     event.preventDefault();
-    await act("draft", "", { method: "PATCH", body: JSON.stringify({ title: draftTitle, abstract: draftAbstract || null }) }, SUBMISSION_ROUTE);
+    setContentConfirming(false);
+    const payload: Record<string, unknown> = { title: draftTitle, abstract: draftAbstract || null };
+    if (isDraftRecord) {
+      await act("content", "", { method: "PATCH", body: JSON.stringify(payload) }, SUBMISSION_ROUTE);
+      return;
+    }
+    if (confirmPublished) payload.confirm_published = true;
+    await act("content", "/content", { method: "PATCH", body: JSON.stringify(payload) }, CONTENT_ROUTE);
+  };
+
+  const restoreVersion = async (auditId: string) => {
+    await act("restore", "/content/restore", {
+      method: "POST",
+      // A restore onto a live Session changes the public site exactly as an
+      // edit does, so it carries the same confirmation.
+      body: JSON.stringify({ audit_id: auditId, confirm_published: true }),
+    }, CONTENT_RESTORE_ROUTE);
   };
 
   if (state.kind === "loading") return <div class="submission-record-page"><PageHeader title="Submission record" copy="Reading the complete conference record…" /><Card><CardBody><div class="record-state">Loading record…</div></CardBody></Card></div>;
   if (state.kind === "error") return <div class="submission-record-page"><PageHeader title="Submission record" copy={state.notFound ? "This record could not be found." : "This record could not be reached right now."} /><Card><CardBody><div class="record-state error"><strong>{state.notFound ? "Record not found" : "Record unavailable"}</strong><span>{state.message}</span><div class="record-action-row"><Button onClick={() => navigate("/submissions")}>Back to submissions</Button><Button variant="primary" onClick={reload}>Retry</Button></div></div></CardBody></Card></div>;
   const record = state.record;
+  // Publication lives on the agenda row, not the status: a scheduled Session
+  // is still `accepted`. This is the only thing that decides whether saving
+  // changes what attendees see, so it is what gates the confirm.
+  const isLivePublicly = record.slot?.is_published === true;
   return <div class="submission-record-page">
     <PageHeader title="Submission record" copy={`${record.id} · ${record.kind === "session" ? "Session" : "Abstract"} · ${record.origin} origin`} actions={<Chip tone={headerChipTone(record)}>{record.stage_label}</Chip>} />
     <div class="record-layout">
       <div class="record-main stack">
         <Card><CardBody><div class="record-summary"><div><span class="eyebrow">Program record</span><h2>{record.title}</h2><p>{record.abstract || "—"}</p></div><div class="record-summary-meta"><Chip>{statusLabel(record.status)}</Chip><span class="tabular">{record.time_in_stage}</span><span>{record.bypass_evaluation ? "Evaluation bypassed" : "Evaluation required"}</span></div></div><div class="record-meta-grid"><span><small>Origin</small><strong>{statusLabel(record.origin)}</strong></span><span><small>Submitted</small><strong>{moment(record.submitted_at)}</strong></span><span><small>Format</small><strong>{record.format?.name ?? "—"}</strong></span><span><small>Wave</small><strong>{record.wave?.name ?? "—"}</strong></span><span><small>Routing rule</small><strong>{record.routing?.name ?? "—"}</strong></span></div>{record.slot && <div class="record-slot"><strong>{record.slot.day} · {record.slot.time} · {record.slot.room}</strong><span>{record.slot.building} · {record.slot.duration_min} min</span>{!record.slot.is_published && <Chip tone="warning">Not yet public</Chip>}{record.slot.is_published && <Chip tone="success">Live on the public site</Chip>}</div>}</CardBody></Card>
-        {record.status === "draft" && <Card><CardHeader title="Draft editor"><span class="subtle">Saving keeps this record in Draft.</span></CardHeader><CardBody><form class="record-draft-form" onSubmit={(event) => void saveDraft(event)}><label class="field"><span>Title</span><input required value={draftTitle} onInput={(event) => setDraftTitle(event.currentTarget.value)} /></label><label class="field"><span>Abstract</span><textarea rows={6} value={draftAbstract} onInput={(event) => setDraftAbstract(event.currentTarget.value)} /></label><div class="record-action-row"><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "draft" ? "Saving…" : "Save draft"}</Button><span class="subtle">No submit action is available from this editor.</span></div></form></CardBody></Card>}
+        {EDITABLE_CONTENT_STATUSES.includes(record.status) && <Card><CardHeader title="Session content"><span class="subtle">{contentNote(record)}</span></CardHeader><CardBody><form class="record-draft-form" onSubmit={(event) => { event.preventDefault(); if (isLivePublicly && !contentConfirming) { setContentConfirming(true); return; } void saveContent(event, isLivePublicly); }}><label class="field"><span>Title</span><input required value={draftTitle} onInput={(event) => setDraftTitle(event.currentTarget.value)} /></label><label class="field"><span>Abstract</span><textarea rows={6} value={draftAbstract} onInput={(event) => setDraftAbstract(event.currentTarget.value)} /></label><div class="record-action-row"><Button variant="primary" type="submit" class="record-content-save" disabled={Boolean(busy)}>{busy === "content" ? "Saving…" : isLivePublicly && contentConfirming ? "Confirm public update" : "Save changes"}</Button><span class="subtle record-content-cue">{isLivePublicly && contentConfirming ? "This replaces what attendees see on the public agenda." : isDraftRecord ? "No submit action is available from this editor." : "Saved changes are recorded in the history below."}</span></div></form></CardBody></Card>}
         {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("approve"); setFeedbackDraft(""); }}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy)} onClick={() => { setDecisionRequest("maybe"); setFeedbackDraft(""); }}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("deny"); setFeedbackDraft(""); }}>Reject</Button>}<span class="subtle">Feedback (optional) is saved with the decision; accepted and rejected decisions also include it in the speaker email.</span></div></CardBody></Card>}
         {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>{decisionRequest === "maybe" ? "A waitlist does not send a message. Any feedback you add is saved with the decision." : "Feedback is optional. If you add it, the speaker will see the same words in the decision email."}</p><label class="field"><span>Feedback for the speaker (optional)</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist" : "Reject and notify"}</Button></div></div>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{decision.kind === "reversal" ? `Acceptance reversed · ${statusLabel(decision.resulting_status)}` : statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.note || decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
@@ -170,7 +222,7 @@ export function SubmissionRecordPage({ eventId = DEFAULT_EVENT_ID, submissionId,
         <Card><CardHeader title="Participants"><span class="tabular">{record.participants.length}</span></CardHeader><CardBody><div class="record-participants">{record.participants.length ? record.participants.map((participant) => <div class="record-person" key={participant.id}><strong>{participant.name}</strong><span>{statusLabel(participant.role)} · {participant.company || "Company not provided"}</span><small>{participant.email}</small><Chip tone={participant.confirmation_status === "confirmed" ? "success" : participant.confirmation_status === "declined" ? "alarm" : ""}>{participant.confirmation_status === "confirmed" ? "Role confirmed" : participant.confirmation_status === "declined" ? "Role declined" : "Role response pending"}</Chip></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div></CardBody></Card>
         <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
         <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <div class="record-answer" key={`${evaluation.round_id}-${evaluation.reviewer_name}-${index}`}><small>{evaluation.round_name} · Scorecard · {evaluation.reviewer_name}</small><strong>{evaluation.score === null ? "—" : evaluation.score.toFixed(2)} · {evaluation.recommendation || "No recommendation"}</strong><span>{evaluation.comment || "—"}</span></div>)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · {comparison.reviewer_name}</small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
-        <Card><CardHeader title="History" /><CardBody><div class="record-history">{record.history.length ? record.history.map((entry) => <div class="record-history-row" key={`${entry.created_at}-${entry.action}`}><strong>{statusLabel(entry.action)}</strong><span>{entry.actor_kind}</span><time>{moment(entry.created_at)}</time></div>) : <span class="subtle">No history recorded.</span>}</div></CardBody></Card>
+        <Card><CardHeader title="History"><span class="subtle">Every change, who made it, and when.</span></CardHeader><CardBody><ContentHistory entries={record.history} onRestore={(entryId) => void restoreVersion(entryId)} busy={Boolean(busy)} label={statusLabel} moment={moment} /></CardBody></Card>
       </div>
       <aside class="record-aside stack"><Card><CardHeader title="Tracks" /><CardBody><div class="track-chips">{record.tracks.length ? record.tracks.map((track) => <Chip key={track.id}>{track.name}{track.is_primary ? " · Primary" : ""}</Chip>) : <span class="subtle">No tracks assigned</span>}</div></CardBody></Card><Card><CardHeader title="Evaluation panel"><span class="subtle">Current reviewers · coverage</span></CardHeader><CardBody><div class="record-rounds">{record.evaluation.rounds.length ? record.evaluation.rounds.map((round) => <section class="record-round" key={round.id}><div class="record-round-head"><strong>{round.name}</strong><span class="tabular">{round.mode === "comparison" ? "Comparison" : "Scorecard"} · target {round.target_reviews_per_submission}</span></div>{round.evaluations.length > 0 && <div class="record-round-evidence"><small>{round.evaluations.length} scorecard result{round.evaluations.length === 1 ? "" : "s"}</small></div>}{round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}{round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong>{assignment.reviewer_name}</strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}<div class="record-assignment-add"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewer.name}</option>)}</select><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div></section>) : <span class="subtle">No evaluation rounds configured</span>}</div></CardBody></Card></aside>
     </div>
