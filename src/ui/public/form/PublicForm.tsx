@@ -334,7 +334,7 @@ export function PublicForm({ initial }: PublicFormProps) {
 
   async function saveDraft() {
     preserveDraftOnBlur.current = true;
-    window.setTimeout(() => { preserveDraftOnBlur.current = false; }, 0);
+    window.setTimeout(() => { preserveDraftOnBlur.current = false; }, 500);
     setPageError(null);
     if (state.resume_token && state.draft_id) {
       await autosave();
