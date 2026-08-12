@@ -300,6 +300,15 @@ async function execute(command, arguments_, options, flags, client) {
     if (!["all", "overdue", "incomplete", "risk"].includes(filter)) usageError("--filter must be all, overdue, incomplete, or risk");
     return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/onboarding`, { query: { filter } });
   }
+  if (root === "files" && verb === "list") {
+    const state = option(options, "--state") ?? "all";
+    if (!["all", "uploaded", "missing", "overdue"].includes(state)) usageError("--state must be all, uploaded, missing, or overdue");
+    const task = option(options, "--task");
+    const search = option(options, "--search");
+    return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/files`, {
+      query: { state, ...(task ? { task_type: task } : {}), ...(search ? { q: search } : {}) },
+    });
+  }
   if (root === "remind") {
     const selector = reminderSelector(requireFilters(command, options, REMINDER_FILTER_KEYS));
     const template = option(options, "--template");

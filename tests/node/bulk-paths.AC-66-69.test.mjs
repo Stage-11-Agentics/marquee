@@ -172,6 +172,20 @@ function nonMapPlaceholderSites(modules) {
 
 const EXPECTED_PLACEHOLDER_SITES = [
   {
+    file: "src/lib/files/versions.ts",
+    owner: "readAttachments",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk families; version-history read in explicit 80-owner chunks, plus one owner_type binding, stays below D1's binding cap",
+  },
+  {
+    file: "src/lib/files/versions.ts",
+    owner: "readPointers",
+    binding: "rows",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk families; latest-pointer read in explicit 80-owner chunks stays below D1's binding cap",
+  },
+  {
     file: "src/lib/reset-demo/demo-fixture.ts",
     owner: "shippedDemoFixtureRows",
     binding: null,
