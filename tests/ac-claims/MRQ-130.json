@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-130",
+  "owns": [],
+  "exercises": [],
+  "notes": "Post-deadline scope: the 'hand this to your agent' affordance makes PHILOSOPHY §3 visible in the product rather than asserted in a document. It adds no acceptance criterion of its own and changes no existing behaviour — every surface keeps the controls it had. Acceptance is the CONTRACT tests in tests/unit/agent-briefs.MRQ-130.test.ts, which assert the four load-bearing items in every brief and pin each surface's pre-existing controls so a later edit cannot delete one to make room, plus the browser evidence recorded in the PR."
+}
