@@ -11,6 +11,19 @@
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Marquee — Program operations</title>
+    <!--
+      Theme is stamped before first paint, not after hydration: a themed app
+      that resolves its palette in JS shows a white flash on every load, which
+      is exactly the kind of jump the design language forbids. Day is the
+      default and needs no attribute; the OS preference is deliberately not
+      consulted (see src/ui/shell/theme.ts).
+    -->
+    <script>
+      try {
+        var t = localStorage.getItem("marquee-theme");
+        if (t === "night") document.documentElement.dataset.theme = t;
+      } catch (e) { /* private mode: fall through to Day */ }
+    </script>
   </head>
   <body>
     <div id="app"></div>

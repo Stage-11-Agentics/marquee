@@ -191,7 +191,7 @@ export function SessionTile({
     class={`agenda-session-tile${hasConflict ? " has-conflict" : ""}${hasDeclined ? " has-declined" : ""}`}
     draggable={session.kind !== "break"}
     data-session-id={session.id}
-    style={{ borderLeftColor: session.kind === "break" ? "#64748b" : trackColor(snapshot, session) }}
+    style={{ borderLeftColor: session.kind === "break" ? "var(--break-tint)" : trackColor(snapshot, session) }}
     onDragStart={(event) => onDragStart({ kind: "session", id: session.id }, event as unknown as DragEvent)}
   >
     <strong title={session.title}>{session.title}</strong>

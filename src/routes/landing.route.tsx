@@ -224,7 +224,7 @@ const LANDING_STYLES = `
 .mini-pipeline { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 17px 0; }
 .mini-stage { border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 12px; min-height: 72px; background: rgba(255,255,255,.82); }
 .mini-stage strong { display: block; font-size: 21px; margin-top: 9px; font-family: var(--mono); font-variant-numeric: tabular-nums lining-nums; }
-.mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid #e3cda2; color: #6b4700; border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
+.mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning-ink); border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
 .preview-notice { display: block; margin-top: 6px; }
 .landing-foot { border-top: 1px solid var(--line); padding: 18px clamp(20px,5vw,70px); color: var(--muted); font: 400 11px/1 var(--mono); display: flex; justify-content: space-between; }
 @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 34px; padding: 42px 0 52px; } .landing-links .button:first-child { display: none; } }
