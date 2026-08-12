@@ -3,7 +3,7 @@
 ## Working contract
 
 - Worktree: `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-134-agent-evaluator`
-- Branch: `mrq-134-agent-evaluator`; remote: `github`; base observed after refresh: `github/main @ 72648d6368917b105edd8fdbe699648d5c2dfcd2`
+- Branch: `mrq-134-agent-evaluator`; remote: `github`; base observed after refresh: `github/main @ 97e0920f22470568b3e3069d66df0f4dc741722e`
 - Binding design: `sequence/agent-evaluator-design.md`; contract docs are read-only.
 - MRQ-109 is present on this base (`7c064bd1`), so the chair results table is in scope for the neutral `Agent` badge.
 - Migration number is not assumed: re-check merged `github/main` immediately before creating the migration and take the next free number, currently 0013.
@@ -39,3 +39,7 @@
 - Use the existing reviewer assignment/coverage and API-token secret-panel seams; no parallel subsystem or secret UI.
 - Because MRQ-109 is on the refreshed base, include its results payload/query/UI in the badge and aggregate work; do not create another results table.
 - Keep the public claim and seeded evidence in one commit lineage and test both directions of the static coupling.
+
+## Plan refresh
+
+- Rebased the pushed plan onto `github/main @ 97e0920f22470568b3e3069d66df0f4dc741722e` before implementation; `npm ci` passed after the rebase.
