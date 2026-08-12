@@ -143,6 +143,25 @@ async function findResumeSubmission(
     .first<SubmissionRow>();
 }
 
+/**
+ * "Submissions per person" caps the abstracts someone puts in front of the
+ * committee. A draft is not one of those — it is the work in progress on the
+ * way to one, and it is created server-side by the ordinary act of pressing
+ * Save draft or attaching a file.
+ *
+ * Counting drafts made the cap self-inflicting: three Save draft presses on a
+ * three-abstract form exhausted the allowance without a single abstract ever
+ * being submitted, and every later draft, file attach, and submit for that
+ * address returned "Your abstract limit is full" forever. Withdrawn rows are
+ * excluded for the same reason — they are not in front of anyone either.
+ */
+const PER_SUBMITTER_LIMIT_CLAUSES = [
+  "form_id = ?",
+  "submitter_person_id = ?",
+  "status <> 'withdrawn'",
+  "status <> 'draft'",
+];
+
 async function countForEmail(
   db: D1Database,
   formId: string,
@@ -159,7 +178,7 @@ async function countForEmail(
     .bind(formId, email)
     .first<{ id: string }>();
   if (!person) return 0;
-  const clauses = ["form_id = ?", "submitter_person_id = ?", "status <> 'withdrawn'"];
+  const clauses = [...PER_SUBMITTER_LIMIT_CLAUSES];
   const bindings: Array<string> = [formId, person.id];
   if (excludeSubmissionId) {
     clauses.push("id <> ?");
@@ -454,7 +473,7 @@ export async function countFormForPerson(
   personId: string,
   excludeSubmissionId?: string,
 ): Promise<number> {
-  const predicates = ["form_id = ?", "submitter_person_id = ?", "status <> 'withdrawn'"];
+  const predicates = [...PER_SUBMITTER_LIMIT_CLAUSES];
   const args: string[] = [formId, personId];
   if (excludeSubmissionId) {
     predicates.push("id <> ?");
