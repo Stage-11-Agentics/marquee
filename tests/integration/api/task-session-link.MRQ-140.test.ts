@@ -16,6 +16,10 @@ import { applyMigrations, env } from "../apply-migrations";
 
 const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
 const SESSION_EXPIRES_AT = Date.now() + 86_400_000;
+// Deadlines ride the real clock: the server compares due dates against
+// Date.now(), so a date pinned to the fixture anchor would quietly become a
+// past deadline and change what these tests mean.
+const DUE_AT = Date.now() + 30 * 86_400_000;
 const ORIGIN = "https://marquee.stage11.dev";
 const ORG_ID = "org_mrq140";
 const EVENT_ID = "evt_mrq140";
@@ -120,7 +124,7 @@ beforeEach(async () => {
     participation("part_mrq140_priya_workshop", PRIYA_WORKSHOP, PRIYA_ID, 0),
     participation("part_mrq140_other", OTHER_SESSION, MARCUS_ID, 0),
     env.DB.prepare(`INSERT INTO task_templates (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
-      VALUES (?, ?, 'Upload Session Presentation', 'file', 'Final deck as a PDF.', ?, NULL, NULL, NULL, 0, 0, ?, ?)`).bind(TEMPLATE_ID, EVENT_ID, NOW + 30 * 86_400_000, NOW, NOW),
+      VALUES (?, ?, 'Upload Session Presentation', 'file', 'Final deck as a PDF.', ?, NULL, NULL, NULL, 0, 0, ?, ?)`).bind(TEMPLATE_ID, EVENT_ID, DUE_AT, NOW, NOW),
   ]);
 });
 
@@ -186,7 +190,7 @@ test("CONTRACT · MRQ-140 · creating a task with assignees resolves sessions th
   const created = await postJson(`/api/v1/events/${EVENT_ID}/task-templates`, {
     name: "Upload Final Headshot",
     kind: "file",
-    due_at: NOW + 20 * 86_400_000,
+    due_at: DUE_AT,
     assign_to: [MARCUS_ID, PRIYA_ID],
     session_assignments: [{ person_id: PRIYA_ID, submission_id: PRIYA_KEYNOTE }],
   });
