@@ -210,13 +210,13 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   };
 
   const changePublication = async (published: boolean) => {
-    setPublicationRequest(null);
     await act(
       published ? "publish" : "unpublish",
       published ? "/publish" : "/unpublish",
       { method: "POST" },
       published ? PUBLISH_ROUTE : UNPUBLISH_ROUTE,
     );
+    setPublicationRequest(null);
   };
 
   const decide = async () => {

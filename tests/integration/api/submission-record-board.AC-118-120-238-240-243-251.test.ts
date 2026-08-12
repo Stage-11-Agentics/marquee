@@ -274,6 +274,10 @@ describe.sequential("MRQ-33 admin record and program board", () => {
     const publicPayload = await body<{ sessions: Array<{ title: string; slug: string }> }>(publicData);
     const publicSession = publicPayload.sessions.find((item) => item.title === title);
     expect(publicSession).toBeTruthy();
+    const publicEmbed = await request(`/api/v1/public/embeds/${encodeURIComponent(`${event!.slug}-agenda`)}?event=${encodeURIComponent(event!.slug)}`);
+    expect(publicEmbed.status).toBe(200);
+    const publicEmbedPayload = await body<{ sessions: Array<{ title: string }> }>(publicEmbed);
+    expect(publicEmbedPayload.sessions.map((item) => item.title)).toContain(title);
     const publicSessionPage = await request(`/s/${encodeURIComponent(publicSession!.slug)}?event=${encodeURIComponent(event!.slug)}`);
     expect(publicSessionPage.status).toBe(200);
     expect(await publicSessionPage.text()).toContain(title);
@@ -297,6 +301,10 @@ describe.sequential("MRQ-33 admin record and program board", () => {
     const hiddenAgenda = await request(`/agenda?event=${encodeURIComponent(event!.slug)}`);
     expect(hiddenAgenda.status).toBe(200);
     expect(await hiddenAgenda.text()).not.toContain(title);
+    const hiddenEmbed = await request(`/api/v1/public/embeds/${encodeURIComponent(`${event!.slug}-agenda`)}?event=${encodeURIComponent(event!.slug)}`);
+    expect(hiddenEmbed.status).toBe(200);
+    const hiddenEmbedPayload = await body<{ sessions: Array<{ title: string }> }>(hiddenEmbed);
+    expect(hiddenEmbedPayload.sessions.map((item) => item.title)).not.toContain(title);
     const hiddenSessionPage = await request(`/s/${encodeURIComponent(publicSession!.slug)}?event=${encodeURIComponent(event!.slug)}`);
     expect(hiddenSessionPage.status).toBe(404);
 
@@ -305,6 +313,10 @@ describe.sequential("MRQ-33 admin record and program board", () => {
     expect(await body<{ is_published: boolean; slot: { is_published: boolean } }>(republished)).toMatchObject({ is_published: true, slot: { is_published: true } });
     const restoredAgenda = await request(`/agenda?event=${encodeURIComponent(event!.slug)}`);
     expect(await restoredAgenda.text()).toContain(title);
+    const restoredEmbed = await request(`/api/v1/public/embeds/${encodeURIComponent(`${event!.slug}-agenda`)}?event=${encodeURIComponent(event!.slug)}`);
+    expect(restoredEmbed.status).toBe(200);
+    const restoredEmbedPayload = await body<{ sessions: Array<{ title: string }> }>(restoredEmbed);
+    expect(restoredEmbedPayload.sessions.map((item) => item.title)).toContain(title);
 
     const auditRows = await env.DB.prepare(`
       SELECT action, before_json, after_json

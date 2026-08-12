@@ -15,6 +15,8 @@ test("CONTRACT · CNT-12 the record API exposes an audited reversible publicatio
   assert.match(route, /action = published \? "published" : "unpublished"/);
   assert.match(route, /updated_at = \?/);
   assert.match(route, /this Session changed while/);
+  assert.match(route, /can_schedule: [^\n]*canWriteProgram/);
+  assert.equal((route.match(/purgePublicEmbedCache\(context\.env\.CACHE, \{ eventId \}\)/g) ?? []).length, 2);
   assert.match(route, /publishSubmission, unpublishSubmission/);
 });
 

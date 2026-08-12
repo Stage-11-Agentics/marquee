@@ -24,6 +24,7 @@ import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/audit";
 import { contentOf, isContentAction, isRestorable, recordHistoryFor } from "../lib/history";
+import { purgePublicEmbedCache } from "../lib/public-site";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
@@ -772,7 +773,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       // re-acceptance is already supported as an idempotent reconciliation, so
       // the record must keep a way back.
       can_decide: ["submitted", "in_review", "accepted", "waved", "declined"].includes(row.stage),
-      can_schedule: row.kind === "session" && row.stage === "accepted" && slot === null,
+      can_schedule: row.kind === "session" && row.stage === "accepted" && slot === null && canWriteProgram,
       // Publishing is gated on the STORED status, not the derived stage: a
       // reversal leaves the agenda row in place, so a withdrawn record still
       // derives to `scheduled` and a stage test would happily publish it to
@@ -1387,6 +1388,7 @@ const publishSubmission = defineApiRoute(
     const { eventId, submissionId } = context.req.valid("param");
     await eventFor(context.env.DB, eventId);
     await setPublication(context.env.DB, eventId, submissionId, true, await actorFor(context));
+    await purgePublicEmbedCache(context.env.CACHE, { eventId });
     return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
   },
 );
@@ -1407,6 +1409,7 @@ const unpublishSubmission = defineApiRoute(
     const { eventId, submissionId } = context.req.valid("param");
     await eventFor(context.env.DB, eventId);
     await setPublication(context.env.DB, eventId, submissionId, false, await actorFor(context));
+    await purgePublicEmbedCache(context.env.CACHE, { eventId });
     return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
   },
 );
