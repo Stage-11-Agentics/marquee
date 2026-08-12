@@ -5,6 +5,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preac
 import type {
   AgendaConflict,
   AgendaPoolItem,
+  AgendaPublication,
+  AgendaPublishCandidate,
   AgendaRoom,
   AgendaSession,
   AgendaSnapshot,
@@ -22,6 +24,7 @@ const DAY_MS = 86_400_000;
 const AGENDA_ROUTE = "/api/v1/events/{eventId}/agenda";
 const AGENDA_ITEMS_ROUTE = "/api/v1/events/{eventId}/agenda/items";
 const AGENDA_ITEM_ROUTE = "/api/v1/events/{eventId}/agenda/items/{itemId}";
+const AGENDA_PUBLISH_ROUTE = "/api/v1/events/{eventId}/agenda/publish";
 
 interface Props {
   eventId?: string;
@@ -36,6 +39,11 @@ type LoadState =
   | { kind: "loading"; snapshot: null }
   | { kind: "ready"; snapshot: AgendaSnapshot }
   | { kind: "error"; snapshot: AgendaSnapshot | null; message: string };
+
+interface PublicationNotice {
+  count: number;
+  publicAgendaUrl: string;
+}
 
 type DragPayload =
   | { kind: "pool"; id: string }
@@ -84,6 +92,21 @@ export function zonedStart(date: string, time: string, timezone: string): number
 
 function speakerLine(session: AgendaSession): string {
   return session.speakers.length ? session.speakers.map((speaker) => speaker.name).join(" · ") : "No speakers listed";
+}
+
+function publicationDateTime(candidate: AgendaPublishCandidate, timezone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  }).format(new Date(candidate.starts_at));
+}
+
+function publicationSpeakerLine(candidate: AgendaPublishCandidate): string {
+  return candidate.speakers.length ? candidate.speakers.map((speaker) => speaker.name).join(" · ") : "No speakers listed";
 }
 
 function trackColor(snapshot: AgendaSnapshot, session: AgendaSession): string {
@@ -191,6 +214,7 @@ export function SessionTile({
     class={`agenda-session-tile${hasConflict ? " has-conflict" : ""}${hasDeclined ? " has-declined" : ""}`}
     draggable={session.kind !== "break"}
     data-session-id={session.id}
+    aria-label={`${session.title} · ${sessionTime(session, snapshot.event.timezone)} · ${location}`}
     style={{ borderLeftColor: session.kind === "break" ? "var(--break-tint)" : trackColor(snapshot, session) }}
     onDragStart={(event) => onDragStart({ kind: "session", id: session.id }, event as unknown as DragEvent)}
   >
@@ -445,14 +469,106 @@ function Pool({
     (!track || item.tracks.some((candidate) => candidate.id === track))
     && (!query.trim() || [item.title, item.format ?? "", ...item.speakers.map((speaker) => speaker.name)].some((value) => value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))),
   );
-  return <aside class="card agenda-pool" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop(event as unknown as DragEvent); }}>
+  return <aside class="card agenda-pool" role="region" aria-label="Unscheduled sessions to place" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop(event as unknown as DragEvent); }}>
     <header class="card-head"><div><h2>Unscheduled</h2><span class="subtle"><span class="tabular">{snapshot.unscheduled.length}</span> schedulable Sessions ready to place</span></div><Chip>Drag back here to unplace</Chip></header>
     <div class="agenda-pool-search"><input aria-label="Filter Sessions" value={query} placeholder="Filter Sessions" onInput={(event) => setQuery((event.currentTarget as HTMLInputElement).value)} /></div>
-    <div class="agenda-pool-list">{pool.length ? pool.map((item) => <article key={item.submission_id} class="agenda-pool-item" draggable data-pool-id={item.submission_id} style={{ borderLeftColor: poolTrackColor(snapshot, item) }} onDragStart={(event) => onDragStart({ kind: "pool", id: item.submission_id }, event as unknown as DragEvent)}>
+    <div class="agenda-pool-list" role="list" aria-label="Accepted sessions not yet placed">{pool.length ? pool.map((item) => <article key={item.submission_id} class="agenda-pool-item" role="listitem" aria-label={`${item.title} · ${item.format ?? "Session"} · ${item.speakers[0]?.name ?? "No speaker"}`} draggable data-pool-id={item.submission_id} style={{ borderLeftColor: poolTrackColor(snapshot, item) }} onDragStart={(event) => onDragStart({ kind: "pool", id: item.submission_id }, event as unknown as DragEvent)}>
       <strong title={item.title}>{item.title}</strong><span>{item.format ?? "Session"} · {item.default_duration_min}m · {item.speakers[0]?.name ?? "No speaker"}</span><span class="agenda-track-chips">{item.tracks.map((candidate) => <Chip key={candidate.id}>{candidate.name}</Chip>)}</span>
     </article>) : <span class="subtle">Everything matching is scheduled.</span>}</div>
     <footer><span><span class="tabular">{pool.length}</span> matching Sessions</span><span>Drag →</span></footer>
   </aside>;
+}
+
+type PublicationStep = "select" | "review";
+
+function PublicationCandidateRow({
+  candidate,
+  timezone,
+  selected,
+  onToggle,
+  review = false,
+}: {
+  candidate: AgendaPublishCandidate;
+  timezone: string;
+  selected?: boolean;
+  onToggle?: (id: string) => void;
+  review?: boolean;
+}): JSX.Element {
+  const detail = `${publicationDateTime(candidate, timezone)} · ${candidate.room} · ${candidate.building}`;
+  const speakers = publicationSpeakerLine(candidate);
+  return <div class="agenda-publication-candidate" role="listitem">
+    {!review && <input
+      type="checkbox"
+      checked={selected === true}
+      aria-label={`Select ${candidate.title} for publication`}
+      onChange={() => onToggle?.(candidate.submission_id)}
+    />}
+    <div class="agenda-publication-candidate-copy">
+      <strong title={candidate.title}>{candidate.title}</strong>
+      <span>{detail}</span>
+      <span>{speakers}</span>
+    </div>
+  </div>;
+}
+
+function PublicationPanel({
+  publication,
+  timezone,
+  selectedIds,
+  step,
+  busy,
+  onToggle,
+  onReview,
+  onBack,
+  onPublish,
+}: {
+  publication: AgendaPublication;
+  timezone: string;
+  selectedIds: readonly string[];
+  step: PublicationStep;
+  busy: boolean;
+  onToggle: (id: string) => void;
+  onReview: () => void;
+  onBack: () => void;
+  onPublish: () => void;
+}): JSX.Element {
+  const selected = new Set(selectedIds);
+  const selectedCandidates = publication.candidates.filter((candidate) => selected.has(candidate.submission_id));
+  return <section class="card agenda-publication-panel" aria-labelledby="agenda-publication-title">
+    <header class="agenda-publication-head">
+      <div>
+        <span class="eyebrow">Public agenda</span>
+        <h2 id="agenda-publication-title">Publish the program</h2>
+        <p class="agenda-publication-counter" aria-live="polite"><strong class="tabular">{publication.live}</strong> live <span aria-hidden="true">·</span> <strong class="tabular">{publication.not_yet_public}</strong> not yet public</p>
+      </div>
+      <a class="button ghost small" href={publication.public_agenda_url}>View public agenda ↗</a>
+    </header>
+    {step === "select" ? <>
+      <div class="agenda-publication-intro">Select scheduled accepted Sessions to make their title, time, room, and speakers visible on the public agenda.</div>
+      {publication.candidates.length ? <div class="agenda-publication-list" role="list" aria-label="Scheduled Sessions not yet public">
+        {publication.candidates.map((candidate) => <PublicationCandidateRow
+          key={candidate.submission_id}
+          candidate={candidate}
+          timezone={timezone}
+          selected={selected.has(candidate.submission_id)}
+          onToggle={onToggle}
+        />)}
+      </div> : <div class="agenda-publication-empty" role="status"><strong>Everything scheduled is public.</strong><span>Accepted Sessions will appear here after they are placed on the agenda.</span></div>}
+      <footer class="agenda-publication-actions">
+        <span class="subtle"><span class="tabular">{selectedCandidates.length}</span> selected</span>
+        <Button variant="primary" disabled={!selectedCandidates.length || busy} onClick={onReview}>Review publication</Button>
+      </footer>
+    </> : <>
+      <div class="agenda-publication-intro"><strong>About to publish {selectedCandidates.length} Session{selectedCandidates.length === 1 ? "" : "s"}.</strong> Review the exact public fields below. Nothing is visible until you confirm.</div>
+      <div class="agenda-publication-list" role="list" aria-label="Publication preview">
+        {selectedCandidates.map((candidate) => <PublicationCandidateRow key={candidate.submission_id} candidate={candidate} timezone={timezone} review />)}
+      </div>
+      <footer class="agenda-publication-actions">
+        <Button variant="ghost" disabled={busy} onClick={onBack}>Back to selection</Button>
+        <Button variant="primary" disabled={!selectedCandidates.length || busy} onClick={onPublish}>{busy ? "Publishing…" : `Publish ${selectedCandidates.length} to public agenda`}</Button>
+      </footer>
+    </>}
+  </section>;
 }
 
 export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
@@ -464,6 +580,10 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
   const [roomPanelId, setRoomPanelId] = useState<string | null>(null);
   const [conflictsOpen, setConflictsOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [publicationNotice, setPublicationNotice] = useState<PublicationNotice | null>(null);
+  const [publishSelection, setPublishSelection] = useState<string[]>([]);
+  const [publicationStep, setPublicationStep] = useState<PublicationStep>("select");
+  const [publicationBusy, setPublicationBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const boardRef = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef<Partial<Record<AgendaView, { top: number; left: number }>>>({});
@@ -473,6 +593,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     try {
       const snapshot = await apiFetch<AgendaSnapshot>(`/api/v1/events/${encodeURIComponent(eventId)}/agenda`, { signal, route: AGENDA_ROUTE });
       setState({ kind: "ready", snapshot });
+      setPublishSelection((current) => current.filter((id) => snapshot.publication.candidates.some((candidate) => candidate.submission_id === id)));
       setDay((current) => current || dayOptions(snapshot)[0]?.value || "all");
     } catch (error: unknown) {
       if (signal?.aborted) return;
@@ -589,6 +710,32 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     }
   };
 
+  const publishSelected = async () => {
+    if (!publishSelection.length) return;
+    setPublicationBusy(true);
+    setNotice("");
+    try {
+      const result = await apiFetch<{ published_count: number; public_agenda_url: string }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/agenda/publish`,
+        {
+          method: "POST",
+          body: JSON.stringify({ submission_ids: publishSelection }),
+          headers: { "content-type": "application/json" },
+          route: AGENDA_PUBLISH_ROUTE,
+        },
+      );
+      setPublicationNotice({ count: result.published_count, publicAgendaUrl: result.public_agenda_url });
+      setPublishSelection([]);
+      setPublicationStep("select");
+      await load();
+    } catch (error: unknown) {
+      setNotice(errorSummary(error));
+      await load();
+    } finally {
+      setPublicationBusy(false);
+    }
+  };
+
   if (state.kind === "loading" && !state.snapshot) return <div class="agenda-page"><PageHeader title="Agenda builder" copy="Place accepted Sessions directly into the conference schedule." /><div class="agenda-loading instrument" aria-busy="true"><span class="eyebrow">Agenda</span><strong>Reading the working schedule…</strong><span class="subtle">Loading Sessions, rooms, and placement metadata.</span></div></div>;
   if (!state.snapshot) return <div class="agenda-page"><PageHeader title="Agenda builder" copy="Place accepted Sessions directly into the conference schedule." /><EmptyState title="Agenda data unavailable" copy={state.message} action={<Button variant="primary" onClick={() => { setState({ kind: "loading", snapshot: null }); setReloadKey((value) => value + 1); }}>Try again</Button>} /></div>;
 
@@ -632,6 +779,18 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
 
   return <div class="agenda-page">
     <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Drag accepted Sessions into a day, time, and room. Format defaults set duration; live conflicts warn without blocking.`} actions={<Button variant="danger" onClick={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</Button>} />
+    {publicationNotice && <div class="agenda-notice agenda-publication-success" role="status"><span>Published <strong class="tabular">{publicationNotice.count}</strong> Session{publicationNotice.count === 1 ? "" : "s"} to the public agenda.</span><span class="agenda-notice-actions"><a href={publicationNotice.publicAgendaUrl}>View public agenda ↗</a><button type="button" onClick={() => setPublicationNotice(null)} aria-label="Dismiss publication confirmation">×</button></span></div>}
+    <PublicationPanel
+      publication={snapshot.publication}
+      timezone={snapshot.event.timezone}
+      selectedIds={publishSelection}
+      step={publicationStep}
+      busy={publicationBusy}
+      onToggle={(id) => setPublishSelection((current) => current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id])}
+      onReview={() => setPublicationStep("review")}
+      onBack={() => setPublicationStep("select")}
+      onPublish={() => void publishSelected()}
+    />
     <div class="agenda-toolbar card">
       <div class="segment agenda-view-tabs" role="tablist" aria-label="Agenda views">{viewNames().map((candidate) => <button type="button" role="tab" aria-selected={view === candidate} class={view === candidate ? "active" : ""} key={candidate} onClick={() => { rememberScroll(); setView(candidate); }}>{candidate[0]!.toUpperCase() + candidate.slice(1)}</button>)}</div>
       <label class="agenda-filter"><span class="eyebrow">Day</span><select value={selectedDay} onChange={(event) => { rememberScroll(); setDay((event.currentTarget as HTMLSelectElement).value); }}><option value="all">All days</option>{days.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>

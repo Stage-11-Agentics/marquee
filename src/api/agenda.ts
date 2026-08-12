@@ -21,9 +21,28 @@ export type SchedulableStatus = (typeof SCHEDULABLE_STATUS_OPTIONS)[number];
 export interface AgendaEvent {
   id: string;
   name: string;
+  slug?: string;
   starts_on: string;
   ends_on: string;
   timezone: string;
+}
+
+export interface AgendaPublishCandidate {
+  agenda_item_id: string;
+  submission_id: string;
+  title: string;
+  starts_at: number;
+  duration_min: number;
+  room: string;
+  building: string;
+  speakers: SubmissionSpeakerListItem[];
+}
+
+export interface AgendaPublication {
+  live: number;
+  not_yet_public: number;
+  candidates: AgendaPublishCandidate[];
+  public_agenda_url: string;
 }
 
 export interface AgendaBuilding {
@@ -115,6 +134,7 @@ export interface AgendaConflict {
 
 export interface AgendaSnapshot {
   event: AgendaEvent;
+  publication: AgendaPublication;
   venue?: AgendaVenueDisclosure;
   schedulable_statuses: SchedulableStatus[];
   rooms: AgendaRoom[];
