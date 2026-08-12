@@ -88,6 +88,15 @@ export interface PublicAgendaData {
   };
 }
 
+export interface PublicSpeakerDirectoryData {
+  event: PublicEvent;
+  venue: PublicVenueDisclosure;
+  speakers: PublicSpeakerSummary[];
+  filters: {
+    q: string | null;
+  };
+}
+
 export interface PublicSpeaker extends PublicSpeakerSummary {
   sessions: Array<Pick<PublicSession, "id" | "slug" | "title" | "day" | "date" | "time" | "roomLabel">>;
 }
@@ -314,7 +323,7 @@ function parseTracks(value: string): PublicTrack[] {
 
 function sessionRowsQuery(
   event: PublicEvent,
-  filters: { track?: string | null; q?: string | null; status?: string | null },
+  filters: { track?: string | null; q?: string | null; status?: string | null; speakerOnly?: boolean },
 ): { sql: string; bindings: unknown[] } {
   const clauses = [
     "ai.event_id = ?",
@@ -342,18 +351,24 @@ function sessionRowsQuery(
 
   if (filters.q?.trim()) {
     const query = `%${filters.q.trim().toLocaleLowerCase()}%`;
-    clauses.push(`(
-      lower(s.title) LIKE ?
-      OR lower(coalesce(s.abstract, '')) LIKE ?
-      OR lower(s.search_blob) LIKE ?
-      OR EXISTS (
-        SELECT 1 FROM participations search_par
-        JOIN people search_person ON search_person.id = search_par.person_id
-        WHERE search_par.submission_id = s.id${participantAudienceFilterSql("search_par", "public")}
-          AND (lower(search_person.name) LIKE ? OR lower(coalesce(search_person.company, '')) LIKE ?)
-      )
-    )`);
-    bindings.push(query, query, query, query, query);
+    const speakerMatch = `EXISTS (
+      SELECT 1 FROM participations search_par
+      JOIN people search_person ON search_person.id = search_par.person_id
+      WHERE search_par.submission_id = s.id${participantAudienceFilterSql("search_par", "public")}
+        AND (lower(search_person.name) LIKE ? OR lower(coalesce(search_person.company, '')) LIKE ?)
+    )`;
+    if (filters.speakerOnly) {
+      clauses.push(speakerMatch);
+      bindings.push(query, query);
+    } else {
+      clauses.push(`(
+        lower(s.title) LIKE ?
+        OR lower(coalesce(s.abstract, '')) LIKE ?
+        OR lower(s.search_blob) LIKE ?
+        OR ${speakerMatch}
+      )`);
+      bindings.push(query, query, query, query, query);
+    }
   }
 
   return {
@@ -501,6 +516,33 @@ export async function loadPublicAgenda(
       q: filters.q?.trim() || null,
       status: filters.status ?? null,
     },
+  };
+}
+
+export async function loadPublicSpeakerDirectory(
+  database: D1Database,
+  filters: { eventSlug?: string | null; q?: string | null } = {},
+): Promise<PublicSpeakerDirectoryData | null> {
+  const event = await findLiveEvent(database, filters.eventSlug);
+  if (!event) return null;
+  const query = sessionRowsQuery(event, { q: filters.q, speakerOnly: true });
+  const [venue, rows] = await Promise.all([
+    publicVenueDisclosure(database, event.id),
+    database.prepare(query.sql).bind(...query.bindings).all<PublicSessionRow>(),
+  ]);
+  const search = filters.q?.trim().toLocaleLowerCase() || null;
+  const speakersById = new Map<string, PublicSpeakerSummary>();
+  for (const session of toPublicSessions(rows.results, event, venue.showComparison)) {
+    for (const speaker of session.speakers) {
+      if (search && !speaker.name.toLocaleLowerCase().includes(search) && !(speaker.company ?? "").toLocaleLowerCase().includes(search)) continue;
+      speakersById.set(speaker.id, speaker);
+    }
+  }
+  return {
+    event,
+    venue,
+    speakers: [...speakersById.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    filters: { q: filters.q?.trim() || null },
   };
 }
 

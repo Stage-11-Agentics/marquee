@@ -8,6 +8,7 @@ import {
   loadPublicAgenda,
   loadPublicSession,
   loadPublicSpeaker,
+  loadPublicSpeakerDirectory,
 } from "../lib/public-site";
 import {
   PUBLIC_AGENDA_SCRIPT,
@@ -16,6 +17,7 @@ import {
   PublicNotFoundPage,
   PublicSessionPage,
   PublicSpeakerPage,
+  PublicSpeakerDirectoryPage,
 } from "../ui/public/agenda/PublicAgendaPage";
 
 const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Public program</title>${ICON_LINKS}</head><body><div id="app"></div><script type="module" src="/src/ui/app.tsx"></script></body></html>`;
@@ -75,6 +77,22 @@ publicAgendaRoutes.get("/agenda", async (context) => {
     shell,
     renderToString(<PublicAgendaPage data={data} />),
     { title: "Agenda", script: PUBLIC_AGENDA_SCRIPT },
+  ));
+});
+
+publicAgendaRoutes.get("/speakers", async (context) => {
+  const query = context.req.query();
+  const data = await loadPublicSpeakerDirectory(context.env.DB, {
+    eventSlug: query.event ?? query.event_slug,
+    q: query.q,
+  });
+  const shell = await assetShell(context.env.ASSETS, context.req.raw);
+  if (!data) return notFoundDocument(shell);
+  context.header("Cache-Control", "no-store");
+  return context.html(renderPublicDocument(
+    shell,
+    renderToString(<PublicSpeakerDirectoryPage data={data} />),
+    { title: "Speakers" },
   ));
 });
 
