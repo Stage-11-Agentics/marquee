@@ -61,6 +61,7 @@ describe("MRQ-102 · split health summaries", () => {
 
     expect(summary.level).toBe("alarm");
     expect(summary.headline).toBe("4 speakers have not heard from you.");
+    expect(summary.detail).toContain("send allowance");
   });
 
   test("AC-3 · system health never receives owed-speaker facts", () => {

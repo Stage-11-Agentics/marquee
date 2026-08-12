@@ -866,6 +866,8 @@ export function summarizeSpeakerFollowups(
       headline: `${count(owedTotal)} ${plural(owedTotal, "speaker has", "speakers have")} not heard from you.`,
       detail: owedUrgent > 0
         ? "Their decision is recorded and the message has not reached them. Open the follow-up list — each row opens its record."
+        : quota.level === "alarm"
+          ? "Today's send allowance will not carry these messages. See the allowance below, then open the follow-up list to see the exact state."
         : "These messages are still in flight or held on purpose. Open the follow-up list to see the exact state.",
     };
   }
