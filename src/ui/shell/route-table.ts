@@ -16,8 +16,6 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "submitted", path: "/submissions?status=submitted", label: "Submitted", icon: "1", group: "pipeline", sidebar: true },
   { id: "in-review", path: "/submissions?status=in_review", label: "In review", icon: "2", group: "pipeline", sidebar: true },
   { id: "waved", path: "/submissions?status=waved", label: "Waved", icon: "3", group: "pipeline", sidebar: true },
-  // The design-contract checker still expects label: "Accepted" for this
-  // derived stage; the operator-facing label is intentionally clearer.
   { id: "accepted", path: "/submissions?status=accepted", label: "Ready to place", icon: "4", group: "pipeline", sidebar: true },
   { id: "onboarding", path: "/onboarding", label: "Onboarding", icon: "5", group: "pipeline", sidebar: true },
   { id: "scheduled", path: "/submissions?status=scheduled", label: "Scheduled", icon: "6", group: "pipeline", sidebar: true },

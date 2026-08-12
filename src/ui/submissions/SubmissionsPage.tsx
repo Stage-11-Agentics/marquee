@@ -105,6 +105,7 @@ function statusLabel(status: SubmissionListItem["status"]): string {
   if (status === "waitlisted") return "Maybe";
   if (status === "in_review") return "In review";
   if (status === "unreviewed") return "Unreviewed";
+  if (status === "accepted") return "Ready to place";
   return status[0]!.toUpperCase() + status.slice(1);
 }
 

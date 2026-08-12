@@ -107,7 +107,7 @@ async function seedFixture(): Promise<void> {
     INSERT INTO submissions
       (id, event_id, form_id, kind, title, status, origin, wave_id,
        submitter_person_id, submitted_at, created_at, updated_at)
-    SELECT printf('sub-mrq19-%03d', n), ?, 'form-mrq19', CASE WHEN n = 1 THEN 'session' ELSE 'abstract' END,
+    SELECT printf('sub-mrq19-%03d', n), ?, 'form-mrq19', CASE WHEN n = 100 THEN 'session' ELSE 'abstract' END,
            printf('Talk %03d', n), 'submitted', 'public', NULL,
            'person-mrq19-speaker', ?, ?, ?
     FROM sequence`,
@@ -204,38 +204,38 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
       expect(response.status).toBe(200);
       return response.json<SubmissionListResponse>();
     };
-    const findTarget = (result: SubmissionListResponse) => result.data.find((item) => item.id === "sub-mrq19-001");
+    const findTarget = (result: SubmissionListResponse) => result.data.find((item) => item.id === "sub-mrq19-100");
 
     const freshlyAccepted = await listAcceptedFacts();
     expect(freshlyAccepted.total).toBe(150);
-    expect(findTarget(freshlyAccepted)).toMatchObject({ id: "sub-mrq19-001", status: "accepted" });
-    expect(await requestRecordRead("sub-mrq19-001").then((response) => response.json<{ stage: string }>())).toMatchObject({ stage: "waved" });
-    expect(await env.DB.prepare("SELECT status FROM submissions WHERE id = 'sub-mrq19-001'").first<{ status: string }>()).toEqual({ status: "accepted" });
+    expect(findTarget(freshlyAccepted)).toMatchObject({ id: "sub-mrq19-100", status: "accepted" });
+    expect(await requestRecordRead("sub-mrq19-100").then((response) => response.json<{ stage: string }>())).toMatchObject({ stage: "waved" });
+    expect(await env.DB.prepare("SELECT status FROM submissions WHERE id = 'sub-mrq19-100'").first<{ status: string }>()).toEqual({ status: "accepted" });
 
     const storedSelectorIds = await selectSubmissionIds(env.DB, { eventId: EVENT_ID, status: "accepted_any" }, { statusSemantics: "stored" });
     expect(storedSelectorIds).toHaveLength(150);
 
     await env.DB.prepare("UPDATE waves SET sent_at = ? WHERE id = 'wave-mrq19'").bind(NOW + 1).run();
     const onboarding = await listAcceptedFacts();
-    expect(findTarget(onboarding)).toMatchObject({ id: "sub-mrq19-001", status: "accepted" });
-    expect(await requestRecordRead("sub-mrq19-001").then((response) => response.json<{ stage: string }>())).toMatchObject({ stage: "onboarding" });
+    expect(findTarget(onboarding)).toMatchObject({ id: "sub-mrq19-100", status: "accepted" });
+    expect(await requestRecordRead("sub-mrq19-100").then((response) => response.json<{ stage: string }>())).toMatchObject({ stage: "onboarding" });
 
-    const scheduled = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/sub-mrq19-001/schedule`, {
+    const scheduled = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/sub-mrq19-100/schedule`, {
       method: "POST",
       headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
       body: JSON.stringify({ starts_at: NOW + 86_400_000, duration_min: 30, room_id: "room-mrq19" }),
     });
     expect(scheduled.status).toBe(200);
     expect(await scheduled.json<{ stage: string }>()).toMatchObject({ stage: "scheduled" });
-    expect(findTarget(await listAcceptedFacts())).toMatchObject({ id: "sub-mrq19-001", status: "scheduled" });
+    expect(findTarget(await listAcceptedFacts())).toMatchObject({ id: "sub-mrq19-100", status: "scheduled" });
 
-    const published = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/sub-mrq19-001/publish`, {
+    const published = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/sub-mrq19-100/publish`, {
       method: "POST",
       headers: { authorization: `Bearer ${TOKEN}` },
     });
     expect(published.status).toBe(200);
     expect(await published.json<{ stage: string }>()).toMatchObject({ stage: "published" });
-    expect(findTarget(await listAcceptedFacts())).toMatchObject({ id: "sub-mrq19-001", status: "published" });
+    expect(findTarget(await listAcceptedFacts())).toMatchObject({ id: "sub-mrq19-100", status: "published" });
   }, 20_000);
 
   test("AC-114, AC-115, AC-116, AC-117 · record-owned reject shares rendered merge fields, status history, and UNIQUE outbox identity", async () => {

@@ -2157,6 +2157,7 @@
           (state.submissionFilter === "All" ||
             (state.submissionFilter === "AcceptedAny" && s.accepted) ||
             (state.submissionFilter === "Accepted" && boardStageFor(s) === "Accepted") ||
+            (state.submissionFilter === "Onboarding" && boardStageFor(s) === "Onboarding") ||
             (state.submissionFilter === "Waved" && s.accepted && s.wave <= 2) ||
             (state.submissionFilter === "Scheduled" && ["Scheduled","Published"].includes(s.status)) ||
             (state.submissionFilter === "Unreviewed" && ["Submitted","In Review"].includes(s.status)) ||
