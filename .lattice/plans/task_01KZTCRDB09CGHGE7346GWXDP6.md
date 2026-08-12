@@ -35,3 +35,14 @@ Verdict: PASS-WITH-NITS (self-review, 2026-08-12).
 - The original plan left the chair result file implicit. Resolved: after the parent/sibling rebase, inspect the exact MRQ-109 result projection and update its aggregate consumer(s), including `src/routes/submissions.queries.ts` / the submissions results UI when those are the landed surfaces; use the existing shared helper and do not fork it.
 - The reminder path must not accidentally become a general audience feature. Resolved: implement it as a program-authorized evaluation route that directly loads the event-scoped reviewer person and `listRoundAssignments`-equivalent outstanding count, then calls the canonical outbox enqueue helper; do not add `reviewer` to `reminderSelectorSchema.role`.
 - The round pool must remain optional for existing plans. Resolved: validate any supplied committee belongs to the round's event, preserve `NULL` on old rounds, and make distribution's UI/API input select the round's persisted pool rather than inventing membership rows.
+
+## Plan-Review Cycle 6 Resolutions (AUTHORITATIVE)
+
+Verdict: FAIL from independent exact-head review; all implementation findings are accepted for this focused remediation.
+
+- Raise the mobile `Declare conflict` control to the same 48px target as Save and add a source-level regression assertion for the mobile rule. Align the two save-row controls by moving the 12px top spacing to `.review-save-actions` and neutralizing the standalone Save margin inside that row; preserve the comparison-card Save spacing.
+- Keep the chair coverage state tri-partite: `undefined` means the round summary is still loading, `null` means the fetch failed, and an empty object means a successful empty result. Render a reserved loading label for the first state, one coverage sentence only for empty/failed states, and an action-column dash when there is no action.
+- Correct the duplicate reminder notice to say `Reviewer reminder already queued today`, matching the event-local-day idempotency key.
+- Make round create/update committee scoping failures field-addressable 422s for `committee_id`, while retaining the generic committee route's 404 semantics. Add/update the integration assertion for cross-event round pool input.
+- Defer the reviewer's suggested split of `listRoundAssignments?summary=1` into a separate operation: it is a broader generated-client contract redesign outside T-C2, and the current route shape is covered by the existing API contract. Carry it as a later API-contract note rather than expanding this PR.
+- Re-run targeted tests, TypeScript, schema/seed checks, the full MRQ-110 gate, and an exact-head review after committing and pushing these changes. Do not reuse the FAIL artifact as the final review evidence.
