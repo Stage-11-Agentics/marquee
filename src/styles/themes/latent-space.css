@@ -78,9 +78,11 @@ html[data-theme="latent-space"] {
 /* ── native controls: dark chrome follows the register ─────────────────── */
 /* Native widgets otherwise keep the browser's light defaults, which is most
    visible on the agenda's Filter Sessions field and on long scroll surfaces. */
+html[data-theme="latent-space"] {
+  color-scheme: dark;
+}
 html[data-theme="latent-space"],
 html[data-theme="latent-space"] * {
-  color-scheme: dark;
   scrollbar-color: var(--rule) var(--surface-sunk);
 }
 
