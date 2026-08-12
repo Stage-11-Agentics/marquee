@@ -445,6 +445,8 @@ export interface NotifyNotifiedResult {
   selected: number;
   queued: number;
   skippedNoAddress: number;
+  remaining: number;
+  nextCursor: string | null;
   outboxIds: Id[];
 }
 
@@ -454,34 +456,48 @@ interface ExistingDecisionCandidate {
   decision: Decision;
   resulting_status: "accepted" | "rejected";
   feedback_md: string | null;
+  candidate_count: number;
 }
+
+/**
+ * One decision mail performs two template reads, an outbox write, and a queue
+ * send. Keep the request comfortably below Workers' 1,000-subrequest ceiling;
+ * callers use the cursor in the response to drain the rest.
+ */
+export const NOTIFY_DECISIONS_BATCH_SIZE = 200;
 
 /**
  * Re-send a decision without touching the decision record. The decision id is
  * the retry's business entity, while a fresh key makes every deliberate retry
- * a new outbox row rather than a duplicate of the automatic send.
+ * a new outbox row rather than a duplicate of the automatic send. A cursor
+ * lets one bounded operation move past queued rows without making pending
+ * messages ineligible for a later deliberate retry.
  */
 export async function notifyExistingDecisions(input: {
   db: D1Database;
   queue: Queue<unknown>;
   eventId: Id;
   submissionIds: readonly Id[];
+  cursor?: string | null;
   now?: number;
 }): Promise<NotifyNotifiedResult> {
   const ids = [...new Set(input.submissionIds)];
-  if (ids.length === 0) return { selected: 0, queued: 0, skippedNoAddress: 0, outboxIds: [] };
+  if (ids.length === 0) return { selected: 0, queued: 0, skippedNoAddress: 0, remaining: 0, nextCursor: null, outboxIds: [] };
   const now = input.now ?? Date.now();
+  const cursor = input.cursor?.trim() || null;
   const submissions = await loadSubmissions(input.db, input.eventId, ids);
   const submissionsById = new Map(submissions.map((submission) => [submission.id, submission]));
   const idsJson = JSON.stringify(ids);
   const candidates = await input.db
     .prepare(
       `SELECT decision.id AS decision_id, decision.submission_id, decision.decision,
-              decision.resulting_status, decision.feedback_md
+              decision.resulting_status, decision.feedback_md,
+              COUNT(*) OVER () AS candidate_count
        FROM submission_decisions decision
        WHERE decision.event_id = ?
          AND decision.resulting_status IN ('accepted', 'rejected')
          AND decision.submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+         AND (? IS NULL OR decision.id > ?)
          AND NOT EXISTS (
            SELECT 1
            FROM submission_decisions newer
@@ -492,16 +508,27 @@ export async function notifyExistingDecisions(input: {
          )
          AND NOT EXISTS (
            SELECT 1
-           FROM outbox sent
-           WHERE sent.event_id = decision.event_id
-             AND sent.status = 'sent'
-             AND (sent.id = decision.outbox_id OR sent.entity_id = decision.id)
+           FROM outbox settled
+           JOIN events settled_event ON settled_event.id = settled.event_id
+           WHERE settled.event_id = decision.event_id
+             AND (settled.id = decision.outbox_id OR settled.entity_id = decision.id)
+             AND (
+               settled.status = 'sent'
+               OR (
+                 settled.status = 'suppressed'
+                 AND settled.suppressed_reason = 'demo_mode_not_allowlisted'
+                 AND settled_event.demo_mode = 1
+               )
+             )
          )
-       ORDER BY decision.submission_id ASC, decision.id ASC`,
+       ORDER BY decision.id ASC
+       LIMIT ?`,
     )
-    .bind(input.eventId, idsJson)
+    .bind(input.eventId, idsJson, cursor, cursor, NOTIFY_DECISIONS_BATCH_SIZE)
     .all<ExistingDecisionCandidate>();
 
+  const remaining = Math.max(Number(candidates.results[0]?.candidate_count ?? 0) - candidates.results.length, 0);
+  const nextCursor = remaining > 0 ? candidates.results[candidates.results.length - 1]?.decision_id ?? null : null;
   let skippedNoAddress = 0;
   let selected = 0;
   let queued = 0;
@@ -530,7 +557,7 @@ export async function notifyExistingDecisions(input: {
     if (result.id) outboxIds.push(result.id);
     if (result.inserted) queued += 1;
   }
-  return { selected, queued, skippedNoAddress, outboxIds };
+  return { selected, queued, skippedNoAddress, remaining, nextCursor, outboxIds };
 }
 
 async function updateSubmissionStatus(

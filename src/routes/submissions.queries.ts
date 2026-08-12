@@ -277,8 +277,9 @@ LEFT JOIN buildings building ON building.id = room.building_id`;
 /**
  * The notification view is deliberately a read-time join. The latest
  * decision owns the state, while a retry is attached to that decision through
- * outbox.entity_id. A sent retry wins over an older queued/suppressed row so
- * the view closes as soon as a notification actually leaves the outbox.
+ * outbox.entity_id. A sent retry wins over an older queued row, and a
+ * demo-mode suppression is settled by design, so the view closes when the
+ * decision has reached a terminal notification outcome.
  */
 const NOTIFICATION_FROM = `${FROM}
 LEFT JOIN submission_decisions latest_decision
@@ -327,7 +328,14 @@ END`;
 
 const NOTIFICATION_GAP_PREDICATE = `latest_decision.id IS NOT NULL
   AND latest_decision.resulting_status IN ('accepted', 'rejected')
-  AND COALESCE(notification_outbox.status, '') <> 'sent'`;
+  AND NOT (
+    COALESCE(notification_outbox.status, '') = 'sent'
+    OR (
+      COALESCE(notification_outbox.status, '') = 'suppressed'
+      AND notification_outbox.suppressed_reason = 'demo_mode_not_allowlisted'
+      AND event.demo_mode = 1
+    )
+  )`;
 
 const NOTIFICATION_SELECT = `
   ${NOTIFICATION_STATE_SQL} AS notification_state,
