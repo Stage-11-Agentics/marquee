@@ -19,6 +19,7 @@ import {
   buildSubmissionsQuery,
   isAcceptedStageDeadEnd,
   isCurrentSubmissionsRequest,
+  normaliseSubmissionSort,
   submissionsRequestKey,
   SUBMISSIONS_PAGE_SIZE,
 } from "./list-request";
@@ -152,6 +153,11 @@ function queryValue(params: URLSearchParams, key: string, fallback = ""): string
   return params.get(key) ?? fallback;
 }
 
+/** The control and the request agree on one normaliser; see list-request.ts. */
+function sortValue(params: URLSearchParams): SavedView["config"]["sort"] {
+  return normaliseSubmissionSort(params.get("sort"));
+}
+
 function columnsWithTitle(columns: readonly SubmissionColumnId[]): SubmissionColumnId[] {
   const result = [...new Set(columns)];
   if (!result.includes("title")) result.splice(0, 0, "title");
@@ -179,7 +185,7 @@ function viewConfigFromParams(params: URLSearchParams, columns: SubmissionColumn
   return {
     q: params.get("q") ?? "",
     filters,
-    sort: (params.get("sort") as SavedView["config"]["sort"] | null) ?? "newest",
+    sort: sortValue(params),
     columns: columnsWithTitle(columns),
   };
 }
@@ -292,7 +298,7 @@ export function SubmissionsPage({
   const wave = queryValue(params, "wave");
   const task = queryValue(params, "task");
   const placement = queryValue(params, "placement");
-  const sort = queryValue(params, "sort", "newest");
+  const sort = sortValue(params);
   const q = queryValue(params, "q");
   const requestKey = useMemo(() => submissionsRequestKey(eventId, params), [eventId, search]);
   const lastCommittedRequestKeyRef = useRef<string | null>(initialEnvelope ? requestKey : null);

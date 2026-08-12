@@ -1,8 +1,26 @@
 export const SUBMISSIONS_PAGE_SIZE = 50;
 
+/** The sort ids the list endpoint accepts. `newest` is the default. */
+export const SUBMISSION_SORTS = ["newest", "updated", "score", "score_asc", "title"] as const;
+export type SubmissionSort = (typeof SUBMISSION_SORTS)[number];
+
+/**
+ * A list view is a URL people paste to each other, and a pasted URL is typed,
+ * edited, and outlived by the option it names. The endpoint validates `sort`
+ * against a fixed set and correctly refuses anything else — but the refusal
+ * arrived as a 400 that emptied the whole table behind a generic error, with
+ * the sort control rendering blank and no way back except editing the address
+ * bar. Normalising here, at the one place the request is assembled, keeps the
+ * API strict and stops the page asking it for something it does not offer.
+ */
+export function normaliseSubmissionSort(value: string | null): SubmissionSort {
+  return SUBMISSION_SORTS.includes(value as SubmissionSort) ? (value as SubmissionSort) : "newest";
+}
+
 export function buildSubmissionsQuery(params: URLSearchParams): URLSearchParams {
   const query = new URLSearchParams(params);
   query.set("per_page", String(SUBMISSIONS_PAGE_SIZE));
+  if (query.has("sort")) query.set("sort", normaliseSubmissionSort(query.get("sort")));
   return query;
 }
 
