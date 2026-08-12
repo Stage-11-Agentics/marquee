@@ -50,7 +50,7 @@ export const PUBLIC_SITE_STYLES = `
 .public-heading p { max-width: 660px; margin: 0; color: var(--public-muted); }
 .public-filters { min-height: 58px; display: grid; grid-template-columns: auto minmax(150px, 190px) minmax(190px, 1fr); align-items: center; gap: 9px; margin-bottom: 14px; padding: 9px; border: 1px solid var(--public-rule); background: var(--public-surface); }
 .public-days { min-height: 38px; display: inline-flex; align-items: stretch; gap: 4px; }
-.public-days button { width: 72px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-sunk); color: var(--public-muted); font: 650 10px/1 var(--public-mono); }
+.public-days button { flex: 0 0 72px; width: 72px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-sunk); color: var(--public-muted); font: 650 10px/1 var(--public-mono); }
 .public-days button.active { border-color: var(--public-accent); background: var(--public-accent-wash); color: var(--public-accent); }
 .public-select, .public-search { width: 100%; min-width: 0; height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 0 9px; font-size: 12px; }
 .public-search::placeholder { color: var(--public-muted); }
@@ -139,7 +139,7 @@ export function PublicShell({
   return (
     <div class="public-site" data-public-page={title.toLowerCase().replaceAll(" ", "-")}>
       <header class="public-top">
-        <a class="public-brand" href="/agenda" aria-label={`${event.name} agenda`}>
+        <a class="public-brand" href="/" aria-label={`${event.name} home`}>
           <span class="public-mark">M</span><span>{event.name}</span>
         </a>
         <div class="public-top-actions">
@@ -187,11 +187,13 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
             <h1>Agenda</h1>
             <p>{data.event.tagline ?? "Practical sessions for people building and operating AI."}</p>
           </div>
-          <a class="public-button" href={`/api/v1/public/agenda?${eventQuery}`}>Agenda data ↗</a>
         </div>
         <form class="public-filters" method="get" action="/agenda" data-public-agenda-filters>
           <input type="hidden" name="event" value={data.event.slug} />
           <div class="public-days" role="tablist" aria-label="Agenda day">
+            <button type="submit" name="day" value="all" class={data.filters.day === "all" ? "active" : ""} role="tab" aria-selected={data.filters.day === "all"}>
+              All days
+            </button>
             {data.days.map((day) => (
               <button type="submit" name="day" value={day.id} class={data.filters.day === day.id ? "active" : ""} role="tab" aria-selected={data.filters.day === day.id} key={day.id}>
                 {day.label.replace(" · ", " ")}
