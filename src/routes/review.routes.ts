@@ -4,6 +4,7 @@ import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { Principal } from "../api/runtime";
 import { validateComparisonRanking } from "../lib/evaluation-comparisons";
+import { participantListSql } from "../lib/participants";
 import {
   authorizeReviewerScope,
   authorizeReviewerQueueScope,
@@ -389,17 +390,18 @@ async function identityForSubmission(
   const row = await db.prepare(`
     SELECT submitter.id, submitter.name, submitter.email, submitter.company, submitter.bio,
       submitter.headshot_attachment_id,
-      COALESCE((
-        SELECT json_group_array(json_object(
-          'id', speaker.id, 'name', speaker.name, 'email', speaker.email,
-          'company', speaker.company, 'bio', speaker.bio,
-          'headshot_attachment_id', speaker.headshot_attachment_id
-        ))
-        FROM participations participation
-        JOIN people speaker ON speaker.id = participation.person_id
-        WHERE participation.submission_id = submission.id
-        ORDER BY participation.position, participation.id
-      ), '[]') AS speakers
+      ${participantListSql({
+        submissionId: "submission.id",
+        audience: "program",
+        fields: {
+          id: "speaker.id",
+          name: "speaker.name",
+          email: "speaker.email",
+          company: "speaker.company",
+          bio: "speaker.bio",
+          headshot_attachment_id: "speaker.headshot_attachment_id",
+        },
+      })} AS speakers
     FROM submissions submission
     JOIN people submitter ON submitter.id = submission.submitter_person_id
     WHERE submission.id = ? AND submission.event_id = ?

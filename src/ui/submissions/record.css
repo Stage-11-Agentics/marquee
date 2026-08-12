@@ -46,6 +46,15 @@
 .record-answer:last-child { border-bottom: 0; }
 .record-answer small, .record-answer span { color: var(--muted); font-size: 10.5px; }
 .record-answer strong { font-size: 11.5px; overflow-wrap: anywhere; }
+.record-file { align-items: start; display: flex; gap: 9px; }
+/* Fixed 64px whatever the state: the crop holds its square before the image
+   loads, while it loads, and when there is no image at all, so the record
+   never reflows around it. */
+.record-file-crop { align-items: center; background: var(--sunk); border: 1px solid var(--line-strong); display: flex; flex: none; height: 64px; justify-content: center; overflow: hidden; width: 64px; }
+.record-file-crop img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.record-file-crop span { color: var(--muted); font: 400 9px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.record-file-meta { display: grid; gap: 3px; min-width: 0; }
+.record-file-meta span { font: 400 9.5px var(--mono); }
 .record-history-row { align-items: center; border-bottom: 1px solid var(--line); display: grid; gap: 7px; grid-template-columns: 1fr auto auto; padding: 6px 0; }
 .record-history-row strong, .record-history-row span, .record-history-row time { font-size: 10.5px; }
 .record-history-row span, .record-history-row time { color: var(--muted); }

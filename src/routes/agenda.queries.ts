@@ -19,6 +19,7 @@ import {
   type SchedulableStatus,
 } from "../api/agenda";
 import { conflictParticipants, dedupeParticipants, sharedConflictParticipants } from "../lib/conflicts";
+import { participantListSql } from "../lib/participants";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import { getTransitConflicts, type TransitAgendaItem } from "../lib/venue-geometry";
 import type { SubmissionSpeakerListItem, SubmissionTrackListItem } from "../api/submissions";
@@ -365,16 +366,17 @@ async function readTracks(database: D1Database, eventId: string): Promise<Agenda
   return result.results;
 }
 
-const SPEAKERS_JSON = `COALESCE((
-  SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company, 'role', ordered.role, 'confirmation_status', ordered.confirmation_status))
-  FROM (
-    SELECT person.id, person.name, person.company, participation.role, participation.confirmation_status
-    FROM participations participation
-    JOIN people person ON person.id = participation.person_id
-    WHERE participation.submission_id = submission.id
-    ORDER BY participation.position ASC, participation.id ASC
-  ) ordered
-), '[]')`;
+const SPEAKERS_JSON = participantListSql({
+  submissionId: "submission.id",
+  audience: "program",
+  fields: {
+    id: "speaker.id",
+    name: "speaker.name",
+    company: "speaker.company",
+    role: "participation.role",
+    confirmation_status: "participation.confirmation_status",
+  },
+});
 
 const TRACKS_JSON = `COALESCE((
   SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'color', ordered.color, 'is_primary', ordered.is_primary))

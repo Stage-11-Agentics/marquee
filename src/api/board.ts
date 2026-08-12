@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import type { ListEnvelope } from "./list";
+import { participantListSql } from "../lib/participants";
 import { submissionStatusPredicate } from "../routes/submissions.queries";
 import {
   executeListPage,
@@ -293,16 +294,11 @@ export async function listBoard(
       wave.name AS wave,
       s.updated_at,
       ${BOARD_STAGE_SQL} AS stage,
-      COALESCE((
-        SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company))
-        FROM (
-          SELECT speaker.id, speaker.name, speaker.company
-          FROM participations participation
-          JOIN people speaker ON speaker.id = participation.person_id
-          WHERE participation.submission_id = s.id
-          ORDER BY participation.position, participation.id
-        ) ordered
-      ), '[]') AS speakers_json,
+      ${participantListSql({
+        submissionId: "s.id",
+        audience: "program",
+        fields: { id: "speaker.id", name: "speaker.name", company: "speaker.company" },
+      })} AS speakers_json,
       COALESCE((
         SELECT json_group_array(json_object(
           'id', ordered.id, 'name', ordered.name, 'color', ordered.color,

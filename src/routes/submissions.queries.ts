@@ -9,6 +9,7 @@ import type {
   SubmissionTrackListItem,
 } from "../api/submissions";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
+import { participantListSql } from "../lib/participants";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import {
   executeListPage,
@@ -438,16 +439,11 @@ const ITEM_SELECT = `
   s.status AS stored_status,
   s.format_id,
   format.name AS format,
-  COALESCE((
-    SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'company', ordered.company))
-    FROM (
-      SELECT speaker.id, speaker.name, speaker.company
-      FROM participations par
-      JOIN people speaker ON speaker.id = par.person_id
-      WHERE par.submission_id = s.id
-      ORDER BY par.position ASC, par.id ASC
-    ) ordered
-  ), '[]') AS speakers_json,
+  ${participantListSql({
+    submissionId: "s.id",
+    audience: "program",
+    fields: { id: "speaker.id", name: "speaker.name", company: "speaker.company" },
+  })} AS speakers_json,
   COALESCE((
     SELECT json_group_array(json_object(
       'id', ordered.id,

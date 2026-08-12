@@ -14,16 +14,19 @@ import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 
+import { ApiError } from "../api/errors";
 import type { ApiEnv } from "../api/runtime";
-import { defineApiRoute, jsonResponse } from "../api/route";
+import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import { SESSION_COOKIE_NAME } from "../lib/cookies";
+import { isPreviewableImage } from "../lib/file-answers";
 import { uploadError } from "../lib/r2/errors";
 import { objectKeyFor, publicMediaUrl } from "../lib/r2/keys";
 import { extensionOf, parseUploadOwnerConfig, policyFor, sanitizeFilename, validateDeclared } from "../lib/r2/policy";
 import { presignPut, type R2SigningConfig } from "../lib/r2/presign";
 import type { UploadOwnerConfig } from "../lib/r2/protocol";
 import { checkUploadRateLimits, rateLimitHeaders } from "../lib/r2/rate-limit";
-import { isMediaHost, serveMediaObject } from "../lib/r2/serve";
+import { isMediaHost, serveInlineImageObject, serveMediaObject } from "../lib/r2/serve";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { verifyAndComplete } from "../lib/r2/complete";
 
@@ -550,6 +553,53 @@ async function handleMedia(context: Context<ApiEnv>) {
   return serveMediaObject(env.MEDIA, key, row);
 }
 
+/**
+ * The organizer's thumbnail of a file answer.
+ *
+ * It adds authorization rather than removing any: the caller must already be
+ * entitled to read the submission the attachment is answering, exactly as the
+ * record route requires, and only then does a raster image render inline (see
+ * `serveInlineImageObject`). Everything else — a pending upload, a PDF, an SVG,
+ * an attachment no answer references, a caller without program access — is a
+ * 404 with no bytes served. The separate media origin keeps its role as the
+ * only place arbitrary uploaded content is downloadable.
+ */
+async function handleAttachmentPreview(context: Context<ApiEnv>) {
+  const env = uploadsEnv(context);
+  const eventId = context.req.param("eventId") ?? "";
+  const attachmentId = context.req.param("attachmentId") ?? "";
+
+  const row = await env.DB.prepare(
+    `SELECT attachment.status, attachment.r2_key, attachment.r2_etag,
+            attachment.content_type, attachment.filename,
+            submission.status AS submission_status
+     FROM attachments attachment
+     JOIN submission_answers answer
+       ON json_extract(answer.value_json, '$.attachmentId') = attachment.id
+     JOIN submissions submission
+       ON submission.id = answer.submission_id AND submission.event_id = attachment.event_id
+     WHERE attachment.id = ?1 AND attachment.event_id = ?2
+     LIMIT 1`,
+  )
+    .bind(attachmentId, eventId)
+    .first<{
+      status: "pending" | "ready";
+      r2_key: string;
+      r2_etag: string | null;
+      content_type: string;
+      filename: string;
+      submission_status: string;
+    }>();
+
+  if (row?.submission_status === "draft") await requireDraftRead(context, eventId);
+  else await requireSubmissionRead(context, eventId);
+  if (!row) throw ApiError.notFound("attachment not found");
+
+  const response = await serveInlineImageObject(env.MEDIA, row.r2_key, row, isPreviewableImage);
+  if (!response) throw ApiError.notFound("attachment not found");
+  return response;
+}
+
 const uploadErrorEnvelopeSchema = z
   .object({
     error: z.object({
@@ -626,6 +676,10 @@ const uploadCompleteResponseSchema = z
 
 const idParamsSchema = z.object({ id: z.string() });
 const mediaParamsSchema = z.object({ key: z.string() });
+const attachmentPreviewParamsSchema = z.object({
+  eventId: z.string().min(1),
+  attachmentId: z.string().min(1),
+});
 
 const signPublicUpload = defineApiRoute(
   {
@@ -782,6 +836,32 @@ const localUploadPut = defineApiRoute(
   handleLocalPut as never,
 );
 
+const previewAttachment = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/attachments/{attachmentId}/preview",
+    operationId: "previewSubmissionAttachment",
+    summary: "Render a submission file answer's image inline",
+    description:
+      "Serves the thumbnail an organizer sees on a submission record. Requires the same program access the record itself requires, and serves only a ready raster image an answer on that conference references; anything else 404s.",
+    tags: ["Uploads"],
+    request: { params: attachmentPreviewParamsSchema },
+    policy: {
+      auth: { kind: "authenticated" },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: {
+        content: { "image/*": { schema: z.any() } },
+        description: "The attachment's image bytes, inline and sandboxed.",
+      },
+      ...errorResponses([400, 401, 403, 404, 429, 500]),
+    },
+  },
+  handleAttachmentPreview as never,
+);
+
 export const apiRoutes = [
   signPublicUpload,
   signTaskUpload,
@@ -789,4 +869,5 @@ export const apiRoutes = [
   completeTaskUpload,
   localUploadPut,
   serveMedia,
+  previewAttachment,
 ];

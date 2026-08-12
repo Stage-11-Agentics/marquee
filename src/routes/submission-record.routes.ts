@@ -10,6 +10,14 @@ import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { decisionHistory } from "../lib/decision-history";
+import {
+  attachmentPreviewPath,
+  isPreviewableImage,
+  missingFileAnswer,
+  readStoredFileAnswer,
+  type FileAnswerView,
+  type StoredFileAnswer,
+} from "../lib/file-answers";
 import { projectApplicableAnswers, type FormAnswerValue } from "../lib/form-conditions";
 import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
@@ -187,6 +195,111 @@ async function audit(
   });
 }
 
+interface AnswerProjection extends Record<string, unknown> {
+  id: string;
+  field_id: string | null;
+  key: string | null;
+  label: string | null;
+  type: string | null;
+  value_text: string | null;
+  value_json: unknown;
+  file: FileAnswerView | null;
+}
+
+/**
+ * Answers as an organizer reads them. A `file` field carries a resolved
+ * `file` view instead of leaving its storage payload to be stringified, and a
+ * file field the speaker never uploaded is listed as missing rather than
+ * silently omitted — the heading the form promised has to appear either way.
+ */
+async function projectAnswers(
+  db: D1Database,
+  input: { eventId: string; formId: string | null; submissionId: string; rows: Array<Record<string, unknown>> },
+): Promise<AnswerProjection[]> {
+  const answers: AnswerProjection[] = input.rows.map((answer) => ({
+    ...answer,
+    id: String(answer.id),
+    field_id: answer.field_id === null ? null : String(answer.field_id),
+    key: answer.key === null ? null : String(answer.key),
+    label: answer.label === null ? null : String(answer.label),
+    type: answer.type === null || answer.type === undefined ? null : String(answer.type),
+    value_text: answer.value_text === null ? null : String(answer.value_text),
+    value_json: answer.value_json === null ? null : jsonValue(answer.value_json as string, null),
+    file: null,
+  }));
+
+  if (input.formId !== null) {
+    const unanswered = await db.prepare(`
+      SELECT field.id, field.key, field.label, field.type
+      FROM form_fields field
+      WHERE field.form_id = ? AND field.type = 'file'
+        AND NOT EXISTS (
+          SELECT 1 FROM submission_answers answer
+          WHERE answer.submission_id = ? AND answer.field_id = field.id
+        )
+      ORDER BY field.position, field.id
+    `).bind(input.formId, input.submissionId).all<{ id: string; key: string; label: string; type: string }>();
+    for (const field of unanswered.results) {
+      answers.push({
+        id: `unanswered:${field.id}`,
+        field_id: field.id,
+        key: field.key,
+        label: field.label,
+        type: field.type,
+        value_text: null,
+        value_json: null,
+        file: missingFileAnswer(),
+      });
+    }
+  }
+
+  const stored = new Map<string, StoredFileAnswer>();
+  for (const answer of answers) {
+    const payload = readStoredFileAnswer(answer.value_json);
+    if (payload) stored.set(payload.attachmentId, payload);
+  }
+  const attachments = new Map<string, { content_type: string; filename: string; size_bytes: number; status: string }>();
+  if (stored.size > 0) {
+    const ids = [...stored.keys()];
+    const rows = await db.prepare(`
+      SELECT id, content_type, filename, size_bytes, status
+      FROM attachments
+      WHERE event_id = ? AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+    `).bind(input.eventId, JSON.stringify(ids)).all<{
+      id: string; content_type: string; filename: string; size_bytes: number; status: string;
+    }>();
+    for (const row of rows.results) attachments.set(row.id, row);
+  }
+
+  for (const answer of answers) {
+    if (answer.file) continue;
+    const payload = readStoredFileAnswer(answer.value_json);
+    if (!payload) {
+      // A file field whose stored value is not a usable upload reads as missing,
+      // never as the raw value.
+      if (answer.type === "file") answer.file = missingFileAnswer();
+      continue;
+    }
+    const attachment = attachments.get(payload.attachmentId);
+    if (!attachment || attachment.status !== "ready") {
+      answer.file = missingFileAnswer();
+      continue;
+    }
+    answer.file = {
+      state: "ready",
+      attachment_id: payload.attachmentId,
+      filename: attachment.filename || payload.filename,
+      content_type: attachment.content_type,
+      size_bytes: attachment.size_bytes,
+      preview_url: isPreviewableImage(attachment.content_type)
+        ? attachmentPreviewPath(input.eventId, payload.attachmentId)
+        : null,
+    };
+  }
+
+  return answers;
+}
+
 async function loadRecord(db: D1Database, eventId: string, submissionId: string): Promise<Record<string, unknown>> {
   const row = await db.prepare(`
     SELECT
@@ -224,7 +337,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       ORDER BY participation.position, participation.id
     `).bind(submissionId).all<Record<string, unknown>>(),
     db.prepare(`
-      SELECT answer.id, answer.field_id, field.key, field.label, answer.value_text, answer.value_json
+      SELECT answer.id, answer.field_id, field.key, field.label, field.type, answer.value_text, answer.value_json
       FROM submission_answers answer
       LEFT JOIN form_fields field ON field.id = answer.field_id
       WHERE answer.submission_id = ?
@@ -372,10 +485,12 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
     if (round) (round.comparisons as Array<Record<string, unknown>>).push(comparison);
   }
 
-  const normalizedAnswers = answers.results.map((answer) => ({
-    ...answer,
-    value_json: answer.value_json === null ? null : jsonValue(answer.value_json as string, null),
-  }));
+  const normalizedAnswers = await projectAnswers(db, {
+    eventId: row.event_id,
+    formId: row.form_id,
+    submissionId,
+    rows: answers.results,
+  });
   const slot = slotFor(row);
   const hours = Math.max(0, Math.floor((Date.now() - row.updated_at) / 3_600_000));
   return {

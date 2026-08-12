@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import { EMBED_KINDS, type EmbedKind, type EmbedLayout, type FormRow } from "../db/schema";
+import { participantAudienceFilterSql, participantListSql } from "./participants";
 import { showsBuildingComparisonCount } from "./venue-disclosure";
 import { slugify } from "./ids";
 import { roomDisplayLabel } from "./venues";
@@ -342,7 +343,7 @@ function sessionRowsQuery(
       OR EXISTS (
         SELECT 1 FROM participations search_par
         JOIN people search_person ON search_person.id = search_par.person_id
-        WHERE search_par.submission_id = s.id
+        WHERE search_par.submission_id = s.id${participantAudienceFilterSql("search_par", "public")}
           AND (lower(search_person.name) LIKE ? OR lower(coalesce(search_person.company, '')) LIKE ?)
       )
     )`);
@@ -360,24 +361,18 @@ function sessionRowsQuery(
         ai.duration_min,
         room.name AS room_name,
         building.name AS building_name,
-        COALESCE((
-          SELECT json_group_array(json_object(
-            'id', ordered.id,
-            'name', ordered.name,
-            'title', ordered.title,
-            'company', ordered.company,
-            'bio', ordered.bio,
-            'social_links', ordered.social_links
-          ))
-          FROM (
-            SELECT speaker.id, speaker.name, speaker.title, speaker.company,
-              speaker.bio, speaker.social_links
-            FROM participations par
-            JOIN people speaker ON speaker.id = par.person_id
-            WHERE par.submission_id = s.id
-            ORDER BY par.position ASC, par.id ASC
-          ) ordered
-        ), '[]') AS speakers_json,
+        ${participantListSql({
+          submissionId: "s.id",
+          audience: "public",
+          fields: {
+            id: "speaker.id",
+            name: "speaker.name",
+            title: "speaker.title",
+            company: "speaker.company",
+            bio: "speaker.bio",
+            social_links: "speaker.social_links",
+          },
+        })} AS speakers_json,
         COALESCE((
           SELECT json_group_array(json_object(
             'id', ordered.id,

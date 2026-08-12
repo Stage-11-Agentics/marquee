@@ -23,6 +23,12 @@ interface ListEnvelope {
   total_pages: number;
 }
 
+/**
+ * The fixture gives every submission the same person twice — once as
+ * `speaker`, once as `submitter` — because that is the ordinary shape a public
+ * CFP writes, and the one that used to print every name twice. At a thousand
+ * rows the register is also the guard that the dedupe holds at list scale.
+ */
 async function buildFixture(): Promise<void> {
   const fixtureSql = `
     CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, timezone TEXT NOT NULL);
@@ -57,7 +63,7 @@ async function buildFixture(): Promise<void> {
       search_blob TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, org_id TEXT NOT NULL, name TEXT NOT NULL, company TEXT);
-    CREATE TABLE IF NOT EXISTS participations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, person_id TEXT NOT NULL, position INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS participations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, person_id TEXT NOT NULL, role TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS tracks (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS submission_tracks (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, track_id TEXT NOT NULL, is_primary INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS evaluations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, score REAL);
@@ -93,7 +99,9 @@ async function buildFixture(): Promise<void> {
       'fmt-stage', 'public', 1700000000000 + n, 1700000000000 + n, printf('submission %04d zoë łukaszewicz-garcía société générale', n)
     FROM seq;
     INSERT INTO participations
-      SELECT 'par-' || id, id, 'person-zoe', 0 FROM submissions;
+      SELECT 'par-' || id, id, 'person-zoe', 'speaker', 0 FROM submissions;
+    INSERT INTO participations
+      SELECT 'par-sub-' || id, id, 'person-zoe', 'submitter', 0 FROM submissions;
     INSERT INTO submission_tracks
       SELECT 'st-' || id, id, CASE WHEN CAST(substr(id, 5) AS INTEGER) % 2 = 0 THEN 'track-evals' ELSE 'track-agents' END, 1 FROM submissions;
     INSERT INTO agenda_items VALUES
