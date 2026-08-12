@@ -32,12 +32,14 @@ function safeAccent(value: string | undefined): string | null {
 async function readEmbed(
   database: D1Database,
   cache: PublicEmbedCache | undefined,
-  request: { slug: string; eventSlug?: string | null; kind?: EmbedKind; track?: string | null; status?: string | null; accent?: string | null; layout?: string | null },
+  request: { slug: string; eventSlug?: string | null; kind?: EmbedKind; track?: string | null; format?: string | null; room?: string | null; status?: string | null; accent?: string | null; layout?: string | null },
 ) {
   const resolved = await resolvePublicEmbed(database, request);
   if (!resolved) return null;
   const filters = {
     track: request.track ?? null,
+    format: request.format ?? null,
+    room: request.room ?? null,
     status: request.status ?? null,
     accent: safeAccent(request.accent ?? undefined),
     layout: request.layout === "list" ? "list" : null,
@@ -72,6 +74,8 @@ embedRoutes.get("/embed/config", async (context) => {
   const event = await loadPublicEvent(context.env.DB, query.event ?? query.event_slug);
   if (!event) return context.notFound();
   const track = query.track ?? "";
+  const format = query.format ?? "";
+  const room = query.room ?? "";
   const status = query.status ?? "";
   const layout = query.layout === "list" ? "list" : "cards";
   const accent = safeAccent(query.accent) ?? event.accent ?? "#0b6a72";
@@ -81,7 +85,7 @@ embedRoutes.get("/embed/config", async (context) => {
     kind,
   });
   if (!resolved) return context.notFound();
-  const preview = await loadPublicEmbed(context.env.DB, resolved, { track, status, accent, layout });
+  const preview = await loadPublicEmbed(context.env.DB, resolved, { track, format, room, status, accent, layout });
   const shell = await shellFor(context);
   const markup = renderToString(<EmbedConfigPage event={event} tracks={preview.tracks} kind={kind} track={track} status={status} layout={layout} accent={accent} preview={preview} />);
   return context.html(renderEmbedDocument(shell, markup, EMBED_CONFIG_SCRIPT));
@@ -93,6 +97,8 @@ embedRoutes.get("/embed/:slug", async (context) => {
     slug: context.req.param("slug"),
     eventSlug: query.event ?? query.event_slug,
     track: query.track,
+    format: query.format,
+    room: query.room,
     status: query.status,
     accent: query.accent,
     layout: query.layout,
@@ -115,6 +121,8 @@ embedRoutes.get("/:eventSlug/:kind/embed", async (context) => {
     eventSlug: context.req.param("eventSlug"),
     kind,
     track: query.track,
+    format: query.format,
+    room: query.room,
     status: query.status,
     accent: query.accent,
     layout: query.layout,
