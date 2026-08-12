@@ -45,6 +45,10 @@ test("AC-1, AC-2 · the SSR landing exposes both reachable demo entries and live
   expect(html).toContain("Fantastic conferences, effortlessly.");
   expect(html).toContain('data-demo-role="organizer"');
   expect(html).toContain('data-demo-role="speaker"');
+  // MRQ-107: the third door. ABS-S3 step 1 starts by reaching a reviewer seat,
+  // and the reviewer queue is the only surface that answers it.
+  expect(html).toContain('data-demo-role="reviewer"');
+  expect(html).toContain("/reviewer?demo=reviewer");
   expect(html).toContain("Submitted");
   expect(html).toContain(">1</strong>");
   expect(html).toContain(">1</strong>");

@@ -165,6 +165,24 @@ function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "SP";
 }
 
+function headshotUrl(eventId: string, personId: string, attachmentId: string | null): string | null {
+  if (!attachmentId) return null;
+  const event = encodeURIComponent(eventId);
+  const person = encodeURIComponent(personId);
+  // The query only busts the browser cache after a replacement. The server
+  // authorizes against the people pointer, never against this client value.
+  return `/api/v1/events/${event}/people/${person}/headshot?v=${encodeURIComponent(attachmentId)}`;
+}
+
+function HeadshotAvatar({ eventId, person, size = "regular" }: { eventId: string; person: Pick<PortalPerson, "id" | "name" | "headshot_attachment_id">; size?: "regular" | "compact" }): JSX.Element {
+  const src = headshotUrl(eventId, person.id, person.headshot_attachment_id);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  return <div class={`portal-avatar portal-avatar-${size}${src && !failed ? " has-photo" : ""}`} aria-label={`${person.name} headshot`} role="img">
+    {src && !failed ? <img src={src} alt={`${person.name} headshot`} width={size === "compact" ? 40 : 52} height={size === "compact" ? 40 : 52} onError={() => setFailed(true)} /> : initials(person.name)}
+  </div>;
+}
+
 function formatDate(value: number): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
 }
@@ -243,16 +261,17 @@ function Markdown({ markdown }: { markdown: string }): JSX.Element {
 }
 
 type TaskSurfaceProps = {
+  eventId: string;
   task: PortalTask;
   submission: PortalSubmission | null;
   person: PortalPerson;
   onComplete: () => Promise<void>;
 };
 
-export function TaskSurface({ task, submission, person, onComplete }: TaskSurfaceProps): JSX.Element {
+export function TaskSurface({ eventId, task, submission, person, onComplete }: TaskSurfaceProps): JSX.Element {
   const subject = subjectTaskKind(task);
   if (subject === "talk" && submission) return <TalkTaskSurface task={task} submission={submission} onComplete={onComplete} />;
-  if (subject === "profile" && person) return <ProfileTaskSurface task={task} person={person} onComplete={onComplete} />;
+  if (subject === "profile" && person) return <ProfileTaskSurface eventId={eventId} task={task} person={person} onComplete={onComplete} />;
   return <GenericTaskSurface task={task} onComplete={onComplete} />;
 }
 
@@ -413,7 +432,7 @@ function TalkTaskSurface({ task, submission, onComplete }: { task: PortalTask; s
   </div>;
 }
 
-function ProfileForm({ person, onSaved, compact = false }: { person: PortalPerson; onSaved: () => Promise<void>; compact?: boolean }): JSX.Element {
+function ProfileForm({ eventId, person, onSaved, compact = false }: { eventId: string; person: PortalPerson; onSaved: () => Promise<void>; compact?: boolean }): JSX.Element {
   const [draft, setDraft] = useState({ title: person.title ?? "", company: person.company ?? "", bio: person.bio ?? "", social_links: person.social_links.join("\n") });
   const [headshot, setHeadshot] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -471,7 +490,7 @@ function ProfileForm({ person, onSaved, compact = false }: { person: PortalPerso
   const bioId = compact ? `task-profile-bio-${person.id}` : "profile-bio";
   const headshotId = compact ? `task-profile-headshot-${person.id}` : "profile-headshot";
   return <form class={`portal-profile${compact ? " portal-profile-compact" : ""}`} onSubmit={save}>
-    {!compact ? <div class="portal-avatar-line"><div class="portal-avatar" aria-hidden="true">{initials(person.name)}</div><div class="portal-avatar-copy"><strong title={person.name}>{person.name}</strong><span>{person.email}</span></div></div> : null}
+    {!compact ? <div class="portal-avatar-line"><HeadshotAvatar eventId={eventId} person={person} /><div class="portal-avatar-copy"><strong title={person.name}>{person.name}</strong><span>{person.email}</span></div></div> : null}
     <div class="portal-profile-grid">
       {!compact ? <><div class="portal-field"><label for="profile-title">Title</label><input id="profile-title" value={draft.title} onInput={(event) => setDraft({ ...draft, title: (event.currentTarget as HTMLInputElement).value })} /></div><div class="portal-field"><label for="profile-company">Company</label><input id="profile-company" value={draft.company} onInput={(event) => setDraft({ ...draft, company: (event.currentTarget as HTMLInputElement).value })} /></div></> : null}
       <div class="portal-field full"><label for={bioId}>Bio</label><textarea id={bioId} value={draft.bio} onInput={(event) => setDraft({ ...draft, bio: (event.currentTarget as HTMLTextAreaElement).value })} /></div>
@@ -482,7 +501,7 @@ function ProfileForm({ person, onSaved, compact = false }: { person: PortalPerso
   </form>;
 }
 
-function ProfileTaskSurface({ task, person, onComplete }: { task: PortalTask; person: PortalPerson; onComplete: () => Promise<void> }): JSX.Element {
+function ProfileTaskSurface({ eventId, task, person, onComplete }: { eventId: string; task: PortalTask; person: PortalPerson; onComplete: () => Promise<void> }): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -507,11 +526,11 @@ function ProfileTaskSurface({ task, person, onComplete }: { task: PortalTask; pe
 
   return <div class="portal-subject-task portal-profile-task">
     <div class="portal-subject-card">
-      <div class="portal-subject-head"><div><span class="portal-subject-kicker">Speaker profile</span><h3>Bio and headshot</h3></div><button class="portal-task-action" type="button" onClick={() => setEditing((current) => !current)}>{editing ? "Close" : "Edit bio & photos"}</button></div>
+      <div class="portal-subject-head"><div class="portal-subject-title"><HeadshotAvatar eventId={eventId} person={person} size="compact" /><div><span class="portal-subject-kicker">Speaker profile</span><h3>Bio and headshot</h3></div></div><button class="portal-task-action" type="button" onClick={() => setEditing((current) => !current)}>{editing ? "Close" : "Edit bio & photos"}</button></div>
       <p class="portal-talk-description">{person.bio || "No bio added yet."}</p>
       <p class="portal-subject-note">{person.headshot_attachment_id ? "A headshot is on file for the speaker gallery." : "No headshot is on file yet."}</p>
     </div>
-    {editing ? <div class="portal-subject-editor"><ProfileForm compact person={person} onSaved={async () => { setEditing(false); await onComplete(); }} /></div> : null}
+    {editing ? <div class="portal-subject-editor"><ProfileForm eventId={eventId} compact person={person} onSaved={async () => { setEditing(false); await onComplete(); }} /></div> : null}
     <form class="portal-subject-confirm" onSubmit={submit}>
       <label class="portal-check"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged((event.currentTarget as HTMLInputElement).checked)} /> <span>I have reviewed my speaker bio and headshot.</span></label>
       <div class="portal-payload-actions"><span class="portal-payload-error">{error ?? ""}</span><button class="portal-button" type="submit" disabled={busy}>{busy ? "Saving…" : "Confirm profile"}</button></div>
@@ -548,7 +567,7 @@ function versionListFor(task: PortalTask): FileVersionList | null {
   };
 }
 
-function TaskRow({ task, submissions, person, onComplete }: { task: PortalTask; submissions: PortalSubmission[]; person: PortalPerson; onComplete: () => Promise<void> }): JSX.Element {
+function TaskRow({ eventId, task, submissions, person, onComplete }: { eventId: string; task: PortalTask; submissions: PortalSubmission[]; person: PortalPerson; onComplete: () => Promise<void> }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const submission = task.submission_id ? submissions.find((item) => item.id === task.submission_id) ?? null : null;
   const versions = versionListFor(task);
@@ -566,7 +585,7 @@ function TaskRow({ task, submissions, person, onComplete }: { task: PortalTask; 
     <button class="portal-task-action" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{task.status === "done" ? (expanded ? "Close" : "View") : (expanded ? "Close" : "Complete")}</button>
     {expanded ? <div class="portal-task-payload">
       {versions ? <div class="portal-task-versions"><FileVersions list={versions} /></div> : null}
-      <TaskSurface task={task} submission={submission} person={person} onComplete={onComplete} />
+      <TaskSurface eventId={eventId} task={task} submission={submission} person={person} onComplete={onComplete} />
       {task.kind === "file" ? <FileComments taskId={task.id} attachmentId={task.payload.attachment_id ?? null} /> : null}
     </div> : null}
   </article>;
@@ -583,7 +602,7 @@ function CancelledTaskRow({ task }: { task: PortalTask }): JSX.Element {
   </article>;
 }
 
-function TasksPanel({ tasks, submissions, person, onRefresh }: { tasks: PortalTask[]; submissions: PortalSubmission[]; person: PortalPerson; onRefresh: () => Promise<void> }): JSX.Element {
+function TasksPanel({ eventId, tasks, submissions, person, onRefresh }: { eventId: string; tasks: PortalTask[]; submissions: PortalSubmission[]; person: PortalPerson; onRefresh: () => Promise<void> }): JSX.Element {
   const activeTasks = tasks.filter((task) => task.cancelled_at === null);
   const cancelledTasks = tasks.filter((task) => task.cancelled_at !== null);
   const complete = activeTasks.length > 0 && activeTasks.every((task) => task.status === "done");
@@ -594,11 +613,11 @@ function TasksPanel({ tasks, submissions, person, onRefresh }: { tasks: PortalTa
     groups.set(key, current);
     return groups;
   }, new Map<string, { key: string; title: string; reason: string; tasks: PortalTask[] }>()).values()];
-  return <section class="portal-panel" aria-labelledby="tasks-heading"><header class="portal-panel-head"><h2 id="tasks-heading">Your tasks</h2><span>{activeTasks.filter((task) => task.status === "done").length}/{activeTasks.length} complete</span></header><div class="portal-panel-body"><div class="portal-task-list">{activeTasks.length === 0 ? <div class="portal-empty">No tasks are assigned to you right now.</div> : activeTasks.map((task) => <TaskRow key={task.id} task={task} submissions={submissions} person={person} onComplete={onRefresh} />)}</div>{complete ? <p class="portal-empty">All speaker tasks are complete. Nothing is waiting on you.</p> : null}{cancelledTasks.length > 0 ? <div class="portal-cancelled-task-list" data-cancelled-task-count={cancelledTasks.length}><div class="portal-cancelled-divider"><span>Cancelled · {cancelledTasks.length}</span></div>{cancelledSets.map((group) => <section class="portal-cancelled-set" key={group.key}><div class="portal-cancelled-set-head"><strong>{group.title}</strong><p>{group.reason}</p></div><div class="portal-task-list">{group.tasks.map((task) => <CancelledTaskRow key={task.id} task={task} />)}</div></section>)}</div> : null}</div></section>;
+  return <section class="portal-panel" aria-labelledby="tasks-heading"><header class="portal-panel-head"><h2 id="tasks-heading">Your tasks</h2><span>{activeTasks.filter((task) => task.status === "done").length}/{activeTasks.length} complete</span></header><div class="portal-panel-body"><div class="portal-task-list">{activeTasks.length === 0 ? <div class="portal-empty">No tasks are assigned to you right now.</div> : activeTasks.map((task) => <TaskRow key={task.id} eventId={eventId} task={task} submissions={submissions} person={person} onComplete={onRefresh} />)}</div>{complete ? <p class="portal-empty">All speaker tasks are complete. Nothing is waiting on you.</p> : null}{cancelledTasks.length > 0 ? <div class="portal-cancelled-task-list" data-cancelled-task-count={cancelledTasks.length}><div class="portal-cancelled-divider"><span>Cancelled · {cancelledTasks.length}</span></div>{cancelledSets.map((group) => <section class="portal-cancelled-set" key={group.key}><div class="portal-cancelled-set-head"><strong>{group.title}</strong><p>{group.reason}</p></div><div class="portal-task-list">{group.tasks.map((task) => <CancelledTaskRow key={task.id} task={task} />)}</div></section>)}</div> : null}</div></section>;
 }
 
-function ProfileEditor({ person, onSaved }: { person: PortalPerson; onSaved: () => Promise<void> }): JSX.Element {
-  return <section class="portal-panel" aria-labelledby="profile-heading"><header class="portal-panel-head"><h2 id="profile-heading">Your profile</h2><span>public speaker record</span></header><div class="portal-panel-body"><ProfileForm person={person} onSaved={onSaved} /></div></section>;
+function ProfileEditor({ eventId, person, onSaved }: { eventId: string; person: PortalPerson; onSaved: () => Promise<void> }): JSX.Element {
+  return <section class="portal-panel" aria-labelledby="profile-heading"><header class="portal-panel-head"><h2 id="profile-heading">Your profile</h2><span>public speaker record</span></header><div class="portal-panel-body"><ProfileForm eventId={eventId} person={person} onSaved={onSaved} /></div></section>;
 }
 
 function TalkCard({ submission, onSaved }: { submission: PortalSubmission; onSaved: () => Promise<void> }): JSX.Element {
@@ -732,7 +751,7 @@ function PortalPage(): JSX.Element {
   if (error && !snapshot && error.status === 401) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></div><main class="portal-main"><div class="portal-error"><div><strong>Sign in to open your speaker portal.</strong><p>Your session is missing or has expired.</p><a class="portal-signin" href="/">Return to sign in</a></div></div></main></div>;
   if (error && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-error"><div><strong>We could not load your portal.</strong><p>{error.message}</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
   if (!snapshot) return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></header><main class="portal-main"><div class="portal-error"><div><strong>No portal data is available.</strong><p>Try loading the speaker workspace again.</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
-  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={async () => { await requestJson("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined); window.location.assign("/"); }}>Sign out</button></header><main class="portal-main">{snapshot.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : snapshot.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={snapshot.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {snapshot.person.name}</h2><p>{snapshot.event.name} · your speaker workspace</p></div><div class="portal-progress">{completedTasks} / {activeTasks.length} tasks complete</div></div><div class="portal-grid"><TasksPanel tasks={snapshot.tasks} submissions={snapshot.submissions} person={snapshot.person} onRefresh={refresh} /><ProfileEditor person={snapshot.person} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{snapshot.submissions.length} record{snapshot.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{snapshot.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : snapshot.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{snapshot.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{snapshot.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{snapshot.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
+  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={async () => { await requestJson("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined); window.location.assign("/"); }}>Sign out</button></header><main class="portal-main">{snapshot.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : snapshot.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={snapshot.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {snapshot.person.name}</h2><p>{snapshot.event.name} · your speaker workspace</p></div><div class="portal-progress">{completedTasks} / {activeTasks.length} tasks complete</div></div><div class="portal-grid"><TasksPanel eventId={snapshot.event.id} tasks={snapshot.tasks} submissions={snapshot.submissions} person={snapshot.person} onRefresh={refresh} /><ProfileEditor eventId={snapshot.event.id} person={snapshot.person} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{snapshot.submissions.length} record{snapshot.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{snapshot.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : snapshot.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{snapshot.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{snapshot.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{snapshot.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
 }
 
 export { PortalPage };

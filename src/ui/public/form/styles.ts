@@ -12,6 +12,8 @@ export const PUBLIC_FORM_STYLES = `
 .public-intro p { color: var(--ink-soft); font-size: 15px; line-height: 1.65; margin: 0; max-width: 700px; white-space: pre-wrap; }
 .public-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 20px; }
 .public-meta span, .public-save-status { color: var(--muted); font: 500 10px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.public-save-status { display: inline-block; min-height: 1.4em; min-width: 15ch; visibility: hidden; }
+.public-save-status.has-value { visibility: visible; }
 .public-progress { display: flex; gap: 5px; margin-top: 24px; }
 .public-progress i { background: var(--line-strong); display: block; height: 4px; width: 36px; }
 .public-progress i.is-active { background: var(--accent); }
@@ -49,10 +51,25 @@ export const PUBLIC_FORM_STYLES = `
 .public-file-crop { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); flex: none; height: 96px; overflow: hidden; width: 96px; }
 .public-file-crop img { display: block; height: 100%; object-fit: cover; width: 100%; }
 .public-file-crop-note { color: var(--muted); font-size: 11px; line-height: 1.45; }
-.public-form-footer { align-items: center; background: var(--sunk); border-top: 1px solid var(--line-strong); display: flex; gap: 14px; justify-content: space-between; padding: 16px 20px; }
+.public-draft-resume { background: var(--accent-soft); border-top: 1px solid var(--line-strong); display: grid; gap: 5px; padding: 14px 20px; }
+.public-draft-resume strong { color: var(--accent-ink); font: 600 11px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.public-draft-resume > span { color: var(--ink-soft); font-size: 12px; line-height: 1.45; }
+.public-draft-resume-actions { align-items: center; display: flex; gap: 12px; min-width: 0; }
+.public-draft-resume-actions .public-resume-link { flex: 1; margin-top: 0; min-width: 0; }
+.public-copy-link, .public-save-draft { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font: 600 11px/1 var(--mono); min-height: 38px; padding: 0 13px; white-space: nowrap; }
+.public-copy-link:hover, .public-save-draft:hover { border-color: var(--accent); color: var(--accent-ink); }
+.public-form-footer { align-items: flex-end; background: var(--sunk); border-top: 1px solid var(--line-strong); display: flex; gap: 14px; justify-content: space-between; padding: 16px 20px; }
+.public-form-footer-copy { display: grid; flex: 1; gap: 10px; min-width: 0; }
+.public-draft-email { display: grid; gap: 6px; max-width: 460px; }
+.public-draft-email label { color: var(--ink); font-size: 12px; font-weight: 650; }
+.public-draft-email input { background: var(--surface); border: 1px solid var(--accent); border-radius: var(--radius); box-sizing: border-box; font-size: 14px; min-height: 40px; min-width: 0; outline: none; padding: 9px 10px; width: 100%; }
+.public-draft-email input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+.public-draft-email span { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.public-form-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 .public-submit { background: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius); color: #fff; font: 600 12px/1 var(--mono); min-height: 42px; padding: 0 17px; }
 .public-submit:hover { background: #095b62; }
 .public-submit:disabled { cursor: not-allowed; opacity: .5; }
+.public-copy-link:disabled, .public-save-draft:disabled { cursor: not-allowed; opacity: .5; }
 .public-security { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .public-error { background: var(--alarm-wash); border: 1px solid #e6b8b2; box-sizing: border-box; color: #7c2018; margin: 16px 20px 0; min-height: 60px; padding: 12px 14px; font-size: 12px; line-height: 1.5; visibility: hidden; }
 .public-error.has-message { visibility: visible; }
@@ -70,7 +87,12 @@ export const PUBLIC_FORM_STYLES = `
   .public-intro h1 { font-size: clamp(29px, 11vw, 42px); }
   .public-intro p { font-size: 13px; }
   .public-form-fields { min-width: 0; padding: 19px 14px; }
+  .public-draft-resume { padding: 14px; }
+  .public-draft-resume-actions { align-items: stretch; flex-direction: column; gap: 8px; }
+  .public-draft-resume-actions .public-resume-link { width: 100%; }
   .public-form-footer { align-items: stretch; flex-direction: column; min-height: 112px; padding: 14px; }
+  .public-form-actions { align-items: stretch; flex-direction: column; width: 100%; }
+  .public-copy-link, .public-save-draft { width: 100%; }
   .public-submit { width: 100%; }
   .public-footer { align-items: flex-start; flex-direction: column; gap: 8px; }
 }

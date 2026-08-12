@@ -20,6 +20,14 @@ Open-source speaker/session-management platform for conference organizers — St
 - This repo will be **public open source** (competition requirement). Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
 - **Do not report subscription usage, limits, or glideslope position unless asked.** The operator can see it and has it under control. It is visible in every agent's status line, which makes it tempting to volunteer — and with a fleet this size, one mention per agent becomes a stream of noise about a number nobody needs. Answer if asked; otherwise leave it alone.
 - **The suite budget is 45s and the gate budget is 120s** (`scripts/checks/run-test.mjs`, `pr-gate.mjs`). Several agents build and test here at once, so the budgets are set to survive contention: a red suite must mean a real defect, never a busy machine. If a run fails on time alone, check the load before believing it.
+- Speaker records are `people` rows (org-scoped); never add a parallel per-event `speakers` table.
+- Keep human properties (bio, headshot, title, company, socials, pronouns, dietary/accessibility) on `people`; keep this event's participation (Invited/Confirmed workflow status, travel, honorarium, session assignment) on `participations` or an event-scoped join.
+- Never put workflow status on `people`: one person must be Confirmed at one conference and Invited at another; this is the one error that cannot be undone.
+- Attach notes, tags, and custom values to org-level `person_id`, never to an event-scoped roster row.
+- Use one list query with optional `event_id`; do not maintain separate directory and roster implementations.
+- Keep search, filter, sort, and pagination server-side; lean on `idx_people_org_name` (R7: speed is a feature).
+- Do not deepen the `attachments.event_id` wart: a person's headshot is org-level while the attachment row it points at is event-scoped.
+- Full reasoning: `sequence/research/speaker-crm-scope.md` §2.
 
 ## Source control: GitHub is canonical for Marquee (operator ruling, 2026-08-11)
 

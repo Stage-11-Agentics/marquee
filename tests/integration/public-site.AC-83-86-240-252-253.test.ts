@@ -237,7 +237,10 @@ test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an e
   expect(allDaysBody).toContain(PUBLIC_TITLE);
   expect(allDaysBody).toContain(PRIVATE_TITLE);
   expect(allDaysBody).toContain('name="day" value="all" class="active" role="tab" aria-selected="true"');
-  expect(allDaysBody).toContain('href="/api/v1/public/agenda?event=public-conf"');
+  // MRQ-94 removed the data link because it carried the event and nothing else,
+  // so a filtered agenda offered a feed of a different program. MRQ-106 brings
+  // it back with the page's own scope, which is what the removal was protecting.
+  expect(allDaysBody).toContain('href="/api/v1/public/agenda?event=public-conf">Agenda data ↗</a>');
 
   const defaultPage = await request(`/agenda?event=${EVENT_SLUG}`);
   const defaultBody = await defaultPage.text();
@@ -254,6 +257,9 @@ test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an e
   expect(dayAndSearch.status).toBe(200);
   expect(dayAndSearchBody).toContain(PRIVATE_TITLE);
   expect(dayAndSearchBody).not.toContain(PUBLIC_TITLE);
+  // The feed link follows the filters the reader can see, so the JSON behind
+  // "Agenda data" is the program on screen and not a wider one.
+  expect(dayAndSearchBody).toContain('href="/api/v1/public/agenda?event=public-conf&amp;day=2026-10-13&amp;q=Private">Agenda data ↗</a>');
 
   const api = await request(`/api/v1/public/agenda?event=${EVENT_SLUG}&day=all`);
   const payload = await api.json<{ filters: { day: string }; sessions: Array<{ title: string }> }>();
