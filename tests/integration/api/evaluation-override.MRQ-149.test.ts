@@ -130,6 +130,16 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare(
       "INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES ('submission-track-mrq149', ?, ?, 1, ?, ?)",
     ).bind(SUBMISSION_ID, TRACK_ID, NOW, NOW),
+    // Track scope and a round assignment, so the reviewer can reach their own
+    // evaluation through the real write route. Without these the revision test
+    // could only reach the row with raw SQL — which would never execute the
+    // upsert it exists to pin.
+    env.DB.prepare(
+      "INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES ('scope-mrq149-reviewer', ?, ?, ?, ?, ?)",
+    ).bind(EVENT_ID, REVIEWER_ID, TRACK_ID, NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO round_assignments (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at) VALUES ('assignment-mrq149-reviewer', ?, ?, ?, NULL, 'complete', ?, ?)",
+    ).bind(ROUND_ID, SUBMISSION_ID, REVIEWER_ID, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
        VALUES (?, ?, ?, ?, 'maybe', 4.5, NULL, ?, 0, ?, ?),
@@ -234,6 +244,12 @@ test("CONTRACT · MRQ-149 · the published schema documents the override the API
   // the wire that the schema omits is the same defect one level down, and
   // `check:api` compares routes rather than payload shapes, so only a test
   // holds it.
+  //
+  // Verify against `/api/openapi.json`, never `/api/docs`. The latter renders a
+  // table of operations — method, path, summary — and links the spec through
+  // `<link rel="alternate">`; it carries no schema properties, so grepping it
+  // for a field name returns nothing whether or not the field is documented.
+  // That false negative reads exactly like a regression.
   const response = await SELF.fetch(`${ORIGIN}/api/openapi.json`);
   expect(response.status).toBe(200);
   const document = await response.json() as {
@@ -276,4 +292,86 @@ test("CONTRACT · MRQ-149 · the record carries the plan's scale so the control 
     expect(evaluation.scale_min).toBe(1);
     expect(evaluation.scale_max).toBe(5);
   }
+});
+
+test("CONTRACT · MRQ-149 · an override supersedes the weighted criteria mean and reports as unweighted", async () => {
+  // The one branch the rest of the suite cannot reach: every other fixture row
+  // has `criteria_scores = NULL`, so nothing exercises an override landing on a
+  // row that *did* go through the weighted computation. The register's asterisk
+  // and the export's "Score basis" column both key off `score_is_weighted`, and
+  // a chair's scalar did not go through that arithmetic — so claiming it did
+  // would be exactly the overclaim this feature was careful to avoid.
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO rubric_criteria (id, round_id, name, kind, weight_pct, scale_min, scale_max, position, created_at, updated_at) VALUES ('criterion-mrq149-fit', ?, 'Program fit', 'numeric', 100, 1, 5, 0, ?, ?)",
+    ).bind(ROUND_ID, NOW, NOW),
+    env.DB.prepare("UPDATE evaluations SET criteria_scores = ? WHERE id = ?")
+      .bind(JSON.stringify({ "Program fit": 4 }), HUMAN_EVALUATION_ID),
+    env.DB.prepare("DELETE FROM evaluations WHERE id = ?").bind(AGENT_EVALUATION_ID),
+  ]);
+  const weighted = await request(`/api/v1/events/${EVENT_ID}/submissions?per_page=50`);
+  const before = (await weighted.json() as { data: Array<{ id: string; score: number | null; score_is_weighted: boolean }> })
+    .data.find((row) => row.id === SUBMISSION_ID);
+  expect(before).toMatchObject({ score: 4, score_is_weighted: true });
+
+  const overridden = await request(overridePath(HUMAN_EVALUATION_ID), { method: "PUT", body: JSON.stringify({ score: 2 }) });
+  expect(overridden.status).toBe(200);
+  const after = await request(`/api/v1/events/${EVENT_ID}/submissions?per_page=50`);
+  const item = (await after.json() as { data: Array<{ id: string; score: number | null; score_is_weighted: boolean }> })
+    .data.find((row) => row.id === SUBMISSION_ID);
+  expect(item).toMatchObject({ score: 2, score_is_weighted: false });
+});
+
+test("CONTRACT · MRQ-149 · a chair's override survives the reviewer revising their own score", async () => {
+  // Deliberate, not incidental: the evaluation upsert leaves `override_*`
+  // alone, so a reviewer cannot lift a chair's correction by re-submitting.
+  //
+  // This drives the REAL write route rather than updating the row with SQL. A
+  // raw UPDATE never executes the `DO UPDATE SET` whose column list is the
+  // entire behaviour under test, so it would pass identically if the override
+  // were cleared there — a check that cannot fail.
+  const overridden = await request(overridePath(HUMAN_EVALUATION_ID), {
+    method: "PUT",
+    body: JSON.stringify({ score: 2.5, comment: "Chair's correction." }),
+  });
+  expect(overridden.status).toBe(200);
+
+  const resubmitted = await request(
+    `/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/submissions/${SUBMISSION_ID}/evaluations`,
+    { method: "POST", body: JSON.stringify({ comment: "Reviewer revised after a second read.", recommendation: "approve", score: 3, abstained: 0 }) },
+    REVIEWER_SESSION,
+  );
+  expect(resubmitted.status).toBe(200);
+
+  const evaluation = await evaluationOf("human");
+  expect(evaluation.override_score).toBe(2.5);
+  expect(evaluation.override_comment).toBe("Chair's correction.");
+  // The reviewer's revision is on the record too — superseded, not discarded.
+  expect(evaluation.score).toBe(3);
+  expect(evaluation.comment).toBe("Reviewer revised after a second read.");
+  // The chair's number still governs the aggregate, not the reviewer's new one.
+  expect((await listScore()).score).toBe(2.5);
+
+  // Clearing restores the reviewer's *current* value, not the one the chair saw.
+  const cleared = await request(overridePath(HUMAN_EVALUATION_ID), { method: "DELETE" });
+  expect(cleared.status).toBe(200);
+  expect((await evaluationOf("human")).override_score).toBeNull();
+  expect((await evaluationOf("human")).score).toBe(3);
+  expect((await listScore()).score).toBe(3);
+});
+
+test("CONTRACT · MRQ-149 · the plan summary headlines the governing score, not the superseded one", async () => {
+  // Two organizer screens must not disagree about the same number. Before this
+  // was fixed, /evaluation's summary kept headlining a reviewer's original
+  // score after the register, the results table, the export and the record had
+  // all moved to the chair's.
+  const before = await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}`);
+  expect(before.status).toBe(200);
+  expect((await before.json() as { summary: { highest_score: number | null } }).summary.highest_score).toBe(4.2);
+
+  const overridden = await request(overridePath(HUMAN_EVALUATION_ID), { method: "PUT", body: JSON.stringify({ score: 2 }) });
+  expect(overridden.status).toBe(200);
+
+  const after = await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}`);
+  expect((await after.json() as { summary: { highest_score: number | null } }).summary.highest_score).toBe(2);
 });
