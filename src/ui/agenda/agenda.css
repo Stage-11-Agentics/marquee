@@ -13,6 +13,9 @@
 .agenda-publication-select-all input { margin: 0; }
 .agenda-publication-error { min-height: 20px; padding: 7px 14px 0; color: var(--danger); font: 9px/1.4 var(--mono); }
 .agenda-publication-candidate { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 9px; align-items: start; min-height: 58px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.agenda-publication-candidate.is-review { grid-template-columns: minmax(0, 1fr); }
+.agenda-publication-candidate.is-review .agenda-publication-candidate-copy strong,
+.agenda-publication-candidate.is-review .agenda-publication-candidate-copy span { overflow: visible; text-overflow: clip; white-space: normal; }
 .agenda-publication-candidate > input { margin-top: 3px; }
 .agenda-publication-candidate-copy { display: grid; gap: 3px; min-width: 0; }
 .agenda-publication-candidate-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }

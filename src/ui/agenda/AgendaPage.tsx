@@ -481,7 +481,7 @@ function Pool({
 
 type PublicationStep = "select" | "review";
 
-function PublicationCandidateRow({
+export function PublicationCandidateRow({
   candidate,
   timezone,
   selected,
@@ -498,7 +498,10 @@ function PublicationCandidateRow({
 }): JSX.Element {
   const detail = `${publicationDateTime(candidate, timezone)} · ${candidate.room} · ${candidate.building}`;
   const speakers = publicationSpeakerLine(candidate);
-  return <div class="agenda-publication-candidate" role="listitem">
+  // Review mode drops the checkbox, so the copy would otherwise land in the
+  // checkbox column and ellipsise to a character or two — unreadable on the one
+  // step whose whole job is letting the organizer read what is about to go public.
+  return <div class={`agenda-publication-candidate${review ? " is-review" : ""}`} role="listitem">
     {!review && <input
       type="checkbox"
       checked={selected === true}
