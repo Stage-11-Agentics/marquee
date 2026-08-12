@@ -41,6 +41,14 @@ test("AC-280 · the screen and the switcher's ＋ open one create-conference end
   expect(sidebarSource).not.toContain("apiFetch");
   expect(sidebarSource).not.toContain('method: "POST"');
 
+  // The conference name beside it stays a caption. It was once a link back to
+  // the page you were already on — a control that promised a switch nothing
+  // could perform, and a judge recorded it as a defect. The ＋ is the only
+  // affordance in this row, and it is the one that goes somewhere.
+  expect(sidebarSource).toContain('<div class="event-context"><small>Conference</small>');
+  expect(sidebarSource).not.toContain("event-switcher");
+  expect(sidebarSource).not.toMatch(/<a[^>]*class="event-context"/);
+
   expect(createConferenceSource).toContain('export const CREATE_EVENT_ROUTE = "/api/v1/events"');
   expect(createConferenceSource).toContain("apiFetch<CreatedEvent>(CREATE_EVENT_ROUTE");
   expect(createConferenceSource).toContain("route: CREATE_EVENT_ROUTE");

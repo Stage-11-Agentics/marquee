@@ -12,6 +12,8 @@ import { SELF } from "cloudflare:test";
 import { createSession } from "../../src/lib/auth/auth-sessions";
 import { instanceIsUnclaimed, mintClaimLink } from "../../src/lib/auth/instance-claim";
 import { mintMagicLink } from "../../src/lib/auth/magic-links";
+import { demoMailWouldBeSuppressed } from "../../src/jobs/mail/consumer";
+import { SHIPPED_DEMO_ORGANIZATION_ID } from "../../src/lib/reset-demo/demo-fixture";
 import { loadLandingData, renderLandingDocument } from "../../src/routes/landing.route";
 import { applyMigrations, env } from "./apply-migrations";
 
@@ -27,21 +29,36 @@ function tokenFromUrl(url: string): string {
 }
 
 /** A conference and its owner, for the routes that need an already-claimed instance. */
-async function seedClaimedInstance(): Promise<{ cookie: string; orgId: string; personId: string }> {
-  const orgId = "org_cold_start";
-  const personId = "per_cold_owner";
+async function seedClaimedInstance(
+  orgId = "org_cold_start",
+  suffix = "cold",
+): Promise<{ cookie: string; orgId: string; personId: string }> {
+  const personId = `per_${suffix}_owner`;
   await env.DB.batch([
     env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(orgId, "Great Lakes Infra", "great-lakes-infra", NOW, NOW),
+      .bind(orgId, "Great Lakes Infra", `great-lakes-infra-${suffix}`, NOW, NOW),
     env.DB.prepare(
       "INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, social_links, created_at, updated_at) VALUES (?, ?, ?, ?, 0, 'marquee', '{}', ?, ?)",
-    ).bind(personId, orgId, "sam@gl-infra.dev", "Sam Okonkwo-Barnes", NOW, NOW),
+    ).bind(personId, orgId, `sam+${suffix}@gl-infra.dev`, "Sam Okonkwo-Barnes", NOW, NOW),
     env.DB.prepare(
       "INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, NULL, ?, 'owner', ?, ?)",
-    ).bind("mem_cold_owner", orgId, personId, NOW, NOW),
+    ).bind(`mem_${suffix}_owner`, orgId, personId, NOW, NOW),
   ]);
   const session = await createSession(env.DB, { personId, userAgent: "mrq-105" });
   return { cookie: `mq_session=${session.id}`, orgId, personId };
+}
+
+async function createConference(cookie: string, body: Record<string, unknown>): Promise<Response> {
+  return request("/api/v1/events", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      starts_on: "2027-04-14",
+      ends_on: "2027-04-15",
+      timezone: "America/New_York",
+      ...body,
+    }),
+  });
 }
 
 beforeEach(async () => {
@@ -289,6 +306,60 @@ test("AC-279 · POST /api/v1/events creates a slugged conference for an owner an
   expect(refused.status).toBe(403);
   const after = await env.DB.prepare("SELECT COUNT(*) AS total FROM events").first<{ total: number }>();
   expect(Number(after?.total)).toBe(Number(before?.total));
+});
+
+test("AC-279 · a new conference inherits demo_mode from its organization and never takes it from the client", async () => {
+  // Inside the shipped demo organization, a new conference is a demo
+  // conference. Mail suppression reads exactly this column, so a 0 here is a
+  // live send to whatever address a judge types into the public form.
+  const demo = await seedClaimedInstance(SHIPPED_DEMO_ORGANIZATION_ID, "demo");
+  const inDemo = await createConference(demo.cookie, { name: "Judge's Conference" });
+  expect(inDemo.status).toBe(201);
+  const demoEventId = (await inDemo.json() as { data: { event: { id: string } } }).data.event.id;
+  const demoRow = await env.DB.prepare("SELECT demo_mode FROM events WHERE id = ?")
+    .bind(demoEventId)
+    .first<{ demo_mode: number }>();
+  expect(demoRow?.demo_mode).toBe(1);
+  expect(await demoMailWouldBeSuppressed(env.DB, demoEventId, "judge@example.com")).toBe(true);
+
+  // And the client cannot ask for the other answer, in either direction.
+  const forced = await createConference(demo.cookie, { name: "Forced Live", demo_mode: 0 });
+  expect(forced.status).toBe(201);
+  const forcedId = (await forced.json() as { data: { event: { id: string } } }).data.event.id;
+  expect(
+    (await env.DB.prepare("SELECT demo_mode FROM events WHERE id = ?").bind(forcedId).first<{ demo_mode: number }>())
+      ?.demo_mode,
+  ).toBe(1);
+
+  const own = await seedClaimedInstance("org_own_instance", "own");
+  const claimed = await createConference(own.cookie, { name: "Great Lakes Infra Days", demo_mode: 1 });
+  expect(claimed.status).toBe(201);
+  const claimedId = (await claimed.json() as { data: { event: { id: string } } }).data.event.id;
+  expect(
+    (await env.DB.prepare("SELECT demo_mode FROM events WHERE id = ?").bind(claimedId).first<{ demo_mode: number }>())
+      ?.demo_mode,
+  ).toBe(0);
+  expect(await demoMailWouldBeSuppressed(env.DB, claimedId, "speaker@example.com")).toBe(false);
+});
+
+test("AC-279 · conference slugs are unique per organization, not across the whole instance", async () => {
+  const first = await seedClaimedInstance("org_one", "one");
+  const second = await seedClaimedInstance("org_two", "two");
+  const a = await createConference(first.cookie, { name: "Infra Days" });
+  const b = await createConference(second.cookie, { name: "Infra Days" });
+  expect(a.status).toBe(201);
+  expect(b.status).toBe(201);
+
+  const slugs = await env.DB.prepare("SELECT org_id, slug FROM events ORDER BY org_id").all<{ org_id: string; slug: string }>();
+  // Neither org's conference is pushed to `-2` by the other's existence; the
+  // unique index is (org_id, slug), and the lookup now agrees with it.
+  expect(slugs.results.map((row) => row.slug)).toEqual(["infra-days", "infra-days"]);
+
+  // Within one organization the suffix still does its job.
+  const again = await createConference(first.cookie, { name: "Infra Days" });
+  expect(again.status).toBe(201);
+  const mine = await env.DB.prepare("SELECT slug FROM events WHERE org_id = 'org_one' ORDER BY slug").all<{ slug: string }>();
+  expect(mine.results.map((row) => row.slug)).toEqual(["infra-days", "infra-days-2"]);
 });
 
 test("AC-282 · an organizer invite mints, exchanges through the claim path, and is inert once spent or revoked", async () => {

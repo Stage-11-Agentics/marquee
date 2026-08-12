@@ -5,6 +5,7 @@ import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { requireOrgAdmin } from "../lib/auth/org-admin";
+import { SHIPPED_DEMO_ORGANIZATION_ID } from "../lib/reset-demo/demo-fixture";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const formatParams = eventParams.extend({ formatId: z.string().min(1) });
@@ -113,9 +114,16 @@ async function settingsFor(db: D1Database, eventId: string): Promise<{ event: Pu
  * segment, and an organizer creating "AI Engineer New York 2027" should not
  * have to know that. Collisions get a numeric suffix rather than a rejection —
  * next year's conference is often last year's name.
+ *
+ * Uniqueness is scoped to the organization, matching the index that actually
+ * enforces it (`uq_events_org_slug`). A global lookup would let one org's slug
+ * block every other org's, which is precisely wrong for the self-host cold
+ * start: two instances of this software should be able to run a conference of
+ * the same name without one of them getting `-2` for no reason it can see.
  */
 export async function uniqueEventSlug(
   db: D1Database,
+  orgId: string,
   name: string,
   now: number,
 ): Promise<string> {
@@ -128,7 +136,10 @@ export async function uniqueEventSlug(
   const stem = base.length > 0 ? base : `conference-${newUlid(now).toLowerCase().slice(0, 8)}`;
   for (let suffix = 0; suffix < 50; suffix += 1) {
     const candidate = suffix === 0 ? stem : `${stem}-${suffix + 1}`;
-    const taken = await db.prepare("SELECT 1 AS present FROM events WHERE slug = ?").bind(candidate).first();
+    const taken = await db
+      .prepare("SELECT 1 AS present FROM events WHERE org_id = ? AND slug = ?")
+      .bind(orgId, candidate)
+      .first();
     if (!taken) return candidate;
   }
   return `${stem}-${newUlid(now).toLowerCase().slice(0, 8)}`;
@@ -235,10 +246,21 @@ const createEvent = defineApiRoute(
     assertTimezone(body.timezone);
     const now = Date.now();
     const id = newUlid(now);
-    const slug = await uniqueEventSlug(context.env.DB, body.name, now);
+    const slug = await uniqueEventSlug(context.env.DB, auth.orgId, body.name, now);
+    // `demo_mode` is inherited, never asked for. Mail suppression rides this
+    // column (`demoMailWouldBeSuppressed`), so a conference created inside the
+    // demo organization that stored a 0 would send live mail to whatever
+    // address a judge or a demo visitor typed. It is deliberately absent from
+    // `eventInput`: a client that could set it could turn suppression off.
+    //
+    // Inheritance is not total containment, and the carve-out is on purpose:
+    // `always_live` senders (the public form's confirmation, the smoke
+    // harness) short-circuit before this column is read. Forms arriving closed
+    // is the other half of that guard — do not "simplify" either one away.
+    const demoMode = auth.orgId === SHIPPED_DEMO_ORGANIZATION_ID ? 1 : 0;
     await context.env.DB.prepare(
       `INSERT INTO events (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, status, demo_mode, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
     ).bind(
       id,
       auth.orgId,
@@ -249,6 +271,7 @@ const createEvent = defineApiRoute(
       body.ends_on,
       body.timezone,
       body.venue ?? null,
+      demoMode,
       now,
       now,
     ).run();
