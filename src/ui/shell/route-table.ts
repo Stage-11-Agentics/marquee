@@ -31,6 +31,7 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "communications", path: "/communications", label: "Communications", icon: "✉", group: "modules", sidebar: true },
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "○", group: "modules", sidebar: true, external: true },
   { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "modules", sidebar: true, external: true },
+  { id: "embeds", path: "/embed/config", label: "Embeds", icon: "⌁", group: "modules", sidebar: true, external: true },
   { id: "settings", path: "/settings", label: "Conference settings", icon: "⚙", group: "modules", sidebar: true },
   // The people-facing page carries its own chrome, so the sidebar hands it a
   // real browser navigation rather than a client-side push.
