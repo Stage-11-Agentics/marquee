@@ -34,6 +34,7 @@ import {
 } from "../lib/form-conditions";
 import { listFormFields, type FormFieldView } from "./forms.queries";
 import { auditStatement, writeAudit } from "../lib/audit";
+import { contentHistoryFor } from "../lib/history";
 import {
   parseSocialLinks,
   personProfilePatchShape,
@@ -169,15 +170,6 @@ type TaskProjection = {
   attachment_id: string | null;
   form_id: string | null;
   file_config: string | null;
-};
-
-type HistoryProjection = {
-  id: string;
-  actor_person_id: string | null;
-  actor_name: string | null;
-  created_at: number;
-  before_json: string | null;
-  after_json: string | null;
 };
 
 const HANDBOOKS: Record<string, string> = {
@@ -886,26 +878,24 @@ function submissionView(event: EventProjection, row: SubmissionProjection, showB
   };
 }
 
+/**
+ * The speaker's view of their own talk's history.
+ *
+ * Reads through the shared projection, which widens this from the portal's own
+ * `speaker_talk_updated` rows to every content action — so an organizer editing
+ * the talk from the record page shows up here, by name, rather than the speaker
+ * finding their title silently changed with nothing to explain it.
+ */
 async function historyFor(db: D1Database, eventId: string, submissionId: string): Promise<Record<string, unknown>[]> {
-  const rows = await db
-    .prepare(
-      `SELECT audit.id, audit.actor_person_id, person.name AS actor_name, audit.created_at,
-         audit.before_json, audit.after_json
-       FROM audit_log audit
-       LEFT JOIN people person ON person.id = audit.actor_person_id
-       WHERE audit.event_id = ? AND audit.entity_type = 'submission' AND audit.entity_id = ?
-         AND audit.action = 'speaker_talk_updated'
-       ORDER BY audit.created_at DESC, audit.id DESC`,
-    )
-    .bind(eventId, submissionId)
-    .all<HistoryProjection>();
-  return rows.results.map((row) => ({
-    id: row.id,
-    actor_person_id: row.actor_person_id,
-    actor_name: row.actor_name,
-    created_at: row.created_at,
-    before: parseJson<Record<string, unknown> | null>(row.before_json, null),
-    after: parseJson<Record<string, unknown> | null>(row.after_json, null),
+  const entries = await contentHistoryFor(db, eventId, "submission", submissionId);
+  return entries.map((entry) => ({
+    id: entry.id,
+    action: entry.action,
+    actor_person_id: entry.actor_person_id,
+    actor_name: entry.actor_name,
+    created_at: entry.created_at,
+    before: entry.before,
+    after: entry.after,
   }));
 }
 

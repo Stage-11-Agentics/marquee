@@ -166,6 +166,14 @@ cd .eval-kit
 Preflight checks three things that have each already gone wrong once: the kit has no new
 upstream commits, live matches `github/main`, and `.env` holds the key.
 
+Before any run, verify optional scoring still has both exclusion sites:
+
+```sh
+grep -n "filter((a) => !a.optional)" .eval-kit/src/report.ts   # 2 hits at pin 2b0f795
+```
+
+Two hits mean optional areas are excluded from `overallPct`, `overallCoveragePct`, and `byType`, so extra credit is currently worth 0.0. If they disappear, the Speaker CRM verdict in `sequence/research/speaker-crm-scope.md` §5 reopens; re-read it before deciding.
+
 Watch `runs/<ts>/run.log` — **the file, not stdout**, which buffers for the whole hour.
 
 **Afterwards, always `npm run reset:demo`.** A run leaves a fictional *DevFlow Conf 2027* in

@@ -128,3 +128,13 @@
   .record-form-grid, .record-schedule-form, .record-new-person-grid { grid-template-columns: 1fr; }
   .record-form-wide { grid-column: auto; }
 }
+
+/* The save button relabels between "Save changes", "Confirm public update",
+   and "Saving…". A width that tracked the label would move the cue beside it
+   on every state change, so the width is pinned to the longest of the three. */
+.record-content-save { min-width: 172px; }
+
+/* Reserved height for the cue, which swaps between one and two lines of copy
+   depending on whether the record is live. Without it the card resizes as the
+   organizer moves through the confirm. */
+.record-content-cue { display: block; min-height: 30px; }

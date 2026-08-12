@@ -9,6 +9,7 @@ import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { membershipAllowsGrant, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { decisionHistory } from "../lib/decision-history";
 import {
   attachmentPreviewPath,
@@ -22,6 +23,7 @@ import { projectApplicableAnswers, type FormAnswerValue } from "../lib/form-cond
 import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import { auditStatement, writeAudit } from "../lib/audit";
+import { contentOf, isContentAction, isRestorable, recordHistoryFor } from "../lib/history";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
@@ -74,6 +76,18 @@ const patchDraftInput = z.object({
   title: z.string().trim().min(1).max(500).optional(),
   abstract: z.string().nullable().optional(),
   answers: z.array(answerInput).max(200).optional(),
+});
+
+const contentInput = z.object({
+  title: z.string().trim().min(1).max(500).optional(),
+  abstract: z.string().nullable().optional(),
+  /** Required when the Session is already live on the public site. */
+  confirm_published: z.boolean().optional(),
+});
+
+const restoreInput = z.object({
+  audit_id: z.string().min(1),
+  confirm_published: z.boolean().optional(),
 });
 
 const scheduleInput = z.object({
@@ -175,6 +189,23 @@ async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   return { kind: "api_token", personId: token.created_by, requestId };
 }
 
+/**
+ * Can this caller actually write program content on this conference?
+ *
+ * The record is READABLE by ops staff and form admins, neither of whom holds
+ * `program:write` — so rendering the content editor and the restore control on
+ * a read grant alone would hand them fields whose Save returns 403 and loses
+ * what they typed. The projection answers the question the UI needs to ask,
+ * from the same grant the write routes enforce.
+ */
+function canWriteProgram(context: Context<ApiEnv>, eventId: string): boolean {
+  const auth = getAuth(context);
+  if (!auth) return false;
+  if (auth.kind === "token") return tokenHasGrant(auth, "program:write", eventId);
+  const role = roleForEvent(auth.memberships, eventId);
+  return role !== null && membershipAllowsGrant(role, "program:write");
+}
+
 async function audit(
   db: D1Database,
   eventId: string,
@@ -194,6 +225,113 @@ async function audit(
     now: Date.now(),
     requestId: actor.requestId,
   });
+}
+
+/**
+ * The statuses whose title and abstract an organizer may edit.
+ *
+ * Explicit rather than "anything but draft" so adding a status later is a
+ * decision someone has to make on purpose. `rejected` and `withdrawn` are out:
+ * their content is a historical record of what was declined, and quietly
+ * letting it be rewritten would make every past decision unreadable. There is
+ * no `scheduled` or `published` status to list — a scheduled Session's status
+ * is still `accepted`; placement lives in `agenda_items` and publication in
+ * `agenda_items.is_published`, which is what `publishedGuard` reads.
+ */
+const EDITABLE_CONTENT_STATUSES = ["draft", "submitted", "in_review", "accepted", "waitlisted"] as const;
+
+interface ContentState {
+  title: string;
+  abstract: string | null;
+}
+
+/**
+ * Build the UPDATE and its audit row as one pair, for a single `batch()`.
+ *
+ * Both organizer doors (the drafts editor and the record's content editor) and
+ * the restore all route through here. An audit row that lands in a different
+ * transaction from the change it describes is worse than no audit row at all —
+ * it reads as authoritative while being free to disagree with reality — so the
+ * two statements are produced together and are never separable by a caller.
+ *
+ * `search_blob` is deliberately NOT written here. The `submissions_search_blob_update`
+ * trigger (`migrations/0001_init.sql`) rebuilds it after any UPDATE of title or
+ * abstract, and its expression trims where a hand-rolled one does not. Writing
+ * the column here too would be dead code that quietly disagrees with the value
+ * the database actually keeps.
+ */
+function contentWriteStatements(
+  db: D1Database,
+  eventId: string,
+  submissionId: string,
+  before: ContentState,
+  after: ContentState,
+  actor: DecisionActor,
+  action: "content_updated" | "content_restored",
+  now: number,
+): D1PreparedStatement[] {
+  return [
+    db.prepare(
+      `UPDATE submissions
+       SET title = ?, abstract = ?, last_saved_at = ?, last_write_source = 'marquee', updated_at = ?
+       WHERE id = ? AND event_id = ?`,
+    ).bind(after.title, after.abstract, now, now, submissionId, eventId),
+    auditStatement(db, {
+      eventId,
+      actorKind: actor.kind,
+      actorPersonId: actor.personId,
+      action,
+      entityType: "submission",
+      entityId: submissionId,
+      before: { title: before.title, abstract: before.abstract },
+      after: { title: after.title, abstract: after.abstract },
+      now,
+      requestId: actor.requestId,
+    }),
+  ];
+}
+
+interface EditableRow {
+  id: string;
+  form_id: string | null;
+  status: string;
+  title: string;
+  abstract: string | null;
+}
+
+async function editableContentFor(
+  db: D1Database,
+  eventId: string,
+  submissionId: string,
+): Promise<EditableRow> {
+  const row = await db
+    .prepare("SELECT id, form_id, status, title, abstract FROM submissions WHERE id = ? AND event_id = ?")
+    .bind(submissionId, eventId)
+    .first<EditableRow>();
+  if (!row) throw ApiError.notFound("submission not found");
+  if (!(EDITABLE_CONTENT_STATUSES as readonly string[]).includes(row.status)) {
+    throw ApiError.conflict(`a ${row.status} record's content cannot be edited`);
+  }
+  return row;
+}
+
+/**
+ * A live session's content is the public site's content.
+ *
+ * The confirm is a real gate, not decoration: it is the only thing standing
+ * between a stray keystroke on an organizer's screen and a changed public
+ * agenda. The UI supplies it as a second click; an API caller supplies the flag
+ * and thereby says the same thing out loud.
+ */
+async function publishedGuard(db: D1Database, eventId: string, submissionId: string, confirmed: boolean): Promise<void> {
+  if (confirmed) return;
+  const slot = await db
+    .prepare("SELECT is_published FROM agenda_items WHERE submission_id = ? AND event_id = ? AND kind = 'session'")
+    .bind(submissionId, eventId)
+    .first<{ is_published: number }>();
+  if (slot?.is_published === 1) {
+    throw ApiError.conflict("this Session is live on the public site — resend with confirm_published to change what attendees see");
+  }
 }
 
 interface AnswerProjection extends Record<string, unknown> {
@@ -301,7 +439,13 @@ async function projectAnswers(
   return answers;
 }
 
-async function loadRecord(db: D1Database, eventId: string, submissionId: string): Promise<Record<string, unknown>> {
+/**
+ * `canWriteProgram` defaults to true because every caller but two is a route
+ * the grants policy has already gated — reaching them at all proves the grant.
+ * The two `authenticated` routes (the record read and the drafts editor) pass
+ * the resolved answer, because they admit principals who genuinely lack it.
+ */
+async function loadRecord(db: D1Database, eventId: string, submissionId: string, canWriteProgram = true): Promise<Record<string, unknown>> {
   const row = await db.prepare(`
     SELECT
       s.id, s.event_id, event.name AS event_name, event.timezone,
@@ -401,12 +545,11 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
         )
       ORDER BY round.position, comparison.updated_at DESC, comparison.id
     `).bind(eventId, submissionId).all<Record<string, unknown>>(),
-    db.prepare(`
-      SELECT id, action, actor_kind, actor_person_id, entity_type, entity_id, after_json, created_at
-      FROM audit_log
-      WHERE event_id = ? AND entity_id = ?
-      ORDER BY created_at DESC, id DESC
-    `).bind(eventId, submissionId).all<Record<string, unknown>>(),
+    // Reads through the shared projection, which resolves `actor_person_id`
+    // against `people`. Without that join the card had nothing but
+    // `actor_kind` to render, and printed the literal string "user" where a
+    // name belongs.
+    recordHistoryFor(db, eventId, submissionId),
     db.prepare(`
       SELECT round.id, round.name, round.position, round.mode, round.target_reviews_per_submission,
         plan.id AS plan_id, plan.name AS plan_name, plan.status AS plan_status,
@@ -539,9 +682,11 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
         track_ids: jsonValue(reviewer.track_ids as string, []),
       })),
     },
-    history: history.results.map((entry) => ({
+    history: history.map((entry) => ({
       ...entry,
-      after_json: entry.after_json === null ? null : jsonValue(entry.after_json as string, null),
+      restorable: isRestorable(entry),
+      // Kept for the existing wire shape; `after` carries the parsed value.
+      after_json: entry.after,
     })),
     actions: {
       // `declined` covers waitlisted, rejected, and withdrawn. All three stay
@@ -555,6 +700,23 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       // derives to `scheduled` and a stage test would happily publish it to
       // the public site.
       can_publish: slot !== null && !slot.is_published && row.status === "accepted",
+      // The UI renders the content editor and the restore control from this one
+      // field, so it must answer exactly what the write routes enforce — which
+      // is not one policy but two. Drafts go to `patchDraft`, gated on
+      // `requireDraftRead`; reaching this projection for a draft has already
+      // satisfied it, and form admins legitimately edit drafts with no
+      // membership role at all (AC-247–249). Everything past Draft goes to
+      // `updateSubmissionContent`, which requires `program:write`. Demanding
+      // the grant on both would quietly take draft editing away from the
+      // people the drafts queue exists for.
+      can_edit_content: (EDITABLE_CONTENT_STATUSES as readonly string[]).includes(row.status)
+        && (row.status === "draft" || canWriteProgram),
+      // Restore has only ONE door — `restoreSubmissionContent`, which requires
+      // `program:write` at every status including Draft. So it needs its own
+      // flag: reusing `can_edit_content` would offer a form admin a Restore
+      // button on a draft they may edit but may not restore, which is the same
+      // dead end this pair exists to prevent, merely pointed the other way.
+      can_restore_content: (EDITABLE_CONTENT_STATUSES as readonly string[]).includes(row.status) && canWriteProgram,
     },
   };
 }
@@ -779,7 +941,7 @@ const getSubmissionRecord = defineApiRoute(
     if (!submission) throw ApiError.notFound("submission not found");
     if (submission.status === "draft") await requireDraftRead(context, eventId);
     else await requireSubmissionRead(context, eventId);
-    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId)), 200);
   },
 );
 
@@ -799,26 +961,24 @@ const patchDraft = defineApiRoute(
     const { eventId, submissionId } = context.req.valid("param");
     const body = context.req.valid("json");
     await eventFor(context.env.DB, eventId);
-    const submission = await context.env.DB.prepare("SELECT id, form_id, status FROM submissions WHERE id = ? AND event_id = ?").bind(submissionId, eventId).first<{ id: string; form_id: string | null; status: string }>();
+    const submission = await context.env.DB.prepare("SELECT id, form_id, status, title, abstract FROM submissions WHERE id = ? AND event_id = ?").bind(submissionId, eventId).first<EditableRow>();
     if (!submission) throw ApiError.notFound("submission not found");
     if (submission.status !== "draft") throw ApiError.conflict("only Draft records can be edited from the Drafts needing attention queue");
     await requireDraftRead(context, eventId);
 
     const now = Date.now();
-    const updates: string[] = ["last_saved_at = ?", "updated_at = ?"];
-    const values: (string | number | null)[] = [now, now];
-    if (body.title !== undefined) {
-      updates.unshift("title = ?");
-      values.unshift(body.title);
-    }
-    if (body.abstract !== undefined) {
-      updates.unshift("abstract = ?");
-      values.unshift(body.abstract);
-    }
-    const statements: D1PreparedStatement[] = [
-      context.env.DB.prepare(`UPDATE submissions SET ${updates.join(", ")} WHERE id = ? AND event_id = ? AND status = 'draft'`)
-        .bind(...values, submissionId, eventId),
-    ];
+    const before: ContentState = { title: submission.title, abstract: submission.abstract };
+    const after: ContentState = {
+      title: body.title ?? submission.title,
+      abstract: body.abstract === undefined ? submission.abstract : body.abstract,
+    };
+    const contentChanged = after.title !== before.title || after.abstract !== before.abstract;
+    // A draft edit is a content edit like any other: it earns the same audited
+    // before/after row and the same search-index maintenance. Answers-only
+    // saves write no content row, because nothing about the content changed.
+    const statements: D1PreparedStatement[] = contentChanged
+      ? contentWriteStatements(context.env.DB, eventId, submissionId, before, after, await actorFor(context), "content_updated", now)
+      : [context.env.DB.prepare("UPDATE submissions SET last_saved_at = ?, updated_at = ? WHERE id = ? AND event_id = ? AND status = 'draft'").bind(now, now, submissionId, eventId)];
 
     if (body.answers !== undefined) {
       if (!submission.form_id) throw ApiError.unprocessable("a draft without a form cannot accept field answers", "answers");
@@ -845,6 +1005,104 @@ const patchDraft = defineApiRoute(
       }
     }
     await context.env.DB.batch(statements);
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId)), 200);
+  },
+);
+
+const updateSubmissionContent = defineApiRoute(
+  {
+    method: "patch",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}/content",
+    operationId: "updateSubmissionContent",
+    summary: "Edit a Session's title and abstract",
+    description:
+      "Organizer content editing for records past Draft. Every change writes a before/after history row in the same transaction; a live Session requires confirm_published.",
+    tags: ["Submissions"],
+    request: { params: submissionParams, body: { content: { "application/json": { schema: contentInput } } } },
+    policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: recordResponse, ...errors },
+  },
+  async (context) => {
+    const { eventId, submissionId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    if (body.title === undefined && body.abstract === undefined) {
+      throw ApiError.badRequest("title or abstract is required");
+    }
+    await eventFor(context.env.DB, eventId);
+    const current = await editableContentFor(context.env.DB, eventId, submissionId);
+    const before: ContentState = { title: current.title, abstract: current.abstract };
+    const after: ContentState = {
+      title: body.title ?? current.title,
+      abstract: body.abstract === undefined ? current.abstract : body.abstract,
+    };
+    // A save that changed nothing writes nothing. A history padded with rows
+    // that say "changed nothing" is the fastest way to make an honest history
+    // panel unreadable, and the organizer learns to stop trusting it.
+    if (after.title === before.title && after.abstract === before.abstract) {
+      return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+    }
+    await publishedGuard(context.env.DB, eventId, submissionId, body.confirm_published === true);
+    const actor = await actorFor(context);
+    await context.env.DB.batch(
+      contentWriteStatements(context.env.DB, eventId, submissionId, before, after, actor, "content_updated", Date.now()),
+    );
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+  },
+);
+
+const restoreSubmissionContent = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}/content/restore",
+    operationId: "restoreSubmissionContent",
+    summary: "Restore an earlier version of a Session's content",
+    description:
+      "Re-applies the state a named history entry recorded before its change, as a forward edit with its own before/after row. No existing history row is ever altered or removed.",
+    tags: ["Submissions"],
+    request: { params: submissionParams, body: { content: { "application/json": { schema: restoreInput } } } },
+    policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: recordResponse, ...errors },
+  },
+  async (context) => {
+    const { eventId, submissionId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    await eventFor(context.env.DB, eventId);
+    const current = await editableContentFor(context.env.DB, eventId, submissionId);
+
+    // Scoped to this event AND this submission: an audit id is guessable enough
+    // that "restore" must never be a way to read, or write, another record's
+    // content.
+    const entry = await context.env.DB
+      .prepare("SELECT id, action, before_json FROM audit_log WHERE id = ? AND event_id = ? AND entity_type = 'submission' AND entity_id = ?")
+      .bind(body.audit_id, eventId, submissionId)
+      .first<{ id: string; action: string; before_json: string | null }>();
+    if (!entry || !isContentAction(entry.action)) throw ApiError.notFound("no such history entry on this record");
+
+    let parsed: Record<string, unknown> | null = null;
+    try {
+      parsed = entry.before_json === null ? null : (JSON.parse(entry.before_json) as Record<string, unknown>);
+    } catch {
+      parsed = null;
+    }
+    const restored = contentOf(parsed);
+    if (!restored) throw ApiError.unprocessable("that history entry records no earlier content to restore", "audit_id");
+
+    const before: ContentState = { title: current.title, abstract: current.abstract };
+    const after: ContentState = {
+      title: restored.title ?? current.title,
+      abstract: "abstract" in restored ? (restored.abstract ?? null) : current.abstract,
+    };
+    if (after.title === before.title && after.abstract === before.abstract) {
+      return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+    }
+    await publishedGuard(context.env.DB, eventId, submissionId, body.confirm_published === true);
+    const actor = await actorFor(context);
+    // The restore's own before/after describes what the restore changed — not
+    // what the original edit changed. That is what makes the row honest when
+    // someone reads the history a month later.
+    await context.env.DB.batch(
+      contentWriteStatements(context.env.DB, eventId, submissionId, before, after, actor, "content_restored", Date.now()),
+    );
     return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
   },
 );
@@ -927,4 +1185,4 @@ const publishSubmission = defineApiRoute(
   },
 );
 
-export const apiRoutes = [createSubmission, getSubmissionRecord, patchDraft, scheduleSubmission, publishSubmission];
+export const apiRoutes = [createSubmission, getSubmissionRecord, patchDraft, updateSubmissionContent, restoreSubmissionContent, scheduleSubmission, publishSubmission];

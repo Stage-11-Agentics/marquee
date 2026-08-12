@@ -17,7 +17,9 @@ import { getCookie } from "hono/cookie";
 import { ApiError } from "../api/errors";
 import type { ApiEnv } from "../api/runtime";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { getAuth } from "../lib/auth/auth-middleware";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
+import { authHasRole } from "../lib/auth/scope-resolution";
 import { SESSION_COOKIE_NAME } from "../lib/cookies";
 import { isPreviewableImage } from "../lib/file-answers";
 import { uploadError } from "../lib/r2/errors";
@@ -632,6 +634,53 @@ async function handleAttachmentPreview(context: Context<ApiEnv>) {
   return response;
 }
 
+/**
+ * A speaker's profile headshot has no submission answer to join through. Keep
+ * it behind the same event-scoped organizer read, while allowing the owning
+ * speaker's portal session to render its own photo after a profile save.
+ * The pointer and owner type are both checked here so an attachment id or
+ * person id from another conference cannot turn this into an object oracle.
+ */
+async function handlePersonHeadshot(context: Context<ApiEnv>) {
+  const eventId = context.req.param("eventId") ?? "";
+  const personId = context.req.param("personId") ?? "";
+  const auth = getAuth(context);
+  if (!auth) throw ApiError.unauthenticated();
+
+  const speakerOwnsRequest = auth.kind === "session"
+    && auth.personId === personId
+    && authHasRole(auth, "speaker", eventId);
+  if (!speakerOwnsRequest) await requireSubmissionRead(context, eventId);
+
+  const env = uploadsEnv(context);
+  const row = await env.DB.prepare(
+    `SELECT attachment.status, attachment.r2_key, attachment.r2_etag,
+            attachment.content_type, attachment.filename
+       FROM people person
+       JOIN events event ON event.id = ?1 AND event.org_id = person.org_id
+       JOIN attachments attachment
+         ON attachment.id = person.headshot_attachment_id
+        AND attachment.event_id = event.id
+        AND attachment.owner_type = 'person_headshot'
+        AND attachment.owner_id = person.id
+      WHERE person.id = ?2
+      LIMIT 1`,
+  )
+    .bind(eventId, personId)
+    .first<{
+      status: "pending" | "ready";
+      r2_key: string;
+      r2_etag: string | null;
+      content_type: string;
+      filename: string;
+    }>();
+
+  if (!row) throw ApiError.notFound("headshot not found");
+  const response = await serveInlineImageObject(env.MEDIA, row.r2_key, row, isPreviewableImage);
+  if (!response) throw ApiError.notFound("headshot not found");
+  return response;
+}
+
 const uploadErrorEnvelopeSchema = z
   .object({
     error: z.object({
@@ -711,6 +760,10 @@ const mediaParamsSchema = z.object({ key: z.string() });
 const attachmentPreviewParamsSchema = z.object({
   eventId: z.string().min(1),
   attachmentId: z.string().min(1),
+});
+const personHeadshotParamsSchema = z.object({
+  eventId: z.string().min(1),
+  personId: z.string().min(1),
 });
 
 const signPublicUpload = defineApiRoute(
@@ -894,6 +947,32 @@ const previewAttachment = defineApiRoute(
   handleAttachmentPreview as never,
 );
 
+const previewPersonHeadshot = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/people/{personId}/headshot",
+    operationId: "previewPersonHeadshot",
+    summary: "Render a speaker headshot inline",
+    description:
+      "Serves the ready raster headshot currently attached to a speaker profile. Organizers need program read access; a speaker session may read only its own event-scoped headshot.",
+    tags: ["Uploads"],
+    request: { params: personHeadshotParamsSchema },
+    policy: {
+      auth: { kind: "authenticated" },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: {
+        content: { "image/*": { schema: z.any() } },
+        description: "The speaker's ready raster headshot, inline and sandboxed.",
+      },
+      ...errorResponses([400, 401, 403, 404, 429, 500]),
+    },
+  },
+  handlePersonHeadshot as never,
+);
+
 export const apiRoutes = [
   signPublicUpload,
   signTaskUpload,
@@ -902,4 +981,5 @@ export const apiRoutes = [
   localUploadPut,
   serveMedia,
   previewAttachment,
+  previewPersonHeadshot,
 ];
