@@ -18,10 +18,11 @@ import { mapPersonHeaders, planPersonImport } from "../../src/lib/people-import"
 import { buildPeopleQuery, parseTags } from "../../src/routes/people.queries";
 import { activeCriteria, saveControl } from "../../src/ui/people/people-api";
 import { PIPELINE_STAGES as CLIENT_STAGES } from "../../src/ui/people/pipeline-stages";
+import { peopleImportBrief } from "../../src/ui/people/people-brief";
 
 const routeTable = readFileSync(new URL("../../src/ui/shell/route-table.ts", import.meta.url), "utf8");
 const sidebar = readFileSync(new URL("../../src/ui/shell/Sidebar.tsx", import.meta.url), "utf8");
-const migration = readFileSync(new URL("../../migrations/0011_people_annotations.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../../migrations/0012_people_annotations.sql", import.meta.url), "utf8");
 const peopleSources = [
   readFileSync(new URL("../../src/routes/people.routes.ts", import.meta.url), "utf8"),
   readFileSync(new URL("../../src/routes/person-lists.routes.ts", import.meta.url), "utf8"),
@@ -212,4 +213,24 @@ test("CONTRACT · MRQ-131 · the area's language is People and List, never CRM o
     const offender = userFacing.find((line) => forbidden.test(line));
     expectEqual(offender, undefined, `forbidden vocabulary in a user-facing string: ${offender}`);
   }
+});
+
+test("CONTRACT · MRQ-131 · the People import brief is paste-ready, and org-level on purpose", () => {
+  const copy = peopleImportBrief("https://example.test");
+  // The four load-bearing items MRQ-130's briefs carry.
+  expect(copy.brief).toContain("https://example.test");
+  expect(copy.brief).toContain("/api/openapi.json");
+  expect(copy.brief).toContain("Settings → API tokens");
+  expect(copy.brief).toMatch(/When you're done, tell me/);
+  expect(copy.brief).toContain("import_id");
+  expect(copy.brief).not.toContain("!");
+  // And the one thing it deliberately does NOT carry: People is the
+  // organization's record, so the brief names no conference and the endpoint
+  // is org-scoped. That is why it is not in AGENT_BRIEF_SURFACES.
+  expect(copy.endpoint).toBe("POST /api/v1/org/imports");
+  expect(copy.endpoint).not.toMatch(/events\//);
+
+  // It renders through MRQ-130's shared panel rather than a second copy of it.
+  const modals = readFileSync(new URL("../../src/ui/people/PeopleModals.tsx", import.meta.url), "utf8");
+  expect(modals).toMatch(/AgentBriefPanel/);
 });

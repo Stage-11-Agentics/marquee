@@ -10,8 +10,10 @@
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 
+import { AgentBriefPanel } from "../shell/AgentBrief";
 import { errorSummary } from "../shell/api-client";
 import { Button } from "../shell/components";
+import { peopleImportBrief } from "./people-brief";
 import {
   createList,
   createPerson,
@@ -47,22 +49,6 @@ function Modal({
   </>;
 }
 
-/**
- * The brief an organizer hands to their agent. It states where Marquee is, that
- * the API describes itself, how matching works, and what to report back — the
- * four things that decide whether the agent's run is trustworthy.
- *
- * MRQ-130 owns a shared agent-brief component and four other briefs. This one is
- * inlined in the prototype's shape so the two can be reconciled when that lands.
- */
-const IMPORT_BRIEF = `Import my speaker list into Marquee.
-
-Marquee is at this site. Read /api/openapi.json first — it describes every endpoint and field. You'll need an API token; I'll paste one in, or you can tell me to make one at Settings → API tokens.
-
-The people are in a CSV I'll point you at. Marquee matches on email address, so anyone already in there gets updated rather than duplicated — no need to de-dupe the file first.
-
-When you're done, tell me how many were created, updated and skipped, list any columns you couldn't map, and give me the import_id so I can undo it if it's wrong.`;
-
 export function ImportPeopleModal({
   onClose,
   onImported,
@@ -72,7 +58,6 @@ export function ImportPeopleModal({
 }): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
   const [hot, setHot] = useState(false);
 
@@ -106,29 +91,7 @@ export function ImportPeopleModal({
       </Button>
     </>}
   >
-    <div class="people-field">
-      <span>Hand this to your agent</span>
-      <p class="people-hint" style={{ margin: "0 0 2px" }}>
-        Copy the text below and paste it into Claude, or whichever agent you work with. It knows where
-        Marquee is, how to read its API, and what to tell you when it is finished.
-      </p>
-      <div class="people-brief">
-        <pre>{IMPORT_BRIEF}</pre>
-        <Button
-          variant="primary"
-          onClick={() => {
-            void navigator.clipboard?.writeText(IMPORT_BRIEF).catch(() => {});
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 2400);
-          }}
-        >{copied ? "Copied — paste it into your agent" : "Copy for your agent"}</Button>
-      </div>
-      <p class="people-hint">
-        Point it at your file when it asks. Everything this screen can do, it can do — there is no
-        capability here the API lacks. <span class="people-subtlecode">POST /api/v1/org/imports</span>,
-        if you would rather drive it yourself.
-      </p>
-    </div>
+    <AgentBriefPanel copy={peopleImportBrief(window.location.origin)} />
 
     <div class="people-field">
       <span>Or just drop a file</span>
