@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-mrq-97",
   "branch_links": [],
-  "comment_count": 6,
+  "comment_count": 13,
   "complexity": null,
   "created_at": "2026-08-12T03:49:56Z",
   "created_by": {
@@ -15,7 +15,7 @@
   },
   "custom_fields": {},
   "description": "**Accepting a talk makes it disappear from the \"Accepted\" filter.** Operator, live\nsite 2026-08-11: *\"I just manually accepted a talk and then I went and searched for\naccepted talks and it didn't appear. That's a big one.\"*\n\nThey are right, and it is not a caching bug. It is the definition of \"Accepted\".\n\n## Root cause\n\n`src/routes/submissions.queries.ts:106-116`:\n\n    function acceptedStagePredicate(submission, agenda, includeCancelledAt) {\n      return `${submission}.status = 'accepted'\n        AND ${agenda}.id IS NULL\n        AND NOT (${onboardingStagePredicate(...)})\n        AND NOT (${pendingWavePredicate(submission)})`;\n    }\n\n\"Accepted\" in the status dropdown does not mean *this was accepted*. It means\n*accepted **and** not scheduled **and** not in onboarding **and** not in a pending\nwave* \u2014 a **transient pipeline stage**, not a fact about the record.\n\nAccepting a submission immediately gives it a pending wave, or auto-assigns speaker\ntasks (`auto_assign` is set on templates in `scripts/seed/event.ts:339-360`). Either\none makes `pendingWavePredicate` or `onboardingStagePredicate` true, so the record\nreclassifies to **Waved** or **Onboarding** the instant it is accepted and drops out\nof \"Accepted\". The operator did exactly the right thing and the product lost the record.\n\nThis also explains their second observation \u2014 *\"it looks like we have no accepted\nstatuses\"*. Almost nothing ever rests in that bucket.\n\n## The dropdown is three vocabularies wearing one label\n\n`STATUS_OPTIONS` (`src/ui/submissions/SubmissionsPage.tsx:54-69`) is a flat list of\n14 entries mixing:\n\n- **Real statuses** (a stored fact): Draft, Submitted, Rejected, Withdrawn\n- **Mutually-exclusive pipeline stages** (derived, transient): Unreviewed, Waved,\n  Onboarding, Accepted, Scheduled, Published\n- **A derived queue**: Decided \u00b7 not notified\n\nOperator: *\"it's just like a long list. I don't know if there's anything we can do\nthere.\"* The length is a symptom; the category confusion is the disease. An organizer\nreads \"Accepted\" as \"talks I accepted\" and is simply right to.\n\n## Required outcome\n\n**Non-negotiable:** after an organizer accepts a submission, filtering for accepted\ntalks finds it. Immediately, and at every later stage of its life.\n\nHow you get there is yours to choose, but state the choice and its reasoning in the\nPR. The two credible shapes:\n\n- **Status and stage become separate dimensions.** \"Accepted\" filters on the stored\n  fact (`s.status = 'accepted'`) and matches regardless of wave/onboarding/schedule;\n  pipeline stage becomes its own control. Truest to how an organizer thinks, and it\n  shortens the status list on its own.\n- **Keep the exclusive stages but stop mislabelling them.** Group the dropdown under\n  headings (`<optgroup>`) that name what each group is, and add an explicit\n  \"Accepted (any stage)\" entry that means the fact. Smaller change, keeps the\n  existing derivation intact.\n\nWhichever you pick:\n\n- **Do not break MRQ-76's guarantee.** That ticket unified stage derivation so a\n  dashboard tile cannot count a different set than its destination\n  (`submissions.queries.ts:118-120`). Every surface consuming these predicates \u2014\n  dashboard tiles, saved views, the program board, the agenda builder \u2014 must still\n  agree after your change. Find the consumers before you edit; there are several.\n- **Visual treatment of the control is in scope** (operator asked): \"All statuses\"\n  should read as the neutral default rather than one item among fourteen, and the\n  list should be scannable. Grouping and a distinct treatment for the default beat\n  a longer list.\n- Keep the organizer's language, per `PHILOSOPHY.md`. \"Maybe\" is the product's word\n  for waitlisted and stays.\n\n## Ownership boundary \u2014 read this\n\nAnother delegator (**MRQ-98**) is concurrently working on the *presentation and\nperformance* of this same page: loading jank, the search field, the placeholder\ncount, saved-view discoverability.\n\n- **You own:** `src/routes/submissions.queries.ts`, the `STATUS_OPTIONS` constant,\n  the status `<select>` and its styling, and any consumer you must update for\n  consistency.\n- **You do not own:** the search field, the loading/skeleton behavior, the saved-view\n  strip, or the toolbar layout.\n- Work in your own git worktree (`git worktree add ../Marquee-worktrees/<branch> <branch>`).\n  Coordinate through a Lattice comment if you truly must cross the line.\n\n## Acceptance\n\n- Accept a submission, then filter for accepted talks: **it is there.** Verify at\n  each stage \u2014 freshly accepted, wave pending, onboarding tasks open, scheduled,\n  published.\n- A test covers accept-then-filter end to end. This defect was invisible to a green\n  suite; do not leave it that way.\n- Dashboard tiles, saved views, and the program board still agree with the list\n  after the change (MRQ-76's invariant holds).\n- The status control reads as categories, not a flat 14-item list, and \"All statuses\"\n  is visibly the default.\n- No status is silently dropped from the vocabulary without saying so in the PR.\n- Validated **locally** with browser automation (no auto-deploy on this project \u2014\n  see `DEPLOY.md`; do not run `wrangler deploy`), screenshot in the PR.\n- `npm test` green within budget; PR open against `Stage-11-Agentics/marquee` `main`.",
-  "done_at": null,
+  "done_at": "2026-08-12T04:59:56Z",
   "evidence_refs": [
     {
       "id": "art_01KZT2664BRJKWRQPQYTKG4YM7",
@@ -26,21 +26,41 @@
       "id": "art_01KZT2KJPWYTB3F6AT4EXGVQ94",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT3YF8GJ0Q6WNHZ60QVPJ2Z",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT4R1KQT93Q6VAPCVX0GW53",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT5AX0RFBJFSMQ37MN5BS2X",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT5EMAXVEFFSSHNZPBF3CA5",
+      "role": "review",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZT1EKP0FMCWPFYXQRPEJ87N",
-  "last_event_id": "ev_01KZT3KCPMQG37R0CMF91PYDQ2",
-  "last_status_changed_at": "2026-08-12T04:11:42Z",
+  "last_event_id": "ev_01KZT5WA3K91NFGA08PEFAQC3N",
+  "last_status_changed_at": "2026-08-12T04:59:56Z",
   "linked_files": [],
   "priority": "critical",
   "relationships_out": [],
   "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-97",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Accepting a talk removes it from the Accepted filter \u2014 \"Accepted\" is a transient stage masquerading as a status",
   "type": "bug",
-  "updated_at": "2026-08-12T04:27:29Z",
+  "updated_at": "2026-08-12T05:07:19Z",
   "urgency": null
 }

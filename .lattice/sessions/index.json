@@ -1,8 +1,12 @@
 {
   "active_sessions": {
-    "feedback-intake-1": "sess_01KZSZXGH17A7VWN1TA7QNT7WG"
+    "feedback-intake-1": "sess_01KZSZXGH17A7VWN1TA7QNT7WG",
+    "intake-1": "sess_01KZT6C1JSV9KWWS2F5EZSN5V6",
+    "merge-agent-1": "sess_01KZT4CNZA5J534NFWXB4DDE8Y"
   },
   "serial_counters": {
-    "feedback-intake": 1
+    "feedback-intake": 1,
+    "intake": 1,
+    "merge-agent": 1
   }
 }

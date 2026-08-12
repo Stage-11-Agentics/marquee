@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "12534163-205D-4FE2-AA6B-C85F46EC296B",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 6,
+  "comment_count": 8,
   "complexity": null,
   "created_at": "2026-08-12T03:24:24Z",
   "created_by": {
@@ -17,7 +17,7 @@
   },
   "custom_fields": {},
   "description": "Speaker file upload fails on the deployed site with **\"upload PUT network error\"**.\nOperator hit this on https://marquee.stage11.dev (2026-08-11) on the Presentation\nUpload task. This blocks the file-upload step of the 11-step walkthrough loop \u2014\nthe competition's evaluation rubric \u2014 so treat it as ship-blocking.\n\n## Mechanism (traced, not guessed)\n\nThat exact string comes from `src/ui/upload/upload-client.ts:36`:\n\n    xhr.onerror = () => reject(new Error(\"upload PUT network error\"));\n\n`xhr.onerror` fires only on a **browser-level** failure \u2014 DNS, TLS, or a blocked\nCORS preflight. It does not fire for HTTP error statuses; `xhr.onload` handles\nthose and produces a different message (\"upload PUT failed with status N\"). So\nthe request never reached R2 as far as the browser is concerned.\n\nThe upload is a **direct browser PUT to R2**, cross-origin by construction:\n\n- `src/lib/r2/presign.ts` signs against `https://{accountId}.r2.cloudflarestorage.com/{bucket}/{key}`\n  and deliberately refuses any other host.\n- The page origin is `https://marquee.stage11.dev`. Different origin \u2192 preflight.\n- The PUT is definitively **not** a CORS-simple request: `presignPut` requires\n  `content-type` **and** `if-none-match: *`, and `upload-client.ts` attaches an\n  `xhr.upload.onprogress` handler. Any one of those forces an `OPTIONS` preflight.\n- **There is no CORS configuration anywhere in this repository.** A repo-wide search\n  for `cors` / `AllowedOrigins` across `src/`, `scripts/`, `docs/`, and\n  `wrangler.jsonc` returns nothing. `wrangler.jsonc` binds the bucket\n  (`MEDIA` \u2192 `marquee-media`) but a binding does not configure the S3 API's CORS\n  rules, which is what a browser PUT is governed by.\n\nLeading hypothesis: **the `marquee-media` bucket has no CORS policy**, so the\npreflight is rejected and every browser upload fails. Note the implication \u2014\nthis likely never worked on the deployed site. The suite is green because nothing\nexercises a real cross-origin browser PUT; this is the textbook\n\"green tests \u2260 working product\" gap.\n\nRule out before fixing, in this order: (1) read the bucket's live CORS rules;\n(2) check the browser console/network panel for the `OPTIONS` preflight and its\nresponse; (3) only then look at the MRQ-89 bucket-scoped credential \u2014 a bad\ncredential returns **403**, which would surface as \"failed with status 403\", not\na network error. Do not assume MRQ-89; confirm from the preflight.\n\n## Required outcome\n\n1. **The bucket accepts browser uploads.** Apply a CORS policy to `marquee-media`\n   (and the preview bucket if it serves any browser path) that allows `PUT` and\n   `OPTIONS` from the site origin, with `content-type` and `if-none-match` in\n   `AllowedHeaders` and `etag` exposed. Scope `AllowedOrigins` to the real origins\n   \u2014 the production domain and whatever local dev origin the team uses. **Do not\n   use `*`.**\n2. **The policy is in the repo, not just in a dashboard.** A CORS rule that exists\n   only as a console click is a rule that silently disappears on the next bucket\n   rebuild and that no one can review. Commit the policy as a JSON file plus an\n   idempotent apply script (wrangler or the S3 API), and document it in\n   `code/platform/cloudflare.md` \u2014 see also `docs/` conventions in this repo.\n3. **A test that would have caught this.** At minimum, an automated check that\n   performs a real cross-origin `OPTIONS` preflight against the bucket and asserts\n   the response allows `PUT` from the production origin. It does not belong in the\n   45s fast suite \u2014 put it in the explicitly-invoked integration suite and wire it\n   into the deploy check.\n4. **The speaker-facing error stops being developer text.** \"upload PUT network\n   error\" is an internal string in front of the least-equipped person to act on it.\n   Replace the user-visible copy with a plain sentence and a retry, per the portal's\n   own stated error philosophy (see the comment above `requestJson` in\n   `PortalPage.tsx`). Keep the precise string in the console/logs for engineers.\n\n## Constraints\n\n- **Credentials never enter this repo.** It is going public. The apply script reads\n  from the environment; the JSON policy file contains no secrets.\n- Coordinate with MRQ-89's bucket-scoped credential \u2014 if the scoped token lacks the\n  permission to *set* CORS, say so in the PR rather than widening the token silently.\n- Suite budget 45s (this check goes in the slow suite), gate budget 120s.\n\n## Acceptance\n\n- On the **live deployed site**, signed in as a speaker, a real file uploads to\n  completion on the Presentation Upload task \u2014 screenshot or recording in the PR\n  showing the completed upload, plus the successful `OPTIONS` + `PUT` in the network\n  panel. A green test alone does not close this ticket.\n- The CORS policy is committed and re-appliable from a clean checkout by one command.\n- `AllowedOrigins` is explicit; `*` appears nowhere.\n- A deliberately wrong origin is still rejected (verify the policy is scoped, not open).\n- The failure path shows a human sentence, not \"upload PUT network error\".\n- PR open against `Stage-11-Agentics/marquee` `main`.",
-  "done_at": null,
+  "done_at": "2026-08-12T04:41:18Z",
   "evidence_refs": [
     {
       "id": "art_01KZT0FCMTKKKGYVH6EFD0FM2F",
@@ -48,21 +48,26 @@
       "id": "art_01KZT38BFYEP0X5NJZWQA62SZ4",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT3XNE303B5Q7P5VRPF5S3E",
+      "role": "review",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZSZZW6RGTJXJ3PCKS880EYM",
-  "last_event_id": "ev_01KZT38BG2TT28C0DQ4JKRTBBC",
-  "last_status_changed_at": "2026-08-12T04:08:10Z",
+  "last_event_id": "ev_01KZT4CQ4KZMD5MHQCNR9D5W7S",
+  "last_status_changed_at": "2026-08-12T04:41:18Z",
   "linked_files": [],
   "priority": "critical",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-92",
-  "status": "review",
+  "status": "done",
   "tags": null,
   "title": "Upload is broken on the deployed site \u2014 presigned R2 PUT fails CORS preflight, no bucket policy exists",
   "type": "bug",
-  "updated_at": "2026-08-12T04:21:28Z",
+  "updated_at": "2026-08-12T04:41:19Z",
   "urgency": null
 }

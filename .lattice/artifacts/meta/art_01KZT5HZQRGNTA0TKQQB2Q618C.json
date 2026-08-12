@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T05:01:40Z",
+  "created_by": "agent:codex-mrq-99",
+  "custom_fields": {},
+  "id": "art_01KZT5HZQRGNTA0TKQQB2Q618C",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT5HZQRGNTA0TKQQB2Q618C.png",
+    "size_bytes": 568708
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "After fetching and rebasing onto MRQ-97 at 2543206, c11 drove the local Worker: the conference link resolves to /dashboard with zero overlays, and the waitlist dialog retains accurate organizer copy.",
+  "tags": [],
+  "title": "MRQ-99 rebased exact-head browser proof",
+  "token_usage": null,
+  "type": "file"
+}

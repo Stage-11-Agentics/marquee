@@ -138,3 +138,5 @@ to it, and note it in a Lattice comment so the rebase is trivial.
   control because the waitlist branch intentionally does not enqueue mail.
 - The reviewer convention applies `(optional)` to the field labels themselves,
   not to unrelated prose or placeholders elsewhere in the product.
+
+## Reset 2026-08-12 by agent:codex-mrq-99

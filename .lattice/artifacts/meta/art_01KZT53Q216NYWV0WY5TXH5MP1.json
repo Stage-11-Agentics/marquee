@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T04:53:53Z",
+  "created_by": "agent:codex-mrq-91",
+  "custom_fields": {},
+  "id": "art_01KZT53Q216NYWV0WY5TXH5MP1",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT53Q216NYWV0WY5TXH5MP1.png",
+    "size_bytes": 1079083
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "c11 screenshot from the rebased local Wrangler build showing the fixed 360px Sheraton venue map, named pin, and single Directions action.",
+  "tags": [],
+  "title": "MRQ-91 rebased local speaker portal",
+  "token_usage": null,
+  "type": "file"
+}

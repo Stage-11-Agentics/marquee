@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-mrq-99",
   "branch_links": [],
-  "comment_count": 2,
+  "comment_count": 5,
   "complexity": null,
   "created_at": "2026-08-12T04:16:28Z",
   "created_by": {
@@ -21,21 +21,46 @@
       "id": "art_01KZT3J113ACSJJS6J0JKBHX61",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT57DT4TH9CGE52KG4EDJ1J",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT5D3ZJA8JN3EB411KRTRG9",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT5HZQRGNTA0TKQQB2Q618C",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT5Z2799XBW99M0WR6FKPZX",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT6CA0A99N7PT9P5VT7EYJK",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZT2Z6N6PF241M8QZ9Q7AQKM",
-  "last_event_id": "ev_01KZT3J1166VBBB55N0SPTW31D",
-  "last_status_changed_at": "2026-08-12T04:22:17Z",
+  "last_event_id": "ev_01KZT6CA0EMVSJ1D90MMRVFKVQ",
+  "last_status_changed_at": "2026-08-12T05:11:44Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-99",
   "status": "in_progress",
   "tags": null,
   "title": "Conference name is a dead-end stub, and the decision dialogs explain themselves in engineer",
   "type": "bug",
-  "updated_at": "2026-08-12T04:26:45Z",
+  "updated_at": "2026-08-12T05:16:03Z",
   "urgency": null
 }

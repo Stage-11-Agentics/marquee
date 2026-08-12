@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-cli",
   "branch_links": [],
-  "comment_count": 6,
+  "comment_count": 10,
   "complexity": null,
   "created_at": "2026-08-12T03:33:25Z",
   "created_by": {
@@ -15,7 +15,7 @@
   },
   "custom_fields": {},
   "description": "Let an organizer configure which file types a speaker upload task accepts.\nOperator decision, 2026-08-11, prompted by exercising the Presentation Upload task\non the live site: *\"are you able to select or allow any arbitrary set of types as\nan event whenever you set it up? Because right now, what if you take other forms\nof file.\"*\n\n## Where it stands\n\nAccepted types and the size cap are **hardcoded in the seed script**.\n`scripts/seed/event.ts:348-350`:\n\n    [TEMPLATE_IDS.presentationUpload, \"Presentation Upload\", \"file\",\n      \"Upload your final deck so the AV team can stage it before your session.\",\n      14, null, JSON.stringify({ accept: [\".pdf\", \".pptx\", \".key\"], maxBytes: 26_214_400 }), 1, 1],\n\nThe good news is that the enforcement path is already complete and correct \u2014 this\nticket is a UI and a route, not new plumbing:\n\n- The value lives on the task-template row as `file_config`\n  (`src/db/schema.ts:516`).\n- The server reads and enforces it on presign, for both the authenticated and the\n  public path (`src/routes/uploads.routes.ts:273-285`, `:391-400`, via\n  `parseUploadOwnerConfig`).\n- The portal honors it client-side \u2014 the file picker's `accept` attribute and\n  `validateClientUpload` (`src/ui/portal/PortalPage.tsx:238`, `:283`).\n\nWhat is missing is any way for an organizer to change it. `src/ui/settings/EventSettings.tsx`\nhas no task-template editor. So a conference that wants video, a Keynote export, a\nGoogle Slides link, or simply a larger cap has to edit a seed script \u2014 which\ncontradicts **\"own your conference\"** in `PHILOSOPHY.md`.\n\n## Scope\n\n1. **An organizer surface for file task templates.** Where task templates are set\n   up for an event, let the organizer edit, per file-kind template: the **accepted\n   file types** and the **maximum size**. Find the existing task-template\n   surface first and extend it; only add a new screen if none exists, and say which\n   you found in the PR.\n2. **Speak the organizer's language.** Offer meaningful choices \u2014 \"Slides (PDF,\n   PPTX, Keynote)\", \"Documents\", \"Images\", \"Video\" \u2014 with an escape hatch for\n   arbitrary extensions, rather than making someone hand-author a JSON array of\n   dotted strings. Size in MB, not bytes.\n3. **Persist through the existing shape.** Write the same `file_config`\n   (`{ accept: string[], maxBytes: number }`) the server already parses. Do not\n   invent a second representation or a parallel enforcement path.\n4. **Normalize and validate on the server.** Accept `.pdf` and `pdf` and `PDF` and\n   store one canonical form \u2014 the portal already re-adds the leading dot at\n   `PortalPage.tsx:283`, so garbage in the array becomes a broken picker. Reject an\n   empty accept list (that would accept nothing and silently brick the task) and\n   cap the maximum size at whatever the R2 path can actually take.\n5. **Tell the speaker the truth.** The portal already prints \"Accepted: \u2026\" and the\n   limit under the file input; confirm it reflects edited config live. A speaker who\n   picks an unsupported file must get a plain sentence naming what *is* accepted \u2014\n   not a terse validation string.\n\n## Constraints\n\n- **Do not touch the presign or upload transport.** MRQ-92 is concurrently fixing a\n  CORS failure in exactly that path (`src/lib/r2/presign.ts`, `src/ui/upload/upload-client.ts`).\n  Stay in the config/UI layer and coordinate through Lattice if you think you need\n  to cross into it.\n- Existing templates with no `file_config` must keep working unchanged \u2014 absent\n  config means \"no restriction beyond the system default\", and that behavior is\n  already relied upon.\n- This repo goes public: no credentials, no Stage 11 internals.\n- Flight Deck aesthetic per `DESIGN.md`; **elements never jump** \u2014 adding or\n  removing a type chip must not reflow the surrounding form.\n- Suite budget 45s, gate budget 120s.\n\n## Acceptance\n\n- An organizer can change the accepted types and size cap for the Presentation\n  Upload task from the UI, save, and see it persist across a reload.\n- A speaker's file picker and the \"Accepted: \u2026\" line immediately reflect the\n  organizer's choice.\n- A file outside the configured list is rejected **server-side** (not only by the\n  picker), with a message naming what is accepted.\n- An empty accept list cannot be saved.\n- A template with no `file_config` behaves exactly as it does today.\n- Validated on the **live deployed site** at https://marquee.stage11.dev \u2014 change\n  the config as an organizer, then upload as a speaker. Screenshots of both in the PR.\n- `npm test` green within budget; PR open against `Stage-11-Agentics/marquee` `main`.",
-  "done_at": null,
+  "done_at": "2026-08-12T04:52:38Z",
   "evidence_refs": [
     {
       "id": "art_01KZT13VZBDV1N70TBMHY9K75X",
@@ -31,21 +31,46 @@
       "id": "ev_01KZT3FGTJNJ0P0KHF4KANN28S",
       "role": "validation",
       "source_type": "comment"
+    },
+    {
+      "id": "art_01KZT3WV0ACP55XW6X22ED38GC",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT3YKV6DSBX0TZB4RZPCYGT",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT4H0D285B77TRE5Y3JV983",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT4QKEZ6M6KSX94DANRE1TH",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT51E8HTJ0NBM6DS9C53X5D",
+      "role": "review",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZT0GCTE9F87GTDS466RW4EM",
-  "last_event_id": "ev_01KZT3FS9PYRWCM6GTZC6J0M3D",
-  "last_status_changed_at": "2026-08-12T04:25:31Z",
+  "last_event_id": "ev_01KZT51EBFB01C81FT390VQW3W",
+  "last_status_changed_at": "2026-08-12T04:52:38Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-96",
-  "status": "review",
+  "status": "done",
   "tags": null,
   "title": "Upload file types are hardcoded in the seed \u2014 give the organizer a real control",
   "type": "task",
-  "updated_at": "2026-08-12T04:25:31Z",
+  "updated_at": "2026-08-12T04:52:38Z",
   "urgency": null
 }
