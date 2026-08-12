@@ -9,6 +9,11 @@ off the request path. The API is a first-class product surface, generated from
 the same route definitions that serve the application. It is usable from a
 browser, `curl`, or another program without reverse-engineering the UI.
 
+New here as an organizer? [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md)
+is the first-run guide — from an empty Cloudflare account to an open call for
+speakers. Its status banner says which parts run today and which land with the
+cold-start build; this README's recipes below are what runs now.
+
 ## Marquee never phones home
 
 You are running a conference, which means you are holding other people's data.
