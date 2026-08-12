@@ -202,6 +202,155 @@ test("MRQ-132 · the itinerary view is a URL, ignores facets, and reserves every
   expect(filteredBody).not.toContain('data-public-session-id="sub-keynote"');
 });
 
+interface CreatedSchedule {
+  code: string;
+  writeKey: string;
+  urls: { share: string; sync: string; webcal: string; ics: string; json: string };
+  sessions: Array<{ id: string }>;
+  overlaps: Array<[string, string]>;
+}
+
+async function createSchedule(sessionIds: string[]): Promise<Response> {
+  return request("/api/v1/public/schedules", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventSlug: EVENT_SLUG, sessionIds }),
+  });
+}
+
+test("MRQ-132 · a set of sessions becomes a code, and the code answers with every URL it powers", async () => {
+  const created = await createSchedule(["sub-memory", "sub-keynote"]);
+  expect(created.status).toBe(201);
+  const payload = await created.json<CreatedSchedule>();
+
+  // ≥64 bits of entropy, in an alphabet that survives being read aloud.
+  expect(payload.code).toMatch(/^MQ-[0-9A-HJKMNP-TV-Z]{13}$/);
+  expect(payload.writeKey).toMatch(/^[0-9a-f]{32}$/);
+  // Self-describing: an agent never string-builds one of these.
+  expect(payload.urls.share).toContain(`/agenda?event=${EVENT_SLUG}&sched=${payload.code}`);
+  expect(payload.urls.sync).toBe(`${payload.urls.share}#k=${payload.writeKey}`);
+  expect(payload.urls.webcal).toBe(`webcal://localhost/api/v1/public/schedules/${payload.code}/calendar.ics`);
+  expect(payload.urls.ics).toContain(`/api/v1/public/schedules/${payload.code}/calendar.ics`);
+  // Time order, not the order they were starred in.
+  expect(payload.sessions.map((session) => session.id)).toEqual(["sub-keynote", "sub-memory"]);
+
+  const read = await request(payload.urls.json.replace("http://localhost", ""));
+  expect(read.status).toBe(200);
+  const view = await read.json<CreatedSchedule & { event: { slug: string } }>();
+  expect(view.event.slug).toBe(EVENT_SLUG);
+  expect(view.sessions.map((session) => session.id)).toEqual(["sub-keynote", "sub-memory"]);
+  // The read side never carries the key, in any form.
+  expect(JSON.stringify(view)).not.toContain(payload.writeKey);
+
+  const unknown = await request("/api/v1/public/schedules/MQ-0000000000000");
+  expect(unknown.status).toBe(404);
+  const malformed = await request("/api/v1/public/schedules/not-a-code");
+  expect(malformed.status).toBe(400);
+});
+
+test("MRQ-132 · the code reads, the key writes, and neither can reach another conference's sessions", async () => {
+  const created = await createSchedule(["sub-keynote"]);
+  const { code, writeKey } = await created.json<CreatedSchedule>();
+
+  const wrongKey = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": "0".repeat(32) },
+    body: JSON.stringify({ sessionIds: ["sub-memory"] }),
+  });
+  expect(wrongKey.status).toBe(403);
+  const stillOriginal = await request(`/api/v1/public/schedules/${code}`);
+  expect((await stillOriginal.json<CreatedSchedule>()).sessions.map((session) => session.id)).toEqual(["sub-keynote"]);
+
+  const updated = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: ["sub-memory", "sub-judges"] }),
+  });
+  expect(updated.status).toBe(200);
+  expect((await updated.json<CreatedSchedule>()).sessions.map((session) => session.id)).toEqual(["sub-memory", "sub-judges"]);
+
+  // Unstarring everything is a legitimate state, not an error.
+  const emptied = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: [] }),
+  });
+  expect(emptied.status).toBe(200);
+  expect((await emptied.json<CreatedSchedule>()).sessions).toEqual([]);
+
+  // A session that is not published is not a session.
+  const unpublished = await createSchedule(["sub-unpublished"]);
+  expect(unpublished.status).toBe(422);
+  expect(await unpublished.text()).toContain("not published");
+
+  const overLimit = await createSchedule(Array.from({ length: 201 }, (_, index) => `sub-${index}`));
+  expect(overLimit.status).toBe(400);
+});
+
+test("MRQ-132 · overlaps are computed server-side so an agent never re-derives interval maths", async () => {
+  // 14:00–14:45 and 14:30–15:15 overlap; the 09:00 keynote clashes with neither.
+  const created = await createSchedule(["sub-keynote", "sub-memory", "sub-judges"]);
+  const payload = await created.json<CreatedSchedule>();
+  expect(payload.overlaps).toEqual([["sub-memory", "sub-judges"]]);
+
+  const read = await request(`/api/v1/public/schedules/${payload.code}`);
+  expect((await read.json<CreatedSchedule>()).overlaps).toEqual([["sub-memory", "sub-judges"]]);
+});
+
+test("MRQ-132 · the feed is live, and an unknown code is a 404 rather than an empty calendar", async () => {
+  const created = await createSchedule(["sub-keynote"]);
+  const { code, writeKey } = await created.json<CreatedSchedule>();
+
+  const first = await request(`/api/v1/public/schedules/${code}/calendar.ics`);
+  const firstBody = await first.text();
+  expect(first.status).toBe(200);
+  expect(first.headers.get("content-type")).toContain("text/calendar");
+  const firstLines = icsLines(firstBody);
+  expect(firstLines).toContain("METHOD:PUBLISH");
+  expect(firstLines).toContain("X-WR-CALNAME:My Schedule Conference 2026 schedule");
+  expect(firstLines.filter((line) => line === "BEGIN:VEVENT")).toHaveLength(1);
+  expect(firstLines).toContain("UID:sub-keynote@marquee.stage11.dev");
+
+  await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: ["sub-keynote", "sub-memory", "sub-judges"] }),
+  });
+  const second = await request(`/api/v1/public/schedules/${code}/calendar.ics`);
+  const secondLines = icsLines(await second.text());
+  expect(secondLines.filter((line) => line === "BEGIN:VEVENT")).toHaveLength(3);
+  expect(secondLines).toContain("UID:sub-judges@marquee.stage11.dev");
+
+  // An emptied schedule is still a valid calendar — it is simply empty.
+  await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: [] }),
+  });
+  const emptyFeed = await request(`/api/v1/public/schedules/${code}/calendar.ics`);
+  const emptyLines = icsLines(await emptyFeed.text());
+  expect(emptyFeed.status).toBe(200);
+  expect(emptyLines[0]).toBe("BEGIN:VCALENDAR");
+  expect(emptyLines).not.toContain("BEGIN:VEVENT");
+
+  // A wrong code must not look like an empty schedule.
+  const missing = await request("/api/v1/public/schedules/MQ-0000000000000/calendar.ics");
+  expect(missing.status).toBe(404);
+  expect(await missing.text()).not.toContain("BEGIN:VCALENDAR");
+});
+
+test("MRQ-132 · codes and keys are drawn fresh every time", async () => {
+  const codes = new Set<string>();
+  const keys = new Set<string>();
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const payload = await (await createSchedule(["sub-keynote"])).json<CreatedSchedule>();
+    codes.add(payload.code);
+    keys.add(payload.writeKey);
+  }
+  expect(codes.size).toBe(8);
+  expect(keys.size).toBe(8);
+});
+
 test("MRQ-132 · the session page offers the calendar three ways and directions an attendee can walk", async () => {
   const response = await request(`/s/memory-architectures?event=${EVENT_SLUG}`);
   const body = await response.text();
