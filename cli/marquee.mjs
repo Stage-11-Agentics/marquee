@@ -28,6 +28,10 @@ const VALUE_OPTIONS = new Set([
   "--from",
   "--copy",
   "--file",
+  "--score",
+  "--recommendation",
+  "--comment",
+  "--criteria",
 ]);
 const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle"]);
 const LIST_FILTER_KEYS = new Set(["kind", "status", "track", "format", "wave", "task", "placement", "q"]);
@@ -260,6 +264,12 @@ async function waitForReset(client, jobId) {
   throw new Error(`the event seed reset did not finish within 30 seconds (last status: ${last?.status ?? "unknown"})`);
 }
 
+async function reviewerRound(client, eventId) {
+  const queue = await client.get(`/api/v1/events/${encodeURIComponent(eventId)}/reviewer/queue`);
+  if (!queue?.round?.id) throw new Error("the API did not return an active review round");
+  return queue.round.id;
+}
+
 const PEOPLE_FILTER_KEYS = new Set(["q", "company", "title", "tag", "stage", "list_id", "event_id"]);
 const AUDIENCE_FILTER_KEYS = new Set(["person_ids", "list_id"]);
 
@@ -445,6 +455,39 @@ async function execute(command, arguments_, options, flags, client) {
     return verb === "schedule"
       ? client.post(`${base}/schedule`, requireSetValues(command, options))
       : client.post(`${base}/publish`);
+  }
+  if (root === "review") {
+    const submissionId = arguments_[1];
+    if (verb === "queue") {
+      return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/reviewer/queue`);
+    }
+    if (!submissionId) usageError(`${command.usage} requires a submission ID`);
+    const roundId = await reviewerRound(client, eventId);
+    const base = `/api/v1/events/${encodeURIComponent(eventId)}/rounds/${encodeURIComponent(roundId)}/submissions/${encodeURIComponent(submissionId)}`;
+    if (verb === "show") return client.get(base);
+    if (verb === "submit") {
+      const scoreText = option(options, "--score");
+      const recommendationValue = option(options, "--recommendation");
+      const comment = option(options, "--comment");
+      if (scoreText === undefined) usageError(`${command.usage} requires --score`);
+      if (recommendationValue === undefined || !["approve", "maybe", "deny"].includes(recommendationValue)) {
+        usageError(`${command.usage} requires --recommendation approve|maybe|deny`);
+      }
+      if (comment === undefined || comment.trim() === "") usageError(`${command.usage} requires a non-empty --comment`);
+      const score = Number(scoreText);
+      if (!Number.isFinite(score)) usageError("--score must be a finite number");
+      const criteriaText = option(options, "--criteria");
+      const criteriaScores = criteriaText === undefined ? undefined : parseJsonValue(criteriaText, "--criteria");
+      if (criteriaScores !== undefined && (criteriaScores === null || Array.isArray(criteriaScores) || typeof criteriaScores !== "object")) {
+        usageError("--criteria must be a JSON object");
+      }
+      return client.post(`${base}/evaluations`, {
+        comment,
+        recommendation: recommendationValue,
+        score,
+        ...(criteriaScores === undefined ? {} : { criteria_scores: criteriaScores }),
+      });
+    }
   }
   if (root === "forms" && verb === "list") {
     return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/forms`);

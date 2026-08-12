@@ -50,6 +50,7 @@
 .record-answer:last-child { border-bottom: 0; }
 .record-answer small, .record-answer span { color: var(--muted); font-size: 10.5px; }
 .record-answer strong { font-size: 11.5px; overflow-wrap: anywhere; }
+.record-answer .reviewer-name { max-width: 100%; }
 .record-file { align-items: start; display: flex; gap: 9px; }
 /* Fixed 64px whatever the state: the crop holds its square before the image
    loads, while it loads, and when there is no image at all, so the record
@@ -71,6 +72,7 @@
 .record-assignment { background: var(--sunk); padding: 7px; }
 .record-assignment > span { display: grid; gap: 3px; min-width: 0; }
 .record-assignment strong { font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-assignment .reviewer-name { max-width: 100%; }
 .record-assignment small { color: var(--muted); font: 400 9.5px var(--mono); }
 .record-assignment-add select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 10.5px; min-height: 27px; min-width: 0; padding: 4px; width: 100%; }
 .record-schedule-form { align-items: end; display: grid; gap: 9px; grid-template-columns: 1.5fr .6fr 1fr auto; }

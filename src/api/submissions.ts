@@ -69,6 +69,14 @@ export interface SubmissionNotification {
   outbox_status: "queued" | "sent" | "suppressed" | "failed" | null;
 }
 
+export interface SubmissionAgentReview {
+  id: string;
+  name: string;
+  score: number | null;
+  recommendation: string | null;
+  comment: string | null;
+}
+
 export interface SubmissionListItem {
   id: string;
   kind: "abstract" | "session";
@@ -83,6 +91,8 @@ export interface SubmissionListItem {
   review_count: number;
   /** False when `score` fell back to a pre-criteria scalar and is not weighted. */
   score_is_weighted: boolean;
+  /** Agent evidence is deliberately separate from the human aggregate. */
+  agent_reviews: SubmissionAgentReview[];
   submitted_at: number | null;
   last_saved_at: number | null;
   updated_at: number;

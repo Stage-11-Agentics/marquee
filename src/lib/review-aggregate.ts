@@ -39,6 +39,9 @@ function contributingRows(submissionRef: string): string {
       ) END AS weighted_value,
       evaluation.score AS scalar_value
     FROM evaluations evaluation
+    JOIN people reviewer
+      ON reviewer.id = evaluation.reviewer_person_id
+     AND reviewer.kind = 'human'
     WHERE evaluation.submission_id = ${submissionRef} AND evaluation.abstained = 0
   ) candidate)`;
 }

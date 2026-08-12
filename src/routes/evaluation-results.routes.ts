@@ -80,6 +80,7 @@ async function criterionMeans(
       ROUND(AVG(element.value), 2) AS mean
     FROM evaluations evaluation
     JOIN submissions submission ON submission.id = evaluation.submission_id
+    JOIN people reviewer ON reviewer.id = evaluation.reviewer_person_id AND reviewer.kind = 'human'
     JOIN json_each(evaluation.criteria_scores) element
     JOIN rubric_criteria criterion
       ON criterion.round_id = evaluation.round_id
@@ -112,6 +113,7 @@ async function recommendationTallies(
       SUM(CASE WHEN evaluation.recommendation = 'deny' THEN 1 ELSE 0 END) AS deny_count
     FROM evaluations evaluation
     JOIN submissions submission ON submission.id = evaluation.submission_id
+    JOIN people reviewer ON reviewer.id = evaluation.reviewer_person_id AND reviewer.kind = 'human'
     WHERE submission.event_id = ? AND evaluation.abstained = 0
     GROUP BY evaluation.submission_id
   `).bind(eventId).all<RecommendationRow>();

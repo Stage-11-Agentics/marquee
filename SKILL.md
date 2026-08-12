@@ -31,6 +31,9 @@ The command registry is:
 - `node cli/marquee.mjs submissions show <event-id> <submission-id>`
 - `node cli/marquee.mjs submissions accept <event-id> --filter <key=value>`
 - `node cli/marquee.mjs submissions reject <event-id> --filter <key=value>`
+- `node cli/marquee.mjs review queue <event-id>`
+- `node cli/marquee.mjs review show <event-id> <submission-id>`
+- `node cli/marquee.mjs review submit <event-id> <submission-id> --score <n> --recommendation <approve|maybe|deny> --comment <text> [--criteria <json>]`
 - `node cli/marquee.mjs submissions schedule <event-id> <submission-id> --set starts_at=<ms> --set duration_min=<n> --set room_id=<id>`
 - `node cli/marquee.mjs submissions publish <event-id> <submission-id>`
 - `node cli/marquee.mjs tasks list <event-id> --overdue`
@@ -135,6 +138,18 @@ node cli/marquee.mjs submissions accept "$EVENT_ID" --filter status=submitted --
 ```
 
 Use `reject` with the same selector when a Session or Abstract should not advance. A filter is resolved by Marquee; the CLI never turns a paginated page into a guessed ID set.
+
+## Review
+
+An Agent evaluator seat authenticates with the bearer token returned when the organizer created that seat. The queue is exactly the assignments the chair made for that seat; an empty queue is a real answer meaning nothing is assigned to you. Read the assigned record, then submit a score and recommendation with a rationale in `comment` — the chair sees that rationale verbatim. Re-submitting updates this seat's own evaluation row. A seat can recommend, but only an organizer can accept or reject a submission.
+
+```sh
+node cli/marquee.mjs review queue "$EVENT_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs review show "$EVENT_ID" "$SUBMISSION_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs review submit "$EVENT_ID" "$SUBMISSION_ID" --score 4.5 --recommendation maybe --comment "The case study is strong; the 40-minute CI path needs a clearer caching plan." --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
+
+The worked loop is: read `review queue`, choose one returned `id`, read it with `review show`, and submit the score with substantive reasoning. Never invent an unassigned ID, and do not use a reviewer seat to decide the conference record.
 
 ## Chase
 

@@ -232,7 +232,7 @@ function titleFor(index: number): string {
     return "The Extremely Long and Deliberately Unabridged Field Guide to Coordinating Heterogeneous Agent Systems Across Regulated Financial Institutions Without Losing Auditability, Operator Trust, or the Plot";
   }
   if (index === 1) {
-    return "What We Learned While Rebuilding a Mission-Critical Retrieval and Evaluation Stack During a Three-Day Production Incident";
+    return "Taming 40-Minute CI";
   }
   return `${TITLE_PREFIXES[index % TITLE_PREFIXES.length]} ${TITLE_SUBJECTS[index % TITLE_SUBJECTS.length]} ${TITLE_SUFFIXES[index % TITLE_SUFFIXES.length]}`;
 }
@@ -280,7 +280,9 @@ export function run(ctx: SeedContext): void {
       kind: "abstract",
       bypass_evaluation: 0,
       title: titleFor(index),
-      abstract: status === "draft" && index % 2 === 0
+      abstract: index === 1
+        ? "A practical account of shrinking a 40-minute CI loop in a monorepo through build caching, dependency boundaries, and measurable developer feedback."
+        : status === "draft" && index % 2 === 0
         ? null
         : `A synthetic proposal about ${TITLE_SUBJECTS[index % TITLE_SUBJECTS.length]}, designed to exercise Marquee at realistic scale without attributing invented work to a real person.`,
       status,

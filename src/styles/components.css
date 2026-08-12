@@ -198,3 +198,14 @@ button.event-context:hover, button.event-context[aria-expanded="true"] { backgro
   .head-actions { justify-content: flex-start; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
 }
+.reviewer-name { align-items: center; display: inline-flex; gap: 6px; min-width: 0; }
+.reviewer-name > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reviewer-badge-slot { align-items: center; display: inline-flex; flex: 0 0 43px; justify-content: flex-start; min-height: 18px; }
+.agent-chip, .agent-chip-placeholder { align-items: center; display: inline-flex; font: 600 9px/1 var(--mono); justify-content: center; min-height: 18px; min-width: 43px; }
+.agent-chip-placeholder { visibility: hidden; }
+.token-secret-card { border-color: var(--accent); }
+.token-secret-warning { color: var(--ink-soft); font-size: 12px; line-height: 1.55; margin: 0 0 13px; }
+.token-secret { background: var(--ink); border: 1px solid var(--accent); border-radius: var(--radius); color: #dff2f3; display: block; font: 400 12px/1.4 var(--mono); overflow-x: auto; padding: 12px; user-select: all; }
+.token-secret-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 13px; }
+.agent-review-line { align-items: center; display: flex; gap: 5px; min-height: 18px; }
+.agent-review-label { color: var(--ink); font-weight: 600; }

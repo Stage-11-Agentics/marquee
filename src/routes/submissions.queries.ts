@@ -3,6 +3,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { ListEnvelope } from "../api/list";
 import type {
+  SubmissionAgentReview,
   SubmissionListItem,
   SubmissionNotificationState,
   SubmissionSpeakerListItem,
@@ -168,6 +169,7 @@ interface SubmissionQueryRow {
   score: number | null;
   review_count: number | null;
   score_is_weighted: number | null;
+  agent_reviews_json: string;
   submitted_at: number | null;
   updated_at: number;
   origin: SubmissionListItem["origin"];
@@ -374,6 +376,13 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
     score: row.score === null ? null : Number(row.score),
     review_count: Number(row.review_count ?? 0),
     score_is_weighted: Number(row.score_is_weighted ?? 0) === 1,
+    agent_reviews: parseJsonArray<SubmissionAgentReview>(row.agent_reviews_json).map((review) => ({
+      id: review.id,
+      name: review.name,
+      score: review.score === null ? null : Number(review.score),
+      recommendation: review.recommendation ?? null,
+      comment: review.comment ?? null,
+    })),
     submitted_at: row.submitted_at,
     last_saved_at: row.last_saved_at ?? null,
     updated_at: row.updated_at,
@@ -477,6 +486,23 @@ const ITEM_SELECT = `
     ) ordered
   ), '[]') AS tracks_json,
   ${reviewAggregateColumns("s.id")},
+  COALESCE((
+    SELECT json_group_array(json_object(
+      'id', evaluation.id,
+      'name', reviewer.name,
+      'score', evaluation.score,
+      'recommendation', evaluation.recommendation,
+      'comment', evaluation.comment
+    ))
+    FROM evaluations evaluation
+    JOIN people reviewer
+      ON reviewer.id = evaluation.reviewer_person_id
+     AND reviewer.kind = 'agent'
+    JOIN evaluation_rounds evaluation_round ON evaluation_round.id = evaluation.round_id
+    WHERE evaluation.submission_id = s.id
+      AND evaluation.abstained = 0
+      AND evaluation_round.mode = 'scorecard'
+  ), '[]') AS agent_reviews_json,
   s.submitted_at,
   s.updated_at,
   s.origin,

@@ -3,6 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { EmptyState, PageHeader } from "../shell/components";
+import { TokenSecretPanel } from "../shell/TokenSecretPanel";
 import "./settings.css";
 
 const API_GRANTS = [
@@ -18,6 +19,8 @@ const API_GRANTS = [
 type ApiGrant = (typeof API_GRANTS)[number];
 
 interface ApiToken {
+  acts_as_person_id: string | null;
+  acting_person_name: string | null;
   id: string;
   event_id: string | null;
   name: string;
@@ -76,8 +79,11 @@ function GrantCheckbox({
 
 function TokenRow({ token, onRevoke }: { token: ApiToken; onRevoke: (token: ApiToken) => void }): JSX.Element {
   const restricted = token.scopes.event_ids.length > 0;
+  const label = token.acts_as_person_id && token.acting_person_name
+    ? `Evaluator seat · ${token.acting_person_name}`
+    : token.name;
   return <tr>
-    <th scope="row"><strong>{token.name}</strong><span class="token-prefix"><code>{token.prefix}…</code></span></th>
+    <th scope="row"><strong>{label}</strong><span class="token-prefix"><code>{token.prefix}…</code></span></th>
     <td><div class="token-scope-list">{token.scopes.permissions.map((grant) => <code key={grant}>{grant}</code>)}</div></td>
     <td>{restricted ? <span class="chip warning">{token.scopes.event_ids.length} conference{token.scopes.event_ids.length === 1 ? "" : "s"}</span> : <span class="chip">All conferences</span>}</td>
     <td class="tabular">{formatDate(token.created_at)}</td>
@@ -165,16 +171,6 @@ export function ApiTokensPage({ eventId, navigate }: Props): JSX.Element {
     }
   };
 
-  const copySecret = async (): Promise<void> => {
-    if (!secret) return;
-    try {
-      await navigator.clipboard.writeText(secret);
-      setNotice("Secret copied. Keep it somewhere safe; Marquee will not show it again.");
-    } catch {
-      setNotice("Copy was unavailable; select the secret manually before dismissing it.");
-    }
-  };
-
   const content = state.kind === "loading"
     ? <TokenSkeleton />
     : state.kind === "error"
@@ -186,12 +182,12 @@ export function ApiTokensPage({ eventId, navigate }: Props): JSX.Element {
   return <div class="settings-page api-tokens-page">
     <PageHeader
       title="API tokens"
-      copy="Issue narrowly scoped credentials for the CLI and integrations. Every request still resolves against the issuer's conference membership."
+      copy="Issue narrowly scoped credentials for the CLI and integrations. Every request resolves against the issuer or its bound Agent seat membership."
       actions={<><a class="button ghost" href="/settings" onClick={(event) => { event.preventDefault(); navigate("/settings"); }}>← Conference settings</a><a class="button" href="/api/docs">Read API &amp; CLI docs</a><button class="button primary" type="button" onClick={() => setShowCreate((value) => !value)}>{showCreate ? "Close form" : "Create API token"}</button></>}
     />
     {notice && <div class="settings-banner" role="status"><span>{notice}</span></div>}
     {error && <div class="settings-error" role="alert"><strong>Action failed</strong><span>{error}</span></div>}
-    {secret && <section class="card token-secret-card" aria-live="polite"><header class="card-head"><h2>Copy your token secret</h2><span class="chip warning">Shown once</span></header><div class="card-body"><p class="token-secret-warning">This is the only time Marquee will show this secret. Store it in your password manager before dismissing this panel.</p><code class="token-secret">{secret}</code><div class="token-secret-actions"><button class="button primary" type="button" onClick={() => void copySecret()}>Copy secret</button><button class="button" type="button" onClick={() => setSecret(null)}>I saved it</button></div></div></section>}
+    {secret && <TokenSecretPanel secret={secret} onDismiss={() => setSecret(null)} onNotice={setNotice} />}
     {showCreate && <section class="card token-create-card"><header class="card-head"><div><h2>New API token</h2><p class="subtle">Named scopes are intersected with the issuer's membership on every request.</p></div></header><form class="card-body stack" onSubmit={(event) => void createToken(event)}><label class="field"><span>Token name</span><input required maxLength={120} value={name} placeholder="CI integration" onInput={(event) => setName(event.currentTarget.value)} /></label><fieldset class="token-scope-fieldset"><legend>Named scopes</legend><div class="token-scope-grid">{API_GRANTS.map((grant) => <GrantCheckbox key={grant} grant={grant} checked={permissions.includes(grant)} onChange={toggleGrant} />)}</div><small>Choose only what this integration needs. A grant never exceeds the issuer's membership.</small></fieldset><label class="token-restriction"><input type="checkbox" checked={restrictToConference} onChange={(event) => setRestrictToConference(event.currentTarget.checked)} /><span>Restrict this token to the current conference <code>{eventId}</code></span></label><div class="token-form-actions"><button class="button" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button class="button primary" type="submit" disabled={pending}>{pending ? "Issuing…" : "Issue token"}</button></div></form></section>}
     <div class="token-list-heading"><div><span class="eyebrow">Organization credentials</span><h2>Issued tokens</h2></div><span class="subtle">Revocation is immediate</span></div>
     {content}

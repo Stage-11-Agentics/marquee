@@ -225,9 +225,6 @@ async function reviewerQueue(
 ): Promise<string[]> {
   const personId = reviewerPersonIdForEvent(principal, eventId);
   if (personId === null) {
-    await authorizeReviewerQueueScope({
-      db, principal, eventId, roundEventId: eventId, roundId: round.id, submissionIds: [], operation: "queue",
-    });
     return [];
   }
   const candidates = await assignedSubmissionIds(db, eventId, round.id, personId);

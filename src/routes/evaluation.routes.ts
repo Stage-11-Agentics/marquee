@@ -10,6 +10,7 @@ import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail
 import { getAuth } from "../lib/auth/auth-middleware";
 import { mintMagicLink } from "../lib/auth/magic-links";
 import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
+import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { comparisonWinCounts, validateComparisonRanking } from "../lib/evaluation-comparisons";
 import { enqueueOutbox } from "../jobs/mail/outbox";
 import { mergeDataForReviewerReminder } from "../jobs/mail/merge-data";
@@ -149,6 +150,10 @@ const inviteInput = z.object({
   company: z.string().trim().max(160).optional(),
   track_ids: z.array(z.string().min(1)).min(1).max(50),
 });
+const agentSeatInput = z.object({
+  name: z.string().trim().min(1).max(160),
+  track_ids: z.array(z.string().min(1)).min(1).max(50),
+});
 const distributionAssignmentsInput = z.object({
   committee_id: z.string().min(1).optional(),
   mode: assignmentMode,
@@ -224,6 +229,7 @@ interface CommitteeRow {
 interface PersonRow {
   company: string | null;
   id: string;
+  kind: "human" | "agent";
   name: string;
 }
 
@@ -414,7 +420,7 @@ async function committeeForEvent(db: D1Database, eventId: string, committeeId: s
 
 async function reviewersForCommittee(db: D1Database, committeeId: string): Promise<PersonRow[]> {
   const result = await db.prepare(`
-    SELECT person.id, person.name, person.company
+    SELECT person.id, person.name, person.company, person.kind
     FROM committee_members member
     JOIN people person ON person.id = member.person_id
     WHERE member.committee_id = ?
@@ -502,10 +508,14 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
       COUNT(DISTINCT CASE WHEN evaluation.abstained = 0 THEN evaluation.submission_id END) AS submissions_with_reviews,
       MAX(CASE WHEN evaluation.abstained = 0 THEN evaluation.score END) AS highest_score,
       COUNT(DISTINCT CASE WHEN evaluation.abstained = 0 AND evaluation.score IS NOT NULL AND evaluation.score != (
-        SELECT AVG(other.score) FROM evaluations other WHERE other.round_id = evaluation.round_id AND other.abstained = 0 AND other.score IS NOT NULL
+        SELECT AVG(other.score)
+        FROM evaluations other
+        JOIN people other_reviewer ON other_reviewer.id = other.reviewer_person_id AND other_reviewer.kind = 'human'
+        WHERE other.round_id = evaluation.round_id AND other.abstained = 0 AND other.score IS NOT NULL
       ) THEN evaluation.submission_id END) AS wide_spread
     FROM evaluations evaluation
     JOIN evaluation_rounds round ON round.id = evaluation.round_id
+    JOIN people reviewer ON reviewer.id = evaluation.reviewer_person_id AND reviewer.kind = 'human'
     WHERE round.plan_id = ?
   `).bind(planId).first<Record<string, number | null>>();
 
@@ -793,9 +803,12 @@ const addCommitteeReviewer = defineApiRoute(
      * every person an organizer could actually pick.
      */
     const person = await context.env.DB.prepare(
-      "SELECT person.id FROM people person WHERE person.id = ? AND person.org_id = ?",
-    ).bind(body.person_id, event.org_id).first<{ id: string }>();
+      "SELECT person.id, person.kind FROM people person WHERE person.id = ? AND person.org_id = ?",
+    ).bind(body.person_id, event.org_id).first<{ id: string; kind: "human" | "agent" }>();
     if (!person) throw ApiError.notFound("person not found");
+    if (person.kind === "agent" && body.role !== "reviewer") {
+      throw ApiError.unprocessable("an Agent evaluator seat may only hold a reviewer committee role", "role");
+    }
     const alreadyOnCommittee = await context.env.DB.prepare(
       "SELECT 1 AS present FROM committee_members WHERE committee_id = ? AND person_id = ?",
     ).bind(committeeId, body.person_id).first<{ present: number }>();
@@ -955,6 +968,69 @@ const inviteCommitteeReviewer = defineApiRoute(
       person_created: !existing,
       track_ids: trackIds,
       ...(event.demo_mode === 1 ? { magic_link: absoluteLink } : {}),
+    }, 201);
+  },
+);
+
+const createAgentEvaluatorSeat = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/committees/{committeeId}/agent-seats",
+    operationId: "createAgentEvaluatorSeat",
+    summary: "Create an Agent evaluator seat",
+    description:
+      "Creates an Agent person, reviewer membership, committee seat, track responsibilities, and a bound review credential in one transaction. The secret is shown once.",
+    tags: ["Evaluation"],
+    request: { params: committeeParams, body: { content: { "application/json": { schema: agentSeatInput } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 201: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, committeeId } = context.req.valid("param");
+    requireProgram(context, eventId, true);
+    const event = await eventIdentity(context.env.DB, eventId);
+    await committeeForEvent(context.env.DB, eventId, committeeId);
+    const body = context.req.valid("json");
+    const trackIds = await ownedTrackIds(context.env.DB, eventId, body.track_ids);
+    const actor = await evaluationActor(context);
+    const now = Date.now();
+    const personId = newUlid(now);
+    const tokenId = newUlid(now);
+    const secret = `mq_${mintToken()}`;
+    const tokenName = `Evaluator seat · ${body.name}`;
+    const scopes = JSON.stringify({ permissions: ["review:write"], event_ids: [eventId] });
+    const internalEmail = `agent.${personId.toLowerCase().replaceAll("_", "-")}@example.com`;
+    await context.env.DB.batch([
+      context.env.DB.prepare(`
+        INSERT INTO people
+          (id, org_id, email, name, kind, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'agent', NULL, NULL, NULL, NULL, '[]', 0, 'marquee', ?, ?)
+      `).bind(personId, event.org_id, internalEmail, body.name, now, now),
+      reviewerMembershipStatement(context.env.DB, event.org_id, eventId, personId, now),
+      committeeMemberStatement(context.env.DB, committeeId, personId, "reviewer", now),
+      ...trackScopeStatements(context.env.DB, eventId, personId, trackIds, now),
+      context.env.DB.prepare(`
+        INSERT INTO api_tokens
+          (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, acts_as_person_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(tokenId, event.org_id, eventId, tokenName, await sha256Hex(secret), secret.slice(0, 7), scopes, actor.personId, personId, now, now),
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "agent_evaluator_seat_created",
+        entityType: "person",
+        entityId: personId,
+        after: { committee_id: committeeId, kind: "agent", name: body.name, track_ids: trackIds, token_id: tokenId },
+        now,
+        requestId: actor.requestId,
+      }),
+    ]);
+    return context.json({
+      committee_id: committeeId,
+      person: { id: personId, kind: "agent", name: body.name },
+      track_ids: trackIds,
+      token: { id: tokenId, name: tokenName, secret },
     }, 201);
   },
 );
@@ -1478,6 +1554,7 @@ export const apiRoutes = [
   createCommittee,
   addCommitteeReviewer,
   inviteCommitteeReviewer,
+  createAgentEvaluatorSeat,
   getReviewerScopes,
   replaceReviewerScopes,
   distributeAssignments,
