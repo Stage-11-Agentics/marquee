@@ -2,7 +2,8 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
-import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "../shell/components";
+import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader, ReviewerName } from "../shell/components";
+import { TokenSecretPanel } from "../shell/TokenSecretPanel";
 import "./evaluation.css";
 
 
@@ -69,6 +70,7 @@ interface Round {
 interface CommitteeMember {
   company: string | null;
   id: string;
+  kind: "human" | "agent";
   name: string;
   progress: number;
   track_scopes: Array<{ color: string; id: string; name: string }>;
@@ -120,6 +122,12 @@ interface InviteResult {
   track_ids: string[];
 }
 
+interface AgentSeatResult {
+  person: { id: string; kind: "agent"; name: string };
+  token: { id: string; name: string; secret: string };
+  track_ids: string[];
+}
+
 interface EvaluationPageProps {
   eventId: string;
 }
@@ -151,7 +159,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<"plan" | "scorecard" | "committee" | "invite" | "assignment" | "promotion" | null>(null);
+  const [dialog, setDialog] = useState<"plan" | "scorecard" | "committee" | "invite" | "agent" | "assignment" | "promotion" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [planName, setPlanName] = useState("2026 Program Review");
   const [instructions, setInstructions] = useState("Recommend Approve, Maybe, or Deny. Numeric scoring is optional.");
@@ -175,6 +183,11 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
   const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
   const [inviteSaving, setInviteSaving] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [agentName, setAgentName] = useState("");
+  const [agentTrackIds, setAgentTrackIds] = useState<string[]>([]);
+  const [agentResult, setAgentResult] = useState<AgentSeatResult | null>(null);
+  const [agentSaving, setAgentSaving] = useState(false);
+  const [agentSecret, setAgentSecret] = useState<string | null>(null);
 
   const firstRound = plan?.rounds[0];
   const secondRound = plan?.rounds[1];
@@ -392,6 +405,36 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
     }
   };
 
+  const openAgent = (): void => {
+    setAgentName("");
+    setAgentTrackIds([]);
+    setAgentResult(null);
+    setAgentSecret(null);
+    setDialog("agent");
+  };
+
+  const createAgent = async (event: Event): Promise<void> => {
+    event.preventDefault();
+    if (!committee || agentResult || agentSaving) return;
+    setAgentSaving(true);
+    setError(null);
+    try {
+      const result = await api<AgentSeatResult>(
+        `/api/v1/events/${eventId}/committees/${committee.id}/agent-seats`,
+        "/api/v1/events/{eventId}/committees/{committeeId}/agent-seats",
+        { method: "POST", body: JSON.stringify({ name: agentName.trim(), track_ids: agentTrackIds }) },
+      );
+      setAgentResult(result);
+      setAgentSecret(result.token.secret);
+      setNotice(`${result.person.name} added as an Agent evaluator`);
+      await load();
+    } catch (reason: unknown) {
+      setError(errorSummary(reason));
+    } finally {
+      setAgentSaving(false);
+    }
+  };
+
   const copyInviteLink = async (): Promise<void> => {
     const link = inviteResult?.magic_link;
     if (!link) return;
@@ -527,7 +570,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
           : progress
             ? <span class="tabular subtle">{progress.reviewed_count} complete</span>
             : <span class="tabular subtle">—</span>;
-        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
+        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong><ReviewerName name={member.name} kind={member.kind} /></strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
       })}</div><Button class="full-width ghost" onClick={() => setDialog("committee")}>View all {roundCommittee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>Choose a reviewer pool on this round card before distributing assignments.</span><Button small variant="primary" onClick={() => setDialog("committee")}>Manage committee</Button></div>}
     </section>;
   };
@@ -537,7 +580,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
   if (!plan) return <EmptyState title="No evaluation plan" copy="Set the scorecard, committee, and two review rounds before assigning abstracts." action={<Button variant="primary" onClick={() => setDialog("plan")}>Create evaluation plan</Button>} />;
 
   return <>
-    <PageHeader title="Evaluation plan" copy="A two-round funnel turns submitted abstracts into a focused committee decision without order-dependent setup." actions={<>
+    <PageHeader title="Evaluation plan" copy="Evaluation is open. Add an Agent evaluator seat with its own credential, prompt, and rubric, then let the committee decide." actions={<>
       <a class="button primary" href="/submissions?sort=score">View results →</a>
       <a class="button" href={`/api/v1/events/${eventId}/plans/${plan.id}/results/export?format=csv`} download="review-results.csv">Export scores (CSV)</a>
       <Button onClick={() => void load()}>Refresh</Button>
@@ -546,6 +589,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
     </>} />
     {error && <div class="evaluation-alert alarm" role="alert">{error}</div>}
     {notice && <div class="evaluation-alert success" role="status">{notice}<button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notification">×</button></div>}
+    {agentSecret && <TokenSecretPanel secret={agentSecret} onDismiss={() => setAgentSecret(null)} onNotice={setNotice} />}
     <div class="evaluation-layout">
       <Card class="evaluation-plan-card">
         <CardHeader title="Plan">
@@ -572,7 +616,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
         </div><div class="evaluation-summary-note"><span>Recusals excluded from aggregates</span><strong class="tabular">{plan.summary.recusals.toLocaleString()}</strong></div><div class="spark" aria-label="Score distribution"><i style="height:35%" /><i style="height:52%" /><i style="height:39%" /><i style="height:71%" /><i style="height:67%" /><i style="height:81%" /><i style="height:74%" /><i style="height:92%" /><i style="height:83%" /><i style="height:96%" /></div></CardBody>
       </Card>
       <Card class="committee-card">
-        <CardHeader title="Program committee"><div class="card-actions"><Button small variant="primary" onClick={openInvite} disabled={!committee}>Invite reviewer</Button><Button small onClick={() => setDialog("committee")}>Manage</Button><Button small onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Edit assignments</Button></div></CardHeader>
+        <CardHeader title="Program committee"><div class="card-actions"><Button small variant="primary" onClick={openInvite} disabled={!committee}>Invite reviewer</Button><Button small onClick={openAgent} disabled={!committee}>Add Agent evaluator</Button><Button small onClick={() => setDialog("committee")}>Manage</Button><Button small onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Edit assignments</Button></div></CardHeader>
         <CardBody>{plan.rounds.length ? plan.rounds.map(renderCommitteeRound) : <div class="inline-empty"><span>No rounds yet. Create a round before assigning reviews.</span><Button small variant="primary" onClick={() => setDialog("plan")}>Configure plan</Button></div>}</CardBody>
       </Card>
       <Card class="promotion-card">
@@ -656,6 +700,17 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
           ? <Button type="button" variant="primary" onClick={openInvite}>Invite another</Button>
           : <Button type="submit" variant="primary" disabled={inviteSaving || !committee || inviteName.trim() === "" || inviteEmail.trim() === "" || inviteTrackIds.length === 0}>{inviteSaving ? "Inviting…" : "Send invitation"}</Button>}
       </footer>
+    </form></div>}
+    {dialog === "agent" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={createAgent}>
+      <header><span class="eyebrow">{committee?.name ?? "Program committee"}</span><h2>Add Agent evaluator</h2></header>
+      <div class="eval-dialog-body">
+        {agentResult ? <div class="invite-result" aria-live="polite"><strong>{agentResult.person.name} is on the committee as an Agent evaluator.</strong><span class="subtle">The credential is in the shown-once panel above. Assign this seat through the existing round controls.</span><span class="subtle">Responsible for {agentResult.track_ids.length === tracks.length ? "every track" : tracks.filter((track) => agentResult.track_ids.includes(track.id)).map((track) => track.name).join(", ")}.</span></div> : <>
+          <label class="field">Name<input aria-label="Agent evaluator name" value={agentName} placeholder="Triage agent" onInput={(event) => setAgentName((event.currentTarget as HTMLInputElement).value)} /></label>
+          <fieldset class="field invite-tracks"><legend>Track responsibilities</legend><div class="scope-checks">{tracks.map((track) => <label class="scope-check" key={track.id}><input type="checkbox" aria-label={track.name} checked={agentTrackIds.includes(track.id)} onChange={(event) => setAgentTrackIds((current) => event.currentTarget.checked ? [...current, track.id] : current.filter((id) => id !== track.id))} /><span>{track.name}</span></label>)}</div><small class="subtle">The Agent seat only sees assigned reviews whose abstracts intersect these responsibilities.</small></fieldset>
+          <div class="message-preview">One transaction creates the Agent person, reviewer seat, committee membership, track scope, and its narrowly scoped credential.</div>
+        </>}
+      </div>
+      <footer><Button type="button" onClick={() => setDialog(null)}>{agentResult ? "Done" : "Cancel"}</Button>{agentResult ? <Button type="button" variant="primary" onClick={openAgent}>Add another</Button> : <Button type="submit" variant="primary" disabled={agentSaving || !committee || agentName.trim() === "" || agentTrackIds.length === 0}>{agentSaving ? "Creating…" : "Create Agent seat"}</Button>}</footer>
     </form></div>}
     {dialog === "promotion" && <div class="eval-dialog-backdrop" role="presentation"><div class="eval-dialog"><header><span class="eyebrow">Round promotion</span><h2>Preview the next funnel</h2></header><div class="eval-dialog-body"><div class="promotion-preview"><strong>Filtered promotion set</strong><span>Use the same typed filter as the conference submission list. Empty legacy selections never promote records.</span><label class="field">Status<select value={promotionStatus} onChange={(event) => { setPromotionStatus((event.currentTarget as HTMLSelectElement).value); setPromotionResult(null); }}><option value="in_review">In review</option><option value="submitted">Submitted</option><option value="accepted">Accepted</option><option value="waitlisted">Waitlisted</option></select></label><label class="field">Search<input value={promotionQuery} placeholder="Title, track, or speaker" onInput={(event) => { setPromotionQuery((event.currentTarget as HTMLInputElement).value); setPromotionResult(null); }} /></label>{promotionResult && <div class="promotion-result"><span><strong>{promotionResult.selected}</strong> selected</span><span><strong>{promotionResult.promoted}</strong> ready to promote</span><span><strong>{promotionResult.already_promoted}</strong> already in Round 2</span></div>}</div></div><footer><Button type="button" onClick={() => { setDialog(null); setPromotionResult(null); }}>Done</Button><Button type="button" onClick={() => void runPromotion(true)} disabled={promotionApplying}>Refresh preview</Button><Button type="button" variant="primary" onClick={() => void runPromotion(false)} disabled={promotionApplying || !promotionResult?.promoted}>{promotionApplying ? "Applying…" : "Promote selected"}</Button></footer></div></div>}
   </>;

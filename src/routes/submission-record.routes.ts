@@ -521,7 +521,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     `).bind(eventId, submissionId).all<Record<string, unknown>>(),
     db.prepare(`
       SELECT evaluation.id, evaluation.round_id, round.name AS round_name, round.position,
-        evaluation.reviewer_person_id, person.name AS reviewer_name, evaluation.recommendation,
+        evaluation.reviewer_person_id, person.name AS reviewer_name, person.kind AS reviewer_kind, evaluation.recommendation,
         evaluation.score, evaluation.comment, evaluation.criteria_scores, evaluation.abstained, evaluation.updated_at
       FROM evaluations evaluation
       JOIN evaluation_rounds round ON round.id = evaluation.round_id
@@ -532,7 +532,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     `).bind(eventId, submissionId).all<Record<string, unknown>>(),
     db.prepare(`
       SELECT comparison.id, comparison.round_id, round.name AS round_name, round.position,
-        round.mode, comparison.reviewer_person_id, person.name AS reviewer_name,
+        round.mode, comparison.reviewer_person_id, person.name AS reviewer_name, person.kind AS reviewer_kind,
         comparison.submission_ids, comparison.ranking, comparison.created_at, comparison.updated_at
       FROM comparisons comparison
       JOIN evaluation_rounds round ON round.id = comparison.round_id
@@ -555,7 +555,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
         plan.id AS plan_id, plan.name AS plan_name, plan.status AS plan_status,
         assignment.id AS assignment_id, assignment.reviewer_person_id,
         assignment.committee_id, assignment.status AS assignment_status,
-        person.name AS reviewer_name, person.company AS reviewer_company,
+        person.name AS reviewer_name, person.kind AS reviewer_kind, person.company AS reviewer_company,
         (SELECT COUNT(*) FROM round_assignments covered
          WHERE covered.round_id = round.id AND covered.reviewer_person_id = assignment.reviewer_person_id) AS assigned_count,
         (SELECT COUNT(*) FROM evaluations reviewed
@@ -570,7 +570,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       ORDER BY round.position, round.id, assignment.id
     `).bind(submissionId, eventId).all<Record<string, unknown>>(),
     db.prepare(`
-      SELECT DISTINCT person.id, person.name, person.company,
+      SELECT DISTINCT person.id, person.name, person.kind, person.company,
         COALESCE((SELECT json_group_array(scope.track_id) FROM reviewer_track_scopes scope WHERE scope.event_id = membership.event_id AND scope.person_id = person.id), '[]') AS track_ids
       FROM memberships membership
       JOIN people person ON person.id = membership.person_id
@@ -599,6 +599,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
         assignment_id: item.assignment_id,
         reviewer_person_id: item.reviewer_person_id,
         reviewer_name: item.reviewer_name,
+        reviewer_kind: item.reviewer_kind,
         reviewer_company: item.reviewer_company,
         committee_id: item.committee_id,
         status: item.assignment_status,

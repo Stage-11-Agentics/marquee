@@ -186,7 +186,9 @@ test("CONTRACT · the manifest has one guarded reviewer inventory and guarded wr
     membershipLoads.push({ name: node.expression.text, source: node.getText(authSourceFile) });
   });
   assert.deepEqual(membershipLoads.map(({ name }) => name), ["loadMembershipsForOrg", "loadMembershipsForOrg"]);
-  assert.ok(membershipLoads.some(({ source }) => source.match(/createdBy\s*,\s*token\.org_id/) !== null), "bearer memberships must stay org-filtered");
+  assert.ok(membershipLoads.some(({ source }) => source.match(/effectivePersonId\s*,\s*token\.org_id/) !== null), "bearer memberships must stay org-filtered");
+  assert.match(authSource, /effectivePersonId\s*=\s*createdBy/);
+  assert.match(authSource, /effectivePersonId\s*=\s*actingPersonId/);
   assert.ok(membershipLoads.some(({ source }) => source.match(/person\.id\s*,\s*person\.org_id/) !== null), "cookie memberships must use the bearer org filter");
 
   const assignmentGuardCalls = allModules.flatMap((module) => {

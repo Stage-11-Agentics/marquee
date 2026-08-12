@@ -1054,4 +1054,48 @@ Three moves, no renumbering:
 - **AC-286**: Removing the demo is one action: it deletes exactly the `is_demo`-scoped rows, flips `demo_mode` to 0, is idempotent, and leaves every non-demo row byte-untouched. It is confirmable in the UI with the same consequences-first dialog language as every other destructive action.
 - **AC-287**: The shipping PR closes the documentation loop: `docs/GETTING-STARTED.md`'s status banner and the README's "lands with the cold-start build" caveat are removed in the same change that makes them true, asserted by a static scan so the docs cannot describe a future that has already arrived.
 
-**Next mint: AC-288.**
+## Amendment 20 — Evaluation is an open seat *(2026-08-12, operator-directed; post-deadline)*
+
+Marquee ships no built-in AI reviewer. It ships the seat an external agent sits in: the organizer's
+own model, prompt, and rubric, on the organizer's own credential. Binding design:
+`sequence/agent-evaluator-design.md`. Built by MRQ-134.
+
+### US-87 · Seat an agent on my review committee *(new, post-deadline)*
+
+**As a** program chair, **I want** to add an agent to my review committee the same way I add a
+person — with its own credential, its own track responsibilities, and its judgments clearly marked
+as its own — **so that** I can take a first pass from whatever model I trust this year without
+handing the committee's judgment to a vendor's idea of a good reviewer.
+
+- **AC-288**: An organizer creates an agent evaluator seat from the committee surface with a name
+  and track responsibilities; one transaction produces the `kind='agent'` person, its reviewer
+  membership, its track scopes, its committee row, and a `review:write` credential bound to it,
+  shown once through the existing shown-once secret panel. A credential bound to that seat then
+  records an evaluation — score, per-criterion scores, and reasoning comment — on a submission
+  assigned to it, and the recorded row is attributed to the seat and readable by the chair.
+- **AC-289**: Negative authority holds on every path. Binding a credential to a `kind='human'`
+  person is rejected at issue **and** re-checked at resolution, so a row edited under a live
+  credential fails closed. An unbound bearer credential still receives 403 on the reviewer record
+  and evaluation-write routes and an empty queue. A bound seat lacking the track scope, or lacking
+  an assignment for that round and submission, receives the same 403 as a human in that position —
+  `authorizeReviewerScope`'s checks are unchanged, and this is asserted by call-site enumeration,
+  not by behaviour alone.
+- **AC-290**: A bound credential carries the seat's authority and only the seat's: it cannot reach
+  an organizer route the issuing human could reach, its named scopes are constrained to
+  `review:write` at issue, and the seat holds no `owner`, `program_lead`, or `ops` membership.
+  Revoking the credential returns 401 immediately and deletes no evaluation — the seat's recorded
+  judgments and their attribution survive revocation.
+- **AC-291**: A human evaluation on the same round and submission coexists with the agent's rather
+  than replacing it; both are readable, each is distinctly attributed, and a re-submit from either
+  side updates only its own row. Marquee never invokes a model: no scheduled job, queue consumer, or
+  in-product control causes an agent evaluation to be written, asserted by a static scan.
+- **AC-292**: An agent evaluation does not move the aggregate score a chair reads for human review,
+  and is rendered as its own labelled line; the same agent evaluation **does** count toward its
+  round-assignment coverage, because a chair who assigned the seat meant its work to count.
+- **AC-293**: `e2e:` on a freshly reset demo, the chair opening *"Taming 40-Minute CI"* sees an
+  agent-attributed score with substantive rationale specific to that abstract and a human review on
+  the same submission, side by side, each carrying its badge, with no row reflow between a
+  human-reviewed and an agent-reviewed row. The public claim that evaluation is open ships in the
+  same change as this evidence, never ahead of it.
+
+**Next mint: AC-294.**

@@ -249,8 +249,10 @@ async function insertPerson(
     name,
     bio: null,
     company: null,
+    custom_fields: "{}" as PersonRow["custom_fields"],
     headshot_attachment_id: null,
     is_demo: 0,
+    kind: "human",
     last_write_source: "marquee",
     social_links: "{}" as PersonRow["social_links"],
     title: null,
@@ -281,9 +283,12 @@ async function upsertOrganizerMembership(
     .first<MembershipRow>();
   if (existing) return existing;
   const membership: MembershipRow = {
+    confirmation_status: "pending",
+    confirmed_at: null,
     id: newUlid(now),
     org_id: orgId,
     event_id: null,
+    invited_at: null,
     person_id: personId,
     role: INSTANCE_ORGANIZER_ROLE,
     created_at: now,

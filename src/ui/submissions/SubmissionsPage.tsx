@@ -11,7 +11,7 @@ import {
 } from "../../lib/submission-columns";
 import { reviewCountLabel, scoreBasisLabel } from "../../lib/review-aggregate";
 import { apiFetch, errorSummary } from "../shell/api-client";
-import { Button, PageHeader } from "../shell/components";
+import { Button, PageHeader, ReviewerName } from "../shell/components";
 import type { NavigationOptions } from "../shell/router";
 import {
   acceptedAnyParams,
@@ -217,6 +217,7 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
       <span class="score-basis-mark" aria-hidden="true">{item.score !== null && !item.score_is_weighted ? "*" : "\u00a0"}</span>
     </span>
     <span class="row-meta">{reviewCountLabel(item.review_count)}</span>
+    {item.agent_reviews.map((review) => <span class="row-meta agent-review-line" key={review.id}><span class="agent-review-label">Agent score</span><ReviewerName name={review.name} kind="agent" /><span class="tabular">{review.score === null ? "—" : review.score.toFixed(2)}</span></span>)}
   </>;
   if (column === "submitted") return <span class="tabular">{item.status === "draft" ? "Not submitted" : formatMoment(item.submitted_at)}</span>;
   if (column === "updated") return <span class="tabular">{formatMoment(item.last_saved_at ?? item.updated_at)}</span>;

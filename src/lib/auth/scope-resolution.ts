@@ -109,7 +109,7 @@ export function tokenEventAllowed(auth: ApiTokenAuth, eventId: Id): boolean {
     : auth.eventId === eventId;
 }
 
-/** Token authority is the requested grant intersected with issuer membership and event restriction. */
+/** Token authority is the requested grant intersected with the effective seat membership and event restriction. */
 export function tokenHasGrant(auth: ApiTokenAuth, grant: ApiGrant, eventId: Id): boolean {
   if (!tokenEventAllowed(auth, eventId) || !auth.grants.includes(grant)) return false;
   const role = roleForEvent(auth.memberships, eventId) ?? (auth.legacyRole && tokenEventAllowed(auth, eventId) ? auth.legacyRole : null);

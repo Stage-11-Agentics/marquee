@@ -9,6 +9,7 @@
 export type Id = string;
 export type EpochMilliseconds = number;
 export type CalendarDate = string;
+export type PersonKind = "human" | "agent";
 export type JsonPrimitive = boolean | number | string | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonText<T extends JsonValue = JsonValue> = string & {
@@ -249,9 +250,11 @@ export interface FileCommentRow extends ImmutableRecord {
 export interface PersonRow extends MutableRecord {
   bio: string | null;
   company: string | null;
+  custom_fields: JsonText;
   email: string;
   headshot_attachment_id: Id | null;
   is_demo: 0 | 1;
+  kind: PersonKind;
   last_write_source: LastWriteSource;
   name: string;
   org_id: Id;
@@ -259,8 +262,42 @@ export interface PersonRow extends MutableRecord {
   title: string | null;
 }
 
+export interface PersonEventRow extends ImmutableRecord {
+  actor_person_id: Id | null;
+  kind: "note" | "tag" | "stage";
+  org_id: Id;
+  person_id: Id;
+  value_json: JsonText;
+}
+
+export interface PersonListRow extends MutableRecord {
+  config_json: JsonText;
+  created_by: Id | null;
+  kind: "live" | "fixed";
+  name: string;
+  org_id: Id;
+}
+
+export interface PersonListMemberRow {
+  created_at: EpochMilliseconds;
+  list_id: Id;
+  person_id: Id;
+}
+
+export interface PublicScheduleRow {
+  code: string;
+  created_at: EpochMilliseconds;
+  event_id: Id;
+  session_ids: JsonText<Id[]>;
+  updated_at: EpochMilliseconds;
+  write_key_hash: string;
+}
+
 export interface MembershipRow extends MutableRecord {
+  confirmation_status: ConfirmationStatus;
+  confirmed_at: EpochMilliseconds | null;
   event_id: Id | null;
+  invited_at: EpochMilliseconds | null;
   org_id: Id;
   person_id: Id;
   role: MembershipRole;
@@ -285,6 +322,7 @@ export interface MagicLinkRow extends MutableRecord {
 }
 
 export interface ApiTokenRow extends MutableRecord {
+  acts_as_person_id: Id | null;
   created_by: Id;
   event_id: Id | null;
   last_used_at: EpochMilliseconds | null;
@@ -718,12 +756,16 @@ export const CORE_TABLE_NAMES = [
   "audit_log",
   "event_settings",
   "file_comments",
+  "person_events",
+  "person_lists",
+  "person_list_members",
+  "public_schedules",
   "webhook_endpoints",
   "webhook_deliveries",
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 49 as const;
+export const CORE_TABLE_COUNT = 53 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -741,7 +783,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 49>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 53>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -776,6 +818,10 @@ export const CORE_TABLES = {
   outbox: "outbox",
   participations: "participations",
   people: "people",
+  person_events: "person_events",
+  person_list_members: "person_list_members",
+  person_lists: "person_lists",
+  public_schedules: "public_schedules",
   reviewer_track_scopes: "reviewer_track_scopes",
   rooms: "rooms",
   round_assignments: "round_assignments",
@@ -828,6 +874,10 @@ export interface CoreTableRows {
   outbox: OutboxRow;
   participations: ParticipationRow;
   people: PersonRow;
+  person_events: PersonEventRow;
+  person_list_members: PersonListMemberRow;
+  person_lists: PersonListRow;
+  public_schedules: PublicScheduleRow;
   reviewer_track_scopes: ReviewerTrackScopeRow;
   rooms: RoomRow;
   round_assignments: RoundAssignmentRow;
@@ -883,13 +933,17 @@ interface CoreDefaultColumns {
   import_rows: never;
   imports: never;
   magic_links: never;
-  memberships: never;
+  memberships: "confirmation_status";
   mirror_outbox: "attempts";
   mirror_state: "local_row_count" | "remote_row_count";
   organizations: never;
   outbox: "send_policy" | "status";
   participations: "confirmation_status";
-  people: "is_demo" | "last_write_source" | "social_links";
+  people: "custom_fields" | "is_demo" | "last_write_source" | "social_links";
+  person_events: never;
+  person_list_members: never;
+  person_lists: "config_json";
+  public_schedules: never;
   reviewer_track_scopes: never;
   rooms: "av_capabilities";
   round_assignments: never;
@@ -938,6 +992,10 @@ export type RoomInsert = CoreInsert<"rooms">;
 export type WaveInsert = CoreInsert<"waves">;
 export type AttachmentInsert = CoreInsert<"attachments">;
 export type PersonInsert = CoreInsert<"people">;
+export type PersonEventInsert = CoreInsert<"person_events">;
+export type PersonListInsert = CoreInsert<"person_lists">;
+export type PersonListMemberInsert = CoreInsert<"person_list_members">;
+export type PublicScheduleInsert = CoreInsert<"public_schedules">;
 export type MembershipInsert = CoreInsert<"memberships">;
 export type AuthSessionInsert = CoreInsert<"auth_sessions">;
 export type MagicLinkInsert = CoreInsert<"magic_links">;

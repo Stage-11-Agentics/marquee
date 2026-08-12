@@ -43,6 +43,13 @@ const submissionNotificationSchema = z.object({
   sent_at: z.number().int().nullable(),
   outbox_status: z.enum(["queued", "sent", "suppressed", "failed"]).nullable(),
 });
+const submissionAgentReviewSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  score: z.number().nullable(),
+  recommendation: z.string().nullable(),
+  comment: z.string().nullable(),
+});
 const submissionListItemSchema = z.object({
   id: z.string(),
   kind: z.enum(["abstract", "session"]),
@@ -55,6 +62,7 @@ const submissionListItemSchema = z.object({
   score: z.number().nullable(),
   review_count: z.number().int(),
   score_is_weighted: z.boolean(),
+  agent_reviews: z.array(submissionAgentReviewSchema),
   submitted_at: z.number().int().nullable(),
   last_saved_at: z.number().int().nullable(),
   updated_at: z.number().int(),

@@ -103,11 +103,13 @@ function findSqliteFiles(directory) {
 function parseMirrorColumns(source) {
   const interfaces = new Map();
   for (const match of source.matchAll(
-    /export interface (\w+Row) extends (MutableRecord|ImmutableRecord) \{([\s\S]*?)\n\}/g,
+    /export interface (\w+Row)(?: extends (MutableRecord|ImmutableRecord))? \{([\s\S]*?)\n\}/g,
   )) {
     const columns = names(/^\s{2}(\w+):/gm, match[3]);
-    columns.push("id", "created_at");
-    if (match[2] === "MutableRecord") columns.push("updated_at");
+    if (match[2]) {
+      columns.push("id", "created_at");
+      if (match[2] === "MutableRecord") columns.push("updated_at");
+    }
     interfaces.set(match[1], sorted(columns));
   }
 
@@ -132,7 +134,7 @@ const expectedTables = names(/^CREATE TABLE (\w+) \(/gm, migration)
 // A rebuild recreates the original named indexes after dropping the old
 // table. The final schema has one of each, even though the migration history
 // contains the declaration twice.
-const expectedIndexes = [...new Set(names(/^CREATE (?:UNIQUE )?INDEX (\w+)/gm, migration))];
+const expectedIndexes = [...new Set(names(/^CREATE (?:UNIQUE )?INDEX (?:IF NOT EXISTS )?(\w+)/gm, migration))];
 const expectedTriggers = [...new Set(names(/^CREATE TRIGGER (\w+)/gm, migration))];
 const mirrorColumns = parseMirrorColumns(typeMirror);
 const requiredIndexes = [
@@ -172,8 +174,8 @@ const requiredIndexes = [
 
 assert.equal(initialTables.length, 46, "0001 must define exactly 46 product tables");
 assert.equal(new Set(initialTables).size, 46, "0001 contains duplicate table names");
-assert.equal(expectedTables.length, 51, "Applied migrations must define exactly 51 product tables");
-assert.equal(new Set(expectedTables).size, 51, "Applied migrations contain duplicate table names");
+assert.equal(expectedTables.length, 53, "Applied migrations must define exactly 53 product tables");
+assert.equal(new Set(expectedTables).size, 53, "Applied migrations contain duplicate table names");
 for (const index of requiredIndexes) {
   assert.ok(expectedIndexes.includes(index), `Required schema index is missing: ${index}`);
 }
@@ -304,7 +306,7 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 92, "Expected the exact foreign-key graph");
+  assert.equal(foreignKeyRows.length, 104, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 
@@ -341,8 +343,10 @@ try {
     INSERT INTO people
       (id,org_id,email,name,social_links,is_demo,last_write_source,created_at,updated_at)
       VALUES ('person2','org2','one@example.test','Two','[]',0,'marquee',1,1);
-    INSERT INTO memberships VALUES ('membership1','org1','event1','person1','owner',1,1);
-    INSERT INTO memberships VALUES ('membership2','org1','event1','person1','reviewer',1,1);
+    INSERT INTO memberships (id,org_id,event_id,person_id,role,created_at,updated_at)
+      VALUES ('membership1','org1','event1','person1','owner',1,1);
+    INSERT INTO memberships (id,org_id,event_id,person_id,role,created_at,updated_at)
+      VALUES ('membership2','org1','event1','person1','reviewer',1,1);
     INSERT INTO forms
       (id,event_id,name,slug,kind,status,opens_at,closes_at,welcome_md,per_submitter_limit,
        min_speakers,max_speakers,max_sponsors,password_hash,reminder_offset_hours,
@@ -555,11 +559,11 @@ try {
   );
   expectConstraint(
     "AC-214 reviewer event requirement",
-    "INSERT INTO memberships VALUES ('bad-membership','org1',NULL,'person1','reviewer',1,1)",
+    "INSERT INTO memberships (id,org_id,event_id,person_id,role,created_at,updated_at) VALUES ('bad-membership','org1',NULL,'person1','reviewer',1,1)",
   );
   expectConstraint(
     "membership exact uniqueness",
-    "INSERT INTO memberships VALUES ('duplicate-membership','org1','event1','person1','reviewer',1,1)",
+    "INSERT INTO memberships (id,org_id,event_id,person_id,role,created_at,updated_at) VALUES ('duplicate-membership','org1','event1','person1','reviewer',1,1)",
   );
   expectConstraint(
     "AC-222 participation triple",

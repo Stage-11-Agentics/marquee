@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-134",
+  "owns": ["AC-288", "AC-289", "AC-290", "AC-291", "AC-292", "AC-293"],
+  "exercises": [],
+  "notes": "Agent evaluator seats reuse the reviewer authorization and evaluation write paths. The public evaluation claim is statically coupled to the reset fixture's Taming 40-Minute CI Agent score and human evidence; no model invocation is part of the product."
+}

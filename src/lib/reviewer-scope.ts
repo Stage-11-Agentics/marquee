@@ -217,12 +217,14 @@ export async function authorizeReviewerQueueScope(
 }
 
 /**
- * Reviewer identity is intentionally session-backed. Bearer tokens can carry
- * `review:write` for future service integrations, but they do not identify a
- * reviewer person and therefore cannot be guessed into a queue assignment.
+ * Reviewer identity comes from a session person or a live bound Agent seat.
+ * Unbound bearer tokens intentionally identify no reviewer, so a grant alone
+ * cannot be guessed into a queue assignment.
  */
 export function reviewerPersonIdForEvent(principal: Principal, eventId: string): string | null {
-  if (principal.kind !== "session") return null;
+  if (principal.kind === "anonymous") return null;
+  const personId = principal.kind === "session" ? principal.personId : principal.actingPersonId;
+  if (personId === null) return null;
   const reviewerMembership = principal.memberships.some(
     (membership) => membership.event_id === eventId && membership.role === "reviewer",
   );
@@ -230,5 +232,5 @@ export function reviewerPersonIdForEvent(principal: Principal, eventId: string):
   // Resolve the effective event role as a second event-boundary guard. The
   // explicit membership above matters because an owner/program lead may also
   // be the seeded reviewer, while an unrelated org role must not become one.
-  return roleForEvent(principal.memberships, eventId) === null ? null : principal.personId;
+  return roleForEvent(principal.memberships, eventId) === null ? null : personId;
 }

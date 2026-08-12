@@ -17,6 +17,7 @@ import evaluationRoundCommitteesMigrationSql from "../../migrations/0010_evaluat
 import coldStartMigrationSql from "../../migrations/0011_cold_start.sql?raw";
 import publicSchedulesMigrationSql from "../../migrations/0011_public_schedules.sql?raw";
 import peopleAnnotationsMigrationSql from "../../migrations/0012_people_annotations.sql?raw";
+import agentEvaluatorSeatsMigrationSql from "../../migrations/0013_agent_evaluator_seats.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -92,6 +93,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(coldStartMigrationSql),
     ...splitStatements(publicSchedulesMigrationSql),
     ...splitStatements(peopleAnnotationsMigrationSql),
+    ...splitStatements(agentEvaluatorSeatsMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

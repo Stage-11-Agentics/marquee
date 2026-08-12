@@ -23,7 +23,7 @@
  */
 
 /** Rows contributing to one submission's aggregate, one per non-abstained evaluation. */
-function contributingRows(submissionRef: string): string {
+function contributingRows(submissionRef: string, includeReviewerIdentity: boolean): string {
   return `(SELECT
     COALESCE(candidate.weighted_value, candidate.scalar_value) AS value,
     CASE WHEN candidate.weighted_value IS NULL THEN 0 ELSE 1 END AS weighted
@@ -39,6 +39,9 @@ function contributingRows(submissionRef: string): string {
       ) END AS weighted_value,
       evaluation.score AS scalar_value
     FROM evaluations evaluation
+    ${includeReviewerIdentity ? `JOIN people reviewer
+      ON reviewer.id = evaluation.reviewer_person_id
+     AND reviewer.kind = 'human'` : ""}
     WHERE evaluation.submission_id = ${submissionRef} AND evaluation.abstained = 0
   ) candidate)`;
 }
@@ -50,8 +53,8 @@ function contributingRows(submissionRef: string): string {
  * different FROM clauses (list, drafts, notification gaps) and all three get
  * the same aggregate for free.
  */
-export function reviewAggregateColumns(submissionRef: string): string {
-  const rows = contributingRows(submissionRef);
+export function reviewAggregateColumns(submissionRef: string, includeReviewerIdentity = true): string {
+  const rows = contributingRows(submissionRef, includeReviewerIdentity);
   return `(SELECT ROUND(AVG(contribution.value), 2) FROM ${rows} contribution) AS score,
   (SELECT COUNT(contribution.value) FROM ${rows} contribution) AS review_count,
   (SELECT COALESCE(MIN(CASE WHEN contribution.value IS NOT NULL THEN contribution.weighted END), 0)

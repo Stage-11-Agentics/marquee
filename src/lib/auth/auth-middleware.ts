@@ -41,6 +41,17 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
     // reach for a real token row so production authority remains membership-
     // backed below.
     const createdBy = (token as unknown as { created_by?: string }).created_by;
+    const actingPersonId = (token as unknown as { acts_as_person_id?: string | null }).acts_as_person_id ?? null;
+    let effectivePersonId = createdBy;
+    if (actingPersonId !== null) {
+      const actingPerson = await db
+        .prepare("SELECT id FROM people WHERE id = ? AND org_id = ? AND kind = 'agent'")
+        .bind(actingPersonId, token.org_id)
+        .first<{ id: string }>();
+      if (!actingPerson) return null;
+      effectivePersonId = actingPersonId;
+    }
+    const memberships = effectivePersonId === undefined ? [] : await loadMembershipsForOrg(db, effectivePersonId, token.org_id);
     await db
       .prepare("UPDATE api_tokens SET last_used_at = ? WHERE id = ?")
       .bind(Date.now(), token.id)
@@ -56,7 +67,8 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
       ),
       eventIds: scopes.event_ids,
       ...(createdBy === undefined ? {} : { organizationEventIds: await loadOrganizationEventIds(db, token.org_id) }),
-      memberships: createdBy === undefined ? [] : await loadMembershipsForOrg(db, createdBy, token.org_id),
+      actingPersonId,
+      memberships,
       ...(createdBy === undefined ? { legacyRole: roleForLegacyPermissions(scopes.permissions) } : {}),
     };
   }
