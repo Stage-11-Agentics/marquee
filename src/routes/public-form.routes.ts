@@ -14,6 +14,7 @@ import { enqueueAuthMail } from "../lib/auth/auth-mail";
 import { mintMagicLink, mintMagicLink as issueParticipantMagicLink } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { verifyTurnstile } from "../lib/r2/turnstile";
+import { boundSourceOf } from "../lib/bound-options";
 import {
   answerAttachmentId,
   answerText,
@@ -194,20 +195,30 @@ async function referenceId(
 async function resolveDomainReferences(
   db: D1Database,
   eventId: string,
+  fields: readonly FormFieldView[],
   answers: Record<string, unknown>,
 ): Promise<{ formatId: string | null; trackIds: string[]; issues: Array<{ fieldKey: string; message: string }> }> {
   const issues: Array<{ fieldKey: string; message: string }> = [];
   let formatId: string | null = null;
-  const format = answerText(answers, "format");
+  // Bound fields are the source of truth even when an organizer gives the
+  // field a human key such as `session_format`. The canonical keys remain the
+  // compatibility fallback for older/custom forms that predate `source`.
+  const formatField = fields.find((field) => boundSourceOf(field) === "formats")
+    ?? fields.find((field) => field.key === "format");
+  const formatKey = formatField?.key ?? "format";
+  const format = answerText(answers, formatKey);
   if (format) {
     formatId = await referenceId(db, "formats", eventId, format);
-    if (!formatId) issues.push({ fieldKey: "format", message: "Choose a format from the list, then try again." });
+    if (!formatId) issues.push({ fieldKey: formatKey, message: "Choose a format from the list, then try again." });
   }
-  const tracks = Array.isArray(answers.tracks) ? answers.tracks.filter((value): value is string => typeof value === "string") : [];
+  const tracksField = fields.find((field) => boundSourceOf(field) === "tracks")
+    ?? fields.find((field) => field.key === "tracks");
+  const tracksKey = tracksField?.key ?? "tracks";
+  const tracks = Array.isArray(answers[tracksKey]) ? answers[tracksKey].filter((value): value is string => typeof value === "string") : [];
   const trackIds: string[] = [];
   for (const track of tracks) {
     const id = await referenceId(db, "tracks", eventId, track);
-    if (!id) issues.push({ fieldKey: "tracks", message: "Choose conference tracks from the list, then try again." });
+    if (!id) issues.push({ fieldKey: tracksKey, message: "Choose conference tracks from the list, then try again." });
     else trackIds.push(id);
   }
   return { formatId, trackIds, issues };
@@ -599,7 +610,7 @@ async function handlePublicSubmission(
   ];
   const event = await findEventContext(context.env.DB, base.form.event_id);
   if (!event) throw ApiError.notFound("This conference is no longer available.");
-  const references = await resolveDomainReferences(context.env.DB, base.form.event_id, projected.projected.answers);
+  const references = await resolveDomainReferences(context.env.DB, base.form.event_id, base.fields, projected.projected.answers);
   domainIssues.push(...publicIssues(references.issues));
   const email = emailFromAnswers(projected.projected.answers) ?? normalisePublicEmail(body.email);
   if (!email) domainIssues.push({ fieldKey: "speaker_email", message: "Enter an address where the conference team can reach you, then try again." });

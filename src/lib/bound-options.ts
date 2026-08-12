@@ -1,3 +1,4 @@
+import type { D1Database } from "@cloudflare/workers-types";
 import type { FormFieldView } from "../routes/forms.queries";
 import type { FormFieldType } from "../db/schema";
 
@@ -19,14 +20,26 @@ export const BOUND_SOURCES = ["formats", "tracks"] as const;
 
 export type BoundSource = (typeof BOUND_SOURCES)[number];
 
+export type BoundFieldType = "single_select" | "multi_select";
+
 /** The settings area each source is edited in, for operator-facing copy. */
 export const BOUND_SOURCE_LABELS: Record<BoundSource, string> = {
   formats: "Formats",
   tracks: "Tracks",
 };
 
-function isSelectType(type: FormFieldType): boolean {
+function isSelectType(type: FormFieldType): type is BoundFieldType {
   return type === "single_select" || type === "multi_select";
+}
+
+/**
+ * The storage model has one format and one-or-more tracks. Keep a bound field
+ * aligned with that model instead of letting a select render a live list that
+ * the submit path cannot place on a submission.
+ */
+export function isBoundSourceCompatible(source: BoundSource, type: FormFieldType): type is BoundFieldType {
+  return (source === "formats" && type === "single_select")
+    || (source === "tracks" && type === "multi_select");
 }
 
 export function isBoundSource(value: unknown): value is BoundSource {
@@ -39,7 +52,9 @@ export function isBoundSource(value: unknown): value is BoundSource {
  */
 export function boundSourceOf(field: { type: FormFieldType; config: Record<string, unknown> }): BoundSource | null {
   if (!isSelectType(field.type)) return null;
-  return isBoundSource(field.config.source) ? field.config.source : null;
+  return isBoundSource(field.config.source) && isBoundSourceCompatible(field.config.source, field.type)
+    ? field.config.source
+    : null;
 }
 
 /**
@@ -59,8 +74,14 @@ export function normalizeFieldConfig(
   if (!isBoundSource(config.source)) {
     return { error: `Options source must be one of ${BOUND_SOURCES.join(", ")}.` };
   }
-  if (!isSelectType(type)) {
-    return { error: "Only single-select and multi-select fields can take their options from conference settings." };
+  if (!isSelectType(type) || !isBoundSourceCompatible(config.source, type)) {
+    return {
+      error: config.source === "formats"
+        ? "Conference formats must be used by a single-select field."
+        : config.source === "tracks"
+          ? "Conference tracks must be used by a multi-select field."
+          : "Only single-select and multi-select fields can take their options from conference settings.",
+    };
   }
   const { options: _stale, ...rest } = config;
   return { config: rest };

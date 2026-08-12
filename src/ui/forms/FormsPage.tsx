@@ -1,7 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
-import { BOUND_SOURCE_LABELS, BOUND_SOURCES, type BoundSource, isBoundSource } from "../../lib/bound-options";
+import { BOUND_SOURCE_LABELS, BOUND_SOURCES, boundSourceOf, isBoundSourceCompatible, type BoundSource } from "../../lib/bound-options";
 import { fieldPreviewProjection, isFieldApplicable, type FormAnswerValue, type FormCondition } from "../../lib/form-conditions";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "../shell/components";
@@ -144,14 +144,17 @@ function isSelectType(type: FieldType): boolean {
 
 /** The conference setting a select field draws its options from, if any. */
 function fieldSource(field: { type: FieldType; config: Record<string, unknown> }): BoundSource | null {
-  if (!isSelectType(field.type)) return null;
-  return isBoundSource(field.config.source) ? field.config.source : null;
+  return boundSourceOf(field);
 }
 
-const SOURCE_CHOICES: Array<{ value: "" | BoundSource; label: string }> = [
-  { value: "", label: "Custom list" },
-  ...BOUND_SOURCES.map((source) => ({ value: source, label: `Conference ${source}` })),
-];
+function sourceChoicesFor(type: FieldType): Array<{ value: "" | BoundSource; label: string }> {
+  return [
+    { value: "", label: "Custom list" },
+    ...BOUND_SOURCES
+      .filter((source) => isBoundSourceCompatible(source, type))
+      .map((source) => ({ value: source, label: `Conference ${source}` })),
+  ];
+}
 
 /**
  * A field key is an identifier the API validates; an organizer types a label.
@@ -198,7 +201,7 @@ function OptionsEditor({ field, onConfig }: { field: FormField; onConfig: (key: 
         if (next) onConfig("options", undefined);
         onConfig("source", next || undefined);
       }}>
-        {SOURCE_CHOICES.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+        {sourceChoicesFor(field.type).map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
       </select>
     </div>
     {source
@@ -434,8 +437,8 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
           <div class="forms-editor-intro"><div><strong>Fields in public order</strong><span>Drag is optional; the arrows are keyboard-safe and persist the same order.</span></div></div>
           <form class="forms-add-row" data-field-add="row" aria-label="Add a field" onSubmit={(event) => { event.preventDefault(); addField(); }}>
             <div class="field"><label for="new-field-label">New field label</label><input id="new-field-label" name="new-field-label" data-field-add="label" value={newFieldLabel} placeholder="Key takeaway" onInput={(event) => setNewFieldLabel((event.currentTarget as HTMLInputElement).value)} /></div>
-            <div class="field"><label for="new-field-type">Type</label><select id="new-field-type" name="new-field-type" data-field-add="type" value={newFieldType} onChange={(event) => setNewFieldType((event.currentTarget as HTMLSelectElement).value as FieldType)}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>
-            <div class="field"><label for="new-field-source">Options come from</label><select id="new-field-source" name="new-field-source" data-field-add="source" value={newFieldSource} disabled={!isSelectType(newFieldType)} onChange={(event) => setNewFieldSource((event.currentTarget as HTMLSelectElement).value as "" | BoundSource)}>{SOURCE_CHOICES.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></div>
+            <div class="field"><label for="new-field-type">Type</label><select id="new-field-type" name="new-field-type" data-field-add="type" value={newFieldType} onChange={(event) => { const type = (event.currentTarget as HTMLSelectElement).value as FieldType; setNewFieldType(type); if (newFieldSource && !isBoundSourceCompatible(newFieldSource, type)) setNewFieldSource(""); }}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>
+            <div class="field"><label for="new-field-source">Options come from</label><select id="new-field-source" name="new-field-source" data-field-add="source" value={newFieldSource} disabled={!isSelectType(newFieldType)} onChange={(event) => setNewFieldSource((event.currentTarget as HTMLSelectElement).value as "" | BoundSource)}>{sourceChoicesFor(newFieldType).map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></div>
             <div class="field"><label for="new-field-options">Options · comma separated</label><input id="new-field-options" name="new-field-options" data-field-add="options" value={newFieldSource && isSelectType(newFieldType) ? "" : newFieldOptions} disabled={!isSelectType(newFieldType) || Boolean(newFieldSource)} placeholder={!isSelectType(newFieldType) ? "Select fields only" : newFieldSource ? `From Conference settings → ${BOUND_SOURCE_LABELS[newFieldSource]}` : "Beginner, Intermediate, Advanced"} onInput={(event) => setNewFieldOptions((event.currentTarget as HTMLInputElement).value)} /></div>
             <label class="forms-check forms-add-required" for="new-field-required"><input id="new-field-required" name="new-field-required" data-field-add="required" type="checkbox" checked={newFieldRequired} onChange={(event) => setNewFieldRequired((event.currentTarget as HTMLInputElement).checked)} /> Required</label>
             <Button id="new-field-submit" data-field-add="submit" type="submit" variant="primary" disabled={busy !== null}>{busy === "field" ? "Adding…" : "Add field"}</Button>

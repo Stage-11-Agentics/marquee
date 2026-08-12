@@ -634,12 +634,18 @@ const updateFormField = defineApiRoute(
     const updates: string[] = [];
     const values: (string | number | null)[] = [];
     const set = (column: string, value: string | number | null) => { updates.push(`${column} = ?`); values.push(value); };
+    const nextType = body.type ?? current.type;
     if (body.key !== undefined) set("key", body.key);
     if (body.label !== undefined) set("label", body.label);
     if (body.help_text !== undefined) set("help_text", body.help_text);
     if (body.type !== undefined) set("type", body.type);
     if (body.required !== undefined) set("required", body.required ? 1 : 0);
-    if (body.config !== undefined) set("config", fieldConfigJson(body.config, body.type ?? current.type));
+    // A type change is part of the same config contract. Re-normalize the
+    // stored config even when the caller omitted it, so a bound select cannot
+    // silently become a non-select while retaining an unusable source.
+    if (body.config !== undefined || body.type !== undefined) {
+      set("config", fieldConfigJson(body.config ?? normalizeField(current).config, nextType));
+    }
     if (body.condition !== undefined) set("condition", conditionJson(body.condition));
     if (updates.length > 0) {
       updates.push("updated_at = ?");
