@@ -1,5 +1,4 @@
 import { ApiError } from "../api/errors";
-import { newUlid } from "../api/ids";
 import { assertCasUpdated, compareAndSwapResource, requireIfMatch, strongEtag } from "../api/concurrency";
 import {
   SCHEDULABLE_STATUS_OPTIONS,
@@ -8,6 +7,7 @@ import {
   type SchedulableStatus,
 } from "../api/agenda";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { auditStatementFromSelect } from "../lib/audit";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
@@ -186,7 +186,7 @@ const settingsBody = z.object({
 const errors = errorResponses([400, 401, 403, 404, 409, 422, 429, 500]);
 
 const batchPublishBody = z.object({
-  submission_ids: z.array(z.string().min(1)).min(1).max(100),
+  submission_ids: z.array(z.string().min(1)).min(1).max(40),
 });
 
 const batchPublishResponse = z.object({
@@ -273,30 +273,30 @@ const batchPublishRoute = defineApiRoute(
         )
     `).bind(now, eventId, ...submissionIds, now);
     // Keep one audit row per submission while retaining one D1 batch call.
-    // UNION ALL gives each row its own ULID; the predicates make audit output
-    // conditional on both writes having actually landed.
-    const auditSelects = submissionIds.map((submissionId) => `
-      SELECT ?, ?, ?, ?, 'published', 'submission', submission.id, NULL, ?, ?, ?
-      FROM agenda_items item
-      JOIN submissions submission ON submission.id = item.submission_id AND submission.event_id = item.event_id
-      WHERE item.event_id = ? AND item.submission_id = ? AND item.kind = 'session'
-        AND item.is_published = 1 AND item.updated_at = ?
-        AND submission.status = 'accepted' AND submission.is_published = 1 AND submission.updated_at = ?
-    `).join(" UNION ALL ");
-    const auditBindings = submissionIds.flatMap((submissionId) => {
+    // Each helper-built INSERT ... SELECT has predicates that make audit
+    // output conditional on both writes having actually landed.
+    const auditStatements = submissionIds.map((submissionId) => {
       const candidate = candidates.get(submissionId)!;
-      return [
-        newUlid(now), eventId, actor.personId, actor.kind,
-        JSON.stringify({ agenda_item_id: candidate.agenda_item_id, is_published: true }),
-        now, actor.requestId, eventId, submissionId, now, now,
-      ];
+      return auditStatementFromSelect(database, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "published",
+        entityType: "submission",
+        entityId: submissionId,
+        after: { agenda_item_id: candidate.agenda_item_id, is_published: true },
+        now,
+        requestId: actor.requestId,
+      }, `
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        FROM agenda_items item
+        JOIN submissions submission ON submission.id = item.submission_id AND submission.event_id = item.event_id
+        WHERE item.event_id = ? AND item.submission_id = ? AND item.kind = 'session'
+          AND item.is_published = 1 AND item.updated_at = ?
+          AND submission.status = 'accepted' AND submission.is_published = 1 AND submission.updated_at = ?
+      `, eventId, submissionId, now, now);
     });
-    const auditInsert = database.prepare(`
-      INSERT INTO audit_log
-        (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at, request_id)
-      ${auditSelects}
-    `).bind(...auditBindings);
-    const results = await database.batch([agendaUpdate, submissionUpdate, auditInsert]);
+    const results = await database.batch([agendaUpdate, submissionUpdate, ...auditStatements]);
     const publishedCount = Number(results[0]?.meta?.changes ?? 0);
     const submissionChanges = Number(results[1]?.meta?.changes ?? 0);
     if (publishedCount !== submissionIds.length || submissionChanges !== submissionIds.length) {

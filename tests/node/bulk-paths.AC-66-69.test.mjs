@@ -214,6 +214,20 @@ const EXPECTED_PLACEHOLDER_SITES = [
     classification: "bounded by the seven-value SCHEDULABLE_STATUS_OPTIONS taxonomy",
   },
   {
+    file: "src/routes/agenda.routes.ts",
+    owner: "batchPublishRoute",
+    binding: "itemPlaceholders",
+    expression: 'agendaItemIds.map(() => "?")',
+    classification: "bounded by batchPublishBody.submission_ids.max(40); the agenda update uses 2N+3 bindings and stays below D1's binding cap",
+  },
+  {
+    file: "src/routes/agenda.routes.ts",
+    owner: "batchPublishRoute",
+    binding: "submissionPlaceholders",
+    expression: 'submissionIds.map(() => "?")',
+    classification: "bounded by batchPublishBody.submission_ids.max(40); the submission update stays below D1's binding cap",
+  },
+  {
     file: "src/routes/evaluation.routes.ts",
     owner: "replaceReviewerScopes",
     binding: "placeholders",

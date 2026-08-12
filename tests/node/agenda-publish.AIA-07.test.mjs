@@ -12,7 +12,8 @@ test("AIA-07 · batch publication is an accepted, scheduled, dual-table command"
   assert.match(route, /submission\.status = 'accepted'/);
   assert.match(route, /UPDATE agenda_items AS item/);
   assert.match(route, /UPDATE submissions AS submission/);
-  assert.match(route, /INSERT INTO audit_log/);
+  assert.match(route, /auditStatementFromSelect/);
+  assert.match(route, /const auditStatements = submissionIds\.map/);
   assert.match(route, /the selected Sessions changed while publishing/);
   assert.match(queries, /item\.is_published = 0/);
   assert.match(queries, /submission\.status = 'accepted'/);
