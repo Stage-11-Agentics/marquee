@@ -133,6 +133,47 @@ export function resolveSessionIds(
   return { resolved, unknown };
 }
 
+/**
+ * A modest per-IP ceiling on code creation, because a row here is permanent
+ * and anonymous. This is deliberately local to this route rather than the
+ * framework's rate-limit vocabulary: the shared limiter adapter is not
+ * installed in this codebase yet (`allowAllRateLimiter` is what every route
+ * gets), and the one endpoint in the product that writes a durable row for a
+ * caller who proved nothing should not wait for that.
+ *
+ * A fixed window is the right crudeness — this is vandalism economics, not
+ * authorization, and a caller who wants a hundred codes can have them an hour
+ * apart.
+ */
+export const SCHEDULE_CREATE_LIMIT = 30;
+export const SCHEDULE_CREATE_WINDOW_SECONDS = 3600;
+
+export interface ScheduleRateStore {
+  get(key: string, type: "json"): Promise<unknown | null>;
+  put(key: string, value: string, options: { expirationTtl: number }): Promise<void>;
+}
+
+export async function checkScheduleCreateLimit(
+  store: ScheduleRateStore | undefined,
+  clientIp: string,
+  now: number,
+): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
+  // No KV binding (unit tests, a self-host without a cache) means no ceiling
+  // rather than no service: refusing to create schedules because a counter is
+  // missing would be a worse failure than an uncounted one.
+  if (!store) return { allowed: true, retryAfterSeconds: 0 };
+  const windowStart = Math.floor(now / (SCHEDULE_CREATE_WINDOW_SECONDS * 1000)) * SCHEDULE_CREATE_WINDOW_SECONDS * 1000;
+  const key = `schedule-create:${clientIp}:${windowStart}`;
+  const seen = await store.get(key, "json").catch(() => null);
+  const count = typeof seen === "number" ? seen : 0;
+  const retryAfterSeconds = Math.max(1, Math.ceil((windowStart + SCHEDULE_CREATE_WINDOW_SECONDS * 1000 - now) / 1000));
+  if (count >= SCHEDULE_CREATE_LIMIT) return { allowed: false, retryAfterSeconds };
+  await store
+    .put(key, JSON.stringify(count + 1), { expirationTtl: SCHEDULE_CREATE_WINDOW_SECONDS * 2 })
+    .catch(() => { /* an uncounted request is better than a refused one */ });
+  return { allowed: true, retryAfterSeconds };
+}
+
 export async function readSchedule(database: D1Database, code: string): Promise<PublicScheduleRow | null> {
   return database
     .prepare("SELECT code, event_id, session_ids, write_key_hash, created_at, updated_at FROM public_schedules WHERE code = ? LIMIT 1")

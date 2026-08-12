@@ -200,9 +200,13 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     glance.hidden = mine.length === 0;
     if (mine.length === 0) { glance.textContent = ''; return; }
 
+    // End is measured FORWARD from the start, never as minutes-since-local-
+    // midnight: a 23:30–00:30 session would otherwise end before it began,
+    // draw a stub in the wrong place, and drag the axis down to 00:00 for
+    // every other day.
     const at = new Map(mine.map((session) => [session.id, {
       start: zoneParts(session.start).minutes,
-      end: zoneParts(session.end).minutes,
+      end: zoneParts(session.start).minutes + Math.max(0, Math.round((session.end - session.start) / 60_000)),
     }]));
     let axisStart = AXIS_DEFAULT_START;
     let axisEnd = AXIS_DEFAULT_END;
@@ -261,7 +265,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         block.dataset.scheduleBlock = session.id;
         const bounds = at.get(session.id);
         block.style.top = pct(bounds.start) + '%';
-        block.style.height = (Math.max(bounds.end - bounds.start, 30) / span * 100).toFixed(2) + '%';
+        const drawnEnd = Math.min(bounds.end, axisEnd);
+        block.style.height = (Math.max(drawnEnd - bounds.start, 30) / span * 100).toFixed(2) + '%';
         const time = document.createElement('small');
         time.className = 'num';
         time.textContent = hhmm(session.start);
@@ -352,21 +357,50 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   const scrim = document.querySelector('[data-schedule-scrim]');
   const sheets = new Map([...document.querySelectorAll('[data-schedule-sheet]')].map((sheet) => [sheet.dataset.scheduleSheet, sheet]));
 
+  let sheetOpener = null;
+
   function closeSheets() {
+    const wasOpen = [...sheets.values()].some((sheet) => sheet.classList.contains('open'));
     scrim?.classList.remove('open');
     for (const sheet of sheets.values()) sheet.classList.remove('open');
+    // Focus goes back where it came from, not to the top of the document.
+    // Only a real close restores and clears the opener: openSheet() calls this
+    // first to make sheets exclusive, and that pass must not forget who asked.
+    if (!wasOpen) return;
+    if (sheetOpener?.isConnected) sheetOpener.focus();
+    sheetOpener = null;
+  }
+
+  const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+  /** aria-modal has to be true in behaviour as well as in markup. */
+  function trapFocus(event) {
+    if (event.key !== 'Tab') return;
+    const sheet = [...sheets.values()].find((each) => each.classList.contains('open'));
+    if (!sheet) return;
+    const stops = [...sheet.querySelectorAll(FOCUSABLE)].filter((node) => node.offsetParent !== null || node === document.activeElement);
+    if (stops.length === 0) return;
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    else if (!sheet.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
   }
   function openSheet(name) {
     const sheet = sheets.get(name);
     if (!sheet) return;
     closeSheets();
+    clearErrors();
     scrim?.classList.add('open');
     sheet.classList.add('open');
     sheet.querySelector('button, [href], input')?.focus?.();
   }
 
   scrim?.addEventListener('click', closeSheets);
-  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeSheets(); });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeSheets();
+    else trapFocus(event);
+  });
 
   /**
    * The human-side complement of the agent API: one paste-ready block whose
@@ -722,32 +756,75 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   let pending = null;
 
   /**
+   * A session an attendee starred can be pulled from the programme days later,
+   * and their star outlives it in localStorage. The server refuses the whole
+   * set when one id has stopped being published, so a stale star would
+   * otherwise break every export path forever, with a message telling them to
+   * try again. Drop exactly what the server names, and carry on.
+   */
+  function dropUnknown(response) {
+    return response.json().then((payload) => {
+      const gone = payload?.error?.details?.unknownSessionIds;
+      if (!Array.isArray(gone) || gone.length === 0) return false;
+      let changed = false;
+      for (const id of gone) if (starred.delete(id)) changed = true;
+      if (!changed) return false;
+      state.sessionIds = [...starred];
+      writeState();
+      paint();
+      return true;
+    }, () => false);
+  }
+
+  /**
    * The set is promoted to the server only when the attendee asks for
    * something that needs a server — a phone, a friend, a calendar. Starring
    * itself never waits on the network.
    */
-  function ensureCode() {
+  function ensureCode(retry = true) {
     if (state.code) return Promise.resolve(state);
     if (pending) return pending;
+    const posted = [...starred];
     pending = fetch(SCHEDULES, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ eventSlug: config.eventSlug, sessionIds: [...starred] }),
+      body: JSON.stringify({ eventSlug: config.eventSlug, sessionIds: posted }),
     })
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error('sync failed'))))
+      .then((response) => {
+        if (response.ok) return response.json();
+        if (response.status === 422 && retry) {
+          return dropUnknown(response).then((pruned) => {
+            if (!pruned || starred.size === 0) throw new Error('sync failed');
+            pending = null;
+            return ensureCode(false);
+          });
+        }
+        throw new Error('sync failed');
+      })
       .then((payload) => {
-        state.code = payload.code;
-        state.writeKey = payload.writeKey;
-        writeState();
+        if (payload && payload.code && !state.code) {
+          state.code = payload.code;
+          state.writeKey = payload.writeKey;
+          writeState();
+        }
+        // Anything starred while the request was in flight has not reached the
+        // code yet: the POST body was a snapshot.
+        if (posted.length !== starred.size || posted.some((id) => !starred.has(id))) pushUpdate(0);
         return state;
       })
       .finally(() => { pending = null; });
     return pending;
   }
 
-  /** localStorage stays this device's source of truth; the code catches up. */
+  /**
+   * localStorage stays this device's source of truth; the code catches up.
+   * "Catches up" has to mean something, though — the feed is the flagship of
+   * this feature and it is the surface that goes stale. A failed push is
+   * remembered and re-sent when the tab comes back or the network does.
+   */
   let pushTimer = null;
-  function pushUpdate() {
+  let unpushed = false;
+  function pushUpdate(delay = 700) {
     if (!state.code || !state.writeKey) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => {
@@ -755,19 +832,39 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         method: 'PUT',
         headers: { 'content-type': 'application/json', 'x-schedule-write-key': state.writeKey },
         body: JSON.stringify({ sessionIds: [...starred] }),
-      }).catch(() => { /* the device already holds the truth; the feed catches up next time */ });
-    }, 700);
+      }).then((response) => {
+        if (response.ok) { unpushed = false; return; }
+        if (response.status === 422) {
+          dropUnknown(response).then((pruned) => { if (pruned) pushUpdate(0); else { unpushed = true; } });
+          return;
+        }
+        unpushed = true;
+      }, () => { unpushed = true; });
+    }, delay);
   }
+
+  const retryPush = () => { if (unpushed && document.visibilityState !== 'hidden') pushUpdate(0); };
+  window.addEventListener('online', retryPush);
+  document.addEventListener('visibilitychange', retryPush);
 
   function fillUrl(name, value) {
     const slot = document.querySelector('[data-schedule-url="' + name + '"]');
     if (slot) slot.textContent = value ?? '';
   }
 
-  function failSheet(name) {
+  function showError(name, message) {
     const sheet = sheets.get(name);
-    const hint = sheet?.querySelector('p');
-    if (hint) hint.textContent = 'That did not reach the server. Your stars are safe on this device — try again in a moment.';
+    const slot = sheet?.querySelector('[data-schedule-error]');
+    if (slot) { slot.textContent = message; slot.hidden = false; }
+  }
+
+  function clearErrors() {
+    for (const slot of document.querySelectorAll('[data-schedule-error]')) { slot.textContent = ''; slot.hidden = true; }
+  }
+
+  /** The sheet's own explanation survives a bad moment; the error sits above it. */
+  function failSheet(name) {
+    showError(name, 'That did not reach the server. Your stars are safe on this device — try again when you have a signal.');
     openSheet(name);
   }
 
@@ -853,6 +950,14 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
           writeState();
           pushUpdate();
           paint();
+          // Binding two devices together is the more consequential of the two
+          // arrivals, so it is the one that must not happen in silence.
+          const banner = document.querySelector('[data-schedule-import]');
+          const message = document.querySelector('[data-schedule-import-message]');
+          const button = document.querySelector('[data-schedule-action="import"]');
+          if (button) button.hidden = true;
+          if (message) message.textContent = 'This device now shares schedule ' + sharedCode + ' — both devices can edit it, and your own stars were kept.';
+          if (banner) banner.hidden = false;
           return;
         }
         const banner = document.querySelector('[data-schedule-import]');
@@ -916,6 +1021,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     const action = event.target.closest?.('[data-schedule-action]');
     if (action) {
       event.preventDefault();
+      sheetOpener = action;
       runAction(action.dataset.scheduleAction, action);
       return;
     }
@@ -943,6 +1049,26 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     for (const segment of document.querySelectorAll('[data-schedule-view]')) {
       segment.setAttribute('aria-selected', segment.dataset.scheduleView === 'mine' ? 'true' : 'false');
     }
+  }
+
+  /**
+   * The itinerary is the page an attendee leaves open on a phone all morning.
+   * A NOW rule pinned to the moment the page loaded is worse than none, so the
+   * clock keeps moving — only while the tab is actually being looked at.
+   */
+  if (MINE) {
+    setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      const mine = mineSessions();
+      paintNextChip(mine);
+      paintGlance(mine);
+    }, 60_000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') return;
+      const mine = mineSessions();
+      paintNextChip(mine);
+      paintGlance(mine);
+    });
   }
 
   applyOrigin();

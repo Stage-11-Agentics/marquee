@@ -103,7 +103,7 @@ publicAgendaRoutes.get("/agenda/agents", async (context) => {
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicAgentsPage event={event} origin={new URL(context.req.url).origin} />),
-    { title: "For agents" },
+    { title: "For agents", script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });
 
@@ -119,7 +119,7 @@ publicAgendaRoutes.get("/speakers", async (context) => {
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicSpeakerDirectoryPage data={data} />),
-    { title: "Speakers" },
+    { title: "Speakers", script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });
 
@@ -145,6 +145,6 @@ publicAgendaRoutes.get("/p/:slug", async (context) => {
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicSpeakerPage event={result.event} venue={result.venue} speaker={result.speaker} />),
-    { title: result.speaker.name },
+    { title: result.speaker.name, script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });

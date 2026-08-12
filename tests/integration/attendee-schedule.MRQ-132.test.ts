@@ -317,6 +317,38 @@ test("CONTRACT · MRQ-132 overlaps are computed server-side so an agent never re
   expect((await read.json<CreatedSchedule>()).overlaps).toEqual([["sub-memory", "sub-judges"]]);
 });
 
+test("CONTRACT · MRQ-132 a refusal names the unpublishable ids machine-readably, so a stale star is recoverable", async () => {
+  const created = await createSchedule(["sub-keynote", "sub-memory"]);
+  const { code, writeKey } = await created.json<CreatedSchedule>();
+
+  // The organiser pulls a talk an attendee had already starred.
+  await env.DB.prepare("UPDATE agenda_items SET is_published = 0 WHERE id = ?").bind("agenda-memory").run();
+
+  const stale = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: ["sub-keynote", "sub-memory"] }),
+  });
+  expect(stale.status).toBe(422);
+  const envelope = await stale.json<{ error: { field: string; details: { unknownSessionIds: string[] } } }>();
+  expect(envelope.error.field).toBe("sessionIds");
+  // Naming them in prose is not enough: a client has to be able to drop
+  // exactly these and carry on rather than being stuck forever.
+  expect(envelope.error.details.unknownSessionIds).toEqual(["sub-memory"]);
+
+  const pruned = await request(`/api/v1/public/schedules/${code}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-schedule-write-key": writeKey },
+    body: JSON.stringify({ sessionIds: ["sub-keynote"] }),
+  });
+  expect(pruned.status).toBe(200);
+
+  const creation = await createSchedule(["sub-keynote", "sub-memory"]);
+  expect(creation.status).toBe(422);
+  expect((await creation.json<{ error: { details: { unknownSessionIds: string[] } } }>()).error.details.unknownSessionIds)
+    .toEqual(["sub-memory"]);
+});
+
 test("CONTRACT · MRQ-132 the feed is live, and an unknown code is a 404 rather than an empty calendar", async () => {
   const created = await createSchedule(["sub-keynote"]);
   const { code, writeKey } = await created.json<CreatedSchedule>();

@@ -12,9 +12,11 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { publicSessionCalendar } from "../lib/public-calendar";
+import { clientIp } from "../api/rate-limit";
 import {
   CODE_PATTERN,
   MAX_SESSIONS,
+  checkScheduleCreateLimit,
   computeOverlaps,
   hashWriteKey,
   loadScheduleView,
@@ -28,6 +30,21 @@ import {
 import { loadPublicAgenda } from "../lib/public-site";
 
 const WRITE_KEY_HEADER = "X-Schedule-Write-Key";
+
+/**
+ * A session an attendee starred can be pulled from the programme while their
+ * star sits in localStorage — routine at a live conference. The refusal names
+ * the ids MACHINE-READABLY as well as in prose, so the caller (the site's own
+ * module, or an agent) can drop exactly those and try again rather than being
+ * told "something in your list is wrong" forever.
+ */
+function unknownSessions(eventSlug: string, unknown: readonly string[]): ApiError {
+  return ApiError.unprocessable(
+    `these sessions are not published on ${eventSlug}: ${unknown.slice(0, 10).join(", ")}`,
+    "sessionIds",
+    { unknownSessionIds: [...unknown] },
+  );
+}
 
 const sessionIdList = z.array(z.string().min(1).max(240)).max(MAX_SESSIONS);
 const createBody = z.object({
@@ -72,6 +89,13 @@ const createPublicSchedule = defineApiRoute(
     },
   },
   async (context) => {
+    const limit = await checkScheduleCreateLimit(
+      context.env.CACHE as unknown as Parameters<typeof checkScheduleCreateLimit>[0],
+      clientIp(context.req.raw),
+      Date.now(),
+    );
+    if (!limit.allowed) throw ApiError.rateLimited(limit.retryAfterSeconds);
+
     const body = context.req.valid("json");
     const agenda = await loadPublicAgenda(context.env.DB, {
       eventSlug: body.eventSlug ?? body.event,
@@ -80,12 +104,7 @@ const createPublicSchedule = defineApiRoute(
     if (!agenda) throw ApiError.notFound("public agenda not found");
 
     const { resolved, unknown } = resolveSessionIds(agenda.sessions, body.sessionIds);
-    if (unknown.length > 0) {
-      throw ApiError.unprocessable(
-        `these sessions are not published on ${agenda.event.slug}: ${unknown.slice(0, 10).join(", ")}`,
-        "sessionIds",
-      );
-    }
+    if (unknown.length > 0) throw unknownSessions(agenda.event.slug, unknown);
 
     const code = newScheduleCode();
     const writeKey = newWriteKey();
@@ -178,12 +197,7 @@ const updatePublicSchedule = defineApiRoute(
     if (!scoped) throw ApiError.notFound("public agenda not found");
 
     const { resolved, unknown } = resolveSessionIds(scoped.sessions, context.req.valid("json").sessionIds);
-    if (unknown.length > 0) {
-      throw ApiError.unprocessable(
-        `these sessions are not published on ${scoped.event.slug}: ${unknown.slice(0, 10).join(", ")}`,
-        "sessionIds",
-      );
-    }
+    if (unknown.length > 0) throw unknownSessions(scoped.event.slug, unknown);
 
     await context.env.DB
       .prepare("UPDATE public_schedules SET session_ids = ?, updated_at = ? WHERE code = ?")

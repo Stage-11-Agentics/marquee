@@ -207,6 +207,9 @@ export const PUBLIC_SITE_STYLES = `
 .sheet.open { display: block; }
 .sheet h2 { margin: 0 0 4px; font: 550 22px/1.15 Georgia, serif; letter-spacing: -.02em; text-transform: none; }
 .sheet > p { margin: 0 0 16px; color: var(--public-muted); font-size: 12.5px; line-height: 1.55; }
+/* A bad moment gets its own line rather than overwriting the sheet's
+   explanation, which the attendee still needs once the network returns. */
+.sheet > p.sheet-error { margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--public-warn); border-radius: 2px; background: var(--public-warn-wash); color: var(--public-warn); }
 .sheet-row { border: 1px solid var(--public-rule-soft); border-radius: 3px; padding: 12px; margin-bottom: 10px; }
 .sheet-row h3 { margin: 0 0 3px; font: 650 12px/1.3 var(--public-sans); }
 .sheet-row .hint { margin: 0 0 8px; color: var(--public-muted); font-size: 11.5px; line-height: 1.5; }
@@ -321,6 +324,22 @@ export interface PublicScheduleConfig {
 }
 
 export type PublicScheduleView = "agenda" | "mine";
+
+/**
+ * The header count is a number stated as fact, in tabular figures. Any page
+ * that renders it has to be able to fill it, so every public shell carries the
+ * config the module reads — on a page with no session cards the module simply
+ * paints the count and stops.
+ */
+export function countOnlySchedule(event: PublicEvent): PublicScheduleConfig {
+  return {
+    eventSlug: event.slug,
+    eventName: event.name,
+    timezone: event.timezone,
+    days: [],
+    view: "agenda",
+  };
+}
 
 function agendaHref(eventSlug: string, view: PublicScheduleView): string {
   const query = `event=${encodeURIComponent(eventSlug)}`;
@@ -613,6 +632,7 @@ function ScheduleSheets(): JSX.Element {
       <div class="sheet-scrim" data-schedule-scrim />
       <div class="sheet" id="schedule-phone-sheet" role="dialog" aria-modal="true" aria-labelledby="schedule-phone-title" data-schedule-sheet="phone">
         <h2 id="schedule-phone-title">Open on your phone</h2>
+        <p class="sheet-error" data-schedule-error hidden />
         <p>Scan and your phone picks up right where this leaves off — same stars, same schedule, both devices can edit. The link carries your private write key in the URL fragment, so it never reaches our logs. Don't share this one; use <b>Share</b> for friends.</p>
         {/* Drawn in the browser, never fetched: the private write key rides
             the URL fragment and must not reach a server to become an image. */}
@@ -625,6 +645,7 @@ function ScheduleSheets(): JSX.Element {
       </div>
       <div class="sheet" id="schedule-share-sheet" role="dialog" aria-modal="true" aria-labelledby="schedule-share-title" data-schedule-sheet="share">
         <h2 id="schedule-share-title">Your schedule, everywhere</h2>
+        <p class="sheet-error" data-schedule-error hidden />
         <p>One code — <code class="num" data-schedule-code /> — powers all three. No account needed.</p>
         <div class="sheet-row">
           <h3>Subscribe in your calendar</h3>
@@ -646,6 +667,7 @@ function ScheduleSheets(): JSX.Element {
       </div>
       <div class="sheet" id="schedule-brief-sheet" role="dialog" aria-modal="true" aria-labelledby="schedule-brief-title" data-schedule-sheet="brief">
         <h2 id="schedule-brief-title">Brief your agent</h2>
+        <p class="sheet-error" data-schedule-error hidden />
         <p>One block, ready to paste into any agent. Your picks are inline so it works immediately; the live URLs let the agent re-check and act on your behalf.</p>
         <pre class="agents-pre" style={{ maxHeight: "280px", overflowY: "auto" }} data-schedule-brief />
         <div class="url-line" style={{ marginTop: "10px" }}>
@@ -895,7 +917,7 @@ export function PublicAgentsPage({ event, origin }: { event: PublicEvent; origin
   const base = origin.replace(/\/+$/, "");
   const agendaFeed = `${base}/api/v1/public/agenda?event=${encodeURIComponent(event.slug)}`;
   return (
-    <PublicShell event={event} title="For agents" schedule={undefined}>
+    <PublicShell event={event} title="For agents" schedule={countOnlySchedule(event)}>
       <main class="public-main">
         <a class="back-link" href={`/agenda?event=${encodeURIComponent(event.slug)}`}>← Agenda</a>
         <div class="public-kicker">{event.name}</div>
@@ -962,6 +984,7 @@ export function PublicSpeakerDirectoryPage({ data }: { data: PublicSpeakerDirect
     <PublicShell
       event={data.event}
       title="Speakers"
+      schedule={countOnlySchedule(data.event)}
       actions={<a class="public-button" href={`/agenda?${eventQuery}`}>← Agenda</a>}
     >
       <main class="public-main">
@@ -1003,7 +1026,7 @@ export function PublicSpeakerDirectoryPage({ data }: { data: PublicSpeakerDirect
 export function PublicSpeakerPage({ event, venue, speaker }: { event: PublicEvent; venue: PublicVenueDisclosure; speaker: PublicSpeaker }): JSX.Element {
   const venueName = venue.buildingName ?? event.venue ?? "Online";
   return (
-    <PublicShell event={event} title="Speaker" actions={<a class="public-button" href={`/agenda?event=${encodeURIComponent(event.slug)}`}>← Agenda</a>}>
+    <PublicShell event={event} title="Speaker" schedule={countOnlySchedule(event)} actions={<a class="public-button" href={`/agenda?event=${encodeURIComponent(event.slug)}`}>← Agenda</a>}>
       <main class="public-main">
         <article class="public-card">
           <div class="public-kicker">{venueName}</div>
