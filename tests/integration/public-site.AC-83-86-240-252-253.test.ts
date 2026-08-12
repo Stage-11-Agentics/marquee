@@ -219,6 +219,57 @@ test("CONTRACT · MRQ-121 · EMB-05/12/13/14 · the public speaker directory is 
   expect(listBody).toContain('class="embed-speaker-row" href="/p/public-speaker?event=public-conf"');
 });
 
+test("CONTRACT · MRQ-156 · the public speaker directory keeps search and ordering in a compact list view", async () => {
+  await env.DB.batch([
+    env.DB.prepare("UPDATE participations SET person_id = ? WHERE id = 'par-private'").bind("person-public"),
+    env.DB.prepare("UPDATE agenda_items SET is_published = 1 WHERE id = 'agenda-private'"),
+    env.DB.prepare("UPDATE people SET name = ?, bio = ? WHERE id = 'person-public'").bind(
+      "Grace Isford",
+      "Grace leads platform engineering at Public Co. She works with teams building reliable systems for high-stakes production environments. Her work focuses on making complex infrastructure easier to operate and easier to explain. She is a frequent conference speaker and mentor to engineers entering the field. Grace lives in New York and is always looking for a better way to make the next decision clear.",
+    ),
+  ]);
+
+  const data = await loadPublicSpeakerDirectory(env.DB, { eventSlug: EVENT_SLUG, view: "list" });
+  expect(data?.filters.view).toBe("list");
+  expect(data?.speakers[0]?.sessionCount).toBe(2);
+
+  const list = await request(`/speakers?event=${EVENT_SLUG}&view=list`);
+  const listBody = await list.text();
+  expect(list.status).toBe(200);
+  expect(listBody).toContain('class="public-speaker-directory-list"');
+  expect(listBody).toContain('class="public-speaker-directory-row"');
+  expect(listBody).toContain("Grace Isford");
+  expect(listBody).toContain("2 published sessions");
+  expect(listBody).toContain('class="public-view-toggle"');
+  expect(listBody).toContain(">Gallery</a>");
+  expect(listBody).toContain(">List</a>");
+  expect(listBody).toContain('name="view" value="list"');
+  expect(listBody).not.toContain("/headshots/");
+
+  const gallery = await request(`/speakers?event=${EVENT_SLUG}`);
+  const galleryBody = await gallery.text();
+  expect(gallery.status).toBe(200);
+  expect(galleryBody).toContain('class="public-speaker-grid"');
+  expect(galleryBody).toContain('class="public-directory-card"');
+  expect(galleryBody).toContain('src="/headshots/grace-isford.svg"');
+
+  const profile = await request(`/p/grace-isford?event=${EVENT_SLUG}`);
+  const profileBody = await profile.text();
+  expect(profile.status).toBe(200);
+  expect(profileBody).toContain('data-public-bio="true"');
+  expect(profileBody).toContain('data-public-bio="true" open');
+  expect(profileBody).toContain("Show more");
+  expect(profileBody).toContain("Sessions (2)");
+  expect(profileBody).toContain("const maxLines = 5");
+
+  const searched = await request(`/speakers?event=${EVENT_SLUG}&view=list&q=Public%20Co`);
+  const searchedBody = await searched.text();
+  expect(searched.status).toBe(200);
+  expect(searchedBody).toContain("Grace Isford");
+  expect(searchedBody).toContain('name="view" value="list"');
+  expect(searchedBody).toContain('href="/speakers?event=public-conf&amp;q=Public+Co&amp;view=list"');
+});
+
 test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an explicit all-days tab, and keeps the API scope aligned", async () => {
   await env.DB.prepare("UPDATE agenda_items SET starts_at = ?, is_published = 1 WHERE id = 'agenda-private'")
     .bind(Date.UTC(2026, 9, 13, 14))

@@ -119,8 +119,15 @@ export const PUBLIC_SITE_STYLES = `
 .public-profile { display: flex; align-items: flex-start; gap: 14px; }
 .public-avatar { --avatar-size: 48px; width: var(--avatar-size); height: var(--avatar-size); display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--public-rule); background: var(--public-accent-wash); color: var(--public-accent); font: 700 12px/1 var(--public-mono); object-fit: cover; }
 .public-speaker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.public-directory-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; margin-bottom: 14px; }
 .public-directory-filters { grid-template-columns: minmax(0, 1fr) auto; }
+.public-directory-toolbar .public-directory-filters { margin-bottom: 0; }
 .public-directory-actions { display: flex; gap: 8px; }
+.public-view-toggle { display: inline-flex; flex: 0 0 auto; border: 1px solid var(--public-rule); border-radius: 3px; overflow: hidden; background: var(--public-surface); }
+.public-view-toggle-button { display: inline-flex; width: 82px; min-height: 36px; align-items: center; justify-content: center; border-right: 1px solid var(--public-rule); color: var(--public-muted); font: 650 10px/1 var(--public-mono); letter-spacing: .06em; text-transform: uppercase; }
+.public-view-toggle-button:last-child { border-right: 0; }
+.public-view-toggle-button:hover, .public-view-toggle-button:focus-visible { background: var(--public-accent-wash); color: var(--public-accent); outline: none; }
+.public-view-toggle-button.active { background: var(--public-accent); color: #fff; }
 
 .public-directory-card { display: flex; align-items: flex-start; gap: 13px; min-height: 132px; border: 1px solid var(--public-rule); background: var(--public-surface); padding: 16px; }
 .public-directory-card:hover, .public-directory-card:focus-visible { border-color: var(--public-accent); background: var(--public-accent-wash); outline: none; }
@@ -128,6 +135,20 @@ export const PUBLIC_SITE_STYLES = `
 .public-directory-card h2 { margin: 0; font: 650 18px/1.15 Georgia, serif; }
 .public-directory-card p { margin: 6px 0 0; color: var(--public-muted); font-size: 11px; line-height: 1.45; }
 .public-directory-card small { display: block; margin-top: 12px; color: var(--public-accent); font: 650 9px/1 var(--public-mono); letter-spacing: .06em; text-transform: uppercase; }
+.public-speaker-directory-list { display: grid; gap: 0; padding: 4px 16px 16px; border: 1px solid var(--public-rule); background: var(--public-surface); }
+.public-speaker-directory-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 54px; padding: 9px 0; border-bottom: 1px solid var(--public-rule-soft); }
+.public-speaker-directory-row:last-child { border-bottom: 0; }
+.public-speaker-directory-row:hover, .public-speaker-directory-row:focus-visible { color: var(--public-accent); outline: none; }
+.public-speaker-directory-row-copy { display: grid; gap: 3px; min-width: 0; }
+.public-speaker-directory-row-copy strong { overflow-wrap: anywhere; font: 650 13px/1.2 Georgia, serif; }
+.public-speaker-directory-row-copy span, .public-speaker-directory-row-count { color: var(--public-muted); font-size: 10px; }
+.public-speaker-directory-row-count { flex: 0 0 auto; font: 600 10px/1.2 var(--public-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.public-bio { margin: 18px 0 0; }
+.public-bio > summary { display: none; min-height: 27px; margin-top: 8px; color: var(--public-accent); font: 650 10px/1.3 var(--public-mono); cursor: pointer; list-style: none; }
+.public-bio > summary::-webkit-details-marker { display: none; }
+.public-bio[data-public-bio-enhanced] > summary { display: block; }
+.public-bio[data-collapsed="true"] [data-public-bio-copy] { display: -webkit-box; max-height: calc(1.65em * 5); overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
+.public-bio > summary:hover, .public-bio > summary:focus-visible { text-decoration: underline; text-underline-offset: 3px; outline: none; }
 .public-profile h1 { margin-top: 0; }
 .public-not-found { max-width: 680px; margin: 40px auto; text-align: center; }
 .public-not-found .public-card { min-height: 300px; display: grid; place-items: center; }
@@ -239,6 +260,7 @@ export const PUBLIC_SITE_STYLES = `
 @media (max-width: 760px) {
   .public-heading { display: block; }
   .public-filters { min-height: 150px; grid-template-columns: 1fr 1fr; }
+  .public-directory-toolbar { grid-template-columns: 1fr; }
   .public-directory-filters { grid-template-columns: minmax(0, 1fr); }
   .public-days { grid-column: 1 / -1; width: 100%; }
   .public-days button { flex: 1 1 0; width: auto; min-width: 0; padding: 0 2px; font-size: 9px; }
@@ -260,6 +282,8 @@ export const PUBLIC_SITE_STYLES = `
   .view-seg .seg { flex: 1 1 0; min-height: 38px; gap: 5px; padding: 7px 4px; white-space: nowrap; }
   .public-filters { min-height: 236px; grid-template-columns: 1fr; }
   .public-directory-filters { grid-template-columns: minmax(0, 1fr); }
+  .public-view-toggle, .public-view-toggle-button { width: 100%; }
+  .public-view-toggle-button { flex: 1 1 0; }
   .public-days { grid-column: auto; }
   .public-agenda-row { grid-template-columns: 40px minmax(0, 1fr); min-height: 132px; padding: 14px 14px 14px 10px; }
   .public-agenda-row > .star-btn { grid-row: 1 / span 3; }
@@ -312,6 +336,36 @@ export const PUBLIC_AGENDA_SCRIPT = `
   search?.addEventListener('input', () => {
     clearTimeout(timer);
     timer = setTimeout(submit, 180);
+  });
+})();
+`;
+
+/**
+ * The speaker bio stays open in the server-rendered document. JavaScript only
+ * adds the compact five-line presentation when the browser can measure that
+ * there is something to hide; a no-JS reader therefore gets the whole bio.
+ */
+export const PUBLIC_SPEAKER_SCRIPT = `
+(() => {
+  const maxLines = 5;
+  document.querySelectorAll('[data-public-bio]').forEach((bio) => {
+    const copy = bio.querySelector('[data-public-bio-copy]');
+    const toggle = bio.querySelector('[data-public-bio-toggle]');
+    if (!(copy instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
+    const lineHeight = Number.parseFloat(window.getComputedStyle(copy).lineHeight);
+    const maxHeight = lineHeight * maxLines;
+    if (!Number.isFinite(maxHeight) || copy.scrollHeight <= maxHeight + 1) return;
+    bio.dataset.publicBioEnhanced = 'true';
+    bio.dataset.collapsed = 'true';
+    toggle.textContent = 'Show more';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.addEventListener('click', (event) => {
+      event.preventDefault();
+      const collapsed = bio.dataset.collapsed === 'true';
+      bio.dataset.collapsed = collapsed ? 'false' : 'true';
+      toggle.textContent = collapsed ? 'Show less' : 'Show more';
+      toggle.setAttribute('aria-expanded', String(collapsed));
+    });
   });
 })();
 `;
@@ -981,7 +1035,14 @@ GET  /api/v1/public/sessions/{slug}/calendar.ics
 export function PublicSpeakerDirectoryPage({ data }: { data: PublicSpeakerDirectoryData }): JSX.Element {
   const eventQuery = `event=${encodeURIComponent(data.event.slug)}`;
   const hasSearch = Boolean(data.filters.q);
+  const listView = data.filters.view === "list";
   const venueName = data.venue?.buildingName ?? data.event.venue ?? "Online";
+  const directoryHref = (view: "gallery" | "list"): string => {
+    const params = new URLSearchParams({ event: data.event.slug });
+    if (data.filters.q) params.set("q", data.filters.q);
+    if (view === "list") params.set("view", "list");
+    return `/speakers?${params.toString()}`;
+  };
   return (
     <PublicShell
       event={data.event}
@@ -1007,30 +1068,51 @@ export function PublicSpeakerDirectoryPage({ data }: { data: PublicSpeakerDirect
           here read as broken rather than as "press Enter". Give the form the
           control it always needed; the filtering behind it works.
         */}
-        <form class="public-filters public-directory-filters" method="get" action="/speakers">
-          <input type="hidden" name="event" value={data.event.slug} />
-          <label>
-            <span class="sr-only">Search speakers</span>
-            <input class="public-search" name="q" value={data.filters.q ?? ""} placeholder="Search speakers or companies" aria-label="Search speakers or companies" />
-          </label>
-          <div class="public-directory-actions">
-            <button class="public-button primary" type="submit">Search</button>
-            {data.filters.q ? <a class="public-button" href={`/speakers?event=${encodeURIComponent(data.event.slug)}`}>Clear</a> : null}
-          </div>
-        </form>
+        <div class="public-directory-toolbar">
+          <form class="public-filters public-directory-filters" method="get" action="/speakers">
+            <input type="hidden" name="event" value={data.event.slug} />
+            {listView ? <input type="hidden" name="view" value="list" /> : null}
+            <label>
+              <span class="sr-only">Search speakers</span>
+              <input class="public-search" name="q" value={data.filters.q ?? ""} placeholder="Search speakers or companies" aria-label="Search speakers or companies" />
+            </label>
+            <div class="public-directory-actions">
+              <button class="public-button primary" type="submit">Search</button>
+              {data.filters.q ? <a class="public-button" href={directoryHref(listView ? "list" : "gallery")}>Clear</a> : null}
+            </div>
+          </form>
+          <nav class="public-view-toggle" aria-label="Speaker directory view">
+            <a class={`public-view-toggle-button${listView ? "" : " active"}`} href={directoryHref("gallery")} aria-current={listView ? undefined : "page"}>Gallery</a>
+            <a class={`public-view-toggle-button${listView ? " active" : ""}`} href={directoryHref("list")} aria-current={listView ? "page" : undefined}>List</a>
+          </nav>
+        </div>
         {data.speakers.length > 0 ? (
-          <section class="public-speaker-grid" aria-label="Published speakers">
-            {data.speakers.map((speaker) => (
-              <a class="public-directory-card" href={`${speakerHref(speaker.slug)}?${eventQuery}`} key={speaker.id}>
-                <PublicSpeakerAvatar speaker={speaker} />
-                <div>
-                  <h2>{speaker.name}</h2>
-                  <p>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</p>
-                  <small>View profile →</small>
-                </div>
-              </a>
-            ))}
-          </section>
+          listView ? (
+            <section class="public-speaker-directory-list" aria-label="Published speakers">
+              {data.speakers.map((speaker) => (
+                <a class="public-speaker-directory-row" href={`${speakerHref(speaker.slug)}?${eventQuery}`} key={speaker.id}>
+                  <span class="public-speaker-directory-row-copy">
+                    <strong>{speaker.name}</strong>
+                    <span>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</span>
+                  </span>
+                  <span class="public-speaker-directory-row-count">{speaker.sessionCount} {speaker.sessionCount === 1 ? "published session" : "published sessions"}</span>
+                </a>
+              ))}
+            </section>
+          ) : (
+            <section class="public-speaker-grid" aria-label="Published speakers">
+              {data.speakers.map((speaker) => (
+                <a class="public-directory-card" href={`${speakerHref(speaker.slug)}?${eventQuery}`} key={speaker.id}>
+                  <PublicSpeakerAvatar speaker={speaker} />
+                  <div>
+                    <h2>{speaker.name}</h2>
+                    <p>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</p>
+                    <small>View profile →</small>
+                  </div>
+                </a>
+              ))}
+            </section>
+          )
         ) : (
           <div class="public-empty"><div><strong>{hasSearch ? "No published speakers match" : "No published speakers yet"}</strong><span>{hasSearch ? "Try a different name or company." : "The conference team has not published any speakers yet."}</span>{hasSearch ? <a class="public-button primary" href={`/speakers?${eventQuery}`}>Show all speakers</a> : <a class="public-button primary" href={`/agenda?${eventQuery}`}>View the agenda</a>}</div></div>
         )}
@@ -1060,9 +1142,11 @@ export function PublicSpeakerPage({ event, venue, speaker }: { event: PublicEven
               <p class="public-detail-meta">{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</p>
             </div>
           </div>
-          <p>{speaker.bio || "—"}</p>
+          {speaker.bio
+            ? <details class="public-bio" data-public-bio open><summary data-public-bio-toggle>Show more</summary><p data-public-bio-copy>{speaker.bio}</p></details>
+            : <p class="public-bio">—</p>}
           <div class="public-divider" />
-          <h2>Sessions</h2>
+          <h2>Sessions ({speaker.sessions.length})</h2>
           <div class="public-speaker-list">
             {speaker.sessions.length > 0 ? speaker.sessions.map((session) => (
               <a class="public-session-link" href={sessionHref(session.slug)} key={session.id}>

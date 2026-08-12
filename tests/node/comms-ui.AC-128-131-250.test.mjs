@@ -18,3 +18,10 @@ test("AC-128 · AC-131 · AC-250 · the communications surface has stable templa
   assert.match(source, /MERGE_FIELDS/);
   assert.doesNotMatch(source, /messages\/send/);
 });
+
+test("CONTRACT · MRQ-156 · the demo outbox says delivery is held rather than suppressed", async () => {
+  const source = await readFile(resolve(root, "src/ui/comms/CommsScreen.tsx"), "utf8");
+  assert.match(source, /held in demo outbox · would send in production/);
+  assert.match(source, /message\.suppressed_reason/);
+  assert.doesNotMatch(source, /suppressed · demo mode/);
+});

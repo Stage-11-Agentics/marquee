@@ -111,10 +111,17 @@ export interface PublicAgendaData {
 export interface PublicSpeakerDirectoryData {
   event: PublicEvent;
   venue: PublicVenueDisclosure;
-  speakers: PublicSpeakerSummary[];
+  speakers: PublicSpeakerDirectoryEntry[];
   filters: {
     q: string | null;
+    view: PublicSpeakerDirectoryView;
   };
+}
+
+export type PublicSpeakerDirectoryView = "gallery" | "list";
+
+export interface PublicSpeakerDirectoryEntry extends PublicSpeakerSummary {
+  sessionCount: number;
 }
 
 export interface PublicSpeaker extends PublicSpeakerSummary {
@@ -734,7 +741,7 @@ export async function loadPublicAgenda(
 
 export async function loadPublicSpeakerDirectory(
   database: D1Database,
-  filters: { eventSlug?: string | null; q?: string | null } = {},
+  filters: { eventSlug?: string | null; q?: string | null; view?: string | null } = {},
 ): Promise<PublicSpeakerDirectoryData | null> {
   const event = await findLiveEvent(database, filters.eventSlug);
   if (!event) return null;
@@ -744,18 +751,26 @@ export async function loadPublicSpeakerDirectory(
     database.prepare(query.sql).bind(...query.bindings).all<PublicSessionRow>(),
   ]);
   const search = filters.q?.trim().toLocaleLowerCase() || null;
-  const speakersById = new Map<string, PublicSpeakerSummary>();
+  const speakersById = new Map<string, PublicSpeakerDirectoryEntry>();
   for (const session of toPublicSessions(rows.results, event, venue.showComparison)) {
     for (const speaker of session.speakers) {
       if (search && !speaker.name.toLocaleLowerCase().includes(search) && !(speaker.company ?? "").toLocaleLowerCase().includes(search)) continue;
-      speakersById.set(speaker.id, speaker);
+      const existing = speakersById.get(speaker.id);
+      if (existing) {
+        existing.sessionCount += 1;
+      } else {
+        speakersById.set(speaker.id, { ...speaker, sessionCount: 1 });
+      }
     }
   }
   return {
     event,
     venue,
     speakers: [...speakersById.values()].sort(comparePublicSpeakerDirectoryEntries),
-    filters: { q: filters.q?.trim() || null },
+    filters: {
+      q: filters.q?.trim() || null,
+      view: filters.view === "list" ? "list" : "gallery",
+    },
   };
 }
 

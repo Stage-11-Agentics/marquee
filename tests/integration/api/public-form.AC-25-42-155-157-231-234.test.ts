@@ -402,6 +402,19 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(participants.results.map((row) => row.role)).toEqual(["speaker", "submitter"]);
   });
 
+  test("CONTRACT · MRQ-156 · a manually closed public form does not print its future close date", async () => {
+    await env.DB.prepare("UPDATE forms SET status = 'closed', closes_at = ? WHERE id = ?")
+      .bind(Date.UTC(2099, 0, 1), FORM_ID)
+      .run();
+
+    const response = await request("/f/public-cfp");
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain("Call for speakers · closed");
+    expect(body).toContain("This call for speakers is closed.");
+    expect(body).not.toMatch(/>Closed\s+\d[^<]*<\/span>/);
+  });
+
   test("CONTRACT · public routes are present in the served OpenAPI document", async () => {
     const response = await request("/api/openapi.json");
     expect(response.status).toBe(200);

@@ -375,7 +375,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
       <div class="message-list">
         {messages.length === 0 && <div class="empty-log comms-empty-copy"><span>{messagesLoading ? "Loading the delivery log…" : error ? "The delivery log is unavailable. Retry communications above to try again." : "No messages queued yet. The first queued message will appear here with its rendered body and honest delivery outcome."}</span>{!messagesLoading && !error && <a class="button-secondary comms-empty-action" href="#comms-compose-heading">Compose the first message</a>}</div>}
         {messages.map((message) => <details class="message-row" key={message.id}>
-          <summary><div><strong>{message.subject}</strong><span>{message.to_email} · {message.template_key}{message.person_id ? ` · ${message.person_id}` : ""}</span></div><span class={`message-status status-${message.status}`}>{message.status === "suppressed" ? "suppressed · demo mode" : message.status}</span></summary>
+          <summary><div><strong>{message.subject}</strong><span>{message.to_email} · {message.template_key}{message.person_id ? ` · ${message.person_id}` : ""}</span></div><span class={`message-status status-${message.status}`}>{message.status === "suppressed" ? "held in demo outbox · would send in production" : message.status}</span></summary>
           <div class="message-detail"><p>{message.text}</p><small>{message.send_policy} · queued {formatDate(message.created_at)}{message.suppressed_reason ? ` · ${message.suppressed_reason}` : ""}</small></div>
         </details>)}
       </div>
