@@ -35,7 +35,7 @@ export class MarqueeClient {
     this.fetchImpl = fetchImpl;
   }
 
-  async request(path, { method = "GET", query, body } = {}) {
+  async request(path, { method = "GET", query, body, headers } = {}) {
     const target = new URL(apiPath(path), `${this.url}/`);
     if (query) {
       for (const [key, value] of Object.entries(query)) {
@@ -49,6 +49,7 @@ export class MarqueeClient {
         accept: "application/json",
         authorization: `Bearer ${this.token}`,
         ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...headers,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
@@ -72,5 +73,15 @@ export class MarqueeClient {
 
   post(path, body, options) {
     return this.request(path, { ...options, method: "POST", body });
+  }
+
+  patch(path, body, options) {
+    return this.request(path, { ...options, method: "PATCH", body });
+  }
+
+  // `delete` is a reserved word, so the method that issues one is named for the
+  // verb rather than spelled like it.
+  remove(path, options) {
+    return this.request(path, { ...options, method: "DELETE" });
   }
 }

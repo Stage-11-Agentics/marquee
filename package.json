@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "marquee": "cli/marquee.mjs"
+  },
   "scripts": {
     "test": "node scripts/checks/run-test.mjs",
     "seed": "node scripts/seed/index.ts",

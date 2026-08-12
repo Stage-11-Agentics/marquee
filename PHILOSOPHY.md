@@ -27,9 +27,9 @@ The post-acceptance half of a conference is chase work — bios, headshots, slid
 
 Marquee treats AI agents as first-class operators alongside humans. Every capability the UI offers is reachable programmatically, and we ship the affordances that make agents effective:
 
-- **A real API** — the UI is built on it; nothing is UI-only.
-- **A CLI** (`marquee`) — every workflow drivable from a terminal, scriptable, composable.
-- **A skill file** — shipped in the repo, teaching any coding agent how to operate a conference on Marquee: seed an event, triage a review queue, chase stragglers, build an agenda.
+- **A real API** — the UI is built on it; nothing is UI-only. Every screen in the product is a client of the same documented, token-authenticated endpoints anyone else can call.
+- **A CLI** (`marquee`) — the operating loop drivable from a terminal, scriptable, composable: configure a conference, triage the queue, chase stragglers, schedule, publish, diagnose. The surfaces built for hands — the form builder, the venue map — stay at the API, because a command line is a worse way to draw a room than a room is.
+- **A skill file** — shipped in the repo, teaching any coding agent how to operate a conference on Marquee. Every workflow in it is a command, not a raw request; an agent that has to drop to `curl` mid-loop has found a gap, and there are none in the loop.
 
 The conference of the near future is run by an operator and their agents together. Marquee is built for that pair — maximum flexibility in how you interact, no privileged surface.
 
