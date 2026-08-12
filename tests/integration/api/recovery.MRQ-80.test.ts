@@ -86,7 +86,7 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
 describe.sequential("MRQ-80 deliberate decision resend", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("the canonical speaker edit persists a corrected address, then one named resend queues a fresh attempt", async () => {
+  test("CONTRACT · MRQ-80 · the canonical speaker edit persists a corrected address, then one named resend queues a fresh attempt", async () => {
     const beforeDecision = await env.DB.prepare(
       "SELECT id, feedback_md, decided_at, outbox_id FROM submission_decisions WHERE id = ?",
     ).bind(DECISION_ID).first<Record<string, unknown>>();
@@ -139,7 +139,7 @@ describe.sequential("MRQ-80 deliberate decision resend", () => {
     expect(JSON.parse(audit?.after_json ?? "{}" )).toMatchObject({ outbox_id: resendBody.outbox_id, to_email: "new-address@mrq80.test" });
   });
 
-  test("the bulk notifier still excludes the already-sent decision after a deliberate resend", async () => {
+  test("CONTRACT · MRQ-80 · the bulk notifier still excludes the already-sent decision after a deliberate resend", async () => {
     const before = await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = ?").bind(EVENT_ID).first<{ total: number }>();
     const response = await request(`/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, { method: "POST" });
     expect(response.status).toBe(202);
@@ -148,7 +148,7 @@ describe.sequential("MRQ-80 deliberate decision resend", () => {
     expect(after).toEqual(before);
   });
 
-  test("resend refuses a record without an accepted or rejected decision", async () => {
+  test("CONTRACT · MRQ-80 · resend refuses a record without an accepted or rejected decision", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/submissions/sub-mrq80-pending/decision/resend`, { method: "POST" });
     expect(response.status).toBe(409);
     expect(await response.json<{ error: { message: string } }>()).toMatchObject({ error: { message: "only accepted or rejected decisions can be resent" } });
