@@ -41,7 +41,7 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "task-templates", path: "/settings/tasks", label: "Task templates", icon: "", group: "utility" },
   { id: "api-tokens", path: "/settings/api", label: "API tokens", icon: "", group: "utility" },
   { id: "api-docs", path: "/api/docs", label: "API & CLI", icon: "⌘", group: "utility" },
-  { id: "import", path: "/import", label: "Sessionize importer", icon: "", group: "utility" },
+  { id: "import", path: "/import", label: "Import speakers", icon: "", group: "utility" },
 ] as const;
 
 /** Admin pages share AppShell; portal, reviewer, and API-doc rows use separate contracts. */
