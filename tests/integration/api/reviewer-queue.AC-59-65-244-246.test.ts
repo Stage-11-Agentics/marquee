@@ -260,7 +260,7 @@ describe.sequential("MRQ-18 reviewer queue", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("Demo Organizer");
   });
-  test("MRQ-108 · the queue carries the round's scorecard, and a submitted review moves to Completed with its stored values", async () => {
+  test("CONTRACT · MRQ-108 · the queue carries the round's scorecard, and a submitted review moves to Completed with its stored values", async () => {
     const now = Date.now();
     await env.DB.batch([
       env.DB.prepare("DELETE FROM rubric_criteria WHERE round_id = ?").bind(ROUND_ID),
