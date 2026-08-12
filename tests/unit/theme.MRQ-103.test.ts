@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { THEMES, THEME_STORAGE_KEY, SWYXY_MODE_STORAGE_KEY, applyTheme, applySwyxyMode, isThemeId, readSwyxyMode, readTheme, writeSwyxyMode, writeTheme } from "../../src/ui/shell/theme";
+import { chromeFor } from "../../src/ui/shell/register";
+import { routeTable } from "../../src/ui/shell/route-table";
 
 const root = resolve(import.meta.dirname, "../..");
 
@@ -204,5 +206,28 @@ describe("theme round · register themes", () => {
     expect(shell).toContain("Plus+Jakarta+Sans");
     // Day and Night stay font-free: no font link exists outside the register map.
     expect(shell).not.toContain("rel=\"stylesheet\" href=\"https://fonts.googleapis.com");
+  });
+
+  test("CONTRACT · register nav labels cannot drift from the route table — a renamed route id keeps its trope or fails here", () => {
+    // swyxy's lowercase nav is an override map keyed by route id. A route
+    // rename would silently revert that entry to Marquee's label, and a stale
+    // key would sit in the registry doing nothing. Both directions pin.
+    const routeIds = new Set(routeTable.map((route) => route.id));
+    const sidebarIds = new Set(
+      routeTable.filter((route) => route.sidebar).map((route) => route.id),
+    );
+    for (const theme of THEMES) {
+      if (theme.kind !== "register") continue;
+      const overrides = chromeFor(theme.id).navLabels;
+      for (const key of Object.keys(overrides)) {
+        expect(routeIds.has(key), `${theme.id} nav label "${key}" has no route`).toBe(true);
+      }
+    }
+    // swyxy's trope is a *complete* lowercase nav — every sidebar destination
+    // carries an override, including the System group (delivery-health split).
+    const swyxyOverrides = chromeFor("swyxy").navLabels;
+    for (const id of sidebarIds) {
+      expect(swyxyOverrides[id], `swyxy nav is missing sidebar route "${id}"`).toBeDefined();
+    }
   });
 });
