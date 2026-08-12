@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T03:57:14Z",
+  "created_by": "agent:codex-mrq-92",
+  "custom_fields": {},
+  "id": "art_01KZT1VZHMQX1GSEF6W8XDG1FP",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT1VZHMQX1GSEF6W8XDG1FP.png",
+    "size_bytes": 491237
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "c11 screenshot from the isolated MRQ-92 worktree: Presentation Upload has a green completion mark after the local LOCAL_UPLOAD_SHIM path completed sign, PUT, and complete.",
+  "tags": [],
+  "title": "MRQ-92 local upload completion",
+  "token_usage": null,
+  "type": "file"
+}

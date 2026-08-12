@@ -1,0 +1,56 @@
+{
+  "assigned_to": "agent:codex-mrq-91",
+  "branch_links": [],
+  "comment_count": 6,
+  "complexity": null,
+  "created_at": "2026-08-12T03:23:19Z",
+  "created_by": {
+    "agent_type": "intake",
+    "base_name": "feedback-intake",
+    "framework": "claude-code",
+    "model": "claude-opus-5",
+    "name": "feedback-intake-1",
+    "serial": 1,
+    "session": "sess_01KZSZXGH17A7VWN1TA7QNT7WG"
+  },
+  "custom_fields": {},
+  "description": "The speaker portal's \"Where you are speaking\" card shows a fake map. Operator\nfeedback while exercising the live site (2026-08-11).\n\n## What is wrong\n\n`src/ui/portal/PortalPage.tsx` `ArrivalCard` (~line 473) renders a placeholder,\nnot a map:\n\n- It is a `.portal-arrival-map` div \u2014 a CSS-gradient grid with a `::before` dot \u2014\n  showing the literal string **\"Pinned venue\"** and the raw **`lat, lng`** pair.\n  A speaker sees `40.7625, -73.9814` where a map belongs.\n- The label says \"Pinned venue\" instead of the building's name, which the card\n  already has in hand as `location.building`.\n- The map sits inside a `<details class=\"portal-arrival-map-fold\">` whose summary\n  toggles \"Show venue map\" / \"Venue map\" \u2014 a shrink/expand the operator does not\n  want in that slot.\n\nA real tile map already exists and is in production use on the organizer Venues\npage: `src/ui/venues/VenueMap.tsx` (OpenStreetMap tiles, Web-Mercator projection,\npins with labels, `tilesFailed` fallback). It handles the single-pin case\ncorrectly \u2014 `pinned.length === 1` renders tiles and one labelled pin, and the\nwalking-line loop is simply empty. The portal was never wired to it.\n\nThe live site sends no Content-Security-Policy header, so `tile.openstreetmap.org`\nimages are not blocked. Verified 2026-08-11 via `curl -sI https://marquee.stage11.dev/`.\n\n## What it should be\n\n1. **Real map.** Render an actual tile map for the session's building instead of\n   the coordinate stub. Reuse `VenueMap` rather than writing a second map \u2014 extract\n   or adapt it so the portal can pass one point. `VenueMap` currently takes\n   `readonly VenueBuildingInput[]`; the portal has `slot.location` with\n   `{ building, address, lat, lng }`. Adapt at the call site or widen the component's\n   input; do not fork the projection/tile code.\n2. **Name, not jargon.** The label reads the building name (`location.building`).\n   Fall back to the address, then to a plain sentence if neither exists. The word\n   \"Pinned\" is internal vocabulary and should not reach a speaker.\n3. **Directions replaces the disclosure.** Remove the `<details>` fold in the map\n   slot; the map is always visible. Put the **Directions** control on the map itself,\n   where the expand/collapse affordance used to be. Its behavior is unchanged \u2014\n   the existing `https://www.google.com/maps/search/?api=1&query=<lat>,<lng>` link\n   opening in a new tab is correct and the operator confirmed it is fine as-is.\n4. **One Directions button, not two.** `ArrivalCard`'s header already renders a\n   `Directions \u2197` link. With the button moving onto the map, remove the header\n   duplicate \u2014 a card should not offer the same action twice.\n5. **No-pin case stays honest.** When `lat`/`lng` are null, keep a truthful empty\n   state (\"The conference team has not pinned this building.\") and render no\n   Directions button. Do not show a broken map frame.\n\n## Constraints\n\n- **`tests/node/venue-disclosure.AC-263.test.mjs:50` asserts\n  `/portal-arrival-map-fold/` against `PortalPage.tsx`.** Removing the fold breaks\n  it. That assertion encodes the old disclosure design, not the AC's intent \u2014\n  AC-263 is about folding *building comparison* until a second building is pinned,\n  which is a different surface (the organizer Venues page keeps its\n  `venue-map-fold`, untouched). Update the portal assertion to match the new design\n  and leave the other AC-263 assertions alone. Explain the change in the PR body.\n- `show_building_comparison` still governs comparison affordances elsewhere in the\n  card; do not repurpose it to hide the map.\n- Flight Deck aesthetic per `DESIGN.md`. The map is a real surface now \u2014 give it the\n  same treatment `venues.css` gives `.venue-map-shell`, adapted to the portal's\n  darker card, and reuse tokens rather than inventing colors.\n- **Elements never jump** (global UI rule): the map slot has a fixed height whether\n  tiles load, fail, or there is no pin.\n- Suite budget 45s, gate budget 120s.\n\n## Acceptance\n\n- A speaker with a scheduled, pinned session sees a real map with their building\n  pinned and labelled by name \u2014 no coordinates rendered as body text anywhere.\n- The words \"Pinned venue\" appear nowhere in the speaker portal.\n- A **Directions** button sits on the map and opens the Google Maps directions URL\n  for the building in a new tab; there is exactly one Directions control on the card.\n- No expand/collapse control remains in the portal's map slot.\n- Unpinned session: honest empty state, fixed height, no Directions button.\n- Validated against the **live deployed site** at https://marquee.stage11.dev,\n  signed in as a speaker with a scheduled session \u2014 screenshot in the PR showing\n  tiles actually rendering, not just a passing test.\n- `npm test` green within budget; PR open against `Stage-11-Agentics/marquee` `main`.",
+  "done_at": null,
+  "evidence_refs": [
+    {
+      "id": "art_01KZT0E36DW7F0B6NV31596W2W",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT1R6C9AH7KA13M2EGFGAT6",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT1RGFPQGG8TF9CC7PA1Y8D",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZT27A44NQEQBQ64KM8M1CH0",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZSZXWQ5094E3F8PB9BXV3ZG",
+  "last_event_id": "ev_01KZT2MS593TNTBN85BBWMB23F",
+  "last_status_changed_at": "2026-08-12T04:10:46Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-91",
+  "status": "review",
+  "tags": null,
+  "title": "Speaker portal venue map is a coordinate stub \u2014 render a real map, name the building, put Directions on it",
+  "type": "bug",
+  "updated_at": "2026-08-12T04:10:46Z",
+  "urgency": null
+}

@@ -1,0 +1,64 @@
+{
+  "assigned_to": null,
+  "branch_links": [
+    {
+      "branch": "mrq-89-bucket-scoped-r2",
+      "linked_at": "2026-08-11T23:04:55Z",
+      "linked_by": "agent:codex-cli",
+      "repo": null
+    }
+  ],
+  "comment_count": 8,
+  "complexity": null,
+  "created_at": "2026-08-11T21:44:15Z",
+  "created_by": "agent:mrq-57-deploy",
+  "custom_fields": {},
+  "description": "ACCEPTED DEBT, taken knowingly at deploy time (operator ruling, Atin, 2026-08-11: \"we're fine to use that key for the time being and then we'll clean it up. Just be sure that it's clear\"). This ticket IS the clarity.\n\nWHAT SHIPPED. The deployed Marquee Worker holds R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY set from CLOUDFLARE_R2_ACCESS_KEY_ID / CLOUDFLARE_R2_SECRET_ACCESS_KEY in code/platform/.credentials/.env. That credential is the shared Stage 11 platform S3 key with **Account -> R2 -> Admin Read & Write**, i.e. account-wide.\n\nWHY IT MATTERS. Marquee's whole job on that credential is accepting ANONYMOUS PUBLIC UPLOADS from a CFP form. The key it holds can read, overwrite and DELETE every other bucket in the Projects account \u2014 today that is acetate-releases (Acetate's production updater artifacts), c11-public-videos and stage11-expandedcinema. Blast radius crosses into two unrelated projects that have nothing to do with this conference.\n\nIT ALSO CONTRADICTS AN EXISTING REQUIREMENT: MRQ-14's real-Cloudflare handoff explicitly asks to 'provision least-privilege S3 vars/secrets'. This is not new scope; it is an unpaid part of MRQ-14 carried by MRQ-57.\n\nTHE FIX (~10 minutes, needs the dashboard). R2 -> Manage API tokens -> Create token, Object Read & Write scoped to the marquee-media and marquee-media-preview buckets ONLY. Then: wrangler secret put R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY against the marquee Worker, redeploy, and re-run an upload end to end. No code change \u2014 the Worker reads both off env and does not care where they came from.\n\nALSO ROTATE-WORTHY WHILE HERE: MARQUEE_CLOUDFLARE_API_TOKEN (cfut_..., minted 2026-08-11, expires 2027-06-03) was pasted into a chat transcript at creation. Same house precedent as the keys.txt entries. Harmless for a demo; rotate before Marquee carries real conference data.",
+  "done_at": "2026-08-12T00:35:07Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KZSP9MZ2RD76059TZT7SRM4C",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZSP9X1WKXM92WNG2FC5J57X",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZSP9X1WKXM92WNG2FC5J57W",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZSP9XSFZ7DCNVC1AGDT2D2V",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZSCH1PC3FHBC2TQ6DQA6X49",
+  "last_event_id": "ev_01KZSP9XSFZ7DCNVC1AGDT2D2V",
+  "last_status_changed_at": "2026-08-12T00:35:07Z",
+  "linked_files": [],
+  "needs_human": null,
+  "priority": "high",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-11T21:44:49Z",
+      "created_by": "agent:mrq-57-deploy",
+      "note": null,
+      "target_task_id": "task_01KZJJY8W3ZS4X9YKVP95Q5MQZ",
+      "type": "blocks"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-89",
+  "status": "done",
+  "tags": null,
+  "title": "Replace the Marquee Worker's account-wide R2 key with a bucket-scoped credential",
+  "type": "task",
+  "updated_at": "2026-08-12T00:35:08Z",
+  "urgency": null
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T02:07:51Z",
+  "created_by": "agent:claude",
+  "custom_fields": {},
+  "id": "art_01KZSVKQ23SP5CF299Y1EW54ZK",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZSVKQ23SP5CF299Y1EW54ZK.md",
+    "size_bytes": 2001
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Shipped and merged as PR #33, squash cb0bc3c on main, carrying Aditya's two commits with authorship preserved.\n\nVERIFIED RATHER THAN TAKEN ON TRUST:\n- Nothing outside the landing reads ?demo=. The onl",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}
