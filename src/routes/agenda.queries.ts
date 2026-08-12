@@ -12,6 +12,8 @@ import {
   type AgendaEvent,
   type AgendaFormat,
   type AgendaPoolItem,
+  type AgendaPublication,
+  type AgendaPublishCandidate,
   type AgendaRoom,
   type AgendaSession,
   type AgendaSnapshot,
@@ -330,7 +332,7 @@ async function readStatuses(database: D1Database, eventId: string): Promise<Sche
 
 async function readEvent(database: D1Database, eventId: string): Promise<EventRow | null> {
   return database.prepare(
-    "SELECT id, name, starts_on, ends_on, timezone FROM events WHERE id = ?",
+    "SELECT id, name, slug, starts_on, ends_on, timezone FROM events WHERE id = ?",
   ).bind(eventId).first<EventRow>();
 }
 
@@ -439,17 +441,19 @@ export async function readAgendaSnapshot(
 ): Promise<AgendaSnapshot | null> {
   const event = await readEvent(database, eventId);
   if (!event) return null;
-  const [statuses, rooms, formats, tracks, sessions, venue] = await Promise.all([
+  const [statuses, rooms, formats, tracks, sessions, venue, publication] = await Promise.all([
     readStatuses(database, eventId),
     readRooms(database, eventId),
     readFormats(database, eventId),
     readTracks(database, eventId),
     readSessions(database, eventId),
     readAgendaVenueDisclosure(database, eventId),
+    readAgendaPublication(database, eventId, event.slug),
   ]);
   const unscheduled = await readPool(database, eventId, statuses);
   return {
     event,
+    publication,
     venue,
     schedulable_statuses: statuses,
     rooms,
@@ -458,6 +462,69 @@ export async function readAgendaSnapshot(
     sessions,
     unscheduled,
     conflicts: getConflicts(sessions, rooms, event.timezone),
+  };
+}
+
+interface PublishCandidateRow {
+  agenda_item_id: string;
+  submission_id: string;
+  title: string;
+  starts_at: number;
+  duration_min: number;
+  room: string;
+  building: string;
+  speakers_json: string;
+}
+
+function toPublishCandidate(row: PublishCandidateRow): AgendaPublishCandidate {
+  return {
+    agenda_item_id: row.agenda_item_id,
+    submission_id: row.submission_id,
+    title: row.title,
+    starts_at: Number(row.starts_at),
+    duration_min: Number(row.duration_min),
+    room: row.room,
+    building: row.building,
+    speakers: parseSpeakers(row.speakers_json),
+  };
+}
+
+/**
+ * Publication is a scheduled-agenda concern, not a submission-stage count.
+ * Keeping the accepted + placed + unpublished predicate here means the
+ * builder counter, preview, and batch command all answer the same question.
+ */
+export async function readAgendaPublication(
+  database: D1Database,
+  eventId: string,
+  eventSlug?: string,
+): Promise<AgendaPublication> {
+  const [live, candidates] = await Promise.all([
+    database.prepare(`
+      SELECT COUNT(*) AS count
+      FROM agenda_items item
+      JOIN submissions submission ON submission.id = item.submission_id AND submission.event_id = item.event_id
+      WHERE item.event_id = ? AND item.kind = 'session'
+        AND item.is_published = 1 AND submission.status NOT IN ('rejected', 'withdrawn')
+    `).bind(eventId).first<{ count: number | null }>(),
+    database.prepare(`
+      SELECT item.id AS agenda_item_id, submission.id AS submission_id, submission.title,
+        item.starts_at, item.duration_min, room.name AS room, building.name AS building,
+        ${SPEAKERS_JSON} AS speakers_json
+      FROM agenda_items item
+      JOIN submissions submission ON submission.id = item.submission_id AND submission.event_id = item.event_id
+      JOIN rooms room ON room.id = item.room_id AND room.event_id = item.event_id
+      JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
+      WHERE item.event_id = ? AND item.kind = 'session' AND item.is_published = 0
+        AND submission.status = 'accepted'
+      ORDER BY item.starts_at ASC, submission.id ASC
+    `).bind(eventId).all<PublishCandidateRow>(),
+  ]);
+  return {
+    live: Number(live?.count ?? 0),
+    not_yet_public: candidates.results.length,
+    candidates: candidates.results.map(toPublishCandidate),
+    public_agenda_url: `/agenda?event=${encodeURIComponent(eventSlug ?? eventId)}`,
   };
 }
 
