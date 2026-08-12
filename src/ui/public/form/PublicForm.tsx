@@ -333,7 +333,8 @@ export function PublicForm({ initial }: PublicFormProps) {
   }
 
   async function saveDraft() {
-    preserveDraftOnBlur.current = false;
+    preserveDraftOnBlur.current = true;
+    window.setTimeout(() => { preserveDraftOnBlur.current = false; }, 0);
     setPageError(null);
     if (state.resume_token && state.draft_id) {
       await autosave();
@@ -466,11 +467,18 @@ export function PublicForm({ initial }: PublicFormProps) {
 
   function handleFieldBlur(event: FocusEvent) {
     const next = event.relatedTarget;
-    const draftSave = preserveDraftOnBlur.current
-      || (next instanceof HTMLElement && Boolean(next.closest("[data-save-draft]")));
-    preserveDraftOnBlur.current = false;
-    if (draftSave || !dirty) return;
-    validate();
+    if (next instanceof HTMLElement && next.closest("[data-save-draft]")) {
+      preserveDraftOnBlur.current = true;
+      return;
+    }
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      const draftSave = preserveDraftOnBlur.current
+        || (active instanceof HTMLElement && Boolean(active.closest("[data-save-draft]")));
+      preserveDraftOnBlur.current = false;
+      if (draftSave || !dirty) return;
+      validate();
+    }, 0);
   }
 
   function renderField(field: PublicFormField) {
