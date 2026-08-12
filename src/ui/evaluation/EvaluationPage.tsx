@@ -382,7 +382,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
 
   const focusReviewerPool = (roundId: string): void => {
     setDialog(null);
-    window.setTimeout(() => document.getElementById(`round-${roundId}-reviewer-pool`)?.focus(), 0);
+    document.getElementById(`round-${roundId}-reviewer-pool`)?.focus();
   };
 
   const openInvite = (): void => {
