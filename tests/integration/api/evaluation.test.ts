@@ -145,7 +145,7 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect(body.committees[0]?.members[0]?.progress).toBeGreaterThanOrEqual(0);
   });
 
-  test("ABS-02 · a round carries its own committee pool and distribution can use that persisted pool", async () => {
+  test("CONTRACT · MRQ-110 · a round carries its own committee pool and distribution can use that persisted pool", async () => {
     const patched = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}`, {
       method: "PATCH",
       body: JSON.stringify({ committee_id: COMMITTEE_ID }),
@@ -172,7 +172,7 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect(restored.status).toBe(200);
   });
 
-  test("ABS-12 · declaring a conflict persists an abstention, completes the assignment, and leaves aggregates untouched", async () => {
+  test("CONTRACT · MRQ-110 · declaring a conflict persists an abstention, completes the assignment, and leaves aggregates untouched", async () => {
     const beforeInvalid = await env.DB.prepare("SELECT COUNT(*) AS count FROM evaluations WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_A_ONLY, ORGANIZER_ID).first<{ count: number }>();
     const missingRecommendation = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/submissions/${SUBMISSION_A_ONLY}/evaluations`, { method: "POST", body: JSON.stringify({ abstained: 0 }) });
     expect(missingRecommendation.status).toBe(400);
@@ -220,7 +220,7 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect(recordRound?.reviewers[0]?.coverage.reviewed).toBe(0);
   });
 
-  test("ABS-09 · reviewer reminders use a narrow idempotent reviewer outbox path", async () => {
+  test("CONTRACT · MRQ-110 · reviewer reminders use a narrow idempotent reviewer outbox path", async () => {
     const assigned = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/assignments`, {
       method: "POST",
       body: JSON.stringify({ submission_id: SUBMISSION_COMPARISON_THREE, reviewer_person_id: ORGANIZER_ID }),

@@ -66,7 +66,7 @@ test("CONTRACT · MRQ-108 · the reviewer renders the round's own scorecard and 
   expect(reviewerStyles).toContain(".reviewer-completed-row");
 });
 
-test("MRQ-110 · reviewer and chair surfaces label recusals and send reminders through their write routes", () => {
+test("CONTRACT · MRQ-110 · reviewer and chair surfaces label recusals and send reminders through their write routes", () => {
   expect(reviewerPageSource).toContain('data-reviewer-control="declare-conflict"');
   expect(reviewerPageSource).toContain("const commitReview = async");
   expect(reviewerPageSource).toContain("abstained: review.abstained ? 1 : 0");
