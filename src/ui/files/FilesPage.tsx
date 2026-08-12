@@ -17,6 +17,7 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { formatBytes } from "../upload/upload-policy";
 import { FileComments } from "./FileComments";
+import { BulkExportDialog } from "./BulkExportDialog";
 import { FileVersions } from "./FileVersions";
 import "./files.css";
 
@@ -112,9 +113,11 @@ export function FilesPage({ eventId = DEFAULT_EVENT_ID, navigate }: { eventId?: 
   const [filters, setFilters] = useState({ state: "all" as FileStateFilter, taskType: "", search: "" });
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [exportOpen, setExportOpen] = useState(false);
   const filterIdentity = JSON.stringify(filters);
   const ready = state.kind === "ready" ? state.snapshot : null;
   const rows = useMemo(() => ready?.rows ?? [], [ready]);
+  const selectedRows = useMemo(() => rows.filter((row) => selected.has(row.id)), [rows, selected]);
   const allVisibleSelected = rows.length > 0 && rows.every((row) => selected.has(row.id));
 
   useEffect(() => {
@@ -155,6 +158,7 @@ export function FilesPage({ eventId = DEFAULT_EVENT_ID, navigate }: { eventId?: 
       copy={ready
         ? `Received ${metrics.received} of ${metrics.expected} requested deliverables. Every upload keeps its history; the current version is the one the speaker uploaded last.`
         : "Reading every deliverable the conference has asked for…"}
+      actions={<button class="button primary" type="button" disabled={selected.size === 0 || !ready} onClick={() => setExportOpen(true)}>Download files ({selected.size})</button>}
     />
     {ready ? <>
       <div class="files-metrics" aria-label="Deliverable metrics">
@@ -220,5 +224,6 @@ export function FilesPage({ eventId = DEFAULT_EVENT_ID, navigate }: { eventId?: 
           </div>}
       </section>
     </> : <div class="files-board-state card">{state.kind === "error" ? <><strong>The files library is unavailable</strong><span>{state.message}</span></> : "Reading every deliverable the conference has asked for…"}</div>}
+    <BulkExportDialog eventId={eventId} rows={selectedRows} open={exportOpen} onClose={() => setExportOpen(false)} />
   </div>;
 }
