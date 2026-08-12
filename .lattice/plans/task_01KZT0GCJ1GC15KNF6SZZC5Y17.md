@@ -5,8 +5,9 @@
 Add `date` as a first-class form field type, stored and compared as strict
 ISO `YYYY-MM-DD` values. Cover the D1 schema, every route/type registry,
 shared validation/conditional projection, public and speaker renderers, the
-form builder, the demo seed, migration evidence, tests, and live speaker-flow
-evidence at `https://marquee.stage11.dev`.
+form builder, the demo seed, migration evidence, tests, and local speaker-flow
+evidence. `DEPLOY.md` is authoritative: do not deploy; the live site remains a
+read-only reference and deployment is a human-owned post-merge step.
 
 ## Approach
 
@@ -41,9 +42,11 @@ evidence at `https://marquee.stage11.dev`.
    wherever the repository requires the new migration.
 7. Run the exact suite within the 45s objective (and the relevant static/gate
    checks), perform a real scratch D1 migrate with pre-existing fields,
-   answers, indexes, and foreign keys, then use the approved c11 browser
-   surface on the live site as a speaker. Capture a screenshot showing both
-   native travel date controls and the saved ISO values after reload.
+   answers, indexes, and foreign keys, then run the app locally and use the
+   approved c11 browser surface as a speaker. Capture a local screenshot
+   showing both native travel date controls and the saved ISO values after
+   reload. Read the live `/health` endpoint only if needed to identify the
+   deployed baseline; never deploy from this branch.
 8. Commit meaningful checkpoints, rebase the feature branch on the latest
    `github/main`, reinstall dependencies if the rebase changes the lock/tree,
    re-gate the exact HEAD, push only to `github`, open the GitHub PR against
@@ -63,6 +66,7 @@ evidence at `https://marquee.stage11.dev`.
 ## Evidence handoff
 
 The Lattice task will receive status/comments at planning, implementation,
-local validation, live validation, and PR-open transitions. The PR body will
+local validation, deployment-deferred, and PR-open transitions. The PR body will
 name the historical-data decision, scratch migration proof, exact test/gate
-results, live URL flow, and screenshot artifact.
+results, local URL flow, screenshot artifact, and the fact that deployment is
+pending after human merge.
