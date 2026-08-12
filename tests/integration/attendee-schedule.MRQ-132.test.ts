@@ -153,6 +153,55 @@ test("MRQ-132 · calendar text is RFC 5545-escaped and folded, and unpublished s
   expect(unknown.status).toBe(404);
 });
 
+test("MRQ-132 · every card ships a star in a reserved slot and the interval hooks a conflict is made of", async () => {
+  const response = await request(`/agenda?event=${EVENT_SLUG}`);
+  const body = await response.text();
+  expect(response.status).toBe(200);
+
+  // The keynote starts 13:00 UTC and runs 45 minutes.
+  expect(body).toContain(`data-public-session-start="${Date.UTC(2026, 9, 13, 13)}"`);
+  expect(body).toContain(`data-public-session-end="${Date.UTC(2026, 9, 13, 13) + 45 * 60_000}"`);
+  expect(body).toContain('data-public-session-room="Metropolitan Ballroom · Sheraton"');
+  expect(body).toContain('data-public-session-speakers="Priya Raghunathan"');
+  // State-unknown until the browser answers, in a slot that already exists.
+  expect(body).toContain('data-schedule-star="sub-keynote" aria-pressed="false"');
+  expect(body.match(/class="star-btn"/g) ?? []).toHaveLength(3);
+  // One tap from everywhere: the segmented pair and its fixed-width count.
+  expect(body).toContain('data-schedule-view="agenda"');
+  expect(body).toContain('data-schedule-view="mine"');
+  expect(body).toContain('<span class="count num" data-schedule-count="true">0</span>');
+  expect(body).toContain(`href="/agenda/agents?event=${EVENT_SLUG}"`);
+});
+
+test("MRQ-132 · the itinerary view is a URL, ignores facets, and reserves every slot the script fills", async () => {
+  // A facet in the URL must not survive into the itinerary: an itinerary built
+  // from a filtered program would count a fraction of the attendee's picks.
+  const response = await request(`/agenda?event=${EVENT_SLUG}&view=mine&day=2026-10-13&track=track-agents&q=memory`);
+  const body = await response.text();
+  expect(response.status).toBe(200);
+  expect(body).toContain("<h1>My schedule</h1>");
+  expect(body).toContain("Your itinerary · Schedule Conference 2026");
+  expect(body).toContain('data-schedule-summary="true" hidden');
+  expect(body).toContain('data-schedule-glance="true" hidden');
+  expect(body).toContain('data-schedule-empty="true" hidden');
+  expect(body).toContain("Nothing starred yet");
+  expect(body).toContain('data-schedule-sheet="phone"');
+  expect(body).toContain('data-schedule-sheet="share"');
+  expect(body).toContain('data-schedule-sheet="brief"');
+  // Every published session is present for the script to filter down to.
+  expect(body).toContain('data-public-session-id="sub-keynote"');
+  expect(body).toContain('data-public-session-id="sub-memory"');
+  expect(body).toContain('data-public-session-id="sub-judges"');
+  expect(body).not.toContain('data-public-session-id="sub-unpublished"');
+  expect(body).toContain("needs JavaScript");
+
+  // The agenda view keeps its facets exactly as before.
+  const filtered = await request(`/agenda?event=${EVENT_SLUG}&q=memory`);
+  const filteredBody = await filtered.text();
+  expect(filteredBody).toContain('data-public-session-id="sub-memory"');
+  expect(filteredBody).not.toContain('data-public-session-id="sub-keynote"');
+});
+
 test("MRQ-132 · the session page offers the calendar three ways and directions an attendee can walk", async () => {
   const response = await request(`/s/memory-architectures?event=${EVENT_SLUG}`);
   const body = await response.text();
@@ -170,4 +219,8 @@ test("MRQ-132 · the session page offers the calendar three ways and directions 
   expect(body).not.toContain("Photo ID required");
   const feed = await request(`/api/v1/public/agenda?event=${EVENT_SLUG}`);
   expect(await feed.text()).not.toContain("Photo ID required");
+
+  // The star and the way back, both on the page the decision happens on.
+  expect(body).toContain('data-schedule-star="sub-memory"');
+  expect(body).toContain(`<a class="back-link" data-schedule-back="true" href="/agenda?event=${EVENT_SLUG}">← Agenda</a>`);
 });
