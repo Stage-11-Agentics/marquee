@@ -34,6 +34,12 @@ import {
 } from "../lib/form-conditions";
 import { listFormFields, type FormFieldView } from "./forms.queries";
 import { auditStatement, writeAudit } from "../lib/audit";
+import {
+  parseSocialLinks,
+  personProfilePatchShape,
+  personProfileUpdateStatement,
+  resolvePersonProfile,
+} from "../lib/person-profile";
 
 const eventQuery = z.object({ eventId: z.string().min(1).optional() });
 const taskParams = z.object({ taskId: z.string().min(1) });
@@ -41,13 +47,9 @@ const submissionParams = z.object({ submissionId: z.string().min(1) });
 const participationParams = z.object({ participationId: z.string().min(1) });
 const eventSubmissionParams = z.object({ eventId: z.string().min(1), submissionId: z.string().min(1) });
 
-const profileBody = z.object({
-  title: z.string().trim().max(200).nullable().optional(),
-  company: z.string().trim().max(200).nullable().optional(),
-  bio: z.string().max(20_000).nullable().optional(),
-  social_links: z.array(z.string().url()).max(12).optional(),
-  headshot_attachment_id: z.string().min(1).nullable().optional(),
-});
+// The organizer roster (`speakers.routes.ts`) accepts the same fields through
+// the same shape, so a field added on one surface cannot go missing on the other.
+const profileBody = z.object({ ...personProfilePatchShape });
 
 const coSpeakerProfileBody = z.object({
   bio: z.string().max(20_000).nullable().optional(),
@@ -219,11 +221,6 @@ function parseObject(value: string | null | undefined): Record<string, unknown> 
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? parsed as Record<string, unknown>
     : {};
-}
-
-function parseSocialLinks(value: string | null | undefined): string[] {
-  const parsed = parseJson<unknown>(value, []);
-  return Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed : [];
 }
 
 function readStoredAnswer(row: { value_json: string | null; value_text: string | null }): unknown {
@@ -1172,22 +1169,16 @@ async function updateProfile(context: import("hono").Context<ApiEnv>, body: z.in
     }
   }
   const now = Date.now();
-  await context.env.DB
-    .prepare(
-      `UPDATE people
-       SET title = ?, company = ?, bio = ?, social_links = ?, headshot_attachment_id = ?, last_write_source = 'marquee', updated_at = ?
-       WHERE id = ?`,
-    )
-    .bind(
-      body.title === undefined ? current.title : body.title,
-      body.company === undefined ? current.company : body.company,
-      body.bio === undefined ? current.bio : body.bio,
-      JSON.stringify(body.social_links ?? parseSocialLinks(current.social_links)),
-      headshot,
-      now,
-      auth.personId,
-    )
-    .run();
+  // The organizer roster writes the same person through the same normalizer:
+  // two of them is how the speaker's bio comes back different on the screen
+  // that did not save it.
+  await personProfileUpdateStatement(
+    context.env.DB,
+    auth.personId,
+    resolvePersonProfile(current, body),
+    headshot,
+    now,
+  ).run();
   const person = await personFor(context.env.DB, auth.personId);
   return context.json({
     person: {

@@ -21,6 +21,9 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "scheduled", path: "/submissions?status=scheduled", label: "Scheduled", icon: "6", group: "pipeline", sidebar: true },
   { id: "published", path: "/submissions?status=published", label: "Published", icon: "7", group: "pipeline", sidebar: true },
   { id: "submissions", path: "/submissions", label: "Abstracts & sessions", icon: "", group: "utility" },
+  // The organizer's person list. The label is the noun organizers and the
+  // conference world use — "Speakers" — not a synonym that reads as a synonym.
+  { id: "speakers", path: "/speakers", label: "Speakers", icon: "◍", group: "modules", sidebar: true },
   { id: "forms", path: "/forms", label: "CFP forms", icon: "□", group: "modules", sidebar: true },
   { id: "evaluation", path: "/evaluation", label: "Evaluation plan", icon: "◇", group: "modules", sidebar: true },
   { id: "reviewer", path: "/reviewer", label: "Review queue", icon: "✓", group: "modules", sidebar: true },

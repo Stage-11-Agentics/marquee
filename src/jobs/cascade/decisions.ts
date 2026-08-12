@@ -5,6 +5,7 @@ import { newUlid } from "../../api/ids";
 import { auditStatement, writeAudit as writeAuditRow, type AuditEntry } from "../../lib/audit";
 import type { Decision, Id } from "../../db/schema";
 import { sha256Hex } from "../../lib/auth/random-token";
+import { acceptedSpeakerMembershipStatements } from "../../lib/speaker-membership";
 import { cancelCalendarInvites } from "../calendar/invites";
 import { enqueueMailMessage } from "../mail/consumer";
 import { enqueueTrigger } from "../mail/triggers";
@@ -312,6 +313,13 @@ export async function reconcileTaskSet(
   const created = new Map<Id, number>();
   const restoredCounts = new Map<Id, number>();
   if (submissionIds.length === 0) return counts;
+  // Acceptance is where the conference commits to a person, so it is where the
+  // person becomes a speaker *of this event* — the membership row the roster,
+  // the portal sign-in, headshot ownership, and the comms audience all read.
+  // Before this, the only writer of `memberships` was the demo reseeder, and
+  // every speaker the product created at runtime was invisible to all four.
+  const memberships = await acceptedSpeakerMembershipStatements(db, eventId, submissionIds, now);
+  if (memberships.length > 0) await db.batch(memberships);
   const idsJson = JSON.stringify([...new Set(submissionIds)]);
   const candidates = await db
     .prepare(

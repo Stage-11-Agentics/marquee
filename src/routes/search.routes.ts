@@ -10,6 +10,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { requireSubmissionRead } from "../lib/auth/program-access";
 import { rankSearchCandidates } from "../lib/quick-search";
+import { SPEAKER_ROSTER_PERSON_SOURCE } from "./speakers.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const searchQuery = z.object({ q: z.string().trim().max(200).optional() });
@@ -33,6 +34,7 @@ interface SubmissionSearchRow {
 
 interface SpeakerSearchRow {
   id: string;
+  on_roster: 0 | 1;
   name: string;
   email: string;
   title: string | null;
@@ -87,7 +89,8 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
        ORDER BY s.title COLLATE NOCASE ASC, s.id ASC`,
     ).bind(eventId, ...submissionsScope.bindings).all<SubmissionSearchRow>(),
     database.prepare(
-      `SELECT id, name, email, title, company
+      `SELECT id, name, email, title, company,
+              CASE WHEN id IN (${SPEAKER_ROSTER_PERSON_SOURCE}) THEN 1 ELSE 0 END AS on_roster
        FROM (
          SELECT p.id, p.name, p.email, p.title, p.company
          FROM participations participation
@@ -101,7 +104,7 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
          WHERE s.event_id = ?${submissionsScope.clause}
        )
        ORDER BY name COLLATE NOCASE ASC, id ASC`,
-    ).bind(eventId, ...submissionsScope.bindings, eventId, ...submissionsScope.bindings).all<SpeakerSearchRow>(),
+    ).bind(eventId, eventId, eventId, ...submissionsScope.bindings, eventId, ...submissionsScope.bindings).all<SpeakerSearchRow>(),
     database.prepare(
       `SELECT f.id, f.name, f.slug, f.kind, f.status
        FROM forms f
@@ -130,7 +133,14 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
       id: row.id,
       title: row.name,
       subtitle: [row.title, row.company].filter(Boolean).join(" · ") || "Conference person",
-      href: `/onboarding?person=${encodeURIComponent(row.id)}`,
+      // MRQ-127 widened these candidates to submitters so its person picker can
+      // find them; MRQ-111 added a speaker record they have no row on. So the
+      // destination follows the person: someone on the roster opens their
+      // record, and anyone else keeps the chase-board link they had before.
+      // Sending a non-roster person to /speakers would 404 in the drawer.
+      href: row.on_roster === 1
+        ? `/speakers?person=${encodeURIComponent(row.id)}`
+        : `/onboarding?person=${encodeURIComponent(row.id)}`,
       searchText: [row.name, row.email, row.title ?? "", row.company ?? "", row.id],
     } satisfies SearchCandidate)),
     ...forms.results.map((row) => ({

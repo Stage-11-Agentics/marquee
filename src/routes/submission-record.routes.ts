@@ -34,6 +34,7 @@ const personInput = z.object({
   email: z.string().trim().email().optional(),
   company: z.string().trim().max(200).nullable().optional(),
   title: z.string().trim().max(200).nullable().optional(),
+  bio: z.string().max(20_000).nullable().optional(),
   role: z.enum(["speaker", "co_speaker", "moderator", "chairperson", "submitter", "sponsor_contact"]).default("speaker"),
   position: z.number().int().min(0).optional(),
 });
@@ -657,7 +658,7 @@ const createSubmission = defineApiRoute(
     const owned = await validateOwnedIds(context.env.DB, event.org_id, eventId, body);
     const personStatements: D1PreparedStatement[] = [];
     const knownPeople = new Set<string>();
-    const makePerson = async (input: { person_id?: string; name?: string; email?: string; company?: string | null; title?: string | null }): Promise<string> => {
+    const makePerson = async (input: { person_id?: string; name?: string; email?: string; company?: string | null; title?: string | null; bio?: string | null }): Promise<string> => {
       if (input.person_id) {
         if (knownPeople.has(input.person_id)) return input.person_id;
         const person = await context.env.DB.prepare("SELECT id FROM people WHERE id = ? AND org_id = ?").bind(input.person_id, event.org_id).first();
@@ -674,11 +675,14 @@ const createSubmission = defineApiRoute(
         return existing.id;
       }
       const id = newUlid();
+      // The bio used to be a literal NULL here, so a speaker created through the
+      // admin record was born with a hole the organizer could not see and the
+      // portal round-trip could not explain.
       personStatements.push(context.env.DB.prepare(`
         INSERT INTO people
           (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, '[]', 0, 'marquee', ?, ?)
-      `).bind(id, event.org_id, input.email, input.name, input.title ?? null, input.company ?? null, now, now));
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', 0, 'marquee', ?, ?)
+      `).bind(id, event.org_id, input.email, input.name, input.title ?? null, input.company ?? null, input.bio?.trim() || null, now, now));
       knownPeople.add(id);
       return id;
     };
