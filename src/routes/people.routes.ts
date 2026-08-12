@@ -48,9 +48,18 @@ export const peopleListQuerySchema = z.object({
   list_id: z.string().trim().min(1).optional(),
   event_id: z.string().trim().min(1).optional()
     .describe("Narrow the same query to one conference's roster population."),
-  page: z.coerce.number().int().min(1).optional(),
-  per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional(),
-  sort: z.enum(Object.keys(PEOPLE_SORTS) as [string, ...string[]]).optional(),
+  // The directory predates the shared list contract but is pasted and
+  // hand-edited exactly like every list built on it, so its navigational
+  // parameters degrade to the endpoint's defaults rather than 400-ing the
+  // whole roster away. Filters above stay strict. As in `createListQuerySchema`,
+  // `.catch()` is opaque to the OpenAPI generator, so each field restates its
+  // shape explicitly rather than throwing while the document is built.
+  page: z.coerce.number().int().min(1).optional().catch(undefined)
+    .openapi({ type: "integer", minimum: 1 }),
+  per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional().catch(undefined)
+    .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
+  sort: z.enum(Object.keys(PEOPLE_SORTS) as [string, ...string[]]).optional().catch(undefined)
+    .openapi({ type: "string", enum: Object.keys(PEOPLE_SORTS) }),
 });
 
 const personSummary = z.object({
