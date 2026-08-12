@@ -17,6 +17,7 @@ const PUBLISH_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/publi
 const UNPUBLISH_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/unpublish";
 const ASSIGNMENT_ROUTE = "/api/v1/events/{eventId}/rounds/{roundId}/assignments";
 const ASSIGNMENT_DELETE_ROUTE = "/api/v1/events/{eventId}/rounds/{roundId}/assignments/{assignmentId}";
+const OVERRIDE_ROUTE = "/api/v1/events/{eventId}/rounds/{roundId}/submissions/{submissionId}/evaluations/{evaluationId}/override";
 const COMMS_SEND_ROUTE = "/api/v1/events/{eventId}/comms/send";
 const CONTENT_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/content";
 const CONTENT_RESTORE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/content/restore";
@@ -37,6 +38,26 @@ interface Participant { id: string; person_id: string; name: string; email: stri
 interface SearchResult { type: string; id: string; title: string; subtitle: string; }
 interface Reviewer { id: string; name: string; kind: "human" | "agent"; company: string | null; track_ids: string[]; }
 interface Assignment { assignment_id: string; reviewer_person_id: string; reviewer_name: string; reviewer_kind: "human" | "agent"; status: string; coverage: { assigned: number; reviewed: number }; }
+/**
+ * One recorded scorecard, plus the chair's override of it when there is one.
+ * The reviewer's own score and reasoning are always present: an override
+ * supersedes a judgment on the record, it does not erase it.
+ */
+interface EvaluationEvidence {
+  abstained: boolean;
+  id: string;
+  round_id: string;
+  round_name: string;
+  reviewer_name: string;
+  reviewer_kind: "human" | "agent";
+  recommendation: string | null;
+  score: number | null;
+  comment: string;
+  override_score: number | null;
+  override_comment: string | null;
+  override_at: number | null;
+  override_person_name: string | null;
+}
 interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; reviewers: Assignment[]; evaluations: Array<{ abstained: boolean; score: number | null; recommendation: string | null; comment: string; reviewer_kind: "human" | "agent" }>; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
 interface RecordData {
   id: string; event_id: string; event_name: string; kind: "abstract" | "session"; title: string; abstract: string | null;
@@ -48,11 +69,11 @@ interface RecordData {
   tracks: Array<{ id: string; name: string; color: string; is_primary: boolean }>;
   participants: Participant[]; answers: Array<{ id: string; field_id: string; label: string | null; key: string | null; type: string | null; value_text: string | null; value_json: unknown; file: FileAnswerView | null }>;
   decisions: Array<{ id: string; kind?: "decision" | "reversal"; decision: string; resulting_status: string; feedback_md: string | null; note?: string | null; decided_at: number; decided_by_name: string | null }>;
-  evaluations: Array<{ abstained: boolean; round_id: string; round_name: string; reviewer_name: string; reviewer_kind: "human" | "agent"; recommendation: string | null; score: number | null; comment: string }>;
+  evaluations: EvaluationEvidence[];
   comparisons: Array<{ round_id: string; round_name: string; reviewer_name: string; reviewer_kind: "human" | "agent"; ranking: unknown; submission_ids: string[] }>;
   evaluation: { rounds: Round[]; reviewer_options: Reviewer[] };
   history: Array<{ id: string; action: string; actor_kind: string | null; actor_name: string | null; created_at: number; before: unknown; after: unknown; restorable: boolean }>;
-  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_edit_participants: boolean };
+  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_edit_participants: boolean; can_override_scores: boolean };
 }
 
 interface Props { eventId: string; submissionId: string; navigate: (target: string) => void; }
@@ -97,6 +118,68 @@ function FileAnswer({ label, file }: { label: string; file: FileAnswerView }): J
       <strong>{file.state === "ready" ? file.filename : "No file uploaded"}</strong>
       <span class="tabular">{file.state === "ready" ? `${file.content_type ?? "Unknown type"} · ${formatFileSize(file.size_bytes ?? 0)}` : "Nothing was attached for this field."}</span>
     </div>
+  </div>;
+}
+
+function scoreText(score: number | null): string {
+  return score === null ? "—" : score.toFixed(2);
+}
+
+/**
+ * A recorded scorecard as the chair reads it: who scored, what they scored,
+ * their reasoning — and, when a chair has overridden it, the governing value
+ * with the superseded one still legible underneath.
+ *
+ * The override control is a fixed-height panel whether or not an override
+ * exists, so recording one never shifts the rows below it.
+ */
+function EvaluationEvidenceRow({ evaluation, canOverride, busy, onOverride, onClear }: {
+  evaluation: EvaluationEvidence;
+  canOverride: boolean;
+  busy: boolean;
+  onOverride: (evaluation: EvaluationEvidence, score: number, comment: string) => Promise<void>;
+  onClear: (evaluation: EvaluationEvidence) => Promise<void>;
+}): JSX.Element {
+  const overridden = evaluation.override_score !== null;
+  const [open, setOpen] = useState(false);
+  const [draftScore, setDraftScore] = useState(String(evaluation.override_score ?? evaluation.score ?? ""));
+  const [draftComment, setDraftComment] = useState(evaluation.override_comment ?? "");
+  const parsed = Number(draftScore);
+  const submittable = draftScore.trim() !== "" && Number.isFinite(parsed);
+  return <div class="record-answer record-evaluation">
+    <small>
+      {evaluation.round_name} · Scorecard · <ReviewerName name={evaluation.reviewer_name} kind={evaluation.reviewer_kind} />
+      <span class="evaluation-override-slot">{overridden ? <Chip tone="warning" class="override-chip">Override</Chip> : <span class="override-chip-placeholder" aria-hidden="true" />}</span>
+    </small>
+    <strong class="tabular">{evaluation.abstained
+      ? "Conflict declared"
+      : `${scoreText(overridden ? evaluation.override_score : evaluation.score)} · ${evaluation.recommendation || "No recommendation"}`}</strong>
+    <span>{evaluation.abstained ? "Reviewer recused; no recommendation recorded." : evaluation.comment || "—"}</span>
+    {overridden && <span class="evaluation-superseded">
+      Overridden by {evaluation.override_person_name || "a chair"} · {evaluation.reviewer_name} scored <span class="tabular">{scoreText(evaluation.score)}</span>
+      {evaluation.override_comment ? ` · ${evaluation.override_comment}` : ""}
+    </span>}
+    {canOverride && !evaluation.abstained && <div class="evaluation-override-controls">
+      {open
+        ? <form class="evaluation-override-form" onSubmit={(event) => {
+            event.preventDefault();
+            if (!submittable) return;
+            void onOverride(evaluation, parsed, draftComment).then(() => setOpen(false));
+          }}>
+            <label class="field"><span>Override score</span><input type="number" step="0.1" required value={draftScore} aria-label={`Override score for ${evaluation.reviewer_name}`} onInput={(event) => setDraftScore(event.currentTarget.value)} /></label>
+            <label class="field"><span>Why</span><input value={draftComment} aria-label={`Reason for overriding ${evaluation.reviewer_name}`} onInput={(event) => setDraftComment(event.currentTarget.value)} /></label>
+            <div class="record-action-row">
+              <Button small variant="ghost" type="button" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
+              <Button small variant="primary" type="submit" disabled={busy || !submittable}>Save override</Button>
+            </div>
+          </form>
+        : <div class="record-action-row">
+            <Button small disabled={busy} onClick={() => { setDraftScore(String(evaluation.override_score ?? evaluation.score ?? "")); setDraftComment(evaluation.override_comment ?? ""); setOpen(true); }}>{overridden ? "Edit override" : "Override score"}</Button>
+            <span class="override-clear-slot">{overridden
+              ? <Button small variant="ghost" disabled={busy} onClick={() => void onClear(evaluation)}>Clear override</Button>
+              : <span class="override-clear-placeholder" aria-hidden="true" />}</span>
+          </div>}
+    </div>}
   </div>;
 }
 
@@ -275,6 +358,17 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     await act(`remove-${assignmentId}`, `/../../rounds/${encodeURIComponent(roundId)}/assignments/${encodeURIComponent(assignmentId)}`, { method: "DELETE" }, ASSIGNMENT_DELETE_ROUTE);
   };
 
+  const overridePath = (evaluation: EvaluationEvidence): string =>
+    `/../../rounds/${encodeURIComponent(evaluation.round_id)}/submissions/${encodeURIComponent(submissionId)}/evaluations/${encodeURIComponent(evaluation.id)}/override`;
+
+  const overrideScore = async (evaluation: EvaluationEvidence, score: number, comment: string) => {
+    await act(`override-${evaluation.id}`, overridePath(evaluation), { method: "PUT", body: JSON.stringify({ score, comment: comment.trim() || undefined }) }, OVERRIDE_ROUTE);
+  };
+
+  const clearOverride = async (evaluation: EvaluationEvidence) => {
+    await act(`override-${evaluation.id}`, overridePath(evaluation), { method: "DELETE" }, OVERRIDE_ROUTE);
+  };
+
   /**
    * One editor, two doors. A Draft saves through the drafts endpoint, which
    * owns the form-answer semantics and the form-admin permission; everything
@@ -388,7 +482,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           </form>}
         </CardBody></Card>
         <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
-        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <div class="record-answer" key={`${evaluation.round_id}-${evaluation.reviewer_name}-${index}`}><small>{evaluation.round_name} · Scorecard · <ReviewerName name={evaluation.reviewer_name} kind={evaluation.reviewer_kind} /></small><strong>{evaluation.abstained ? "Conflict declared" : `${evaluation.score === null ? "—" : evaluation.score.toFixed(2)} · ${evaluation.recommendation || "No recommendation"}`}</strong><span>{evaluation.abstained ? "Reviewer recused; no recommendation recorded." : evaluation.comment || "—"}</span></div>)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
+        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
         <Card><CardHeader title="History"><span class="subtle">Every change, who made it, and when.</span></CardHeader><CardBody><ContentHistory entries={record.history} onRestore={record.actions.can_restore_content ? ((entryId) => void restoreVersion(entryId, isLivePublicly)) : undefined} busy={Boolean(busy)} label={statusLabel} moment={moment} livePublicly={isLivePublicly} /></CardBody></Card>
       </div>
       <aside class="record-aside stack">

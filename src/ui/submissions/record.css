@@ -72,6 +72,21 @@
 .record-answer small, .record-answer span { color: var(--muted); font-size: 10.5px; }
 .record-answer strong { font-size: 11.5px; overflow-wrap: anywhere; }
 .record-answer .reviewer-name { max-width: 100%; }
+/* The Override chip's slot is reserved whether or not a score is overridden,
+   so recording one never shifts the reasoning line beneath it. */
+.evaluation-override-slot { align-items: center; display: inline-flex; flex: 0 0 70px; justify-content: flex-start; min-height: 18px; }
+.override-chip, .override-chip-placeholder { align-items: center; display: inline-flex; font: 600 9px/1 var(--mono); justify-content: center; min-height: 18px; min-width: 70px; }
+.override-chip-placeholder { visibility: hidden; }
+.record-evaluation small { align-items: center; display: flex; flex-wrap: wrap; gap: 4px; }
+.evaluation-superseded { color: var(--muted); }
+.evaluation-override-controls { margin-top: 3px; min-height: 26px; }
+.evaluation-override-form { display: grid; gap: 6px; }
+.evaluation-override-form .field span { font-size: 10px; }
+.evaluation-override-controls .record-action-row { display: flex; gap: 6px; justify-content: flex-start; }
+/* Same reserved-slot rule as the chip: Clear appears only when there is an
+   override to clear, and its absence must not move the Override button. */
+.override-clear-slot { align-items: center; display: inline-flex; flex: 0 0 auto; min-height: 26px; min-width: 96px; }
+.override-clear-placeholder { display: inline-flex; min-height: 26px; min-width: 96px; }
 .record-file { align-items: start; display: flex; gap: 9px; }
 /* Fixed 64px whatever the state: the crop holds its square before the image
    loads, while it loads, and when there is no image at all, so the record
