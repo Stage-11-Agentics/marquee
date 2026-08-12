@@ -250,11 +250,13 @@ const createSpeaker = defineApiRoute(
         context.env.DB
           .prepare("UPDATE people SET name = ?, last_write_source = 'marquee', updated_at = ? WHERE id = ?")
           .bind(body.name, now, personId),
+        // The headshot is not part of the create contract (see `createBody`), so
+        // the existing pointer is carried through untouched rather than resolved.
         personProfileUpdateStatement(
           context.env.DB,
           personId,
           resolved,
-          await resolveHeadshot(context.env.DB, personId, existing.headshot_attachment_id, body.headshot_attachment_id),
+          existing.headshot_attachment_id,
           now,
           customFields,
         ),
@@ -337,10 +339,14 @@ const patchSpeaker = defineApiRoute(
 
     const actor = await actorPersonId(context);
     const now = Date.now();
-    if (body.email !== undefined && body.email !== person.email) {
+    if (body.email !== undefined && body.email.toLowerCase() !== person.email.toLowerCase()) {
+      // Case-insensitive, because `createSpeaker` resolves identity with
+      // `lower(email)`. An exact-match check let `Dana@…` slip past a stored
+      // `dana@…` and created two people sharing one address, after which the
+      // create path picks between the duplicates arbitrarily.
       const taken = await context.env.DB
-        .prepare("SELECT id FROM people WHERE org_id = ? AND email = ? AND id <> ?")
-        .bind(event.org_id, body.email, personId)
+        .prepare("SELECT id FROM people WHERE org_id = ? AND lower(email) = ? AND id <> ?")
+        .bind(event.org_id, body.email.toLowerCase(), personId)
         .first<{ id: string }>();
       if (taken) throw ApiError.unprocessable("another person in this organization already uses that email", "email");
     }
@@ -369,11 +375,32 @@ const patchSpeaker = defineApiRoute(
         speakerMembershipStatement(context.env.DB, { orgId: event.org_id, eventId, personId, now }),
         context.env.DB
           .prepare(
+            // Confirming a speaker invited in May must not restamp the
+            // invitation as today, or the two stores disagree about when it
+            // happened in a design whose premise is that they cannot. The
+            // membership row is often minted by this very request, so it has
+            // nothing of its own to preserve — it inherits the earliest real
+            // invitation from the sessions before falling back to now.
             `UPDATE memberships
-             SET confirmation_status = ?, confirmed_at = ?, invited_at = ?, updated_at = ?
+             SET confirmation_status = ?, confirmed_at = ?,
+                 invited_at = ${invitedAt === null ? "NULL" : `COALESCE(
+                   invited_at,
+                   (SELECT MIN(part.invited_at) FROM participations part
+                     WHERE part.person_id = ?
+                       AND part.role IN ('speaker', 'co_speaker')
+                       AND part.submission_id IN (SELECT id FROM submissions WHERE event_id = ?)),
+                   ?
+                 )`}, updated_at = ?
              WHERE event_id = ? AND person_id = ? AND role = 'speaker'`,
           )
-          .bind(stored, confirmedAt, invitedAt, now, eventId, personId),
+          .bind(...[
+            stored,
+            confirmedAt,
+            ...(invitedAt === null ? [] : [personId, eventId, invitedAt]),
+            now,
+            eventId,
+            personId,
+          ]),
         context.env.DB
           .prepare(
             // Setting a speaker back to Pending has to clear the invitation

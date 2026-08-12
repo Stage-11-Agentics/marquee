@@ -309,3 +309,51 @@ test("MRQ-111 · SPK-02 · renaming onto another person's email is a field error
   const body = await response.json<{ error: { field?: string } }>();
   expect(JSON.stringify(body)).toContain("email");
 });
+
+test("MRQ-111 · CNT-10 · an email collision is case-insensitive, matching how identity resolves", async () => {
+  // `createSpeaker` resolves identity with `lower(email)`, so an exact-match
+  // guard let a case variant through and created two people sharing one address.
+  const response = await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "DANA@example.com" }),
+  });
+  expect(response.status).toBe(422);
+  const duplicates = await env.DB
+    .prepare("SELECT COUNT(*) AS count FROM people WHERE org_id = ? AND lower(email) = 'dana@example.com'")
+    .bind(ORG_ID)
+    .first<{ count: number }>();
+  expect(Number(duplicates?.count)).toBe(1);
+});
+
+test("MRQ-111 · SPK-01 · quick search never types a non-roster person as a Speaker", async () => {
+  // The roster admits only live submissions, so a rejected-only speaker has no
+  // record. Typing them "Speaker" would send the organizer to a 404 through a
+  // link this ticket made live.
+  const response = await request(`/api/v1/events/${EVENT_ID}/search?q=Sam`);
+  expect(response.status).toBe(200);
+  const body = await response.json<{ data: Array<{ type: string; id: string }> }>();
+  expect(body.data.filter((hit) => hit.type === "Speaker").map((hit) => hit.id)).not.toContain(REJECTED_PERSON);
+
+  const record = await request(`/api/v1/events/${EVENT_ID}/speakers/${REJECTED_PERSON}`);
+  expect(record.status).toBe(404);
+});
+
+test("MRQ-111 · SPK-04 · confirming a speaker keeps the original invitation date on both stores", async () => {
+  const invitedOn = NOW - 30 * 86_400_000;
+  await env.DB.prepare("UPDATE participations SET invited_at = ? WHERE id = 'par_mrq111_accepted'").bind(invitedOn).run();
+  await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ confirmation_status: "confirmed" }),
+  });
+  const membership = await env.DB
+    .prepare("SELECT invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'")
+    .bind(EVENT_ID, ACCEPTED_SPEAKER)
+    .first<{ invited_at: number | null }>();
+  const participation = await env.DB
+    .prepare("SELECT invited_at FROM participations WHERE id = 'par_mrq111_accepted'")
+    .first<{ invited_at: number | null }>();
+  expect(participation?.invited_at).toBe(invitedOn);
+  expect(membership?.invited_at).toBe(invitedOn);
+});
