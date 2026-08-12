@@ -4,6 +4,7 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { formatBytes } from "../upload/upload-policy";
+import { referenceCode } from "../shell/api-client";
 import { Button } from "../shell/components";
 import "./export.css";
 
@@ -16,6 +17,8 @@ export interface ExportableFileRow {
 }
 
 type ExportState = "idle" | "preparing" | "ready" | "error";
+const MAX_EXPORT_ITEMS = 200;
+const MAX_EXPORT_BYTES = 1024 * 1024 * 1024;
 
 interface Props {
   eventId: string;
@@ -34,10 +37,14 @@ async function responseMessage(response: Response): Promise<string> {
   const apiMessage = typeof payload === "object" && payload !== null && "error" in payload
     && typeof payload.error === "object" && payload.error !== null && "message" in payload.error
     && typeof payload.error.message === "string" ? payload.error.message : null;
+  const requestId = typeof payload === "object" && payload !== null && "request_id" in payload && typeof payload.request_id === "string"
+    ? payload.request_id : response.headers.get("X-Request-Id");
+  const reference = requestId ? ` · ref ${referenceCode(requestId)}` : "";
+  if (response.status === 400) return "Export up to 200 deliverables at a time. Remove some files, or export in two passes.";
   if (response.status === 401) return "Your session has expired. Sign in again, then retry the export.";
   if (response.status === 404) return "One of the selected deliverables is no longer available. Refresh the Files library and try again.";
   if (response.status === 422) return apiMessage ?? "This selection is too large for one ZIP. Remove some files and try again.";
-  return apiMessage ?? "The export could not be generated. Your selection is still here — try again.";
+  return `${apiMessage ?? "The export could not be generated. Your selection is still here — try again."}${reference}`;
 }
 
 export function BulkExportDialog({ eventId, rows, open, onClose }: Props): JSX.Element | null {
@@ -45,8 +52,10 @@ export function BulkExportDialog({ eventId, rows, open, onClose }: Props): JSX.E
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [state, setState] = useState<ExportState>("idle");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [downloadName, setDownloadName] = useState("deliverables-session.zip");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const selected = useMemo(() => rows.filter((row) => !removed.has(row.id)), [rows, removed]);
   const totalBytes = selected.reduce((sum, row) => sum + (row.latest?.size_bytes ?? 0), 0);
@@ -60,12 +69,19 @@ export function BulkExportDialog({ eventId, rows, open, onClose }: Props): JSX.E
       setState("idle");
       setRemoved(new Set());
       setDownloadUrl(null);
+      setDownloadName("deliverables-session.zip");
       setErrorMessage(null);
     }
   }, [open]);
 
   const close = (): void => {
-    if (state === "preparing") return;
+    if (state === "preparing") {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      setState("idle");
+      setErrorMessage(null);
+      return;
+    }
     onClose();
   };
 
@@ -85,6 +101,7 @@ export function BulkExportDialog({ eventId, rows, open, onClose }: Props): JSX.E
   const invalidateDownload = (): void => {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
+    setDownloadName("deliverables-session.zip");
     setErrorMessage(null);
     if (state !== "preparing") setState("idle");
   };
@@ -103,25 +120,38 @@ export function BulkExportDialog({ eventId, rows, open, onClose }: Props): JSX.E
   if (!open) return null;
 
   const generate = async (): Promise<void> => {
-    if (selected.length === 0 || state === "preparing") return;
+    if (selected.length === 0 || selected.length > MAX_EXPORT_ITEMS || totalBytes > MAX_EXPORT_BYTES || state === "preparing") return;
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
+    setDownloadName("deliverables-session.zip");
     setErrorMessage(null);
     setState("preparing");
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/files/export`, {
         method: "POST",
         credentials: "include",
+        signal: controller.signal,
         headers: { "content-type": "application/json", accept: "application/zip" },
         body: JSON.stringify({ task_ids: selected.map((row) => row.id), grouping }),
       });
       if (!response.ok) throw new Error(await responseMessage(response));
       const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition");
+      const filename = disposition?.match(/filename="([^"]+)"/)?.[1] ?? `deliverables-${grouping}.zip`;
+      setDownloadName(filename);
       setDownloadUrl(URL.createObjectURL(blob));
       setState("ready");
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setState("idle");
+        return;
+      }
       setErrorMessage(error instanceof Error ? error.message : "The export could not be generated. Your selection is still here — try again.");
       setState("error");
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
     }
   };
 
@@ -129,7 +159,7 @@ export function BulkExportDialog({ eventId, rows, open, onClose }: Props): JSX.E
     <section ref={dialogRef} class="files-export-dialog" role="dialog" aria-modal="true" aria-labelledby="files-export-title" tabIndex={-1}>
       <header class="files-export-head">
         <div><span class="eyebrow">Bulk export</span><h2 id="files-export-title">Export deliverables</h2><p>Only the current version of each selected deliverable is included.</p></div>
-        <button class="files-export-close" type="button" aria-label="Close export dialog" onClick={close} disabled={state === "preparing"}>×</button>
+        <button class="files-export-close" type="button" aria-label="Close export dialog" onClick={close}>×</button>
       </header>
       <div class="files-export-body">
         <fieldset class="files-export-grouping">
@@ -147,12 +177,12 @@ export function BulkExportDialog({ eventId, rows, open, onClose }: Props): JSX.E
         </ul>
         <div class="files-export-status" aria-live="polite" aria-atomic="true">
           {state === "preparing" && <><span class="files-export-status-mark" aria-hidden="true">◌</span><div><strong>Preparing your download…</strong><small>Reading the current files and assembling the archive. Keep this panel open.</small></div></>}
-          {state === "ready" && downloadUrl && <><span class="files-export-status-mark is-ready" aria-hidden="true">✓</span><div><strong>Ready to download</strong><small>The ZIP contains the latest selected versions. Missing deliverables are listed in manifest.txt.</small><a class="button primary files-export-download" href={downloadUrl} download={`deliverables-${grouping}.zip`}>Download ZIP</a></div></>}
+          {state === "ready" && downloadUrl && <><span class="files-export-status-mark is-ready" aria-hidden="true">✓</span><div><strong>Ready to download</strong><small>The ZIP contains the latest selected versions. Missing deliverables are listed in manifest.txt.</small><a class="button primary files-export-download" href={downloadUrl} download={downloadName}>Download ZIP</a></div></>}
           {state === "error" && <><span class="files-export-status-mark is-error" aria-hidden="true">!</span><div><strong>Export unavailable</strong><small>{errorMessage ?? "The archive was not created. Nothing changed in the Files library."}</small></div></>}
           {state === "idle" && <><span class="files-export-status-mark" aria-hidden="true">→</span><div><strong>Ready when you are</strong><small>Generate a ZIP of the selected current deliverables. Empty slots stay visible in manifest.txt.</small></div></>}
         </div>
       </div>
-      <footer class="files-export-foot"><span class="files-export-foot-note">{selected.length === 0 ? "Select at least one deliverable." : "The archive is generated securely from the conference file store."}</span><div><Button type="button" onClick={close} disabled={state === "preparing"}>Cancel</Button><Button type="button" variant="primary" onClick={() => void generate()} disabled={selected.length === 0 || state === "preparing"}>{state === "preparing" ? "Preparing…" : state === "error" ? "Try again" : "Generate download"}</Button></div></footer>
+      <footer class="files-export-foot"><span class="files-export-foot-note">{selected.length === 0 ? "Select at least one deliverable." : selected.length > MAX_EXPORT_ITEMS ? `Export up to ${MAX_EXPORT_ITEMS} deliverables at a time — ${selected.length} selected. Remove some, or export in two passes.` : totalBytes > MAX_EXPORT_BYTES ? "This selection is too large for one ZIP. Remove some files and export in two passes." : "The archive is generated securely from the conference file store."}</span><div><Button type="button" onClick={close}>{state === "preparing" ? "Stop" : "Cancel"}</Button><Button type="button" variant="primary" onClick={() => void generate()} disabled={selected.length === 0 || selected.length > MAX_EXPORT_ITEMS || totalBytes > MAX_EXPORT_BYTES || state === "preparing"}>{state === "preparing" ? "Preparing…" : state === "error" ? "Try again" : "Generate download"}</Button></div></footer>
     </section>
   </div>;
 }

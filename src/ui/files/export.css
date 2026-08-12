@@ -29,5 +29,6 @@
 .files-export-download { justify-self: start; margin-top: 4px; text-decoration: none; }
 .files-export-foot { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; padding: 14px 22px; }
 .files-export-foot > div { display: flex; gap: 8px; }
+.files-export-foot > div button { min-width: 108px; }
 .files-export-foot-note { color: var(--muted); font: 10px/1.3 var(--mono); }
 @media (max-width: 620px) { .files-export-backdrop { padding: 8px; } .files-export-dialog { max-height: calc(100vh - 16px); } .files-export-head, .files-export-body, .files-export-foot { padding-left: 14px; padding-right: 14px; } .files-export-foot { align-items: stretch; flex-direction: column; } .files-export-foot > div { justify-content: flex-end; } }

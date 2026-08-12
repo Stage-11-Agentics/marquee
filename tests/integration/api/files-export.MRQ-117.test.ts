@@ -9,13 +9,17 @@ const ORG_ID = "org_mrq117";
 const EVENT_ID = "evt_mrq117";
 const EVENT_OTHER_ID = "evt_mrq117_other";
 const PERSON_ID = "person_mrq117";
+const OTHER_PERSON_ID = "person_mrq117_other";
 const SESSION_ID = "session_mrq117";
 const AUTH_SESSION = "auth_mrq117";
 const TEMPLATE_ID = "template_mrq117";
+const OTHER_TEMPLATE_ID = "template_mrq117_other";
 const TASK_ID = "task_mrq117";
 const MISSING_TASK_ID = "task_mrq117_missing";
+const OTHER_TASK_ID = "task_mrq117_other";
 const OLD_ATTACHMENT_ID = "attachment_mrq117_old";
 const LATEST_ATTACHMENT_ID = "attachment_mrq117_latest";
+const LATEST_KEY = `uploads/${EVENT_ID}/task_upload/${LATEST_ATTACHMENT_ID}.pdf`;
 const BUILDING_ID = "building_mrq117";
 const ROOM_ID = "room_mrq117";
 
@@ -62,6 +66,7 @@ beforeEach(async () => {
       (id, event_id, building_id, name, capacity, position, created_at, updated_at)
       VALUES (?, ?, ?, 'Studio A', 100, 0, ?, ?)`).bind(ROOM_ID, EVENT_ID, BUILDING_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'organizer@example.com', 'Priya Raman', '[]', 0, ?, ?)").bind(PERSON_ID, ORG_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'other@example.com', 'Other Speaker', '[]', 0, ?, ?)").bind(OTHER_PERSON_ID, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('membership_mrq117', ?, ?, ?, 'owner', ?, ?)").bind(ORG_ID, PERSON_ID, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(AUTH_SESSION, PERSON_ID, NOW + 86_400_000, NOW, NOW),
     env.DB.prepare(`INSERT INTO submissions
@@ -73,6 +78,9 @@ beforeEach(async () => {
     env.DB.prepare(`INSERT INTO task_templates
       (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
       VALUES (?, ?, 'Upload slides', 'file', 'Final deck', ?, NULL, NULL, NULL, 0, 1, ?, ?)`).bind(TEMPLATE_ID, EVENT_ID, NOW, NOW, NOW),
+    env.DB.prepare(`INSERT INTO task_templates
+      (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
+      VALUES (?, ?, 'Upload other slides', 'file', 'Final deck', ?, NULL, NULL, NULL, 0, 1, ?, ?)`).bind(OTHER_TEMPLATE_ID, EVENT_OTHER_ID, NOW, NOW, NOW),
   ]);
   await storeAttachment(OLD_ATTACHMENT_ID, `uploads/${EVENT_ID}/task_upload/${OLD_ATTACHMENT_ID}.pdf`, "old bytes");
   await storeAttachment(LATEST_ATTACHMENT_ID, `uploads/${EVENT_ID}/task_upload/${LATEST_ATTACHMENT_ID}.pdf`, "latest bytes");
@@ -83,6 +91,9 @@ beforeEach(async () => {
     env.DB.prepare(`INSERT INTO speaker_tasks
       (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 'Upload Final Headshot', 'file', 'Print quality', ?, 'open', NULL, NULL, NULL, ?, ?)`).bind(MISSING_TASK_ID, EVENT_ID, PERSON_ID, SESSION_ID, TEMPLATE_ID, NOW, NOW, NOW),
+    env.DB.prepare(`INSERT INTO speaker_tasks
+      (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, created_at, updated_at)
+      VALUES (?, ?, ?, NULL, ?, 'Upload Other Deck', 'file', 'Final deck', ?, 'open', NULL, NULL, NULL, ?, ?)`).bind(OTHER_TASK_ID, EVENT_OTHER_ID, OTHER_PERSON_ID, OTHER_TEMPLATE_ID, NOW, NOW, NOW),
   ]);
 });
 
@@ -128,5 +139,17 @@ test("CONTRACT · CNT-14 · export follows the pointer even when an older ready 
 test("CONTRACT · CNT-14 · export refuses an unauthenticated or cross-event selection", async () => {
   const body = JSON.stringify({ task_ids: [TASK_ID] });
   expect((await request(`/api/v1/events/${EVENT_ID}/files/export`, { method: "POST", headers: { "content-type": "application/json" }, body }, "")).status).toBe(401);
-  expect((await request(`/api/v1/events/${EVENT_ID}/files/export`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ task_ids: ["task-from-another-event"] }) })).status).toBe(404);
+  expect((await request(`/api/v1/events/${EVENT_ID}/files/export`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ task_ids: [OTHER_TASK_ID] }) })).status).toBe(404);
+});
+
+test("CONTRACT · CNT-14 · a lost R2 object stays visible in the manifest", async () => {
+  await env.MEDIA.delete(LATEST_KEY);
+  const response = await request(`/api/v1/events/${EVENT_ID}/files/export`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ task_ids: [TASK_ID], grouping: "session" }),
+  });
+  expect(response.status).toBe(200);
+  const text = new TextDecoder().decode(new Uint8Array(await response.arrayBuffer()));
+  expect(text).toContain("the latest upload bytes are unavailable");
 });

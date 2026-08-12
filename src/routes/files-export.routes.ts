@@ -43,7 +43,10 @@ const exportRequest = z.object({
 type ExportRequest = z.infer<typeof exportRequest>;
 
 const QUERY_CHUNK_SIZE = 80;
-const MAX_ZIP_BYTES = 0xffffffff - (4 * 1024 * 1024);
+// STORE/CRC plus a browser Blob is intentionally capped below ZIP32's hard
+// limit. This leaves a practical single-Worker/browser ceiling instead of
+// starting a multi-gigabyte export that cannot finish honestly.
+const MAX_ZIP_BYTES = 1024 * 1024 * 1024;
 
 function bindings(context: { env: ApiEnv["Bindings"] }): ExportEnv {
   return context.env as unknown as ExportEnv;
@@ -58,6 +61,18 @@ function safeSegment(value: string | null | undefined, fallback: string): string
     .replace(/^\.+|\.+$/g, "")
     .slice(0, 96);
   return segment || fallback;
+}
+
+function safeFilename(value: string | null | undefined): string {
+  const raw = (value ?? "deliverable")
+    .trim()
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/[^a-z0-9._ -]/gi, "_")
+    .replace(/\s+/g, "_");
+  const dot = raw.lastIndexOf(".");
+  const extension = dot > 0 ? raw.slice(dot).replace(/[^a-z0-9.]/gi, "_").slice(0, 24) : "";
+  const stem = safeSegment(dot > 0 ? raw.slice(0, dot) : raw, "deliverable");
+  return `${stem.slice(0, Math.max(1, 96 - extension.length))}${extension}`;
 }
 
 function sessionFolder(row: ExportTaskRow): string {
@@ -76,10 +91,10 @@ function sessionFolder(row: ExportTaskRow): string {
 
 function archivePath(row: ExportTaskRow, grouping: "session" | "speaker", filename: string): string {
   const session = sessionFolder(row);
-  const safeFilename = safeSegment(filename, "deliverable");
+  const safeFile = safeFilename(filename);
   return grouping === "speaker"
-    ? `${safeSegment(row.speaker_name, "Unknown_Speaker")}/${session}/${safeFilename}`
-    : `${session}/${safeFilename}`;
+    ? `${safeSegment(row.speaker_name, "Unknown_Speaker")}/${session}/${safeFile}`
+    : `${session}/${safeFile}`;
 }
 
 function missingLine(row: ExportTaskRow, reason: string): string {

@@ -19,6 +19,9 @@ test("MRQ-117 · Files selection mounts a discoverable export dialog", () => {
   assert.match(dialog, /Ready to download/);
   assert.match(dialog, /manifest\.txt/);
   assert.match(dialog, /Remove/);
+  assert.match(dialog, /MAX_EXPORT_ITEMS = 200/);
+  assert.match(dialog, /AbortController/);
+  assert.match(dialog, /MAX_EXPORT_ITEMS/);
 });
 
 test("MRQ-117 · export route remains latest-pointer and manifest honest", () => {
@@ -27,4 +30,6 @@ test("MRQ-117 · export route remains latest-pointer and manifest honest", () =>
   assert.match(route, /manifest\.txt/);
   assert.match(route, /application\/zip/);
   assert.match(route, /task\.event_id = \?/);
+  assert.match(route, /QUERY_CHUNK_SIZE = 80/);
+  assert.match(route, /safeFilename/);
 });
