@@ -3,9 +3,14 @@ import { expect, test } from "vitest";
 import { matchRoute, routesFor } from "../../src/ui/shell/route-table";
 
 test("CONTRACT · the sidebar reproduces the binding prototype navigation order", () => {
+  // "Tasks" is the one row the binding prototype does not carry. Task authoring
+  // did not exist when the prototype was drawn, and an area reachable only from
+  // a settings sub-page is an area an organizer has to already know about. The
+  // prototype's order is otherwise untouched, and the new row sits with the
+  // other program modules where its siblings are.
   expect([...routesFor("home"), ...routesFor("pipeline"), ...routesFor("modules")].map((route) => route.label)).toEqual([
     "Program home", "Program board", "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published",
-    "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Communications", "Speaker portal", "Conference site", "Conference settings",
+    "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Communications", "Tasks", "Speaker portal", "Conference site", "Conference settings",
     "Speaker follow-ups",
   ]);
 });
