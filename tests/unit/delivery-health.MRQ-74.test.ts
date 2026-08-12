@@ -7,6 +7,7 @@ import {
   deriveOwed,
   deriveQuota,
   readInfrastructure,
+  summarizeSystemHealth,
   type DeliveryHealthFacts,
   type InfrastructureFacts,
   type OwedFact,
@@ -258,7 +259,7 @@ describe("MRQ-74 · capability verdicts", () => {
       UNREPORTED,
     );
     expect(snapshot.capabilities.find((row) => row.id === "email")?.level).toBe("warn");
-    expect(snapshot.summary.level).toBe("warn");
+    expect(summarizeSystemHealth(snapshot.capabilities).level).toBe("warn");
   });
 
   test("CONTRACT · a form left open past its closing date is caught before a speaker notices", () => {
@@ -373,7 +374,7 @@ describe("MRQ-74 · scheduled jobs and the infrastructure report", () => {
 
   test("CONTRACT · unreachable storage is the loudest thing on the screen", () => {
     const snapshot = deriveDeliveryHealth(facts(), readInfrastructure({ status: "degraded", probes: [{ name: "d1", ok: false, duration_ms: 5 }] }));
-    expect(snapshot.summary.level).toBe("alarm");
+    expect(summarizeSystemHealth(snapshot.capabilities).level).toBe("alarm");
     expect(snapshot.capabilities[0].id).toBe("storage");
     expect(snapshot.capabilities[0].level).toBe("alarm");
   });

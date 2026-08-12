@@ -12,10 +12,10 @@ import { DeliveryHealthPage } from "./DeliveryHealthPage";
 import { runDemoReset } from "./demo-reset";
 
 /**
- * Delivery health renders the shared Flight Deck chrome around its own screen.
- * Navigation out of it is a real browser navigation rather than a client-side
- * push, so every sidebar destination resolves the same way it does anywhere
- * else — there is no dead end on this screen.
+ * The health pages render the shared Flight Deck chrome around their own
+ * screens. Navigation out of them is a real browser navigation rather than a
+ * client-side push, so every sidebar destination resolves the same way it does
+ * anywhere else — there is no dead end on either page.
  */
 export function DeliveryHealthShell({
   eventName = "AIE NYC 2026",
@@ -37,7 +37,11 @@ export function DeliveryHealthShell({
     else setResetting(false);
   }, [resetting]);
 
-  const route = matchRoute("/delivery-health");
+  const systemHealth = new URLSearchParams(window.location.search).get("view") === "system";
+  const route = systemHealth
+    ? matchRoute("/delivery-health?view=system")
+    : matchRoute(window.location.pathname, window.location.search) ?? matchRoute("/delivery-health");
+  const mode = systemHealth ? "system-health" : "speaker-followups";
 
   return <>
     <div class="app-shell">
@@ -51,7 +55,7 @@ export function DeliveryHealthShell({
       <main class="main">
         <Topbar
           eventName={eventName}
-          routeName={route?.label ?? "Delivery health"}
+          routeName={route?.label ?? "Speaker follow-ups"}
           identity={identity}
           userMenuOpen={userMenuOpen}
           openSearch={() => setSearchOpen(true)}
@@ -61,8 +65,8 @@ export function DeliveryHealthShell({
         <div class="page">
           {/* The shell's own boundary, as the admin shell keeps: a screen that
               throws on its first render must not take navigation down with it. */}
-          <ErrorBoundary label={route?.label ?? "Delivery health"}>
-            <DeliveryHealthPage eventId={eventId} navigate={navigate} />
+          <ErrorBoundary label={route?.label ?? "Speaker follow-ups"}>
+            <DeliveryHealthPage eventId={eventId} navigate={navigate} mode={mode} />
           </ErrorBoundary>
         </div>
       </main>
