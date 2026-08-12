@@ -56,6 +56,13 @@ describe("MRQ-102 · split health summaries", () => {
     expect(summary.detail).toContain("follow-up list");
   });
 
+  test("AC-2 · an owed in-flight set still reflects a spent mail allowance", () => {
+    const summary = summarizeSpeakerFollowups(4, 0, 5, deriveQuota({ sent_today: 100, waiting: 5 }));
+
+    expect(summary.level).toBe("alarm");
+    expect(summary.headline).toBe("4 speakers have not heard from you.");
+  });
+
   test("AC-3 · system health never receives owed-speaker facts", () => {
     const summary = summarizeSystemHealth([
       { id: "storage", label: "Your conference data", level: "alarm", headline: "The system cannot reach your conference data.", detail: "Screens will fail to load.", href: null },

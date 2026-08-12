@@ -37,8 +37,11 @@ export function DeliveryHealthShell({
     else setResetting(false);
   }, [resetting]);
 
-  const route = matchRoute(window.location.pathname, window.location.search) ?? matchRoute("/delivery-health");
-  const mode = route?.id === "system-health" ? "system-health" : "speaker-followups";
+  const systemHealth = new URLSearchParams(window.location.search).get("view") === "system";
+  const route = systemHealth
+    ? matchRoute("/delivery-health?view=system")
+    : matchRoute(window.location.pathname, window.location.search) ?? matchRoute("/delivery-health");
+  const mode = systemHealth ? "system-health" : "speaker-followups";
 
   return <>
     <div class="app-shell">

@@ -14,6 +14,8 @@ export function Sidebar({ activeId, eventName, navigate, resetting, onReset }: {
     <Nav label="Program lifecycle" routes={routesFor("pipeline")} activeId={activeId} navigate={navigate} />
     <div class="nav-label">Modules</div>
     <Nav label="Program modules" routes={routesFor("modules")} activeId={activeId} navigate={navigate} />
+    <div class="nav-label">System</div>
+    <Nav label="System" routes={routesFor("utility")} activeId={activeId} navigate={navigate} />
     <div class="sidebar-foot">
       <a href="/api/docs">⌘ API &amp; CLI</a>
       <button type="button" class="reset-demo-button" onClick={onReset} disabled={resetting} aria-busy={resetting}>

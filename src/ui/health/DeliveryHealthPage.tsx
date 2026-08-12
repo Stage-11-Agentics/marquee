@@ -8,7 +8,7 @@ import type {
   HealthLevel,
   OwedMessage,
 } from "../../lib/delivery-health";
-import { summarizeSpeakerFollowups, summarizeSystemHealth } from "../../lib/delivery-health";
+import { OWED_LEDGER_LIMIT, summarizeSystemHealth } from "../../lib/delivery-health";
 import { apiFetch, backoffDelayMs } from "../shell/api-client";
 import { Button, PageHeader } from "../shell/components";
 import { ErrorBanner, ErrorBoundary } from "../shell/ErrorSurface";
@@ -160,7 +160,12 @@ function FollowupsSkeleton(): JSX.Element {
     </section>
     <section class="card health-ledger health-loading-card" aria-label="Who is owed a message" aria-busy="true">
       <header class="card-head"><div><h2>Owed a message</h2><span class="subtle">Decided, and not yet told</span></div><span class="button small ghost">Open the list</span></header>
-      <div class="card-body health-ledger-body"><div class="health-loading-ledger">{Array.from({ length: 5 }, (_, index) => <div class="health-loading-row" key={index}><i /><span /><span /><span /></div>)}</div></div>
+      <div class="card-body health-ledger-body">
+        <div class="health-loading-reasons" aria-hidden="true"><span /><span /><span /></div>
+        <div class="health-owed-head" aria-hidden="true"><span>Status</span><span>Speaker</span><span>What happened</span><span>Decision</span><span>Waiting</span></div>
+        <div class="health-loading-ledger">{Array.from({ length: OWED_LEDGER_LIMIT }, (_, index) => <div class="health-loading-row" key={index}><i /><span /><span /><span /><span /></div>)}</div>
+        <p class="health-ledger-foot">Reading the full follow-up list…</p>
+      </div>
     </section>
   </>;
 }
@@ -304,7 +309,7 @@ export function DeliveryHealthPage({ eventId = "evt_aie-ny-2026", navigate, mode
     ? null
     : mode === "system-health"
       ? summarizeSystemHealth(snapshot.capabilities)
-      : summarizeSpeakerFollowups(snapshot.owed_total, snapshot.owed_urgent, snapshot.quota.waiting, snapshot.quota);
+      : snapshot.summary;
   const checked = state.loadedAt === null
     ? "checking…"
     : error === null ? `checked ${formatClock(state.loadedAt)}` : `as of ${formatClock(state.loadedAt)} · retrying`;

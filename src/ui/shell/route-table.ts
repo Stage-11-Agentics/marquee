@@ -34,7 +34,7 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "delivery-health", path: "/delivery-health", label: "Speaker follow-ups", icon: "◎", group: "modules", sidebar: true, external: true },
   // The query variant shares the health document entrypoint without adding an
   // unowned app bootstrap branch. It is deliberately outside the main flow.
-  { id: "system-health", path: "/delivery-health?view=system", label: "System health", icon: "◌", group: "utility", sidebar: true, external: false },
+  { id: "system-health", path: "/delivery-health?view=system", label: "System health", icon: "◌", group: "utility", sidebar: true, external: true },
   { id: "venues", path: "/settings/venues", label: "Venues", icon: "⌖", group: "utility" },
   { id: "submission-detail", path: "/submissions/:id", label: "Submission record", icon: "", group: "utility" },
   { id: "submission-new", path: "/submissions/new", label: "Create submission", icon: "", group: "utility" },

@@ -858,8 +858,11 @@ export function summarizeSpeakerFollowups(
   sentLast7Days = 0,
 ): HealthSummary {
   if (owedTotal > 0) {
+    const level = owedUrgent > 0 || quota.level === "alarm"
+      ? "alarm"
+      : quota.level === "warn" ? "warn" : "ok";
     return {
-      level: owedUrgent > 0 ? "alarm" : "ok",
+      level,
       headline: `${count(owedTotal)} ${plural(owedTotal, "speaker has", "speakers have")} not heard from you.`,
       detail: owedUrgent > 0
         ? "Their decision is recorded and the message has not reached them. Open the follow-up list — each row opens its record."
@@ -888,7 +891,7 @@ export function summarizeSystemHealth(capabilities: readonly CapabilityStatus[])
   const warning = capabilities.find((capability) => capability.level === "warn");
   if (warning) return { level: "warn", headline: warning.headline, detail: warning.detail };
   const unknown = capabilities.find((capability) => capability.level === "unknown");
-  if (unknown) return { level: "unknown", headline: "The system has not reported every check yet.", detail: unknown.detail };
+  if (unknown) return { level: "unknown", headline: `The ${unknown.label} check has not reported yet.`, detail: unknown.detail };
   return {
     level: "ok",
     headline: "System health is clear.",

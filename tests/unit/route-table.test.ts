@@ -12,7 +12,8 @@ test("CONTRACT · the sidebar reproduces the binding prototype navigation order"
 
 test("AC-1 · speaker follow-ups and system health are real external destinations in their binding groups", () => {
   expect(matchRoute("/delivery-health")).toMatchObject({ label: "Speaker follow-ups", group: "modules", external: true });
-  expect(matchRoute("/delivery-health", "?view=system")).toMatchObject({ label: "System health", group: "utility", external: false });
+  expect(matchRoute("/delivery-health", "?view=system")).toMatchObject({ label: "System health", group: "utility", external: true });
+  expect(routesFor("utility").map((route) => route.label)).toContain("System health");
 });
 
 test("CONTRACT · route matching preserves lifecycle query routes and dynamic records", () => {
