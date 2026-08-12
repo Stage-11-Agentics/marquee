@@ -460,11 +460,11 @@ interface ExistingDecisionCandidate {
 }
 
 /**
- * One decision mail performs a template read, an outbox write, and a queue
+ * One decision mail performs two template reads, an outbox write, and a queue
  * send. Keep the request comfortably below Workers' 1,000-subrequest ceiling;
  * callers use the cursor in the response to drain the rest.
  */
-export const NOTIFY_DECISIONS_BATCH_SIZE = 250;
+export const NOTIFY_DECISIONS_BATCH_SIZE = 200;
 
 /**
  * Re-send a decision without touching the decision record. The decision id is

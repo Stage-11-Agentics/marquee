@@ -338,8 +338,13 @@ describe.sequential("MRQ-68 decided not notified", () => {
     await suppress(second.outbox_ids);
 
     const third = await notify(second.next_cursor);
-    expect(third).toMatchObject({ selected: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 2, queued: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 2, skipped_no_address: 0, remaining: 0, next_cursor: null });
+    expect(third).toMatchObject({ selected: NOTIFY_DECISIONS_BATCH_SIZE, queued: NOTIFY_DECISIONS_BATCH_SIZE, skipped_no_address: 0, remaining: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 3 });
+    expect(third.next_cursor).toBeTruthy();
     await suppress(third.outbox_ids);
+
+    const fourth = await notify(third.next_cursor);
+    expect(fourth).toMatchObject({ selected: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 3, queued: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 3, skipped_no_address: 0, remaining: 0, next_cursor: null });
+    await suppress(fourth.outbox_ids);
 
     const final = await notify();
     expect(final).toEqual({ selected: 0, queued: 0, skipped_no_address: 0, remaining: 0, next_cursor: null, outbox_ids: [] });
