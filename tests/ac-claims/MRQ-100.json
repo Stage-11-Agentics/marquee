@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-100",
+  "owns": [],
+  "exercises": ["AC-3"],
+  "notes": "MRQ-100 adds ticket-local seed acceptance AC-1 through AC-6; the consolidated EVALUATION contract has no new minted criterion. The node contract tests and local browser evidence cover the seed rows, derived Ready to place predicate, deterministic convergence, and confirmation projections."
+}

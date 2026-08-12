@@ -150,10 +150,12 @@ test("CONTRACT · every accepted submission resolves its taxonomy, decision and 
   }
 
   // Participations: one speaker of record per submission, additional accepted
-  // participants after it, contiguous positions, and no duplicate person.
-  // M-04b deliberately adds moderators to create live agenda conflicts.
+  // participants after it, and contiguous positions. The agenda deliberately
+  // carries one multi-role confirmation fixture: a confirmed moderator and a
+  // declined speaker role for the same person, plus one pending co-speaker.
   const wavesById = new Map(submissions.map((row) => [row.id, row.wave_id]));
   const bySubmission = new Map();
+  const confirmationExceptions = [];
   for (const participation of table("participations").filter(
     (row) => submissionIds.has(row.submission_id),
   )) {
@@ -162,24 +164,41 @@ test("CONTRACT · every accepted submission resolves its taxonomy, decision and 
     const expected = wavesById.get(participation.submission_id) === "wav_wave-1"
       ? "confirmed"
       : "pending";
-    assert.equal(participation.confirmation_status, expected);
+    if (participation.confirmation_status !== expected) confirmationExceptions.push(participation);
     const group = bySubmission.get(participation.submission_id) ?? [];
     group.push(participation);
     bySubmission.set(participation.submission_id, group);
   }
+  assert.deepEqual(
+    confirmationExceptions.map((row) => row.confirmation_status).sort(),
+    ["declined", "declined", "pending"],
+  );
+  const exceptionSubmissionIds = new Set(confirmationExceptions.map((row) => row.submission_id));
+  assert.equal(exceptionSubmissionIds.size, 2, "confirmation exceptions should be on scheduled agenda Sessions");
+  const exceptionSubmissionId = [...exceptionSubmissionIds][0];
   assert.equal(bySubmission.size, 60);
   for (const [submissionId, group] of bySubmission) {
     const ordered = [...group].sort((left, right) => left.position - right.position);
     assert.deepEqual(ordered.map((row) => row.position), ordered.map((_, index) => index));
     assert.equal(ordered[0].role, "speaker", `${submissionId} has no speaker of record`);
     for (const participant of ordered.slice(1)) {
-      assert.ok(["co_speaker", "moderator", "chairperson"].includes(participant.role));
+      assert.ok(
+        ["co_speaker", "moderator", "chairperson"].includes(participant.role)
+          || (participant.role === "speaker" && submissionId === exceptionSubmissionId),
+      );
     }
-    assert.equal(
-      new Set(ordered.map((row) => row.person_id)).size,
-      ordered.length,
-      `${submissionId} lists the same person twice`,
-    );
+    const personCounts = new Map();
+    for (const participant of ordered) personCounts.set(participant.person_id, (personCounts.get(participant.person_id) ?? 0) + 1);
+    const duplicatePeople = [...personCounts].filter(([, count]) => count > 1);
+    if (submissionId === exceptionSubmissionId) {
+      assert.equal(duplicatePeople.length, 1);
+      const duplicateId = duplicatePeople[0][0];
+      const duplicateRoles = ordered.filter((row) => row.person_id === duplicateId);
+      assert.deepEqual(new Set(duplicateRoles.map((row) => row.role)), new Set(["moderator", "speaker"]));
+      assert.equal(duplicateRoles.find((row) => row.confirmation_status === "declined")?.role, "speaker");
+    } else {
+      assert.equal(duplicatePeople.length, 0, `${submissionId} lists the same person twice`);
+    }
   }
 });
 

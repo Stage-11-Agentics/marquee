@@ -215,7 +215,12 @@ export function poolSubmissionId(index: number): string {
   return seedId("sub", `synthetic-pool-${String(index + 1).padStart(4, "0")}`);
 }
 
-function poolStatus(index: number): "in_review" | "rejected" | "waitlisted" | "draft" {
+function poolStatus(index: number): "submitted" | "in_review" | "rejected" | "waitlisted" | "withdrawn" | "draft" {
+  // Keep the 1,000-row demo spine and every deterministic pool identity intact
+  // while making the two status filters reachable. These are synthetic pool
+  // records, deliberately outside the published accepted core.
+  if (index === IN_REVIEW_COUNT - 1) return "submitted";
+  if (index === IN_REVIEW_COUNT + REJECTED_COUNT - 1) return "withdrawn";
   if (index < IN_REVIEW_COUNT) return "in_review";
   if (index < IN_REVIEW_COUNT + REJECTED_COUNT) return "rejected";
   if (index < IN_REVIEW_COUNT + REJECTED_COUNT + WAITLISTED_COUNT) return "waitlisted";
@@ -245,7 +250,11 @@ export function run(ctx: SeedContext): void {
     const savedAt = FIRST_SAVED_AT + index * SAVE_INTERVAL_MS;
     const primaryTrackIndex = index % TRACKS.length;
     const primaryTrackId = TRACKS[primaryTrackIndex]!;
-    const decided = status === "rejected" || status === "waitlisted";
+    // The withdrawn fixture represents a synthetic proposal that was decided
+    // against and then withdrawn. Keeping its prior decision preserves the
+    // established seed cardinalities while the current status reaches the
+    // organizer's Withdrawn filter.
+    const decided = status === "rejected" || status === "waitlisted" || status === "withdrawn";
     const malformedNoFormat = index >= POOL_SIZE - 2;
 
     ctx.add("people", {
