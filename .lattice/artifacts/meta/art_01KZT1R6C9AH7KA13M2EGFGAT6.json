@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T03:55:10Z",
+  "created_by": "agent:codex-mrq-91",
+  "custom_fields": {},
+  "id": "art_01KZT1R6C9AH7KA13M2EGFGAT6",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT1R6C9AH7KA13M2EGFGAT6.png",
+    "size_bytes": 961275
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Local Wrangler speaker portal at 127.0.0.1:8812: rendered OSM tiles, building label, one map Directions control.",
+  "tags": [],
+  "title": "MRQ-91 local speaker portal screenshot",
+  "token_usage": null,
+  "type": "file"
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T02:06:35Z",
+  "created_by": "agent:claude",
+  "custom_fields": {},
+  "id": "art_01KZSVHCREJGWCJNHF6MTDZTNT",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZSVHCREJGWCJNHF6MTDZTNT.md",
+    "size_bytes": 2608
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Shipped and merged as PR #38, squash edfaf6c1 on main.\n\nTHE FINDING WAS WORSE THAN FILED. The avatar was not missing identity \u2014 it was the literal string 'MC', a hardcoded default prop on both AppShel",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

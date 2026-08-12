@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T21:41:42Z",
+  "created_by": "agent:claude-ux-polish",
+  "custom_fields": {},
+  "id": "art_01KZSCCBHQSAHD1ERWDZMW8BRK",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZSCCBHQSAHD1ERWDZMW8BRK.md",
+    "size_bytes": 1442
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "VERIFIED FIXED ON MAIN \u2014 no code change made, none needed.\n\nMRQ-76 (PR #17) unified pipeline-stage derivation onto BOARD_STAGE_SQL. The 'waved' arm now requires status='accepted' AND a pending wave, s",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,41 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 5,
+  "complexity": null,
+  "created_at": "2026-08-12T03:33:25Z",
+  "created_by": {
+    "agent_type": "intake",
+    "base_name": "feedback-intake",
+    "framework": "claude-code",
+    "model": "claude-opus-5",
+    "name": "feedback-intake-1",
+    "serial": 1,
+    "session": "sess_01KZSZXGH17A7VWN1TA7QNT7WG"
+  },
+  "custom_fields": {},
+  "description": "Add `date` as a first-class form field type. Operator decision, 2026-08-11, from\nexercising the live site: the Hotel and Travel Reservations task asks for an\n**Arrival date** and a **Departure date** and both are free-text boxes.\n\n## Why\n\n`scripts/seed/event.ts:316-317` seeds them as `short_text`:\n\n    [\"arrival_date\", \"Arrival date\", \"short_text\", 1, 0],\n    [\"departure_date\", \"Departure date\", \"short_text\", 1, 1],\n\nNot an oversight in the seed \u2014 **the system has no date type to choose.** The\nschema's CHECK constraint (`migrations/0001_init.sql:252-257`) allows exactly\n`short_text, long_text, single_select, multi_select, url, email, file, number`.\n\nSo a speaker types their travel dates as prose, and the organizer holding a hotel\nblock receives strings like \"the 14th\" and \"Tues morning\" that nothing can sort,\ncompare, or export. This is squarely the post-acceptance workflow Marquee claims\nas its moat over Sessionize, and it is on the walkthrough path.\n\n## Scope \u2014 end to end, one PR\n\n1. **Schema.** Widen the `form_fields.type` CHECK to include `date`. SQLite/D1\n   cannot alter a CHECK in place: write a new migration that rebuilds the table\n   (create new, copy, drop, rename) following whatever pattern\n   `migrations/0002_venue_geography.sql` establishes for this project. Preserve\n   every row, index, and foreign key. Verify against a real migrate run, not just\n   a read of the SQL.\n2. **Route validation.** Add `date` to the zod enums \u2014 `src/routes/forms.routes.ts`\n   (two places, ~lines 69 and 150) and `src/routes/public-form.routes.ts:61`.\n   Search for others; do not assume three is all of them.\n3. **Validation and conditions.** `src/lib/form-conditions.ts` switches on field\n   type (~lines 196, 215, 246, 287). Give `date` correct coercion and comparison\n   semantics. Store and compare as **ISO `YYYY-MM-DD`** \u2014 a date with no time and\n   no zone, because \"the day I arrive\" is not an instant. Reject malformed values\n   server-side; never trust the client control.\n4. **Renderers.** Emit `<input type=\"date\">` wherever fields render: the speaker\n   portal (`src/ui/portal/PortalPage.tsx`, the `form` task kind) and the public\n   form renderer. Keep the existing label/help-text/required treatment.\n5. **Form builder.** `src/ui/forms/FormsPage.tsx` \u2014 add `date` to the `FieldType`\n   union (line 11) and to the type picker options (~line 80) as \"Date\", so an\n   organizer can actually choose it. Check `hasTextRules` (line 141) and the other\n   type-conditional rule blocks and make sure `date` lands in the right bucket\n   rather than silently inheriting text rules.\n6. **Seed.** Switch `arrival_date` and `departure_date` to the new type. Sweep the\n   seed for any other field that is semantically a date and convert it too.\n7. **Existing data.** Decide and state what happens to `short_text` values already\n   stored for these fields in a seeded/deployed database \u2014 convert what parses,\n   leave what does not, or re-seed. The demo database is the one that matters here;\n   say what you did in the PR.\n\n## Constraints\n\n- **Don't gold-plate.** No date *ranges*, no time-of-day, no timezone picker, no\n  calendar widget of our own \u2014 the native control is correct and accessible.\n- The organizer's language, per `PHILOSOPHY.md`: the picker says \"Date\", not\n  \"ISO 8601\".\n- Flight Deck aesthetic per `DESIGN.md`. A native date input needs styling to sit\n  with the other fields in both the portal and the public form \u2014 reuse the existing\n  field classes; the control must not be visibly taller or shorter than its\n  neighbours (**elements never jump**).\n- Suite budget 45s, gate budget 120s.\n\n## Acceptance\n\n- An organizer creating a form field can pick **Date** and save it.\n- A speaker opening Hotel and Travel Reservations gets a real date picker for both\n  arrival and departure, and the saved value round-trips on reload.\n- A malformed date submitted directly to the API is rejected with a clear error.\n- Conditional logic keyed on a date field behaves correctly.\n- Migration applies cleanly to a database with existing form fields and rows, with\n  no data loss.\n- Validated on the **live deployed site** at https://marquee.stage11.dev as a\n  speaker, screenshot in the PR.\n- `npm test` green within budget; PR open against `Stage-11-Agentics/marquee` `main`.",
+  "done_at": null,
+  "evidence_refs": [
+    {
+      "id": "art_01KZT13TAXDK7RBYTF6AFNVY90",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZT0GCJ1GC15KNF6SZZC5Y17",
+  "last_event_id": "ev_01KZT26YR9TJNST6XKWQEKE97M",
+  "last_status_changed_at": "2026-08-12T03:41:20Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-95",
+  "status": "in_progress",
+  "tags": null,
+  "title": "No date field type exists \u2014 travel dates are collected as free text",
+  "type": "task",
+  "updated_at": "2026-08-12T04:03:13Z",
+  "urgency": null
+}
