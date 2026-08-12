@@ -20,6 +20,13 @@ export function createListQuerySchema<Filters extends z.ZodRawShape>(
   options: { defaultSort?: string } = {},
 ) {
   const defaultSort = options.defaultSort ?? sortKeys[0];
+  // Neither `.default()` nor `.catch()` re-parses the value it supplies, and
+  // this one now feeds both the missing-key and the invalid-value path — so a
+  // typo'd `defaultSort` would reach the sort registry as a live column name.
+  // Failing at module load names the call site; failing at request time does not.
+  if (!sortKeys.includes(defaultSort)) {
+    throw new Error(`defaultSort ${JSON.stringify(defaultSort)} is not one of: ${sortKeys.join(", ")}`);
+  }
   const base = z.object({
     // A list URL is pasted, hand-edited, and outlived by the options it names,
     // so the three navigational parameters below degrade to their defaults

@@ -6,12 +6,12 @@ export type SubmissionSort = (typeof SUBMISSION_SORTS)[number];
 
 /**
  * A list view is a URL people paste to each other, and a pasted URL is typed,
- * edited, and outlived by the option it names. The endpoint validates `sort`
- * against a fixed set and correctly refuses anything else — but the refusal
- * arrived as a 400 that emptied the whole table behind a generic error, with
- * the sort control rendering blank and no way back except editing the address
- * bar. Normalising here, at the one place the request is assembled, keeps the
- * API strict and stops the page asking it for something it does not offer.
+ * edited, and outlived by the option it names. The endpoint degrades an
+ * unrecognised `sort` to its own default rather than refusing the read, so the
+ * list always answers — but the response envelope does not echo which sort it
+ * applied, and a control bound to the raw URL would still render blank.
+ * Normalising here, at the one place the request is assembled, is what makes
+ * the sort control show the value actually in effect.
  */
 export function normaliseSubmissionSort(value: string | null): SubmissionSort {
   return SUBMISSION_SORTS.includes(value as SubmissionSort) ? (value as SubmissionSort) : "newest";
