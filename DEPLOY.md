@@ -61,7 +61,7 @@ npm run seed -- --remote      # deterministic upserts: converges, does not dupli
 
 ---
 
-## The four things that go wrong
+## The five things that go wrong
 
 **`npx vite build` is load-bearing, not a formality.** With the Cloudflare Vite plugin,
 `wrangler.jsonc` is *not* what Wrangler reads — `.wrangler/deploy/config.json` redirects it to
@@ -82,6 +82,28 @@ is granted with nowhere to land and no error naming the cause.
 
 **Verify by build hash, not by the page loading.** The old build serves a perfectly healthy
 200. `/health` carries the commit; that is the only honest check.
+
+**A new name in `wrangler.jsonc`'s `secrets.required` blocks the next deploy, whoever runs
+it.** Adding a name there is free at merge time — no test covers it, CI stays green, and the
+PR that added it looks finished. The bill arrives when someone else runs `wrangler deploy` and
+it refuses outright: *"The following required secrets have not been set"*. This is "merging
+does not ship" in a second costume, and it is worse than the first, because the person who
+pays is not the person who chose. Before deploying, when the diff since the live build touches
+that file:
+
+```sh
+git diff <deployed-sha> github/main -- wrangler.jsonc | grep '^+' | grep -i secret
+npx wrangler secret list        # names only; compare against secrets.required
+```
+
+If you are the one adding a required secret, set it on the Worker in the same sitting —
+`npx wrangler secret put NAME` takes effect immediately and needs no deploy. If you are the
+one blocked by someone else's, note that the reverse is also true: setting the real value
+later costs one command and no downtime, so an unblocking placeholder is recoverable. But say
+out loud that you used one. A placeholder silently disables whatever verifies against it —
+for `RESEND_WEBHOOK_SECRET` that is inbound webhook signature checking, while outbound mail
+(`RESEND_API_KEY`) keeps working — and a half-working integration nobody flagged is how a
+feature gets reported as shipped when it is not.
 
 ---
 
