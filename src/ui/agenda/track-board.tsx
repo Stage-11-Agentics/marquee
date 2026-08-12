@@ -17,6 +17,7 @@ export interface TrackDay {
 interface DropCellProps {
   children?: ComponentChildren;
   class?: string;
+  ariaLabel: string;
   dataTrackDay: string;
   dataTrackTime: string;
   onDrop: (event: DragEvent) => void;
@@ -25,6 +26,7 @@ interface DropCellProps {
 function DropCell({
   children,
   class: className = "",
+  ariaLabel,
   dataTrackDay,
   dataTrackTime,
   onDrop,
@@ -32,6 +34,9 @@ function DropCell({
   const [over, setOver] = useState(false);
   return <div
     class={`agenda-drop-cell ${over ? "drag-over" : ""} ${className}`.trim()}
+    role="region"
+    aria-label={ariaLabel}
+    data-agenda-drop-target="true"
     data-track-day={dataTrackDay}
     data-track-time={dataTrackTime}
     data-track-slot={`${dataTrackDay}:${dataTrackTime}`}
@@ -82,6 +87,7 @@ export function TrackBoard({
             <div class="agenda-track-slots">
               {TIME_SLOTS.map((time) => <DropCell
                 class="agenda-track-slot"
+                ariaLabel={`Place Session in ${track.name} on ${day.label} at ${time}`}
                 dataTrackDay={day.value}
                 dataTrackTime={time}
                 key={`${day.value}-${time}`}

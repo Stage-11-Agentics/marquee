@@ -16,6 +16,8 @@ import {
   ERROR_TREATMENTS,
   MarqueeApiError,
   describeError,
+  errorSummary,
+  fieldError,
   referenceCode,
 } from "../../src/ui/shell/api-client";
 import {
@@ -68,6 +70,29 @@ describe("the reference code", () => {
     const described = describeError(new Error("Cannot read properties of undefined"));
     expect(described.sentence).not.toContain("undefined");
     expect(described.retryable).toBe(false);
+  });
+
+  test("MRQ-127 · field detail maps to the named control and an unmapped field stays available globally", () => {
+    const direct = new MarqueeApiError({
+      code: "unprocessable",
+      message: "Choose a format from this conference's settings.",
+      status: 422,
+      field: "format_id",
+      route: "/api/v1/events/{eventId}/submissions",
+    });
+    expect(fieldError(direct, ["format_id"])).toBe("Choose a format from this conference's settings.");
+    expect(fieldError(direct, ["track_ids"])).toBeUndefined();
+    expect(errorSummary(direct)).toContain("Choose a format from this conference's settings.");
+
+    const details = new MarqueeApiError({
+      code: "unprocessable",
+      message: "The submission has invalid values.",
+      status: 422,
+      details: { issues: [{ fieldKey: "submitter.email", message: "Enter a reachable email address." }] },
+      route: "/api/v1/events/{eventId}/submissions",
+    });
+    expect(fieldError(details, ["submitter.email"])).toBe("Enter a reachable email address.");
+    expect(errorSummary(details)).toContain("The submission has invalid values.");
   });
 });
 

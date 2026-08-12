@@ -82,6 +82,31 @@
 .record-form-grid { display: grid; gap: 14px; grid-template-columns: 180px minmax(0, 1fr); }
 .record-form-wide { grid-column: 1 / -1; }
 .record-form-grid textarea { resize: vertical; }
+.record-picker-state { align-items: center; color: var(--muted); display: flex; font: 400 10.5px/1.4 var(--mono); min-height: 45px; }
+.record-picker-state.error { color: var(--danger); }
+.record-person-picker { border: 1px solid var(--line); display: grid; gap: 9px; margin: 0; min-width: 0; padding: 12px; }
+.record-person-picker legend { color: var(--ink); font-size: 11.5px; font-weight: 700; padding: 0 5px; }
+.required-mark { color: var(--danger); font: 600 9px var(--mono); letter-spacing: .08em; margin-left: 5px; text-transform: uppercase; }
+.record-picker-tabs { display: flex; gap: 6px; }
+.record-picker-tabs button { background: var(--panel); border: 1px solid var(--line-strong); color: var(--muted); cursor: pointer; font: 600 9px var(--mono); letter-spacing: .04em; min-height: 30px; padding: 6px 9px; }
+.record-picker-tabs button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.record-picker-body { display: grid; gap: 7px; min-width: 0; }
+.record-picker-body > input, .record-new-person-grid input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font: 12px/1.4 var(--sans); min-height: 34px; outline: none; padding: 8px 9px; width: 100%; }
+.record-picker-body > input:focus, .record-new-person-grid input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.record-person-suggestions { border: 1px solid var(--line); min-height: 44px; }
+.record-picker-placeholder { align-items: center; color: var(--muted); display: flex; font: 400 10px/1.4 var(--mono); min-height: 42px; padding: 7px 9px; }
+.record-picker-placeholder.error { color: var(--danger); }
+.record-person-suggestion { align-items: center; background: var(--panel); border: 0; border-bottom: 1px solid var(--line); color: var(--ink); cursor: pointer; display: flex; gap: 8px; justify-content: space-between; min-height: 42px; padding: 7px 9px; text-align: left; width: 100%; }
+.record-person-suggestion:last-child { border-bottom: 0; }
+.record-person-suggestion:hover, .record-person-suggestion:focus-visible { background: var(--accent-soft); outline: none; }
+.record-person-suggestion strong, .record-selected-person strong { font-size: 11.5px; }
+.record-person-suggestion small, .record-selected-person small { color: var(--muted); font: 400 9.5px/1.3 var(--mono); }
+.record-selected-person { align-items: center; background: var(--accent-soft); border: 1px solid var(--accent); display: flex; gap: 10px; justify-content: space-between; min-height: 52px; padding: 8px 9px; }
+.record-selected-person span { display: grid; gap: 4px; min-width: 0; }
+.record-new-person-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.create-field-error { color: transparent; display: block; font: 400 10px/1.3 var(--mono); min-height: 13px; }
+.create-field-error.visible { color: var(--danger); }
+.record-form-grid select[multiple] { min-height: 88px; }
 .record-bypass-toggle { align-items: flex-start; background: var(--accent-soft); border: 1px solid var(--accent); display: flex; gap: 9px; grid-column: 1 / -1; padding: 10px; }
 .record-bypass-toggle span { display: grid; gap: 4px; }
 .record-bypass-toggle strong { font-size: 11.5px; }
@@ -100,6 +125,6 @@
   .record-summary-meta { align-items: flex-start; text-align: left; }
   .record-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .record-participants, .record-aside { display: grid; grid-template-columns: 1fr; }
-  .record-form-grid, .record-schedule-form { grid-template-columns: 1fr; }
+  .record-form-grid, .record-schedule-form, .record-new-person-grid { grid-template-columns: 1fr; }
   .record-form-wide { grid-column: auto; }
 }

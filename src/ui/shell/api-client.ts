@@ -204,6 +204,32 @@ export function errorSummary(error: unknown): string {
   return `${described.sentence} ${described.recovery} · ref ${described.reference}`;
 }
 
+interface FieldDetail {
+  field?: unknown;
+  fieldKey?: unknown;
+  message?: unknown;
+}
+
+function detailIssues(details: unknown): FieldDetail[] {
+  if (Array.isArray(details)) return details.filter((item): item is FieldDetail => Boolean(item) && typeof item === "object");
+  if (!details || typeof details !== "object") return [];
+  const issues = (details as { issues?: unknown }).issues;
+  return Array.isArray(issues)
+    ? issues.filter((item): item is FieldDetail => Boolean(item) && typeof item === "object")
+    : [];
+}
+
+/** Return the API's own 422 detail for one or more controls on a screen. */
+export function fieldError(error: unknown, fields: readonly string[]): string | undefined {
+  if (!(error instanceof MarqueeApiError) || error.code !== "unprocessable") return undefined;
+  if (error.field && fields.includes(error.field)) return error.message;
+  const issue = detailIssues(error.details).find((candidate) => {
+    const field = typeof candidate.field === "string" ? candidate.field : candidate.fieldKey;
+    return typeof field === "string" && fields.includes(field);
+  });
+  return typeof issue?.message === "string" && issue.message.length > 0 ? issue.message : undefined;
+}
+
 function isOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }

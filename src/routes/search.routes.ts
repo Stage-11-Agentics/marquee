@@ -78,7 +78,7 @@ function formScope(authPersonId: string | null): { clause: string; bindings: str
 async function querySearchCandidates(database: D1Database, eventId: string, scopedPersonId: string | null): Promise<SearchCandidate[]> {
   const submissionsScope = eventScope(scopedPersonId);
   const formsScope = formScope(scopedPersonId);
-  const [submissions, speakers, forms] = await Promise.all([
+  const [submissions, speakers, forms, members] = await Promise.all([
     database.prepare(
       `SELECT s.id, s.kind, s.title, s.abstract, s.search_blob
        FROM submissions s
@@ -88,9 +88,12 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
     database.prepare(
       `SELECT DISTINCT p.id, p.name, p.title, p.company
        FROM people p
-       JOIN participations participation ON participation.person_id = p.id
-       JOIN submissions s ON s.id = participation.submission_id
-       WHERE s.event_id = ?${submissionsScope.clause}
+       JOIN submissions s ON s.event_id = ?
+         AND (s.submitter_person_id = p.id OR EXISTS (
+           SELECT 1 FROM participations participation
+           WHERE participation.submission_id = s.id AND participation.person_id = p.id
+         ))
+       WHERE 1 = 1${submissionsScope.clause}
        ORDER BY p.name COLLATE NOCASE ASC, p.id ASC`,
     ).bind(eventId, ...submissionsScope.bindings).all<SpeakerSearchRow>(),
     database.prepare(
@@ -99,7 +102,19 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
        WHERE f.event_id = ?${formsScope.clause}
        ORDER BY f.name COLLATE NOCASE ASC, f.id ASC`,
     ).bind(eventId, ...formsScope.bindings).all<FormSearchRow>(),
+    scopedPersonId === null
+      ? database.prepare(
+        `SELECT DISTINCT p.id, p.name, p.title, p.company
+         FROM people p
+         JOIN memberships membership ON membership.person_id = p.id
+         WHERE membership.event_id = ?
+         ORDER BY p.name COLLATE NOCASE ASC, p.id ASC`,
+      ).bind(eventId).all<SpeakerSearchRow>()
+      : Promise.resolve({ results: [] as SpeakerSearchRow[] }),
   ]);
+
+  const people = new Map<string, SpeakerSearchRow>();
+  for (const person of [...speakers.results, ...members.results]) people.set(person.id, person);
 
   return [
     ...submissions.results.map((row) => {
@@ -113,11 +128,11 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
         searchText: [row.title, row.id, row.search_blob, row.abstract ?? ""],
       } satisfies SearchCandidate;
     }),
-    ...speakers.results.map((row) => ({
+    ...[...people.values()].map((row) => ({
       type: "Speaker" as const,
       id: row.id,
       title: row.name,
-      subtitle: [row.title, row.company].filter(Boolean).join(" · ") || "Conference speaker",
+      subtitle: [row.title, row.company].filter(Boolean).join(" · ") || "Conference person",
       href: `/onboarding?person=${encodeURIComponent(row.id)}`,
       searchText: [row.name, row.title ?? "", row.company ?? "", row.id],
     } satisfies SearchCandidate)),

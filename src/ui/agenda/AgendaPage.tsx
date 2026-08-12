@@ -216,15 +216,20 @@ export function SessionTile({
 function DropCell({
   children,
   class: className = "",
+  ariaLabel,
   onDrop,
 }: {
   children?: ComponentChildren;
   class?: string;
+  ariaLabel: string;
   onDrop: (event: DragEvent) => void;
 }): JSX.Element {
   const [over, setOver] = useState(false);
   return <div
     class={`agenda-drop-cell ${over ? "drag-over" : ""} ${className}`.trim()}
+    role="region"
+    aria-label={ariaLabel}
+    data-agenda-drop-target="true"
     onDragOver={(event) => { event.preventDefault(); setOver(true); }}
     onDragLeave={() => setOver(false)}
     onDrop={(event) => { event.preventDefault(); setOver(false); onDrop(event as unknown as DragEvent); }}
@@ -326,6 +331,7 @@ function DayBoard({
       {snapshot.rooms.map((room) => <DropCell
         class="agenda-day-cell"
         key={`${time}-${room.id}`}
+        ariaLabel={`Place Session on ${day} at ${time} in ${room.name}`}
         onDrop={(event) => onDrop(event, day, time, room.id)}
       >{sessions.filter((session) => session.room_id === room.id && sessionTime(session, snapshot.event.timezone) === time).map((session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={onRoomOpen} conflicts={conflicts} />)}</DropCell>)}
     </>)}
@@ -357,7 +363,7 @@ function WeekBoard({
     {days.map((day) => <div class="agenda-grid-head" key={day.value}>{day.label}</div>)}
     {TIME_SLOTS.map((time) => <>
       <div class="agenda-time tabular" key={`${time}-label`}>{time}</div>
-      {days.map((day) => <DropCell key={`${day.value}-${time}`} class="agenda-week-cell" onDrop={(event) => { if (fallbackRoom) onDrop(event, day.value, time, fallbackRoom.id); }}>
+      {days.map((day) => <DropCell key={`${day.value}-${time}`} class="agenda-week-cell" ariaLabel={`Place Session on ${day.label} at ${time}${fallbackRoom ? ` in ${fallbackRoom.name}` : ""}`} onDrop={(event) => { if (fallbackRoom) onDrop(event, day.value, time, fallbackRoom.id); }}>
         {sessions.filter((session) => sessionDay(session, snapshot.event.timezone) === day.value && sessionTime(session, snapshot.event.timezone) === time).map((session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={onRoomOpen} conflicts={conflicts} />)}
       </DropCell>)}
     </>)}
@@ -390,7 +396,7 @@ function RoomBoard({
       {days.map((day) => <div class="agenda-room-day" key={day.value}>
         <div class="agenda-day-label">{day.label}</div>
         {sessions.filter((session) => session.room_id === room.id && sessionDay(session, snapshot.event.timezone) === day.value).sort((left, right) => left.starts_at - right.starts_at).map((session) => <div key={session.id} class="agenda-room-session-wrap"><span class="tabular">{sessionTime(session, snapshot.event.timezone)}</span><SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={onRoomOpen} conflicts={conflicts} /></div>)}
-        <DropCell class="agenda-room-empty" onDrop={(event) => onDrop(event, day.value, "16:00", room.id)}>Drop at 16:00</DropCell>
+        <DropCell class="agenda-room-empty" ariaLabel={`Place Session on ${day.label} in ${room.name} at 16:00`} onDrop={(event) => onDrop(event, day.value, "16:00", room.id)}>Drop at 16:00</DropCell>
       </div>)}
     </section>)}
   </div>;
