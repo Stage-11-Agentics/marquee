@@ -10,10 +10,10 @@ import { listCommsAudience, type CommsRecipientRow } from "../jobs/mail/audience
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import {
+  COMMUNICATION_TEMPLATE_KEYS,
   defaultTemplateKeyFromId,
   findTemplate,
   listCommunicationTemplates,
-  MAIL_TEMPLATE_KEYS,
   type MailTemplateKey,
 } from "../jobs/mail/templates";
 import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
@@ -563,7 +563,7 @@ const createTemplate = defineApiRoute(
     const { eventId } = context.req.valid("param");
     requireComms(context, eventId, true);
     const body = context.req.valid("json");
-    if (!(MAIL_TEMPLATE_KEYS as readonly string[]).includes(body.key)) throw ApiError.badRequest("unknown template key", "key");
+    if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(body.key)) throw ApiError.badRequest("unknown template key", "key");
     const now = Date.now();
     const id = crypto.randomUUID();
     try {
@@ -615,7 +615,7 @@ const updateTemplate = defineApiRoute(
       ).bind(persistedId, eventId, current.key, current.name, current.subject, current.body_md, current.enabled, now, now).run();
     }
     const nextKey = body.key ?? current.key;
-    if (!(MAIL_TEMPLATE_KEYS as readonly string[]).includes(nextKey)) throw ApiError.badRequest("unknown template key", "key");
+    if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(nextKey)) throw ApiError.badRequest("unknown template key", "key");
     const now = Date.now();
     await context.env.DB.prepare(
       `UPDATE email_templates SET key = ?, name = ?, subject = ?, body_md = ?, enabled = ?, updated_at = ? WHERE id = ? AND event_id = ?`,
@@ -668,7 +668,7 @@ const previewComms = defineApiRoute(
       ? mergeDataFor(selected)
       : { "speaker.first_name": firstName(recipient.name), "speaker.name": recipient.name, "speaker.email": recipient.email };
     if (body.template_key) {
-      if (!(MAIL_TEMPLATE_KEYS as readonly string[]).includes(body.template_key)) throw ApiError.badRequest("unknown template key", "template_key");
+      if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(body.template_key)) throw ApiError.badRequest("unknown template key", "template_key");
       const template = await findTemplate(context.env.DB, eventId, body.template_key);
       const rendered = renderMail(template, data);
       return context.json({ ...rendered, to_email: recipient.email }, 200);
@@ -702,7 +702,7 @@ const sendComms = defineApiRoute(
     if (hasTemplate === hasAdHoc || (!hasTemplate && (body.subject === undefined || body.body === undefined))) {
       throw ApiError.badRequest("send requires exactly one of template_key or subject and body");
     }
-    if (body.template_key && !(MAIL_TEMPLATE_KEYS as readonly string[]).includes(body.template_key)) {
+    if (body.template_key && !(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(body.template_key)) {
       throw ApiError.badRequest("unknown template key", "template_key");
     }
     const recipients = await recipientsFor(context.env.DB, eventId, body.selector);

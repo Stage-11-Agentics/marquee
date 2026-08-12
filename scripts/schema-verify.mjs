@@ -213,7 +213,8 @@ try {
   assert.match(firstApply.stdout, /0006_audit_log_request_id\.sql/);
   assert.match(firstApply.stdout, /0007_embed_widget_kinds\.sql/);
   assert.match(firstApply.stdout, /0008_form_field_dates\.sql/);
-  assert.match(firstApply.stdout, /0009_evaluation_round_committees\.sql/);
+  assert.match(firstApply.stdout, /0009_criterion_kinds\.sql/);
+  assert.match(firstApply.stdout, /0010_evaluation_round_committees\.sql/);
 
   const secondApply = runWrangler([
     "d1",
@@ -301,7 +302,7 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 91, "Expected the exact foreign-key graph");
+  assert.equal(foreignKeyRows.length, 92, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 
@@ -376,10 +377,12 @@ try {
       ('view1','event1','person1','Mine','{"q":"","filters":{},"sort":[],"columns":["title"]}',1,1);
     INSERT INTO evaluation_plans VALUES
       ('plan1','event1','Plan','',NULL,NULL,'open',1,1);
-    INSERT INTO evaluation_rounds VALUES
-      ('round1','plan1',0,'Round 1','scorecard',0,1,NULL,NULL,1,1);
-    INSERT INTO evaluation_rounds VALUES
-      ('round2','plan1',1,'Round 2','comparison',0,1,NULL,NULL,1,1);
+    INSERT INTO evaluation_rounds
+      (id,plan_id,position,name,mode,anonymized,target_reviews_per_submission,opens_at,closes_at,created_at,updated_at,committee_id)
+      VALUES ('round1','plan1',0,'Round 1','scorecard',0,1,NULL,NULL,1,1,NULL);
+    INSERT INTO evaluation_rounds
+      (id,plan_id,position,name,mode,anonymized,target_reviews_per_submission,opens_at,closes_at,created_at,updated_at,committee_id)
+      VALUES ('round2','plan1',1,'Round 2','comparison',0,1,NULL,NULL,1,1,NULL);
     INSERT INTO reviewer_track_scopes VALUES ('scope1','event1','person1','track1',1,1);
     INSERT INTO committees VALUES ('committee1','event1','Committee',1,1);
     INSERT INTO round_assignments VALUES

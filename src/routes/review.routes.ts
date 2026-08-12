@@ -290,7 +290,7 @@ async function reviewsForSubmissions(
   for (let offset = 0; offset < uniqueIds.length; offset += 80) {
     const chunk = uniqueIds.slice(offset, offset + 80);
     const result = await db.prepare(`
-      SELECT submission_id, recommendation, score, criteria_scores, comment, reviewer_person_id, created_at, updated_at
+      SELECT submission_id, recommendation, score, criteria_scores, comment, abstained, reviewer_person_id, created_at, updated_at
       FROM evaluations
       WHERE round_id = ? AND reviewer_person_id = ? AND submission_id IN (${chunk.map(() => "?").join(",")})
     `).bind(roundId, reviewerPersonId, ...chunk).all<CompletedRow>();
@@ -324,7 +324,7 @@ async function reviewerTrackScopes(db: D1Database, eventId: string, personId: st
 async function activeRoundForEvent(db: D1Database, eventId: string, principal: Principal): Promise<RoundRow> {
   const rounds = await db.prepare(`
     SELECT round.id, round.plan_id, plan.name AS plan_name, round.position, round.name, round.mode,
-      round.anonymized, round.target_reviews_per_submission, round.opens_at, round.closes_at
+      round.anonymized, round.committee_id, round.target_reviews_per_submission, round.opens_at, round.closes_at
     FROM evaluation_rounds round
     JOIN evaluation_plans plan ON plan.id = round.plan_id
     WHERE plan.event_id = ? AND plan.status = 'open'
