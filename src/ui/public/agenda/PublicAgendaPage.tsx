@@ -92,9 +92,9 @@ export const PUBLIC_SITE_STYLES = `
 .public-not-found h1 { margin: 12px 0 7px; font: 550 30px/1.1 Georgia, serif; }
 @media (max-width: 760px) {
   .public-heading { display: block; }
-  .public-heading .public-button { margin-top: 15px; }
   .public-filters { grid-template-columns: 1fr 1fr; }
   .public-days { grid-column: 1 / -1; width: 100%; }
+  .public-days button { flex: 1 1 0; width: auto; min-width: 0; padding: 0 2px; font-size: 9px; }
   .public-agenda-row { grid-template-columns: 86px minmax(0, 1fr); gap: 10px; }
   .public-track-list { grid-column: 2; justify-content: flex-start; }
 }
@@ -116,6 +116,16 @@ export const PUBLIC_AGENDA_SCRIPT = `
   if (!form) return;
   const submit = () => {
     const activeDay = form.querySelector('button[name="day"].active');
+    if (!(activeDay instanceof HTMLButtonElement)) {
+      const currentDay = new URLSearchParams(window.location.search).get('day');
+      if (currentDay && currentDay !== 'all') {
+        const preservedDay = document.createElement('input');
+        preservedDay.type = 'hidden';
+        preservedDay.name = 'day';
+        preservedDay.value = currentDay;
+        form.append(preservedDay);
+      }
+    }
     if (form.requestSubmit) form.requestSubmit(activeDay instanceof HTMLButtonElement ? activeDay : undefined);
     else form.submit();
   };

@@ -174,6 +174,7 @@ test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an e
   expect(defaultBody).toContain('form.requestSubmit(activeDay instanceof HTMLButtonElement ? activeDay : undefined)');
   expect(defaultBody).toContain('href="/">Organizer demo</a>');
   expect(defaultBody).toContain("scrollIntoView({ block: 'nearest', inline: 'nearest' })");
+  expect(defaultBody).toContain("new URLSearchParams(window.location.search).get('day')");
 
   const dayAndSearch = await request(`/agenda?event=${EVENT_SLUG}&day=2026-10-13&q=Private`);
   const dayAndSearchBody = await dayAndSearch.text();
@@ -262,6 +263,7 @@ test("AC-87, AC-88, AC-90 · anonymous embed configuration emits a live snippet 
   expect(configBody).toContain("Copy embed code");
   expect(configBody).toContain("Live preview");
   expect(configBody).toContain('data-embed-kind="speakers"');
+  expect(configBody).toContain('href="/agenda?event=public-conf">← Agenda</a>');
 
   const agenda = await request(`/embed/${EVENT_SLUG}-agenda?event=${EVENT_SLUG}&track=track-public&status=accepted&accent=%23ff00aa`);
   const agendaBody = await agenda.text();
