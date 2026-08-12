@@ -24,3 +24,10 @@ No rubric item names this screen — it is the fallback the judge reaches when t
 - `tests/integration/api/search.AC-101-104.test.ts`: submitter-only person is found for an organizer, while existing event/form visibility behavior remains intact.
 - New MRQ-127 node/source checks: picker controls are settings-backed and required; no raw ID placeholders or actor-default submitter path remains in the UI; agenda drop-cell labels cover each board.
 - Targeted Vitest only for changed test files; no full `npm test` under fleet load. Before `npm run pr-gate -- --ticket MRQ-127`, inspect `uptime` and wait/retry if one-minute load exceeds 24.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+- Accepted: the screen will use an explicit API-field-to-control map. `person_id` and `participants` map to the submitter picker/new-person fields; `track_ids` maps to tracks; `format_id` maps to format; `title` and `abstract` map directly. An unmapped 422 remains visible in the form-level alert with the server's message, so no field detail disappears.
+- Accepted: submitter-only people intentionally join the existing event search candidate set because the typeahead reuses that endpoint. The result type stays `Speaker` for compatibility, but the fallback subtitle says `Conference person` rather than falsely calling a submitter-only record a speaker; the positive test asserts this choice.
+- Clarified: submitter selection is required in the UI and the UI always sends either `submitter_person_id` or an explicit inline `submitter` object. The API's actor fallback remains for backwards-compatible direct callers and is not claimed as removed.
+- Accepted: the typeahead sends ordinary query requests without the global-search prefetch/session cache headers, so it sees an inline-created person on the next query. The server's five-second cache remains limited to the existing explicit prefetch path.
