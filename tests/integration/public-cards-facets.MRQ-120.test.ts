@@ -114,6 +114,11 @@ test("AC-85 · format and room facets narrow the public agenda and preserve an h
   expect(byRoom.status).toBe(200);
   expect(byRoomPayload.sessions.map((session) => session.id)).toEqual(["sub-stage"]);
 
+  const byRoomName = await request(`/agenda?event=${EVENT_SLUG}&room=Workshop%20Room`);
+  const byRoomNameBody = await byRoomName.text();
+  expect(byRoomNameBody).toContain("Workshop session");
+  expect(byRoomNameBody).not.toContain("Stage session");
+
   const combinedEmpty = await request(`/agenda?event=${EVENT_SLUG}&format=format-stage&room=room-workshop`);
   const combinedEmptyBody = await combinedEmpty.text();
   expect(combinedEmpty.status).toBe(200);

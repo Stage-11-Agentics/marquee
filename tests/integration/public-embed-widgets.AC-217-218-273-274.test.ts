@@ -105,6 +105,7 @@ test("AC-273 · the sessions embed is a flat title/track/time card list with pub
   expect(allBody).toContain("Principal Engineer");
   expect(allBody).toContain("Format");
   expect(allBody).toContain("Track");
+  expect(allBody).toContain('class="embed-format">—</span>');
 
   const filtered = await request(`/embed/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}&track=track-agents`);
   const filteredBody = await filtered.text();
