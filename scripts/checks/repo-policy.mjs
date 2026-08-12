@@ -34,9 +34,12 @@ const markerTailnet = joinParts("tail", "net");
 const personalMailbox = joinParts("benevolent", "\\.", "futures");
 const personalDomain = joinParts("atin", "@", "atin", "\\.", "me");
 
+// Both path rules require a real segment after the prefix. The audit reports in the published
+// history quote these patterns as vocabulary ("scanned for /Users/ paths"), and a rule that
+// fires on its own vocabulary reports a leak where there is none.
 export const DENIED_CONTENT = [
-  { label: "private filesystem path", pattern: /\/Users\// },
-  { label: "private Atin path", pattern: /(?:^|\/)Atin\//i },
+  { label: "private filesystem path", pattern: /\/Users\/[A-Za-z0-9._-]+\// },
+  { label: "private Atin path", pattern: /(?:^|\/)Atin\/[A-Za-z0-9._-]/i },
   { label: joinParts("internal Forge", "jo hostname"), pattern: new RegExp(markerForge, "i") },
   { label: joinParts("tail", "net identifier"), pattern: new RegExp(`\\b${markerTailnet}\\b`, "i") },
   // Personal addresses only. Role addresses (the sending identity, the platform account) are
