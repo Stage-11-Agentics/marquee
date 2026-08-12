@@ -2,6 +2,12 @@ import { defineConfig } from "vitest/config";
 
 /** Unit tests that exercise no Workers runtime or Cloudflare binding. */
 export default defineConfig({
+  // Without this the project transpiles JSX against React and a `.tsx` import
+  // fails on `react/jsx-dev-runtime`, which reads as a missing dependency
+  // rather than a missing setting. UI components are the half of the product a
+  // human actually looks at; they should be unit-testable without paying for a
+  // Miniflare isolate to render them.
+  oxc: { jsx: { runtime: "automatic", importSource: "preact" } },
   test: {
     name: "node",
     include: ["tests/unit/**/*.test.ts"],
