@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T05:45:46Z",
+  "created_by": "agent:claude-mrq101",
+  "custom_fields": {},
+  "id": "art_01KZT82PYM10DP8Q1J70GF4NKJ",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT82PYM10DP8Q1J70GF4NKJ.png",
+    "size_bytes": 396570
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "Undecided record (In Review): breadcrumb links, single title, all three decision buttons",
+  "token_usage": null,
+  "type": "file"
+}

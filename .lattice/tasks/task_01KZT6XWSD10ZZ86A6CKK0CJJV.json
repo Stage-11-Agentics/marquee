@@ -1,0 +1,44 @@
+{
+  "assigned_to": "agent:claude-theme",
+  "branch_links": [
+    {
+      "branch": "mrq-103-themes",
+      "linked_at": "2026-08-12T05:25:45Z",
+      "linked_by": "agent:claude-theme",
+      "repo": null
+    }
+  ],
+  "comment_count": 1,
+  "complexity": "medium",
+  "created_at": "2026-08-12T05:25:39Z",
+  "created_by": "agent:claude-theme",
+  "custom_fields": {},
+  "description": "Operator directive 2026-08-12 (overrides DESIGN.md's 'no dark mode by Wednesday' ruling \u2014 deliberately; ~22h runway acknowledged; aesthetic nice-touch, must not disturb the live fleet: all work in a linked worktree).\n\nWHAT: A multi-theme system for Marquee. Day (current Flight Deck) stays the default and is untouched. Themes are palette-token overrides under html[data-theme=...] \u2014 structure tokens (spacing, radius, hairline, type, shadow:none) are theme-invariant in every theme. Adding a theme = one CSS block + one row in a small THEMES registry that the switcher renders. Persistence via localStorage; no prefers-color-scheme auto-switch (Day unless explicitly chosen).\n\nPHASE 1 \u2014 PROTOTYPE (the design gate, binding): in prototypes/pipeline-v1.1/index.html, build the theme machinery + a fixed-width instrument-style theme switch in the top bar (elements never jump), and FOUR themes beyond Day:\n  1. Three distinct NIGHT candidates, each resting on a different aesthetic bet (e.g. blue-black re-lit instrument w/ luminous accent; amber/red-shift cockpit night-vision; neutral graphite). Operator picks ONE \u2014 the others are deleted before the app fold.\n  2. VAPORWAVE \u2014 a fun theme proving arbitrary-theme extensibility; palette-only vaporwave (deep indigo/magenta/cyan) still obeying every Flight Deck craft rule.\nAll palettes contrast-measured like Day (ratios in comments; nothing under 4.5:1 for text). The 8 track colors get per-theme octaves where needed. Agenda canvas relationship re-tuned per theme. ~85 raw hex outside :root in the prototype get tokenized as encountered.\n\nPHASE 2 \u2014 APP (after operator picks the night winner): lift machinery + Day/Night/Vaporwave into src/styles/tokens.css + switcher; tokenize the ~36 raw hex in src and 8 in components.css; extend check:design with a no-raw-hex-outside-tokens.css rule (small allowlist) so themes cannot rot.\n\nBranch/worktree: mrq-themes via Marquee-worktrees. Do not merge near the submission window without operator go-ahead.",
+  "done_at": null,
+  "evidence_refs": [
+    {
+      "id": "art_01KZT725DFER82645650N2Z3ZK",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZT6XWSD10ZZ86A6CKK0CJJV",
+  "last_event_id": "ev_01KZT7TXQX0RH1GC664RMSCMJV",
+  "last_status_changed_at": "2026-08-12T05:25:59Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-103",
+  "status": "in_progress",
+  "tags": [
+    "design",
+    "themes",
+    "prototype"
+  ],
+  "title": "Theme system: Day default plus selectable themes \u2014 three night-mode candidates and Vaporwave in the prototype, winner + machinery to the app",
+  "type": "task",
+  "updated_at": "2026-08-12T05:41:31Z",
+  "urgency": "normal"
+}
