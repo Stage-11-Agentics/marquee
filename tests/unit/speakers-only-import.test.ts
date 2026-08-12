@@ -17,24 +17,35 @@ const SPEAKERS_CSV = [
 ].join("\n");
 
 describe("an absent CSV has no header row", () => {
-  test.each([
-    ["empty string", ""],
-    ["a single newline", "\n"],
-    ["whitespace only", "  \n  "],
-  ])("%s parses to no headers and no rows", (_label, text) => {
+  // Titles are traced against the acceptance contract, which reads them as
+  // string literals — neither a `test.each` table nor an interpolated title
+  // gives it anything to read, so each case states its own.
+  const expectNoHeaderRow = (text: string): void => {
     const table = parseCsv(text);
     expect(table.headers).toEqual([]);
     expect(table.rows).toEqual([]);
+  };
+
+  test("CONTRACT · an empty string parses to no headers and no rows", () => {
+    expectNoHeaderRow("");
   });
 
-  test("a real export still parses normally", () => {
+  test("CONTRACT · a single newline parses to no headers and no rows", () => {
+    expectNoHeaderRow("\n");
+  });
+
+  test("CONTRACT · whitespace only parses to no headers and no rows", () => {
+    expectNoHeaderRow("  \n  ");
+  });
+
+  test("CONTRACT · a real export still parses normally", () => {
     const table = parseCsv(SPEAKERS_CSV);
     expect(table.headers).toEqual(["name", "email", "title", "company", "bio"]);
     expect(table.rows).toHaveLength(2);
   });
 });
 
-test("a speakers-only import leaves the sessions half empty rather than unrecognised", () => {
+test("CONTRACT · a speakers-only import leaves the sessions half empty rather than unrecognised", () => {
   const sessions = previewCsv("sessions", "", defaultMapping("sessions", []));
   // The wizard's gate reads `Boolean(sessionPreview.headers.length)` to decide
   // whether the sessions half applies at all. One phantom header made it apply.

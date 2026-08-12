@@ -14,7 +14,7 @@ const read = (path) => readFile(resolve(ROOT, path), "utf8");
  * column beside it. Both halves of that have to stay fixed: the column states a
  * width, and nothing inside a cell sets a floor the cell cannot honour.
  */
-test("the speaker column states a width, like every other column in the matrix", async () => {
+test("CONTRACT · the speaker column states a width, like every other column in the matrix", async () => {
   const css = await read("src/ui/onboarding/onboarding.css");
   const page = await read("src/ui/onboarding/OnboardingPage.tsx");
 
@@ -25,7 +25,7 @@ test("the speaker column states a width, like every other column in the matrix",
   assert.match(page, /<th scope="row" class="onboarding-speaker-column">/);
 });
 
-test("nothing inside a matrix cell sets a width floor the cell cannot honour", async () => {
+test("CONTRACT · nothing inside a matrix cell sets a width floor the cell cannot honour", async () => {
   const css = await read("src/ui/onboarding/onboarding.css");
   const rule = /\.onboarding-speaker-link \{([^}]*)\}/.exec(css);
   assert.ok(rule, "the speaker link rule should exist");
@@ -33,7 +33,7 @@ test("nothing inside a matrix cell sets a width floor the cell cannot honour", a
   assert.doesNotMatch(rule[1], /min-width: \d*[1-9]\d*px/);
 });
 
-test("the matrix scrolls rather than squeezing, and the cell clips either way", async () => {
+test("CONTRACT · the matrix scrolls rather than squeezing, and the cell clips either way", async () => {
   const css = await read("src/ui/onboarding/onboarding.css");
   assert.match(css, /\.onboarding-matrix-wrap \{[^}]*overflow-x: auto/);
   assert.match(css, /\.onboarding-matrix tbody th\.onboarding-speaker-column \{[^}]*overflow: hidden/);
@@ -47,7 +47,7 @@ test("the matrix scrolls rather than squeezing, and the cell clips either way", 
  * into each other with no gap. Every column in the header row states a width,
  * and the table is at least as wide as their sum, so the wrap scrolls instead.
  */
-test("every column in the header row states a width, whatever the template count", async () => {
+test("CONTRACT · every column in the header row states a width, whatever the template count", async () => {
   const css = await read("src/ui/onboarding/onboarding.css");
   const page = await read("src/ui/onboarding/OnboardingPage.tsx");
 
