@@ -80,14 +80,13 @@ test("CONTRACT · repository policy retains every denied path with duplicate con
   assert.match(result.stdout, /sequence\/research\/sources\/second\.vtt/);
 });
 
-test("CONTRACT · repository policy rejects internal publication vocabulary anywhere in history", async () => {
+test("CONTRACT · repository policy rejects operator-private content anywhere in history", async () => {
   const { repository, binaryDirectory } = await fixture();
   const deniedMarkers = [
     ["forgejo", ".", "stage", "11", ".", "ai"].join(""),
     ["tail", "net"].join(""),
-    ["Lat", "tice"].join(""),
-    ["dele", "gator"].join(""),
-    ["orches", "trator"].join(""),
+    "/Users/someone/Projects",
+    ["benevolent", ".", "futures", "@", "example-mail", ".", "invalid"].join(""),
   ];
   await writeFile(
     resolve(repository, "internal-notes.md"),
@@ -95,16 +94,42 @@ test("CONTRACT · repository policy rejects internal publication vocabulary anyw
     "utf8",
   );
   git(repository, "add", ".");
-  git(repository, "commit", "-qm", "introduce internal publication vocabulary");
+  git(repository, "commit", "-qm", "introduce operator-private content");
   const result = runCheck(repository, binaryDirectory);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   for (const label of [
     ["internal Forge", "jo hostname"].join(""),
     ["tail", "net identifier"].join(""),
-    ["Lat", "tice vocabulary"].join(""),
-    ["dele", "gator vocabulary"].join(""),
-    ["orches", "trator vocabulary"].join(""),
+    "private filesystem path",
+    "personal email address",
   ]) {
     assert.match(result.stdout, new RegExp(label));
   }
+});
+
+test("CONTRACT · repository policy publishes the development record rather than policing it", async () => {
+  const { repository, binaryDirectory } = await fixture();
+  // The board, the agent briefs, the run-state and the research dossiers ship on purpose.
+  await mkdir(resolve(repository, ".lattice/events"), { recursive: true });
+  await mkdir(resolve(repository, "sequence/research/briefs"), { recursive: true });
+  await writeFile(resolve(repository, ".lattice/events/task.jsonl"), "{}\n", "utf8");
+  await writeFile(resolve(repository, "sequence/run-state.md"), "# Run state\n", "utf8");
+  await writeFile(resolve(repository, "sequence/research/briefs/AGENT-BRIEF-example.md"), "# Brief\n", "utf8");
+  git(repository, "add", ".");
+  git(repository, "commit", "-qm", "publish the development record");
+  const result = runCheck(repository, binaryDirectory);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test("CONTRACT · repository policy rejects the operator account runbook anywhere in history", async () => {
+  const { repository, binaryDirectory } = await fixture();
+  await mkdir(resolve(repository, "sequence"), { recursive: true });
+  await writeFile(resolve(repository, "sequence/OPERATOR-PRECONDITIONS.md"), "# Accounts\n", "utf8");
+  git(repository, "add", ".");
+  git(repository, "commit", "-qm", "introduce the operator runbook");
+  git(repository, "rm", "-q", "sequence/OPERATOR-PRECONDITIONS.md");
+  git(repository, "commit", "-qm", "delete at the tip, which does not remove it from history");
+  const result = runCheck(repository, binaryDirectory);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /OPERATOR-PRECONDITIONS/);
 });
