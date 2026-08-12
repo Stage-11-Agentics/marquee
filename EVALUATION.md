@@ -617,6 +617,28 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 
 ---
 
+### 2.4 Post-deadline cold-start band — AC-275 – AC-287 *(Amendment 13, 2026-08-12)*
+
+**This band is outside the Wednesday terminal gate.** §2's "210 live in-scope" count and every tier arithmetic above deliberately exclude it: these criteria are minted for the post-deadline build (MRQ-105), and the auditor of the competition build neither tests them nor fails their absence. `trace:ac` mechanics make this safe by construction — rows here are unenforced until the owning ticket's claims manifest lands, at which point coverage is required like any other `auto` row. Stories: US-83 – US-86 (`sequence/USER_STORIES.md` Amendment 19). Binding surfaces: prototype v1.11, `docs/GETTING-STARTED.md`, `prototypes/cold-start/SKILL-SETUP-CHAPTER.md`.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-275 | PD | `auto` | `test:` run the claim-link mint against a DB with zero people → token hash row exists, stdout carries the URL exactly once and no other secret. Run it again → prior token's exchange now renders the inert page, new token exchanges. Assert the printed URL's token never appears in any log line. |
+| AC-276 | PD | `auto` | `test + e2e:` exchange a valid claim token with name+email → org row (created if absent), person, org-wide `owner` membership, and `mq_session` cookie all exist; `used_at` is set in the same statement that read the token (single-statement assertion). Replay the same token → inert page, zero new rows. Expired and unknown tokens render byte-identical inert copy naming the CLI re-run. No mail is sent or queued anywhere in the flow. |
+| AC-277 | PD | `auto` | `e2e:` with zero `owner` memberships, `GET /` renders the unclaimed landing (agent-run setup + claim-link story) and no event data; every event-scoped API route still auths normally (401/403, never a hint of claim state). After claim, `/` never renders it again. `POST /api/v1/auth/magic-link` responses are byte-unchanged from pre-claim to post-claim for an unknown address. |
+| AC-278 | PD | `auto` | `e2e:` complete a claim → the handoff offers a token mint; minting writes a standard `api_tokens` row (named, scoped, hash-only) shown once; declining leaves a fully navigable session and the token screen still reachable at Settings → API tokens. Assert no new token table or kind exists (schema scan). |
+| AC-279 | PD | `auto` | `test + e2e:` `POST /api/v1/events` as owner creates the event with generated slug; as reviewer/speaker → 403, zero rows. The switcher lists both events; five event-scoped screens against the new empty event render their AC-161 empty states with zero records from the other event (scoping assertion on every list payload). |
+| AC-280 | PD | `auto` | `e2e:` drive `/conferences/new` and the switcher `＋` on a claimed instance → both hit the same endpoint (route spy/registry parity), the checklist renders conference-scoped (no claim step, no instance-level steps), and the prior conference remains selectable with its data intact. |
+| AC-281 | PD | `auto` | `test + e2e:` each setup verb drives the same route as its screen (registry↔route parity per verb); `SKILL.md` equals `renderSkill()` byte-for-byte with the setup chapter present; static scan of the chapter text asserts the claim step says a human opens the link and no chapter command publishes a form. |
+| AC-282 | PD | `auto` | `test + e2e:` mint an invite → hash row with expiry; recipient exchange → person + org membership + session, token consumed single-statement; replay/revoked/expired → the same inert page as AC-276. Pending invites list and revoke live; assert the exchange path is the claim exchange path (call-site enumeration, not behaviour). |
+| AC-283 | PD | `auto` | `test + e2e:` remove an organizer → their session 401s on the next request, their authored decisions/evaluations still render attributed; the last owner's self-remove is rejected server-side; with mail configured the emailed invite writes one outbox row; with mail absent the modal still yields a copyable link and states mail unlocks sending. |
+| AC-284 | PD | `auto` | `test + e2e:` instance-status read derives each row from real binding/secret presence (flip one via test env → row flips; no stored flag consulted — asserted statically); panel rows hold fixed positions across states; each unconfigured row's rendered fix command is copy-exact against the README's. |
+| AC-285 | PD | `auto` | `e2e:` publish with mail unconfigured → acknowledgment dialog naming the three consequences; acknowledge → form opens and the acknowledgment is recorded with actor+time; cancel → nothing published. With mail configured → no dialog, direct publish. No code path hard-blocks the publish. |
+| AC-286 | PD | `auto` | `test:` snapshot non-demo rows → remove demo → assert every `is_demo` row gone, `demo_mode = 0`, non-demo rows byte-identical; run again → no-op. `e2e:` the confirm dialog names what is removed and what is untouched. |
+| AC-287 | PD | `auto` | `static:` the shipping PR's tree contains no status-banner marker in `docs/GETTING-STARTED.md` and no "lands with the cold-start build" caveat in `README.md` while the claim route exists in the route manifest — one scan asserting docs and build agree. |
+
+---
+
 ## 3. Felt checkpoints
 
 Four in-scope ACs are judgements no assertion settles. Each is a scheduled human-use session with an explicit trigger, an explicit method, and a recorded verdict. A checkpoint that has not run is not a pass.
@@ -714,6 +736,8 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 ---
 
 ## Amendment log
+
+**Amendment 13 — the cold-start band, 2026-08-12, client-directed.** Folds `USER_STORIES.md` Amendment 19 (US-83 – US-86, AC-275 – AC-287) as new §2.4 — a **post-deadline** band explicitly outside the Wednesday terminal gate. §2's live in-scope count (210), the tier counts, the cut line, and the terminal gate are all deliberately **unchanged**: the band is enforced by `trace:ac` only once MRQ-105's claims manifest lands, which is the mechanism that lets the contract carry scheduled-but-not-judged work without corrupting the gate arithmetic. Built by MRQ-105 (`BUILDPLAN.md` Amendment 12) on the operator's direction; binding surfaces are prototype v1.11, `docs/GETTING-STARTED.md`, and `prototypes/cold-start/SKILL-SETUP-CHAPTER.md`.
 
 **Amendment 12 — AC-231 scoped to real conferences, 2026-08-11.** AC-231 (Tier A, no-waiver) asserted that draft creation, submit, and every presign fail closed without a valid Turnstile token. That gate now applies only where `demo_mode = 0`; demo conferences skip it. **No AC is struck, no count moves** — AC-231 keeps its Tier A no-waiver seat and its three rejection cases, measured against a real conference.
 

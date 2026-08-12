@@ -423,3 +423,15 @@ M-21 (embeds, merged under MRQ-22) shipped a two-kind dialog (`agenda|speakers`)
 **Total: 5 agent-hours.**
 
 ---
+
+## Amendment 12 — the cold start, one ticket (2026-08-12, client-directed)
+
+*Folds `SPEC.md` Amendment 19, `USER_STORIES.md` Amendment 19 (US-83 – US-86), `EVALUATION.md` §2.4 / Amendment 13. **Post-deadline wave** — this ticket does not exist for the Wednesday gate and must not merge before the freeze clears. Operator directives: one ticket, executed by a **Claude Opus** delegator (explicit ruling 2026-08-12, overriding the sonnet default for this ticket).*
+
+| # | Ticket | ACs | Hrs | Deps |
+|---|---|---|---|---|
+| **M-65** | **Cold start: from git clone to an owned conference (MRQ-105).** One vertical slice in walkthrough order: migration widening `magic_links` (purpose enum, nullable `person_id`); claim mint CLI verb + `/claim/:token` page + `POST /api/v1/claim`; unclaimed landing; post-claim token offer; `POST /api/v1/events` + `/conferences/new` UI + switcher `＋` (conference-scoped checklist per prototype v1.11); org invites mint/exchange/revoke + organizers list/removal; `GET /api/v1/instance/status` + Instance panel + AC-285 publish acknowledgment; `POST /api/v1/admin/remove-demo`; CLI setup verbs + SKILL setup chapter via `renderSkill()`; docs truth scan (AC-287: GETTING-STARTED banner and README caveat removed in this same change). Claims manifest `tests/ac-claims/MRQ-105.json` owns AC-275 – AC-287 — that manifest landing is what turns §2.4's enforcement on. | **AC-275 – AC-287** | 16 | main post-freeze; no schema conflicts expected (last migration at time of minting: check and take the next number) |
+
+**Boundaries.** `package.json` untouched (no new dependencies are needed for any of this). The CLI registry and `cli/generate-skill.mjs` are in scope — reconcile the chapter's proposed verb names with what MRQ-104's loop verbs already shipped before minting new names. The suite budget (45 s objective) binds: prefer `tests/node` for pure logic; every new Worker-backed test file costs ~19 s, so consolidate integration coverage into as few files as the ACs allow.
+
+**Total: 16 agent-hours.**
