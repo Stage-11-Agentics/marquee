@@ -13,3 +13,7 @@ ac-coverage.json
 speed-report.json
 playwright-report/
 test-results/
+
+# Generated from the served OpenAPI document by cli/generate-api-registry.mjs.
+# Not tracked: a committed copy conflicts on every concurrent branch.
+cli/api-registry.json
