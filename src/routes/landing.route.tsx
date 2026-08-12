@@ -191,6 +191,8 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
             <a class="button" href="/reviewer?demo=reviewer" data-demo-role="reviewer">Enter as reviewer</a>
             <a class="button" href="/portal?demo=speaker" data-demo-role="speaker">Enter as speaker</a>
             <a class="button ghost" href="/f/cfp">View public CFP</a>
+            <a class="button ghost" href="/agenda">View public agenda</a>
+            <a class="button ghost" href="/speakers">Browse speakers</a>
           </div>
           <div class="hero-note">No signup. Every demo opens the populated {data.conferenceName} workspace, each in its own seat.</div>
           <div class="demo-status" id="demo-status" role="status" aria-live="polite"></div>
