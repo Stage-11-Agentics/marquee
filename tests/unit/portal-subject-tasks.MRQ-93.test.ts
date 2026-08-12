@@ -54,6 +54,7 @@ function task(overrides: Partial<PortalTask> = {}): PortalTask {
 
 function markup(currentTask: PortalTask, currentSubmission: PortalSubmission | null = submission): string {
   return renderToString(h(TaskSurface, {
+    eventId: "evt_mrq93",
     task: currentTask,
     submission: currentSubmission,
     person,
