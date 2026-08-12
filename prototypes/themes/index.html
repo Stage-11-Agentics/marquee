@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!--
+  Marquee theme round — picker
+  ────────────────────────────
+  Three full-register takes on the program home (#dashboard from
+  prototypes/pipeline-v1.1, the binding prototype), each self-contained.
+  Open this file and switch with the buttons or keys 1/2/3; each theme
+  also opens standalone from file://.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>marquee — theme round</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #10141a; color: #e6ebf1;
+               font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .bar {
+    display: flex; align-items: center; gap: 8px; height: 46px;
+    padding: 0 14px; border-bottom: 1px solid #232a33;
+  }
+  .bar .label { font-size: 11px; letter-spacing: .12em; color: #7d8894; margin-right: 8px; }
+  .bar button {
+    font: inherit; font-size: 12px; color: #aeb9c4; background: none;
+    border: 1px solid #2c3540; padding: 6px 12px; cursor: pointer;
+  }
+  .bar button:hover { color: #fff; border-color: #4a5765; }
+  .bar button.active { color: #10141a; background: #e6ebf1; border-color: #e6ebf1; }
+  .bar .ref { margin-left: auto; font-size: 11px; color: #7d8894; text-decoration: none; }
+  .bar .ref:hover { color: #e6ebf1; }
+  iframe { display: block; width: 100%; height: calc(100% - 47px); border: 0; background: #fff; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span class="label">MARQUEE · THEME ROUND · PROGRAM HOME</span>
+    <button data-theme="latent-space">1 · latent.space</button>
+    <button data-theme="ai-engineer">2 · ai engineer</button>
+    <button data-theme="swyxy">3 · swyxy</button>
+    <a class="ref" href="../pipeline-v1.1/index.html#dashboard" target="_blank">flight deck (binding) ↗</a>
+  </div>
+  <iframe id="frame" title="Theme preview"></iframe>
+  <script>
+    var themes = ["latent-space", "ai-engineer", "swyxy"];
+    var frame = document.getElementById("frame");
+    var buttons = Array.prototype.slice.call(document.querySelectorAll("button[data-theme]"));
+    function pick(name) {
+      if (themes.indexOf(name) === -1) name = themes[0];
+      frame.src = name + ".html";
+      buttons.forEach(function (b) { b.classList.toggle("active", b.dataset.theme === name); });
+      if (("#" + name) !== location.hash) history.replaceState(null, "", "#" + name);
+    }
+    buttons.forEach(function (b) { b.addEventListener("click", function () { pick(b.dataset.theme); }); });
+    document.addEventListener("keydown", function (e) {
+      var i = ["1", "2", "3"].indexOf(e.key);
+      if (i !== -1) pick(themes[i]);
+    });
+    pick(location.hash.replace("#", "") || "latent-space");
+  </script>
+</body>
+</html>

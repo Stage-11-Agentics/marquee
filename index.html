@@ -17,11 +17,39 @@
       is exactly the kind of jump the design language forbids. Day is the
       default and needs no attribute; the OS preference is deliberately not
       consulted (see src/ui/shell/theme.ts).
+
+      Two theme classes share this script (mirrors src/ui/shell/theme.ts —
+      keep them in sync): palette themes ("night") only move color; register
+      themes ("latent-space", "ai-engineer", "swyxy") also load webfonts,
+      injected here with display=swap so the first paint never waits on them.
+      swyxy's dark palette is a second attribute read from its own key —
+      explicit toggle only, never prefers-color-scheme. `?theme=<id>` and
+      `?mode=dark` override storage for comparison links without persisting.
     -->
     <script>
       try {
-        var t = localStorage.getItem("marquee-theme");
-        if (t === "night") document.documentElement.dataset.theme = t;
+        var params = new URLSearchParams(window.location.search);
+        var ids = { "night": 1, "latent-space": 1, "ai-engineer": 1, "swyxy": 1 };
+        var t = params.get("theme");
+        if (!ids[t]) t = localStorage.getItem("marquee-theme");
+        if (ids[t]) {
+          document.documentElement.dataset.theme = t;
+          if (t === "swyxy") {
+            var mode = params.get("mode") || localStorage.getItem("marquee-swyxy-mode");
+            if (mode === "dark") document.documentElement.dataset.swyxyMode = "dark";
+          }
+          var fonts = {
+            "latent-space": "https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&display=swap",
+            "ai-engineer": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
+          };
+          if (fonts[t]) {
+            var pre = document.createElement("link");
+            pre.rel = "preconnect"; pre.href = "https://fonts.gstatic.com"; pre.crossOrigin = "anonymous";
+            var css = document.createElement("link");
+            css.rel = "stylesheet"; css.href = fonts[t]; css.dataset.themeFonts = t;
+            document.head.append(pre, css);
+          }
+        }
       } catch (e) { /* private mode: fall through to Day */ }
     </script>
   </head>

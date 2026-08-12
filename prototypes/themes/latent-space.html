@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<!--
+  Marquee theme round — latent.space register
+  ────────────────────────────────────────────
+  Display: Syncopate (free Google substitute for Tachyon — wide geometric
+  techno display; the brief's substitution logic is "Roc Grotesk Wide /
+  Grange neighborhood, never Inter-extended"). Body: the Substack serif
+  reading stack, because nothing in latent.space body copy sets in the
+  display face. Figures + micro-labels: mono.
+
+  Chroma: exactly one two-stop gradient, #FFA363 → #E56EFF, on near-black.
+  There is no secondary palette. Status reads as position on the gradient
+  (orange end = warn, pink end = alarm) over neutral grays.
+
+  Tropes: hexagonal logomark carrying the gradient; the VAE bottleneck
+  silhouette drawn behind the pipeline strip (wide in, pinch at the
+  decision, wide out); lowercase everywhere.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>marquee — program pipeline · latent.space theme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:            #0b0b0e;
+    --surface:       #131318;
+    --surface-sunk:  #0f0f13;
+    --rule:          #26262e;
+    --rule-soft:     #1d1d24;
+
+    --ink:           #f2f0f5;
+    --ink-soft:      #c7c4cf;
+    --muted:         #8b8896;
+
+    --grad:          linear-gradient(92deg, #ffa363 0%, #e56eff 100%);
+    --grad-soft:     linear-gradient(92deg, rgba(255,163,99,.14), rgba(229,110,255,.14));
+    --orange:        #ffa363;   /* warn end of the single gradient */
+    --pink:          #e56eff;   /* alarm end of the single gradient */
+
+    --display: "Syncopate", "Arial Black", sans-serif;
+    --serif:   "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --mono:    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+  body { margin: 0; min-width: 1100px; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+
+  .grad-text {
+    background: var(--grad);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+  }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .micro {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+    text-transform: lowercase; color: var(--muted);
+  }
+
+  /* ── shell ─────────────────────────────────────────────── */
+  .app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+
+  .sidebar {
+    border-right: 1px solid var(--rule-soft); padding: var(--s5) var(--s4);
+    display: flex; flex-direction: column; gap: var(--s5);
+    background: var(--surface-sunk);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-name {
+    font-family: var(--display); font-weight: 700; font-size: 15px;
+    letter-spacing: .06em;
+  }
+  .event { display: block; border: 1px solid var(--rule); padding: 10px 12px; }
+  .event small { display: block; margin-bottom: 4px; }
+  .event strong { font-family: var(--serif); font-weight: 600; font-size: 14px; }
+
+  .nav-label { margin: var(--s3) 0 var(--s1); }
+  .nav { display: flex; flex-direction: column; }
+  .nav a {
+    display: flex; gap: 10px; align-items: baseline; padding: 5px 8px;
+    font-size: 13.5px; color: var(--ink-soft); border-left: 2px solid transparent;
+  }
+  .nav a .nav-icon { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 14px; }
+  .nav a:hover { color: var(--ink); }
+  .nav a.active {
+    color: var(--ink);
+    border-image: linear-gradient(180deg, #ffa363, #e56eff) 1;
+    background: linear-gradient(92deg, rgba(255,163,99,.08), rgba(229,110,255,.08));
+  }
+  .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+  .sidebar-foot button {
+    background: none; border: 1px solid var(--rule); padding: 8px 10px;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
+    color: var(--muted); text-align: left;
+  }
+  .sidebar-foot button:hover { color: var(--ink); border-color: var(--muted); }
+
+  .main { display: flex; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; gap: var(--s4);
+    padding: 14px var(--s6); border-bottom: 1px solid var(--rule-soft);
+  }
+  .crumbs { font-size: 13.5px; color: var(--muted); }
+  .crumbs strong { color: var(--ink); font-weight: 600; }
+  .search {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--rule); padding: 7px 12px; width: 340px;
+    color: var(--muted); font-size: 13px;
+  }
+  .search input { background: none; border: 0; outline: 0; width: 100%; font-size: 13px; }
+  .search input::placeholder { color: var(--muted); font-style: italic; }
+  .kbd { font-family: var(--mono); font-size: 9.5px; border: 1px solid var(--rule); padding: 2px 5px; color: var(--muted); }
+  .avatar {
+    width: 30px; height: 30px; display: grid; place-items: center;
+    font-family: var(--mono); font-size: 10px; color: #0b0b0e;
+    background: var(--grad); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  }
+
+  .page { padding: var(--s6) var(--s6) var(--s7); display: flex; flex-direction: column; gap: var(--s5); max-width: 1280px; width: 100%; }
+
+  /* ── page head ─────────────────────────────────────────── */
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s5); }
+  .page-head h1 {
+    font-family: var(--display); font-weight: 700; font-size: 26px;
+    letter-spacing: .04em; margin: 0 0 10px;
+  }
+  .page-head p { margin: 0; max-width: 640px; font-size: 15px; line-height: 1.55; color: var(--ink-soft); }
+  .page-head p em { color: var(--ink); }
+  .head-actions { display: flex; gap: 10px; }
+
+  .btn {
+    border: 1px solid var(--rule); background: none; padding: 10px 16px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+    color: var(--ink-soft);
+  }
+  .btn:hover { color: var(--ink); border-color: var(--muted); }
+  .btn.primary {
+    border: 0; color: #0b0b0e; font-weight: 700; background: var(--grad);
+  }
+  .btn.small { padding: 6px 10px; font-size: 10px; }
+
+  /* ── pipeline strip over the bottleneck silhouette ─────── */
+  .pipeline-card { position: relative; border: 1px solid var(--rule); background: var(--surface); overflow: hidden; }
+  .bottleneck { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .pipeline {
+    position: relative; display: grid; grid-template-columns: repeat(7, 1fr);
+  }
+  .stage { padding: 26px 14px 22px; text-align: center; border-right: 1px solid var(--rule-soft); }
+  .stage:last-child { border-right: 0; }
+  .stage .stage-name { display: block; margin-bottom: 12px; }
+  .stage .stage-count {
+    display: block; font-family: var(--display); font-weight: 700;
+    font-size: 30px; line-height: 1; margin-bottom: 12px;
+  }
+  .stage.pinch .stage-count { font-size: 36px; }
+  .stage .stage-delta { display: block; font-size: 12.5px; font-style: italic; color: var(--muted); }
+  .pipeline-caption {
+    position: relative; padding: 10px 16px; border-top: 1px solid var(--rule-soft);
+    font-size: 12px; font-style: italic; color: var(--muted); text-align: center;
+  }
+
+  /* ── attention strip ───────────────────────────────────── */
+  .attention { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule-soft); border: 1px solid var(--rule-soft); }
+  .attention button {
+    background: var(--surface-sunk); border: 0; border-top: 2px solid transparent;
+    padding: 14px 16px; text-align: left; display: flex; flex-direction: column; gap: 5px;
+  }
+  .attention button:hover { border-image: linear-gradient(90deg, #ffa363, #e56eff) 1; background: var(--surface); }
+  .attention strong { font-size: 14px; font-weight: 600; }
+  .attention span { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--muted); }
+
+  /* ── cards ─────────────────────────────────────────────── */
+  .grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: var(--s4); align-items: start; }
+  .card { border: 1px solid var(--rule); background: var(--surface); }
+  .card.span { grid-column: 1 / -1; }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
+    padding: 14px 18px; border-bottom: 1px solid var(--rule-soft);
+  }
+  .card-head h2 { font-family: var(--display); font-weight: 400; font-size: 12.5px; letter-spacing: .1em; margin: 0 0 5px; }
+  .card-head .sub { font-size: 12.5px; font-style: italic; color: var(--muted); }
+  .card-body { padding: 18px; }
+
+  /* pacing chart */
+  .readout {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .03em;
+    color: var(--ink-soft); margin-bottom: 12px;
+  }
+  .readout strong { color: var(--ink); font-weight: 700; }
+  .pacing { width: 100%; height: auto; display: block; }
+
+  /* wave planner */
+  .wave-row {
+    display: grid; grid-template-columns: 150px 1fr 90px; gap: 14px; align-items: center;
+    padding: 13px 0; border-bottom: 1px solid var(--rule-soft);
+  }
+  .wave-row:last-child { border-bottom: 0; }
+  .wave-row strong { font-size: 14px; font-weight: 600; }
+  .wave-date { font-size: 12px; font-style: italic; color: var(--muted); margin-top: 2px; }
+  .wave-bar { height: 3px; background: var(--rule); }
+  .wave-bar i { display: block; height: 100%; background: var(--grad); }
+  .wave-target { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: right; }
+
+  /* work in motion */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule-soft); border: 1px solid var(--rule-soft); margin-bottom: 18px; }
+  .metric { background: var(--surface-sunk); border: 0; padding: 14px; text-align: left; display: flex; flex-direction: column; gap: 8px; }
+  .metric:hover { background: var(--surface); }
+  .metric .value { font-family: var(--display); font-weight: 700; font-size: 26px; line-height: 1; }
+  .metric .sub { font-size: 12px; font-style: italic; color: var(--muted); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--rule); background: none; padding: 6px 12px;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; color: var(--ink-soft);
+  }
+  .chip:hover { border-color: var(--muted); color: var(--ink); }
+  .chip b { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  /* speaker task dashboard */
+  .task-row {
+    display: grid; grid-template-columns: 190px 1fr 190px 110px; gap: 14px; align-items: center;
+    width: 100%; background: none; border: 0; border-bottom: 1px solid var(--rule-soft);
+    padding: 12px 18px; text-align: left;
+  }
+  .task-row:hover { background: var(--surface-sunk); }
+  .task-row strong { font-size: 14px; font-weight: 600; }
+  .task-row .title { font-size: 13.5px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-row .task { font-size: 12.5px; font-style: italic; color: var(--muted); }
+  .due {
+    justify-self: end; font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
+    border: 1px solid var(--rule); padding: 4px 8px; color: var(--muted);
+  }
+  .due.overdue { border-color: rgba(229,110,255,.5); color: var(--pink); }
+  .due.soon { border-color: rgba(255,163,99,.5); color: var(--orange); }
+
+  /* floating theme badge */
+  .badge {
+    position: fixed; right: 14px; bottom: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    border: 1px solid var(--rule); background: var(--surface); color: var(--muted);
+    padding: 7px 11px;
+  }
+  .badge:hover { color: var(--ink); border-color: var(--muted); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="ls-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffa363"/>
+      <stop offset="1" stop-color="#e56eff"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="#">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+        <polygon points="16,1.5 29,9 29,23 16,30.5 3,23 3,9" fill="url(#ls-grad)"/>
+        <text x="16" y="21" text-anchor="middle" style="font:700 13px var(--display);fill:#0b0b0e">m</text>
+      </svg>
+      <span class="brand-name grad-text">marquee</span>
+    </a>
+
+    <a class="event" href="#">
+      <small class="micro">conference</small>
+      <strong>AIE NYC 2026</strong>
+    </a>
+
+    <div>
+      <nav class="nav" aria-label="Program home">
+        <a href="#" class="active"><span class="nav-icon">⌂</span><span>program home</span></a>
+        <a href="#"><span class="nav-icon">▥</span><span>program board</span></a>
+      </nav>
+    </div>
+
+    <div>
+      <div class="nav-label micro">pipeline</div>
+      <nav class="nav" aria-label="Program lifecycle">
+        <a href="#"><span class="nav-icon">1</span><span>submitted</span></a>
+        <a href="#"><span class="nav-icon">2</span><span>in review</span></a>
+        <a href="#"><span class="nav-icon">3</span><span>waved</span></a>
+        <a href="#"><span class="nav-icon">4</span><span>accepted</span></a>
+        <a href="#"><span class="nav-icon">5</span><span>onboarding</span></a>
+        <a href="#"><span class="nav-icon">6</span><span>scheduled</span></a>
+        <a href="#"><span class="nav-icon">7</span><span>published</span></a>
+      </nav>
+    </div>
+
+    <div>
+      <div class="nav-label micro">modules</div>
+      <nav class="nav" aria-label="Modules">
+        <a href="#"><span class="nav-icon">□</span><span>cfp forms</span></a>
+        <a href="#"><span class="nav-icon">◇</span><span>evaluation plan</span></a>
+        <a href="#"><span class="nav-icon">✓</span><span>review queue</span></a>
+        <a href="#"><span class="nav-icon">▦</span><span>agenda</span></a>
+        <a href="#"><span class="nav-icon">✉</span><span>communications</span></a>
+        <a href="#"><span class="nav-icon">○</span><span>speaker portal</span></a>
+        <a href="#"><span class="nav-icon">↗</span><span>conference site</span></a>
+        <a href="#"><span class="nav-icon">⚙</span><span>settings</span></a>
+      </nav>
+    </div>
+
+    <div class="sidebar-foot">
+      <button>⌘ api &amp; cli</button>
+      <button>↻ reset demo</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="crumbs">aie nyc 2026 &nbsp;/&nbsp; <strong>program home</strong></div>
+      <div class="search">
+        <span>⌕</span>
+        <input placeholder="search abstracts, speakers, sessions…" readonly>
+        <span class="kbd">⌘K</span>
+      </div>
+      <button class="btn small">view portal ↗</button>
+      <div class="avatar" title="Maya Chen · program lead">MC</div>
+    </header>
+
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <h1 class="grad-text">program pipeline</h1>
+          <p>wave 2 closes friday — <em>214 abstracts still need review in agents.</em> every count opens the work behind it.</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn">conference settings</button>
+          <button class="btn primary">work the pipeline →</button>
+        </div>
+      </div>
+
+      <section class="pipeline-card">
+        <svg class="bottleneck" viewBox="0 0 1200 170" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0,14 C 320,14 420,68 600,68 C 780,68 880,14 1200,14 L1200,156 C 880,156 780,102 600,102 C 420,102 320,156 0,156 Z"
+                fill="url(#ls-grad)" opacity="0.055"/>
+          <path d="M0,14 C 320,14 420,68 600,68 C 780,68 880,14 1200,14" fill="none" stroke="url(#ls-grad)" stroke-width="1" opacity="0.35"/>
+          <path d="M0,156 C 320,156 420,102 600,102 C 780,102 880,156 1200,156" fill="none" stroke="url(#ls-grad)" stroke-width="1" opacity="0.35"/>
+        </svg>
+        <div class="pipeline">
+          <div class="stage"><span class="stage-name micro">submitted</span><span class="stage-count num">350</span><span class="stage-delta">+41 this week</span></div>
+          <div class="stage"><span class="stage-name micro">in review</span><span class="stage-count num">90</span><span class="stage-delta">62% assigned</span></div>
+          <div class="stage"><span class="stage-name micro">waved</span><span class="stage-count num">108</span><span class="stage-delta">2 of 3 waves</span></div>
+          <div class="stage pinch"><span class="stage-name micro">accepted</span><span class="stage-count num grad-text">190</span><span class="stage-delta">18.1% of all</span></div>
+          <div class="stage"><span class="stage-name micro">onboarding</span><span class="stage-count num">61</span><span class="stage-delta">owe tasks · 9 at risk</span></div>
+          <div class="stage"><span class="stage-name micro">scheduled</span><span class="stage-count num">32</span><span class="stage-delta">158 still unplaced</span></div>
+          <div class="stage"><span class="stage-name micro">published</span><span class="stage-count num">26</span><span class="stage-delta">3 live conflicts</span></div>
+        </div>
+        <div class="pipeline-caption">the program funnel, drawn as an autoencoder — wide in, pinch at the decision, wide out to the site</div>
+      </section>
+
+      <div class="attention">
+        <button><strong>wave 2 in 6 days</strong><span>52 accepted · 60 target · open planner</span></button>
+        <button><strong>214 unreviewed in agents</strong><span>90 in review · 124 waiting for assignment</span></button>
+        <button><strong>9 speakers overdue</strong><span>headshots, agreements, travel · open chase board</span></button>
+        <button><strong>14 decided · not notified</strong><span>they have an outcome and have not heard it</span></button>
+      </div>
+
+      <div class="grid">
+        <section class="card span">
+          <div class="card-head">
+            <div>
+              <h2>submission pacing</h2>
+              <span class="sub">cumulative intake vs the 2025 edition, aligned by days before the event · <span class="grad-text">—</span> 2026 live · <span style="color:var(--muted)">– –</span> 2025 edition</span>
+            </div>
+            <button class="btn small">days before event</button>
+          </div>
+          <div class="card-body">
+            <div class="readout">t−63 · <strong>2026: 1,040</strong> · 2025 edition: 812 · <strong class="grad-text">+228 vs prior</strong> — on pace, no extension needed</div>
+            <svg class="pacing" viewBox="0 0 1100 232" role="img" aria-label="Cumulative submissions, this edition versus the 2025 edition">
+              <line x1="50" y1="206" x2="982" y2="206" stroke="#1d1d24" stroke-width="1"/>
+              <line x1="50" y1="142" x2="982" y2="142" stroke="#1d1d24" stroke-width="1"/>
+              <line x1="50" y1="78"  x2="982" y2="78"  stroke="#1d1d24" stroke-width="1"/>
+              <line x1="50" y1="14"  x2="982" y2="14"  stroke="#1d1d24" stroke-width="1"/>
+              <text x="43" y="209" text-anchor="end" style="font:400 9px var(--mono);fill:#8b8896">0</text>
+              <text x="43" y="145" text-anchor="end" style="font:400 9px var(--mono);fill:#8b8896">400</text>
+              <text x="43" y="81"  text-anchor="end" style="font:400 9px var(--mono);fill:#8b8896">800</text>
+              <text x="43" y="17"  text-anchor="end" style="font:400 9px var(--mono);fill:#8b8896">1.2k</text>
+              <text x="50"    y="224" text-anchor="middle" style="font:400 9px var(--mono);fill:#8b8896">t−90</text>
+              <text x="360.7" y="224" text-anchor="middle" style="font:400 9px var(--mono);fill:#8b8896">t−60</text>
+              <text x="671.3" y="224" text-anchor="middle" style="font:400 9px var(--mono);fill:#8b8896">t−30</text>
+              <text x="982"   y="224" text-anchor="middle" style="font:400 9px var(--mono);fill:#8b8896">event</text>
+              <line x1="671.3" y1="14" x2="671.3" y2="206" stroke="#26262e" stroke-width="1" stroke-dasharray="2 3"/>
+              <text x="671.3" y="11" text-anchor="middle" style="font:600 8px var(--mono);letter-spacing:.1em;fill:#8b8896">cfp closes</text>
+              <path d="M112.1,206 L205.3,177.2 L308.9,116.4 L360.7,87.6 L464.2,65.2 L567.8,49.2 L671.3,41.2 L774.9,33.2 L878.4,26.8 L982,22"
+                    fill="none" stroke="#55525f" stroke-width="2" stroke-dasharray="5 4"/>
+              <path d="M81.1,206 L132.8,167.6 L174.2,132.4 L236.4,94 L277.8,65.2 L329.6,39.6"
+                    fill="none" stroke="url(#ls-grad)" stroke-width="2.5"/>
+              <circle cx="329.6" cy="39.6" r="3.5" fill="#e56eff"/>
+              <text x="337.6" y="33" style="font:600 10px var(--mono);fill:#e56eff">2026 · 1,040 today</text>
+              <text x="900" y="44" style="font:600 10px var(--mono);fill:#55525f">2025 · 1,150 final</text>
+            </svg>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div><h2>wave planner</h2><span class="sub">accept while the cfp stays open</span></div>
+            <button class="btn small">plan next wave</button>
+          </div>
+          <div class="card-body" style="padding-top:6px;padding-bottom:6px">
+            <div class="wave-row">
+              <div><strong>wave 1</strong><div class="wave-date">aug 15 · sent</div></div>
+              <div><div class="wave-bar"><i style="width:100%"></i></div><div class="wave-date">48 accepted</div></div>
+              <div class="wave-target">48 target</div>
+            </div>
+            <div class="wave-row">
+              <div><strong>wave 2</strong><div class="wave-date">sep 1 · closes in 6 days</div></div>
+              <div><div class="wave-bar"><i style="width:87%"></i></div><div class="wave-date">52 accepted</div></div>
+              <div class="wave-target">60 target</div>
+            </div>
+            <div class="wave-row">
+              <div><strong>wave 3</strong><div class="wave-date">sep 15 · planned</div></div>
+              <div><div class="wave-bar"><i style="width:0%"></i></div><div class="wave-date">0 accepted</div></div>
+              <div class="wave-target">50 target</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div><h2>work in motion</h2><span class="sub">updated just now</span></div>
+            <button class="btn small">export</button>
+          </div>
+          <div class="card-body">
+            <div class="metrics">
+              <button class="metric"><span class="micro">reviews done</span><span class="value num">1,842</span><span class="sub">of 2,130</span></button>
+              <button class="metric"><span class="micro">tasks overdue</span><span class="value num" style="color:var(--pink)">23</span><span class="sub">across 9 speakers</span></button>
+              <button class="metric"><span class="micro">unscheduled</span><span class="value num">158</span><span class="sub">accepted sessions</span></button>
+              <button class="metric"><span class="micro">conflicts</span><span class="value num" style="color:var(--orange)">3</span><span class="sub">5 affected sessions · live</span></button>
+            </div>
+            <div class="micro" style="margin-bottom:10px">review pressure by track</div>
+            <div class="chips">
+              <button class="chip">agents · <b>214</b></button>
+              <button class="chip">evals · <b>87</b></button>
+              <button class="chip">infra · <b>64</b></button>
+              <button class="chip">security · <b>41</b></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card span">
+          <div class="card-head">
+            <div><h2>speaker task dashboard</h2><span class="sub">23 overdue tasks across 9 accepted speakers · changes update live</span></div>
+            <button class="btn small">open onboarding</button>
+          </div>
+          <div>
+            <button class="task-row">
+              <strong>Amara van der Meer</strong>
+              <span class="title">Beyond the demo: reliable multi-agent systems <span class="micro">aie-0027</span></span>
+              <span class="task">speaker agreement</span>
+              <span class="due overdue">4 days overdue</span>
+            </button>
+            <button class="task-row">
+              <strong>João García Márquez</strong>
+              <span class="title">Operating low-latency inference platforms</span>
+              <span class="task">high-resolution headshot</span>
+              <span class="due overdue">2 days overdue</span>
+            </button>
+            <button class="task-row">
+              <strong>Oluwaseun O'Connell-Singh</strong>
+              <span class="title">AI governance without gridlock</span>
+              <span class="task">travel and accommodation</span>
+              <span class="due soon">due today</span>
+            </button>
+            <button class="task-row">
+              <strong>Mei-Ling de la Fontaine</strong>
+              <span class="title">Secure tool-using agents in regulated teams</span>
+              <span class="task">final slides</span>
+              <span class="due">due oct 5</span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<a class="badge" href="index.html">theme: latent.space · ⌂ picker</a>
+
+</body>
+</html>
