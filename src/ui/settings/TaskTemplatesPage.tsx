@@ -65,12 +65,47 @@ interface SpeakerTask {
   submission_title: string | null;
 }
 
+interface SessionOption {
+  id: string;
+  title: string;
+}
+
 interface Assignee {
   id: string;
   name: string;
   email: string;
   company: string | null;
   accepted_session_count: number;
+  sessions: SessionOption[];
+}
+
+/**
+ * The session this speaker's copy of the task belongs to: what the organizer
+ * picked, or their only session when they have exactly one. An empty string is
+ * "no session" — a real answer for a bio or a release form.
+ */
+function chosenSession(person: Assignee, choices: Readonly<Record<string, string>>): string {
+  const choice = choices[person.id];
+  if (choice !== undefined) return choice;
+  return person.sessions.length === 1 ? (person.sessions[0] as SessionOption).id : "";
+}
+
+/**
+ * What the request says about sessions.
+ *
+ * Only speakers the picker actually showed a session control for are named, so
+ * a speaker who gained a session while the page sat open is still resolved by
+ * the server rather than pinned to a stale nothing.
+ */
+function sessionAssignments(
+  assignees: readonly Assignee[],
+  selected: readonly string[],
+  choices: Readonly<Record<string, string>>,
+): Array<{ person_id: string; submission_id: string | null }> {
+  const selectedSet = new Set(selected);
+  return assignees
+    .filter((person) => selectedSet.has(person.id) && person.sessions.length > 0)
+    .map((person) => ({ person_id: person.id, submission_id: chosenSession(person, choices) || null }));
 }
 
 interface FormOption {
@@ -97,10 +132,11 @@ interface Draft {
   formId: string;
   autoAssign: boolean;
   assignTo: string[];
+  sessionChoices: Record<string, string>;
 }
 
 function emptyDraft(): Draft {
-  return { name: "", kind: "acknowledge", description: "", dueMode: "date", dueDate: "", dueOffsetDays: "14", formId: "", autoAssign: false, assignTo: [] };
+  return { name: "", kind: "acknowledge", description: "", dueMode: "date", dueDate: "", dueOffsetDays: "14", formId: "", autoAssign: false, assignTo: [], sessionChoices: {} };
 }
 
 async function requestJson<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
@@ -199,6 +235,58 @@ function AssigneePicker({
   </div>;
 }
 
+/**
+ * Which session each selected speaker's task belongs to.
+ *
+ * Every deliverable the speaker uploads is filed under this session — the files
+ * board groups by it and the bulk export makes a folder per session — so a task
+ * assigned without one produces a deck nobody can place. A speaker with a single
+ * session is answered before the organizer arrives; the rest get one control
+ * each, right where they were selected.
+ */
+function SessionChoicePicker({
+  assignees,
+  selected,
+  choices,
+  onChange,
+  idPrefix,
+}: {
+  assignees: readonly Assignee[];
+  selected: readonly string[];
+  choices: Readonly<Record<string, string>>;
+  onChange: (personId: string, submissionId: string) => void;
+  idPrefix: string;
+}): JSX.Element | null {
+  const selectedSet = new Set(selected);
+  const people = assignees.filter((person) => selectedSet.has(person.id) && person.sessions.length > 0);
+  if (people.length === 0) return null;
+
+  return <div class="task-session-picker">
+    <div class="task-assignee-head">
+      <span class="eyebrow">Session</span>
+      <span class="subtle">Deliverables are filed under the session chosen here.</span>
+    </div>
+    <div class="task-session-list">
+      {people.map((person) => <div class="task-session-row" key={person.id}>
+        <span class="task-session-person">
+          <strong>{person.name}</strong>
+          <small>{person.sessions.length === 1 ? "Their only session" : `${person.sessions.length} sessions`}</small>
+        </span>
+        <select
+          class="task-session-select"
+          id={`${idPrefix}-session-${person.id}`}
+          aria-label={`Session for ${person.name}`}
+          value={chosenSession(person, choices)}
+          onChange={(event) => onChange(person.id, event.currentTarget.value)}
+        >
+          <option value="">No session</option>
+          {person.sessions.map((session) => <option key={session.id} value={session.id}>{session.title}</option>)}
+        </select>
+      </div>)}
+    </div>
+  </div>;
+}
+
 /** The deadline control: a literal date by default, an offset when the organizer wants one. */
 function DeadlineFields({
   dueMode,
@@ -288,6 +376,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
   const [expanded, setExpanded] = useState<string[]>([]);
   const [assignFor, setAssignFor] = useState<string | null>(null);
   const [assignSelection, setAssignSelection] = useState<string[]>([]);
+  const [assignSessions, setAssignSessions] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft>(emptyDraft);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
@@ -361,7 +450,11 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
       const response = await requestJson<{ assigned: number }>(`/api/v1/events/${encodeURIComponent(eventId)}/task-templates`, "/api/v1/events/{eventId}/task-templates", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...prepared.body, assign_to: draft.assignTo }),
+        body: JSON.stringify({
+          ...prepared.body,
+          assign_to: draft.assignTo,
+          session_assignments: sessionAssignments(assignees, draft.assignTo, draft.sessionChoices),
+        }),
       });
       setNotice(response.assigned > 0
         ? `Created “${draft.name.trim()}” and assigned it to ${response.assigned} speaker${response.assigned === 1 ? "" : "s"}.`
@@ -405,10 +498,15 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
       const response = await requestJson<{ assigned: number; skipped: number }>(`/api/v1/events/${encodeURIComponent(eventId)}/speaker-tasks`, "/api/v1/events/{eventId}/speaker-tasks", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ template_id: templateId, person_ids: assignSelection }),
+        body: JSON.stringify({
+          template_id: templateId,
+          person_ids: assignSelection,
+          session_assignments: sessionAssignments(assignees, assignSelection, assignSessions),
+        }),
       });
       setAssignFor(null);
       setAssignSelection([]);
+      setAssignSessions({});
       setNotice(response.skipped > 0
         ? `Assigned to ${response.assigned} speaker${response.assigned === 1 ? "" : "s"}; ${response.skipped} already owed this task.`
         : `Assigned to ${response.assigned} speaker${response.assigned === 1 ? "" : "s"}.`);
@@ -479,6 +577,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
       formId: template.form_id ?? "",
       autoAssign: template.auto_assign === 1,
       assignTo: [],
+      sessionChoices: {},
     });
   };
 
@@ -499,6 +598,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
         <div class="field span-2"><span>Deadline</span><DeadlineFields dueMode={draft.dueMode} dueDate={draft.dueDate} dueOffsetDays={draft.dueOffsetDays} idPrefix="task-new" onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))} /></div>
       </div>
       <AssigneePicker assignees={assignees} selected={draft.assignTo} idPrefix="task-new-assignee" onChange={(update) => setDraft((current) => ({ ...current, assignTo: update(current.assignTo) }))} />
+      <SessionChoicePicker assignees={assignees} selected={draft.assignTo} choices={draft.sessionChoices} idPrefix="task-new-assignee" onChange={(personId, submissionId) => setDraft((current) => ({ ...current, sessionChoices: { ...current.sessionChoices, [personId]: submissionId } }))} />
       <label class="task-auto-assign"><input type="checkbox" checked={draft.autoAssign} onChange={(event) => { const checked = event.currentTarget.checked; setDraft((current) => ({ ...current, autoAssign: checked })); }} /><span>Also give this task to every speaker accepted from now on</span></label>
       <div class="task-compose-error" role="alert">{createError ?? ""}</div>
       <div class="task-compose-actions">
@@ -544,7 +644,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
                   <span class="tabular">{done} of {rows.length} complete</span>
                 </button>
                 <div class="task-row-actions">
-                  <button class="button small" type="button" onClick={() => { setAssignFor(assignFor === template.id ? null : template.id); setAssignSelection([]); setEditing(null); }} disabled={rowBusy === template.id}>Assign to speakers</button>
+                  <button class="button small" type="button" onClick={() => { setAssignFor(assignFor === template.id ? null : template.id); setAssignSelection([]); setAssignSessions({}); setEditing(null); }} disabled={rowBusy === template.id}>Assign to speakers</button>
                   <button class="button small" type="button" onClick={() => editing === template.id ? setEditing(null) : startEdit(template)} disabled={rowBusy === template.id}>{editing === template.id ? "Cancel" : "Edit"}</button>
                   <button class="button small" type="button" onClick={() => void deleteTemplate(template)} disabled={rowBusy === template.id}>Delete</button>
                 </div>
@@ -559,6 +659,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
               </div>}
               {assignFor === template.id && <div class="task-row-assign">
                 <AssigneePicker assignees={assignees} selected={assignSelection} idPrefix={`task-assign-${template.id}`} onChange={(update) => setAssignSelection((current) => update(current))} />
+                <SessionChoicePicker assignees={assignees} selected={assignSelection} choices={assignSessions} idPrefix={`task-assign-${template.id}`} onChange={(personId, submissionId) => setAssignSessions((current) => ({ ...current, [personId]: submissionId }))} />
                 <div class="task-compose-actions"><button class="button primary" type="button" onClick={() => void assignTemplate(template.id)} disabled={assignSelection.length === 0 || rowBusy === template.id}>{rowBusy === template.id ? "Assigning…" : `Assign to ${assignSelection.length} speaker${assignSelection.length === 1 ? "" : "s"}`}</button></div>
               </div>}
               {isOpen && <div class="task-assignment-list">
