@@ -51,6 +51,8 @@ const SEEDED_COUNTS: Record<string, number> = {
   task_templates: 6,
   agenda_items: 25,
   embeds: 0,
+  // Attendee-created, never seeded: a fresh demo has nobody's schedule in it.
+  public_schedules: 0,
   import_rows: 0,
   imports: 0,
   submissions: 1000,

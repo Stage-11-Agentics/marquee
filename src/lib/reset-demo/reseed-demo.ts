@@ -37,6 +37,7 @@ export const WIPE_ORDER = [
   "task_templates",
   "agenda_items",
   "embeds",
+  "public_schedules",
   "import_rows",
   "imports",
   "submissions",
@@ -101,6 +102,13 @@ const DELETE_PLANS: Partial<Record<WipeTable, DeletePlan>> = {
   webhook_deliveries: {
     sql: `DELETE FROM webhook_deliveries WHERE endpoint_id IN (SELECT id FROM webhook_endpoints WHERE event_id IN (${ORG_EVENTS}))`,
     bindings: ORG,
+  },
+  // Attendee schedules are anonymous rows pointing at demo sessions; a demo
+  // reset that left them behind would leave codes resolving to sessions that
+  // no longer exist.
+  public_schedules: {
+    sql: "DELETE FROM public_schedules WHERE event_id = ?",
+    bindings: [DEMO_EVENT_ID],
   },
   webhook_endpoints: {
     sql: `DELETE FROM webhook_endpoints WHERE event_id IN (${ORG_EVENTS})`,
