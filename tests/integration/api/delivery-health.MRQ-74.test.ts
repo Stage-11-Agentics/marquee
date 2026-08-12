@@ -12,6 +12,19 @@ const TOKEN = "mq_mrq74-program-token";
 const NOW = Date.parse("2026-08-11T18:00:00.000Z");
 const DAY = 86_400_000;
 
+// `sent_today` is the ONE fact here measured against the real wall clock: the
+// route derives its window as `now - (now % DAY)`, i.e. UTC midnight of the day
+// the test actually runs on. Every other fact is frozen at NOW on purpose.
+//
+// Anchoring the sent row to NOW too made the suite pass for as long as the real
+// date matched the fixture's, then fail permanently once UTC rolled past
+// 2026-08-12T00:00Z — not intermittently, but for every run and every PR after
+// that instant. So this row alone tracks the real clock: at most a minute ago,
+// and never earlier than today's midnight, so it lands inside the window at any
+// hour including the first seconds of a new UTC day.
+const REAL_NOW = Date.now();
+const SENT_TODAY_AT = Math.max(REAL_NOW - (REAL_NOW % DAY), REAL_NOW - 60_000);
+
 interface HealthSnapshot {
   generated_at: number;
   event_id: string;
@@ -87,7 +100,7 @@ async function seedFixture(): Promise<void> {
         ('outbox-mrq74-bounced', ?, 'acceptance', 'decision-mrq74-bounced', 'person-mrq74-bounced', 'bounced@mrq74.test', 'You are in', '<p>In</p>', 'In', 'failed', NULL, 'key-mrq74-bounced', 'the address was rejected', NULL, ?, ?),
         ('outbox-mrq74-told', ?, 'acceptance', 'decision-mrq74-told', 'person-mrq74-told', 'told@mrq74.test', 'You are in', '<p>In</p>', 'In', 'sent', NULL, 'key-mrq74-told', NULL, ?, ?, ?),
         ('outbox-mrq74-reminder', ?, 'reminder', 'sub-mrq74-told', 'person-mrq74-told', 'told@mrq74.test', 'A reminder', '<p>Soon</p>', 'Soon', 'sent', NULL, 'key-mrq74-reminder', NULL, ?, ?, ?)`,
-    ).bind(EVENT_ID, NOW - 2 * DAY, NOW, EVENT_ID, NOW - DAY, NOW - DAY, NOW, EVENT_ID, NOW - 60_000, NOW - 60_000, NOW),
+    ).bind(EVENT_ID, NOW - 2 * DAY, NOW, EVENT_ID, NOW - DAY, NOW - DAY, NOW, EVENT_ID, SENT_TODAY_AT, NOW - 60_000, NOW),
     env.DB.prepare(
       `INSERT INTO submission_decisions (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
        VALUES
