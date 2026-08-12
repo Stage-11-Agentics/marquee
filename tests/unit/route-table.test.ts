@@ -26,14 +26,14 @@ test("CONTRACT · MRQ-115 — the files library is reachable by the noun an orga
   expect(matchRoute("/files")).toMatchObject({ id: "files", label: "Files", group: "modules", sidebar: true });
 });
 
-test("MRQ-106 · the embed builder navigates for real, because the shell does not render it", () => {
+test("CONTRACT · MRQ-106 · the embed builder navigates for real, because the shell does not render it", () => {
   // `app.tsx` treats every `/embed/` path as a public page, so a client-side
   // push would draw the shell's "not installed" empty state over a working
   // server-rendered builder — worse than having no link at all.
   expect(matchRoute("/embed/config")).toMatchObject({ label: "Embeds", external: true, sidebar: true });
 });
 
-test("MRQ-106 · the submissions list and its create action are in the sidebar", () => {
+test("CONTRACT · MRQ-106 · the submissions list and its create action are in the sidebar", () => {
   expect(matchRoute("/submissions")).toMatchObject({ id: "submissions", sidebar: true, group: "home" });
   expect(matchRoute("/submissions/new")).toMatchObject({ id: "submission-new", sidebar: true, group: "home" });
 });

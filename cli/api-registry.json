@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "d4e7f690349edfead0b4cfb3de3bf147118f88bbe6b03798949960bfce4c1169",
+  "documentSha256": "7be603a75c254e834fa07e02ea51271299cb14d13030ec11ad81d62a9c8300b7",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",
@@ -24,6 +24,7 @@
     "GET /api/v1/events/{eventId}/comms/audience listCommunicationAudience",
     "GET /api/v1/events/{eventId}/dashboard getProgramDashboard",
     "GET /api/v1/events/{eventId}/delivery-health getDeliveryHealth",
+    "GET /api/v1/events/{eventId}/files listConferenceFiles",
     "GET /api/v1/events/{eventId}/formats listEventFormats",
     "GET /api/v1/events/{eventId}/forms listEventForms",
     "GET /api/v1/events/{eventId}/forms/{formId} getEventForm",

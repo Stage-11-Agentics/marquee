@@ -5,7 +5,7 @@ import test from "node:test";
 const root = new URL("../../", import.meta.url);
 const source = async (path) => readFile(new URL(path, root), "utf8");
 
-test("MRQ-106 · the public agenda keeps a door to its own data feed", async () => {
+test("CONTRACT · MRQ-106 · the public agenda keeps a door to its own data feed", async () => {
   // Removed in MRQ-94's navigation repair with nothing put in its place, which
   // left the JSON feed behind the agenda with no on-page entrance at all. It
   // comes back carrying the page's own filters — the unscoped version is what
@@ -17,7 +17,7 @@ test("MRQ-106 · the public agenda keeps a door to its own data feed", async () 
   assert.match(agenda, /if \(data\.filters\.q\) feedQuery\.set\("q", data\.filters\.q\);/);
 });
 
-test("MRQ-106 · the Ready-to-place escape holds its space before the count arrives", async () => {
+test("CONTRACT · MRQ-106 · the Ready-to-place escape holds its space before the count arrives", async () => {
   const page = await source("src/ui/submissions/SubmissionsPage.tsx");
   const styles = await source("src/ui/submissions/submissions.css");
 
@@ -39,7 +39,7 @@ test("MRQ-106 · the Ready-to-place escape holds its space before the count arri
   assert.match(styles, /\.accepted-any-note \.button \{ visibility: hidden; \}/);
 });
 
-test("MRQ-106 · the route map is generated and gated, never hand-written", async () => {
+test("CONTRACT · MRQ-106 · the route map is generated and gated, never hand-written", async () => {
   const packageJson = JSON.parse(await source("package.json"));
   const gate = await source("scripts/checks/pr-gate.mjs");
   const map = await source("docs/ROUTES.md");

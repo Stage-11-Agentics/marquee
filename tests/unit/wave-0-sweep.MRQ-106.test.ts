@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { acceptedAnyParams, acceptedStageUndercount, isAcceptedStageDeadEnd } from "../../src/ui/submissions/list-request";
 
 describe("MRQ-106 · Ready to place tells you what it is not", () => {
-  test("the gap is the trigger, not the zero", () => {
+  test("CONTRACT · MRQ-106 · the gap is the trigger, not the zero", () => {
     // The seed this ships against answers `?status=accepted` with ONE record
     // out of 62 accepted talks. A list of one reads as an answer in a way an
     // empty list does not, so it needs the other count more, not less.
@@ -20,7 +20,7 @@ describe("MRQ-106 · Ready to place tells you what it is not", () => {
 });
 
 describe("MRQ-106 · the Ready-to-place dead end offers a way out", () => {
-  test("the dead end is the stage filter finding nothing, and nothing else", () => {
+  test("CONTRACT · MRQ-106 · the dead end is the stage filter finding nothing, and nothing else", () => {
     expect(isAcceptedStageDeadEnd("accepted", 0)).toBe(true);
     // A stage that found records is not a dead end.
     expect(isAcceptedStageDeadEnd("accepted", 12)).toBe(false);
@@ -33,7 +33,7 @@ describe("MRQ-106 · the Ready-to-place dead end offers a way out", () => {
     expect(isAcceptedStageDeadEnd("accepted", null)).toBe(false);
   });
 
-  test("the escape swaps the stage for the stored fact and keeps every other filter", () => {
+  test("CONTRACT · MRQ-106 · the escape swaps the stage for the stored fact and keeps every other filter", () => {
     const swapped = acceptedAnyParams(new URLSearchParams("status=accepted&track=agents&q=rag&sort=score&page=3"));
     expect(swapped.get("status")).toBe("accepted_any");
     expect(swapped.get("track")).toBe("agents");
@@ -44,7 +44,7 @@ describe("MRQ-106 · the Ready-to-place dead end offers a way out", () => {
     expect(swapped.get("page")).toBeNull();
   });
 
-  test("the escape does not mutate the query it was given", () => {
+  test("CONTRACT · MRQ-106 · the escape does not mutate the query it was given", () => {
     const original = new URLSearchParams("status=accepted&page=2");
     acceptedAnyParams(original);
     expect(original.get("status")).toBe("accepted");
