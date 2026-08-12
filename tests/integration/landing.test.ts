@@ -3,7 +3,9 @@ import { beforeEach, expect, test } from "vitest";
 import { loadLandingData, renderLandingDocument } from "../../src/routes/landing.route";
 import { applyMigrations, env } from "./apply-migrations";
 
-const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
+// Anchored to the real clock: the fixtures below are offsets ("due yesterday"),
+// and the server compares those columns against Date.now().
+const NOW = Date.now();
 const SHELL = `<!doctype html><html><head></head><body><div id="app"></div></body></html>`;
 
 beforeEach(async () => {
