@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T04:19:23Z",
+  "created_by": "agent:codex-mrq-91",
+  "custom_fields": {},
+  "id": "art_01KZT34HAG967GJZB92ZDCY7N3",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZT34HAG967GJZB92ZDCY7N3.md",
+    "size_bytes": 2642
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS self-review after resolving the tiles-failed notice collision; exact head and tracked diff audited.",
+  "tags": [],
+  "title": "MRQ-91 exact-head self-review 61b42ed",
+  "token_usage": null,
+  "type": "file"
+}

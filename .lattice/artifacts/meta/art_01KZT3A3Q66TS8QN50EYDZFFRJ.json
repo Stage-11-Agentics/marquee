@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T04:22:25Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZT3A3Q66TS8QN50EYDZFFRJ",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT3A3Q66TS8QN50EYDZFFRJ.png",
+    "size_bytes": 486472
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Fresh exact-head c11 embedded-browser screenshot showing the expanded Finalize bio & photos task with actual speaker bio, headshot state, review control, and Confirm profile.",
+  "tags": [],
+  "title": "MRQ-93 local profile task proof",
+  "token_usage": null,
+  "type": "file"
+}

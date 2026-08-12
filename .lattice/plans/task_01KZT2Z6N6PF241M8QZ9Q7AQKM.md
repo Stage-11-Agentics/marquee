@@ -98,3 +98,43 @@ to it, and note it in a Lattice comment so the rebase is trivial.
   dialog, and the reviewer surface.
 - Validated locally with browser automation, screenshots in the PR.
 - `npm test` green within budget; PR open against `Stage-11-Agentics/marquee` `main`.
+
+## Delegator plan — 2026-08-12
+
+### Approach
+
+1. Keep the existing Flight Deck `.event-switcher` markup and CSS geometry, but
+   render the conference identity as the same `/dashboard` client-side link as
+   the Marquee brand. Remove the sidebar's dead-end callback wiring without
+   changing the reusable overlay host or unrelated affordances.
+2. Rewrite the record decision dialog's explanatory copy as one organizer-facing
+   sentence whose promise follows the actual action: accept/reject feedback is
+   included in the queued decision email; waitlist feedback is saved with the
+   decision but no message is sent. The waitlist confirmation control will stop
+   saying “notify” for the same reason.
+3. Standardize the named decision/review field labels to put the qualifier after
+   the noun: `Feedback for the speaker (optional)`, `Feedback for the speakers
+   (optional)`, `Scorecard (optional)`, and `Committee note (optional)`. This is
+   intentionally scoped to the three ticket-named organizer/reviewer surfaces;
+   unrelated copy about optional form configuration or public-form metadata is
+   not this ticket's field vocabulary.
+4. Add a focused source-contract test for the home link, absence of the removed
+   call site, action-specific decision copy, and optional-label convention. Run
+   the baseline and final `npm test` within the 45s suite budget, then use the
+   c11 embedded browser against a local Wrangler instance to drive the sidebar
+   home link and all three decision-dialog states and capture screenshots.
+5. Commit the focused change, push only to the `github` remote, open the GitHub
+   PR against `main`, and include the complete `unavailable(...)` inventory,
+   judgment calls, local browser evidence, and the explicit no-auto-deploy
+   follow-up in the PR body.
+
+### Judgment calls
+
+- The conference link uses the existing `event-switcher` class and `/dashboard`
+  route so its size and position do not change when the element changes from a
+  button to an anchor.
+- “Accept and notify” and “Reject and notify” remain accurate because the
+  decision writer queues the corresponding mail; “Waitlist” is the accurate
+  control because the waitlist branch intentionally does not enqueue mail.
+- The reviewer convention applies `(optional)` to the field labels themselves,
+  not to unrelated prose or placeholders elsewhere in the product.

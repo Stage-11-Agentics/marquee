@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-cli",
   "branch_links": [],
-  "comment_count": 5,
+  "comment_count": 6,
   "complexity": null,
   "created_at": "2026-08-12T03:33:25Z",
   "created_by": {
@@ -26,21 +26,26 @@
       "id": "ev_01KZT2DQA5KSHYN39BR6TGQCFB",
       "role": "validation",
       "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT3FGTJNJ0P0KHF4KANN28S",
+      "role": "validation",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZT0GCTE9F87GTDS466RW4EM",
-  "last_event_id": "ev_01KZT2DQA5KSHYN39BR6TGQCFB",
-  "last_status_changed_at": "2026-08-12T03:43:43Z",
+  "last_event_id": "ev_01KZT3FS9PYRWCM6GTZC6J0M3D",
+  "last_status_changed_at": "2026-08-12T04:25:31Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-96",
-  "status": "in_progress",
+  "status": "review",
   "tags": null,
   "title": "Upload file types are hardcoded in the seed \u2014 give the organizer a real control",
   "type": "task",
-  "updated_at": "2026-08-12T04:06:55Z",
+  "updated_at": "2026-08-12T04:25:31Z",
   "urgency": null
 }

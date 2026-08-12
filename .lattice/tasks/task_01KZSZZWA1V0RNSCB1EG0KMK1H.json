@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-cli",
   "branch_links": [],
-  "comment_count": 4,
+  "comment_count": 7,
   "complexity": null,
   "created_at": "2026-08-12T03:24:24Z",
   "created_by": {
@@ -31,21 +31,26 @@
       "id": "art_01KZT2494YENX7Q4QRRTVJ4D7S",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT3A3Q66TS8QN50EYDZFFRJ",
+      "role": "validation",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZSZZWA1V0RNSCB1EG0KMK1H",
-  "last_event_id": "ev_01KZT249544BQGF6SECV1SYDZQ",
-  "last_status_changed_at": "2026-08-12T03:54:15Z",
+  "last_event_id": "ev_01KZT3JZ1SRGHMMSPG9NG94EM6",
+  "last_status_changed_at": "2026-08-12T04:23:49Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-93",
-  "status": "review",
+  "status": "pr_open",
   "tags": null,
   "title": "\"Finalize talk description\" shows a checkbox and no talk \u2014 the task never renders what it asks you to confirm",
   "type": "bug",
-  "updated_at": "2026-08-12T04:01:46Z",
+  "updated_at": "2026-08-12T04:27:15Z",
   "urgency": null
 }

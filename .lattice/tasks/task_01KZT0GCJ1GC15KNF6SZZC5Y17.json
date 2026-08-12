@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-cli",
   "branch_links": [],
-  "comment_count": 5,
+  "comment_count": 6,
   "complexity": null,
   "created_at": "2026-08-12T03:33:25Z",
   "created_by": {
@@ -24,18 +24,18 @@
     }
   ],
   "id": "task_01KZT0GCJ1GC15KNF6SZZC5Y17",
-  "last_event_id": "ev_01KZT26YR9TJNST6XKWQEKE97M",
-  "last_status_changed_at": "2026-08-12T03:41:20Z",
+  "last_event_id": "ev_01KZT33S1886ZCMAYBZ6KQDD4K",
+  "last_status_changed_at": "2026-08-12T04:18:58Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-95",
-  "status": "in_progress",
+  "status": "review",
   "tags": null,
   "title": "No date field type exists \u2014 travel dates are collected as free text",
   "type": "task",
-  "updated_at": "2026-08-12T04:03:13Z",
+  "updated_at": "2026-08-12T04:18:58Z",
   "urgency": null
 }

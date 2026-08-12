@@ -43,3 +43,5 @@ selected scope will use the same `day=all` representation.
   defects, deployment configuration, or production state.
 - Preserve Flight Deck spacing and the no-layout-jump rule by keeping the day controls at
   a stable reserved width across selected states and responsive layouts.
+
+## Reset 2026-08-12 by agent:delegator-mrq-94
