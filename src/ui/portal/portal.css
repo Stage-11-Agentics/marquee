@@ -216,6 +216,11 @@
 .portal-next-steps li { color: var(--ink-soft); display: grid; font-size: 12px; gap: 10px; grid-template-columns: 22px minmax(0, 1fr); line-height: 1.55; }
 .portal-next-steps li::before { color: var(--accent-dark); content: counter(step); counter-increment: step; font: 600 10px/22px var(--mono); text-align: center; }
 .portal-next-steps strong { color: var(--ink); }
+.portal-submitter-flow { min-height: 282px; }
+.portal-submitter-action { color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
+.portal-submitter-action strong { color: var(--ink); display: block; font-size: 13px; margin-bottom: 10px; }
+.portal-submitter-action p, .portal-submitter-status-note { margin: 0; }
+.portal-submitter-status-note { color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
 .portal-seat-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .portal-seat-actions .portal-button { align-items: center; display: inline-flex; text-decoration: none; }
 .portal-submitted-row { align-items: center; border-bottom: 1px solid var(--rule-soft); display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) 104px; min-height: 60px; padding: 12px 0; }

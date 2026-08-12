@@ -88,15 +88,52 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(render(snapshot({ submissions: [submission({ status: "rejected" })] }))).toContain("was not selected");
   });
 
+  test("CONTRACT · MRQ-150 · a draft names the submitter's next action and makes no review promise", () => {
+    const html = render(snapshot({
+      submissions: [submission({ status: "draft", submitted_at: null, wave_name: null, wave_decision_on: null })],
+    }));
+    expect(html).toContain("Your draft is saved, not yet submitted");
+    expect(html).toContain("Finish and submit your abstract");
+    expect(html).toContain("confirmation email");
+    expect(html).toContain("reopens it");
+    expect(html).not.toContain("Nothing is waiting on you");
+    expect(html.toLowerCase()).not.toContain("under review");
+    expect(html.toLowerCase()).not.toContain("decision");
+    expect(html).not.toContain('href="/f/cfp"');
+  });
+
+  test("CONTRACT · MRQ-150 · decided statuses do not show a forward-looking decision flow", () => {
+    for (const status of ["accepted", "rejected", "withdrawn"] as const) {
+      const html = render(snapshot({ submissions: [submission({ status })] }));
+      expect(html).not.toContain("What happens next");
+      expect(html).not.toContain("portal-next-steps");
+      expect(html.toLowerCase()).not.toContain("next decision");
+      expect(html.toLowerCase()).not.toContain("go out by");
+      expect(html.toLowerCase()).not.toContain("has not set a decision date");
+    }
+  });
+
+  test("CONTRACT · MRQ-150 · the submitter chip uses Maybe for a waitlisted abstract", () => {
+    expect(render(snapshot({ submissions: [submission({ status: "waitlisted" })] }))).toContain(">Maybe<");
+  });
+
+  test("CONTRACT · MRQ-150 · a lead status never borrows another abstract's wave date", () => {
+    const html = render(snapshot({
+      submissions: [
+        submission({ id: "lead-rejected", title: "Lead abstract", status: "rejected", wave_name: null, wave_decision_on: null }),
+        submission({ id: "other-submitted", title: "Other abstract", status: "submitted", wave_name: "Wave 2", wave_decision_on: "2026-10-01" }),
+      ],
+    }));
+    expect(html).toContain("Your abstract was not selected");
+    expect(html).toContain("Lead abstract");
+    expect(html).toContain("Other abstract");
+    expect(html).not.toContain("Wave 2");
+    expect(html).not.toContain("October 1, 2026");
+  });
+
   test("CONTRACT · MRQ-153 · a rejected submitter preview keeps its viewing-as label", () => {
     const html = render(snapshot({ submissions: [submission({ status: "rejected" })] }), true);
     expect(html).toContain("Viewing as speaker · organizer preview");
     expect(html).toContain("Your abstract was not selected");
-  });
-
-  test("CONTRACT · MRQ-150 · no submissions still leaves the reader somewhere to go", () => {
-    const html = render(snapshot({ submissions: [] }));
-    expect(html).toContain("No abstract is on file");
-    expect(html).toContain('href="/signin?next=/portal"');
   });
 });

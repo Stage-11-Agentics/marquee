@@ -73,6 +73,8 @@ const declineBody = z.object({ note: z.string().trim().max(10_000).nullable().op
 
 /** Statuses that still have a decision coming, so a wave date is worth showing. */
 const AWAITING_DECISION = ["draft", "submitted", "in_review"];
+/** Submitter drafts are unfinished work, not abstracts waiting for a decision. */
+const SUBMITTER_AWAITING_DECISION = ["submitted", "in_review"];
 
 const portalResponseSchema = z
   .object({
@@ -1009,9 +1011,10 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
     .bind(auth.personId, event.id, auth.personId)
     .all<SubmitterSubmissionRow>();
   const submissions = [...rows.results];
-  // Same fallback the speaker snapshot uses: an abstract not yet assigned to a
-  // wave still deserves a real "you will hear by" date, not a shrug.
-  if (submissions.some((row) => row.wave_name === null && AWAITING_DECISION.includes(row.status))) {
+  // A submitted or in-review abstract not yet assigned to a wave still
+  // deserves a real "you will hear by" date. Drafts are unfinished work, so
+  // they must not inherit a decision date from the next wave.
+  if (submissions.some((row) => row.wave_name === null && SUBMITTER_AWAITING_DECISION.includes(row.status))) {
     const nextWave = await db
       .prepare(
         `SELECT name AS wave_name, decision_on AS wave_decision_on FROM waves
@@ -1021,7 +1024,7 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
       .first<{ wave_name: string; wave_decision_on: string }>();
     if (nextWave) {
       for (const row of submissions) {
-        if (row.wave_name === null && AWAITING_DECISION.includes(row.status)) {
+        if (row.wave_name === null && SUBMITTER_AWAITING_DECISION.includes(row.status)) {
           row.wave_name = nextWave.wave_name;
           row.wave_decision_on = nextWave.wave_decision_on;
         }
