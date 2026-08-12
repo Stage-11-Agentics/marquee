@@ -46,7 +46,7 @@ const personInput = z.object({
  * absent: a record has exactly one, it is written when the record is created,
  * and a second one would make authorship ambiguous everywhere it is read.
  */
-const participantInput = personInput.omit({ role: true }).extend({
+const participantInput = personInput.omit({ role: true, position: true }).extend({
   role: z.enum(["speaker", "co_speaker", "moderator", "chairperson", "sponsor_contact"]).default("co_speaker"),
 });
 
@@ -1287,7 +1287,9 @@ const addParticipant = defineApiRoute(
     tags: ["Submissions"],
     request: { params: submissionParams, body: { content: { "application/json": { schema: participantInput } } } },
     policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
-    responses: { 201: recordResponse, ...errors },
+    // 200 is the already-attached answer: the record is returned either way,
+    // and only one of the two paths actually created something.
+    responses: { 200: recordResponse, 201: recordResponse, ...errors },
   },
   async (context) => {
     const { eventId, submissionId } = context.req.valid("param");
@@ -1302,17 +1304,25 @@ const addParticipant = defineApiRoute(
     // Adding the same person in the same role twice is the organizer clicking
     // Add on a row that is already there. It is not an error worth a red
     // banner, but it must not create the duplicate the dedupe in
-    // `participantListSql` then has to hide.
-    if (existing) return context.json(await loadRecord(context.env.DB, eventId, submissionId), 201);
-    const position = body.position ?? await nextParticipantPosition(context.env.DB, submissionId);
+    // `participantListSql` then has to hide — and it is not a creation either,
+    // so it answers 200 rather than claiming a 201 no reader could find.
+    if (existing) return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+    const position = await nextParticipantPosition(context.env.DB, submissionId);
     const participationId = newUlid();
     const actor = await actorFor(context);
     await context.env.DB.batch([
       ...resolved.statements,
+      // `ON CONFLICT DO NOTHING` against uq_participations_person_submission_role
+      // rather than trusting the read above: the check and this write are two
+      // round trips, so two simultaneous Adds both pass the check. Without it
+      // the loser of that race surfaces the constraint failure as a 500 —
+      // the data stays correct either way, but a double-click deserves the
+      // same quiet no-op as a second click a minute later.
       context.env.DB.prepare(`
         INSERT INTO participations
           (id, submission_id, person_id, role, position, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, 'pending', NULL, NULL, ?, ?)
+        ON CONFLICT (person_id, submission_id, role) DO NOTHING
       `).bind(participationId, submissionId, resolved.personId, body.role, position, now, now),
       auditStatement(context.env.DB, {
         eventId,

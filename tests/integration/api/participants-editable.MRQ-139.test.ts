@@ -91,7 +91,7 @@ beforeEach(async () => {
 });
 
 describe.sequential("MRQ-139 · a submission's participants are editable after intake", () => {
-  test("MRQ-139 · an organizer attaches a co-presenter who is already in the organization, and it persists with that role", async () => {
+  test("CONTRACT · MRQ-139 · an organizer attaches a co-presenter who is already in the organization, and it persists with that role", async () => {
     const before = await readRecord();
     expect(before.actions.can_edit_participants).toBe(true);
     expect(before.participants.map((participant) => participant.role)).toEqual(["submitter"]);
@@ -108,7 +108,7 @@ describe.sequential("MRQ-139 · a submission's participants are editable after i
     });
   });
 
-  test("MRQ-139 · a co-presenter nobody has met yet is created and attached in one action", async () => {
+  test("CONTRACT · MRQ-139 · a co-presenter nobody has met yet is created and attached in one action", async () => {
     const response = await addParticipant({ name: "Priya Raman", email: "priya@example.com", role: "moderator" });
     expect(response.status).toBe(201);
     const record = await readRecord();
@@ -117,7 +117,7 @@ describe.sequential("MRQ-139 · a submission's participants are editable after i
     expect(person?.org_id).toBe(DEMO_ORGANIZATION_ID);
   });
 
-  test("MRQ-139 · an address the organization already knows is matched, not duplicated", async () => {
+  test("CONTRACT · MRQ-139 · an address the organization already knows is matched, not duplicated", async () => {
     const before = await countPeople();
     const response = await addParticipant({ name: "Demo Speaker Again", email: "speaker@demo.marquee.example", role: "speaker" });
     expect(response.status).toBe(201);
@@ -126,14 +126,30 @@ describe.sequential("MRQ-139 · a submission's participants are editable after i
     expect(record.participants.find((participant) => participant.person_id === DEMO_SPEAKER_PERSON_ID)?.role).toBe("speaker");
   });
 
-  test("MRQ-139 · adding the same person in the same role twice leaves one row, not a duplicate to dedupe later", async () => {
+  test("CONTRACT · MRQ-139 · adding the same person in the same role twice leaves one row, not a duplicate to dedupe later", async () => {
     expect((await addParticipant({ person_id: DEMO_SPEAKER_PERSON_ID, role: "co_speaker" })).status).toBe(201);
-    expect((await addParticipant({ person_id: DEMO_SPEAKER_PERSON_ID, role: "co_speaker" })).status).toBe(201);
+    // 200, not 201: nothing was created the second time, and an agent reading
+    // this API should not be told otherwise.
+    expect((await addParticipant({ person_id: DEMO_SPEAKER_PERSON_ID, role: "co_speaker" })).status).toBe(200);
     const record = await readRecord();
     expect(record.participants.filter((participant) => participant.person_id === DEMO_SPEAKER_PERSON_ID)).toHaveLength(1);
   });
 
-  test("MRQ-139 · a participant added in error can be removed again", async () => {
+  test("CONTRACT · MRQ-139 · a race between two identical adds is a no-op, not a constraint failure", async () => {
+    // The exists-check and the INSERT are separate round trips, so two
+    // simultaneous Adds both pass the check. Without ON CONFLICT DO NOTHING the
+    // loser surfaces the unique index as a 500 — a double-click deserves the
+    // same quiet answer as a second click a minute later.
+    const responses = await Promise.all([
+      addParticipant({ person_id: DEMO_SPEAKER_PERSON_ID, role: "co_speaker" }),
+      addParticipant({ person_id: DEMO_SPEAKER_PERSON_ID, role: "co_speaker" }),
+    ]);
+    for (const response of responses) expect([200, 201]).toContain(response.status);
+    const record = await readRecord();
+    expect(record.participants.filter((participant) => participant.person_id === DEMO_SPEAKER_PERSON_ID)).toHaveLength(1);
+  });
+
+  test("CONTRACT · MRQ-139 · a participant added in error can be removed again", async () => {
     expect((await addParticipant({ person_id: DEMO_SPEAKER_PERSON_ID, role: "co_speaker" })).status).toBe(201);
     const added = (await readRecord()).participants.find((participant) => participant.person_id === DEMO_SPEAKER_PERSON_ID);
     expect(added?.id).toBeTruthy();
@@ -142,13 +158,13 @@ describe.sequential("MRQ-139 · a submission's participants are editable after i
     expect((await readRecord()).participants.map((participant) => participant.role)).toEqual(["submitter"]);
   });
 
-  test("MRQ-139 · the submitter cannot be removed from their own record", async () => {
+  test("CONTRACT · MRQ-139 · the submitter cannot be removed from their own record", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/submissions/${SUBMISSION_ID}/participants/${SUBMITTER_PARTICIPATION_ID}`, { method: "DELETE" });
     expect(response.status).toBe(422);
     expect((await readRecord()).participants.map((participant) => participant.role)).toEqual(["submitter"]);
   });
 
-  test("MRQ-139 · a person from another organization is refused rather than silently attached", async () => {
+  test("CONTRACT · MRQ-139 · a person from another organization is refused rather than silently attached", async () => {
     const now = Date.UTC(2026, 7, 12, 12, 0, 0);
     await env.DB.batch([
       env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES ('org_other_139', 'Another Org', 'another-139', ?, ?)").bind(now, now),
@@ -162,7 +178,7 @@ describe.sequential("MRQ-139 · a submission's participants are editable after i
     expect((await readRecord()).participants.map((participant) => participant.role)).toEqual(["submitter"]);
   });
 
-  test("MRQ-139 · the public form advertises the number of people it can actually collect", async () => {
+  test("CONTRACT · MRQ-139 · the public form advertises the number of people it can actually collect", async () => {
     // The form is configured for four speakers; its fields hold a primary and
     // one co-speaker. Four was a number no applicant could ever satisfy.
     const response = await SELF.fetch(`${ORIGIN}/api/v1/public/forms/mrq-139-cfp`);
