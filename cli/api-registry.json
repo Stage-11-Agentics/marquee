@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "94737090a716f85981a71dc9a8eb7612abad81e819e509836e4ac21499e2cb9a",
+  "documentSha256": "151a5fe96550bd85a1315fd9896111500984d250fdf2ea40050591da3f69077c",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",
@@ -92,6 +92,7 @@
     "POST /api/v1/events/{eventId}/agenda/items placeAgendaItem",
     "POST /api/v1/events/{eventId}/agenda/publish batchPublishAgenda",
     "POST /api/v1/events/{eventId}/committees createEvaluationCommittee",
+    "POST /api/v1/events/{eventId}/committees/{committeeId}/invites inviteCommitteeReviewer",
     "POST /api/v1/events/{eventId}/committees/{committeeId}/reviewers addCommitteeReviewer",
     "POST /api/v1/events/{eventId}/comms/preview previewCommunication",
     "POST /api/v1/events/{eventId}/comms/send sendCommunication",
