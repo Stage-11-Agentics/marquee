@@ -106,7 +106,7 @@ publicAgendaRoutes.get("/s/:slug", async (context) => {
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(
     shell,
-    renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} />),
+    renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} origin={new URL(context.req.url).origin} />),
     { title: result.session.title },
   ));
 });

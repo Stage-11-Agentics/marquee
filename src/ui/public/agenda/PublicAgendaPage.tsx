@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import type { ComponentChildren, JSX } from "preact";
 
+import { sessionCalendarLinks, sessionDirectionsUrl } from "../../../lib/public-calendar";
 import {
   publicAbstractSnippet,
   type PublicAgendaData,
@@ -102,6 +103,9 @@ export const PUBLIC_SITE_STYLES = `
 .public-card h2 { margin: 0 0 9px; font: 650 15px/1.2 var(--public-mono); letter-spacing: .05em; text-transform: uppercase; }
 .public-card p { color: var(--public-soft); line-height: 1.65; }
 .public-detail-meta { margin: 0; color: var(--public-muted) !important; font: 600 11px/1.45 var(--public-mono); }
+.detail-actions { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; margin: 18px 0 0; }
+.public-getting-there { margin: 0; color: var(--public-muted); font: 600 11px/1.7 var(--public-mono); }
+.public-getting-there a { color: var(--public-accent); text-decoration: underline; text-underline-offset: 3px; }
 .public-divider { height: 1px; margin: 25px 0; background: var(--public-rule-soft); }
 .public-speaker-list { display: grid; gap: 8px; }
 .public-speaker-link, .public-session-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--public-rule-soft); padding: 11px 12px; }
@@ -464,17 +468,39 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
   );
 }
 
-export function PublicSessionPage({ event, venue, session }: { event: PublicEvent; venue: PublicVenueDisclosure; session: PublicSession }): JSX.Element {
+/**
+ * Where an attendee decides "yes, I'm going": the session's own page carries
+ * the same star the cards do, the calendar it belongs in, and the way to walk
+ * there. `origin` comes from the request so the links a local dev server hands
+ * out point at that server rather than at production.
+ */
+export function PublicSessionPage({ event, venue, session, origin }: { event: PublicEvent; venue: PublicVenueDisclosure; session: PublicSession; origin: string }): JSX.Element {
   const venueName = venue.buildingName ?? event.venue ?? "Online";
+  const links = sessionCalendarLinks(session, event, origin);
+  const directions = sessionDirectionsUrl(session);
+  const icsHref = `/api/v1/public/sessions/${encodeURIComponent(session.slug)}/calendar.ics?event=${encodeURIComponent(event.slug)}`;
   return (
     <PublicShell event={event} title="Session" actions={<a class="public-button" href={`/agenda?event=${encodeURIComponent(event.slug)}`}>← Agenda</a>}>
       <main class="public-main">
-        <article class="public-card">
+        <article
+          class="public-card"
+          data-public-session-id={session.id}
+          data-public-session-slug={session.slug}
+          data-public-session-start={session.startsAt}
+          data-public-session-end={session.startsAt + session.durationMin * 60_000}
+          data-public-session-day={session.date}
+          data-public-session-title={session.title}
+        >
           <div class="public-kicker">{venueName}</div>
           <div class="public-track-list" style={{ justifyContent: "flex-start" }}><FormatChip session={session} /><TrackChips session={session} /></div>
           <h1>{session.title}</h1>
           <p class="public-detail-meta">{session.day} · {session.time}–{session.endTime} · {session.roomLabel} · {session.durationMin} minutes</p>
           <p class="public-detail-meta">Format: {session.format?.name ?? "—"} · Track: {session.tracks.map((track) => track.name).join(", ") || "—"}</p>
+          <div class="detail-actions">
+            <a class="public-button" href={icsHref}>Add to calendar (.ics)</a>
+            <a class="public-button" href={links.google} target="_blank" rel="noopener">Google</a>
+            <a class="public-button" href={links.outlook} target="_blank" rel="noopener">Outlook</a>
+          </div>
           <div class="public-divider" />
           <h2>About this session</h2>
           <p>{session.abstract || "—"}</p>
@@ -487,6 +513,14 @@ export function PublicSessionPage({ event, venue, session }: { event: PublicEven
               </a>
             )) : <span>—</span>}
           </div>
+          <div class="public-divider" />
+          <h2>Getting there</h2>
+          <p class="public-getting-there">
+            {directions
+              ? <a href={directions} target="_blank" rel="noopener">{session.building} — Directions ↗</a>
+              : <span>{session.building ?? venueName}</span>}
+            {session.buildingAddress ? <><br />{session.buildingAddress}</> : null}
+          </p>
         </article>
       </main>
     </PublicShell>

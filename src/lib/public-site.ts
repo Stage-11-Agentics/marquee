@@ -77,6 +77,8 @@ export interface PublicSession {
   roomId: string;
   room: string;
   building: string | null;
+  /** Street address of the building, for a directions link an attendee can act on. */
+  buildingAddress: string | null;
   roomLabel: string;
   format: PublicFormat | null;
   tracks: PublicTrack[];
@@ -196,6 +198,7 @@ interface PublicSessionRow {
   room_id: string;
   room_name: string;
   building_name: string | null;
+  building_address: string | null;
   format_id: string | null;
   format_name: string | null;
   speakers_json: string;
@@ -441,6 +444,7 @@ function sessionRowsQuery(
         ai.room_id,
         room.name AS room_name,
         building.name AS building_name,
+        building.address AS building_address,
         fmt.id AS format_id,
         fmt.name AS format_name,
         ${participantListSql({
@@ -613,6 +617,7 @@ function toPublicSessions(rows: PublicSessionRow[], event: PublicEvent, showBuil
       roomId: row.room_id,
       room: row.room_name,
       building: row.building_name,
+      buildingAddress: row.building_address,
       roomLabel: showBuildingComparison ? roomDisplayLabel(room, building) : room.name,
       format: row.format_id && row.format_name ? { id: row.format_id, name: row.format_name } : null,
       tracks,
