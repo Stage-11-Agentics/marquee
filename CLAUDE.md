@@ -1,10 +1,10 @@
 # Marquee
 
-Open-source speaker/session-management platform for conference organizers — Stage 11's entry in swyx's "$10,000 Kill My SaaS" hackathon (deadline **Wed 2026-08-12 22:00 PT**), built to actually run AIE NYC 2026 afterward. Replaces Sessionboard; competes against Sessionize's scope with the post-acceptance workflow neither ships.
+Open-source speaker/session-management platform for conference organizers, built to run AIE NYC 2026. Replaces Sessionboard; competes against Sessionize's scope with the post-acceptance workflow neither ships. It began as Stage 11's entry in swyx's "$10,000 Kill My SaaS" hackathon.
 
 ## Orient here first
 
-- `sequence/run-state.md` — the arc's resume anchor: current stage/phase, decisions, active agents, open touchpoints. **Read this first on every session.**
+- `sequence/run-state.md` — where the work stands: current focus, decisions, active agents, open touchpoints. **Read this first on every session.**
 - `DESIGN.md` — the binding design language: Flight Deck aesthetic (tokens in `prototypes/skins/skin-c.html`), voice, craft rules, and the pointer to the binding prototype. The build reproduces the prototype one-to-one.
 - `PHILOSOPHY.md` — the one thing (fantastic conferences, effortlessly), the principles (respect the operator; the system does the chase work; agent-native by design; whole loop or nothing; own your conference; the organizer's language), and the taste rules. Binds every design and copy decision.
 - `DEPLOY.md` — how the site gets built and shipped, and how to check what is actually live. **There is no auto-deploy: merging does not ship.** Read it before deploying, and improve it there rather than rediscovering the same gotchas per-run.
@@ -15,9 +15,9 @@ Open-source speaker/session-management platform for conference organizers — St
 
 - The Tone workflow governs this project (tone-initiation → tone-prototype → tone-architect → lattice-orchestrator). Pipeline norms: living artifacts, AC lineage, one run-state.
 - Requirements trace to R-numbers; stories to US-numbers; stable AC IDs are minted only at consolidation.
-- The walkthrough video is the evaluation rubric: the 11-step loop must complete with zero dead ends.
-- Speed is a graded feature (R7). Treat any slow list or transition as a defect.
-- This repo will be **public open source** (competition requirement). Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
+- The 11-step walkthrough loop is the product's spine: it must complete with zero dead ends. A dead end anywhere in it is a defect, whoever finds it.
+- Speed is a feature (R7). Treat any slow list or transition as a defect.
+- This repo is **public open source**. Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
 - **Do not report subscription usage, limits, or glideslope position unless asked.** The operator can see it and has it under control. It is visible in every agent's status line, which makes it tempting to volunteer — and with a fleet this size, one mention per agent becomes a stream of noise about a number nobody needs. Answer if asked; otherwise leave it alone.
 - **The suite budget is 45s and the gate budget is 120s** (`scripts/checks/run-test.mjs`, `pr-gate.mjs`). Several agents build and test here at once, so the budgets are set to survive contention: a red suite must mean a real defect, never a busy machine. If a run fails on time alone, check the load before believing it.
 - Speaker records are `people` rows (org-scoped); never add a parallel per-event `speakers` table.
@@ -29,7 +29,7 @@ Open-source speaker/session-management platform for conference organizers — St
 - Do not deepen the `attachments.event_id` wart: a person's headshot is org-level while the attachment row it points at is event-scoped.
 - Full reasoning: `sequence/research/speaker-crm-scope.md` §2.
 
-## Source control: GitHub is canonical for Marquee (operator ruling, 2026-08-11)
+## Source control: GitHub is canonical for Marquee
 
 **`Stage-11-Agentics/marquee` on GitHub — private — is the single home for this project.**
 A collaborator works through it, so it is where the work has to live.
@@ -43,11 +43,11 @@ A collaborator works through it, so it is where the work has to live.
   there too.
 - PRs via `gh pr create --repo Stage-11-Agentics/marquee --base main`. No token handling —
   `gh` is already authenticated.
-- **Private stays private.** The competition needs a *public* repo, and that is a separate,
-  curated artifact: the orphan branch `mrq-42-assembly` (tip `f4240644`), which carries the
-  app tree without `sequence/` internals, `OPERATOR-PRECONDITIONS.md`, or the `.lattice`
-  board. **Never push `main` to a public repo, and never merge the orphan into `main`** — it
-  would delete everything the orphan omits, including the whole board.
+- **Private stays private.** What gets published is a separate, curated artifact: the orphan
+  branch `mrq-42-assembly` (tip `f4240644`), which carries the app tree without `sequence/`
+  internals, `OPERATOR-PRECONDITIONS.md`, or the `.lattice` board. **Never push `main` to a
+  public repo, and never merge the orphan into `main`** — it would delete everything the
+  orphan omits, including the whole board.
 
 ## The primary checkout is the Lattice board's home, never a workspace
 
