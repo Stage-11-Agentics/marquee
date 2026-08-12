@@ -66,6 +66,36 @@ export function auditStatement(db: D1Database, entry: AuditEntry): D1PreparedSta
     );
 }
 
+/**
+ * Compose a conditional audit row into a larger D1 batch. The SELECT must
+ * return the eleven audit columns in the same order as `COLUMNS`; callers can
+ * add source predicates so an audit row is emitted only when the write it
+ * describes actually landed.
+ */
+export function auditStatementFromSelect(
+  db: D1Database,
+  entry: AuditEntry,
+  selectSql: string,
+  ...selectBindings: readonly unknown[]
+): D1PreparedStatement {
+  return db
+    .prepare(`INSERT INTO audit_log\n  ${COLUMNS}\n${selectSql}`)
+    .bind(
+      newUlid(entry.now),
+      entry.eventId,
+      entry.actorPersonId,
+      entry.actorKind,
+      entry.action,
+      entry.entityType,
+      entry.entityId,
+      entry.before === undefined ? null : JSON.stringify(entry.before),
+      entry.after === undefined ? null : JSON.stringify(entry.after),
+      entry.now,
+      entry.requestId,
+      ...selectBindings,
+    );
+}
+
 /** Write one audit row immediately. Prefer `auditStatement` inside a `batch()`. */
 export async function writeAudit(db: D1Database, entry: AuditEntry): Promise<void> {
   await auditStatement(db, entry).run();
