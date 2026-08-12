@@ -174,8 +174,8 @@ const requiredIndexes = [
 
 assert.equal(initialTables.length, 46, "0001 must define exactly 46 product tables");
 assert.equal(new Set(initialTables).size, 46, "0001 contains duplicate table names");
-assert.equal(expectedTables.length, 52, "Applied migrations must define exactly 52 product tables");
-assert.equal(new Set(expectedTables).size, 52, "Applied migrations contain duplicate table names");
+assert.equal(expectedTables.length, 53, "Applied migrations must define exactly 53 product tables");
+assert.equal(new Set(expectedTables).size, 53, "Applied migrations contain duplicate table names");
 for (const index of requiredIndexes) {
   assert.ok(expectedIndexes.includes(index), `Required schema index is missing: ${index}`);
 }
@@ -306,7 +306,7 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 103, "Expected the exact foreign-key graph");
+  assert.equal(foreignKeyRows.length, 104, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 

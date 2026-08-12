@@ -284,6 +284,15 @@ export interface PersonListMemberRow {
   person_id: Id;
 }
 
+export interface PublicScheduleRow {
+  code: string;
+  created_at: EpochMilliseconds;
+  event_id: Id;
+  session_ids: JsonText<Id[]>;
+  updated_at: EpochMilliseconds;
+  write_key_hash: string;
+}
+
 export interface MembershipRow extends MutableRecord {
   confirmation_status: ConfirmationStatus;
   confirmed_at: EpochMilliseconds | null;
@@ -750,12 +759,13 @@ export const CORE_TABLE_NAMES = [
   "person_events",
   "person_lists",
   "person_list_members",
+  "public_schedules",
   "webhook_endpoints",
   "webhook_deliveries",
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 52 as const;
+export const CORE_TABLE_COUNT = 53 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -773,7 +783,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 52>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 53>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -811,6 +821,7 @@ export const CORE_TABLES = {
   person_events: "person_events",
   person_list_members: "person_list_members",
   person_lists: "person_lists",
+  public_schedules: "public_schedules",
   reviewer_track_scopes: "reviewer_track_scopes",
   rooms: "rooms",
   round_assignments: "round_assignments",
@@ -866,6 +877,7 @@ export interface CoreTableRows {
   person_events: PersonEventRow;
   person_list_members: PersonListMemberRow;
   person_lists: PersonListRow;
+  public_schedules: PublicScheduleRow;
   reviewer_track_scopes: ReviewerTrackScopeRow;
   rooms: RoomRow;
   round_assignments: RoundAssignmentRow;
@@ -931,6 +943,7 @@ interface CoreDefaultColumns {
   person_events: never;
   person_list_members: never;
   person_lists: "config_json";
+  public_schedules: never;
   reviewer_track_scopes: never;
   rooms: "av_capabilities";
   round_assignments: never;
@@ -982,6 +995,7 @@ export type PersonInsert = CoreInsert<"people">;
 export type PersonEventInsert = CoreInsert<"person_events">;
 export type PersonListInsert = CoreInsert<"person_lists">;
 export type PersonListMemberInsert = CoreInsert<"person_list_members">;
+export type PublicScheduleInsert = CoreInsert<"public_schedules">;
 export type MembershipInsert = CoreInsert<"memberships">;
 export type AuthSessionInsert = CoreInsert<"auth_sessions">;
 export type MagicLinkInsert = CoreInsert<"magic_links">;
