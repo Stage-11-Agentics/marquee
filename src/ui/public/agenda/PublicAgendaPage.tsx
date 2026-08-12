@@ -369,13 +369,31 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
     data.filters.track || data.filters.format || data.filters.room || data.filters.q
       || (data.filters.day && data.filters.day !== "all"),
   );
+  /**
+   * The feed URL for exactly what is on screen. The old data link carried the
+   * event and nothing else, so from a filtered agenda it handed you a different
+   * program than the one you were reading — which is why MRQ-94 removed it
+   * rather than fix it. A link that answers a different question than the page
+   * is worse than no link; a link that answers the same one is the page's
+   * machine-readable half.
+   */
+  const feedQuery = new URLSearchParams({ event: data.event.slug });
+  if (data.filters.day && data.filters.day !== "all") feedQuery.set("day", data.filters.day);
+  if (data.filters.track) feedQuery.set("track", data.filters.track);
+  if (data.filters.format) feedQuery.set("format", data.filters.format);
+  if (data.filters.room) feedQuery.set("room", data.filters.room);
+  if (data.filters.q) feedQuery.set("q", data.filters.q);
   const venueName = data.venue?.buildingName ?? data.event.venue ?? "Online";
   const groups = groupSessions(data.sessions);
   return (
     <PublicShell
       event={data.event}
       title="Agenda"
-      actions={<><a class="public-button" href={`/speakers?${eventQuery}`}>Speakers</a><a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a></>}
+      actions={<>
+        <a class="public-button" href={`/speakers?${eventQuery}`}>Speakers</a>
+        <a class="public-button" href={`/api/v1/public/agenda?${feedQuery.toString()}`}>Agenda data ↗</a>
+        <a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a>
+      </>}
     >
       <main class="public-main">
         <div class="public-kicker">{data.event.startsOn} → {data.event.endsOn} · {venueName}</div>

@@ -56,10 +56,23 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
     "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
   ]);
+  // The third issuer is the reviewer invitation (MRQ-107, eval §T-A). It is
+  // enumerated here rather than excused: an organizer provisioning a reviewer
+  // has to hand them a way in, and the alternative — a second credential path
+  // beside magic links — is the outcome A-5 exists to prevent. It reuses the
+  // same `purpose: "login"` mint, behind `requireProgram(..., write)`, and
+  // refuses any address that resolves to a program-staff seat.
   assert.deepEqual(magicMintCalls.map(({ file }) => file).sort(), [
     "src/routes/auth.routes.ts",
+    "src/routes/evaluation.routes.ts",
     "src/routes/public-form.routes.ts",
   ]);
+  const evaluationRoutes = modules.find(({ path }) => path === "src/routes/evaluation.routes.ts");
+  assert.ok(evaluationRoutes);
+  // The invitation may only mint for someone who holds no program-staff role,
+  // because exchanging a link opens every membership its person carries.
+  assert.match(evaluationRoutes.source, /role IN \('owner', 'program_lead', 'ops'\)/);
+  assert.match(evaluationRoutes.source, /purpose: "login", redirectTo: "\/reviewer"/);
   assert.deepEqual(magicConsumeCalls.map(({ file }) => file), ["src/routes/auth.routes.ts"]);
 
   const sessionSource = await readFile(resolve(root, "src/lib/auth/auth-sessions.ts"), "utf8");

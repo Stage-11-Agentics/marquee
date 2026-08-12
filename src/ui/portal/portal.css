@@ -147,7 +147,10 @@
 .portal-empty { color: var(--muted); font-size: 12px; line-height: 1.6; padding: 14px 0; }
 .portal-profile { display: grid; gap: 14px; }
 .portal-avatar-line { align-items: center; display: flex; gap: 12px; }
-.portal-avatar { align-items: center; background: var(--accent-wash); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; flex: 0 0 52px; font: 600 15px/1 var(--mono); height: 52px; place-items: center; width: 52px; }
+.portal-avatar { align-items: center; background: var(--accent-wash); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; flex: 0 0 52px; font: 600 15px/1 var(--mono); height: 52px; overflow: hidden; place-items: center; width: 52px; }
+.portal-avatar img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.portal-avatar-compact { flex-basis: 40px; height: 40px; width: 40px; }
+.portal-subject-title { align-items: center; display: flex; gap: 10px; min-width: 0; }
 .portal-avatar-copy { min-width: 0; }
 .portal-avatar-copy strong { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .portal-avatar-copy span { color: var(--muted); display: block; font-size: 11px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
