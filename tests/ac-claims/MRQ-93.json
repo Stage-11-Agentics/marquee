@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-93",
+  "owns": [],
+  "exercises": [],
+  "notes": "MRQ-93 is a portal presentation specialization of existing speaker-task and public-session behavior; its source contract and portal integration tests provide the ticket coverage without adding a new automatic acceptance criterion."
+}

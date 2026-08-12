@@ -783,6 +783,7 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
       id: task.id,
       submission_id: task.submission_id,
       submission_title: task.submission_title,
+      template_id: task.template_id,
       title: task.title,
       kind: task.kind,
       description: task.description,
