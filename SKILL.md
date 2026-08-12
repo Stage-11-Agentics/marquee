@@ -136,7 +136,7 @@ An empty exact selection is a deliberate no-op. Keep recipient selectors narrow 
 People is the ORGANIZATION's record of everyone it has worked with, across every conference — so none of these commands takes an event ID. A returning speaker is already there, carrying their bio, history, notes and tags; nothing is re-keyed per conference.
 
 ```sh
-node cli/marquee.mjs people list --filter company="Latticework Systems" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs people list --filter company="Northwind Data" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 node cli/marquee.mjs people show "$PERSON_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 node cli/marquee.mjs people note "$PERSON_ID" --set body="Confirmed the keynote slot on a call." --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 node cli/marquee.mjs people tag "$PERSON_ID" --set tag=Keynote --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json

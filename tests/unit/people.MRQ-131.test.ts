@@ -31,7 +31,7 @@ const peopleSources = [
   readFileSync(new URL("../../src/ui/people/PeopleModals.tsx", import.meta.url), "utf8"),
 ].join("\n");
 
-function annotation(id, kind, value, createdAt) {
+function annotation(id: string, kind: string, value: Record<string, unknown>, createdAt: number) {
   return { id, person_id: "per_1", kind, value_json: JSON.stringify(value), actor_person_id: null, created_at: createdAt };
 }
 
@@ -81,7 +81,7 @@ test("CONTRACT · MRQ-131 · the stage history falls out of the log, and the car
 
   // A move records where the card went, not why the prospect was interesting —
   // so the score and rationale carry forward from the row that stated them.
-  const card = currentCard(rows);
+  const card = currentCard(rows)!;
   expectEqual(card.stage, "interested");
   expectEqual(card.score, 85);
   expectEqual(card.rationale, "Strong track record");

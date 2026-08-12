@@ -50,11 +50,16 @@ async function audienceFor(
   audience: z.infer<typeof audienceSchema>,
 ): Promise<RecipientPerson[]> {
   if (audience.person_ids && audience.person_ids.length > 0) {
-    const ids = [...new Set(audience.person_ids)];
-    const placeholders = ids.map(() => "?").join(", ");
+    // One binding for the whole selection, the way the conference-scoped
+    // selector already does it: a placeholder per id would put a 500-person
+    // send straight through D1's binding cap.
     const rows = await db
-      .prepare(`SELECT id, name, email, company FROM people WHERE org_id = ? AND id IN (${placeholders}) ORDER BY name COLLATE NOCASE, id`)
-      .bind(orgId, ...ids)
+      .prepare(
+        `SELECT id, name, email, company FROM people
+         WHERE org_id = ? AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+         ORDER BY name COLLATE NOCASE, id`,
+      )
+      .bind(orgId, JSON.stringify([...new Set(audience.person_ids)]))
       .all<RecipientPerson>();
     return rows.results;
   }

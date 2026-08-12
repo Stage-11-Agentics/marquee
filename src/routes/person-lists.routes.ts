@@ -188,11 +188,11 @@ const createList = defineApiRoute(
     if (body.kind === "fixed") {
       // Members are filtered through the org so a stray id from another
       // organization cannot be smuggled into a list by naming it.
-      const ids = [...new Set(body.person_ids ?? [])];
-      const placeholders = ids.map(() => "?").join(", ");
+      // One binding for the whole membership, not one per person: a thousand-row
+      // list would otherwise expand past D1's binding cap.
       const owned = await context.env.DB
-        .prepare(`SELECT id FROM people WHERE org_id = ? AND id IN (${placeholders})`)
-        .bind(access.orgId, ...ids)
+        .prepare("SELECT id FROM people WHERE org_id = ? AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))")
+        .bind(access.orgId, JSON.stringify([...new Set(body.person_ids ?? [])]))
         .all<{ id: string }>();
       if (owned.results.length > 0) {
         await context.env.DB.batch(owned.results.map((row) =>
