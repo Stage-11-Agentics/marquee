@@ -79,6 +79,10 @@ export const PUBLIC_SITE_STYLES = `
 .public-speakers a { text-decoration: underline; text-decoration-color: var(--public-rule); text-underline-offset: 3px; }
 .public-speakers a:hover, .public-speakers a:focus-visible { color: var(--public-accent); }
 .public-speaker-role { color: var(--public-soft); }
+/* Real abstracts contain pasted URLs. On a phone one of them is wider than
+   the column, and an unbreakable token drags the whole page sideways — so the
+   card's prose breaks rather than the layout. */
+.public-abstract, .public-more p, .public-session-title, .public-speakers { overflow-wrap: anywhere; }
 .public-abstract { min-height: 34px; margin: 9px 0 0; color: var(--public-soft); font-size: 12px; line-height: 1.55; }
 .public-more { margin-top: 5px; }
 .public-more > summary { display: inline-block; color: var(--public-accent); font: 650 11px/1.3 var(--public-mono); cursor: pointer; list-style: none; }
@@ -138,6 +142,9 @@ export const PUBLIC_SITE_STYLES = `
 /* One tap, a fixed slot, never moves: the leading rail down every card. */
 .star-btn { width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--public-rule); border-radius: 3px; background: var(--public-surface); color: var(--public-muted); font-size: 17px; line-height: 1; transition: border-color 110ms, background 110ms, color 110ms, transform 110ms; }
 .star-btn:hover, .star-btn:focus-visible { border-color: var(--public-accent); background: var(--public-accent-wash); color: var(--public-accent); outline: none; }
+/* Starred is gold on ink; unstarred is a quiet outline. The state lives on
+   aria-pressed, so the control's accessible truth and its paint can never
+   disagree. */
 .star-btn[aria-pressed="true"] { border-color: var(--public-ink); background: var(--public-ink); color: #ffc94d; }
 .star-btn[aria-pressed="true"]:hover, .star-btn[aria-pressed="true"]:focus-visible { border-color: var(--public-ink); background: #22303c; color: #ffd76e; }
 .star-btn .glyph::before { content: "☆"; }
@@ -238,10 +245,14 @@ export const PUBLIC_SITE_STYLES = `
 }
 @media (max-width: 460px) {
   .public-top { align-items: center; flex-wrap: wrap; row-gap: 8px; padding-top: 10px; padding-bottom: 10px; }
-  .public-top-actions { gap: 4px; }
+  /* Brand on one row, the view switch spanning the next: on a phone the
+     switch is the primary control and gets the whole width. */
+  .public-top-actions { flex: 1 1 100%; width: 100%; gap: 4px; }
   .public-top-actions .public-button { min-height: 30px; padding: 5px 7px; font-size: 10px; }
-  .view-seg { width: 100%; }
-  .view-seg .seg { flex: 1 1 0; min-height: 38px; }
+  .view-seg { flex: 1 1 100%; width: 100%; }
+  /* Two halves of one row, each on one line: "My schedule" breaking across
+     two lines made the switch look like two different controls. */
+  .view-seg .seg { flex: 1 1 0; min-height: 38px; gap: 5px; padding: 7px 4px; white-space: nowrap; }
   .public-filters { min-height: 236px; grid-template-columns: 1fr; }
   .public-directory-filters { grid-template-columns: minmax(0, 1fr); }
   .public-days { grid-column: auto; }
@@ -682,7 +693,13 @@ export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgenda
         days: data.days.map((day) => ({ date: day.id, label: day.label })),
         view,
       }}
-      actions={<>
+      /*
+        The itinerary is the attendee's own page: brand, the two segments, and
+        nothing else, exactly as ruled. Speakers, the data feed and the embed
+        builder are still one tap away on the agenda they came from — they are
+        not deleted, they are simply not what this screen is for.
+      */
+      actions={mine ? undefined : <>
         <a class="public-button" href={`/speakers?${eventQuery}`}>Speakers</a>
         <a class="public-button" href={`/api/v1/public/agenda?${feedQuery.toString()}`}>Agenda data ↗</a>
         <a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a>
@@ -864,6 +881,77 @@ export function PublicSpeakerAvatar({
   return speaker.headshotUrl
     ? <img class={classes} src={speaker.headshotUrl} alt={`${speaker.name} synthetic avatar`} width="48" height="48" loading="lazy" />
     : <span class={classes} role="img" aria-label={`${speaker.name} initials avatar`}>{initials(speaker.name)}</span>;
+}
+
+/**
+ * The agent guide is a PAGE, not a sheet.
+ *
+ * Everything on it is written for a reader that cannot open a modal, cannot
+ * run a script, and arrives by fetching a URL. A dialog would have hidden the
+ * one document whose entire audience is machines — so it is a plain server-
+ * rendered page an agent can GET, a human can bookmark, and both can link to.
+ */
+export function PublicAgentsPage({ event, origin }: { event: PublicEvent; origin: string }): JSX.Element {
+  const base = origin.replace(/\/+$/, "");
+  const agendaFeed = `${base}/api/v1/public/agenda?event=${encodeURIComponent(event.slug)}`;
+  return (
+    <PublicShell event={event} title="For agents" schedule={undefined}>
+      <main class="public-main">
+        <a class="back-link" href={`/agenda?event=${encodeURIComponent(event.slug)}`}>← Agenda</a>
+        <div class="public-kicker">{event.name}</div>
+        <div class="public-heading">
+          <div>
+            <h1>For agents</h1>
+            <p>Everything on this site is anonymous, typed JSON. An agent can build its human's conference schedule end to end without a browser and without an account.</p>
+          </div>
+        </div>
+        <article class="public-card">
+          <h2>The loop</h2>
+          <pre class="agents-pre">{`GET  /api/v1/public/agenda?event=${event.slug}
+     → the full published program: sessions, times, rooms,
+       buildings, tracks, formats, speakers
+
+POST /api/v1/public/schedules
+     { "eventSlug": "${event.slug}",
+       "sessionIds": ["ses_…", "ses_…"] }
+     → { "code": "MQ-…", "writeKey": "…",
+         "urls": { "share": …, "sync": …, "webcal": …, "ics": …, "json": … },
+         "sessions": [ … ], "overlaps": [ … ] }
+
+GET  /api/v1/public/schedules/{code}
+     → the set with full session objects and computed overlap pairs
+
+PUT  /api/v1/public/schedules/{code}
+     (X-Schedule-Write-Key header) → replace the set
+
+GET  /api/v1/public/schedules/{code}/calendar.ics
+     → the live calendar feed; webcal:// is the same URL
+
+GET  /api/v1/public/sessions/{slug}/calendar.ics
+     → one session as a calendar file`}</pre>
+          <div class="public-divider" />
+          <h2>What to hand a human</h2>
+          <p>
+            The POST response is self-describing on purpose: every URL that matters comes back fully formed, so nothing has to be assembled by hand. Give them the <strong>share</strong> link to look at, the <strong>webcal</strong> link to subscribe to, and keep the <strong>sync</strong> link private — it carries the write key in its fragment, which is the only thing that can change the schedule.
+          </p>
+          <div class="public-divider" />
+          <h2>Rules worth knowing</h2>
+          <p>
+            Session ids and slugs are both accepted, so it does not matter whether you read the API or the page. Only published sessions of the named event resolve; anything else is a 422 that names it. A set is capped at 200 sessions. Overlaps are computed server-side and returned as id pairs — touching sessions are not overlapping. Losing the write key makes a code permanently read-only; it is stored only as a hash.
+          </p>
+          <div class="public-divider" />
+          <h2>Driving the UI instead</h2>
+          <p>
+            Every session card on the agenda carries stable hooks, and so does the session page: <code class="num">data-public-session-id</code>, <code class="num">-slug</code>, <code class="num">-start</code>, <code class="num">-end</code> (epoch milliseconds), <code class="num">-day</code>, <code class="num">-title</code>, <code class="num">-room</code>, <code class="num">-speakers</code>. The star control is <code class="num">[data-schedule-star="&lt;session id&gt;"]</code> with <code class="num">aria-pressed</code> carrying its state, and the itinerary lives at <code class="num">/agenda?view=mine</code>. A computer-use agent finds the same handles the site's own script binds to.
+          </p>
+          <div class="public-divider" />
+          <p class="public-detail-meta">
+            <a href={agendaFeed} style={{ color: "var(--public-accent)", textDecoration: "underline", textUnderlineOffset: "3px" }}>Read this event's program as JSON ↗</a>
+          </p>
+        </article>
+      </main>
+    </PublicShell>
+  );
 }
 
 export function PublicSpeakerDirectoryPage({ data }: { data: PublicSpeakerDirectoryData }): JSX.Element {

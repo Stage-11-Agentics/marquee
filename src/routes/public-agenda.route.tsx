@@ -6,6 +6,7 @@ import type { Env } from "../index";
 import { ICON_LINKS } from "../lib/head-icons";
 import {
   loadPublicAgenda,
+  loadPublicEvent,
   loadPublicSession,
   loadPublicSpeaker,
   loadPublicSpeakerDirectory,
@@ -15,6 +16,7 @@ import {
   PUBLIC_AGENDA_SCRIPT,
   PUBLIC_SITE_STYLES,
   PublicAgendaPage,
+  PublicAgentsPage,
   PublicNotFoundPage,
   PublicSessionPage,
   PublicSpeakerPage,
@@ -89,6 +91,19 @@ publicAgendaRoutes.get("/agenda", async (context) => {
     shell,
     renderToString(<PublicAgendaPage data={data} view={view} />),
     { title: view === "mine" ? "My schedule" : "Agenda", script: `${PUBLIC_AGENDA_SCRIPT}\n${PUBLIC_SCHEDULE_SCRIPT}` },
+  ));
+});
+
+publicAgendaRoutes.get("/agenda/agents", async (context) => {
+  const query = context.req.query();
+  const event = await loadPublicEvent(context.env.DB, query.event ?? query.event_slug);
+  const shell = await assetShell(context.env.ASSETS, context.req.raw);
+  if (!event) return notFoundDocument(shell);
+  context.header("Cache-Control", "public, max-age=300");
+  return context.html(renderPublicDocument(
+    shell,
+    renderToString(<PublicAgentsPage event={event} origin={new URL(context.req.url).origin} />),
+    { title: "For agents" },
   ));
 });
 

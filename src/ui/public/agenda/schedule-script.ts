@@ -92,6 +92,13 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   };
   const hhmm = (instant) => zoneParts(instant).time;
 
+  /** "Tuesday", not "Tue" — the summary line reads as a sentence about a day. */
+  const weekday = (date) => {
+    try {
+      return new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'UTC' }).format(new Date(date + 'T12:00:00Z'));
+    } catch { return date; }
+  };
+
   /* ── Rendering ─────────────────────────────────────────────────────── */
 
   const countEl = document.querySelector('[data-schedule-count]');
@@ -121,8 +128,17 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     for (const slot of document.querySelectorAll('.public-agenda-slot')) {
       slot.hidden = !slot.querySelector('[data-public-session-id]:not([hidden])');
     }
+    // The itinerary groups by day only. A time-slot header above a single
+    // starred session repeats what the row already says, and the prototype
+    // ruled the shape: day header, then the sessions.
+    for (const head of document.querySelectorAll('.public-slot-head')) head.hidden = true;
     for (const day of document.querySelectorAll('.public-agenda-day')) {
-      day.hidden = !day.querySelector('[data-public-session-id]:not([hidden])');
+      const starredHere = day.querySelectorAll('[data-public-session-id]:not([hidden])').length;
+      day.hidden = starredHere === 0;
+      // "4 sessions" is the day's programme; this view is about the attendee's
+      // own picks, so the count has to say which number it is showing.
+      const count = day.querySelector('.public-day-head small');
+      if (count) count.textContent = starredHere + ' starred';
     }
 
     const list = document.querySelector('[data-schedule-list]');
@@ -137,7 +153,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       const perDay = config.days
         .map((day) => ({ day, count: mine.filter((session) => session.day === day.date).length }))
         .filter((entry) => entry.count > 0)
-        .map((entry) => entry.day.label.split(',')[0] + ' ' + entry.count)
+        .map((entry) => weekday(entry.day.date) + ' ' + entry.count)
         .join(' · ');
       counts.textContent = '';
       const total = document.createElement('strong');

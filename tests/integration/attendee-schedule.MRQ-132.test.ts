@@ -107,7 +107,7 @@ beforeEach(async () => {
   ]);
 });
 
-test("MRQ-132 · a published session downloads as a calendar file the extension-suffixed sibling route cannot shadow", async () => {
+test("CONTRACT · MRQ-132 a published session downloads as a calendar file the extension-suffixed sibling route cannot shadow", async () => {
   const response = await request(`/api/v1/public/sessions/the-year-agents-went-to-work/calendar.ics?event=${EVENT_SLUG}`);
   const body = await response.text();
 
@@ -134,7 +134,7 @@ test("MRQ-132 · a published session downloads as a calendar file the extension-
   expect(await json.json<{ session: { id: string } }>()).toMatchObject({ session: { id: "sub-keynote" } });
 });
 
-test("MRQ-132 · calendar text is RFC 5545-escaped and folded, and unpublished sessions have no calendar at all", async () => {
+test("CONTRACT · MRQ-132 calendar text is RFC 5545-escaped and folded, and unpublished sessions have no calendar at all", async () => {
   const response = await request(`/api/v1/public/sessions/rooms-agents-tools-zofia-s-live-demo/calendar.ics?event=${EVENT_SLUG}`);
   const body = await response.text();
   expect(response.status).toBe(200);
@@ -153,7 +153,7 @@ test("MRQ-132 · calendar text is RFC 5545-escaped and folded, and unpublished s
   expect(unknown.status).toBe(404);
 });
 
-test("MRQ-132 · every card ships a star in a reserved slot and the interval hooks a conflict is made of", async () => {
+test("AC-83 · MRQ-132 every card ships a star in a reserved slot and the interval hooks a conflict is made of", async () => {
   const response = await request(`/agenda?event=${EVENT_SLUG}`);
   const body = await response.text();
   expect(response.status).toBe(200);
@@ -173,7 +173,7 @@ test("MRQ-132 · every card ships a star in a reserved slot and the interval hoo
   expect(body).toContain(`href="/agenda/agents?event=${EVENT_SLUG}"`);
 });
 
-test("MRQ-132 · the itinerary view is a URL, ignores facets, and reserves every slot the script fills", async () => {
+test("CONTRACT · MRQ-132 the itinerary view is a URL, ignores facets, and reserves every slot the script fills", async () => {
   // A facet in the URL must not survive into the itinerary: an itinerary built
   // from a filtered program would count a fraction of the attendee's picks.
   const response = await request(`/agenda?event=${EVENT_SLUG}&view=mine&day=2026-10-13&track=track-agents&q=memory`);
@@ -202,6 +202,26 @@ test("MRQ-132 · the itinerary view is a URL, ignores facets, and reserves every
   expect(filteredBody).not.toContain('data-public-session-id="sub-keynote"');
 });
 
+test("CONTRACT · MRQ-132 the agent guide is a page an agent can fetch, not a dialog it cannot open", async () => {
+  const response = await request(`/agenda/agents?event=${EVENT_SLUG}`);
+  const body = await response.text();
+  expect(response.status).toBe(200);
+  expect(body).toContain("<h1>For agents</h1>");
+  // Every endpoint of the loop, named on the page a human is pointed at.
+  expect(body).toContain("POST /api/v1/public/schedules");
+  expect(body).toContain("GET  /api/v1/public/schedules/{code}");
+  expect(body).toContain("PUT  /api/v1/public/schedules/{code}");
+  expect(body).toContain("/api/v1/public/schedules/{code}/calendar.ics");
+  expect(body).toContain("/api/v1/public/sessions/{slug}/calendar.ics");
+  expect(body).toContain("X-Schedule-Write-Key");
+  // The card hook contract is documented where an agent driving the UI looks.
+  expect(body).toContain("data-public-session-id");
+  expect(body).toContain("data-schedule-star");
+
+  const missingEvent = await request("/agenda/agents?event=no-such-event");
+  expect(missingEvent.status).toBe(404);
+});
+
 interface CreatedSchedule {
   code: string;
   writeKey: string;
@@ -218,7 +238,7 @@ async function createSchedule(sessionIds: string[]): Promise<Response> {
   });
 }
 
-test("MRQ-132 · a set of sessions becomes a code, and the code answers with every URL it powers", async () => {
+test("CONTRACT · MRQ-132 a set of sessions becomes a code, and the code answers with every URL it powers", async () => {
   const created = await createSchedule(["sub-memory", "sub-keynote"]);
   expect(created.status).toBe(201);
   const payload = await created.json<CreatedSchedule>();
@@ -248,7 +268,7 @@ test("MRQ-132 · a set of sessions becomes a code, and the code answers with eve
   expect(malformed.status).toBe(400);
 });
 
-test("MRQ-132 · the code reads, the key writes, and neither can reach another conference's sessions", async () => {
+test("CONTRACT · MRQ-132 the code reads, the key writes, and neither can reach another conference's sessions", async () => {
   const created = await createSchedule(["sub-keynote"]);
   const { code, writeKey } = await created.json<CreatedSchedule>();
 
@@ -287,7 +307,7 @@ test("MRQ-132 · the code reads, the key writes, and neither can reach another c
   expect(overLimit.status).toBe(400);
 });
 
-test("MRQ-132 · overlaps are computed server-side so an agent never re-derives interval maths", async () => {
+test("CONTRACT · MRQ-132 overlaps are computed server-side so an agent never re-derives interval maths", async () => {
   // 14:00–14:45 and 14:30–15:15 overlap; the 09:00 keynote clashes with neither.
   const created = await createSchedule(["sub-keynote", "sub-memory", "sub-judges"]);
   const payload = await created.json<CreatedSchedule>();
@@ -297,7 +317,7 @@ test("MRQ-132 · overlaps are computed server-side so an agent never re-derives 
   expect((await read.json<CreatedSchedule>()).overlaps).toEqual([["sub-memory", "sub-judges"]]);
 });
 
-test("MRQ-132 · the feed is live, and an unknown code is a 404 rather than an empty calendar", async () => {
+test("CONTRACT · MRQ-132 the feed is live, and an unknown code is a 404 rather than an empty calendar", async () => {
   const created = await createSchedule(["sub-keynote"]);
   const { code, writeKey } = await created.json<CreatedSchedule>();
 
@@ -339,7 +359,7 @@ test("MRQ-132 · the feed is live, and an unknown code is a 404 rather than an e
   expect(await missing.text()).not.toContain("BEGIN:VCALENDAR");
 });
 
-test("MRQ-132 · codes and keys are drawn fresh every time", async () => {
+test("CONTRACT · MRQ-132 codes and keys are drawn fresh every time", async () => {
   const codes = new Set<string>();
   const keys = new Set<string>();
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -351,7 +371,7 @@ test("MRQ-132 · codes and keys are drawn fresh every time", async () => {
   expect(keys.size).toBe(8);
 });
 
-test("MRQ-132 · the session page offers the calendar three ways and directions an attendee can walk", async () => {
+test("AC-240, AC-252, AC-253 · MRQ-132 the session page offers the calendar three ways and directions an attendee can walk", async () => {
   const response = await request(`/s/memory-architectures?event=${EVENT_SLUG}`);
   const body = await response.text();
 

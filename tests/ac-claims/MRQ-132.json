@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-132",
+  "owns": [],
+  "exercises": ["AC-83", "AC-240", "AC-252", "AC-253"],
+  "notes": "MRQ-132 adds no new acceptance criteria: the attendee schedule is post-evaluation product work (register rows 37/38, section T-J). Its coverage exercises the existing anonymous public-agenda contracts it extends — card anatomy and hooks, session cross-links, schedule-framing legibility, and the venue-disclosure rule that keeps operator-only building notes off every public surface."
+}

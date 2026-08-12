@@ -53,14 +53,14 @@ function loadEncoder(): (text: string) => number[][] | null {
 const render = (matrix: number[][]): string[] =>
   matrix.map((row) => row.map((cell) => (cell & 1 ? "1" : "0")).join(""));
 
-test("MRQ-132 · the QR encoder reproduces a decoder-verified matrix", () => {
+test("CONTRACT · MRQ-132 the QR encoder reproduces a decoder-verified matrix", () => {
   const qrMatrix = loadEncoder();
   const matrix = qrMatrix("HELLO");
   expect(matrix).not.toBeNull();
   expect(render(matrix!)).toEqual(HELLO_V1_L);
 });
 
-test("MRQ-132 · a sync link picks a version that fits, and an impossible payload draws nothing", () => {
+test("CONTRACT · MRQ-132 a sync link picks a version that fits, and an impossible payload draws nothing", () => {
   const qrMatrix = loadEncoder();
   const syncUrl = "https://marquee.stage11.dev/agenda?event=aie-nyc-2026&sched=MQ-K7TQM3RAX9TQ2#k=9f2c1ab4d7e05638";
   const matrix = qrMatrix(syncUrl);
