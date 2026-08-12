@@ -17,11 +17,15 @@ test("CONTRACT · MRQ-99 organizer copy removes the sidebar dead end", async () 
 
 test("CONTRACT · MRQ-99 decision copy states the actual speaker message", async () => {
   const record = await source("src/ui/submissions/SubmissionRecordPage.tsx");
+  const bulk = await source("src/ui/submissions/SubmissionsPage.tsx");
 
   assert.match(record, /speaker will see the same words in the decision email/);
   assert.match(record, /A waitlist does not send a message/);
   assert.match(record, /decisionRequest === "maybe" \? "Waitlist"/);
   assert.match(record, /Feedback for the speaker \(optional\)/);
+  assert.match(bulk, /Each selected speaker will receive the feedback you add in the decision email/);
+  assert.match(bulk, /A waitlist does not send a message/);
+  assert.doesNotMatch(bulk, /normalized feedback|decision row|standard conference email/);
 });
 
 test("CONTRACT · MRQ-99 optional field labels use the parenthesized convention", async () => {

@@ -617,7 +617,7 @@ export function SubmissionsPage({
             <div><span class="eyebrow">Confirm bulk action</span><h2 id="bulk-decision-heading">{option.question} {selectedCount.toLocaleString()} {scope}?</h2></div>
             <button type="button" aria-label="Close bulk decision dialog" onClick={() => setBulkRequest(null)}>×</button>
           </div>
-          <p>The decision is written on every selected record. {option.notifies ? "The same normalized feedback is saved on each decision row and rendered through the standard conference email." : "A waitlist is not announced: the feedback is saved on each decision row, and no message is queued."}</p>
+          <p>{option.notifies ? "Each selected speaker will receive the feedback you add in the decision email." : "A waitlist does not send a message. Any feedback you add is saved with each decision."}</p>
           <label class="field"><span>Feedback for the speakers (optional)</span><textarea rows={5} value={bulkFeedback} onInput={(event) => setBulkFeedback(event.currentTarget.value)} placeholder="Share context every one of these speakers can act on." /></label>
           <div class="bulk-decision-actions">
             <Button type="button" onClick={() => setBulkRequest(null)} disabled={bulkBusy}>Cancel</Button>
