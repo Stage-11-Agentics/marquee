@@ -71,7 +71,7 @@ describe("the reference code", () => {
     expect(described.retryable).toBe(false);
   });
 
-  test("MRQ-127 · field detail maps to the named control and an unmapped field stays available globally", () => {
+  test("CONTRACT · MRQ-127 field detail maps to the named control and an unmapped field stays available globally", () => {
     const direct = new MarqueeApiError({
       code: "unprocessable",
       message: "Choose a format from this conference's settings.",

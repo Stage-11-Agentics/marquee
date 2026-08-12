@@ -134,7 +134,7 @@ describe.sequential("MRQ-29 quick search", () => {
     expect(body.data.find((result) => result.id === MAIN_FORM_ID)).toMatchObject({ type: "Form", href: `/forms?form=${MAIN_FORM_ID}` });
   });
 
-  test("MRQ-127 · submitter-only people are discoverable for the create-submission picker", async () => {
+  test("CONTRACT · MRQ-127 submitter-only people are discoverable for the create-submission picker", async () => {
     const response = await request("?q=Submitter%20Only");
     expect(response.status).toBe(200);
     const body = await json(response);
