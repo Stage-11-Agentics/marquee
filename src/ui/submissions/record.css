@@ -14,6 +14,10 @@
 .record-slot strong { font: 600 11px/1.2 var(--mono); }
 .record-slot span:not(.chip) { color: var(--muted); font-size: 11px; }
 .record-action-row { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+/* Same slot and font-size as the undecided `.subtle` caption it replaces —
+   only color and weight change — so naming a standing decision never grows
+   the fixed-height `.card-head` it lives in. */
+.record-decision-cue { color: var(--ink); font-size: 11.5px; font-variant-numeric: tabular-nums; font-weight: 600; }
 .record-draft-form { display: grid; gap: 14px; }
 .record-action-row .subtle { flex: 1 1 260px; }
 .record-decision-dialog { background: var(--sunk); border: 1px solid var(--accent); display: grid; gap: 12px; margin-top: 14px; padding: 14px; }

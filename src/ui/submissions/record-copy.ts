@@ -33,3 +33,17 @@ export function decidedNote(latest: { resulting_status: string; decided_at: numb
   if (!latest) return UNDECIDED_RECORD_ACTION_COPY;
   return `Decided ${statusLabel(latest.resulting_status)} · ${moment(latest.decided_at)}`;
 }
+
+/**
+ * The header state chip's tone. Keyed on the stored `status`, not `stage` —
+ * `stage` buckets waitlisted, rejected, withdrawn, and even a stray draft into
+ * one "declined" fallback (`src/api/board.ts`), which would tone a waitlisted
+ * record the same alarming red as a rejected one. `status` is the one field
+ * that actually distinguishes a terminal negative from an in-flight record.
+ */
+export function headerChipTone(record: { status: string; stage: string }): "" | "success" | "warning" | "alarm" {
+  if (record.status === "rejected" || record.status === "withdrawn") return "alarm";
+  if (record.status === "accepted" || record.stage === "published") return "success";
+  if (record.status === "waitlisted" || record.stage === "waved") return "warning";
+  return "";
+}

@@ -135,6 +135,8 @@ export function AppShell({ eventName = "AIE NYC 2026" }: { eventName?: string })
         <Topbar
           eventName={eventName}
           routeName={routeName}
+          pathname={location.pathname}
+          navigate={navigate}
           identity={identity}
           userMenuOpen={userMenuOpen}
           openSearch={openSearch}
