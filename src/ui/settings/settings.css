@@ -150,11 +150,7 @@
 .token-scope-option:hover, .token-restriction:hover { border-color: var(--accent); }
 .token-scope-option code, .token-restriction code { font: 400 11px/1.2 var(--mono); }
 .token-restriction { color: var(--ink-soft); font-size: 12px; }
-.token-form-actions, .token-secret-actions { display: flex; gap: 8px; justify-content: flex-end; }
-.token-secret-card { border-color: var(--accent); }
-.token-secret-warning { color: var(--ink-soft); font-size: 12px; line-height: 1.55; margin: 0 0 13px; }
-.token-secret { background: var(--ink); border: 1px solid var(--accent); border-radius: var(--radius); color: #dff2f3; display: block; font: 400 12px/1.4 var(--mono); overflow-x: auto; padding: 12px; user-select: all; }
-.token-secret-actions { margin-top: 13px; }
+.token-form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .token-table-card { min-width: 0; }
 .table-scroll { overflow-x: auto; }
 .token-table { border-collapse: collapse; min-width: 900px; width: 100%; }
@@ -178,4 +174,4 @@
 .token-docs-note a { color: var(--accent-dark); text-decoration: underline; text-underline-offset: 2px; }
 .token-secondary-create { justify-self: start; }
 .sr-only { border: 0; clip: rect(0, 0, 0, 0); height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; white-space: nowrap; width: 1px; }
-@media (max-width: 600px) { .token-scope-grid { grid-template-columns: 1fr; } .token-form-actions, .token-secret-actions { align-items: stretch; flex-direction: column-reverse; } .token-form-actions .button, .token-secret-actions .button { width: 100%; } .token-list-heading { align-items: start; flex-direction: column; gap: 6px; } }
+@media (max-width: 600px) { .token-scope-grid { grid-template-columns: 1fr; } .token-form-actions { align-items: stretch; flex-direction: column-reverse; } .token-form-actions .button { width: 100%; } .token-list-heading { align-items: start; flex-direction: column; gap: 6px; } }

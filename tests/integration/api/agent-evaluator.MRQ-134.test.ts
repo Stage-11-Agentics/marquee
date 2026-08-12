@@ -122,8 +122,8 @@ async function seedFixture(): Promise<void> {
     ).bind(EVENT_ID, HUMAN_ID, TRACK_MAIN, NOW, NOW, EVENT_ID, SECOND_HUMAN_ID, TRACK_MAIN, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, 'Program reviewers', ?, ?),
-       ("committee-mrq134-empty", ?, 'Unused committee', ?, ?)`,
-    ).bind(COMMITTEE_ID, EVENT_ID, NOW, NOW, EVENT_ID, NOW, NOW),
+       (?, ?, 'Unused committee', ?, ?)`,
+    ).bind(COMMITTEE_ID, EVENT_ID, NOW, NOW, "committee-mrq134-empty", EVENT_ID, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO committee_members (id, committee_id, person_id, role, created_at, updated_at)
        VALUES ('committee-member-mrq134-human', ?, ?, 'reviewer', ?, ?),

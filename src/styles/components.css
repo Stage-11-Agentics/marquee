@@ -209,3 +209,7 @@ button.event-context:hover, button.event-context[aria-expanded="true"] { backgro
 .token-secret-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 13px; }
 .agent-review-line { align-items: center; display: flex; gap: 5px; min-height: 18px; }
 .agent-review-label { color: var(--ink); font-weight: 600; }
+@media (max-width: 600px) {
+  .token-secret-actions { align-items: stretch; flex-direction: column-reverse; }
+  .token-secret-actions .button { width: 100%; }
+}

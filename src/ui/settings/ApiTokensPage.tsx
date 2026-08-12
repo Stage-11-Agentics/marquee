@@ -79,13 +79,13 @@ function GrantCheckbox({
 
 function TokenRow({ token, onRevoke }: { token: ApiToken; onRevoke: (token: ApiToken) => void }): JSX.Element {
   const restricted = token.scopes.event_ids.length > 0;
-  const label = token.acts_as_person_id && token.acting_person_name
+  const seatLabel = token.acts_as_person_id && token.acting_person_name
     ? `Evaluator seat · ${token.acting_person_name}`
-    : token.name;
+    : null;
   return <tr>
-    <th scope="row"><strong>{label}</strong><span class="token-prefix"><code>{token.prefix}…</code></span></th>
+    <th scope="row"><strong>{token.name}</strong><span class="token-prefix"><code>{token.prefix}…</code></span></th>
     <td><div class="token-scope-list">{token.scopes.permissions.map((grant) => <code key={grant}>{grant}</code>)}</div></td>
-    <td>{restricted ? <span class="chip warning">{token.scopes.event_ids.length} conference{token.scopes.event_ids.length === 1 ? "" : "s"}</span> : <span class="chip">All conferences</span>}</td>
+    <td>{seatLabel ? <span class="chip warning">{seatLabel}</span> : restricted ? <span class="chip warning">{token.scopes.event_ids.length} conference{token.scopes.event_ids.length === 1 ? "" : "s"}</span> : <span class="chip">All conferences</span>}</td>
     <td class="tabular">{formatDate(token.created_at)}</td>
     <td class="tabular">{formatDate(token.last_used_at)}</td>
     <td>{token.revoked_at === null
