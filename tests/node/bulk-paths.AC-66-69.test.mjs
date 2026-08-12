@@ -193,6 +193,13 @@ const EXPECTED_PLACEHOLDER_SITES = [
     classification: "one placeholder per COLUMN of a single-row INSERT; bounded by the table schema, not by any caller-supplied list, so it cannot approach D1's binding cap",
   },
   {
+    file: "src/lib/history.ts",
+    owner: "contentHistoryFor",
+    binding: "placeholders",
+    expression: 'CONTENT_ACTIONS.map(() => "?")',
+    classification: "bounded by the three-value CONTENT_ACTIONS taxonomy; no caller-supplied list reaches it",
+  },
+  {
     file: "src/lib/reviewer-scope.ts",
     owner: "authorizeReviewerQueueScope",
     binding: "result",
