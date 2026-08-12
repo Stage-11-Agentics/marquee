@@ -30,18 +30,27 @@ import { errorFields, loggerForEnv } from "../lib/observability/log";
 
 export type SigninReason = "expired" | "signed_out" | "session_ended";
 
-const REASON_COPY: Record<SigninReason, { eyebrow: string; line: string }> = {
+/**
+ * Each reason reads differently to someone who still has a session, because
+ * the banner points at what to do next and the two states have different next
+ * things. "Request a new one below" under a panel with no form below is the
+ * kind of small lie that makes a page feel broken.
+ */
+const REASON_COPY: Record<SigninReason, { eyebrow: string; line: string; signedInLine: string }> = {
   expired: {
     eyebrow: "Link expired",
     line: "That sign-in link had already been used or had passed its fifteen minutes. Request a new one below.",
+    signedInLine: "That sign-in link had already been used or had passed its fifteen minutes. This browser is still signed in, so carry on.",
   },
   signed_out: {
     eyebrow: "Signed out",
     line: "You are signed out on this device. Request a link when you want to come back.",
+    signedInLine: "That session was signed out. This browser holds a different one, still live.",
   },
   session_ended: {
     eyebrow: "Session ended",
     line: "Your session ended. Sign in again to pick up where you left off.",
+    signedInLine: "That session ended. This browser is signed in again, so carry on.",
   },
 };
 
@@ -66,11 +75,11 @@ export interface SigninPageState {
   next: string;
 }
 
-function ReasonBanner({ reason }: { reason: SigninReason }): JSX.Element {
+function ReasonBanner({ reason, signedIn }: { reason: SigninReason; signedIn: boolean }): JSX.Element {
   const copy = REASON_COPY[reason];
   return (
     <div class="signin-reason" role="status">
-      <strong>{copy.eyebrow}.</strong> {copy.line}
+      <strong>{copy.eyebrow}.</strong> {signedIn ? copy.signedInLine : copy.line}
     </div>
   );
 }
@@ -96,7 +105,7 @@ function SigninForm({ state }: { state: SigninPageState }): JSX.Element {
         No password, ever. Give the address your conference knows you by and a one-time link
         arrives by email. It works once and expires in fifteen minutes.
       </p>
-      {state.reason && <ReasonBanner reason={state.reason} />}
+      {state.reason && <ReasonBanner reason={state.reason} signedIn={false} />}
       {!state.mailConfigured && <MailCallout />}
       <form class="signin-form" id="signin-form" method="post" action="/api/v1/auth/magic-link">
         <input type="hidden" name="next" value={state.next} />
@@ -160,7 +169,7 @@ function SignedInPanel({ state, person }: { state: SigninPageState; person: Sign
       <p class="signin-lede">
         Signed in as {person.name} · {person.email}
       </p>
-      {state.reason && <ReasonBanner reason={state.reason} />}
+      {state.reason && <ReasonBanner reason={state.reason} signedIn />}
       <div class="signin-actions">
         <span class="signin-status" id="signin-status" role="status" aria-live="polite"></span>
         <div class="signin-actions-pair">

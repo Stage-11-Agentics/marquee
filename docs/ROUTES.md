@@ -84,7 +84,7 @@ Registered in `src/routes/*.route.tsx`, outside the SPA.
 
 ## Public-page predicate
 
-`app.tsx` treats a path as public when it is exactly `/`, `/signin`, `/login`, `/sign-in`, `/agenda`, `/agenda/agents`, `/speakers`, or begins with `/f/`, `/s/`, `/p/`, `/embed/`, or matches 1 embed pattern.
+`app.tsx` treats a path as public when it is exactly `/`, `/signin`, `/login`, `/sign-in`, `/agenda`, `/agenda/agents`, `/speakers`, or begins with `/claim/`, `/join/`, `/f/`, `/s/`, `/p/`, `/embed/`, or matches 1 embed pattern.
 
 ## Route summary
 

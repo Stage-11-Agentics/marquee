@@ -33,11 +33,23 @@
   ],
   "assets": {
     "binding": "ASSETS",
+    // Every server-rendered page has to be listed here, or the assets router
+    // answers first and returns the bare SPA shell — a 200 that contains none
+    // of the page. Nothing in the test suite can see it: the integration tests
+    // call `app.fetch` directly, which never consults this list. Verified live:
+    // before this entry, https://marquee.stage11.dev/claim/<token> served 1,486
+    // bytes of empty shell, so the cold start's one human moment rendered
+    // nothing at all.
     "run_worker_first": [
       "/",
       "/api/*",
       "/health",
       "/__validation/*",
+      "/signin",
+      "/login",
+      "/sign-in",
+      "/claim/*",
+      "/join/*",
       "/f/*",
       "/agenda*",
       "/speakers*",
