@@ -176,10 +176,10 @@ describe("MRQ-148 · one-action assisted placement", () => {
 
     const built = autoPlaceSlots(snapshot);
 
-    // Twelve grid hours across both conference days, earliest first.
-    expect(built).toHaveLength(24);
+    // Forty-eight 15-minute grid targets across both conference days, earliest first.
+    expect(built).toHaveLength(96);
     expect(built[0]).toMatchObject({ day: "2026-05-04", time: "09:00", starts_at: NINE_AM });
-    expect(built[12]).toMatchObject({ day: "2026-05-05", time: "09:00" });
+    expect(built[48]).toMatchObject({ day: "2026-05-05", time: "09:00" });
     for (let index = 1; index < built.length; index += 1) {
       expect(built[index]!.starts_at).toBeGreaterThan(built[index - 1]!.starts_at);
     }

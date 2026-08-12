@@ -14,11 +14,21 @@ import type {
 } from "../../api/agenda";
 import { AGENDA_VIEWS, durationIsAllowed, MAX_BATCH_PUBLISH_IDS, viewNames } from "../../api/agenda";
 import { autoPlaceSummary, planAutoPlacements, type AutoPlaceSlot } from "../../lib/auto-place";
+import {
+  AGENDA_GRID_OPTIONS,
+  agendaGridPosition,
+  DEFAULT_AGENDA_GRID_GRANULARITY,
+  generateAgendaGridSlots,
+  readAgendaGridGranularity,
+  writeAgendaGridGranularity,
+  type AgendaGridGranularity,
+  type AgendaGridSlot,
+} from "../../lib/agenda-grid";
 import { displayRoomLabel, showsBuildingComparison, showsBuildingComparisonCount, visibleVenueConflicts } from "../../lib/venue-disclosure";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
-import { localParts, sessionDay, sessionTime, TIME_SLOTS, TrackBoard } from "./track-board";
+import { localParts, sessionDay, sessionTime, TrackBoard } from "./track-board";
 import "./agenda.css";
 
 const DAY_MS = 86_400_000;
@@ -161,11 +171,15 @@ export function agendaPlacementRequest(
 }
 
 /** Every opening the organizer could drag into, in the order the board lays them out. */
-export function autoPlaceSlots(snapshot: AgendaSnapshot): AutoPlaceSlot[] {
+export function autoPlaceSlots(
+  snapshot: AgendaSnapshot,
+  granularity: unknown = DEFAULT_AGENDA_GRID_GRANULARITY,
+): AutoPlaceSlot[] {
   const slots: AutoPlaceSlot[] = [];
+  const gridSlots = generateAgendaGridSlots(granularity);
   for (const day of dayOptions(snapshot)) {
-    for (const time of TIME_SLOTS) {
-      slots.push({ day: day.value, time, starts_at: zonedStart(day.value, time, snapshot.event.timezone) });
+    for (const slot of gridSlots) {
+      slots.push({ day: day.value, time: slot.time, starts_at: zonedStart(day.value, slot.time, snapshot.event.timezone) });
     }
   }
   return slots;
@@ -357,11 +371,41 @@ function DropCell({
     : children}</div>;
 }
 
-function roomSlotIsFree(snapshot: AgendaSnapshot, day: string, time: string, roomId: string): boolean {
+function PositionedSession({
+  session,
+  timezone,
+  slots,
+  children,
+}: {
+  session: AgendaSession;
+  timezone: string;
+  slots: readonly AgendaGridSlot[];
+  children: ComponentChildren;
+}): JSX.Element | null {
+  const position = agendaGridPosition(sessionTime(session, timezone), slots);
+  if (!position) return null;
+  return <div
+    class="agenda-session-position"
+    style={{ top: `${position.offsetRatio * 100}%` }}
+  >{children}</div>;
+}
+
+function roomSlotIsFree(
+  snapshot: AgendaSnapshot,
+  day: string,
+  time: string,
+  roomId: string,
+  slots: readonly AgendaGridSlot[],
+): boolean {
+  const targetStart = zonedStart(day, time, snapshot.event.timezone);
   return !snapshot.sessions.some((session) =>
     session.room_id === roomId
-    && sessionDay(session, snapshot.event.timezone) === day
-    && sessionTime(session, snapshot.event.timezone) === time,
+    && (
+      (sessionDay(session, snapshot.event.timezone) === day
+        && agendaGridPosition(sessionTime(session, snapshot.event.timezone), slots)?.slot.time === time)
+      || (session.starts_at <= targetStart
+        && session.starts_at + session.duration_min * 60_000 > targetStart)
+    ),
   );
 }
 
@@ -435,6 +479,7 @@ export function DayBoard({
   snapshot,
   sessions,
   day,
+  slots = generateAgendaGridSlots(),
   onDrop,
   onPlace,
   armedPlacement,
@@ -449,6 +494,7 @@ export function DayBoard({
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
   day: string;
+  slots?: readonly AgendaGridSlot[];
   onDrop: (event: DragEvent, day: string, time: string, roomId: string) => void;
   onPlace: (target: AgendaPlacementTarget) => void;
   armedPlacement: ArmedPlacement | null;
@@ -465,22 +511,26 @@ export function DayBoard({
     {showBuildingBand && <BuildingBand rooms={snapshot.rooms} />}
     <div class="agenda-grid-head agenda-time-head" />
     {snapshot.rooms.map((room) => <div class="agenda-grid-head" key={room.id}><RoomHead room={room} bare={showBuildingBand} showBuildingComparison={showBuildingBand} onOpen={onRoomOpen} /></div>)}
-    {TIME_SLOTS.map((time) => <>
-      <div class="agenda-time tabular" key={`${time}-label`}>{time}</div>
+    {slots.map((slot) => <>
+      <div class={`agenda-time tabular${slot.isHour ? "" : " is-micro"}`} key={`${slot.time}-label`} aria-label={slot.time}>
+        {slot.isHour ? slot.time : <span class="agenda-time-micro-tick" aria-hidden="true" />}
+      </div>
       {snapshot.rooms.map((room) => {
-        const cellSessions = sessions.filter((session) => session.room_id === room.id && sessionTime(session, snapshot.event.timezone) === time);
-        const placementLabel = armedPlacement && roomSlotIsFree(snapshot, day, time, room.id)
-          ? `Place at ${time} · ${room.name}`
+        const cellSessions = sessions.filter((session) => session.room_id === room.id && agendaGridPosition(sessionTime(session, snapshot.event.timezone), slots)?.slot.time === slot.time);
+        const placementLabel = armedPlacement && roomSlotIsFree(snapshot, day, slot.time, room.id, slots)
+          ? `Place at ${slot.time} · ${room.name}`
           : undefined;
         return <DropCell
           class="agenda-day-cell"
-          key={`${time}-${room.id}`}
-          ariaLabel={`Place Session on ${day} at ${time} in ${room.name}`}
-          onDrop={(event) => onDrop(event, day, time, room.id)}
+          key={`${slot.time}-${room.id}`}
+          ariaLabel={`Place Session on ${day} at ${slot.time} in ${room.name}`}
+          onDrop={(event) => onDrop(event, day, slot.time, room.id)}
           placementLabel={placementLabel}
           placementBusy={placementBusy}
-          onPlace={placementLabel ? () => onPlace({ day, time, roomId: room.id }) : undefined}
-        >{cellSessions.map((session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />)}</DropCell>;
+          onPlace={placementLabel ? () => onPlace({ day, time: slot.time, roomId: room.id }) : undefined}
+        >{cellSessions.map((session) => <PositionedSession key={session.id} session={session} timezone={snapshot.event.timezone} slots={slots}>
+          <SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />
+        </PositionedSession>)}</DropCell>;
       })}
     </>)}
   </div>;
@@ -490,6 +540,7 @@ export function WeekBoard({
   snapshot,
   sessions,
   days,
+  slots = generateAgendaGridSlots(),
   onDrop,
   onPlace,
   armedPlacement,
@@ -504,6 +555,7 @@ export function WeekBoard({
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
   days: DayOption[];
+  slots?: readonly AgendaGridSlot[];
   onDrop: (event: DragEvent, day: string, time: string, roomId: string) => void;
   onPlace: (target: AgendaPlacementTarget) => void;
   armedPlacement: ArmedPlacement | null;
@@ -519,22 +571,26 @@ export function WeekBoard({
   return <div class="agenda-week-grid" style={{ gridTemplateColumns: `68px repeat(${Math.max(days.length, 1)}, minmax(240px, 1fr))` }}>
     <div class="agenda-grid-head agenda-time-head" />
     {days.map((day) => <div class="agenda-grid-head" key={day.value}>{day.label}</div>)}
-    {TIME_SLOTS.map((time) => <>
-      <div class="agenda-time tabular" key={`${time}-label`}>{time}</div>
+    {slots.map((slot) => <>
+      <div class={`agenda-time tabular${slot.isHour ? "" : " is-micro"}`} key={`${slot.time}-label`} aria-label={slot.time}>
+        {slot.isHour ? slot.time : <span class="agenda-time-micro-tick" aria-hidden="true" />}
+      </div>
       {days.map((day) => {
-        const cellSessions = sessions.filter((session) => sessionDay(session, snapshot.event.timezone) === day.value && sessionTime(session, snapshot.event.timezone) === time);
-        const placementLabel = armedPlacement && fallbackRoom && roomSlotIsFree(snapshot, day.value, time, fallbackRoom.id)
-          ? `Place at ${time} · ${fallbackRoom.name}`
+        const cellSessions = sessions.filter((session) => sessionDay(session, snapshot.event.timezone) === day.value && agendaGridPosition(sessionTime(session, snapshot.event.timezone), slots)?.slot.time === slot.time);
+        const placementLabel = armedPlacement && fallbackRoom && roomSlotIsFree(snapshot, day.value, slot.time, fallbackRoom.id, slots)
+          ? `Place at ${slot.time} · ${fallbackRoom.name}`
           : undefined;
         return <DropCell
-          key={`${day.value}-${time}`}
+          key={`${day.value}-${slot.time}`}
           class="agenda-week-cell"
-          ariaLabel={`Place Session on ${day.label} at ${time}${fallbackRoom ? ` in ${fallbackRoom.name}` : ""}`}
-          onDrop={(event) => { if (fallbackRoom) onDrop(event, day.value, time, fallbackRoom.id); }}
+          ariaLabel={`Place Session on ${day.label} at ${slot.time}${fallbackRoom ? ` in ${fallbackRoom.name}` : ""}`}
+          onDrop={(event) => { if (fallbackRoom) onDrop(event, day.value, slot.time, fallbackRoom.id); }}
           placementLabel={placementLabel}
           placementBusy={placementBusy}
-          onPlace={placementLabel && fallbackRoom ? () => onPlace({ day: day.value, time, roomId: fallbackRoom.id }) : undefined}
-        >{cellSessions.map((session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />)}</DropCell>;
+          onPlace={placementLabel && fallbackRoom ? () => onPlace({ day: day.value, time: slot.time, roomId: fallbackRoom.id }) : undefined}
+        >{cellSessions.map((session) => <PositionedSession key={session.id} session={session} timezone={snapshot.event.timezone} slots={slots}>
+          <SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />
+        </PositionedSession>)}</DropCell>;
       })}
     </>)}
   </div>;
@@ -544,6 +600,7 @@ export function RoomBoard({
   snapshot,
   sessions,
   days,
+  slots = generateAgendaGridSlots(),
   onDrop,
   onPlace,
   armedPlacement,
@@ -558,6 +615,7 @@ export function RoomBoard({
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
   days: DayOption[];
+  slots?: readonly AgendaGridSlot[];
   onDrop: (event: DragEvent, day: string, time: string, roomId: string) => void;
   onPlace: (target: AgendaPlacementTarget) => void;
   armedPlacement: ArmedPlacement | null;
@@ -577,19 +635,19 @@ export function RoomBoard({
         <div class="agenda-day-label">{day.label}</div>
         {sessions.filter((session) => session.room_id === room.id && sessionDay(session, snapshot.event.timezone) === day.value).sort((left, right) => left.starts_at - right.starts_at).map((session) => <div key={session.id} class="agenda-room-session-wrap"><span class="tabular">{sessionTime(session, snapshot.event.timezone)}</span><SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} /></div>)}
         <div class="agenda-room-slots" aria-label={`Available times in ${room.name} on ${day.label}`}>
-          {TIME_SLOTS.map((time) => {
-            const placementLabel = armedPlacement && roomSlotIsFree(snapshot, day.value, time, room.id)
-              ? `Place at ${time} · ${room.name}`
+          {slots.map((slot) => {
+            const placementLabel = armedPlacement && roomSlotIsFree(snapshot, day.value, slot.time, room.id, slots)
+              ? `Place at ${slot.time} · ${room.name}`
               : undefined;
             return <DropCell
               class="agenda-room-empty"
-              key={time}
-              ariaLabel={`Place Session on ${day.label} in ${room.name} at ${time}`}
-              onDrop={(event) => onDrop(event, day.value, time, room.id)}
+              key={slot.time}
+              ariaLabel={`Place Session on ${day.label} in ${room.name} at ${slot.time}`}
+              onDrop={(event) => onDrop(event, day.value, slot.time, room.id)}
               placementLabel={placementLabel}
               placementBusy={placementBusy}
-              onPlace={placementLabel ? () => onPlace({ day: day.value, time, roomId: room.id }) : undefined}
-            >Drop at {time}</DropCell>;
+              onPlace={placementLabel ? () => onPlace({ day: day.value, time: slot.time, roomId: room.id }) : undefined}
+            >{slot.isHour ? `Drop at ${slot.time}` : <span class="agenda-room-micro-tick" aria-hidden="true" />}</DropCell>;
           })}
         </div>
       </div>)}
@@ -789,6 +847,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
   const [autoPlaceBusy, setAutoPlaceBusy] = useState(false);
   const [armedPlacement, setArmedPlacement] = useState<ArmedPlacement | null>(null);
   const [placementBusy, setPlacementBusy] = useState(false);
+  const [gridGranularity, setGridGranularity] = useState<AgendaGridGranularity>(() => readAgendaGridGranularity(eventId));
   const [reloadKey, setReloadKey] = useState(0);
   const boardRef = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef<Partial<Record<AgendaView, { top: number; left: number }>>>({});
@@ -811,6 +870,10 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
     void load(controller.signal);
     return () => controller.abort();
   }, [load, reloadKey]);
+
+  useEffect(() => {
+    setGridGranularity(readAgendaGridGranularity(eventId));
+  }, [eventId]);
 
   useEffect(() => {
     if (!armedPlacement) return;
@@ -965,7 +1028,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
       sessions: current.sessions,
       rooms: current.rooms,
       unscheduled: current.unscheduled,
-      slots: autoPlaceSlots(current),
+      slots: autoPlaceSlots(current, gridGranularity),
     });
     if (!plan.placements.length) {
       setNotice(autoPlaceSummary(plan));
@@ -1034,6 +1097,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
 
   const snapshot = state.snapshot;
   const days = dayOptions(snapshot);
+  const gridSlots = generateAgendaGridSlots(gridGranularity);
   const selectedDay = day || days[0]?.value || "all";
   const visibleSessions = sessionsFor(snapshot, selectedDay, track);
   const conflicts = conflictMarkers(snapshot.conflicts);
@@ -1063,17 +1127,18 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
   };
   const renderBoard = () => {
     if (view === "list") return <AgendaList snapshot={snapshot} sessions={visibleSessions} conflicts={presentationConflicts} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} onClearFilters={() => { setDay("all"); setTrack(""); }} />;
-    if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
-    if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
+    if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
+    if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
     if (view === "track") return <TrackBoard
       snapshot={snapshot}
       sessions={sessionsFor(snapshot, "all", track)}
       days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)}
+      slots={gridSlots}
       onDrop={onDrop}
       renderTile={(session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />}
     />;
     const dayForBoard = selectedDay === "all" ? days[0]?.value ?? selectedDay : selectedDay;
-    return <DayBoard snapshot={snapshot} sessions={sessionsFor(snapshot, dayForBoard, track)} day={dayForBoard} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
+    return <DayBoard snapshot={snapshot} sessions={sessionsFor(snapshot, dayForBoard, track)} day={dayForBoard} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
   };
 
   return <div class="agenda-page">
@@ -1096,6 +1161,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
       <div class="segment agenda-view-tabs" role="tablist" aria-label="Agenda views">{viewNames().map((candidate) => <button type="button" role="tab" aria-selected={view === candidate} disabled={candidate === "track" && Boolean(armedPlacement)} title={candidate === "track" && armedPlacement ? "Choose a time and room before returning to the track view." : undefined} class={view === candidate ? "active" : ""} key={candidate} onClick={() => { rememberScroll(); setView(candidate); }}>{candidate[0]!.toUpperCase() + candidate.slice(1)}</button>)}</div>
       <label class="agenda-filter"><span class="eyebrow">Day</span><select value={selectedDay} onChange={(event) => { rememberScroll(); setDay((event.currentTarget as HTMLSelectElement).value); }}><option value="all">All days</option>{days.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
       <label class="agenda-filter"><span class="eyebrow">Track</span><select value={track} onChange={(event) => { rememberScroll(); setTrack((event.currentTarget as HTMLSelectElement).value); }}><option value="">All tracks</option>{snapshot.tracks.map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select></label>
+      <label class="agenda-filter"><span class="eyebrow">Placement grid</span><select aria-label="Placement grid increment" value={gridGranularity} onChange={(event) => { rememberScroll(); setGridGranularity(writeAgendaGridGranularity(eventId, (event.currentTarget as HTMLSelectElement).value)); }}>{AGENDA_GRID_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
       <Button
         class="agenda-auto-place"
         data-auto-place="true"

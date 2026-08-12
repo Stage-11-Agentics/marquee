@@ -70,7 +70,7 @@ export function TrackBoard({
   const fallbackRoom = snapshot.rooms[0];
   const slotColumns = `repeat(${Math.max(slots.length, 1)}, minmax(105px, 1fr))`;
   return <div class="agenda-track-board" data-track-board>
-    <div class="agenda-track-time-axis" aria-hidden="true">
+    <div class="agenda-track-time-axis" aria-hidden="true" style={{ gridTemplateColumns: `110px ${slotColumns}` }}>
       <span class="agenda-track-axis-label">Track · day</span>
       {slots.map((slot) => <span class={`agenda-track-time tabular${slot.isHour ? "" : " is-micro"}`} key={slot.time} aria-label={slot.time}>
         {slot.isHour ? slot.time : <span class="agenda-track-micro-tick" aria-hidden="true" />}
