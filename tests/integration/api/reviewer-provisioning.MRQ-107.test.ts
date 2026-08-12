@@ -101,7 +101,7 @@ async function sessionCookieFromLink(magicLink: string): Promise<string> {
 describe("MRQ-107 reviewer provisioning", () => {
   beforeEach(seedFixture, 15_000);
 
-  test("MRQ-107 · one invite writes person, reviewer membership, committee seat, and track scope", async () => {
+  test("CONTRACT · one invite writes person, reviewer membership, committee seat, and track scope", async () => {
     const response = await invite({ name: "Nora Vale", email: "Nora@Example.org", company: "Mosaic Relay", track_ids: [TRACK_AGENTS] });
     expect(response.status).toBe(201);
     const body = await json<InviteResponse>(response);
@@ -131,7 +131,7 @@ describe("MRQ-107 reviewer provisioning", () => {
     expect(audit?.entity_id).toBe(body.person.id);
   });
 
-  test("MRQ-107 · the invited reviewer's queue is exactly their assigned work inside their tracks", async () => {
+  test("CONTRACT · the invited reviewer's queue is exactly their assigned work inside their tracks", async () => {
     const body = await json<InviteResponse>(await invite({ name: "Nora Vale", email: "nora@example.org", track_ids: [TRACK_AGENTS] }));
     expect(body.magic_link).toBeTruthy();
 
@@ -149,14 +149,14 @@ describe("MRQ-107 reviewer provisioning", () => {
     expect(payload.scopes.map((scope) => scope.id)).toEqual([TRACK_AGENTS]);
   });
 
-  test("MRQ-107 · a reviewer-only seat cannot reach the organizer's evaluation plan", async () => {
+  test("CONTRACT · a reviewer-only seat cannot reach the organizer's evaluation plan", async () => {
     const body = await json<InviteResponse>(await invite({ name: "Nora Vale", email: "nora@example.org", track_ids: [TRACK_AGENTS] }));
     const cookie = await sessionCookieFromLink(body.magic_link!);
     const plans = await request(`/api/v1/events/${EVENT_ID}/plans`, {}, cookie);
     expect(plans.status).toBe(403);
   });
 
-  test("MRQ-107 · re-inviting the same address keeps one seat and replaces the responsibilities", async () => {
+  test("CONTRACT · re-inviting the same address keeps one seat and replaces the responsibilities", async () => {
     const first = await json<InviteResponse>(await invite({ name: "Nora Vale", email: "nora@example.org", track_ids: [TRACK_AGENTS] }));
     const second = await json<InviteResponse>(await invite({ name: "Nora Vale", email: "nora@example.org", track_ids: [TRACK_SECURITY] }));
     expect(second.person.id).toBe(first.person.id);
@@ -175,7 +175,7 @@ describe("MRQ-107 reviewer provisioning", () => {
     expect(scopes.results.map((row) => row.track_id)).toEqual([TRACK_SECURITY]);
   });
 
-  test("MRQ-107 · an invitation is refused before it can create an unassignable reviewer", async () => {
+  test("CONTRACT · an invitation is refused before it can create an unassignable reviewer", async () => {
     expect((await invite({ name: "Nora Vale", email: "nora@example.org", track_ids: [] })).status).toBe(400);
     expect((await invite({ name: "Nora Vale", email: "nora@example.org", track_ids: ["track-from-another-conference"] })).status).toBe(422);
     expect((await invite({ name: "Nora Vale", email: "not-an-address", track_ids: [TRACK_AGENTS] })).status).toBe(422);
@@ -183,7 +183,7 @@ describe("MRQ-107 reviewer provisioning", () => {
     expect(Number(people?.n)).toBe(0);
   });
 
-  test("MRQ-107 · adding an existing person to a committee grants the reviewer role instead of refusing them", async () => {
+  test("CONTRACT · adding an existing person to a committee grants the reviewer role instead of refusing them", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/committees/${COMMITTEE_ID}/reviewers`, {
       method: "POST",
       body: JSON.stringify({ person_id: OUTSIDER_ID }),
@@ -206,7 +206,7 @@ describe("MRQ-107 reviewer provisioning", () => {
    * would open whichever seat was provisioned last — including one scoped to a
    * track with no assignments, which is an empty queue and a scored failure.
    */
-  test("MRQ-107 · an invited reviewer never captures the demo reviewer door", async () => {
+  test("CONTRACT · an invited reviewer never captures the demo reviewer door", async () => {
     const now = Date.now();
     await env.DB.batch([
       env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, '[]', 1, 'marquee', ?, ?)")
@@ -227,7 +227,7 @@ describe("MRQ-107 reviewer provisioning", () => {
    * `uq_people_org_email` is case-sensitive, so a case-sensitive match would
    * mint a second identity beside the real one and send the sign-in link there.
    */
-  test("MRQ-107 · an address that differs only in case reaches the person who already holds it", async () => {
+  test("CONTRACT · an address that differs only in case reaches the person who already holds it", async () => {
     const now = Date.now();
     await env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, '[]', 0, 'marquee', ?, ?)")
       .bind("per_mixed_case", DEMO_ORGANIZATION_ID, "Nora@Example.org", "Nora Vale", now, now).run();
@@ -246,7 +246,7 @@ describe("MRQ-107 reviewer provisioning", () => {
    * program lead read back an owner session from a control labelled "invite a
    * reviewer".
    */
-  test("MRQ-107 · an invitation cannot be aimed at a program-team member", async () => {
+  test("CONTRACT · an invitation cannot be aimed at a program-team member", async () => {
     const staff = await env.DB.prepare("SELECT email FROM people WHERE id = ?").bind(ORGANIZER_ID).first<{ email: string }>();
     const response = await invite({ name: "Not actually a reviewer", email: staff!.email, track_ids: [TRACK_AGENTS] });
     expect(response.status).toBe(422);
@@ -258,7 +258,7 @@ describe("MRQ-107 reviewer provisioning", () => {
     expect(Number(seat?.n)).toBe(0);
   });
 
-  test("MRQ-107 · an anonymous caller cannot provision a reviewer", async () => {
+  test("CONTRACT · an anonymous caller cannot provision a reviewer", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/committees/${COMMITTEE_ID}/invites`, {
       method: "POST",
       body: JSON.stringify({ name: "Nora Vale", email: "nora@example.org", track_ids: [TRACK_AGENTS] }),

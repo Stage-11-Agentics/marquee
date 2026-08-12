@@ -377,7 +377,7 @@ test("CONTRACT · signing out ends the session, so the shell's exit is a real ex
  * `owner` and `program_lead`. A reviewer door that resolves to that person hands
  * the visitor full organizer navigation — the exact failure CFP-10 scores.
  */
-test("MRQ-107 · the reviewer demo door never opens a program-staff seat", async () => {
+test("CONTRACT · the reviewer demo door never opens a program-staff seat", async () => {
   await seedDemoFixture();
   const now = Date.now();
   await env.DB.batch([
@@ -402,7 +402,7 @@ test("MRQ-107 · the reviewer demo door never opens a program-staff seat", async
   expect(body.person.id).not.toBe(DEMO_ORGANIZER_PERSON_ID);
 });
 
-test("MRQ-107 · the organizer and speaker doors still open their named personas", async () => {
+test("CONTRACT · the organizer and speaker doors still open their named personas", async () => {
   await seedDemoFixture();
   for (const [role, expected] of [["organizer", DEMO_ORGANIZER_PERSON_ID], ["speaker", DEMO_SPEAKER_PERSON_ID]] as const) {
     const response = await app.request("/api/v1/auth/demo", {
@@ -415,7 +415,7 @@ test("MRQ-107 · the organizer and speaker doors still open their named personas
   }
 });
 
-test("MRQ-107 · a demo reviewer door with no non-staff reviewer refuses rather than opening the organizer's seat", async () => {
+test("CONTRACT · a demo reviewer door with no non-staff reviewer refuses rather than opening the organizer's seat", async () => {
   await seedDemoFixture();
   const now = Date.now();
   await env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'reviewer', ?, ?)")
