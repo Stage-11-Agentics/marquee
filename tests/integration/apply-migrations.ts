@@ -18,7 +18,7 @@ import coldStartMigrationSql from "../../migrations/0011_cold_start.sql?raw";
 import publicSchedulesMigrationSql from "../../migrations/0011_public_schedules.sql?raw";
 import peopleAnnotationsMigrationSql from "../../migrations/0012_people_annotations.sql?raw";
 import agentEvaluatorSeatsMigrationSql from "../../migrations/0013_agent_evaluator_seats.sql?raw";
-import inboundDeliveryStateMigrationSql from "../../migrations/0013_inbound_delivery_state.sql?raw";
+import inboundDeliveryStateMigrationSql from "../../migrations/0014_inbound_delivery_state.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
