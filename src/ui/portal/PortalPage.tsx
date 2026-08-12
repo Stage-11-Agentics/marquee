@@ -13,6 +13,7 @@ import type { VenueBuildingInput } from "../../lib/venues";
 import { MAP_HEIGHT, VenueMap } from "../venues/VenueMap";
 import { FileVersions } from "../files/FileVersions";
 import type { FileVersion, FileVersionList } from "../../lib/files/versions";
+import { FileComments } from "./FileComments";
 import "./portal.css";
 
 type PortalField = {
@@ -566,6 +567,7 @@ function TaskRow({ task, submissions, person, onComplete }: { task: PortalTask; 
     {expanded ? <div class="portal-task-payload">
       {versions ? <div class="portal-task-versions"><FileVersions list={versions} /></div> : null}
       <TaskSurface task={task} submission={submission} person={person} onComplete={onComplete} />
+      {task.kind === "file" ? <FileComments taskId={task.id} attachmentId={task.payload.attachment_id ?? null} /> : null}
     </div> : null}
   </article>;
 }

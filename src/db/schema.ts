@@ -226,6 +226,15 @@ export interface AttachmentRow extends MutableRecord {
   status: AttachmentStatus;
 }
 
+export interface FileCommentRow extends ImmutableRecord {
+  attachment_id: Id | null;
+  author_person_id: Id;
+  body: string;
+  event_id: Id;
+  owner_id: Id;
+  owner_type: "task_upload";
+}
+
 export interface PersonRow extends MutableRecord {
   bio: string | null;
   company: string | null;
@@ -687,12 +696,13 @@ export const CORE_TABLE_NAMES = [
   "embeds",
   "audit_log",
   "event_settings",
+  "file_comments",
   "webhook_endpoints",
   "webhook_deliveries",
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 48 as const;
+export const CORE_TABLE_COUNT = 49 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -710,7 +720,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 48>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 49>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -729,6 +739,7 @@ export const CORE_TABLES = {
   evaluation_rounds: "evaluation_rounds",
   evaluations: "evaluations",
   event_settings: "event_settings",
+  file_comments: "file_comments",
   events: "events",
   form_admins: "form_admins",
   form_fields: "form_fields",
@@ -780,6 +791,7 @@ export interface CoreTableRows {
   evaluation_rounds: EvaluationRoundRow;
   evaluations: EvaluationRow;
   event_settings: EventSettingRow;
+  file_comments: FileCommentRow;
   events: EventRow;
   form_admins: FormAdminRow;
   form_fields: FormFieldRow;
@@ -833,6 +845,7 @@ interface CoreDefaultColumns {
   evaluation_rounds: "anonymized" | "mode";
   evaluations: "abstained" | "comment";
   event_settings: never;
+  file_comments: never;
   events: "demo_mode" | "status";
   form_admins: never;
   form_fields: "config" | "required";
@@ -941,5 +954,6 @@ export type ImportRowInsert = CoreInsert<"import_rows">;
 export type EmbedInsert = CoreInsert<"embeds">;
 export type AuditLogInsert = CoreInsert<"audit_log">;
 export type EventSettingInsert = CoreInsert<"event_settings">;
+export type FileCommentInsert = CoreInsert<"file_comments">;
 export type WebhookEndpointInsert = CoreInsert<"webhook_endpoints">;
 export type WebhookDeliveryInsert = CoreInsert<"webhook_deliveries">;

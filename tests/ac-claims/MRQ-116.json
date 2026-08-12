@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-116",
+  "owns": [],
+  "exercises": [],
+  "notes": "CNT-05 is a provisional eval-kit criterion rather than a pre-minted EVALUATION.md AC. Focused MRQ-116 tests cover the slot-anchored cross-role roundtrip, version metadata, refusal side effects, and speaker/admin boundary."
+}

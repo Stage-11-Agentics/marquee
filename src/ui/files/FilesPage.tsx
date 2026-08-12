@@ -16,6 +16,7 @@ import type { FilesRow, FilesSnapshot, FileStateFilter } from "../../routes/file
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { formatBytes } from "../upload/upload-policy";
+import { FileComments } from "./FileComments";
 import { FileVersions } from "./FileVersions";
 import "./files.css";
 
@@ -59,7 +60,7 @@ async function readLibrary(
   return body.data;
 }
 
-function FileRow({ row, selected, onToggle }: { row: FilesRow; selected: boolean; onToggle: () => void }): JSX.Element {
+function FileRow({ eventId, row, selected, onToggle }: { eventId: string; row: FilesRow; selected: boolean; onToggle: () => void }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const hasFile = row.latest !== null;
   return <>
@@ -87,16 +88,20 @@ function FileRow({ row, selected, onToggle }: { row: FilesRow; selected: boolean
       <td class="files-versions-count">{row.version_count > 0 ? `${row.version_count} version${row.version_count === 1 ? "" : "s"}` : "—"}</td>
       <td class="files-size">{row.latest ? formatBytes(row.latest.size_bytes) : "—"}</td>
       <td>
-        <button class="files-expand" type="button" aria-expanded={expanded} disabled={!hasFile} onClick={() => setExpanded((current) => !current)}>
-          {expanded ? "Hide" : "Versions"}
+        <button class="files-expand" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
+          {expanded ? "Hide" : hasFile ? "Versions" : "Details"}
         </button>
       </td>
     </tr>
-    {expanded && hasFile ? <tr>
+    {expanded ? <tr>
       <td class="files-detail-cell" colSpan={9}>
         <div class="files-detail">
           <div class="files-detail-head">Version history · {row.person.name} · {row.task.title}</div>
-          <FileVersions list={{ owner_type: "task_upload", owner_id: row.id, versions: row.versions, latest: row.latest, version_count: row.version_count, latest_source: row.latest_source }} />
+          <FileVersions
+            list={hasFile ? { owner_type: "task_upload", owner_id: row.id, versions: row.versions, latest: row.latest, version_count: row.version_count, latest_source: row.latest_source } : null}
+            emptyCopy="No upload yet — this deliverable slot is open for context."
+          />
+          <FileComments eventId={eventId} taskId={row.id} attachmentId={row.latest?.attachment_id ?? null} />
         </div>
       </td>
     </tr> : null}
@@ -210,7 +215,7 @@ export function FilesPage({ eventId = DEFAULT_EVENT_ID, navigate }: { eventId?: 
                 <th scope="col">Size</th>
                 <th scope="col"><span class="sr-only">Version history</span></th>
               </tr></thead>
-              <tbody>{rows.map((row) => <FileRow key={row.id} row={row} selected={selected.has(row.id)} onToggle={() => toggleRow(row.id)} />)}</tbody>
+              <tbody>{rows.map((row) => <FileRow key={row.id} eventId={eventId} row={row} selected={selected.has(row.id)} onToggle={() => toggleRow(row.id)} />)}</tbody>
             </table>
           </div>}
       </section>

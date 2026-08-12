@@ -83,6 +83,25 @@
 .portal-task-action:hover { background: var(--accent-wash); border-color: var(--accent); }
 .portal-task-action:disabled { color: var(--muted); cursor: default; }
 .portal-task-payload { border-top: 1px solid var(--rule); grid-column: 2 / 4; padding-top: 14px; }
+.portal-file-comments { border-top: 1px solid var(--rule); display: grid; gap: 10px; margin-top: 16px; min-height: 190px; padding-top: 14px; }
+.portal-file-comments-head { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; min-height: 28px; }
+.portal-file-comments-head > div { align-items: baseline; display: flex; gap: 10px; }
+.portal-file-comments-head h4 { font: 600 10px/1.2 var(--mono); letter-spacing: .13em; margin: 0; text-transform: uppercase; }
+.portal-file-comments-head span, .portal-file-comments-current { color: var(--muted); font-size: 10px; }
+.portal-file-comments-current { font: 500 9px/1.2 var(--mono); }
+.portal-file-comments-state { color: var(--muted); font-size: 11px; line-height: 1.45; margin: 0; min-height: 32px; }
+.portal-file-comment-list { display: grid; gap: 8px; }
+.portal-file-comment { background: var(--surface); border: 1px solid var(--rule-soft); display: grid; gap: 7px; padding: 10px; }
+.portal-file-comment-meta { align-items: baseline; display: flex; flex-wrap: wrap; gap: 5px 9px; min-height: 15px; }
+.portal-file-comment-meta strong { font-size: 11px; }
+.portal-file-comment-meta span, .portal-file-comment-meta time { color: var(--muted); font: 500 9px/1.2 var(--mono); }
+.portal-file-comment p { color: var(--ink-soft); font-size: 11px; line-height: 1.5; margin: 0; white-space: pre-wrap; }
+.portal-file-comment-version { color: var(--accent-dark); font: 500 9px/1.2 var(--mono); }
+.portal-file-comment-form { display: grid; gap: 7px; }
+.portal-file-comment-form label { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.portal-file-comment-form textarea { min-height: 64px; resize: vertical; }
+.portal-file-comment-actions { align-items: center; display: flex; gap: 10px; justify-content: space-between; min-height: 30px; }
+.portal-file-comment-error { color: var(--alarm); font-size: 10px; line-height: 1.35; min-height: 14px; }
 .portal-subject-task { display: grid; gap: 14px; }
 .portal-talk-task { min-height: 310px; }
 .portal-profile-task { min-height: 470px; }
