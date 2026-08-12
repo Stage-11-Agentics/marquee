@@ -20,10 +20,11 @@
     --bg:#0b0b0e; --surface:#131318; --surface-sunk:#0f0f13;
     --ink:#f2f0f5; --ink-soft:#c7c4cf; --muted:#8b8896;
     --rule:#26262e; --rule-soft:#1d1d24;
-    --accent:#e56eff; --accent-ink:#e56eff; --accent-wash:#231626;
-    --ok:#b8b4c2; --warn:#ffa363; --alarm:#e56eff;
+    --accent:#e56eff; --accent-ink:#e56eff;
     --success-soft:#1a1a21; --warning-soft:#2a1f16; --alarm-wash:#2a1626;
-    --warning-ink:#ffc890; --danger-ink:#f0a0ff;
+    --success-ink:#c9cdd4; --success-line:#33333c;
+    --warning-ink:#ffc890; --warning-line:#5c4122;
+    --danger-ink:#f0a0ff; --danger-line:#5c2a52;
     --ls-grad-from:#ffa363; --ls-grad-to:#e56eff;
     --ls-grad:linear-gradient(92deg, var(--ls-grad-from) 0%, var(--ls-grad-to) 100%);
     --ls-grad-wash:linear-gradient(92deg, rgba(255,163,99,.14), rgba(229,110,255,.14));
@@ -61,6 +62,11 @@
     border-radius:var(--radius); padding:28px 28px 24px; margin-bottom:24px;
     position:relative; overflow:hidden; }
   .bottleneck { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  /* At phone widths the mast is far taller than the silhouette's 1200×170 box
+     and preserveAspectRatio:none stretches the strokes into stray diagonals —
+     the trope only earns its place at desktop proportions. */
+  @media (max-width:720px){ .bottleneck { display:none; } }
+  .mark svg { pointer-events:none; user-select:none; -webkit-user-select:none; }
   .mast > :not(.bottleneck) { position:relative; }
   .markrow { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
   .mark { display:flex; align-items:center; gap:12px;
@@ -122,10 +128,10 @@
   .chip { display:inline-block; font-family:var(--mono); font-size:10.5px;
     letter-spacing:.08em; text-transform:lowercase; border-radius:var(--radius);
     padding:2px 7px; white-space:nowrap; border:var(--hair) solid var(--rule); }
-  .chip.ok    { background:var(--success-soft); color:var(--ok); }
-  .chip.part  { background:var(--warning-soft); color:var(--warning-ink); border-color:#5c4122; }
-  .chip.no    { background:var(--surface-sunk); color:var(--muted); }
-  .chip.extra { background:var(--alarm-wash); color:var(--danger-ink); border-color:#5c2a52; }
+  .chip.ok    { background:var(--success-soft); color:var(--success-ink); border-color:var(--success-line); }
+  .chip.part  { background:var(--warning-soft); color:var(--warning-ink); border-color:var(--warning-line); }
+  .chip.no    { background:var(--surface-sunk); color:var(--muted); border-color:var(--rule-soft); }
+  .chip.extra { background:var(--alarm-wash); color:var(--danger-ink); border-color:var(--danger-line); }
 
   /* Differentiator cards */
   .cards { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -172,7 +178,7 @@
   </svg>
   <div class="markrow">
     <div class="mark"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,1.5 29,9 29,23 16,30.5 3,23 3,9" fill="url(#ls-grad)"/><text x="16" y="21" text-anchor="middle" style="font:700 13px var(--display);fill:#0b0b0e">m</text></svg>marquee</div>
-    <div class="micro">Kill My SaaS 1 · Submission · Stage 11</div>
+    <div class="micro"><span style="text-transform:none">Kill My SaaS 1</span> · submission · <span style="text-transform:none">Stage 11</span></div>
   </div>
   <h1 class="oneliner">Open-source conference program operations — CFP, review,
   acceptance, speaker onboarding, agenda, publish. One loop, no dead ends, on
