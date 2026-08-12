@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-120",
+  "owns": [],
+  "exercises": ["AC-83", "AC-85", "AC-89", "AC-240"],
+  "notes": "MRQ-120 adds no new acceptance criteria; focused integration coverage exercises the existing anonymous public agenda, cold-render/card, embed-cache, and schedule-framing contracts. AC-273's older no-room/no-speaker wording is superseded on this branch by the T-I public-card anatomy for session embeds."
+}

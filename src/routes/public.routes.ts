@@ -35,7 +35,7 @@ const getPublicAgenda = defineApiRoute(
     path: "/api/v1/public/agenda",
     operationId: "getPublicAgenda",
     summary: "Read the published public agenda",
-    description: "Anonymous published-only agenda data; omitted day and day=all return the whole program, while day, track, and search filter it.",
+    description: "Anonymous published-only agenda data; omitted day and day=all return the whole program, while day, track, format, location, and search filter it.",
     tags: ["Public"],
     request: { query: publicQuery },
     policy: { auth: { kind: "public" }, rateLimit: { bucket: "read" }, concurrency: "none" },

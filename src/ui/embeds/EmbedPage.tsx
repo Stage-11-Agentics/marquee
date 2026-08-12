@@ -6,8 +6,6 @@ import {
   publicAbstractSnippet,
   type PublicEmbedData,
   type PublicEvent,
-  type PublicFormat,
-  type PublicRoom,
   type PublicSession,
   type PublicTrack,
 } from "../../lib/public-site";
