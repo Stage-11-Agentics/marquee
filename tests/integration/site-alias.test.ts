@@ -17,13 +17,13 @@ async function request(path: string): Promise<Response> {
   return app.request(path, {}, { ...env, ASSETS: assets } as unknown as Env);
 }
 
-test("/site is answered by the Worker, not the app shell", async () => {
+test("CONTRACT · /site is answered by the Worker, not the app shell", async () => {
   const response = await request("/site");
   expect(response.status).toBe(302);
   expect(response.headers.get("location")).toBe("/agenda");
 });
 
-test("/site carries its filters across to the agenda", async () => {
+test("CONTRACT · /site carries its filters across to the agenda", async () => {
   const response = await request("/site?day=2&track=platform");
   expect(response.status).toBe(302);
   expect(response.headers.get("location")).toBe("/agenda?day=2&track=platform");

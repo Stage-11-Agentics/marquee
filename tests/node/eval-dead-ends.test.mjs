@@ -11,7 +11,7 @@ import { resolve } from "node:path";
 const ROOT = resolve(import.meta.dirname, "../..");
 const read = (path) => readFile(resolve(ROOT, path), "utf8");
 
-test("the public form repeats the server's own reason instead of house copy", async () => {
+test("CONTRACT · the public form repeats the server's own reason instead of house copy", async () => {
   const component = await read("src/ui/public/form/PublicForm.tsx");
   // A 409 is where the server writes the only actionable sentence in the
   // response ("Your abstract limit is full. Use a saved resume link…").
@@ -21,7 +21,7 @@ test("the public form repeats the server's own reason instead of house copy", as
   assert.doesNotMatch(component, /after following the message above/);
 });
 
-test("a file that fails to attach says so on the field the person just used", async () => {
+test("CONTRACT · a file that fails to attach says so on the field the person just used", async () => {
   const component = await read("src/ui/public/form/PublicForm.tsx");
   assert.match(component, /function setFileError/);
   // Every exit from handleFile that does not attach has to explain itself; the
@@ -35,7 +35,7 @@ test("a file that fails to attach says so on the field the person just used", as
   assert.equal((handleFile.match(/setFileError\(/g) ?? []).length, 3);
 });
 
-test("Save draft names the missing contact address where the person is looking", async () => {
+test("CONTRACT · Save draft names the missing contact address where the person is looking", async () => {
   const component = await read("src/ui/public/form/PublicForm.tsx");
   const ensureDraft = component.slice(component.indexOf("async function ensureDraft"), component.indexOf("async function saveDraft"));
   assert.match(ensureDraft, /setDraftEmailPrompt\(true\)/);
@@ -45,7 +45,7 @@ test("Save draft names the missing contact address where the person is looking",
   assert.doesNotMatch(ensureDraft, /setDraftEmailPrompt\(true\);\n\s*setPageError\(null\)/);
 });
 
-test("/site reaches the conference site rather than the shell's Route not found", async () => {
+test("CONTRACT · /site reaches the conference site rather than the shell's Route not found", async () => {
   const route = await read("src/routes/public-agenda.route.tsx");
   assert.match(route, /publicAgendaRoutes\.get\("\/site"/);
   assert.match(route, /context\.redirect\(`\/agenda\$\{url\.search\}`, 302\)/);
@@ -55,7 +55,7 @@ test("/site reaches the conference site rather than the shell's Route not found"
   assert.doesNotMatch(routeTable, /path: "\/site"/);
 });
 
-test("the reviewer queue names the reviewer it belongs to", async () => {
+test("CONTRACT · the reviewer queue names the reviewer it belongs to", async () => {
   const page = await read("src/ui/review/ReviewerPage.tsx");
   assert.match(page, /import \{ useIdentity \} from "\.\.\/shell\/identity"/);
   assert.match(page, /const identity = useIdentity\(\)/);

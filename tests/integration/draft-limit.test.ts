@@ -58,7 +58,7 @@ async function saveDraft(title: string): Promise<Response> {
   );
 }
 
-test("saving a draft repeatedly never exhausts the abstract allowance", async () => {
+test("CONTRACT · saving a draft repeatedly never exhausts the abstract allowance", async () => {
   await seed();
 
   // Two presses past the form's own limit of three.
