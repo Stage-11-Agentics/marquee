@@ -214,11 +214,25 @@ const EXPECTED_PLACEHOLDER_SITES = [
     classification: "bounded by the seven-value SCHEDULABLE_STATUS_OPTIONS taxonomy",
   },
   {
+    file: "src/routes/auth.routes.ts",
+    owner: "findDemoPersona",
+    binding: "preferenceOrder",
+    expression: 'preferred.map(() => "?")',
+    classification: "at most two ids, from the module-level DEMO_PERSONA_PREFERENCE table; no caller-supplied list reaches it",
+  },
+  {
+    file: "src/routes/auth.routes.ts",
+    owner: "findDemoPersona",
+    binding: "staffExclusion",
+    expression: 'DEMO_STAFF_ROLES.map(() => "?")',
+    classification: "one placeholder per role in the three-value DEMO_STAFF_ROLES taxonomy",
+  },
+  {
     file: "src/routes/evaluation.routes.ts",
-    owner: "replaceReviewerScopes",
+    owner: "ownedTrackIds",
     binding: "placeholders",
     expression: 'trackIds.map(() => "?")',
-    classification: "outside the named assignment-distribution path; reviewer-scope read; no explicit track-ID max",
+    classification: "outside the named assignment-distribution path; reviewer-scope read shared by the scopes PUT (no track-ID max) and the reviewer invite (track_ids.max(50))",
   },
   {
     file: "src/routes/evaluation.routes.ts",
