@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-mrq-99",
   "branch_links": [],
-  "comment_count": 5,
+  "comment_count": 8,
   "complexity": null,
   "created_at": "2026-08-12T04:16:28Z",
   "created_by": {
@@ -15,7 +15,7 @@
   },
   "custom_fields": {},
   "description": "Three small organizer-facing defects from the live site (operator, 2026-08-11/12):\na dead-end button in the shell, and decision-dialog copy written in engineer.\nSmall diffs, but two of them sit on the walkthrough path, which must complete with\n**zero dead ends**.\n\n## 1. The conference name is a dead-end stub\n\n*\"When I clicked the conference switcher, it said the shell of ordinance is ready.\nIts owning modules have not landed yet.\"*\n\n`src/ui/shell/Sidebar.tsx:11`:\n\n    <button class=\"event-switcher\"\n      onClick={() => unavailable(\"Conference switcher\",\n        \"Switching between conferences arrives with conference administration.\")}>\n      <small>Conference</small><strong>{eventName}</strong></button>\n\nThe conference name \u2014 \"AIE NYC 2026\" \u2014 **is** the switcher button, and clicking it\nopens the \"Not installed\" overlay from `src/ui/shell/OverlayHosts.tsx:41`\n(*\"This shell affordance is ready; its owning module has not landed yet.\"*). So the\nmost prominent piece of identity in the sidebar is a button whose only behavior is\nto apologise.\n\nThe operator's own instruction resolves it: *\"Let's make AIE NYC 2026 \u2014 that should\ntake you to like the home page or something.\"*\n\n**Make the conference name a link home** (the dashboard, matching the `brand` link\ndirectly above it at `Sidebar.tsx:10`) and drop the switcher stub. Multi-conference\nswitching is genuinely not built; an affordance that only announces its own absence\nis worse than no affordance.\n\nWhile you are there: **sweep for other `unavailable(...)` call sites** and list them\nin the PR with a one-line judgement each \u2014 dead end on the walkthrough path, or\nacceptable. Do not fix them all in this ticket; the operator needs the inventory more\nthan the fixes right now. If any sit on the 11-step loop, say so loudly.\n\n## 2. The accept dialog explains itself in engineer\n\n`src/ui/submissions/SubmissionRecordPage.tsx:158`:\n\n> \"Feedback is optional. If supplied, the exact normalized note is saved on this\n> decision row and rendered through the standard conference email.\"\n\n\"Normalized note\", \"decision row\", \"rendered through the standard conference email\"\n\u2014 that is the schema talking. `PHILOSOPHY.md` binds this: **the organizer's language**.\nAn organizer about to accept a speaker wants to know one thing: *will this person read\nexactly what I typed?*\n\nRewrite it as a plain sentence that answers that. Keep the promise accurate \u2014 do not\nclaim mail is sent if this action does not send it (the same file's waitlist path\ndeliberately does not notify; check before you write). One or two short sentences.\n\nApply the same read to the sibling dialogs in that component (accept / waitlist /\nreject) so the three read as one voice.\n\n## 3. \"optional\" belongs in parentheses\n\nOperator: *\"and then for optional put that in parentheses.\"*\n\nThe field label is `Feedback for the speaker \u00b7 optional`\n(`SubmissionRecordPage.tsx:158`). Make it read `Feedback for the speaker (optional)`.\n\nThe identical pattern exists on the bulk dialog \u2014\n`Feedback for the speakers \u00b7 optional` (`SubmissionsPage.tsx:607`) \u2014 and in the\nreviewer surface (`src/ui/review/ReviewerPage.tsx:403-405` uses \"Optional scorecard\",\n\"Optional context for the committee\"). **Make the treatment consistent everywhere a\nfield is marked optional**, and say in the PR what convention you settled on. A\nmixed vocabulary for \"optional\" across three surfaces is its own small defect.\n\n## Ownership boundary\n\n**MRQ-97** owns `submissions.queries.ts` and the status control; **MRQ-98** owns the\nsubmissions list's loading behavior, search field, and saved-view strip. You are\ntouching `Sidebar.tsx`, `OverlayHosts.tsx` (read-only sweep), and the decision\ndialogs in `SubmissionRecordPage.tsx`. Your one point of contact with MRQ-98 is the\nbulk dialog label in `SubmissionsPage.tsx:607` \u2014 take just that line, keep the diff\nto it, and note it in a Lattice comment so the rebase is trivial.\n\n## Constraints\n\n- Flight Deck aesthetic per `DESIGN.md`; the conference name must not change size or\n  position when it becomes a link (**elements never jump**).\n- Work in your own git worktree. **Never** branch, stash, or clean in the primary\n  checkout \u2014 see `CLAUDE.md`, \"The primary checkout is the Lattice board's home\".\n- No auto-deploy: validate locally, do not run `wrangler deploy`. See `DEPLOY.md`.\n- Suite budget 45s, gate budget 120s.\n\n## Acceptance\n\n- Clicking the conference name goes home; no \"not landed yet\" overlay is reachable\n  from the sidebar.\n- The PR lists every remaining `unavailable(...)` affordance with a verdict on each.\n- The accept/waitlist/reject dialogs explain in an organizer's words what the speaker\n  will receive, and the promise matches what the action actually does.\n- Optional fields read `(optional)` consistently across the record dialog, the bulk\n  dialog, and the reviewer surface.\n- Validated locally with browser automation, screenshots in the PR.\n- `npm test` green within budget; PR open against `Stage-11-Agentics/marquee` `main`.",
-  "done_at": null,
+  "done_at": "2026-08-12T05:21:26Z",
   "evidence_refs": [
     {
       "id": "art_01KZT3J113ACSJJS6J0JKBHX61",
@@ -46,21 +46,36 @@
       "id": "art_01KZT6CA0A99N7PT9P5VT7EYJK",
       "role": "validation",
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT6CGE6TEFV0FJRBZ697754",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT6D2NNPW8ECQNAYEKRBHTZ",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT6P575YKHGZW4H4065WWPK",
+      "role": "review",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZT2Z6N6PF241M8QZ9Q7AQKM",
-  "last_event_id": "ev_01KZT6CA0EMVSJ1D90MMRVFKVQ",
-  "last_status_changed_at": "2026-08-12T05:11:44Z",
+  "last_event_id": "ev_01KZT6P5GRPBPPVXT5ZP448D57",
+  "last_status_changed_at": "2026-08-12T05:21:26Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-99",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Conference name is a dead-end stub, and the decision dialogs explain themselves in engineer",
   "type": "bug",
-  "updated_at": "2026-08-12T05:16:03Z",
+  "updated_at": "2026-08-12T05:21:26Z",
   "urgency": null
 }

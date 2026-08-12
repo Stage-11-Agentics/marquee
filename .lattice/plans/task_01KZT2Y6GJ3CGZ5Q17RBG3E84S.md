@@ -144,3 +144,5 @@
   router replace mode are required for search-as-you-type.
 - Add the standard `tests/ac-claims/MRQ-98.json` manifest so the PR gate can trace
   this ticket's claims instead of relying on a missing-manifest warning.
+
+## Reset 2026-08-12 by {'name': 'merge-agent-1', 'base_name': 'merge-agent', 'serial': 1, 'session': 'sess_01KZT4CNZA5J534NFWXB4DDE8Y', 'model': 'claude-opus-5', 'framework': 'claude-code', 'agent_type': 'merge'}
