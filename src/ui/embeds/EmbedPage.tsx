@@ -35,11 +35,12 @@ export const EMBED_STYLES = `
 .embed-tracks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
 .embed-track { border-left: 3px solid var(--track-color, var(--embed-accent)); border-top: 1px solid var(--public-rule); border-right: 1px solid var(--public-rule); border-bottom: 1px solid var(--public-rule); padding: 3px 5px; color: var(--public-muted); font: 600 8px/1.2 var(--public-mono); }
 .embed-speaker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 9px; padding: 12px 16px 16px; }
-.embed-speaker { min-width: 0; border: 1px solid var(--public-rule); border-top: 2px solid var(--embed-accent); padding: 12px; background: var(--public-surface); }
+.embed-speaker { display: block; min-width: 0; border: 1px solid var(--public-rule); border-top: 2px solid var(--embed-accent); padding: 12px; background: var(--public-surface); }
+.embed-speaker:hover, .embed-speaker:focus-visible { border-color: var(--embed-accent); background: var(--public-accent-wash); outline: none; }
 .embed-speaker h2 { margin: 0; overflow-wrap: anywhere; font: 650 16px/1.15 Georgia, serif; }
 .embed-speaker p { margin: 4px 0 0; color: var(--public-muted); font-size: 10px; }
 .embed-speaker small { display: block; margin-top: 12px; color: var(--public-soft); font: 600 9px/1.35 var(--public-mono); }
-.embed-speaker-list { display: grid; gap: 0; padding: 4px 16px 16px; }
+.embed-speaker-list { display: grid; gap: 0; padding: 4px 16px 16px; list-style: none; }
 .embed-speaker-row { display: flex; align-items: baseline; gap: 7px; padding: 9px 0; border-bottom: 1px solid var(--public-rule-soft); font-size: 12px; }
 .embed-speaker-row:last-child { border-bottom: 0; }
 .embed-speaker-row strong { font: 650 13px/1.2 Georgia, serif; }
@@ -151,18 +152,22 @@ function formatDeadline(epochMs: number): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(epochMs));
 }
 
-function speakerCards(speakers: PublicEmbedData["speakers"]): JSX.Element {
+function speakerHref(slug: string, eventSlug: string): string {
+  return `/p/${encodeURIComponent(slug)}?event=${encodeURIComponent(eventSlug)}`;
+}
+
+function speakerCards(speakers: PublicEmbedData["speakers"], eventSlug: string): JSX.Element {
   return (
     <section class="embed-speaker-grid" aria-label="Published speakers">
-      {speakers.map((speaker) => <article class="embed-speaker" key={speaker.id}><h2>{speaker.name}</h2><p>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</p><small>{speaker.sessions.length} {speaker.sessions.length === 1 ? "published session" : "published sessions"}</small></article>)}
+      {speakers.map((speaker) => <a class="embed-speaker" href={speakerHref(speaker.slug, eventSlug)} key={speaker.id}><h2>{speaker.name}</h2><p>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</p><small>{speaker.sessions.length} {speaker.sessions.length === 1 ? "published session" : "published sessions"}</small></a>)}
     </section>
   );
 }
 
-function speakerList(speakers: PublicEmbedData["speakers"]): JSX.Element {
+function speakerList(speakers: PublicEmbedData["speakers"], eventSlug: string): JSX.Element {
   return (
     <ul class="embed-speaker-list" aria-label="Published speakers">
-      {speakers.map((speaker) => <li class="embed-speaker-row" key={speaker.id}><strong>{speaker.name}</strong><span>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</span></li>)}
+      {speakers.map((speaker) => <li key={speaker.id}><a class="embed-speaker-row" href={speakerHref(speaker.slug, eventSlug)}><strong>{speaker.name}</strong><span>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</span></a></li>)}
     </ul>
   );
 }
@@ -221,7 +226,7 @@ export function EmbedPage({ data }: { data: PublicEmbedData }): JSX.Element {
         </form>
       ) : null}
       {data.kind === "cfp" ? cfpBody(data.cfp) : data.kind === "speakers" ? (
-        data.speakers.length > 0 ? (layout === "list" ? speakerList(data.speakers) : speakerCards(data.speakers))
+        data.speakers.length > 0 ? (layout === "list" ? speakerList(data.speakers, data.event.slug) : speakerCards(data.speakers, data.event.slug))
           : <div class="embed-empty"><div><strong>{hasFilters ? "No published speakers match" : "No published speakers yet"}</strong><span>{hasFilters ? "Clear a filter to bring the gallery back into view." : "The conference team has not published any speakers yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : agendaHref}>{hasFilters ? "Show all speakers" : "Open the conference agenda"}</a></div></div>
       ) : data.kind === "sessions" ? (
         data.sessions.length > 0 ? sessionsFlatList(data.sessions)

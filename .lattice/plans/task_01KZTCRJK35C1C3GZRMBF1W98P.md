@@ -4,17 +4,17 @@
 
 Ship the fifth enumerable public surface described by T-I2 / register row 36:
 
-- Add an SSR `/speakers` page using `PublicShell`, with a responsive card grid showing each published speaker's name, title/company, and initials avatar slot. Cards link directly to the existing `/p/:slug` profile (with the event query preserved for multi-event correctness).
+- Add an SSR `/speakers` page using `PublicShell`, with a responsive card grid showing each published speaker's name, title/company, and the shared `headshotUrl` avatar when present with an initials fallback. Cards link directly to the existing `/p/:slug` profile (with the event query preserved for multi-event correctness).
 - Add a GET `q` search control whose server-side directory query matches published speaker name/company only. Preserve the selected event and show truthful empty states for no published speakers versus no search matches.
 - Turn both speaker embed layouts into real anchors to the existing speaker profile route, preserving the embed event in the link.
 
-The page is anonymous and published-only, deduplicates people who speak in multiple sessions, and does not expose private/unpublished speakers. The initials slot is intentional: MRQ-121 does not seed or serve headshots (T-I3 owns that follow-up), and EMB-13 gets the existing back navigation rather than a modal.
+The page is anonymous and published-only, deduplicates people who speak in multiple sessions, and does not expose private/unpublished speakers. MRQ-122 owns the shared `headshotUrl` producer and synthetic assets; MRQ-121 owns this card markup and keeps the honest initials fallback. EMB-13 gets the existing back navigation rather than a modal.
 
 ## Implementation plan
 
 1. Extend `src/lib/public-site.ts` with a directory data shape and loader that reuses the published agenda/session projection, adds a speaker-only search predicate on the existing `sessionRowsQuery`, deduplicates by person id, and sorts by speaker name. Keep the existing agenda search semantics unchanged.
 2. Add the `/speakers` route in `src/routes/public-agenda.route.tsx`, passing `event`/`event_slug` and `q`, using the shared public document/404 shell.
-3. Add the directory page and small responsive card-grid styles in `src/ui/public/agenda/PublicAgendaPage.tsx`; use stable card/avatar dimensions, visible labels, resettable GET search, and links to `/p/:slug?event=...`.
+3. Add the directory page and small responsive card-grid styles in `src/ui/public/agenda/PublicAgendaPage.tsx`; use stable card/avatar dimensions, render `headshotUrl` with an initials fallback, visible labels, resettable GET search, and links to `/p/:slug?event=...`.
 4. Update `src/ui/embeds/EmbedPage.tsx` so both card and list speaker renderers use real profile anchors and add event-aware link construction; keep the existing layout/filter behavior.
 5. Add focused integration coverage to the existing public-site fixture for `/speakers`, name/company filtering, published-only privacy, multi-session dedupe, event-preserving profile links, and both embed link layouts.
 
@@ -29,4 +29,4 @@ The page is anonymous and published-only, deduplicates people who speak in multi
 - Privacy: the loader's SQL remains scoped to live events, published agenda items, public participant audience, and non-rejected/non-withdrawn sessions; no person-table-only enumeration is introduced.
 - Search honesty: directory `q` uses only the existing speaker name/company branch, so a title/abstract match cannot surface an unrelated speaker. Empty search results retain a one-click event-preserving reset.
 - Correctness: deduplicate on stable speaker id before rendering; include `event` in every new directory/embed profile link so two live events cannot silently resolve a profile from the default event.
-- Scope: no modal, headshot seeding, image route, public API endpoint, or organizer navigation is added; those belong to T-I3 or future work.
+- Scope: no modal, headshot seeding, image route, public API endpoint, or organizer navigation is added; MRQ-122 owns the headshot producer/assets while this ticket consumes its projection field.
