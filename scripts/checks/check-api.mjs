@@ -18,7 +18,7 @@
  * captured non-GET request exists in the public schema (AC-105's UI-only write
  * set). This command owns generation parity; that one owns traffic parity.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { access } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -160,6 +160,21 @@ if (!cliExists) {
   process.stdout.write(`[check:api] ${notice}\n`);
 } else {
   const registryPath = resolve(cliDirectory, "api-registry.json");
+  // The registry is a build artifact, not source: it is generated from the
+  // served OpenAPI document and is deliberately not tracked in git. A tracked
+  // copy conflicts on every concurrent branch — its documentSha256 changes
+  // whenever any route does — which serialises an otherwise parallel fleet.
+  // Generate it on demand instead. The build must already exist; pr-gate runs
+  // the production build before this check.
+  if (!(await access(registryPath).then(() => true, () => false))) {
+    const generated = spawnSync(process.execPath, [resolve(cliDirectory, "generate-api-registry.mjs")], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+    });
+    if (generated.status !== 0) {
+      findings.push({ code: "cli-registry-ungeneratable", detail: generated.stderr?.trim() || "generator failed" });
+    }
+  }
   try {
     const registry = JSON.parse(
       await (await import("node:fs/promises")).readFile(registryPath, "utf8"),
