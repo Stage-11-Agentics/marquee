@@ -21,6 +21,7 @@ import { EvaluationPage } from "../evaluation/EvaluationPage";
 import { EventSettings } from "../settings/EventSettings";
 import { TaskTemplatesPage } from "../settings/TaskTemplatesPage";
 import { ApiTokensPage } from "../settings/ApiTokensPage";
+import { WebhooksPage } from "../settings/WebhooksPage";
 import { VenuesPage } from "../venues/VenuesPage";
 import { FormsPage } from "../forms/FormsPage";
 import { AgendaPage } from "../agenda/AgendaPage";
@@ -232,6 +233,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : isEvaluation ? <EvaluationPage eventId={eventId} />
             : route?.id === "venues" ? <VenuesPage eventId={eventId} />
             : isApiTokens ? <ApiTokensPage eventId={eventId} navigate={navigate} />
+            : route?.id === "webhooks" ? <WebhooksPage eventId={eventId} navigate={navigate} />
             : route?.id === "task-templates" || route?.id === "tasks" ? <TaskTemplatesPage eventId={eventId} />
             : route?.id === "settings" ? <EventSettings eventId={eventId} navigate={navigate} />
             : isForms ? <FormsPage eventId={eventId} search={location.search} />
