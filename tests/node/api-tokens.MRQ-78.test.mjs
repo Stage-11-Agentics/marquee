@@ -13,7 +13,7 @@ const memberships = rows
   .map((entry) => entry.row);
 
 test("AC-242 · MRQ-78 · the generated demo seed leaves requireTokenAdmin satisfiable", () => {
-  assert.equal(memberships.length, 160, "MRQ-78 adds exactly one membership row to the shipped seed");
+  assert.equal(memberships.length, 161, "the shipped seed includes the organizer membership and the Agent seat membership");
   assert.ok(
     memberships.some((membership) =>
       membership.org_id === ORG_ID &&

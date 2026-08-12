@@ -42,15 +42,16 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
     // backed below.
     const createdBy = (token as unknown as { created_by?: string }).created_by;
     const actingPersonId = (token as unknown as { acts_as_person_id?: string | null }).acts_as_person_id ?? null;
-    let memberships = createdBy === undefined ? [] : await loadMembershipsForOrg(db, createdBy, token.org_id);
+    let effectivePersonId = createdBy;
     if (actingPersonId !== null) {
       const actingPerson = await db
         .prepare("SELECT id FROM people WHERE id = ? AND org_id = ? AND kind = 'agent'")
         .bind(actingPersonId, token.org_id)
         .first<{ id: string }>();
       if (!actingPerson) return null;
-      memberships = await loadMembershipsForOrg(db, actingPersonId, token.org_id);
+      effectivePersonId = actingPersonId;
     }
+    const memberships = effectivePersonId === undefined ? [] : await loadMembershipsForOrg(db, effectivePersonId, token.org_id);
     await db
       .prepare("UPDATE api_tokens SET last_used_at = ? WHERE id = ?")
       .bind(Date.now(), token.id)
