@@ -20,6 +20,7 @@ import {
   countFormForPerson,
   emailFromAnswers,
   findEventContext,
+  publicTurnstileExempt,
   findPersonByEmail,
   loadPublicForm,
   normalisePublicEmail,
@@ -458,9 +459,11 @@ async function createDraft(
   slug: string,
   body: z.infer<typeof draftBodySchema>,
 ): Promise<PublicFormState> {
-  await requireTurnstile(context, tokenFromBody(body));
   const base = await loadPublicForm(context.env.DB, slug, { email: body.email });
   if (!base) throw ApiError.notFound("This conference form is not available.");
+  if (!(await publicTurnstileExempt(context.env.DB, base.form.event_id))) {
+    await requireTurnstile(context, tokenFromBody(body));
+  }
   if (publicFormIsClosed(base.form)) throw ApiError.conflict("This call for speakers is closed. Keep your answers and return when the conference reopens.");
   if (base.state === "at_limit") throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
 
@@ -576,7 +579,10 @@ async function handlePublicSubmission(
    * error message could not explain. Every other path — no resume token, or
    * one that does not resolve — still faces the full gate.
    */
-  if (!(resumeToken && base.submission)) {
+  if (
+    !(resumeToken && base.submission) &&
+    !(await publicTurnstileExempt(context.env.DB, base.form.event_id))
+  ) {
     await requireTurnstile(context, tokenFromBody(body));
   }
   if (base.submission && base.submission.status !== "draft") throw ApiError.conflict("This abstract was already submitted. Use its confirmation link to view it.");

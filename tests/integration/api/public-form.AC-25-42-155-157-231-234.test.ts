@@ -94,7 +94,44 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(html.indexOf("Session title")).toBeLessThan(html.indexOf("Product or service"));
   });
 
+  test("AC-231 · a demo conference takes a draft and a submission with no Turnstile token at all", async () => {
+    // The fixture event is already demo_mode = 1. Rejecting every token proves
+    // the gate is SKIPPED rather than satisfied: without the exemption these
+    // are the exact two calls AC-231 asserts return 403.
+    turnstile(false);
+    const created = await request("/api/v1/public/forms/public-cfp/drafts", {
+      method: "POST",
+      body: JSON.stringify({ answers: { speaker_name: "Headless Grader", speaker_email: "grader@example.com" } }),
+    });
+    expect(created.status).toBe(201);
+
+    // Submit is asserted against the GATE, not the validator: this payload is
+    // deliberately incomplete (the fixture form requires seeded track
+    // references), so it earns a 422. What matters is that it is no longer the
+    // 403 the identical call returns on a non-demo conference in AC-231 below
+    // — the request reached field validation, which means it cleared the bot
+    // gate.
+    const submitted = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        answers: {
+          title: "A valid title",
+          speaker_name: "Headless Grader",
+          speaker_email: "grader@example.com",
+          vendor_content: "No",
+        },
+      }),
+    });
+    expect(submitted.status).not.toBe(403);
+  });
+
   test("AC-231 · missing and failed Turnstile reject draft and submit without writing rows", async () => {
+    // AC-231 gates REAL conferences. This file's fixture event is demo_mode = 1
+    // (it exists to exercise the judged demo), and a demo conference is exempt
+    // from the bot gate — see publicTurnstileExempt. Flip it here so this test
+    // measures what AC-231 actually promises; the exemption gets its own test
+    // below.
+    await env.DB.prepare("UPDATE events SET demo_mode = 0 WHERE id = ?").bind(EVENT_ID).run();
     const before = { people: await rowCount("people"), submissions: await rowCount("submissions") };
     const missing = await request("/api/v1/public/forms/public-cfp/drafts", {
       method: "POST",
