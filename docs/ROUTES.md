@@ -48,7 +48,7 @@ everything else is drawn inside the organizer shell.
 | `/settings/tasks` | Task templates | organizer | — | client push |
 | `/settings/api` | API tokens | organizer | — | client push |
 | `/api/docs` | API & CLI | api | — | client push |
-| `/import` | Sessionize importer | organizer | — | client push |
+| `/import` | Import speakers | organizer | — | client push |
 
 ## Server-rendered pages
 
@@ -64,10 +64,11 @@ Registered in `src/routes/*.route.tsx`, outside the SPA.
 | `/f/:slug` | src/routes/public-form.route.tsx |
 | `/p/:slug` | src/routes/public-agenda.route.tsx |
 | `/s/:slug` | src/routes/public-agenda.route.tsx |
+| `/speakers` | src/routes/public-agenda.route.tsx |
 
 ## Public-page predicate
 
-`app.tsx` treats a path as public when it is exactly `/`, `/agenda`, or begins with `/f/`, `/s/`, `/p/`, `/embed/`, or matches 1 embed pattern.
+`app.tsx` treats a path as public when it is exactly `/`, `/agenda`, `/speakers`, or begins with `/f/`, `/s/`, `/p/`, `/embed/`, or matches 1 embed pattern.
 
 ## Route summary
 
@@ -76,7 +77,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 
 ```text
 ROUTES (real paths, not hash routes):
-  Public, no auth: / /:eventSlug/:kind/embed /agenda /embed/:slug /embed/config /f/:slug /p/:slug /s/:slug
+  Public, no auth: / /:eventSlug/:kind/embed /agenda /embed/:slug /embed/config /f/:slug /p/:slug /s/:slug /speakers
   Organizer (admin shell): /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /forms /evaluation /agenda-builder /communications /settings /delivery-health /delivery-health?view=system /settings/venues /submissions/:id /settings/tasks /settings/api /import
   Review queue: /reviewer
   Speaker portal: /portal
