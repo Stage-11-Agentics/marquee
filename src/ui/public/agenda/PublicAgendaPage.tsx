@@ -220,7 +220,14 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
     <PublicShell
       event={data.event}
       title="Agenda"
-      actions={<><a class="public-button" href={`/speakers?${eventQuery}`}>Speakers</a><a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a></>}
+      actions={<>
+        <a class="public-button" href={`/speakers?${eventQuery}`}>Speakers</a>
+        {/* The machine-readable half of this page. It was dropped in MRQ-94's
+            navigation repair; nothing replaced it, so the JSON feed behind the
+            agenda had no on-page door at all. */}
+        <a class="public-button" href={`/api/v1/public/agenda?${eventQuery}`}>Agenda data ↗</a>
+        <a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a>
+      </>}
     >
       <main class="public-main">
         <div class="public-kicker">{data.event.startsOn} → {data.event.endsOn} · {venueName}</div>

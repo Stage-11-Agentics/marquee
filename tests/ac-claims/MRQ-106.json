@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-106",
+  "owns": [],
+  "exercises": [],
+  "notes": "MRQ-106 owns no new evaluation criterion. It is the Wave-0 sweep: it verifies the deployed headshot upload, makes the route map generated and gated instead of hand-written, puts the submissions list, its create action, and the embed builder in the sidebar, restores the public agenda's data-feed link, gives the Ready-to-place stage filter an escape to the stored accepted fact, and removes an event switcher that switched nothing. Existing contracts are preserved; tests/unit/route-table.test.ts records the one deliberate departure from the binding prototype's navigation order."
+}

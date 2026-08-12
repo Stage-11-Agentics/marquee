@@ -152,3 +152,34 @@ not drawing the control. The honest version simply is not a control.
 EMB-15 (w3, embeds area discoverable), the two w3 items naming "the organizer's submissions list"
 (register row 51), CFP-02/03/04 turn recovery via the verified upload, and the AIA area protected by
 truthful routes (register row 52).
+
+---
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+Self-review inline (COMMON permits it; this is a six-item sweep of small, independent edits, and a
+spawned reviewer over an unwritten diff would add latency without adding eyes). Four findings, all
+resolved here; the diff still goes to a spawned reviewer.
+
+1. **Sidebar group placement was wrong.** The `pipeline` group is a numbered ladder (icons `1`–`7`).
+   Dropping "Abstracts & sessions" and "+ Add session" into it breaks that sequence visually for
+   every organizer, forever, to satisfy a rubric line. **Resolution:** both rows go in `home`,
+   beside "Program home" and "Program board" — which is what they are: top-level entrances, not
+   lifecycle stages. Icons `▤` and `+`.
+
+2. **`tests/unit/route-table.test.ts` encodes the sidebar order as a CONTRACT against the binding
+   prototype.** Adding three rows breaks it. **Resolution:** update the expected order and treat it
+   as a deliberate, named deviation from prototype-fidelity — the prototype has no Embeds area and
+   no submissions-list link, and `DESIGN.md` cannot have anticipated the discoverability finding.
+   Reported as **deviate-with-flag** in the completion comment; I do not edit `DESIGN.md`.
+
+3. **`tests/node/mrq-99-organizer-copy.test.mjs:12` pins `<a class="event-switcher" href="/dashboard"`.**
+   Item 6 removes exactly that. **Resolution:** preserve the test's real intent — MRQ-99 removed a
+   dead-end overlay — by keeping the `unavailable(` / `unavailable = useCallback` negative
+   assertions and re-pointing the positive one at the honest non-interactive element. The dead end
+   stays dead; it does not come back as a link either.
+
+4. **The `accepted_any` count needs a bound.** An unconditional second request on every
+   `/submissions` render would tax the list this project treats speed as a feature of (R7).
+   **Resolution:** the request fires only in the exact dead-end state (`status === "accepted"` and
+   total 0), at `per_page=1`, once per entry into that state.

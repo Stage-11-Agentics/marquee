@@ -13,7 +13,9 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, PageHeader } from "../shell/components";
 import type { NavigationOptions } from "../shell/router";
 import {
+  acceptedAnyParams,
   buildSubmissionsQuery,
+  isAcceptedStageDeadEnd,
   isCurrentSubmissionsRequest,
   submissionsRequestKey,
   SUBMISSIONS_PAGE_SIZE,
@@ -258,6 +260,7 @@ export function SubmissionsPage({
   const [bulkError, setBulkError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const [acceptedAnyTotal, setAcceptedAnyTotal] = useState<number | null>(null);
   const [tableFrameMinHeight, setTableFrameMinHeight] = useState<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tableWrapRef = useRef<HTMLDivElement>(null);
@@ -516,6 +519,30 @@ export function SubmissionsPage({
 
   const envelope = state.kind === "ready" ? state.envelope : null;
   const rows = envelope?.data ?? [];
+  const acceptedStageDeadEnd = isAcceptedStageDeadEnd(status, envelope?.total ?? null);
+  const acceptedAnyQuery = useMemo(() => acceptedAnyParams(params), [search]);
+
+  // Fired only from inside the dead end, and only for a count — one row, so the
+  // list this product treats speed as a feature of pays nothing on every other
+  // render (R7).
+  useEffect(() => {
+    if (!acceptedStageDeadEnd) {
+      setAcceptedAnyTotal(null);
+      return;
+    }
+    const controller = new AbortController();
+    const countQuery = new URLSearchParams(acceptedAnyQuery);
+    countQuery.set("per_page", "1");
+    apiFetch<ListEnvelope>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions?${countQuery.toString()}`, {
+      signal: controller.signal,
+      route: "/api/v1/events/{eventId}/submissions",
+    })
+      .then((body) => { if (!controller.signal.aborted) setAcceptedAnyTotal(body.total); })
+      // A failed count is a missing sentence, never an error banner over a list
+      // that loaded fine. The reserved slot simply stays empty.
+      .catch(() => { if (!controller.signal.aborted) setAcceptedAnyTotal(null); });
+    return () => controller.abort();
+  }, [eventId, acceptedStageDeadEnd, acceptedAnyQuery, reloadKey]);
   const selectedCount = selectionCount(selectedIds, allMatching, envelope?.total ?? 0);
   const first = envelope && envelope.total > 0 ? (envelope.page - 1) * envelope.per_page + 1 : 0;
   const last = envelope ? Math.min(envelope.page * envelope.per_page, envelope.total) : 0;
@@ -736,7 +763,22 @@ export function SubmissionsPage({
           <tbody>
             {state.kind === "loading" && Array.from({ length: COLD_SKELETON_ROWS }, (_, index) => <SkeletonRow columns={columns} key={`skeleton-${index}`} />)}
             {state.kind === "error" && <tr class="state-row error"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Notification gaps did not load" : draftQueue ? "Drafts did not load" : "Submissions did not load"}</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></td></tr>}
-            {envelope && rows.length === 0 && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Every decision has reached its speaker" : draftQueue ? "No drafts need attention" : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{notifiedQueue ? "The notification gap is clear." : draftQueue ? "Every draft is complete for the fields its submitter can see." : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{notifiedQueue || draftQueue ? <Button small onClick={() => navigate("/submissions")}>View all submissions</Button> : q || status || kind || track || format || wave || task || placement ? <Button small onClick={() => navigate("/submissions")}>Clear filters</Button> : <Button small onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</td></tr>}
+            {envelope && rows.length === 0 && acceptedStageDeadEnd && <tr class="state-row"><td colSpan={columns.length + 1}><strong>0 in Ready to place</strong><span>Ready to place is the pipeline stage after onboarding finishes — an accepted talk with an open onboarding task is not in it yet.</span>
+              {/* The slot is reserved the moment this state renders, so the
+                  count arriving does not push the controls down under the
+                  reader's cursor. Empty is a legitimate resting state: a count
+                  that failed to load promises nothing. */}
+              <span class="accepted-escape" data-accepted-escape>{acceptedAnyTotal !== null && acceptedAnyTotal > 0 ? <><strong class="tabular">{acceptedAnyTotal.toLocaleString()}</strong> accepted overall</> : " "}</span>
+              <span class="state-row-actions">
+                {/* Rendered in both states and hidden rather than removed, so
+                    "Clear filters" does not slide sideways under the pointer
+                    when the count lands. `visibility: hidden` also takes it out
+                    of the tab order, so nothing offers an escape that is not
+                    there. */}
+                <span class={`accepted-escape-action${acceptedAnyTotal !== null && acceptedAnyTotal > 0 ? " is-ready" : ""}`}><Button small variant="primary" onClick={() => navigate(`/submissions?${acceptedAnyQuery.toString()}`)}>View all accepted</Button></span>
+                <Button small onClick={() => navigate("/submissions")}>Clear filters</Button>
+              </span></td></tr>}
+            {envelope && rows.length === 0 && !acceptedStageDeadEnd && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Every decision has reached its speaker" : draftQueue ? "No drafts need attention" : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{notifiedQueue ? "The notification gap is clear." : draftQueue ? "Every draft is complete for the fields its submitter can see." : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{notifiedQueue || draftQueue ? <Button small onClick={() => navigate("/submissions")}>View all submissions</Button> : q || status || kind || track || format || wave || task || placement ? <Button small onClick={() => navigate("/submissions")}>Clear filters</Button> : <Button small onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</td></tr>}
             {rows.map((item) => <tr class="submission-row" key={item.id} onClick={(event) => { const target = event.target as HTMLElement; if (!target.closest("a,input,button,select")) navigate(`/submissions/${item.id}`); }}>
               <td class="check-col"><input type="checkbox" aria-label={`Select ${item.id}`} checked={allMatching || selectedIds.has(item.id)} onChange={(event) => toggleRow(item.id, event.currentTarget.checked)} /></td>
               {columns.map((column) => <td class={`${column}-col`}><Cell item={item} column={column} navigate={navigate} /></td>)}
