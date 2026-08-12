@@ -1,7 +1,7 @@
 # Marquee — Design Language
 
 **Status:** Converged, client-loved, binding. Minted 2026-08-09 at the close of tone-prototype.
-**Binding visual contract:** `prototypes/pipeline-v1.1/index.html` at **v1.9** (the v1.4 converged structure reskinned to Flight Deck at v1.5, a real cold start at v1.6, geography at v1.7, the Sessionboard gap-analysis fold at v1.8, the Amendment 14 venue set at v1.9). The build reproduces it one-to-one; every designed control ships. Divergences are legal only where SPEC marks them `[beyond … prototype — acknowledged divergence]`.
+**Binding visual contract:** `prototypes/pipeline-v1.1/index.html` at **v1.11** (v1.11 adds the theme system: Day default + Night, machinery for arbitrary themes) (the v1.4 converged structure reskinned to Flight Deck at v1.5, a real cold start at v1.6, geography at v1.7, the Sessionboard gap-analysis fold at v1.8, the Amendment 14 venue set at v1.9). The build reproduces it one-to-one; every designed control ships. Divergences are legal only where SPEC marks them `[beyond … prototype — acknowledged divergence]`.
 
 ## The direction, and how it was found
 
@@ -17,7 +17,22 @@ Then a skin round (House Lights · Press Room · Flight Deck) ran on the frozen 
 - **Type:** grotesque for prose and labels; **monospaced tabular figures for every count, time, and ID** — numbers are gauges.
 - **Surfaces:** hairline rules over shadows; recessed cells over floating cards; density with air — the grid carries the structure so ornament doesn't have to.
 - **Motion:** none decorative. State changes render instantly; drag (agenda only) feels physical; 120ms fades at most.
-- **Light-mode primary** — judges demo in daylight. No dark mode by Wednesday.
+- **Day is primary and default** — judges demo in daylight. **Night** is opt-in, and the OS preference is deliberately not consulted: nobody should get a palette they did not choose.
+
+## Themes
+
+The aesthetic has two lightings, and the machinery takes more. A theme is **one `html[data-theme="…"]` block in `tokens.css` plus one row in `src/ui/shell/theme.ts`** — palette only. Spacing, radius, the hairline, the type stacks and `--shadow: none` are **theme-invariant**; that constraint is what makes Night a re-lit instrument instead of a generic dark mode.
+
+- **Day** — the cockpit in daylight, exactly as specified above.
+- **Night** — *the quiet server room.* Strictly neutral greys with chroma held back for status and a restrained teal. The agenda canvas stays **darker than the page**, preserving the figure-ground relationship Day establishes. Chosen by the client 2026-08-12 over two alternatives (a blue-black "Midnight Ops" and an amber night-vision "Red-Shift").
+
+Binding rules for any theme, present or future:
+
+- **Every color is a token.** A literal color is invisible to the theme system: right in Day, silently wrong in Night. `check:design` fails on any literal color in `components.css`, and on any color token Day introduces that Night does not redefine.
+- **Contrast is measured, not eyeballed.** Every text pair carries its ratio; nothing below 4.5:1. Night's floor is 6.3:1.
+- **Track colors are never rewritten.** They are the organizer's data, and they paint borders and dots rather than text, so they carry no contrast duty. (The prototype's *seeded* tracks do carry night octaves — that is demo data, not authored data.)
+- **Theme is stamped before first paint** (inline script in `index.html`). Resolving a palette after hydration flashes white on every load — the jump the craft rules forbid.
+- **Scope is the admin shell.** The public agenda, embeds, and API docs own their palettes on purpose: an embed inherits its host page, and an attendee's page must not be re-lit because an organizer picked Night.
 
 ## Voice
 

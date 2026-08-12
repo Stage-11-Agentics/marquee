@@ -31,6 +31,41 @@ for (const label of ["Program home", "Program board", "Submitted", "In review", 
 for (const [path, content] of sourceFiles) {
   if (/PROTOTYPE/i.test(content)) findings.push(`${path} contains a prototype badge/marker`);
 }
+
+// A hardcoded color is invisible to the theme system: it looks correct in Day
+// and is simply wrong in Night, with nothing to catch it but a human's eye on
+// the one screen that happens to use it. Every color the admin shell paints
+// must come from a token, so themes stay a property of tokens.css alone.
+//
+// Scope is the admin shell. The public site, embeds, and the API docs page are
+// deliberately outside it: an embed inherits its host page's palette, and an
+// attendee reading a public agenda should not have it re-lit because an
+// organizer picked Night in admin. Those surfaces own their own palettes.
+const THEMED_STYLESHEET = "src/styles/components.css";
+const themedCss = components
+  .split("\n")
+  .map((line, index) => [index + 1, line])
+  .filter(([, line]) => /#[0-9a-fA-F]{3,8}\b|\brgba?\(/.test(line) && !/^\s*\/\*/.test(line));
+for (const [lineNumber, line] of themedCss) {
+  findings.push(`${THEMED_STYLESHEET}:${lineNumber} hardcodes a color; use a token so themes can re-light it — ${line.trim().slice(0, 80)}`);
+}
+
+// Night must define every token Day's second :root introduces, or a night
+// screen silently inherits a light value (white text on white, most likely).
+const dayExtensions = [...tokens.matchAll(/^:root \{[\s\S]*?\n\}\s*\n\/\* Binding[\s\S]*?\n:root \{([\s\S]*?)\n\}/g)][0]?.[1] ?? "";
+const nightBlock = tokens.match(/html\[data-theme="night"\] \{([\s\S]*?)\n\}/)?.[1] ?? "";
+if (!nightBlock) findings.push("tokens.css has no html[data-theme=\"night\"] block");
+else {
+  // Only color tokens are themeable; aliases that resolve to other tokens and
+  // the structure tokens are intentionally inherited.
+  const colorLiteral = /^\s*(--[a-z0-9-]+):\s*(#[0-9a-fA-F]{3,8}|rgba?\()/;
+  for (const line of dayExtensions.split("\n")) {
+    const name = line.match(colorLiteral)?.[1];
+    if (name && !new RegExp(`^\\s*${name}\\s*:`, "m").test(nightBlock)) {
+      findings.push(`night theme does not redefine ${name}; it would inherit the Day color`);
+    }
+  }
+}
 const result = { command: "check:design", status: findings.length ? "fail" : "pass", findings };
 emit(result);
 if (findings.length) process.exitCode = 1;

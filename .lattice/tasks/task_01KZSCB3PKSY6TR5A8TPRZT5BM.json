@@ -1,0 +1,41 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 2,
+  "complexity": null,
+  "created_at": "2026-08-11T21:41:01Z",
+  "created_by": "agent:merge-driver",
+  "custom_fields": {},
+  "description": "Found by MRQ-81 (surface:268) while walking the loop from a real public submission. Not MRQ-81's files, so filed rather than fixed.\n\n## Symptom\n\nOn the submission record, a file answer renders as RAW JSON under the 'Headshot' heading instead of a filename, a link, or a thumbnail. The organizer sees the storage payload rather than the thing the speaker uploaded.\n\n## Why it matters\n\nThis is on the organizer's most-used screen and it is the direct result of the step the whole product asks a speaker to complete. It also sits one step into the walkthrough loop, so it is likely on camera.\n\nIt became newly reachable tonight for the same reason as MRQ-87: before PR #30 no public submission could be created, so no real file answer had ever rendered here.\n\n## Scope\n\n- A file answer renders as something a human recognises \u2014 filename at minimum; a thumbnail for images is the obvious win given the field is a headshot and its own label promises a crop preview.\n- Handle the absent case honestly: a required file that was never uploaded should read as missing, not as empty JSON or a broken image.\n- Check the same rendering on any other surface that shows answers (reviewer detail, the portal's own view of what was submitted). A file answer is not special to one screen.\n\n## Where\n\nsrc/ui/submissions/* (the record's answer rendering) and whatever shapes the answer payload in src/routes/submission-record.routes.ts.\n\n## Constraints\n\n- ELEMENTS NEVER JUMP \u2014 if you add a thumbnail, reserve its space so the record does not reflow as images load.\n- Flight Deck tokens per DESIGN.md; check:design stays green.\n- Do not weaken the upload path's authorization to render a preview. Media is served from a separate origin with Content-Disposition attachment and nosniff by design.\n- Corrected fleet gate: 3x tsc --noEmit, npx vite build, check:design, check:api, trace:ac, plus your diff's own test files. NO full npm test, NO pr-gate; say so in the PR body and let CI run the suite.\n- Test titles must begin 'AC-<n> \u00b7 ' or 'CONTRACT \u00b7 '. test.each() fails trace:ac.\n- main is behind a manual merge gate. Open a PR; a human merges.\n\n## Verification\n\nUse a REAL submission created through /f/cfp with a genuine image (possible as of PR #30), not a seeded fixture.",
+  "done_at": "2026-08-12T02:01:11Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KZSV7G025777AVZEVWZGWVMK",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZSCB3PKSY6TR5A8TPRZT5BM",
+  "last_event_id": "ev_01KZSV7G33MYKW62312JJW7ZJ4",
+  "last_status_changed_at": "2026-08-12T02:01:11Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-11T21:41:01Z",
+      "created_by": "agent:merge-driver",
+      "note": null,
+      "target_task_id": "task_01KZS74XMEX3SYQGRTVR1RTZ1K",
+      "type": "related_to"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-88",
+  "status": "done",
+  "tags": null,
+  "title": "Submission record shows a file answer as raw JSON",
+  "type": "bug",
+  "updated_at": "2026-08-12T02:01:11Z",
+  "urgency": null
+}

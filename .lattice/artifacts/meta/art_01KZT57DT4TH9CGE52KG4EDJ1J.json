@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T04:55:54Z",
+  "created_by": "agent:codex-mrq-99",
+  "custom_fields": {},
+  "id": "art_01KZT57DT4TH9CGE52KG4EDJ1J",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT57DT4TH9CGE52KG4EDJ1J.png",
+    "size_bytes": 567739
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "c11 browser screenshot of the local Worker record page: conference link in the sidebar, organizer copy, optional feedback label, and accurate waitlist no-message action.",
+  "tags": [],
+  "title": "MRQ-99 local waitlist dialog",
+  "token_usage": null,
+  "type": "file"
+}

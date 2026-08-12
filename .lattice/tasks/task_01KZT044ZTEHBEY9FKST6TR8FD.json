@@ -1,0 +1,76 @@
+{
+  "assigned_to": "agent:delegator-mrq-94",
+  "branch_links": [],
+  "comment_count": 11,
+  "complexity": null,
+  "created_at": "2026-08-12T03:26:44Z",
+  "created_by": {
+    "agent_type": "intake",
+    "base_name": "feedback-intake",
+    "framework": "claude-code",
+    "model": "claude-opus-5",
+    "name": "feedback-intake-1",
+    "serial": 1,
+    "session": "sess_01KZSZXGH17A7VWN1TA7QNT7WG"
+  },
+  "custom_fields": {},
+  "description": "Three defects the operator hit on the public agenda of the live site\n(https://marquee.stage11.dev, 2026-08-11). They share two files, so they are one\nticket and one PR \u2014 three agents editing `PublicAgendaPage.tsx` would collide.\n\nThe public agenda is the conference's front door and sits on the walkthrough path.\n\n---\n\n## 1. The agenda defaults to day one and then blames the user for it\n\n**Operator:** *\"nothing has happened when I click show full agenda. Just says no\npublished sessions match. Clear a filter. But I've got no filter set.\"*\n\nRoot cause, `src/lib/public-site.ts:486`:\n\n    const selectedDay = filters.allDays ? null : filters.day ?? event.startsOn;\n\nWith **no query parameters at all**, `filters.day` is null, so `selectedDay`\nsilently becomes `event.startsOn` \u2014 day one. A visitor who has set nothing is\nserved a day-filtered agenda without being told. If day one has no published\nsessions, the page reports an empty conference.\n\nIt compounds three ways:\n\n- **The empty state lies.** `PublicAgendaPage.tsx:226` computes\n  `hasFilters = Boolean(track || q || (day && day !== \"all\"))`. The defaulted day\n  makes this true, so the visitor is told *\"No published sessions match \u2014 clear a\n  filter to bring the program back into view\"* when they never set a filter and\n  the UI shows none set.\n- **\"Show full agenda\" is a no-op.** That button links to `/agenda?${eventQuery}`\n  \u2014 i.e. `/agenda?event=<slug>` \u2014 which carries no `day`, so the server re-applies\n  the identical day-one default and renders the byte-identical page. Clicking it\n  does nothing, forever. This is exactly what the operator saw.\n- **\"All days\" is unreachable.** The code has an `allDays` path (signalled by\n  `day=all`), but the day tablist at `PublicAgendaPage.tsx:194-200` renders only\n  concrete days. There is no control that produces `day=all`, so a visitor can\n  never get to the full program through the UI.\n\n**Required outcome.** Decide the correct default and make it honest:\n\n- Showing the **whole program by default** is almost certainly right for a\n  conference front door \u2014 a visitor who lands on \"Agenda\" wants the agenda. If you\n  instead keep a day default, the UI must *show* that day as selected so it does\n  not read as an empty conference. **Pick one, justify it in one sentence in the PR,\n  and make the UI state and the server state agree either way.**\n- Add an **\"All days\"** control to the day tablist, reflecting selected state like\n  the other tabs.\n- `hasFilters` must be true only for filters the visitor actually chose. A defaulted\n  value is not a filter.\n- \"Show full agenda\" must clear every filter, day included, and visibly change the\n  page. If a click can't change the result, the button must not be there.\n- Keep the genuinely-empty case honest: an unpublished program still says\n  \"No published sessions yet\", not \"no match\".\n\n## 2. A raw JSON endpoint is linked from the public conference site\n\n`PublicAgendaPage.tsx:190`:\n\n    <a class=\"public-button\" href={`/api/v1/public/agenda?${eventQuery}`}>Agenda data \u2197</a>\n\nThis sits next to the page's `<h1>` and dumps a JSON object in the visitor's face.\n**Operator: we shouldn't show that.** Remove the link from the public agenda page.\n\nDo **not** remove the `/api/v1/public/agenda` endpoint itself \u2014 it is a real public\nAPI, it is documented in `src/routes/public.routes.ts:36`, and the embed feature\ndepends on that surface. This is about not advertising a developer artifact to\nconference attendees. The \"Get embed code\" action in the shell is the legitimate\nintegrator path and stays.\n\n## 3. There is no way back out of the agenda\n\n**Operator:** *\"when looking at the agenda, there's no way for me to go back to the\npage that I was on.\"*\n\n`PublicShell` (`PublicAgendaPage.tsx:128-152`) gives the visitor: a brand link to\n`/agenda`, \"Get embed code\", and \"Organizer demo\". From the agenda page the brand\nlink is a self-link \u2014 pressing the one thing that looks like \"home\" reloads the page\nyou are on. There is no route back to the conference landing page, and the session\n(`/s/:slug`) and speaker (`/p/:slug`) detail pages inherit the same shell.\n\n**Required outcome.** The public shell gets a real, always-available way home \u2014\nthe brand should lead to the conference landing page (`/`), not to `/agenda`, and\ndetail pages should offer a clear route back to the agenda. Every public page must\nbe escapable using only what is on screen. Do not rely on the browser back button;\na visitor who arrived by deep link has no history to go back to.\n\n---\n\n## Constraints\n\n- Flight Deck aesthetic per `DESIGN.md`; reuse existing `public-*` classes.\n- **Elements never jump** (global UI rule): adding the \"All days\" tab must not\n  reflow the day tablist as selection changes; reserve width.\n- The agenda is server-rendered \u2014 check `src/routes/public-agenda.route.tsx` and\n  `src/lib/public-site.ts` together so the UI and the query agree.\n- `src/ui/embeds/EmbedPage.tsx` carries the **same** `hasFilters` / \"Show full\n  agenda\" pattern (lines 224-231). Verify whether it has the same no-op defect and\n  fix it consistently if so; note the finding in the PR either way.\n- Speed is a graded feature (R7) \u2014 the agenda must stay fast.\n- Suite budget 45s, gate budget 120s.\n\n## Acceptance\n\n- Loading `/agenda` with no query parameters shows the published program, and the\n  day control visibly reflects whatever scope is being shown.\n- The \"no filter set\" empty state never says \"clear a filter\".\n- Clicking \"Show full agenda\" measurably changes the page, or the button is absent.\n- \"All days\" is reachable from the UI and works.\n- No JSON-endpoint link appears anywhere on the public agenda; `/api/v1/public/agenda`\n  still responds and the embed flow still works.\n- From `/agenda`, `/s/:slug`, and `/p/:slug`, a visitor can reach the conference home\n  in one click, and the brand link is never a self-link.\n- Validated on the **live deployed site** with screenshots in the PR \u2014 including the\n  before/after of the empty-state case that started this ticket.\n- `npm test` green within budget; PR open against `Stage-11-Agentics/marquee` `main`.",
+  "done_at": "2026-08-12T05:21:23Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZT1BTHG7PE37RJ516RD295D",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT2R9PA68N7NEDGG4X5DCNH",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT3ZG4G69T3MWMKK0MPVBTJ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT4P8SSHEV0NHMKVXZBMXFB",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT58TXTW4VDRD0C5GW288Q7",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT61MA2WGPW6G8VW3D2MKQQ",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT6P2D1J5RDP9GK52ANAHR2",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZT044ZTEHBEY9FKST6TR8FD",
+  "last_event_id": "ev_01KZT6P2K4EF9VNK4MJE05MTCE",
+  "last_status_changed_at": "2026-08-12T05:21:23Z",
+  "linked_files": [],
+  "needs_human": {
+    "flagged_by": "agent:delegator-mrq-94",
+    "reason": "Final fixes are ready at 4f331ad, but the Lattice review-cycle limit is reached (3/3); human review/approval is needed before another review cycle.",
+    "since": "2026-08-12T05:08:55Z"
+  },
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 3,
+  "schema_version": 1,
+  "short_id": "MRQ-94",
+  "status": "done",
+  "tags": null,
+  "title": "Public agenda: day-one default fakes an empty conference, \"Show full agenda\" is a no-op, JSON link is exposed, and there is no way home",
+  "type": "bug",
+  "updated_at": "2026-08-12T05:21:23Z",
+  "urgency": null
+}

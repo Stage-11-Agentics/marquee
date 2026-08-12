@@ -1,0 +1,41 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 2,
+  "complexity": null,
+  "created_at": "2026-08-11T21:40:45Z",
+  "created_by": "agent:merge-driver",
+  "custom_fields": {},
+  "description": "ON CAMERA IN THE WALKTHROUGH. Found by MRQ-81 (surface:268) while walking the full loop from a real public submission \u2014 the first time anyone has run that path end to end. Not MRQ-81's files, so filed rather than fixed.\n\n## Symptom\n\nThe public conference site renders the speaker name twice, as 'Robin Alvarez \u00b7 Robin Alvarez'. The API returns the same person id as BOTH Speaker and Submitter for a submission where one person is both \u2014 which is the ordinary case for a public CFP submission, so this is the default appearance, not an edge case.\n\n## Why this is critical rather than cosmetic\n\nThe walkthrough video IS the evaluation rubric (project CLAUDE.md), and the public conference site is where the 11-step loop ends \u2014 it is the payoff shot. A judge sees a duplicated name on the public-facing artifact before they see anything else that was fixed tonight. It is also the single most screenshot-able surface in the product.\n\nIt became newly reachable tonight: until PR #30 no public submission could be created at all, so nobody had ever seen a real submitter-is-also-speaker record render on the public site.\n\n## Scope\n\n- One person appearing in two roles on the same submission renders ONCE on the public site.\n- Decide deliberately what the public site should say when submitter and speaker genuinely DIFFER \u2014 the public site is an audience-facing surface and the submitter is arguably not audience information at all. State the ruling in the PR.\n- Check the same duplication does not appear on the agenda, session detail, embeds, or ICS attendee lists \u2014 the join is likely shared. A fix that repairs one surface and leaves the embed wrong is worse than none, because the embed is what gets pasted elsewhere.\n\n## Where\n\nsrc/routes/submissions.queries.ts (the participations join returning the same person id twice) and the public site render path. Cross-check src/ui/public/*.\n\n## Constraints\n\n- Do not dedupe in the view layer alone if the query is returning a duplicate row \u2014 fix the source, or the next consumer inherits it.\n- Corrected fleet gate: 3x tsc --noEmit, npx vite build, check:design, check:api, trace:ac, plus your diff's own test files. NO full npm test, NO pr-gate; say so in the PR body and let GitHub CI run the suite.\n- Test titles must begin 'AC-<n> \u00b7 ' or 'CONTRACT \u00b7 '. test.each() fails trace:ac \u2014 write tables longhand.\n- main is behind a manual merge gate (CODEOWNERS + 'main: manual merge gate'). Open a PR; a human merges.\n\n## Verification\n\nReproduce on a REAL submission created through /f/cfp (possible as of PR #30), not a seeded one, and confirm the public site, agenda and any embed all render the person once.",
+  "done_at": "2026-08-12T02:00:59Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KZSV74BQZKS8ZNBV5YFP49X0",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZSCAKXTE6EFVSZC28RT04KN",
+  "last_event_id": "ev_01KZSV74EP2SFBB99CX3SMMG4W",
+  "last_status_changed_at": "2026-08-12T02:00:59Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-11T21:41:01Z",
+      "created_by": "agent:merge-driver",
+      "note": null,
+      "target_task_id": "task_01KZS74XMEX3SYQGRTVR1RTZ1K",
+      "type": "related_to"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-87",
+  "status": "done",
+  "tags": null,
+  "title": "Public conference site prints every speaker twice",
+  "type": "bug",
+  "updated_at": "2026-08-12T02:00:59Z",
+  "urgency": null
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T00:35:07Z",
+  "created_by": "agent:claude",
+  "custom_fields": {},
+  "id": "art_01KZSP9X1WKXM92WNG2FC5J57W",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZSP9X1WKXM92WNG2FC5J57W.md",
+    "size_bytes": 726
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Bucket-scoped R2 credential installed and verified on the deployed Worker. Scoping proven before install: writes/reads its own two buckets, DENIED on acetate-releases, c11-public-videos and stage11-ex",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

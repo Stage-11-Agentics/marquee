@@ -1,0 +1,13 @@
+{
+  "agent_type": "intake",
+  "base_name": "intake",
+  "framework": "claude-code",
+  "last_active": "2026-08-12T05:22:26Z",
+  "model": "claude-opus-5",
+  "name": "intake-1",
+  "parent": "human:atin",
+  "serial": 1,
+  "session": "sess_01KZT6C1JSV9KWWS2F5EZSN5V6",
+  "started_at": "2026-08-12T05:15:54Z",
+  "status": "active"
+}

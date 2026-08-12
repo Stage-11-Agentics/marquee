@@ -1,0 +1,13 @@
+{
+  "agent_type": "merge",
+  "base_name": "merge-agent",
+  "framework": "claude-code",
+  "last_active": "2026-08-12T05:21:26Z",
+  "model": "claude-opus-5",
+  "name": "merge-agent-1",
+  "parent": "human:atin",
+  "serial": 1,
+  "session": "sess_01KZT4CNZA5J534NFWXB4DDE8Y",
+  "started_at": "2026-08-12T04:41:18Z",
+  "status": "active"
+}

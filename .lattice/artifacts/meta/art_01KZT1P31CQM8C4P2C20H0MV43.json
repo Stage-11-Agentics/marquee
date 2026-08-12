@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T03:54:01Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZT1P31CQM8C4P2C20H0MV43",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT1P31CQM8C4P2C20H0MV43.png",
+    "size_bytes": 507887
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Local c11 speaker portal after in-task save: title and abstract are inside Finalize talk description, abstract-specific confirmation is present, and the refreshed TalkCard below shows the saved title.",
+  "tags": [],
+  "title": "MRQ-93 local speaker task proof",
+  "token_usage": null,
+  "type": "file"
+}

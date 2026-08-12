@@ -1,5 +1,7 @@
 import type { JSX } from "preact";
+import { useState } from "preact/hooks";
 import { AccountMenu, type Identity } from "./identity";
+import { THEMES, isThemeId, readTheme, writeTheme } from "./theme";
 
 /** A route sits under Submissions when a "Submissions" crumb belongs between
  * the conference name and the route itself; the submissions list route is its
@@ -23,6 +25,10 @@ export function Topbar({ eventName, routeName, pathname = "", identity, userMenu
   navigate?: (target: string) => void;
 }): JSX.Element {
   const crumbTo = (target: string) => (event: MouseEvent) => { event.preventDefault(); navigate(target); };
+  // The theme is presentational and owned by the document, not by app state:
+  // index.html has already stamped it before first paint, so this only needs
+  // to remember what the select should read.
+  const [theme, setTheme] = useState(readTheme);
   return <header class="topbar">
     <div class="breadcrumbs">
       <a href="/dashboard" onClick={crumbTo("/dashboard")}>{eventName}</a>&nbsp; / &nbsp;
@@ -39,6 +45,24 @@ export function Topbar({ eventName, routeName, pathname = "", identity, userMenu
       holds its place with an em dash rather than appearing later and shoving
       the avatar sideways. Elements never jump.
     */}
+    {/*
+      A select rather than a toggle: the registry takes arbitrary themes, and
+      a select holds one fixed width however many are registered. Elements
+      never jump.
+    */}
+    <label class="theme-switch" title="Theme">
+      <span class="glyph" aria-hidden="true">◐</span>
+      <select
+        aria-label="Theme"
+        value={theme}
+        onChange={(event) => {
+          const next = (event.currentTarget as HTMLSelectElement).value;
+          if (!isThemeId(next)) return;
+          writeTheme(next);
+          setTheme(next);
+        }}
+      >{THEMES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
+    </label>
     <div class="top-identity" data-identity>
       <strong>{identity?.name ?? "—"}</strong>
       <span>{identity?.role ?? "—"}</span>
