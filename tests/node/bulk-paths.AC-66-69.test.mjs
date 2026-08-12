@@ -256,6 +256,13 @@ const EXPECTED_PLACEHOLDER_SITES = [
     classification: "outside named bulk writes; explicit 80-ID queue-read chunks stay below D1's binding cap",
   },
   {
+    file: "src/routes/review.routes.ts",
+    owner: "reviewsForSubmissions",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; reads one reviewer's stored reviews in the same explicit 80-ID chunks as queueRows, over a completed set the queue caps at 50",
+  },
+  {
     file: "src/routes/submission-record.routes.ts",
     owner: "validateOwnedIds",
     binding: "result",
