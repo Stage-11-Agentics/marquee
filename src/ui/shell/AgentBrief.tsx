@@ -23,8 +23,13 @@ export function AgentBriefPanel({ copy }: { copy: AgentBriefCopy }): JSX.Element
   // full-width, so swapping its label cannot change its size — and nothing is
   // inserted or removed to say "copied", which is what would push the muted
   // endpoint line down the panel.
+  //
+  // Only the copied state reverts. The fallback's "press ⌘C" is an instruction
+  // the operator has not carried out yet, and retracting it while the selection
+  // is still live would take the instruction away mid-task; the panel unmounts
+  // with its modal anyway.
   useEffect(() => {
-    if (state === "idle") return;
+    if (state !== "copied") return;
     const timer = setTimeout(() => setState("idle"), 2400);
     return () => clearTimeout(timer);
   }, [state]);
@@ -44,13 +49,20 @@ export function AgentBriefPanel({ copy }: { copy: AgentBriefCopy }): JSX.Element
   const label = state === "copied" ? "Copied — paste it into your agent" : state === "selected" ? "Selected — press ⌘C to copy" : "Copy for your agent";
 
   return <div class="agent-brief" data-agent-brief-state={state}>
-    <label class="agent-brief-label" for="agent-brief-text">{copy.label}</label>
+    {/* A span, not a <label>: the thing being named is a <pre>, which is not a
+        labelable element, so `for` would be inert. The block names itself with
+        aria-label instead — and carries no id, because this panel is exported
+        for other surfaces to mount and a fixed id collides the moment two of
+        them render on one page. */}
+    <span class="agent-brief-label">{copy.label}</span>
     <p class="agent-brief-hint">{copy.hint}</p>
     <div class="agent-brief-box">
-      <pre id="agent-brief-text" ref={briefRef} class="agent-brief-text" tabIndex={0}>{copy.brief}</pre>
-      <button class="button primary agent-brief-copy" type="button" onClick={onCopy}>
-        <span aria-live="polite">{label}</span>
-      </button>
+      <pre ref={briefRef} class="agent-brief-text" tabIndex={0} aria-label={copy.label}>{copy.brief}</pre>
+      <button class="button primary agent-brief-copy" type="button" onClick={onCopy}>{label}</button>
+      {/* The announcement lives apart from the label so the timed revert is a
+          silent visual change rather than a second thing said to a screen
+          reader. */}
+      <span class="agent-brief-status" role="status" aria-live="polite">{state === "idle" ? "" : label}</span>
     </div>
     <p class="agent-brief-note">
       {copy.note} {AGENT_BRIEF_PARITY} <span class="agent-brief-endpoint">{copy.endpoint}</span>, if you'd rather drive it yourself.

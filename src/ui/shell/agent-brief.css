@@ -41,6 +41,9 @@
  */
 .agent-brief-copy { justify-content: center; min-width: 0; text-align: center; width: 100%; }
 
+/* Announced, never drawn — and zero-sized, so it cannot move the panel. */
+.agent-brief-status { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
+
 .agent-brief-note { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0; }
 
 .agent-brief-endpoint { color: var(--muted); font: 400 10.5px/1 var(--mono); }

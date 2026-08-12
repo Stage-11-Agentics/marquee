@@ -148,9 +148,13 @@ describe("MRQ-130 · every surface keeps the controls it had", () => {
       retained: ["Demo-safe outbox", "default: demo_safe", "Save template edits", "Ad-hoc", "Template", "Merge fields"],
     },
     {
+      // "conflicts" alone would be a guard that cannot fail: the word appears
+      // all over this file in state names and copy, so deleting the conflicts
+      // BUTTON to make room would still leave it green. Each entry here is
+      // unique to a control the organizer can operate.
       surface: "agenda",
       path: "src/ui/agenda/AgendaPage.tsx",
-      retained: ["conflicts"],
+      retained: ["setConflictsOpen(true)", "<span class=\"tabular\">{visibleConflictData.length}</span> conflicts", "Publish the program", "Review publication"],
     },
     {
       surface: "portal",
