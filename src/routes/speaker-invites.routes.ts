@@ -3,7 +3,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail";
-import { mintMagicLink } from "../lib/auth/magic-links";
+import { mintPortalMagicLink } from "../lib/auth/magic-links";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -46,11 +46,10 @@ const inviteSpeakers = defineApiRoute(
     if (!event) throw ApiError.notFound("conference not found");
 
     const personIds: string[] = [...new Set<string>(body.person_ids as string[])];
-    const placeholders = personIds.map(() => "?").join(", ");
     const speakers = await context.env.DB.prepare(
       `SELECT p.id, p.name, p.email
        FROM people p
-       WHERE p.org_id = ? AND p.id IN (${placeholders})
+       WHERE p.org_id = ? AND p.id IN (SELECT value FROM json_each(?))
          AND (
            EXISTS (
              SELECT 1 FROM memberships m
@@ -64,7 +63,7 @@ const inviteSpeakers = defineApiRoute(
          )
        ORDER BY p.id`,
     )
-      .bind(event.org_id, ...personIds, eventId, eventId)
+      .bind(event.org_id, JSON.stringify(personIds), eventId, eventId)
       .all<{ id: string; name: string; email: string }>();
     const speakerById = new Map(speakers.results.map((speaker) => [speaker.id, speaker]));
     if (speakers.results.length !== personIds.length) {
@@ -77,7 +76,7 @@ const inviteSpeakers = defineApiRoute(
     for (const personId of personIds) {
       const speaker = speakerById.get(personId);
       if (!speaker) throw ApiError.notFound("speaker not found");
-      const link = await mintMagicLink(context.env.DB, {
+      const link = await mintPortalMagicLink(context.env.DB, {
         personId: speaker.id,
         purpose: "login",
         redirectTo: "/portal",

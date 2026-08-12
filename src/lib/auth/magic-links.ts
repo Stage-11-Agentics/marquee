@@ -24,14 +24,16 @@ export function isSafeRedirectTarget(redirectTo: string): boolean {
   return redirectTo.startsWith("/") && !redirectTo.startsWith("//");
 }
 
-export async function mintMagicLink(
+type MintMagicLinkInput = {
+  personId: Id;
+  purpose: MagicLinkPurpose;
+  redirectTo?: string;
+  now?: number;
+};
+
+async function mintLink(
   db: D1Database,
-  input: {
-    personId: Id;
-    purpose: MagicLinkPurpose;
-    redirectTo?: string;
-    now?: number;
-  },
+  input: MintMagicLinkInput,
 ): Promise<MintedMagicLink> {
   const now = input.now ?? Date.now();
   const redirectTo = input.redirectTo ?? "/";
@@ -59,6 +61,15 @@ export async function mintMagicLink(
     )
     .run();
   return { id, token, redirectTo };
+}
+
+export function mintMagicLink(db: D1Database, input: MintMagicLinkInput): Promise<MintedMagicLink> {
+  return mintLink(db, input);
+}
+
+/** Organizer-only speaker invitations share the auth token writer without adding another route-local writer. */
+export function mintPortalMagicLink(db: D1Database, input: MintMagicLinkInput): Promise<MintedMagicLink> {
+  return mintLink(db, input);
 }
 
 /**
