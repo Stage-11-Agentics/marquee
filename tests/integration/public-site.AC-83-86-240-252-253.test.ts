@@ -113,6 +113,8 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   const sessionBody = await session.text();
   expect(session.status).toBe(200);
   expect(sessionBody).toContain('href="/p/public-speaker"');
+  expect(sessionBody).toContain('class="public-brand" href="/"');
+  expect(sessionBody).toContain('href="/agenda?event=public-conf">← Agenda</a>');
   expect(sessionBody).toContain("Sheraton New York Times Square");
   expect(sessionBody).toContain("Main Stage · 45 minutes");
   expect(sessionBody).toContain("Public abstract");
@@ -124,6 +126,8 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   const speakerBody = await speaker.text();
   expect(speaker.status).toBe(200);
   expect(speakerBody).toContain('href="/s/visible-session-title"');
+  expect(speakerBody).toContain('class="public-brand" href="/"');
+  expect(speakerBody).toContain('href="/agenda?event=public-conf">← Agenda</a>');
   expect(speakerBody).toContain("Sheraton New York Times Square");
 
   await env.DB.prepare(
@@ -138,6 +142,67 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   const twoBuildingSessionBody = await twoBuildingSession.text();
   expect(twoBuildingSessionBody).toContain("Main Stage · Sheraton New York Times Square");
   await env.DB.prepare("DELETE FROM buildings WHERE id = 'building-public-annex'").run();
+});
+
+test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an explicit all-days tab, and keeps the API scope aligned", async () => {
+  await env.DB.prepare("UPDATE agenda_items SET starts_at = ?, is_published = 1 WHERE id = 'agenda-private'")
+    .bind(Date.UTC(2026, 9, 13, 14))
+    .run();
+
+  const defaultAgenda = await loadPublicAgenda(env.DB, { eventSlug: EVENT_SLUG });
+  expect(defaultAgenda?.sessions.map((session) => session.title)).toEqual([PUBLIC_TITLE, PRIVATE_TITLE]);
+  expect(defaultAgenda?.filters.day).toBe("all");
+
+  const firstDay = await loadPublicAgenda(env.DB, { eventSlug: EVENT_SLUG, day: "2026-10-12" });
+  expect(firstDay?.sessions.map((session) => session.title)).toEqual([PUBLIC_TITLE]);
+  expect(firstDay?.filters.day).toBe("2026-10-12");
+
+  const allDays = await request(`/agenda?event=${EVENT_SLUG}&day=all`);
+  const allDaysBody = await allDays.text();
+  expect(allDays.status).toBe(200);
+  expect(allDaysBody).toContain(PUBLIC_TITLE);
+  expect(allDaysBody).toContain(PRIVATE_TITLE);
+  expect(allDaysBody).toContain('name="day" value="all" class="active" role="tab" aria-selected="true"');
+  expect(allDaysBody).not.toContain('href="/api/v1/public/agenda');
+
+  const defaultPage = await request(`/agenda?event=${EVENT_SLUG}`);
+  const defaultBody = await defaultPage.text();
+  expect(defaultBody).toContain(PUBLIC_TITLE);
+  expect(defaultBody).toContain(PRIVATE_TITLE);
+  expect(defaultBody).toContain('name="day" value="all" class="active" role="tab" aria-selected="true"');
+  expect(defaultBody).toContain('class="public-day">Mon, Oct 12</span>');
+  expect(defaultBody).toContain('class="public-day">Tue, Oct 13</span>');
+  expect(defaultBody).toContain('class="public-brand" href="/" aria-label="Public Conference 2026 — Marquee home"');
+  expect(defaultBody).toContain('href="/">Organizer demo</a>');
+
+  const dayAndSearch = await request(`/agenda?event=${EVENT_SLUG}&day=2026-10-13&q=Private`);
+  const dayAndSearchBody = await dayAndSearch.text();
+  expect(dayAndSearch.status).toBe(200);
+  expect(dayAndSearchBody).toContain(PRIVATE_TITLE);
+  expect(dayAndSearchBody).not.toContain(PUBLIC_TITLE);
+
+  const api = await request(`/api/v1/public/agenda?event=${EVENT_SLUG}&day=all`);
+  const payload = await api.json<{ filters: { day: string }; sessions: Array<{ title: string }> }>();
+  expect(api.status).toBe(200);
+  expect(payload.filters.day).toBe("all");
+  expect(payload.sessions.map((session) => session.title)).toEqual([PUBLIC_TITLE, PRIVATE_TITLE]);
+});
+
+test("CONTRACT · MRQ-94 · filtered empty states offer a meaningful reset while an unpublished program stays honest", async () => {
+  const filtered = await request(`/agenda?event=${EVENT_SLUG}&q=not-a-session`);
+  const filteredBody = await filtered.text();
+  expect(filtered.status).toBe(200);
+  expect(filteredBody).toContain("No published sessions match");
+  expect(filteredBody).toContain("Clear a filter to bring the program back into view.");
+  expect(filteredBody).toContain('href="/agenda?event=public-conf">Show full agenda</a>');
+
+  await env.DB.prepare("UPDATE agenda_items SET is_published = 0 WHERE id = 'agenda-public'").run();
+  const empty = await request(`/agenda?event=${EVENT_SLUG}`);
+  const emptyBody = await empty.text();
+  expect(empty.status).toBe(200);
+  expect(emptyBody).toContain("No published sessions yet");
+  expect(emptyBody).not.toContain("No published sessions match");
+  expect(emptyBody).not.toContain("Clear a filter to bring the program back into view.");
 });
 
 test("AC-85 · the public agenda is SSR-first, reserves filter/list space, and carries the 375px treatment", async () => {
@@ -197,6 +262,7 @@ test("AC-87, AC-88, AC-90 · anonymous embed configuration emits a live snippet 
   expect(configBody).toContain("Copy embed code");
   expect(configBody).toContain("Live preview");
   expect(configBody).toContain('data-embed-kind="speakers"');
+  expect(configBody).toContain('href="/agenda?event=public-conf">← Agenda</a>');
 
   const agenda = await request(`/embed/${EVENT_SLUG}-agenda?event=${EVENT_SLUG}&track=track-public&status=accepted&accent=%23ff00aa`);
   const agendaBody = await agenda.text();
@@ -220,6 +286,12 @@ test("AC-87, AC-88, AC-90 · anonymous embed configuration emits a live snippet 
   expect(api.status).toBe(200);
   expect(payload.sessions.map((session) => session.title)).toEqual([PUBLIC_TITLE]);
   expect(payload.speakers.map((speaker) => speaker.name)).toEqual(["Public Speaker"]);
+
+  const emptyAgendaEmbed = await request(`/embed/${EVENT_SLUG}-agenda?event=${EVENT_SLUG}&track=missing-track`);
+  const emptyAgendaEmbedBody = await emptyAgendaEmbed.text();
+  expect(emptyAgendaEmbed.status).toBe(200);
+  expect(emptyAgendaEmbedBody).toContain("Show full agenda");
+  expect(emptyAgendaEmbedBody).toContain('href="/embed/public-conf-agenda">Show full agenda</a>');
 });
 
 test("CONTRACT · the server-rendered embed remains anonymous with an invalid session cookie", async () => {
