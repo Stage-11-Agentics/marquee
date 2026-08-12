@@ -10,6 +10,7 @@ import { agentBrief, AGENT_BRIEF_SURFACES, type AgentBriefSurface } from "../../
 
 const CONTEXT = { origin: "https://marquee.stage11.dev", eventId: "evt_aie-ny-2026" };
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const each = (assert: (surface: AgentBriefSurface) => void) => { for (const surface of AGENT_BRIEF_SURFACES) assert(surface); };
 
 /**
  * The ticket's own failure conditions, asserted. A brief that omits auth sends
@@ -18,39 +19,45 @@ const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf
  * silent unless something checks.
  */
 describe("MRQ-130 · every brief is paste-ready", () => {
-  for (const surface of AGENT_BRIEF_SURFACES) {
-    it(`${surface} names the running deployment, the schema, the token path, and this conference`, () => {
+  it("CONTRACT · every brief names the running deployment, the schema, the token path, and this conference", () => {
+    each((surface) => {
       const copy = agentBrief(surface, CONTEXT);
-      expect(copy.brief).toContain(CONTEXT.origin);
-      expect(copy.brief).toContain("/api/openapi.json");
-      expect(copy.brief).toContain("Settings → API tokens");
-      expect(copy.brief).toContain(CONTEXT.eventId);
+      expect(copy.brief, surface).toContain(CONTEXT.origin);
+      expect(copy.brief, surface).toContain("/api/openapi.json");
+      expect(copy.brief, surface).toContain("Settings → API tokens");
+      expect(copy.brief, surface).toContain(CONTEXT.eventId);
     });
+  });
 
-    it(`${surface} asks for a report back and names an undo handle`, () => {
+  it("CONTRACT · every brief asks for a report back and names an undo handle", () => {
+    each((surface) => {
       const copy = agentBrief(surface, CONTEXT);
-      expect(copy.brief).toMatch(/When you're done, tell me|When you're done, give me/);
-      expect(copy.brief).toMatch(/form_id|outbox_ids|agenda item ids/);
+      expect(copy.brief, surface).toMatch(/When you're done, tell me|When you're done, give me/);
+      expect(copy.brief, surface).toMatch(/form_id|outbox_ids|agenda item ids/);
     });
+  });
 
-    it(`${surface} speaks in the operator's voice`, () => {
+  it("CONTRACT · every brief speaks in the operator's voice, with no exclamation marks", () => {
+    each((surface) => {
       const copy = agentBrief(surface, CONTEXT);
       // DESIGN.md: no exclamation marks, anywhere.
-      expect(copy.brief).not.toContain("!");
-      expect(copy.note).not.toContain("!");
+      expect(copy.brief, surface).not.toContain("!");
+      expect(copy.note, surface).not.toContain("!");
       // First person — the operator talking to their own agent.
-      expect(copy.brief).toMatch(/\bI\b|\bmy\b/);
+      expect(copy.brief, surface).toMatch(/\bI\b|\bmy\b/);
     });
+  });
 
-    it(`${surface} carries a real endpoint, not a path template`, () => {
+  it("CONTRACT · every endpoint line is a single real path, not a template", () => {
+    each((surface) => {
       const copy = agentBrief(surface, CONTEXT);
-      expect(copy.endpoint).toContain(CONTEXT.eventId);
-      expect(copy.endpoint).not.toContain("{eventId}");
-      expect(copy.endpoint.split("\n")).toHaveLength(1);
+      expect(copy.endpoint, surface).toContain(CONTEXT.eventId);
+      expect(copy.endpoint, surface).not.toContain("{eventId}");
+      expect(copy.endpoint.split("\n"), surface).toHaveLength(1);
     });
-  }
+  });
 
-  it("the origin is whatever the deployment actually is", () => {
+  it("CONTRACT · the origin is whatever the deployment actually is", () => {
     const local = agentBrief("cfp", { origin: "http://localhost:5173", eventId: "evt_x" });
     expect(local.brief).toContain("http://localhost:5173");
     expect(local.brief).not.toContain("marquee.stage11.dev");
@@ -61,7 +68,7 @@ describe("MRQ-130 · every brief is paste-ready", () => {
    * fail. Only the shared contract paragraph may repeat; the job each brief
    * describes must be its own copy.
    */
-  it("the four briefs are distinct copy, not one template with holes", () => {
+  it("CONTRACT · the four briefs are distinct copy, not one template with holes", () => {
     const bodies = AGENT_BRIEF_SURFACES.map((surface) => agentBrief(surface, CONTEXT).brief
       .split("\n\n")
       .filter((paragraph) => !paragraph.startsWith("Marquee is at "))
@@ -85,7 +92,7 @@ describe("MRQ-130 · every brief is paste-ready", () => {
 describe("MRQ-130 · the panel reproduces the prototype's shape", () => {
   const html = renderToString(h(AgentBriefPanel, { copy: agentBrief("agenda", CONTEXT) }));
 
-  it("renders label, explanation, brief, copy button, and the muted endpoint line", () => {
+  it("CONTRACT · the panel renders label, explanation, brief, copy button, and the muted endpoint line", () => {
     expect(html).toContain("Hand this to your agent");
     expect(html).toContain("agent-brief-hint");
     expect(html).toContain("agent-brief-text");
@@ -94,12 +101,12 @@ describe("MRQ-130 · the panel reproduces the prototype's shape", () => {
     expect(html).toContain(`POST /api/v1/events/${CONTEXT.eventId}/agenda/items`);
   });
 
-  it("keeps the endpoint reference a muted line rather than a second code block", () => {
+  it("CONTRACT · the endpoint reference stays a muted line rather than a second code block", () => {
     expect(html).not.toContain("<pre class=\"agent-brief-endpoint\"");
     expect(html.match(/<pre/g) ?? []).toHaveLength(1);
   });
 
-  it("gives the copy button a full width so its confirmation cannot resize it", () => {
+  it("CONTRACT · the copy button is full width so its confirmation cannot resize it", () => {
     // Elements never jump: the label swaps to a confirmation on copy, and only
     // a full-width button can survive that without changing size.
     expect(source("src/ui/shell/agent-brief.css")).toMatch(/\.agent-brief-copy \{[^}]*width: 100%/);
@@ -108,14 +115,14 @@ describe("MRQ-130 · the panel reproduces the prototype's shape", () => {
     expect(component).toContain("aria-live=\"polite\"");
   });
 
-  it("falls back to selecting the text where the clipboard API is unavailable", () => {
+  it("CONTRACT · copying falls back to selecting the text where the clipboard API is unavailable", () => {
     const component = source("src/ui/shell/AgentBrief.tsx");
     expect(component).toContain("navigator.clipboard?.writeText");
     expect(component).toContain("selectNodeContents");
     expect(component).toContain("Selected — press ⌘C to copy");
   });
 
-  it("paints from tokens only, so Night re-lights it with the rest of the shell", () => {
+  it("CONTRACT · the panel paints from tokens only, so Night re-lights it with the shell", () => {
     const css = source("src/ui/shell/agent-brief.css");
     const literals = css.split("\n").filter((line) => /#[0-9a-fA-F]{3,8}\b|\brgba?\(/.test(line) && !line.trim().startsWith("*"));
     expect(literals).toEqual([]);
@@ -152,20 +159,20 @@ describe("MRQ-130 · every surface keeps the controls it had", () => {
     },
   ];
 
-  for (const { surface, path, retained } of SURFACES) {
-    it(`${path} mounts the brief and keeps its existing controls`, () => {
+  it("CONTRACT · all four surfaces mount the brief and keep every existing control", () => {
+    for (const { surface, path, retained } of SURFACES) {
       const content = source(path);
-      expect(content).toContain(`<AgentBriefLauncher surface="${surface}"`);
+      expect(content, path).toContain(`<AgentBriefLauncher surface="${surface}"`);
       for (const control of retained) {
         expect(content, `${path} no longer contains "${control}"`).toContain(control);
       }
-    });
-  }
-
-  it("stops at the People boundary — that surface and its brief are MRQ-131's", () => {
-    for (const surface of AGENT_BRIEF_SURFACES) {
-      expect(agentBrief(surface, CONTEXT).endpoint).not.toMatch(/\/people|\/imports/);
     }
+  });
+
+  it("CONTRACT · the briefs stop at the People boundary, which belongs to MRQ-131", () => {
+    each((surface) => {
+      expect(agentBrief(surface, CONTEXT).endpoint, surface).not.toMatch(/\/people|\/imports/);
+    });
     expect([...AGENT_BRIEF_SURFACES]).toEqual(["cfp", "chase", "agenda", "portal"]);
     // The panel is exported on its own so MRQ-131 can consume it in place,
     // inside the import modal it already owns, rather than inlining a second
