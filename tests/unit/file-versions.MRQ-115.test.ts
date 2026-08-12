@@ -43,7 +43,7 @@ const TWO_VERSIONS: FileVersionList = {
   latest_source: "pointer",
 };
 
-test("MRQ-115/CNT-02 · the summary names the file, its version, when it arrived, and how big it is", () => {
+test("CONTRACT · MRQ-115/CNT-02 — the summary names the file, its version, when it arrived, and how big it is", () => {
   const html = renderToString(h(FileVersions, { list: TWO_VERSIONS, compact: true }));
   expect(html).toContain("slides.pdf");
   expect(html).toContain("v2 of 2");
@@ -53,7 +53,7 @@ test("MRQ-115/CNT-02 · the summary names the file, its version, when it arrived
   expect(html).toContain('href="https://media.marquee.test/api/v1/media/uploads/evt/task_upload/att_v2.pdf"');
 });
 
-test("MRQ-115/CNT-04 · both versions render, the latest is marked, and the older one keeps its own download control", () => {
+test("CONTRACT · MRQ-115/CNT-04 — both versions render, the latest is marked, and the older one keeps its own download control", () => {
   const html = renderToString(h(FileVersions, { list: TWO_VERSIONS }));
   expect(html).toContain("Current · v2 of 2");
   expect(html).toContain("Previous version");
@@ -63,7 +63,7 @@ test("MRQ-115/CNT-04 · both versions render, the latest is marked, and the olde
   expect(html).toContain("1 earlier version kept and still downloadable.");
 });
 
-test("MRQ-115 · the capability-URL caveat is stated where the link is offered, not buried", () => {
+test("CONTRACT · MRQ-115 — the capability-URL caveat is stated where the link is offered, not buried", () => {
   const html = renderToString(h(FileVersions, { list: TWO_VERSIONS }));
   // Copying a link hands out the file. Saying so is the honest version of
   // shipping the control at all.
@@ -72,7 +72,7 @@ test("MRQ-115 · the capability-URL caveat is stated where the link is offered, 
   expect(html).toContain("Copy link");
 });
 
-test("MRQ-115 · a single version says so rather than implying a history it does not have", () => {
+test("CONTRACT · MRQ-115 — a single version says so rather than implying a history it does not have", () => {
   const only = version({ attachment_id: "att_v1", version: 1, is_latest: true });
   const html = renderToString(h(FileVersions, {
     list: { owner_type: "task_upload", owner_id: "task_slides", versions: [only], latest: only, version_count: 1, latest_source: "pointer" },
@@ -82,7 +82,7 @@ test("MRQ-115 · a single version says so rather than implying a history it does
   expect(html).not.toContain("earlier version");
 });
 
-test("MRQ-115 · nothing uploaded renders a true sentence, not an empty box", () => {
+test("CONTRACT · MRQ-115 — nothing uploaded renders a true sentence, not an empty box", () => {
   const html = renderToString(h(FileVersions, { list: null, emptyCopy: "Marcus has not uploaded a deck yet." }));
   expect(html).toContain("Marcus has not uploaded a deck yet.");
   const fallback = renderToString(h(FileVersions, { list: null }));

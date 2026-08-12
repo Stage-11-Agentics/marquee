@@ -126,7 +126,7 @@ beforeEach(async () => {
     .bind(SLIDES_V2, NOW - DAY, PRIYA_SLIDES_TASK).run();
 });
 
-test("MRQ-115/CNT-13 · the library lists the upload with its session, speaker, date, and a version count of 2", async () => {
+test("CONTRACT · MRQ-115/CNT-13 — the library lists the upload with its session, speaker, date, and a version count of 2", async () => {
   const row = rowFor(await library(), PRIYA_SLIDES_TASK);
   expect(row.state).toBe("uploaded");
   expect(row.latest?.filename).toBe("slides.pdf");
@@ -137,7 +137,7 @@ test("MRQ-115/CNT-13 · the library lists the upload with its session, speaker, 
   expect(row.latest?.size_bytes).toBe(4_300_000);
 });
 
-test("MRQ-115/CNT-04 · both versions are listed newest-first, the latest is flagged, and the older one keeps its own URL", async () => {
+test("CONTRACT · MRQ-115/CNT-04 — both versions are listed newest-first, the latest is flagged, and the older one keeps its own URL", async () => {
   const row = rowFor(await library(), PRIYA_SLIDES_TASK);
   expect(row.versions.map((version) => version.version)).toEqual([2, 1]);
   expect(row.versions.map((version) => version.is_latest)).toEqual([true, false]);
@@ -150,7 +150,7 @@ test("MRQ-115/CNT-04 · both versions are listed newest-first, the latest is fla
   expect(first.url.startsWith(`https://${MEDIA_ORIGIN}/api/v1/media/`)).toBe(true);
 });
 
-test("MRQ-115 · is_latest follows the deliverable pointer even when the pointer names an older upload", async () => {
+test("CONTRACT · MRQ-115 — is_latest follows the deliverable pointer even when the pointer names an older upload", async () => {
   // The pointer is what the portal writes and what AV stages from. If a
   // "newest wins" rule ever creeps in, this is the test that catches it.
   await env.DB.prepare("UPDATE speaker_tasks SET attachment_id = ? WHERE id = ?").bind(SLIDES_V1, PRIYA_SLIDES_TASK).run();
@@ -161,7 +161,7 @@ test("MRQ-115 · is_latest follows the deliverable pointer even when the pointer
   expect(list.versions.filter((version) => version.is_latest)).toHaveLength(1);
 });
 
-test("MRQ-115 · an upload that never completed is not a version", async () => {
+test("CONTRACT · MRQ-115 — an upload that never completed is not a version", async () => {
   await storeUpload(SLIDES_PENDING, PRIYA_SLIDES_TASK, "slides.pdf", NOW, "pending");
   const list = await listVersionsFor(env.DB, "task_upload", PRIYA_SLIDES_TASK, MEDIA_ORIGIN);
   expect(list.version_count).toBe(2);
@@ -170,7 +170,7 @@ test("MRQ-115 · an upload that never completed is not a version", async () => {
   expect(rowFor(await library(), PRIYA_SLIDES_TASK).version_count).toBe(2);
 });
 
-test("MRQ-115 · the batch read numbers each owner independently and answers for owners with nothing", async () => {
+test("CONTRACT · MRQ-115 — the batch read numbers each owner independently and answers for owners with nothing", async () => {
   const lists = await listVersionsForOwners(env.DB, "task_upload", [PRIYA_SLIDES_TASK, MARCUS_SLIDES_TASK], MEDIA_ORIGIN);
   expect(lists.get(PRIYA_SLIDES_TASK)?.version_count).toBe(2);
   const marcus = lists.get(MARCUS_SLIDES_TASK);
@@ -181,7 +181,7 @@ test("MRQ-115 · the batch read numbers each owner independently and answers for
   expect(single).toEqual(lists.get(PRIYA_SLIDES_TASK));
 });
 
-test("MRQ-115 · a deliverable nobody has uploaded is a row, not an absence", async () => {
+test("CONTRACT · MRQ-115 — a deliverable nobody has uploaded is a row, not an absence", async () => {
   const snapshot = await library();
   // The human half: the AV lead's screen has to name what is missing.
   const marcus = rowFor(snapshot, MARCUS_SLIDES_TASK);
@@ -194,7 +194,7 @@ test("MRQ-115 · a deliverable nobody has uploaded is a row, not an absence", as
   expect(snapshot.metrics).toEqual({ expected: 3, received: 1, missing: 2, overdue: 1 });
 });
 
-test("MRQ-115 · filters change the visible set and the counts agree with the rows they produce", async () => {
+test("CONTRACT · MRQ-115 — filters change the visible set and the counts agree with the rows they produce", async () => {
   const uploaded = await library("?state=uploaded");
   expect(uploaded.rows.map((row) => row.id)).toEqual([PRIYA_SLIDES_TASK]);
   const missing = await library("?state=missing");
@@ -206,14 +206,14 @@ test("MRQ-115 · filters change the visible set and the counts agree with the ro
   expect(all.rows).toHaveLength(all.counts.all);
 });
 
-test("MRQ-115 · search reaches the filename, the speaker, and the session", async () => {
+test("CONTRACT · MRQ-115 — search reaches the filename, the speaker, and the session", async () => {
   expect((await library("?q=slides.pdf")).rows.map((row) => row.id)).toEqual([PRIYA_SLIDES_TASK]);
   expect((await library("?q=Marcus")).rows.map((row) => row.id)).toEqual([MARCUS_SLIDES_TASK]);
   expect((await library("?q=40-Minute")).rows.map((row) => row.id).sort()).toEqual([PRIYA_SLIDES_TASK, PRIYA_HEADSHOT_TASK].sort());
   expect((await library("?q=nothing-matches-this")).rows).toEqual([]);
 });
 
-test("MRQ-115 · a cancelled deliverable keeps its file but stops being owed", async () => {
+test("CONTRACT · MRQ-115 — a cancelled deliverable keeps its file but stops being owed", async () => {
   await env.DB.prepare("UPDATE speaker_tasks SET cancelled_at = ? WHERE id = ?").bind(NOW, MARCUS_SLIDES_TASK).run();
   const snapshot = await library();
   expect(rowFor(snapshot, MARCUS_SLIDES_TASK).state).toBe("cancelled");
@@ -223,7 +223,7 @@ test("MRQ-115 · a cancelled deliverable keeps its file but stops being owed", a
   expect(snapshot.rows[snapshot.rows.length - 1].id).toBe(MARCUS_SLIDES_TASK);
 });
 
-test("MRQ-115 · the library is organizer-only and answers honestly for a conference that does not exist", async () => {
+test("CONTRACT · MRQ-115 — the library is organizer-only and answers honestly for a conference that does not exist", async () => {
   expect((await request(`/api/v1/events/${EVENT_ID}/files`)).status).toBe(401);
   expect((await request(`/api/v1/events/${EVENT_ID}/files`, SPEAKER_SESSION)).status).toBe(403);
   // A conference this organizer holds no grant on is refused before the
@@ -233,7 +233,7 @@ test("MRQ-115 · the library is organizer-only and answers honestly for a confer
   expect((await request(`/api/v1/events/evt_does_not_exist/files`, ORGANIZER_SESSION)).status).toBe(403);
 });
 
-test("MRQ-115/CNT-02 · the speaker portal names the file it is holding, with its version count", async () => {
+test("CONTRACT · MRQ-115/CNT-02 — the speaker portal names the file it is holding, with its version count", async () => {
   const response = await request("/api/v1/me/portal", SPEAKER_SESSION);
   expect(response.status).toBe(200);
   const snapshot = await response.json() as { tasks: { id: string; payload: Record<string, unknown> }[] };

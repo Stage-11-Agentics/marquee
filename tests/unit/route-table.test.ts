@@ -10,7 +10,7 @@ test("CONTRACT · the sidebar reproduces the binding prototype navigation order"
   ]);
 });
 
-test("MRQ-115 · the files library is reachable by the noun an organizer searches for", () => {
+test("CONTRACT · MRQ-115 — the files library is reachable by the noun an organizer searches for", () => {
   // CNT-S3 step 5 enumerates the labels an operator (and the eval agent) will
   // look for. "Files" is one of them, spelled exactly; a cleverer name here is
   // a screen nobody finds.
