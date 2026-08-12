@@ -8,7 +8,7 @@ const page = fs.readFileSync(path.join(root, "src/ui/files/FilesPage.tsx"), "utf
 const dialog = fs.readFileSync(path.join(root, "src/ui/files/BulkExportDialog.tsx"), "utf8");
 const route = fs.readFileSync(path.join(root, "src/routes/files-export.routes.ts"), "utf8");
 
-test("MRQ-117 · Files selection mounts a discoverable export dialog", () => {
+test("CONTRACT · Files selection mounts a discoverable export dialog", () => {
   assert.match(page, /Download files \(\{selected\.size\}\)/);
   assert.match(page, /selectedRows/);
   assert.match(page, /<BulkExportDialog eventId=\{eventId\} rows=\{selectedRows\}/);
@@ -24,7 +24,7 @@ test("MRQ-117 · Files selection mounts a discoverable export dialog", () => {
   assert.match(dialog, /MAX_EXPORT_ITEMS/);
 });
 
-test("MRQ-117 · export route remains latest-pointer and manifest honest", () => {
+test("CONTRACT · export route remains latest-pointer and manifest honest", () => {
   assert.match(route, /listVersionsForOwners\(/);
   assert.match(route, /version\.is_latest/);
   assert.match(route, /manifest\.txt/);

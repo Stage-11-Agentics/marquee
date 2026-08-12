@@ -35,7 +35,7 @@ function signatures(bytes: Uint8Array, signature: number): number[] {
 }
 
 describe("ZIP STORE streaming", () => {
-  test("writes a valid descriptor-backed STORE archive and manifest", async () => {
+  test("CONTRACT · writes a valid descriptor-backed STORE archive and manifest", async () => {
     const archive = await bytesOf(createZipStoreStream([
       { path: "Thu-1400-Room/Priya/slides.pdf", body: body("slide bytes") },
     ], { missing: ["Thu-1400-Room/Priya · Upload Final Headshot"] }));
@@ -50,13 +50,13 @@ describe("ZIP STORE streaming", () => {
     expect(new TextDecoder().decode(archive)).toContain("Upload Final Headshot");
   });
 
-  test("continues CRC state across streamed chunks", () => {
+  test("CONTRACT · continues CRC state across streamed chunks", () => {
     const first = encoder.encode("first ");
     const second = encoder.encode("second");
     expect(crc32(second, crc32(first))).toBe(crc32(encoder.encode("first second")));
   });
 
-  test("normalizes traversal and duplicate paths", async () => {
+  test("CONTRACT · normalizes traversal and duplicate paths", async () => {
     const archive = await bytesOf(createZipStoreStream([
       { path: "../speaker/../slides.pdf", body: body("one") },
       { path: "speaker/slides.pdf", body: body("two") },
