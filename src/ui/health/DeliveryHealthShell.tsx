@@ -18,9 +18,9 @@ import { runDemoReset } from "./demo-reset";
  * anywhere else — there is no dead end on either page.
  */
 export function DeliveryHealthShell({
-  eventName = "AIE NYC 2026",
+  eventName,
   eventId = "evt_aie-ny-2026",
-}: { eventName?: string; eventId?: string }): JSX.Element {
+}: { eventName: string; eventId?: string }): JSX.Element {
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const identity = useIdentity();

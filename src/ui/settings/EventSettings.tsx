@@ -3,6 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
+import { EVENT_NAME_CHANGED } from "../shell/identity";
 import { DEFAULT_EVENT_ID, loadVenueModel } from "../venues/venue-writer";
 import type { VenueModel } from "../../lib/venues";
 import "./settings.css";
@@ -228,6 +229,7 @@ export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
         else await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/tracks/${encodeURIComponent(track.id)}`, "/api/v1/events/{eventId}/tracks/{trackId}", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       }
       const response = await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, "/api/v1/events/{eventId}");
+      window.dispatchEvent(new CustomEvent(EVENT_NAME_CHANGED, { detail: response.data.event.name }));
       setState({ kind: "ready", model: response.data });
       setRemovedFormats([]);
       setRemovedTracks([]);

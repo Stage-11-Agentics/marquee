@@ -240,7 +240,7 @@ export function run(ctx: SeedContext): void {
   ctx.add("forms", {
     id: FORM_IDS.cfp,
     event_id: EVENT_ID,
-    name: "2026 CFP",
+    name: "Call for Speakers",
     slug: "cfp",
     kind: "abstract",
     status: "open",
