@@ -253,11 +253,20 @@ async function materializePublicFixture(repository, ref, sourcePaths, output) {
 
   const loaderPath = join(output, SOURCE_LOADER_PATH);
   const loader = await readFile(loaderPath, "utf8");
-  const rewritten = loader.replace(
-    /"sequence",\s*"research",\s*"sources",/,
-    '"fixtures",\n  "seed",',
-  );
+  // The loader has reached the private capture two ways over this repo's life:
+  // as path segments joined at runtime, and as a static JSON import specifier.
+  // Both must land on the materialized public fixture, because `sequence/` is
+  // not in the public tree at all — an unrewritten specifier ships a dangling
+  // import rather than a leak, which fails the public build instead of the cut.
+  const rewrites = [
+    { from: /"sequence",\s*"research",\s*"sources",/, to: '"fixtures",\n  "seed",' },
+    { from: /sequence\/research\/sources\/(?=aie-summit-2025-program\.json)/g, to: "fixtures/seed/" },
+  ];
+  const rewritten = rewrites.reduce((text, { from, to }) => text.replace(from, to), loader);
   if (rewritten === loader) throw new Error(`seed loader did not expose the private source path: ${SOURCE_LOADER_PATH}`);
+  if (rewritten.includes("sequence/research/sources")) {
+    throw new Error(`seed loader still reaches the private capture after rewrite: ${SOURCE_LOADER_PATH}`);
+  }
   await writeFile(loaderPath, rewritten, "utf8");
 }
 
