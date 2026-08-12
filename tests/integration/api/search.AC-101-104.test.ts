@@ -11,6 +11,7 @@ const OWNER_ID = "person_search_owner";
 const FORM_ADMIN_ID = "person_search_form_admin";
 const SPEAKER_ID = "person_signal_speaker";
 const SECRET_SPEAKER_ID = "person_secret_speaker";
+const SUBMITTER_ONLY_ID = "person_submitter_only";
 const MAIN_FORM_ID = "form_signal";
 const SECRET_FORM_ID = "form_secret";
 const ABSTRACT_ID = "submission_signal_abstract";
@@ -48,6 +49,7 @@ async function seedFixture(): Promise<void> {
       [FORM_ADMIN_ID, "admin@search.example", "Assigned Admin", "Conference Operator", "Search Org"],
       [SPEAKER_ID, "speaker@search.example", "Signal Speaker", "Systems Cartographer", "Signal Labs"],
       [SECRET_SPEAKER_ID, "secret@search.example", "Secret Speaker", "Private Researcher", "Secret Labs"],
+      [SUBMITTER_ONLY_ID, "submitter@search.example", "Submitter Only Person", null, null],
       ["person_other_reviewer", "other@search.example", "Other Event Reviewer", "Reviewer", "Search Org"],
     ].map(([id, email, name, title, company]) => env.DB.prepare(
       `INSERT INTO people
@@ -71,7 +73,7 @@ async function seedFixture(): Promise<void> {
       VALUES (?, ?, ?, 'abstract', 'Signal over silent failures', 'A reliable signal for operators.', 'accepted', 'public', ?, ?, ?),
              (?, ?, ?, 'session', 'Signal workshop in practice', 'A session about signal routing.', 'accepted', 'public', ?, ?, ?),
              (?, ?, ?, 'abstract', 'Secret signal review', 'A private signal record.', 'draft', 'admin', ?, ?, ?)`)
-      .bind(ABSTRACT_ID, EVENT_ID, MAIN_FORM_ID, OWNER_ID, now, now, SESSION_ID, EVENT_ID, MAIN_FORM_ID, OWNER_ID, now, now, SECRET_ID, EVENT_ID, SECRET_FORM_ID, SECRET_SPEAKER_ID, now, now),
+      .bind(ABSTRACT_ID, EVENT_ID, MAIN_FORM_ID, OWNER_ID, now, now, SESSION_ID, EVENT_ID, MAIN_FORM_ID, OWNER_ID, now, now, SECRET_ID, EVENT_ID, SECRET_FORM_ID, SUBMITTER_ONLY_ID, now, now),
     env.DB.prepare(`INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
       VALUES ('participation_signal', ?, ?, 'speaker', 0, ?, ?),
              ('participation_session', ?, ?, 'speaker', 0, ?, ?),
@@ -130,6 +132,16 @@ describe.sequential("MRQ-29 quick search", () => {
     expect(body.data.find((result) => result.id === SESSION_ID)).toMatchObject({ type: "Session", href: `/submissions/${SESSION_ID}` });
     expect(body.data.find((result) => result.id === SPEAKER_ID)).toMatchObject({ type: "Speaker", href: `/onboarding?person=${SPEAKER_ID}` });
     expect(body.data.find((result) => result.id === MAIN_FORM_ID)).toMatchObject({ type: "Form", href: `/forms?form=${MAIN_FORM_ID}` });
+  });
+
+  test("CONTRACT · MRQ-127 submitter-only people are discoverable for the create-submission picker", async () => {
+    const response = await request("?q=Submitter%20Only");
+    expect(response.status).toBe(200);
+    const body = await json(response);
+    expect(body.data.find((result) => result.id === SUBMITTER_ONLY_ID)).toMatchObject({
+      type: "Speaker",
+      subtitle: "Conference person",
+    });
   });
 
   test("AC-103 · an event search query remains bounded and responds to a misspelled title", async () => {

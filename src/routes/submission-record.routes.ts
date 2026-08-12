@@ -666,6 +666,13 @@ const createSubmission = defineApiRoute(
         return input.person_id;
       }
       if (!input.name || !input.email) throw ApiError.unprocessable("a new participant needs a name and email", "participants");
+      const existing = await context.env.DB.prepare(
+        "SELECT id FROM people WHERE org_id = ? AND lower(email) = lower(?)",
+      ).bind(event.org_id, input.email).first<{ id: string }>();
+      if (existing) {
+        knownPeople.add(existing.id);
+        return existing.id;
+      }
       const id = newUlid();
       personStatements.push(context.env.DB.prepare(`
         INSERT INTO people
