@@ -25,7 +25,11 @@ import { reseedDemo } from "../../src/lib/reset-demo/reseed-demo";
 import { applyMigrations, env } from "./apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
-const NOW = Date.UTC(2026, 7, 12, 12, 0, 0);
+// Anchored to the real clock. The CFP below is seeded open — opens_at NOW-1s,
+// closes_at NOW+1s — and the server decides open/closed against Date.now(), so
+// a calendar-pinned anchor makes that a two-second window on one afternoon and
+// a closed form every moment after it.
+const NOW = Date.now();
 const ORG_ID = "org_multi_event";
 const OWNER_ID = "per_multi_owner";
 const REVIEWER_ID = "per_multi_reviewer";
