@@ -7,9 +7,14 @@ const source = async (path) => readFile(new URL(path, root), "utf8");
 
 test("MRQ-106 · the public agenda keeps a door to its own data feed", async () => {
   // Removed in MRQ-94's navigation repair with nothing put in its place, which
-  // left the JSON feed behind the agenda with no on-page entrance at all.
+  // left the JSON feed behind the agenda with no on-page entrance at all. It
+  // comes back carrying the page's own filters — the unscoped version is what
+  // MRQ-94 was right to delete.
   const agenda = await source("src/ui/public/agenda/PublicAgendaPage.tsx");
-  assert.match(agenda, /href=\{`\/api\/v1\/public\/agenda\?\$\{eventQuery\}`\}>Agenda data ↗<\/a>/);
+  assert.match(agenda, /href=\{`\/api\/v1\/public\/agenda\?\$\{feedQuery\.toString\(\)\}`\}>Agenda data ↗<\/a>/);
+  assert.match(agenda, /if \(data\.filters\.day && data\.filters\.day !== "all"\) feedQuery\.set\("day", data\.filters\.day\);/);
+  assert.match(agenda, /if \(data\.filters\.track\) feedQuery\.set\("track", data\.filters\.track\);/);
+  assert.match(agenda, /if \(data\.filters\.q\) feedQuery\.set\("q", data\.filters\.q\);/);
 });
 
 test("MRQ-106 · the Ready-to-place escape holds its space before the count arrives", async () => {

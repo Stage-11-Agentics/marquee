@@ -215,6 +215,18 @@ function TrackChips({ session }: { session: PublicSession }): JSX.Element {
 export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Element {
   const eventQuery = `event=${encodeURIComponent(data.event.slug)}`;
   const hasFilters = Boolean(data.filters.track || data.filters.q || (data.filters.day && data.filters.day !== "all"));
+  /**
+   * The feed URL for exactly what is on screen. The old data link carried the
+   * event and nothing else, so from a filtered agenda it handed you a different
+   * program than the one you were reading — which is why MRQ-94 removed it
+   * rather than fix it. A link that answers a different question than the page
+   * is worse than no link; a link that answers the same one is the page's
+   * machine-readable half.
+   */
+  const feedQuery = new URLSearchParams({ event: data.event.slug });
+  if (data.filters.day && data.filters.day !== "all") feedQuery.set("day", data.filters.day);
+  if (data.filters.track) feedQuery.set("track", data.filters.track);
+  if (data.filters.q) feedQuery.set("q", data.filters.q);
   const venueName = data.venue?.buildingName ?? data.event.venue ?? "Online";
   return (
     <PublicShell
@@ -222,10 +234,7 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
       title="Agenda"
       actions={<>
         <a class="public-button" href={`/speakers?${eventQuery}`}>Speakers</a>
-        {/* The machine-readable half of this page. It was dropped in MRQ-94's
-            navigation repair; nothing replaced it, so the JSON feed behind the
-            agenda had no on-page door at all. */}
-        <a class="public-button" href={`/api/v1/public/agenda?${eventQuery}`}>Agenda data ↗</a>
+        <a class="public-button" href={`/api/v1/public/agenda?${feedQuery.toString()}`}>Agenda data ↗</a>
         <a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a>
       </>}
     >
