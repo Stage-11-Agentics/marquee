@@ -190,10 +190,12 @@ test("AC-274 · the speakers embed orders by surname, matching the public direct
   ];
 
   await env.DB.batch([
-    // First-name order here is Aparna → Barr → Zoë; surname order is the reverse.
-    ...seedSpeaker("zoe", "Zoë Abernathy", "Retrieval at the edge", Date.UTC(2026, 9, 12, 16)),
+    // Three orders that disagree, so only surname order satisfies the assertion:
+    // by first name this is Aparna → Barr → Zoë, by session time it is Aparna →
+    // Barr → Zoë as well, and by surname it is the reverse of both.
+    ...seedSpeaker("zoe", "Zoë Abernathy", "Retrieval at the edge", Date.UTC(2026, 9, 12, 18)),
     ...seedSpeaker("barr", "Barr Mikkelsen", "Budgets for eval suites", Date.UTC(2026, 9, 12, 17)),
-    ...seedSpeaker("aparna", "Aparna Yardley", "Latency as a feature", Date.UTC(2026, 9, 12, 18)),
+    ...seedSpeaker("aparna", "Aparna Yardley", "Latency as a feature", Date.UTC(2026, 9, 12, 16)),
   ]);
   await purgePublicEmbedCache(env.CACHE, { eventId: EVENT_ID });
 
@@ -201,6 +203,10 @@ test("AC-274 · the speakers embed orders by surname, matching the public direct
   expect(list.status).toBe(200);
   const body = await list.text();
   const seeded = ["Zoë Abernathy", "Barr Mikkelsen", "Aparna Yardley"];
+  // Presence first: `indexOf` answers -1 for a name that never rendered, and a
+  // comparator of all -1s is a no-op on a stable sort — so without this the
+  // ordering assertion passes green against an embed carrying no speakers.
+  for (const name of seeded) expect(body).toContain(name);
   expect(seeded.toSorted((left, right) => body.indexOf(left) - body.indexOf(right))).toEqual(seeded);
 });
 
