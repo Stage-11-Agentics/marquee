@@ -10,6 +10,15 @@ const COOKIE = `mq_session=${SESSION_ID}`;
 const FILE_TEMPLATE_ID = "template_task_file_mrq96";
 const ACK_TEMPLATE_ID = "template_task_ack_mrq96";
 
+type FileConfig = { accept: string[]; maxBytes: number } | null;
+interface TemplateListResponse { data: Array<{ file_config: FileConfig }> }
+interface TemplateUpdateResponse { data: { file_config: FileConfig } }
+interface ErrorResponse { error: { code: string; field?: string } }
+
+async function responseJson<T>(response: Response): Promise<T> {
+  return await response.json() as T;
+}
+
 async function seedFixture(): Promise<void> {
   const now = Date.now();
   await env.DB.batch([
@@ -51,7 +60,7 @@ async function request(path: string, init: RequestInit = {}, cookie = COOKIE): P
   return app.request(`${ORIGIN}${path}`, { ...init, headers: { cookie, ...(init.headers ?? {}) } }, env);
 }
 
-test("MRQ-96 · list returns task templates in position order and canonicalizes seeded config", async () => {
+test("CONTRACT · MRQ-96 · list returns task templates in position order and canonicalizes seeded config", async () => {
   const response = await request(`/api/v1/events/${EVENT_ID}/task-templates`);
   expect(response.status).toBe(200);
   expect(await response.json()).toMatchObject({
@@ -62,29 +71,29 @@ test("MRQ-96 · list returns task templates in position order and canonicalizes 
   });
 });
 
-test("MRQ-96 · file policy edits normalize, cap to the R2 ceiling, and survive reload", async () => {
+test("CONTRACT · MRQ-96 · file policy edits normalize, cap to the R2 ceiling, and survive reload", async () => {
   const response = await request(`/api/v1/events/${EVENT_ID}/task-templates/${FILE_TEMPLATE_ID}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ file_config: { accept: [".PDF", "pdf", "PPTX"], maxBytes: 200 * 1024 * 1024 } }),
   });
   expect(response.status).toBe(200);
-  expect((await response.json()).data.file_config).toEqual({ accept: ["pdf", "pptx"], maxBytes: 100 * 1024 * 1024 });
+  expect((await responseJson<TemplateUpdateResponse>(response)).data.file_config).toEqual({ accept: ["pdf", "pptx"], maxBytes: 100 * 1024 * 1024 });
 
   const stored = await env.DB.prepare("SELECT file_config FROM task_templates WHERE id = ?").bind(FILE_TEMPLATE_ID).first<{ file_config: string }>();
   expect(JSON.parse(stored?.file_config ?? "{}")).toEqual({ accept: ["pdf", "pptx"], maxBytes: 100 * 1024 * 1024 });
   const reloaded = await request(`/api/v1/events/${EVENT_ID}/task-templates`);
-  expect((await reloaded.json()).data[0].file_config).toEqual({ accept: ["pdf", "pptx"], maxBytes: 100 * 1024 * 1024 });
+  expect((await responseJson<TemplateListResponse>(reloaded)).data[0].file_config).toEqual({ accept: ["pdf", "pptx"], maxBytes: 100 * 1024 * 1024 });
 });
 
-test("MRQ-96 · empty lists and non-file templates are rejected without changing stored config", async () => {
+test("CONTRACT · MRQ-96 · empty lists and non-file templates are rejected without changing stored config", async () => {
   const empty = await request(`/api/v1/events/${EVENT_ID}/task-templates/${FILE_TEMPLATE_ID}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ file_config: { accept: [], maxBytes: 10 * 1024 * 1024 } }),
   });
   expect(empty.status).toBe(422);
-  expect((await empty.json()).error).toMatchObject({ code: "unprocessable", field: "accept" });
+  expect((await responseJson<ErrorResponse>(empty)).error).toMatchObject({ code: "unprocessable", field: "accept" });
 
   const nonFile = await request(`/api/v1/events/${EVENT_ID}/task-templates/${ACK_TEMPLATE_ID}`, {
     method: "PATCH",
@@ -92,19 +101,19 @@ test("MRQ-96 · empty lists and non-file templates are rejected without changing
     body: JSON.stringify({ file_config: null }),
   });
   expect(nonFile.status).toBe(422);
-  expect((await nonFile.json()).error).toMatchObject({ code: "unprocessable", field: "file_config" });
+  expect((await responseJson<ErrorResponse>(nonFile)).error).toMatchObject({ code: "unprocessable", field: "file_config" });
   const stored = await env.DB.prepare("SELECT file_config FROM task_templates WHERE id = ?").bind(FILE_TEMPLATE_ID).first<{ file_config: string }>();
   expect(stored?.file_config).toContain(".pdf");
 });
 
-test("MRQ-96 · null preserves the system-default behavior and auth remains required", async () => {
+test("CONTRACT · MRQ-96 · null preserves the system-default behavior and auth remains required", async () => {
   const cleared = await request(`/api/v1/events/${EVENT_ID}/task-templates/${FILE_TEMPLATE_ID}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ file_config: null }),
   });
   expect(cleared.status).toBe(200);
-  expect((await cleared.json()).data.file_config).toBeNull();
+  expect((await responseJson<TemplateUpdateResponse>(cleared)).data.file_config).toBeNull();
 
   const unauthenticated = await request(`/api/v1/events/${EVENT_ID}/task-templates`, {}, "");
   expect(unauthenticated.status).toBe(401);

@@ -16,6 +16,7 @@ const FILE_PRESETS = [
   { id: "images", label: "Images", extensions: ["jpg", "jpeg", "png", "webp", "gif"] },
   { id: "video", label: "Video", extensions: ["mp4", "mov", "webm", "m4v"] },
 ] as const;
+const PRESET_EXTENSIONS: string[] = FILE_PRESETS.flatMap((preset) => [...preset.extensions]);
 
 interface TaskFileConfig {
   accept: string[];
@@ -103,7 +104,7 @@ function FileTemplateRow({
               return <button class={`task-template-preset ${selected ? "is-selected" : ""}`} type="button" aria-pressed={selected} key={preset.id} onClick={() => togglePreset(preset.extensions)}><span>{preset.label}</span><small>{selected ? "Included" : "Add set"}</small></button>;
             })}
           </div>
-          <label class="field task-template-custom-field"><span>Custom extensions</span><input value={custom} placeholder="csv, zip, or another extension" onInput={(event) => { const next = extensionDraft(event.currentTarget.value); const presetExtensions = FILE_PRESETS.flatMap((preset) => [...preset.extensions]); onChange({ ...config, accept: [...new Set([...config.accept.filter((extension) => presetExtensions.includes(extension)), ...next])] }); }} /><small>Separate extensions with commas. A leading dot is optional.</small></label>
+          <label class="field task-template-custom-field"><span>Custom extensions</span><input value={custom} placeholder="csv, zip, or another extension" onInput={(event) => { const next = extensionDraft(event.currentTarget.value); onChange({ ...config, accept: [...new Set([...config.accept.filter((extension) => PRESET_EXTENSIONS.includes(extension)), ...next])] }); }} /><small>Separate extensions with commas. A leading dot is optional.</small></label>
         </fieldset>
         <div class="task-template-limits">
           <label class="field"><span>Maximum file size</span><span class="unit-input"><input type="number" min="1" max={MAX_FILE_SIZE_MB} step="1" value={fileSizeMb(config)} onInput={(event) => { const megabytes = Math.min(MAX_FILE_SIZE_MB, Math.max(1, Number(event.currentTarget.value) || 1)); onChange({ ...config, maxBytes: megabytes * BYTES_PER_MB }); }} /><small>MB</small></span><small>Up to {MAX_FILE_SIZE_MB} MB per file.</small></label>
