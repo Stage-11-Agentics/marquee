@@ -84,7 +84,7 @@ async function loginLinks(): Promise<{ redirect_to: string }[]> {
   return result.results;
 }
 
-test("MRQ-133 · a request with no event_id resolves the person and enqueues exactly one mail", async () => {
+test("CONTRACT · MRQ-133 · a request with no event_id resolves the person and enqueues exactly one mail", async () => {
   await seedRealInstance();
   const response = await requestLink({ email: ADDRESS });
   expect(response.status).toBe(200);
@@ -99,7 +99,7 @@ test("MRQ-133 · a request with no event_id resolves the person and enqueues exa
   expect(await loginLinks()).toEqual([{ redirect_to: "/reviewer" }]);
 });
 
-test("MRQ-133 · a person with no event membership is filed against the org's newest event", async () => {
+test("CONTRACT · MRQ-133 · a person with no event membership is filed against the org's newest event", async () => {
   await seedRealInstance();
   await env.DB.prepare("DELETE FROM memberships WHERE person_id = ?").bind(PERSON).run();
   await requestLink({ email: ADDRESS });
@@ -110,7 +110,7 @@ test("MRQ-133 · a person with no event membership is filed against the org's ne
   expect(await loginLinks()).toEqual([{ redirect_to: "/portal" }]);
 });
 
-test("MRQ-133 · an unknown address gets the identical body and enqueues nothing", async () => {
+test("CONTRACT · MRQ-133 · an unknown address gets the identical body and enqueues nothing", async () => {
   await seedRealInstance();
   const known = await requestLink({ email: ADDRESS });
   const knownBody = await known.text();
@@ -122,7 +122,7 @@ test("MRQ-133 · an unknown address gets the identical body and enqueues nothing
   expect(await outboxRows()).toHaveLength(0);
 });
 
-test("MRQ-133 · an org with no event at all mints nothing and still says the same sentence", async () => {
+test("CONTRACT · MRQ-133 · an org with no event at all mints nothing and still says the same sentence", async () => {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, 'Bare', 'bare', 1, 1)").bind(ORG),
     env.DB.prepare(
@@ -136,7 +136,7 @@ test("MRQ-133 · an org with no event at all mints nothing and still says the sa
   expect(await loginLinks()).toHaveLength(0);
 });
 
-test("MRQ-133 · demo mode returns the link on screen", async () => {
+test("CONTRACT · MRQ-133 · demo mode returns the link on screen", async () => {
   await seedDemoFixture();
   const response = await requestLink({ email: "organizer@demo.marquee.example" });
   const body = await response.json<{ message: string; magic_link?: string }>();
@@ -144,7 +144,7 @@ test("MRQ-133 · demo mode returns the link on screen", async () => {
   expect(body.magic_link).toMatch(/\/api\/v1\/auth\/exchange\?token=/);
 });
 
-test("MRQ-133 · a second request inside the cooldown does not send a second mail", async () => {
+test("CONTRACT · MRQ-133 · a second request inside the cooldown does not send a second mail", async () => {
   await seedRealInstance();
   await requestLink({ email: ADDRESS });
   const second = await requestLink({ email: ADDRESS });
@@ -153,13 +153,13 @@ test("MRQ-133 · a second request inside the cooldown does not send a second mai
   expect(await loginLinks()).toHaveLength(1);
 });
 
-test("MRQ-133 · a hostile ?next= never becomes the redirect", async () => {
+test("CONTRACT · MRQ-133 · a hostile ?next= never becomes the redirect", async () => {
   await seedRealInstance();
   await requestLink({ email: ADDRESS, redirect_to: "//evil.example/steal" });
   expect(await loginLinks()).toEqual([{ redirect_to: "/reviewer" }]);
 });
 
-test("MRQ-133 · a browser opening a spent link lands on the door, not on JSON", async () => {
+test("CONTRACT · MRQ-133 · a browser opening a spent link lands on the door, not on JSON", async () => {
   const response = await app.request("/api/v1/auth/exchange?token=long-since-spent", {
     headers: {
       accept: "text/html,application/xhtml+xml",
@@ -172,7 +172,7 @@ test("MRQ-133 · a browser opening a spent link lands on the door, not on JSON",
   expect(response.headers.get("set-cookie")).toMatch(/mq_session=/);
 });
 
-test("MRQ-133 · an API client opening a spent link still gets the 401 envelope", async () => {
+test("CONTRACT · MRQ-133 · an API client opening a spent link still gets the 401 envelope", async () => {
   const response = await app.request("/api/v1/auth/exchange?token=long-since-spent", {
     headers: { accept: "application/json" },
   }, env);
@@ -185,7 +185,7 @@ test("MRQ-133 · an API client opening a spent link still gets the 401 envelope"
   });
 });
 
-test("MRQ-133 · a link minted through the door exchanges into a session", async () => {
+test("CONTRACT · MRQ-133 · a link minted through the door exchanges into a session", async () => {
   await seedRealInstance();
   const minted = await mintMagicLink(env.DB, {
     personId: PERSON,
@@ -206,7 +206,7 @@ async function signinPage(init: RequestInit = {}, overrides: Record<string, unkn
   return response.text();
 }
 
-test("MRQ-133 · the anonymous page offers the form, and says so honestly when mail is unconfigured", async () => {
+test("CONTRACT · MRQ-133 · the anonymous page offers the form, and says so honestly when mail is unconfigured", async () => {
   const unconfigured = await signinPage();
   expect(unconfigured).toContain('id="signin-form"');
   expect(unconfigured).toContain("This deployment cannot send mail yet.");
@@ -217,7 +217,7 @@ test("MRQ-133 · the anonymous page offers the form, and says so honestly when m
   expect(configured).not.toContain("This deployment cannot send mail yet.");
 });
 
-test("MRQ-133 · a demo instance additionally opens its three doors", async () => {
+test("CONTRACT · MRQ-133 · a demo instance additionally opens its three doors", async () => {
   await seedDemoFixture();
   const page = await signinPage();
   expect(page).toContain('data-signin-demo="organizer"');
@@ -225,7 +225,7 @@ test("MRQ-133 · a demo instance additionally opens its three doors", async () =
   expect(page).toContain('data-signin-demo="speaker"');
 });
 
-test("MRQ-133 · a signed-in visitor is not shown a login form", async () => {
+test("CONTRACT · MRQ-133 · a signed-in visitor is not shown a login form", async () => {
   await seedDemoFixture();
   const session = await createSession(env.DB, {
     personId: DEMO_ORGANIZER_PERSON_ID,
@@ -239,12 +239,12 @@ test("MRQ-133 · a signed-in visitor is not shown a login form", async () => {
   expect(page).toContain('href="/dashboard"');
 });
 
-test("MRQ-133 · the reason banner states why the visitor is here", async () => {
+test("CONTRACT · MRQ-133 · the reason banner states why the visitor is here", async () => {
   const response = await app.request("/signin?reason=expired", {}, env);
   expect(await response.text()).toContain("Link expired");
 });
 
-test("MRQ-133 · /login and /sign-in are the same page", async () => {
+test("CONTRACT · MRQ-133 · /login and /sign-in are the same page", async () => {
   for (const path of ["/login", "/sign-in"]) {
     const response = await app.request(path, {}, env);
     expect(response.status).toBe(200);

@@ -33,7 +33,7 @@ describe("the seat's home", () => {
     expect(roleHome([])).toBe("/portal");
   });
 
-  test("rolesOf reads the role column off membership rows", () => {
+  test("CONTRACT · rolesOf reads the role column off membership rows", () => {
     expect(rolesOf([{ role: "owner" }, { role: "reviewer" }])).toEqual(["owner", "reviewer"]);
   });
 });
@@ -99,7 +99,7 @@ describe("outbox attribution", () => {
     expect(pickOutboxEventId([{ event_id: null, created_at: 1 }], [])).toBeNull();
   });
 
-  test("the pick does not mutate the caller's rows", () => {
+  test("CONTRACT · the pick does not mutate the caller's rows", () => {
     const memberships = [
       { event_id: "evt_a", created_at: 1 },
       { event_id: "evt_b", created_at: 2 },
