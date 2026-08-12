@@ -306,7 +306,7 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
       state: "no_address",
       level: "alarm",
       reason: "There is no usable email address on file.",
-      what_to_do: "Add an address to this speaker's record, then send the decision.",
+      what_to_do: "Add an address to this speaker's record, then open the record and choose Send decision again.",
     };
   }
   if (fact.outbox_status === "suppressed") {
@@ -323,7 +323,7 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
       state: "held_back",
       level: "alarm",
       reason: heldBackReason(fact.suppressed_reason),
-      what_to_do: "Open the record and send the decision again once the reason no longer applies.",
+      what_to_do: "Open the record and choose Send decision again once the reason no longer applies.",
     };
   }
   if (fact.outbox_status === "queued") {
@@ -333,7 +333,7 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
         state: "waiting_too_long",
         level: "warn",
         reason: "Written and waiting longer than it should be.",
-        what_to_do: "Give it a few minutes. If it is still here, send it again from the record.",
+        what_to_do: "Give it a few minutes. If it is still here, open the record and choose Send decision again.",
       };
     }
     return {
@@ -348,14 +348,14 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
       state: "changed_elsewhere",
       level: "warn",
       reason: "The record changed in Airtable after the decision was made.",
-      what_to_do: "Open the record, confirm the decision still stands, then send it.",
+      what_to_do: "Open the record, confirm the decision still stands, then choose Send decision again.",
     };
   }
   return {
     state: "never_prepared",
     level: "alarm",
     reason: "The decision is recorded but no message was ever written.",
-    what_to_do: "Open the record and send the decision — this speaker does not know yet.",
+    what_to_do: "Open the record and choose Send decision again — this speaker does not know yet.",
   };
 }
 
