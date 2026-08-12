@@ -114,7 +114,7 @@ beforeEach(async () => {
   await applyMigrations();
 });
 
-test("MRQ-129 · the copy manifest accounts for every column in every table it copies", async () => {
+test("CONTRACT · MRQ-129 the copy manifest accounts for every column in every table it copies", async () => {
   // Discovery means a new column is never silently dropped; this means it is
   // never silently leaked. A migration that adds one fails here, which is the
   // only moment anyone is in a position to rule on where it should go.
@@ -126,7 +126,7 @@ test("MRQ-129 · the copy manifest accounts for every column in every table it c
   }
 });
 
-test("MRQ-129 · the events list is scoped to the organization and to what each seat can read", async () => {
+test("CONTRACT · MRQ-129 the events list is scoped to the organization and to what each seat can read", async () => {
   await seedOrganization();
 
   const owner = await request("/api/v1/events", { headers: { cookie: await sessionCookie(OWNER_ID) } });
@@ -149,7 +149,7 @@ test("MRQ-129 · the events list is scoped to the organization and to what each 
   expect(anonymous.status).toBe(401);
 });
 
-test("MRQ-129 · a copied conference carries the structure and none of the cross-conference references", async () => {
+test("CONTRACT · MRQ-129 a copied conference carries the structure and none of the cross-conference references", async () => {
   await seedOrganization();
   const cookie = await sessionCookie(OWNER_ID);
 
@@ -160,7 +160,7 @@ test("MRQ-129 · a copied conference carries the structure and none of the cross
     copied: Record<string, number>;
     task_templates_skipped_fixed_due: number;
   }>;
-  const created = body.event ? body.event.id : body.data.event.id;
+  const created = body.data.event.id;
 
   expect(body.data.copied.formats).toBe(1);
   expect(body.data.copied.tracks).toBe(1);
@@ -214,7 +214,7 @@ test("MRQ-129 · a copied conference carries the structure and none of the cross
   expect(room?.building_id).not.toBe(BUILDING_ID);
 });
 
-test("MRQ-129 · an illegal copy selection is refused before anything is written, not rolled back after", async () => {
+test("CONTRACT · MRQ-129 an illegal copy selection is refused before anything is written, not rolled back after", async () => {
   await seedOrganization();
   const cookie = await sessionCookie(OWNER_ID);
 
@@ -246,7 +246,7 @@ test("MRQ-129 · an illegal copy selection is refused before anything is written
   expect(unknown.status).toBe(404);
 });
 
-test("MRQ-129 · the copy plan reports what would travel, what is locked, and what will be declined", async () => {
+test("CONTRACT · MRQ-129 the copy plan reports what would travel, what is locked, and what will be declined", async () => {
   await seedOrganization();
   const cookie = await sessionCookie(OWNER_ID);
   const response = await request(`/api/v1/events/${SOURCE_EVENT_ID}/copy-plan`, { headers: { cookie } });
@@ -265,7 +265,7 @@ test("MRQ-129 · the copy plan reports what would travel, what is locked, and wh
   expect(body.data.reasons.task_templates).toContain("Speaker details");
 });
 
-test("MRQ-129 · the reset sweeps the demo organization, and the demo oracle stays the seeded conference", async () => {
+test("CONTRACT · MRQ-129 the reset sweeps the demo organization, and the demo oracle stays the seeded conference", async () => {
   // `npm run seed` — the documented production path — stamps every seeded row
   // with a frozen clock that is currently in the future, which is exactly the
   // condition that made "oldest demo conference" the wrong oracle.
