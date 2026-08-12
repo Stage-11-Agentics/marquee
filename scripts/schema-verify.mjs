@@ -172,8 +172,8 @@ const requiredIndexes = [
 
 assert.equal(initialTables.length, 46, "0001 must define exactly 46 product tables");
 assert.equal(new Set(initialTables).size, 46, "0001 contains duplicate table names");
-assert.equal(expectedTables.length, 48, "Applied migrations must define exactly 48 product tables");
-assert.equal(new Set(expectedTables).size, 48, "Applied migrations contain duplicate table names");
+assert.equal(expectedTables.length, 51, "Applied migrations must define exactly 51 product tables");
+assert.equal(new Set(expectedTables).size, 51, "Applied migrations contain duplicate table names");
 for (const index of requiredIndexes) {
   assert.ok(expectedIndexes.includes(index), `Required schema index is missing: ${index}`);
 }

@@ -31,6 +31,11 @@ import { OnboardingPage } from "../onboarding/OnboardingPage";
 import { SpeakersPage } from "../speakers/SpeakersPage";
 import { SessionizeImportPage } from "../import/SessionizeImportPage";
 import { FilesPage } from "../files/FilesPage";
+import { CreateConferencePage } from "../setup/CreateConferencePage";
+import { HandoffPage } from "../setup/HandoffPage";
+import { PeoplePage } from "../people/PeoplePage";
+import { ListsPage } from "../people/ListsPage";
+import { SourcingPipelinePage } from "../people/SourcingPipelinePage";
 
 type ResetResponse = {
   job_id?: unknown;
@@ -124,6 +129,12 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const isSpeakers = location.pathname === "/roster";
   const isImport = location.pathname === "/import";
   const isApiTokens = location.pathname === "/settings/api";
+  // Four paths, one page: agents guess URLs and each 404 costs turns.
+  const isPeople = ["/people", "/crm", "/directory", "/contacts"].includes(location.pathname);
+  // The handoff is the second half of the claim, not an admin screen: it is
+  // reached seconds after a session first exists, before there is a conference
+  // to draw navigation around.
+  if (location.pathname === "/handoff") return <HandoffPage navigate={navigate} />;
   if (location.pathname === "/portal") return <PortalPage />;
   if (location.pathname === "/co-speaker") return <CoSpeakerPage />;
   if (location.pathname === "/reviewer") return <ReviewerPage />;
@@ -151,11 +162,16 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
               but a route module that throws on its first render has none — and
               without this the whole shell, navigation included, goes white. */}
           <ErrorBoundary label={routeName}>
-          {isSubmissionsList
+          {isPeople
+            ? <PeoplePage search={location.search} navigate={navigate} />
+            : route?.id === "lists" ? <ListsPage navigate={navigate} />
+            : route?.id === "sourcing" ? <SourcingPipelinePage search={location.search} navigate={navigate} />
+            : isSubmissionsList
             ? <SubmissionsPage search={location.search} navigate={navigate} />
             : isProgramBoard ? <ProgramBoardPage navigate={navigate} />
             : isSubmissionNew ? <CreateSubmissionPage navigate={navigate} />
             : isSubmissionRecord ? <SubmissionRecordPage submissionId={decodeURIComponent(location.pathname.slice("/submissions/".length))} navigate={navigate} />
+            : route?.id === "conference-new" ? <CreateConferencePage navigate={navigate} />
             : route?.id === "dashboard" ? <DashboardPage navigate={navigate} />
             : isEvaluation ? <EvaluationPage />
             : route?.id === "venues" ? <VenuesPage />

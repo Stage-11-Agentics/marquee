@@ -20,6 +20,12 @@ everything else is drawn inside the organizer shell.
 
 | Path | Label | Surface | In sidebar | Navigation |
 | --- | --- | --- | --- | --- |
+| `/people` | People | organizer | yes | client push |
+| `/lists` | Lists | organizer | yes | client push |
+| `/pipeline` | Sourcing pipeline | organizer | yes | client push |
+| `/crm` | People | organizer | — | client push |
+| `/directory` | People | organizer | — | client push |
+| `/contacts` | People | organizer | — | client push |
 | `/dashboard` | Program home | organizer | yes | client push |
 | `/board` | Program board | organizer | yes | client push |
 | `/submissions` | Abstracts & sessions | organizer | yes | client push |
@@ -46,6 +52,8 @@ everything else is drawn inside the organizer shell.
 | `/delivery-health` | Speaker follow-ups | organizer | yes | browser navigation |
 | `/delivery-health?view=system` | System health | organizer | yes | browser navigation |
 | `/co-speaker` | Co-speaker confirmation | speaker | — | browser navigation |
+| `/conferences/new` | Create conference | organizer | — | client push |
+| `/handoff` | Instance handoff | organizer | — | client push |
 | `/settings/venues` | Venues | organizer | — | client push |
 | `/submissions/:id` | Submission record | organizer | — | client push |
 | `/settings/tasks` | Task templates | organizer | — | client push |
@@ -82,7 +90,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 ```text
 ROUTES (real paths, not hash routes):
   Public, no auth: / /:eventSlug/:kind/embed /agenda /embed/:slug /embed/config /f/:slug /p/:slug /s/:slug /site /speakers
-  Organizer (admin shell): /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /roster /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /settings/venues /submissions/:id /settings/tasks /settings/api /import
+  Organizer (admin shell): /people /lists /pipeline /crm /directory /contacts /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /roster /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /import
   Review queue: /reviewer
   Speaker portal: /portal
   Co-speaker confirmation: /co-speaker

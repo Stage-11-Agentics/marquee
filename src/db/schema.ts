@@ -33,7 +33,16 @@ export const MAGIC_LINK_PURPOSES = [
   "draft_resume",
   "cospeaker_profile",
   "task_link",
+  "claim",
+  "org_invite",
 ] as const;
+/**
+ * The two purposes that pre-date their person: a claim token is minted against
+ * a database with no people in it, and an organization invite is minted before
+ * the invited organizer exists. Both create their person at exchange, so both
+ * carry a null `person_id` — enforced in the schema by 0009's CHECK.
+ */
+export const PERSONLESS_MAGIC_LINK_PURPOSES = ["claim", "org_invite"] as const;
 export const FORM_KINDS = ["abstract", "session"] as const;
 export const FORM_STATUSES = ["draft", "open", "closed"] as const;
 export const FORM_FIELD_TYPES = [
@@ -267,7 +276,8 @@ export interface AuthSessionRow extends MutableRecord {
 
 export interface MagicLinkRow extends MutableRecord {
   expires_at: EpochMilliseconds;
-  person_id: Id;
+  /** Null exactly for `claim` and `org_invite`, whose person is created at exchange. */
+  person_id: Id | null;
   purpose: MagicLinkPurpose;
   redirect_to: string;
   token_hash: string;

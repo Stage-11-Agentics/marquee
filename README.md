@@ -11,8 +11,8 @@ browser, `curl`, or another program without reverse-engineering the UI.
 
 New here as an organizer? [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md)
 is the first-run guide — from an empty Cloudflare account to an open call for
-speakers. Its status banner says which parts run today and which land with the
-cold-start build; this README's recipes below are what runs now.
+speakers, including the claim link that makes you the owner. This README's
+recipes below are the same sequence in command form.
 
 ## Marquee never phones home
 
