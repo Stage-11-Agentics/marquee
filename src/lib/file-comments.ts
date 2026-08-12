@@ -143,7 +143,21 @@ export async function listFileComments(
                  FROM memberships membership
                  WHERE membership.person_id = comment.author_person_id
                    AND membership.org_id = event.org_id
-                   AND (membership.event_id = comment.event_id OR membership.event_id IS NULL)
+                   AND membership.event_id = comment.event_id
+                 ORDER BY CASE membership.role
+                   WHEN 'owner' THEN 5
+                   WHEN 'program_lead' THEN 4
+                   WHEN 'ops' THEN 3
+                   WHEN 'reviewer' THEN 2
+                   WHEN 'speaker' THEN 1
+                   ELSE 0
+                 END DESC, membership.id ASC
+                 LIMIT 1),
+                (SELECT membership.role
+                 FROM memberships membership
+                 WHERE membership.person_id = comment.author_person_id
+                   AND membership.org_id = event.org_id
+                   AND membership.event_id IS NULL
                  ORDER BY CASE membership.role
                    WHEN 'owner' THEN 5
                    WHEN 'program_lead' THEN 4

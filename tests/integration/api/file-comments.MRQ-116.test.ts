@@ -76,6 +76,10 @@ test("CONTRACT · MRQ-116 speaker comment survives replacement and organizer rep
   expect(posted.comment.attachment_version).toBe(1);
   expect(posted.comment.created_at).toBeGreaterThan(0);
 
+  // A person can carry an org-wide role as well as an event role. The thread
+  // must report the role that applies to this conference, not the broader one.
+  await env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_mrq116_speaker_org_owner', ?, NULL, ?, 'owner', ?, ?)").bind(ORG_ID, SPEAKER_ID, NOW, NOW).run();
+
   await insertVersion(V2_ID, "slides.pdf", NOW + 10_000);
   await env.DB.prepare("UPDATE speaker_tasks SET attachment_id = ?, updated_at = ? WHERE id = ? AND event_id = ?").bind(V2_ID, NOW + 10_000, TASK_ID, EVENT_ID).run();
 
@@ -91,13 +95,14 @@ test("CONTRACT · MRQ-116 speaker comment survives replacement and organizer rep
 
   const organizerRead = await request(`/api/v1/events/${EVENT_ID}/files/${TASK_ID}/comments`, {}, ORGANIZER_SESSION);
   expect(organizerRead.status).toBe(200);
-  const thread = await responseJson<{ comments: Array<{ body: string; attachment_version: number | null }> }>(organizerRead);
+  const thread = await responseJson<{ comments: Array<{ body: string; author_role: string; attachment_version: number | null }> }>(organizerRead);
   expect(thread.comments).toHaveLength(2);
   expect(thread.comments.map((comment) => comment.body)).toEqual([
     "Draft deck - final version coming Friday.",
     "Thanks - please confirm the final version by Tuesday.",
   ]);
   expect(thread.comments.map((comment) => comment.attachment_version)).toEqual([1, 2]);
+  expect(thread.comments.map((comment) => comment.author_role)).toEqual(["speaker", "owner"]);
 });
 
 test("CONTRACT · MRQ-116 invalid attachment is refused with no comment write", async () => {
