@@ -74,7 +74,9 @@
 .record-assignment strong { font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .record-assignment .reviewer-name { max-width: 100%; }
 .record-assignment small { color: var(--muted); font: 400 9.5px var(--mono); }
-.record-assignment-add select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 10.5px; min-height: 27px; min-width: 0; padding: 4px; width: 100%; }
+.record-assignment-picker { align-items: center; display: flex; flex: 1 1 auto; gap: 6px; min-width: 0; }
+.record-assignment-picker select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); flex: 1 1 auto; font-size: 10.5px; min-height: 27px; min-width: 0; padding: 4px; width: auto; }
+.assignment-agent-chip { flex: 0 0 auto; }
 .record-schedule-form { align-items: end; display: grid; gap: 9px; grid-template-columns: 1.5fr .6fr 1fr auto; }
 .record-schedule-form .field span { color: var(--muted); font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .record-state { align-items: center; color: var(--muted); display: grid; gap: 10px; min-height: 300px; place-items: center; text-align: center; }
