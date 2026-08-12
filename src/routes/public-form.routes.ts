@@ -142,14 +142,34 @@ async function requireTurnstile(context: { env: ApiEnv["Bindings"]; req: { heade
   await context.env.CACHE.put(tokenKey, "1", { expirationTtl: 300 });
 }
 
+/**
+ * Autosave rate limit: a fixed window keyed on the wall-clock minute.
+ *
+ * The limit and the key builder are exported so a test can seed the counter
+ * instead of trying to spend it. Spending it means issuing DRAFT_AUTOSAVE_LIMIT
+ * + 1 requests inside one window, which is a race against the window boundary:
+ * a boundary landing mid-run resets the count and neither side reaches the
+ * limit, and on a loaded machine — where the requests take longer than the
+ * window is wide — no window can ever fill, so the limiter becomes untestable
+ * rather than merely flaky.
+ */
+export const DRAFT_AUTOSAVE_LIMIT = 30;
+export const DRAFT_AUTOSAVE_WINDOW_SECONDS = 60;
+
+export async function draftAutosaveRateKey(token: string, now = Date.now()): Promise<string> {
+  const window = Math.floor(now / 1000 / DRAFT_AUTOSAVE_WINDOW_SECONDS);
+  return `public-form:autosave:${await sha256Hex(token)}:${window}`;
+}
+
 async function draftTokenAllowed(cache: KVNamespace, token: string, now = Date.now()): Promise<void> {
-  const limit = 30;
-  const windowSeconds = 60;
-  const window = Math.floor(now / 1000 / windowSeconds);
-  const key = `public-form:autosave:${await sha256Hex(token)}:${window}`;
+  const key = await draftAutosaveRateKey(token, now);
   const current = Number((await cache.get(key)) ?? "0");
-  if (current >= limit) throw ApiError.rateLimited(windowSeconds - Math.floor((now / 1000) % windowSeconds));
-  await cache.put(key, String(current + 1), { expirationTtl: windowSeconds + 10 });
+  if (current >= DRAFT_AUTOSAVE_LIMIT) {
+    throw ApiError.rateLimited(
+      DRAFT_AUTOSAVE_WINDOW_SECONDS - Math.floor((now / 1000) % DRAFT_AUTOSAVE_WINDOW_SECONDS),
+    );
+  }
+  await cache.put(key, String(current + 1), { expirationTtl: DRAFT_AUTOSAVE_WINDOW_SECONDS + 10 });
 }
 
 function answerMap(body: { answers?: Record<string, unknown> }): Record<string, unknown> {
