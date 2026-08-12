@@ -6,6 +6,8 @@ import { SELF } from "cloudflare:test";
 import { validate } from "@scalar/openapi-parser";
 import { expect, test } from "vitest";
 
+import { apiManifest } from "../../../src/routes/_manifest";
+
 const ORIGIN = "https://marquee.stage11.dev";
 
 test("AC-106 · the served OpenAPI document validates as OpenAPI 3.1", async () => {
@@ -55,7 +57,10 @@ test("CONTRACT · MRQ-146 · concurrency claims and headers describe only agenda
     }>>;
   };
 
-  expect(document.info.description).toContain("only to the two agenda item mutation operations that require it");
+  // MRQ-150 restates MRQ-146's claim in full rather than in one clause: the scope is
+  // still agenda items only, and the document now says what everything else does instead.
+  expect(document.info.description).toContain("Optimistic concurrency is scoped to **agenda items**");
+  expect(document.info.description).toContain("Every other mutation is last-write-wins.");
   expect(body.match(/If-Match/g) ?? []).toHaveLength(1);
 
   const ifMatchOperations = Object.values(document.paths)
@@ -118,4 +123,31 @@ test("AC-106 · the docs route returns HTML rendered from the same document, wit
     0,
   );
   expect(html).toContain(`name="marquee-openapi-operations" content="${operationCount}"`);
+});
+
+/**
+ * MRQ-150 — `info.description` is a claim a technical judge can falsify in one
+ * request, so it is held to the route table rather than to an author's memory.
+ * The document used to state that mutations carry `ETag`/`If-Match` optimistic
+ * concurrency; two of two hundred did.
+ */
+test("CONTRACT · MRQ-150 · the document's concurrency claim matches the routes that actually enforce it", async () => {
+  const enforcing = apiManifest
+    .filter((route) => route.policy.concurrency === "if-match")
+    .map((route) => `${route.method.toUpperCase()} ${route.path}`)
+    .sort();
+
+  // If this list grows, the sentence in `src/api/openapi.ts` has to grow with
+  // it — that is the whole point of asserting the set rather than the count.
+  expect(enforcing).toEqual([
+    "DELETE /api/v1/events/{eventId}/agenda/items/{itemId}",
+    "PATCH /api/v1/events/{eventId}/agenda/items/{itemId}",
+  ]);
+
+  const description = (await (await SELF.fetch(`${ORIGIN}/api/openapi.json`)).json<{ info: { description: string } }>())
+    .info.description;
+  expect(description).not.toContain("Mutations carry strong");
+  expect(description).toContain("agenda items");
+  expect(description).toContain("If-Match");
+  expect(description).toContain("last-write-wins");
 });

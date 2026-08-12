@@ -71,8 +71,17 @@ const talkBody = z.object({
 const talkEditingBody = z.object({ enabled: z.boolean() });
 const declineBody = z.object({ note: z.string().trim().max(10_000).nullable().optional() }).strict();
 
+/** Statuses that still have a decision coming, so a wave date is worth showing. */
+const AWAITING_DECISION = ["draft", "submitted", "in_review"];
+
 const portalResponseSchema = z
   .object({
+    /**
+     * Which seat the session holds. `speaker` carries tasks, handbook, and
+     * schedule; `submitter` is a person who submitted an abstract and holds no
+     * speaker role yet, and carries only their own submissions and their status.
+     */
+    seat: z.enum(["speaker", "submitter"]),
     event: z.any(),
     person: z.any(),
     submissions: z.array(z.any()),
@@ -275,14 +284,14 @@ function requireCoSpeakerSession(context: import("hono").Context<ApiEnv>): { aut
   return { auth, participationId };
 }
 
-async function speakerEvent(
+async function findSpeakerEvent(
   db: D1Database,
   auth: SessionAuth,
   requestedEventId?: string,
-): Promise<EventProjection> {
+): Promise<EventProjection | null> {
   const predicate = requestedEventId ? "AND e.id = ?" : "";
   const bindings = requestedEventId ? [auth.personId, auth.orgId, requestedEventId] : [auth.personId, auth.orgId];
-  const event = await db
+  return db
     .prepare(
       `SELECT e.id, e.name, e.slug, e.starts_on, e.ends_on, e.timezone, e.status
        FROM events e
@@ -293,8 +302,47 @@ async function speakerEvent(
     )
     .bind(...bindings)
     .first<EventProjection>();
+}
+
+async function speakerEvent(
+  db: D1Database,
+  auth: SessionAuth,
+  requestedEventId?: string,
+): Promise<EventProjection> {
+  const event = await findSpeakerEvent(db, auth, requestedEventId);
   if (!event) throw ApiError.notFound("conference not found");
   return event;
+}
+
+/**
+ * The conference a person reaches through a submission rather than a speaker role.
+ *
+ * SPEC §10 (Amendment 15) rules the submitter and the speaker distinct, and rules
+ * the fix for a submitter opening the portal to be one honest empty state rather
+ * than a state-model change. So this resolver deliberately does *not* look at
+ * `memberships`: it reaches the event through the `participations` row the public
+ * form writes for whoever submitted (role `submitter`), which is exactly the seat
+ * that holds no speaker role.
+ */
+async function findSubmitterEvent(
+  db: D1Database,
+  auth: SessionAuth,
+  requestedEventId?: string,
+): Promise<EventProjection | null> {
+  const predicate = requestedEventId ? "AND e.id = ?" : "";
+  const bindings = requestedEventId ? [auth.personId, auth.orgId, requestedEventId] : [auth.personId, auth.orgId];
+  return db
+    .prepare(
+      `SELECT e.id, e.name, e.slug, e.starts_on, e.ends_on, e.timezone, e.status
+       FROM events e
+       JOIN submissions s ON s.event_id = e.id
+       JOIN participations p ON p.submission_id = s.id AND p.person_id = ?
+       WHERE e.org_id = ? ${predicate}
+       ORDER BY e.starts_on ASC, e.id ASC
+       LIMIT 1`,
+    )
+    .bind(...bindings)
+    .first<EventProjection>();
 }
 
 type SpeakerParticipationRow = {
@@ -916,8 +964,101 @@ async function talkIsEditable(db: D1Database, eventId: string, submissionId: str
   return row.form_status === "open" && (row.closes_at === null || row.closes_at > Date.now());
 }
 
+type SubmitterSubmissionRow = {
+  id: string;
+  title: string;
+  status: string;
+  submitted_at: number | null;
+  updated_at: number;
+  format_name: string | null;
+  wave_name: string | null;
+  wave_decision_on: string | null;
+  participation_role: string;
+  form_slug: string | null;
+};
+
+/**
+ * What the portal owes a person who submitted an abstract and holds no speaker
+ * role: the truth, not a 404. Their own submissions, their status, and the date
+ * a decision is expected — nothing that belongs to a speaker seat (no tasks, no
+ * handbook, no schedule), because they do not hold one yet.
+ */
+async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: EventProjection) {
+  const person = await personFor(db, auth.personId);
+  const rows = await db
+    .prepare(
+      // One row per submission, never per participation. The public form writes
+      // this person *two* participations on their own abstract — `submitter` and
+      // `speaker` (SPEC §10: the two are the same person until two addresses
+      // ship) — so a join here would show every abstract twice.
+      `SELECT s.id, s.title, s.status, s.submitted_at, s.updated_at,
+         format.name AS format_name, wave.name AS wave_name, wave.decision_on AS wave_decision_on,
+         form.slug AS form_slug,
+         (SELECT p.role FROM participations p
+           WHERE p.submission_id = s.id AND p.person_id = ?
+           ORDER BY CASE p.role WHEN 'submitter' THEN 0 ELSE 1 END, p.position ASC, p.id ASC
+           LIMIT 1) AS participation_role
+       FROM submissions s
+       LEFT JOIN formats format ON format.id = s.format_id AND format.event_id = s.event_id
+       LEFT JOIN waves wave ON wave.id = s.wave_id AND wave.event_id = s.event_id
+       LEFT JOIN forms form ON form.id = s.form_id AND form.event_id = s.event_id AND form.status = 'open'
+       WHERE s.event_id = ?
+         AND EXISTS (SELECT 1 FROM participations p WHERE p.submission_id = s.id AND p.person_id = ?)
+       ORDER BY s.updated_at DESC, s.id ASC`,
+    )
+    .bind(auth.personId, event.id, auth.personId)
+    .all<SubmitterSubmissionRow>();
+  const submissions = [...rows.results];
+  // Same fallback the speaker snapshot uses: an abstract not yet assigned to a
+  // wave still deserves a real "you will hear by" date, not a shrug.
+  if (submissions.some((row) => row.wave_name === null && AWAITING_DECISION.includes(row.status))) {
+    const nextWave = await db
+      .prepare(
+        `SELECT name AS wave_name, decision_on AS wave_decision_on FROM waves
+         WHERE event_id = ? AND sent_at IS NULL ORDER BY position ASC, id ASC LIMIT 1`,
+      )
+      .bind(event.id)
+      .first<{ wave_name: string; wave_decision_on: string }>();
+    if (nextWave) {
+      for (const row of submissions) {
+        if (row.wave_name === null && AWAITING_DECISION.includes(row.status)) {
+          row.wave_name = nextWave.wave_name;
+          row.wave_decision_on = nextWave.wave_decision_on;
+        }
+      }
+    }
+  }
+  return {
+    seat: "submitter" as const,
+    event,
+    person: { id: person.id, name: person.name, email: person.email },
+    submissions: submissions.map((row) => ({
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      format: row.format_name,
+      submitted_at: row.submitted_at,
+      updated_at: row.updated_at,
+      wave_name: row.wave_name,
+      wave_decision_on: row.wave_decision_on,
+      role: row.participation_role,
+      // Only set while the form is still open — an expired call is not a way back.
+      form_slug: row.form_slug,
+    })),
+    tasks: [] as never[],
+    handbook: { markdown: "" },
+    venue: { pinned_building_count: 0 },
+  };
+}
+
 async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrigin: string, requestedEventId?: string) {
-  const event = await speakerEvent(db, auth, requestedEventId);
+  const speakerSeat = await findSpeakerEvent(db, auth, requestedEventId);
+  if (!speakerSeat) {
+    const submitterSeat = await findSubmitterEvent(db, auth, requestedEventId);
+    if (submitterSeat) return submitterSnapshot(db, auth, submitterSeat);
+    throw ApiError.notFound("conference not found");
+  }
+  const event = speakerSeat;
   const person = await personFor(db, auth.personId);
   const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount] = await Promise.all([
     listSubmissions(db, event, auth.personId),
@@ -936,7 +1077,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
       timezone: event.timezone,
     });
   }
-  if (submissions.some((row) => row.wave_name === null && ["draft", "submitted", "in_review"].includes(row.status))) {
+  if (submissions.some((row) => row.wave_name === null && AWAITING_DECISION.includes(row.status))) {
     const nextWave = await db
       .prepare(
         `SELECT name AS wave_name, decision_on AS wave_decision_on FROM waves
@@ -946,7 +1087,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
       .first<{ wave_name: string; wave_decision_on: string }>();
     if (nextWave) {
       for (const row of submissions) {
-        if (row.wave_name === null && ["draft", "submitted", "in_review"].includes(row.status)) {
+        if (row.wave_name === null && AWAITING_DECISION.includes(row.status)) {
           row.wave_name = nextWave.wave_name;
           row.wave_decision_on = nextWave.wave_decision_on;
         }
@@ -961,6 +1102,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
     return { ...submissionView(event, row, showBuildingComparison), history, talk_editable };
   }));
   return {
+    seat: "speaker" as const,
     event,
     person: {
       id: person.id,
@@ -1225,7 +1367,7 @@ const getPortal = defineApiRoute(
     path: "/api/v1/me/portal",
     operationId: "getSpeakerPortal",
     summary: "Read the authenticated speaker portal",
-    description: "Returns only the current session speaker's conference status, submissions, tasks, profile, schedule, and handbook.",
+    description: "Returns only the current session's own conference status, submissions, tasks, profile, schedule, and handbook. A session holding no speaker role but carrying a submission answers with `seat: \"submitter\"` and that person's submissions alone.",
     tags: ["Speaker portal"],
     request: { query: eventQuery },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
