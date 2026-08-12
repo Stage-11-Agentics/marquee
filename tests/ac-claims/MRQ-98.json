@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-98",
+  "owns": [],
+  "exercises": [],
+  "notes": "This ticket is an operator-feedback UX and performance repair. Its acceptance is demonstrated by the focused request-helper tests and local browser transition evidence recorded in the PR; no pre-minted AC claim applies."
+}
