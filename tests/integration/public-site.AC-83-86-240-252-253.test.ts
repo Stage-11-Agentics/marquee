@@ -114,7 +114,7 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   expect(session.status).toBe(200);
   expect(sessionBody).toContain('href="/p/public-speaker"');
   expect(sessionBody).toContain('class="public-brand" href="/"');
-  expect(sessionBody).toContain('href="/agenda">← Agenda</a>');
+  expect(sessionBody).toContain('href="/agenda?event=public-conf">← Agenda</a>');
   expect(sessionBody).toContain("Sheraton New York Times Square");
   expect(sessionBody).toContain("Main Stage · 45 minutes");
   expect(sessionBody).toContain("Public abstract");
@@ -127,7 +127,7 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   expect(speaker.status).toBe(200);
   expect(speakerBody).toContain('href="/s/visible-session-title"');
   expect(speakerBody).toContain('class="public-brand" href="/"');
-  expect(speakerBody).toContain('href="/agenda">← Agenda</a>');
+  expect(speakerBody).toContain('href="/agenda?event=public-conf">← Agenda</a>');
   expect(speakerBody).toContain("Sheraton New York Times Square");
 
   await env.DB.prepare(
@@ -172,7 +172,8 @@ test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an e
   expect(defaultBody).toContain('name="day" value="all" class="active" role="tab" aria-selected="true"');
   expect(defaultBody).toContain('class="public-brand" href="/" aria-label="Public Conference 2026 — Marquee home"');
   expect(defaultBody).toContain('form.requestSubmit(activeDay instanceof HTMLButtonElement ? activeDay : undefined)');
-  expect(defaultBody).not.toContain(">Organizer demo</a>");
+  expect(defaultBody).toContain('href="/">Organizer demo</a>');
+  expect(defaultBody).toContain("scrollIntoView({ block: 'nearest', inline: 'nearest' })");
 
   const dayAndSearch = await request(`/agenda?event=${EVENT_SLUG}&day=2026-10-13&q=Private`);
   const dayAndSearchBody = await dayAndSearch.text();
