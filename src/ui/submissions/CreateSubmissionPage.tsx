@@ -166,12 +166,14 @@ export function CreateSubmissionPage({ eventId = DEFAULT_EVENT_ID, navigate }: P
       assign("format", ["format_id"]);
       setFieldErrors(mapped);
       setState("error");
-      setError(caught instanceof MarqueeApiError && caught.code === "unprocessable" ? `${caught.message} · ref ${caught.reference}` : errorSummary(caught));
+      setError(caught instanceof MarqueeApiError && ["unprocessable", "malformed_request"].includes(caught.code)
+        ? `${caught.message} · ref ${caught.reference}`
+        : errorSummary(caught));
     }
   };
 
   const model = settings.kind === "ready" ? settings.model : null;
-  const submitterFieldError = fieldErrors.submitter || fieldErrors.submitterName;
+  const submitterFieldError = fieldErrors.submitter;
   return <div class="submission-record-page">
     <PageHeader title="Create a submission" copy="Add an Abstract or Session directly to the conference program record. Choose the real person and conference options so the record is truthful." actions={<Button onClick={() => navigate("/submissions")}>Cancel</Button>} />
     <form onSubmit={submit} class="record-create-form">
@@ -179,8 +181,8 @@ export function CreateSubmissionPage({ eventId = DEFAULT_EVENT_ID, navigate }: P
         <CreateSettings state={settings} />
         {model && <div class="record-form-grid">
           <div class="field"><label for="submission-kind">Type</label><select id="submission-kind" value={kind} onChange={(event) => { const next = event.currentTarget.value as "abstract" | "session"; setKind(next); if (next === "abstract") setBypass(false); }}><option value="session">Session</option><option value="abstract">Abstract</option></select></div>
-          <div class="field"><label for="submission-title">Title</label><input id="submission-title" required value={title} onInput={(event) => setTitle(event.currentTarget.value)} placeholder="A clear program title" aria-describedby="submission-title-error" />{<InlineError id="submission-title-error" message={fieldErrors.title} />}</div>
-          <div class="field record-form-wide"><label for="submission-abstract">Abstract / description</label><textarea id="submission-abstract" rows={8} value={abstract} onInput={(event) => setAbstract(event.currentTarget.value)} placeholder="What should the program team know?" aria-describedby="submission-abstract-error" />{<InlineError id="submission-abstract-error" message={fieldErrors.abstract} />}</div>
+          <div class="field"><label for="submission-title">Title</label><input id="submission-title" required value={title} onInput={(event) => { setTitle(event.currentTarget.value); setFieldErrors((current) => ({ ...current, title: "" })); }} placeholder="A clear program title" aria-describedby="submission-title-error" />{<InlineError id="submission-title-error" message={fieldErrors.title} />}</div>
+          <div class="field record-form-wide"><label for="submission-abstract">Abstract / description</label><textarea id="submission-abstract" rows={8} value={abstract} onInput={(event) => { setAbstract(event.currentTarget.value); setFieldErrors((current) => ({ ...current, abstract: "" })); }} placeholder="What should the program team know?" aria-describedby="submission-abstract-error" />{<InlineError id="submission-abstract-error" message={fieldErrors.abstract} />}</div>
           <fieldset class="record-person-picker record-form-wide" aria-describedby="submission-submitter-error">
             <legend>Submitter <span class="required-mark">Required</span></legend>
             <p class="field-note">Search by the person's name. This person is recorded as the submitter and speaker-of-record context for the new submission.</p>
@@ -201,13 +203,13 @@ export function CreateSubmissionPage({ eventId = DEFAULT_EVENT_ID, navigate }: P
               </>}
             </div>}
             {submitterMode === "new" && <div class="record-new-person-grid">
-              <label class="field"><span>Name</span><input required value={newSubmitterName} onInput={(event) => setNewSubmitterName(event.currentTarget.value)} placeholder="Full name" aria-describedby="submission-submitter-name-error" />{<InlineError id="submission-submitter-name-error" message={fieldErrors.submitterName} />}</label>
-              <label class="field"><span>Email</span><input required type="email" value={newSubmitterEmail} onInput={(event) => setNewSubmitterEmail(event.currentTarget.value)} placeholder="name@example.com" aria-describedby="submission-submitter-email-error" />{<InlineError id="submission-submitter-email-error" message={fieldErrors.submitterEmail} />}</label>
+              <label class="field"><span>Name</span><input required value={newSubmitterName} onInput={(event) => { setNewSubmitterName(event.currentTarget.value); setFieldErrors((current) => ({ ...current, submitterName: "" })); }} placeholder="Full name" aria-describedby="submission-submitter-name-error" />{<InlineError id="submission-submitter-name-error" message={fieldErrors.submitterName} />}</label>
+              <label class="field"><span>Email</span><input required type="email" value={newSubmitterEmail} onInput={(event) => { setNewSubmitterEmail(event.currentTarget.value); setFieldErrors((current) => ({ ...current, submitterEmail: "" })); }} placeholder="name@example.com" aria-describedby="submission-submitter-email-error" />{<InlineError id="submission-submitter-email-error" message={fieldErrors.submitterEmail} />}</label>
             </div>}
             <InlineError id="submission-submitter-error" message={submitterFieldError} />
           </fieldset>
-          <div class="field"><label for="submission-tracks">Tracks</label><select id="submission-tracks" multiple size={Math.min(Math.max(model.tracks.length, 3), 7)} value={trackIds} onChange={(event) => setTrackIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value))} aria-describedby="submission-tracks-error">{model.tracks.map((track) => <option value={track.id} key={track.id}>{track.name}</option>)}</select><span class="field-note">Optional · hold ⌘ or Ctrl to choose more than one.</span><InlineError id="submission-tracks-error" message={fieldErrors.tracks} /></div>
-          <div class="field"><label for="submission-format">Format</label><select id="submission-format" value={formatId} onChange={(event) => setFormatId(event.currentTarget.value)} aria-describedby="submission-format-error"><option value="">No format selected</option>{model.formats.map((format) => <option value={format.id} key={format.id}>{format.name}</option>)}</select><span class="field-note">Live from Conference settings · Formats.</span><InlineError id="submission-format-error" message={fieldErrors.format} /></div>
+          <div class="field"><label for="submission-tracks">Tracks</label><select id="submission-tracks" multiple size={Math.min(Math.max(model.tracks.length, 3), 7)} onChange={(event) => { setTrackIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value)); setFieldErrors((current) => ({ ...current, tracks: "" })); }} aria-describedby="submission-tracks-error">{model.tracks.map((track) => <option value={track.id} key={track.id} selected={trackIds.includes(track.id)}>{track.name}</option>)}</select><span class="field-note">Optional · hold ⌘ or Ctrl to choose more than one.</span><InlineError id="submission-tracks-error" message={fieldErrors.tracks} /></div>
+          <div class="field"><label for="submission-format">Format</label><select id="submission-format" value={formatId} onChange={(event) => { setFormatId(event.currentTarget.value); setFieldErrors((current) => ({ ...current, format: "" })); }} aria-describedby="submission-format-error"><option value="">No format selected</option>{model.formats.map((format) => <option value={format.id} key={format.id}>{format.name}</option>)}</select><span class="field-note">Live from Conference settings · Formats.</span><InlineError id="submission-format-error" message={fieldErrors.format} /></div>
           {kind === "session" && <label class="record-bypass-toggle"><input type="checkbox" checked={bypass} onChange={(event) => setBypass(event.currentTarget.checked)} /><span><strong>Bypass evaluation</strong><small>Ready for the working agenda after creation.</small></span></label>}
         </div>}
       </CardBody></Card>

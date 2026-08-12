@@ -34,6 +34,7 @@ interface SubmissionSearchRow {
 interface SpeakerSearchRow {
   id: string;
   name: string;
+  email: string;
   title: string | null;
   company: string | null;
 }
@@ -78,7 +79,7 @@ function formScope(authPersonId: string | null): { clause: string; bindings: str
 async function querySearchCandidates(database: D1Database, eventId: string, scopedPersonId: string | null): Promise<SearchCandidate[]> {
   const submissionsScope = eventScope(scopedPersonId);
   const formsScope = formScope(scopedPersonId);
-  const [submissions, speakers, forms, members] = await Promise.all([
+  const [submissions, speakers, forms] = await Promise.all([
     database.prepare(
       `SELECT s.id, s.kind, s.title, s.abstract, s.search_blob
        FROM submissions s
@@ -86,35 +87,31 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
        ORDER BY s.title COLLATE NOCASE ASC, s.id ASC`,
     ).bind(eventId, ...submissionsScope.bindings).all<SubmissionSearchRow>(),
     database.prepare(
-      `SELECT DISTINCT p.id, p.name, p.title, p.company
-       FROM people p
-       JOIN submissions s ON s.event_id = ?
-         AND (s.submitter_person_id = p.id OR EXISTS (
-           SELECT 1 FROM participations participation
-           WHERE participation.submission_id = s.id AND participation.person_id = p.id
-         ))
-       WHERE 1 = 1${submissionsScope.clause}
-       ORDER BY p.name COLLATE NOCASE ASC, p.id ASC`,
-    ).bind(eventId, ...submissionsScope.bindings).all<SpeakerSearchRow>(),
+      `SELECT id, name, email, title, company
+       FROM (
+         SELECT p.id, p.name, p.email, p.title, p.company
+         FROM participations participation
+         JOIN submissions s ON s.id = participation.submission_id
+         JOIN people p ON p.id = participation.person_id
+         WHERE s.event_id = ?${submissionsScope.clause}
+         UNION
+         SELECT p.id, p.name, p.email, p.title, p.company
+         FROM submissions s
+         JOIN people p ON p.id = s.submitter_person_id
+         WHERE s.event_id = ?${submissionsScope.clause}
+       )
+       ORDER BY name COLLATE NOCASE ASC, id ASC`,
+    ).bind(eventId, ...submissionsScope.bindings, eventId, ...submissionsScope.bindings).all<SpeakerSearchRow>(),
     database.prepare(
       `SELECT f.id, f.name, f.slug, f.kind, f.status
        FROM forms f
        WHERE f.event_id = ?${formsScope.clause}
        ORDER BY f.name COLLATE NOCASE ASC, f.id ASC`,
     ).bind(eventId, ...formsScope.bindings).all<FormSearchRow>(),
-    scopedPersonId === null
-      ? database.prepare(
-        `SELECT DISTINCT p.id, p.name, p.title, p.company
-         FROM people p
-         JOIN memberships membership ON membership.person_id = p.id
-         WHERE membership.event_id = ?
-         ORDER BY p.name COLLATE NOCASE ASC, p.id ASC`,
-      ).bind(eventId).all<SpeakerSearchRow>()
-      : Promise.resolve({ results: [] as SpeakerSearchRow[] }),
   ]);
 
   const people = new Map<string, SpeakerSearchRow>();
-  for (const person of [...speakers.results, ...members.results]) people.set(person.id, person);
+  for (const person of speakers.results) people.set(person.id, person);
 
   return [
     ...submissions.results.map((row) => {
@@ -134,7 +131,7 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
       title: row.name,
       subtitle: [row.title, row.company].filter(Boolean).join(" · ") || "Conference person",
       href: `/onboarding?person=${encodeURIComponent(row.id)}`,
-      searchText: [row.name, row.title ?? "", row.company ?? "", row.id],
+      searchText: [row.name, row.email, row.title ?? "", row.company ?? "", row.id],
     } satisfies SearchCandidate)),
     ...forms.results.map((row) => ({
       type: "Form" as const,

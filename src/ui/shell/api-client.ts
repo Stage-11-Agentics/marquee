@@ -221,7 +221,7 @@ function detailIssues(details: unknown): FieldDetail[] {
 
 /** Return the API's own 422 detail for one or more controls on a screen. */
 export function fieldError(error: unknown, fields: readonly string[]): string | undefined {
-  if (!(error instanceof MarqueeApiError) || error.code !== "unprocessable") return undefined;
+  if (!(error instanceof MarqueeApiError) || !["unprocessable", "malformed_request"].includes(error.code)) return undefined;
   if (error.field && fields.includes(error.field)) return error.message;
   const issue = detailIssues(error.details).find((candidate) => {
     const field = typeof candidate.field === "string" ? candidate.field : candidate.fieldKey;

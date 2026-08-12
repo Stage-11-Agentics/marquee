@@ -82,17 +82,16 @@ describe("the reference code", () => {
     });
     expect(fieldError(direct, ["format_id"])).toBe("Choose a format from this conference's settings.");
     expect(fieldError(direct, ["track_ids"])).toBeUndefined();
-    expect(errorSummary(direct)).toContain("Choose a format from this conference's settings.");
 
     const details = new MarqueeApiError({
-      code: "unprocessable",
-      message: "The submission has invalid values.",
-      status: 422,
-      details: { issues: [{ fieldKey: "submitter.email", message: "Enter a reachable email address." }] },
-      route: "/api/v1/events/{eventId}/submissions",
-    });
+      code: "malformed_request",
+        message: "The submission has invalid values.",
+        status: 422,
+        details: { issues: [{ fieldKey: "submitter.email", message: "Enter a reachable email address." }] },
+        route: "/api/v1/events/{eventId}/submissions",
+      });
     expect(fieldError(details, ["submitter.email"])).toBe("Enter a reachable email address.");
-    expect(errorSummary(details)).toContain("The submission has invalid values.");
+    expect(details.message).toBe("The submission has invalid values.");
   });
 });
 

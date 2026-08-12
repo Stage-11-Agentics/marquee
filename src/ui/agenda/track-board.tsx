@@ -34,7 +34,7 @@ function DropCell({
   const [over, setOver] = useState(false);
   return <div
     class={`agenda-drop-cell ${over ? "drag-over" : ""} ${className}`.trim()}
-    role="region"
+    role="group"
     aria-label={ariaLabel}
     data-agenda-drop-target="true"
     data-track-day={dataTrackDay}
