@@ -45,7 +45,7 @@ test("AC-106 · the document advertises both auth schemes and the shared error e
   expect(document.paths["/api/v1/me/uploads/sign"].post.operationId).toBe("signTaskUpload");
 });
 
-test("MRQ-146 · concurrency claims and headers describe only agenda mutations", async () => {
+test("CONTRACT · MRQ-146 · concurrency claims and headers describe only agenda mutations", async () => {
   const body = await (await SELF.fetch(`${ORIGIN}/api/openapi.json`)).text();
   const document = JSON.parse(body) as {
     info: { description: string };
@@ -68,7 +68,7 @@ test("MRQ-146 · concurrency claims and headers describe only agenda mutations",
   expect(ifMatchOperations).toEqual(["removeAgendaItem", "updateAgendaItem"]);
 });
 
-test("MRQ-146 · the skill is served as markdown rather than the SPA shell", async () => {
+test("CONTRACT · MRQ-146 · the skill is served as markdown rather than the SPA shell", async () => {
   const response = await SELF.fetch(`${ORIGIN}/SKILL.md`);
   expect(response.status).toBe(200);
   expect(response.headers.get("content-type")).toContain("text/markdown");
