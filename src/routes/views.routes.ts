@@ -12,7 +12,7 @@ import {
 import { SUBMISSION_COLUMN_IDS } from "../lib/submission-columns";
 import { requireSubmissionRead } from "../lib/auth/program-access";
 import { getAuth } from "../lib/auth/auth-middleware";
-import { submissionFilterSchema } from "./submissions.queries";
+import { listSubmissions, submissionFilterSchema } from "./submissions.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const viewParams = eventParams.extend({ viewId: z.string().min(1) });
@@ -42,6 +42,8 @@ const viewResponse = z.object({
   name: z.string(),
   built_in: z.boolean(),
   config: viewConfigResponse,
+  count: z.number().int().nonnegative().nullable()
+    .describe("Records matching this view's own config; null when the view is not counted."),
   created_at: z.number().int().nullable(),
   updated_at: z.number().int().nullable(),
 }).openapi("SavedView");
@@ -72,9 +74,43 @@ function rowResponse(row: SavedViewRow) {
     name: row.name,
     built_in: false,
     config: parseConfig(row.config_json),
+    count: null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
+}
+
+/**
+ * A view's badge has to count that view, not whatever list happens to be on
+ * screen — so the count is resolved from the view's own config through the
+ * same query the list uses, and the two can never disagree. Only the
+ * narrowing built-ins are counted: "All submissions" is the unfiltered total
+ * the page header already states, and personal views are unbounded in number.
+ */
+function countsRecords(config: SavedViewConfig): boolean {
+  return Boolean(config.q) || Object.values(config.filters).some(Boolean);
+}
+
+async function builtInViewCount(
+  db: D1Database,
+  eventId: string,
+  config: SavedViewConfig,
+): Promise<number | null> {
+  if (!countsRecords(config)) return null;
+  try {
+    const envelope = await listSubmissions(db, {
+      eventId,
+      ...config.filters,
+      ...(config.q ? { q: config.q } : {}),
+      page: 1,
+      per_page: 1,
+    });
+    return envelope.total;
+  } catch {
+    // A badge is an aid, not the page. If its count cannot be read, the strip
+    // still renders and the view still opens — it just shows no number.
+    return null;
+  }
 }
 
 function inputConfig(body: z.infer<typeof viewInputSchema>, current?: SavedViewConfig): SavedViewConfig {
@@ -111,12 +147,15 @@ const listViews = defineApiRoute(
   async (context) => {
     const { eventId } = context.req.valid("param");
     const auth = await requireSubmissionRead(context, eventId);
-    const personal = auth.kind === "session"
-      ? await context.env.DB.prepare("SELECT * FROM saved_views WHERE event_id = ? AND person_id = ? ORDER BY name COLLATE NOCASE, id ASC").bind(eventId, auth.personId).all<SavedViewRow>()
-      : { results: [] as SavedViewRow[] };
+    const [personal, builtInCounts] = await Promise.all([
+      auth.kind === "session"
+        ? context.env.DB.prepare("SELECT * FROM saved_views WHERE event_id = ? AND person_id = ? ORDER BY name COLLATE NOCASE, id ASC").bind(eventId, auth.personId).all<SavedViewRow>()
+        : Promise.resolve({ results: [] as SavedViewRow[] }),
+      Promise.all(BUILT_IN_SAVED_VIEWS.map((view) => builtInViewCount(context.env.DB, eventId, view.config))),
+    ]);
     return context.json({
       data: [
-        ...BUILT_IN_SAVED_VIEWS,
+        ...BUILT_IN_SAVED_VIEWS.map((view, index) => ({ ...view, count: builtInCounts[index] ?? null })),
         ...personal.results.map(rowResponse),
       ],
     }, 200);

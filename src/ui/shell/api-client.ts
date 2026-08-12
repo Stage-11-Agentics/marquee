@@ -251,6 +251,18 @@ function noted(error: MarqueeApiError): MarqueeApiError {
  * sentence and — whenever the request reached the server — the correlation id.
  * Callers never see a bare status again.
  */
+const forbiddenListeners = new Set<() => void>();
+
+/**
+ * Fires whenever a route refuses this seat its data. The shell listens so it
+ * can stop drawing organizer chrome around a wall the seat cannot pass; the
+ * refusal itself is still thrown to the caller that asked for the data.
+ */
+export function onForbidden(listener: () => void): () => void {
+  forbiddenListeners.add(listener);
+  return () => { forbiddenListeners.delete(listener); };
+}
+
 export async function apiFetch<Result>(
   path: string,
   options: ApiFetchOptions = {},
@@ -274,8 +286,10 @@ export async function apiFetch<Result>(
   const requestId = asString(response.headers.get("X-Request-Id") ?? undefined);
   if (!response.ok) {
     const envelope = (await response.json().catch(() => null)) as EnvelopeShape | null;
+    const code = codeFromEnvelope(envelope?.error?.code, response.status);
+    if (code === "forbidden") for (const listener of forbiddenListeners) listener();
     throw noted(new MarqueeApiError({
-      code: codeFromEnvelope(envelope?.error?.code, response.status),
+      code,
       message: asString(envelope?.error?.message) ?? `the request failed with status ${response.status}`,
       status: response.status,
       requestId: asString(envelope?.request_id) ?? requestId,

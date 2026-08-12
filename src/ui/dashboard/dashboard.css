@@ -1,6 +1,13 @@
-.dashboard-page { display: grid; gap: 14px; }
-.dashboard-pipeline-card { overflow: hidden; }
-.dashboard-pipeline { border-image: linear-gradient(90deg,#635bff,#db4c3f,#0d9488,#d97706,#2563eb,#9333ea,#4d7c0f) 1; border-top: 3px solid transparent; display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)); overflow-x: auto; }
+/* minmax(0, 1fr) rather than the implicit auto track, and min-width: 0 on the
+   card: a grid item sizes to its content's min-content width by default, so
+   the 7 × 130px pipeline row must never be able to widen the page itself. */
+.dashboard-page { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+.dashboard-pipeline-card { min-width: 0; overflow: hidden; }
+/* overscroll-behavior-x, as the board's column list does for its own axis:
+   without it, reaching either end of this strip chains the scroll outward and
+   pans the whole page sideways — header, panels and all — which reads as the
+   layout coming apart rather than as a row that has run out of row. */
+.dashboard-pipeline { border-image: linear-gradient(90deg,#635bff,#db4c3f,#0d9488,#d97706,#2563eb,#9333ea,#4d7c0f) 1; border-top: 3px solid transparent; display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)); overflow-x: auto; overscroll-behavior-x: contain; }
 .dashboard-pipeline-stage { background: rgba(255,255,255,.72); border-right: 1px solid var(--line); color: inherit; display: grid; min-height: 120px; min-width: 130px; padding: 18px 16px 16px; text-align: left; text-decoration: none; transition: background 110ms; }
 .dashboard-pipeline-stage:last-child { border-right: 0; }
 .dashboard-pipeline-stage:hover { background: var(--accent-soft); }

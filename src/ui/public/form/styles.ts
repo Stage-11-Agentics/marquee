@@ -21,7 +21,11 @@ export const PUBLIC_FORM_STYLES = `
 .public-form-card-head { align-items: center; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; justify-content: space-between; padding: 13px 16px; }
 .public-form-card-head h2 { font: 600 11px/1.2 var(--mono); letter-spacing: .15em; margin: 0; text-transform: uppercase; }
 .public-participant-limit { background: var(--accent-soft); border-bottom: 1px solid var(--line-strong); color: var(--accent-ink); font-size: 12px; line-height: 1.5; margin: 0; padding: 12px 20px; }
-.public-form-fields { display: grid; gap: 23px; padding: 24px 20px; }
+/* A fieldset, so a closed or at-limit call disables every control under it in
+   one attribute. The reset keeps its layout identical to the div it replaced. */
+.public-form-fields { border: 0; display: grid; gap: 23px; margin: 0; min-width: 0; padding: 24px 20px; }
+.public-form-fields:disabled { opacity: .62; }
+.public-form-fields:disabled input, .public-form-fields:disabled textarea, .public-form-fields:disabled select { background: var(--sunk); cursor: not-allowed; }
 .public-field { display: grid; gap: 7px; min-width: 0; }
 .public-field label { color: var(--ink); font-size: 13px; font-weight: 650; }
 .public-field label em { color: var(--muted); font-size: 11px; font-style: normal; font-weight: 400; }

@@ -39,6 +39,20 @@
 .toolbar-spacer { flex: 1; }
 .selection-bar { align-items: center; background: transparent; border-bottom: 1px solid var(--line); color: transparent; display: flex; font: 400 10.5px/1.2 var(--mono); gap: 9px; min-height: 42px; padding: 7px 12px; }
 .selection-bar.visible { background: var(--accent-soft); border-bottom-color: var(--accent); color: var(--accent-dark); }
+.selection-actions { display: flex; gap: 6px; }
+/* Fixed widths: the three decisions must not resize each other, and the row
+   they sit in must not change height between its empty and selected states. */
+.selection-actions .button { min-width: 74px; }
+.bulk-message { color: transparent; font: 400 10px/1.2 var(--mono); min-height: 24px; padding: 6px 12px 0; }
+.bulk-message.visible { color: var(--accent-dark); }
+.bulk-decision-dialog { background: var(--sunk); border-bottom: 1px solid var(--accent); border-top: 1px solid var(--accent); display: grid; gap: 12px; padding: 14px 12px; }
+.bulk-decision-dialog-head { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+.bulk-decision-dialog-head h2 { font-size: 16px; margin: 5px 0 0; }
+.bulk-decision-dialog-head > button { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: 20px; line-height: 1; padding: 0 2px; }
+.bulk-decision-dialog p { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0; }
+.bulk-decision-dialog .field span { color: var(--muted); font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.bulk-decision-dialog textarea { min-height: 92px; resize: vertical; }
+.bulk-decision-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .submissions-table-wrap { min-height: 430px; overflow: auto; }
 .submissions-table { border-collapse: collapse; table-layout: fixed; width: 100%; }
 .submissions-table th { background: var(--sunk); border-bottom: 1px solid var(--line-strong); color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .12em; padding: 9px 10px; position: sticky; text-align: left; text-transform: uppercase; top: 0; z-index: 1; }
