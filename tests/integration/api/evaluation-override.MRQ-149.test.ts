@@ -44,6 +44,8 @@ interface EvaluationView {
   override_comment: string | null;
   override_person_name: string | null;
   override_at: number | null;
+  scale_min: number | null;
+  scale_max: number | null;
 }
 
 interface RecordView {
@@ -224,4 +226,54 @@ test("CONTRACT · MRQ-149 · an override is refused when it does not identify on
 
   const offScale = await request(overridePath(AGENT_EVALUATION_ID), { method: "PUT", body: JSON.stringify({ score: 9 }) });
   expect(offScale.status).toBe(422);
+});
+
+test("CONTRACT · MRQ-149 · the published schema documents the override the API actually returns", async () => {
+  // `sequence/submission/DIFFERENTIATORS.md` stakes the claim that an
+  // undocumented endpoint is not a state this codebase can express. A field on
+  // the wire that the schema omits is the same defect one level down, and
+  // `check:api` compares routes rather than payload shapes, so only a test
+  // holds it.
+  const response = await SELF.fetch(`${ORIGIN}/api/openapi.json`);
+  expect(response.status).toBe(200);
+  const document = await response.json() as {
+    components: {
+      schemas: {
+        SubmissionListItem: {
+          properties: { agent_reviews: { items: { properties: Record<string, unknown>; required: string[] } } };
+        };
+      };
+    };
+  };
+  // The agent review is inlined into `SubmissionListItem`, not a named
+  // component, so assert on where it actually lives rather than sweeping the
+  // component table — a sweep would pass on any schema that happened to match.
+  const agentReview = document.components.schemas.SubmissionListItem.properties.agent_reviews.items;
+  expect(Object.keys(agentReview.properties)).toContain("override_score");
+  expect(agentReview.required).toContain("override_score");
+});
+
+test("CONTRACT · MRQ-149 · an off-scale override is refused without destroying the record", async () => {
+  // The record page renders `kind: "error"` as a full-page "Record unavailable".
+  // The override is the only control on that page submitting a number an
+  // operator typed, so its refusal has to stay an ordinary answer: the server
+  // says 422 with the offending field named, and the record itself still loads.
+  const refused = await request(overridePath(AGENT_EVALUATION_ID), { method: "PUT", body: JSON.stringify({ score: 9 }) });
+  expect(refused.status).toBe(422);
+  const body = await refused.json() as { error: { message: string; field?: string } };
+  expect(body.error.field).toBe("score");
+  expect(body.error.message).toContain("1");
+  expect(body.error.message).toContain("5");
+
+  const record = await readRecord();
+  expect(record.evaluations).toHaveLength(2);
+  expect((await evaluationOf("agent")).override_score).toBeNull();
+});
+
+test("CONTRACT · MRQ-149 · the record carries the plan's scale so the control can bound its own input", async () => {
+  const record = await readRecord();
+  for (const evaluation of record.evaluations) {
+    expect(evaluation.scale_min).toBe(1);
+    expect(evaluation.scale_max).toBe(5);
+  }
 });
