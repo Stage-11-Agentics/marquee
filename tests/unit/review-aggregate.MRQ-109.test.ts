@@ -23,7 +23,7 @@ describe("MRQ-109 · the results table's ordering and its honesty about the numb
   });
 
   test("ABS-04 · a score never appears without the reviewer count behind it", () => {
-    expect(reviewCountLabel(0)).toBe("No reviews");
+    expect(reviewCountLabel(0)).toBe("Not scored");
     expect(reviewCountLabel(1)).toBe("1 review");
     expect(reviewCountLabel(4)).toBe("4 reviews");
   });

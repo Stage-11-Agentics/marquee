@@ -54,13 +54,18 @@ export function reviewAggregateColumns(submissionRef: string): string {
   const rows = contributingRows(submissionRef);
   return `(SELECT ROUND(AVG(contribution.value), 2) FROM ${rows} contribution) AS score,
   (SELECT COUNT(contribution.value) FROM ${rows} contribution) AS review_count,
-  (SELECT COALESCE(MAX(CASE WHEN contribution.value IS NOT NULL THEN contribution.weighted END), 0)
+  (SELECT COALESCE(MIN(CASE WHEN contribution.value IS NOT NULL THEN contribution.weighted END), 0)
    FROM ${rows} contribution) AS score_is_weighted`;
 }
 
-/** Reviewer count for the line under a score. Always rendered, never omitted. */
+/**
+ * How many reviews the score above rests on — always rendered, never omitted.
+ * "Not scored" rather than "No reviews": a recommendation-only review is a
+ * real review that contributes no number, and the count under a score column
+ * describes the number, not the reviewing.
+ */
 export function reviewCountLabel(count: number): string {
-  if (count <= 0) return "No reviews";
+  if (count <= 0) return "Not scored";
   return count === 1 ? "1 review" : `${count} reviews`;
 }
 
@@ -72,7 +77,7 @@ export function scoreBasisLabel(score: number | null, weighted: boolean): string
   if (score === null) return "Not scored yet";
   return weighted
     ? "Weighted by the round's criterion weights"
-    : "Unweighted — recorded before this round had scorecard criteria";
+    : "Unweighted — includes reviews recorded before this round had scorecard criteria";
 }
 
 /** The CSV's own basis column, for a human opening the file away from the app. */
