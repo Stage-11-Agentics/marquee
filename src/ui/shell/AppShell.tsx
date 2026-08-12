@@ -158,7 +158,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : isEvaluation ? <EvaluationPage />
             : route?.id === "venues" ? <VenuesPage />
             : isApiTokens ? <ApiTokensPage navigate={navigate} />
-            : route?.id === "task-templates" ? <TaskTemplatesPage />
+            : route?.id === "task-templates" || route?.id === "tasks" ? <TaskTemplatesPage />
             : route?.id === "settings" ? <EventSettings navigate={navigate} />
             : isForms ? <FormsPage search={location.search} />
             : isAgenda ? <AgendaPage />

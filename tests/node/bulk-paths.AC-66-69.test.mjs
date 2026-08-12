@@ -256,6 +256,20 @@ const EXPECTED_PLACEHOLDER_SITES = [
     classification: "NAMED_FINDING: category routing expands one D1 placeholder per track; no input max",
   },
   {
+    file: "src/routes/files-export.routes.ts",
+    owner: "attachmentObjectsFor",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; explicit 80-ID export-read chunks stay below D1's binding cap",
+  },
+  {
+    file: "src/routes/files-export.routes.ts",
+    owner: "taskRowsFor",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; explicit 80-ID export-read chunks stay below D1's binding cap",
+  },
+  {
     file: "src/routes/public-form.routes.ts",
     owner: "moveAttachments",
     binding: "placeholders",
@@ -275,6 +289,13 @@ const EXPECTED_PLACEHOLDER_SITES = [
     binding: "result",
     expression: 'chunk.map(() => "?")',
     classification: "outside named bulk writes; explicit 80-ID queue-read chunks stay below D1's binding cap",
+  },
+  {
+    file: "src/routes/review.routes.ts",
+    owner: "reviewsForSubmissions",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; reads one reviewer's stored reviews in the same explicit 80-ID chunks as queueRows, over a completed set the queue caps at 50",
   },
   {
     file: "src/routes/submission-record.routes.ts",

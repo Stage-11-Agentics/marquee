@@ -68,6 +68,8 @@ publicAgendaRoutes.get("/agenda", async (context) => {
     eventSlug: query.event ?? query.event_slug,
     day: query.day,
     track: query.track,
+    format: query.format,
+    room: query.room,
     q: query.q,
   });
   const shell = await assetShell(context.env.ASSETS, context.req.raw);

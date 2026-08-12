@@ -278,6 +278,11 @@ export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
           <div><span class="eyebrow">Venues and rooms</span><h2>One place for every door</h2><p class="subtle tabular">{venueCounts ? `${venueCounts.buildings} buildings · ${venueCounts.rooms} rooms` : "Venue counts unavailable"}</p></div>
           <button class="button primary" type="button" onClick={() => navigate("/settings/venues")}>Open Venues →</button>
         </section>
+
+        <section class="card settings-venue-link">
+          <div><span class="eyebrow">Speaker tasks</span><h2>What every speaker owes</h2><p class="subtle">Author slide uploads, bios, and release forms, then assign them to speakers.</p></div>
+          <button class="button primary" type="button" onClick={() => navigate("/tasks")}>Open Tasks →</button>
+        </section>
       </div>
       <footer class="settings-savebar"><span class="subtle">Changes apply to the conference record after saving.</span><button class="button primary" type="submit" disabled={!dirty}>{dirty ? "Save event settings" : "Event settings saved"}</button></footer>
     </form>

@@ -37,6 +37,7 @@ everything else is drawn inside the organizer shell.
 | `/agenda-builder` | Agenda | organizer | yes | client push |
 | `/files` | Files | organizer | yes | client push |
 | `/communications` | Communications | organizer | yes | client push |
+| `/tasks` | Tasks | organizer | yes | client push |
 | `/portal` | Speaker portal | speaker | yes | browser navigation |
 | `/agenda` | Conference site | public | yes | browser navigation |
 | `/embed/config` | Embeds | public | yes | browser navigation |
@@ -79,7 +80,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 ```text
 ROUTES (real paths, not hash routes):
   Public, no auth: / /:eventSlug/:kind/embed /agenda /embed/:slug /embed/config /f/:slug /p/:slug /s/:slug /speakers
-  Organizer (admin shell): /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /forms /evaluation /agenda-builder /files /communications /settings /delivery-health /delivery-health?view=system /settings/venues /submissions/:id /settings/tasks /settings/api /import
+  Organizer (admin shell): /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /settings/venues /submissions/:id /settings/tasks /settings/api /import
   Review queue: /reviewer
   Speaker portal: /portal
   Co-speaker confirmation: /co-speaker

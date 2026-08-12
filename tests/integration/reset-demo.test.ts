@@ -37,7 +37,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   comparisons: 0,
   round_assignments: 200,
   round_promotions: 0,
-  rubric_criteria: 3,
+  rubric_criteria: 7,
   evaluation_rounds: 2,
   evaluation_plans: 1,
   committee_members: 3,

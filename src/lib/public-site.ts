@@ -40,6 +40,17 @@ export interface PublicTrack {
   color: string;
 }
 
+export interface PublicFormat {
+  id: string;
+  name: string;
+}
+
+export interface PublicRoom {
+  id: string;
+  name: string;
+  label: string;
+}
+
 export interface PublicSpeakerSummary {
   id: string;
   slug: string;
@@ -60,11 +71,14 @@ export interface PublicSession {
   day: string;
   date: string;
   time: string;
+  endTime: string;
   startsAt: number;
   durationMin: number;
+  roomId: string;
   room: string;
   building: string | null;
   roomLabel: string;
+  format: PublicFormat | null;
   tracks: PublicTrack[];
   speakers: PublicSpeakerSummary[];
 }
@@ -79,10 +93,14 @@ export interface PublicAgendaData {
   venue: PublicVenueDisclosure;
   days: PublicDay[];
   tracks: PublicTrack[];
+  formats: PublicFormat[];
+  rooms: PublicRoom[];
   sessions: PublicSession[];
   filters: {
     day: string;
     track: string | null;
+    format: string | null;
+    room: string | null;
     q: string | null;
     status: string | null;
   };
@@ -110,6 +128,15 @@ export interface PublicEmbedConfig {
   output: EmbedOutputFormat;
 }
 
+export interface PublicEmbedFilters {
+  track?: string | null;
+  format?: string | null;
+  room?: string | null;
+  status?: string | null;
+  accent?: string | null;
+  layout?: string | null;
+}
+
 export interface ResolvedPublicEmbed {
   event: PublicEvent;
   slug: string;
@@ -133,11 +160,15 @@ export interface PublicEmbedData {
   kind: EmbedKind;
   config: PublicEmbedConfig;
   tracks: PublicTrack[];
+  formats: PublicFormat[];
+  rooms: PublicRoom[];
   sessions: PublicSession[];
   speakers: PublicSpeaker[];
   cfp: PublicEmbedCfp | null;
   filters: {
     track: string | null;
+    format: string | null;
+    room: string | null;
     status: string | null;
     layout: EmbedLayout | null;
   };
@@ -162,8 +193,11 @@ interface PublicSessionRow {
   status: string;
   starts_at: number;
   duration_min: number;
+  room_id: string;
   room_name: string;
   building_name: string | null;
+  format_id: string | null;
+  format_name: string | null;
   speakers_json: string;
   tracks_json: string;
 }
@@ -326,7 +360,14 @@ function parseTracks(value: string): PublicTrack[] {
 
 function sessionRowsQuery(
   event: PublicEvent,
-  filters: { track?: string | null; q?: string | null; status?: string | null; speakerOnly?: boolean },
+  filters: {
+    track?: string | null;
+    format?: string | null;
+    room?: string | null;
+    q?: string | null;
+    status?: string | null;
+    speakerOnly?: boolean;
+  },
 ): { sql: string; bindings: unknown[] } {
   const clauses = [
     "ai.event_id = ?",
@@ -344,6 +385,20 @@ function sessionRowsQuery(
         AND (filter_st.track_id = ? OR lower(filter_track.name) = lower(?))
     )`);
     bindings.push(filters.track, filters.track);
+  }
+
+  // Format and room accept an id or a display name, exactly as the track facet
+  // does. The selects always submit ids; the tolerance is for a human (or an
+  // agent) typing `?format=Workshop` into the address bar and expecting it to
+  // mean what it says.
+  if (filters.format) {
+    clauses.push("(s.format_id = ? OR lower(fmt.name) = lower(?))");
+    bindings.push(filters.format, filters.format);
+  }
+
+  if (filters.room) {
+    clauses.push("(ai.room_id = ? OR lower(room.name) = lower(?))");
+    bindings.push(filters.room, filters.room);
   }
 
   if (filters.status && filters.status !== "all" && filters.status !== "published") {
@@ -383,8 +438,11 @@ function sessionRowsQuery(
         s.status,
         ai.starts_at,
         ai.duration_min,
+        ai.room_id,
         room.name AS room_name,
         building.name AS building_name,
+        fmt.id AS format_id,
+        fmt.name AS format_name,
         ${participantListSql({
           submissionId: "s.id",
           audience: "public",
@@ -416,6 +474,7 @@ function sessionRowsQuery(
       JOIN submissions s ON s.id = ai.submission_id AND s.event_id = ai.event_id
       JOIN rooms room ON room.id = ai.room_id AND room.event_id = ai.event_id
       LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
+      LEFT JOIN formats fmt ON fmt.id = s.format_id AND fmt.event_id = s.event_id
       WHERE ${clauses.join(" AND ")}
       ORDER BY ai.starts_at ASC, s.id ASC
     `,
@@ -429,6 +488,91 @@ async function loadTrackCatalog(database: D1Database, eventId: string): Promise<
     .bind(eventId)
     .all<PublicTrack>();
   return result.results.map((track) => ({ id: track.id, name: track.name, color: track.color }));
+}
+
+async function loadFormatCatalog(database: D1Database, eventId: string): Promise<PublicFormat[]> {
+  const result = await database
+    .prepare("SELECT id, name FROM formats WHERE event_id = ? ORDER BY position ASC, id ASC")
+    .bind(eventId)
+    .all<PublicFormat>();
+  return result.results.map((format) => ({ id: format.id, name: format.name }));
+}
+
+interface RoomCatalogRow {
+  id: string;
+  name: string;
+  building_name: string | null;
+}
+
+/**
+ * The room facet's options carry the same venue disclosure the session cards
+ * do. Labelling a room with its building here while the cards suppress it
+ * would make the filter control the channel that leaks what the labels hide.
+ */
+async function loadRoomCatalog(
+  database: D1Database,
+  eventId: string,
+  showBuildingComparison: boolean,
+): Promise<PublicRoom[]> {
+  const result = await database
+    .prepare(
+      `SELECT room.id, room.name, building.name AS building_name
+         FROM rooms room
+         LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
+        WHERE room.event_id = ?
+        ORDER BY room.position ASC, room.id ASC`,
+    )
+    .bind(eventId)
+    .all<RoomCatalogRow>();
+  return result.results.map((room) => ({
+    id: room.id,
+    name: room.name,
+    label: showBuildingComparison
+      ? roomDisplayLabel({ name: room.name }, room.building_name ? { name: room.building_name } : null)
+      : room.name,
+  }));
+}
+
+const ABSTRACT_SNIPPET_CHARS = 180;
+const ABSTRACT_EXPANDED_CHARS = 640;
+
+export interface PublicAbstractSnippet {
+  /** The 2–3 lines rendered on the card before any interaction. */
+  head: string;
+  /** What a `Show more` expansion reveals in place; empty when nothing is hidden. */
+  rest: string;
+  /** True when even the expansion stops short of the full abstract. */
+  clipped: boolean;
+}
+
+function cutAtWord(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  const window = text.slice(0, limit);
+  const lastSpace = window.lastIndexOf(" ");
+  return (lastSpace > limit * 0.6 ? window.slice(0, lastSpace) : window).trimEnd();
+}
+
+/**
+ * Server-side truncation for public session cards. The agenda is on an
+ * AC-85 cold-render budget and abstracts are unbounded, so a list page ships a
+ * snippet plus a bounded expansion — never every abstract in full. When the
+ * abstract outruns the expansion the caller links out to the session page
+ * rather than presenting a cut as the whole text.
+ */
+export function publicAbstractSnippet(
+  abstract: string | null | undefined,
+  limits: { head?: number; expanded?: number } = {},
+): PublicAbstractSnippet | null {
+  const text = abstract?.replaceAll(/\s+/g, " ").trim();
+  if (!text) return null;
+  const headLimit = limits.head ?? ABSTRACT_SNIPPET_CHARS;
+  const expandedLimit = Math.max(limits.expanded ?? ABSTRACT_EXPANDED_CHARS, headLimit);
+  if (text.length <= headLimit) return { head: text, rest: "", clipped: false };
+  const head = cutAtWord(text, headLimit);
+  const remainder = text.slice(head.length).trimStart();
+  const restBudget = expandedLimit - head.length;
+  const rest = cutAtWord(remainder, restBudget);
+  return { head, rest, clipped: rest.length < remainder.length };
 }
 
 async function publicVenueDisclosure(
@@ -463,11 +607,14 @@ function toPublicSessions(rows: PublicSessionRow[], event: PublicEvent, showBuil
       day: dateLabel(zoned.date),
       date: zoned.date,
       time: zoned.time,
+      endTime: zonedParts(row.starts_at + row.duration_min * 60_000, event.timezone).time,
       startsAt: row.starts_at,
       durationMin: row.duration_min,
+      roomId: row.room_id,
       room: row.room_name,
       building: row.building_name,
       roomLabel: showBuildingComparison ? roomDisplayLabel(room, building) : room.name,
+      format: row.format_id && row.format_name ? { id: row.format_id, name: row.format_name } : null,
       tracks,
       speakers,
     } satisfies PublicSession;
@@ -486,6 +633,8 @@ export interface PublicAgendaFilters {
   day?: string | null;
   allDays?: boolean;
   track?: string | null;
+  format?: string | null;
+  room?: string | null;
   q?: string | null;
   status?: string | null;
 }
@@ -496,10 +645,12 @@ export async function loadPublicAgenda(
 ): Promise<PublicAgendaData | null> {
   const event = await findLiveEvent(database, filters.eventSlug);
   if (!event) return null;
-  const [catalog, venue] = await Promise.all([
+  const [catalog, formats, venue] = await Promise.all([
     loadTrackCatalog(database, event.id),
+    loadFormatCatalog(database, event.id),
     publicVenueDisclosure(database, event.id),
   ]);
+  const rooms = await loadRoomCatalog(database, event.id, venue.showComparison);
   const query = sessionRowsQuery(event, filters);
   const rows = await database.prepare(query.sql).bind(...query.bindings).all<PublicSessionRow>();
   const allSessions = toPublicSessions(rows.results, event, venue.showComparison);
@@ -512,10 +663,14 @@ export async function loadPublicAgenda(
     venue,
     days: eventDays(event),
     tracks: catalog,
+    formats,
+    rooms,
     sessions,
     filters: {
       day: selectedDay ?? "all",
       track: filters.track ?? null,
+      format: filters.format ?? null,
+      room: filters.room ?? null,
       q: filters.q?.trim() || null,
       status: filters.status ?? null,
     },
@@ -706,7 +861,7 @@ async function loadPublicCfp(database: D1Database, eventId: string): Promise<Pub
 export async function loadPublicEmbed(
   database: D1Database,
   resolved: ResolvedPublicEmbed,
-  filters: { track?: string | null; status?: string | null; accent?: string | null; layout?: string | null } = {},
+  filters: PublicEmbedFilters = {},
 ): Promise<PublicEmbedData> {
   const accent = validAccent(filters.accent) ?? resolved.config.accent;
   const config = { ...resolved.config, accent };
@@ -719,14 +874,18 @@ export async function loadPublicEmbed(
       kind: resolved.kind,
       config,
       tracks: [],
+      formats: [],
+      rooms: [],
       sessions: [],
       speakers: [],
       cfp: await loadPublicCfp(database, resolved.event.id),
-      filters: { track: null, status: null, layout: null },
+      filters: { track: null, format: null, room: null, status: null, layout: null },
     };
   }
 
   const track = filters.track ?? resolved.config.tracks[0] ?? null;
+  const format = filters.format ?? null;
+  const room = filters.room ?? null;
   const status = filters.status ?? resolved.config.statuses[0] ?? null;
   const layout: EmbedLayout = filters.layout === "list"
     ? "list"
@@ -735,6 +894,8 @@ export async function loadPublicEmbed(
     eventSlug: resolved.event.slug,
     allDays: true,
     track,
+    format,
+    room,
     status,
   });
   if (!agenda) throw new Error("live embed event disappeared");
@@ -776,17 +937,19 @@ export async function loadPublicEmbed(
     kind: resolved.kind,
     config,
     tracks: agenda.tracks,
+    formats: agenda.formats,
+    rooms: agenda.rooms,
     sessions: agenda.sessions,
     speakers: [...speakersById.values()].sort((left, right) => left.name.localeCompare(right.name)),
     cfp: null,
-    filters: { track, status, layout: resolved.kind === "speakers" ? layout : null },
+    filters: { track, format, room, status, layout: resolved.kind === "speakers" ? layout : null },
   };
 }
 
 export function publicEmbedCacheKey(
   eventId: string,
   slug: string,
-  filters: { track?: string | null; status?: string | null; accent?: string | null; layout?: string | null } = {},
+  filters: PublicEmbedFilters = {},
 ): string {
   return [
     "public-embed",
@@ -796,6 +959,10 @@ export function publicEmbedCacheKey(
     filters.status ?? "all-statuses",
     filters.accent ?? "event-accent",
     filters.layout === "list" ? "list" : "cards",
+    // Every facet the embed honors has to key the cache. A facet outside the
+    // key serves one visitor's filtered list to the next visitor.
+    filters.format ?? "all-formats",
+    filters.room ?? "all-rooms",
   ].map((part) => encodeURIComponent(part)).join(":");
 }
 

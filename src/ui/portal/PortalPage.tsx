@@ -9,6 +9,7 @@ import { formatBytes, validateClientUpload } from "../upload/upload-policy";
 import type { SignedUpload } from "../../lib/r2/protocol";
 import { isFieldApplicable } from "../../lib/form-conditions";
 import { seedId } from "../../lib/ids";
+import { formatDueDate } from "../../lib/task-due";
 import type { VenueBuildingInput } from "../../lib/venues";
 import { MAP_HEIGHT, VenueMap } from "../venues/VenueMap";
 import { FileVersions } from "../files/FileVersions";
@@ -576,7 +577,7 @@ function TaskRow({ eventId, task, submissions, person, onComplete }: { eventId: 
     <div>
       <h3 class="portal-task-title" title={task.title}>{task.title}</h3>
       <p class="portal-task-description">{task.description || "—"}</p>
-      <div class="portal-task-meta"><span>{task.kind}</span><span>due {formatDate(task.due_at)}</span>{task.overdue && task.status === "open" ? <span class="overdue">overdue</span> : null}</div>
+      <div class="portal-task-meta"><span>{task.kind}</span><span>due {formatDueDate(task.due_at)}</span>{task.overdue && task.status === "open" ? <span class="overdue">overdue</span> : null}</div>
       {/* Named in the collapsed row on purpose: a checkmark alone is not
           evidence, and the speaker should never have to open anything to
           confirm which file the conference is holding. */}

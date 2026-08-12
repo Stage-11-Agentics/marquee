@@ -27,7 +27,13 @@ async function buildFixture(): Promise<void> {
     CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, name TEXT NOT NULL, company TEXT);
     CREATE TABLE IF NOT EXISTS participations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, person_id TEXT NOT NULL, role TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS submission_tracks (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, track_id TEXT NOT NULL, is_primary INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS evaluations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, score REAL);
+    CREATE TABLE IF NOT EXISTS evaluations (
+      id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, round_id TEXT,
+      score REAL, criteria_scores TEXT, abstained INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS rubric_criteria (
+      id TEXT PRIMARY KEY, round_id TEXT NOT NULL, name TEXT NOT NULL, weight_pct REAL NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS buildings (id TEXT PRIMARY KEY, name TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, building_id TEXT NOT NULL, name TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS agenda_items (id TEXT PRIMARY KEY, submission_id TEXT, kind TEXT NOT NULL, starts_at INTEGER NOT NULL, duration_min INTEGER NOT NULL, room_id TEXT NOT NULL, is_published INTEGER NOT NULL);

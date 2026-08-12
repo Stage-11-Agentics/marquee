@@ -33,6 +33,7 @@ export const routeTable: readonly RouteDefinition[] = [
   // the deck, and renaming it to something cleverer only makes it unfindable.
   { id: "files", path: "/files", label: "Files", icon: "▤", group: "modules", sidebar: true },
   { id: "communications", path: "/communications", label: "Communications", icon: "✉", group: "modules", sidebar: true },
+  { id: "tasks", path: "/tasks", label: "Tasks", icon: "☑", group: "modules", sidebar: true },
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "○", group: "modules", sidebar: true, external: true },
   { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "modules", sidebar: true, external: true },
   // Server-rendered outside the admin shell (`embed.route.tsx`), and `app.tsx`
@@ -53,6 +54,8 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "co-speaker", path: "/co-speaker", label: "Co-speaker confirmation", icon: "", group: "utility", external: true },
   { id: "venues", path: "/settings/venues", label: "Venues", icon: "⌖", group: "utility" },
   { id: "submission-detail", path: "/submissions/:id", label: "Submission record", icon: "", group: "utility" },
+  // `/tasks` is where the sidebar sends an organizer; this row keeps the older
+  // settings path working for anything that already links to it.
   { id: "task-templates", path: "/settings/tasks", label: "Task templates", icon: "", group: "utility" },
   { id: "api-tokens", path: "/settings/api", label: "API tokens", icon: "", group: "utility" },
   { id: "api-docs", path: "/api/docs", label: "API & CLI", icon: "⌘", group: "utility" },

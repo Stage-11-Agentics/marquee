@@ -10,7 +10,7 @@ export type SavedViewFilters = Omit<SubmissionFilter, "eventId" | "q">;
 export interface SavedViewConfig {
   q: string;
   filters: SavedViewFilters;
-  sort: "newest" | "updated" | "title" | "score";
+  sort: "newest" | "updated" | "title" | "score" | "score_asc";
   columns: SubmissionColumnId[];
 }
 

@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-117",
+  "owns": [],
+  "exercises": [],
+  "notes": "CNT-14 is an eval-kit criterion rather than a canonical AC. Contract tests cover the visible export state and the latest-only ZIP mechanism without claiming a pre-minted product criterion."
+}

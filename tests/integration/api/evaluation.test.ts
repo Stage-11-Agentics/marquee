@@ -335,4 +335,96 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     const evaluation = await env.DB.prepare("SELECT recommendation FROM evaluations WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_ID, ORGANIZER_ID).first<{ recommendation: string }>();
     expect(evaluation?.recommendation).toBe("maybe");
   });
+  test("CONTRACT · MRQ-108 · a scorecard carries rating, dropdown, and free-text criteria, per round, and they survive a reload", async () => {
+    const put = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/criteria`, {
+      method: "PUT",
+      body: JSON.stringify({ criteria: [
+        { name: "Originality", kind: "numeric", position: 0, weight_pct: 60, scale_min: 1, scale_max: 5 },
+        { name: "Relevance", kind: "numeric", position: 1, weight_pct: 40, scale_min: 1, scale_max: 5 },
+        { name: "Recommendation", kind: "select", position: 2, weight_pct: 0, options: ["Accept", "Maybe", "Reject"] },
+        { name: "Comments", kind: "text", position: 3, weight_pct: 0 },
+      ] }),
+    });
+    expect(put.status).toBe(200);
+
+    // Round two's scorecard is its own: editing round one must not touch it.
+    const roundTwo = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_TWO_ID}/criteria`, {
+      method: "PUT",
+      body: JSON.stringify({ criteria: [{ name: "Final score", kind: "numeric", position: 0, weight_pct: 100, scale_min: 1, scale_max: 10 }] }),
+    });
+    expect(roundTwo.status).toBe(200);
+
+    const reloaded = await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}`);
+    const body = await json<{ rounds: Array<{ id: string; criteria: Array<{ kind: string; name: string; options: string[] | null; scale_max: number | null; weight_pct: number }> }> }>(reloaded);
+    const one = body.rounds.find((round) => round.id === ROUND_ONE_ID)?.criteria ?? [];
+    const two = body.rounds.find((round) => round.id === ROUND_TWO_ID)?.criteria ?? [];
+    expect(one.map((criterion) => [criterion.name, criterion.kind])).toEqual([
+      ["Originality", "numeric"], ["Relevance", "numeric"], ["Recommendation", "select"], ["Comments", "text"],
+    ]);
+    expect(one[2]?.options).toEqual(["Accept", "Maybe", "Reject"]);
+    expect(one[3]?.options).toBeNull();
+    expect(two.map((criterion) => criterion.name)).toEqual(["Final score"]);
+    expect(two[0]?.scale_max).toBe(10);
+  });
+
+  test("CONTRACT · MRQ-108 · weights stay a rating-only rule, so a dropdown-and-text scorecard saves without one", async () => {
+    const noRatings = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/criteria`, {
+      method: "PUT",
+      body: JSON.stringify({ criteria: [
+        { name: "Recommendation", kind: "select", position: 0, weight_pct: 0, options: ["Accept", "Reject"] },
+        { name: "Comments", kind: "text", position: 1, weight_pct: 0 },
+      ] }),
+    });
+    expect(noRatings.status).toBe(200);
+
+    // A non-numeric criterion sent with a weight is zeroed, not rejected.
+    const zeroed = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/criteria`, {
+      method: "PUT",
+      body: JSON.stringify({ criteria: [
+        { name: "Fit", kind: "numeric", position: 0, weight_pct: 100 },
+        { name: "Comments", kind: "text", position: 1, weight_pct: 55 },
+      ] }),
+    });
+    expect(zeroed.status).toBe(200);
+    const stored = await env.DB.prepare("SELECT name, weight_pct FROM rubric_criteria WHERE round_id = ? ORDER BY position").bind(ROUND_ONE_ID).all<{ name: string; weight_pct: number }>();
+    expect(stored.results).toEqual([{ name: "Fit", weight_pct: 100 }, { name: "Comments", weight_pct: 0 }]);
+
+    // Ratings still have to add up.
+    const unbalanced = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/criteria`, {
+      method: "PUT",
+      body: JSON.stringify({ criteria: [
+        { name: "Fit", kind: "numeric", position: 0, weight_pct: 70 },
+        { name: "Comments", kind: "text", position: 1, weight_pct: 0 },
+      ] }),
+    });
+    expect(unbalanced.status).toBe(422);
+
+    // A dropdown with no choices would render as an empty control, so it is refused.
+    const emptyDropdown = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/criteria`, {
+      method: "PUT",
+      body: JSON.stringify({ criteria: [{ name: "Recommendation", kind: "select", position: 0, weight_pct: 0, options: [] }] }),
+    });
+    expect(emptyDropdown.status).toBe(422);
+  });
+
+  test("CONTRACT · MRQ-108 · a round's name, dates, and anonymization are editable and a backwards range is refused on its field", async () => {
+    const patched = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: "Initial Review", opens_at: Date.UTC(2026, 7, 1), closes_at: Date.UTC(2026, 9, 15), anonymized: true }),
+    });
+    expect(patched.status).toBe(200);
+
+    const backwards = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ closes_at: Date.UTC(2026, 6, 1) }),
+    });
+    expect(backwards.status).toBe(422);
+    const failure = await json<{ error: { field: string } }>(backwards);
+    expect(failure.error.field).toBe("closes_at");
+
+    const reloaded = await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}`);
+    const body = await json<{ rounds: Array<{ anonymized: boolean; closes_at: number | null; id: string; name: string; opens_at: number | null }> }>(reloaded);
+    const round = body.rounds.find((item) => item.id === ROUND_ONE_ID);
+    expect(round).toMatchObject({ name: "Initial Review", opens_at: Date.UTC(2026, 7, 1), closes_at: Date.UTC(2026, 9, 15), anonymized: true });
+  });
 });

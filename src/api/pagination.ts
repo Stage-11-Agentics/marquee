@@ -44,6 +44,13 @@ export interface SortColumn {
   /** SQL identifier — only ever an endpoint-owned constant. */
   column: string;
   direction: "asc" | "desc";
+  /**
+   * Keep NULLs at the bottom in BOTH directions. SQLite sorts NULLs first
+   * ascending, which buries the scored records under every unscored one the
+   * moment a chair asks for "lowest score first" — the ordering is technically
+   * correct and useless. Records with no value belong last either way.
+   */
+  nullsLast?: boolean;
 }
 
 export type SortRegistry = Record<string, SortColumn>;
@@ -73,7 +80,9 @@ export function resolveSort(
  * tiebreaker unless the primary sort is already the unique `id` column.
  */
 export function orderClause(sort: SortColumn): string {
-  const primary = `${sort.column} ${sort.direction.toUpperCase()}`;
+  const primary = sort.nullsLast
+    ? `${sort.column} IS NULL ASC, ${sort.column} ${sort.direction.toUpperCase()}`
+    : `${sort.column} ${sort.direction.toUpperCase()}`;
   return sort.column === "id" ? primary : `${primary}, id ASC`;
 }
 

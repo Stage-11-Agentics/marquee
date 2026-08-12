@@ -90,7 +90,7 @@ beforeEach(async () => {
   await purgePublicEmbedCache(env.CACHE, { eventId: EVENT_ID });
 });
 
-test("AC-273 · the sessions embed is a flat title/track/time list, filterable by track and status on the agenda's KV path", async () => {
+test("AC-273 · the sessions embed is a flat title/track/time card list with public card details, filterable by track and status on the agenda's KV path", async () => {
   const all = await request(`/embed/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}`);
   const allBody = await all.text();
   expect(all.status).toBe(200);
@@ -98,9 +98,14 @@ test("AC-273 · the sessions embed is a flat title/track/time list, filterable b
   expect(allBody).toContain("Reliable multi-agent systems");
   expect(allBody).toContain("Evaluation infrastructure at scale");
   expect(allBody).toContain('<section class="embed-flat-list"');
-  // Sessions kind omits room and speaker detail present on the agenda kind's cards.
-  expect(allBody).not.toContain("Main Stage");
-  expect(allBody).not.toContain("Agents Speaker");
+  // MRQ-120 keeps the sessions surface flat while giving it the same public
+  // card anatomy: room, speaker credits, and the explicit format/track row.
+  expect(allBody).toContain("Main Stage");
+  expect(allBody).toContain("Agents Speaker");
+  expect(allBody).toContain("Principal Engineer");
+  expect(allBody).toContain("Format");
+  expect(allBody).toContain("Track");
+  expect(allBody).toContain('class="embed-format">—</span>');
 
   const filtered = await request(`/embed/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}&track=track-agents`);
   const filteredBody = await filtered.text();
