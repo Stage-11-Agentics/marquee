@@ -11,12 +11,16 @@
  * the migrations defined 52 — a failure nobody saw because nothing ran it. A
  * check that is not in a gate is a check that is already stale.
  *
- * It runs in CI, not in `pr-gate`, and takes ~100 seconds because it spawns
- * Wrangler, which spawns workerd. `pr-gate` runs on the shared machine where
- * the whole fleet builds at once — measured at load 189 with 85 workerd
- * processes alive — and adding another workerd-spawning check there compounds
- * the contention it would be measured against. CI gets a dedicated runner with
- * none of that, which is the only place a hundred-second check is honest.
+ * It runs in both `pr-gate` and CI, which `tests/node/gate-truth.test.mjs`
+ * requires: a local gate that does not predict CI is worse than no local gate,
+ * because it sends people to CI for a verdict they thought they already had.
+ *
+ * Verification costs ~100 seconds — it spawns Wrangler, which spawns workerd —
+ * and `pr-gate` runs on the shared machine where the whole fleet builds at once
+ * (measured at load 189 with 85 workerd processes alive). That cost is why this
+ * is triggered rather than unconditional, not a reason to run it only in CI:
+ * with the trigger, the PRs that pay the hundred seconds are exactly the ones
+ * that changed the schema, and everything else exits in a few seconds.
  *
  * Drift comes from exactly three places, so those are the trigger:
  *
