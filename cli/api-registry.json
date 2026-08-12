@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "35de43cf8c1174b7dd8253a3eb3d820bf86b569bdd9f1ec918f74229803ce6dd",
+  "documentSha256": "c87669042d70fefa7690253f0d3ca6d86a2fc0a354c1a295b677fb6b9dacbd9c",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",
@@ -76,6 +76,7 @@
     "PATCH /api/v1/events/{eventId}/plans/{planId} updateEvaluationPlan",
     "PATCH /api/v1/events/{eventId}/rounds/{roundId} updateEvaluationRound",
     "PATCH /api/v1/events/{eventId}/submissions/{submissionId} patchDraftSubmission",
+    "PATCH /api/v1/events/{eventId}/submissions/{submissionId}/content updateSubmissionContent",
     "PATCH /api/v1/events/{eventId}/submissions/{submissionId}/talk-editing updateSpeakerTalkEditing",
     "PATCH /api/v1/events/{eventId}/task-templates/{templateId} updateTaskTemplate",
     "PATCH /api/v1/events/{eventId}/templates/{templateId} updateEmailTemplate",
@@ -91,7 +92,6 @@
     "POST /api/v1/auth/magic-link requestMagicLink",
     "POST /api/v1/events/{eventId}/agenda/items placeAgendaItem",
     "POST /api/v1/events/{eventId}/committees createEvaluationCommittee",
-    "POST /api/v1/events/{eventId}/committees/{committeeId}/invites inviteCommitteeReviewer",
     "POST /api/v1/events/{eventId}/committees/{committeeId}/reviewers addCommitteeReviewer",
     "POST /api/v1/events/{eventId}/comms/preview previewCommunication",
     "POST /api/v1/events/{eventId}/comms/send sendCommunication",
@@ -116,6 +116,7 @@
     "POST /api/v1/events/{eventId}/rounds/{roundId}/submissions/{submissionId}/evaluations writeReviewerEvaluation",
     "POST /api/v1/events/{eventId}/speakers/invite inviteSpeakersToPortal",
     "POST /api/v1/events/{eventId}/submissions createAdminSubmission",
+    "POST /api/v1/events/{eventId}/submissions/{submissionId}/content/restore restoreSubmissionContent",
     "POST /api/v1/events/{eventId}/submissions/{submissionId}/decision decideSubmission",
     "POST /api/v1/events/{eventId}/submissions/{submissionId}/invites sendSubmissionCalendarInvites",
     "POST /api/v1/events/{eventId}/submissions/{submissionId}/publish publishSubmission",
