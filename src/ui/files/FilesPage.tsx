@@ -69,7 +69,10 @@ function FileRow({ row, selected, onToggle }: { row: FilesRow; selected: boolean
       </td>
       <td class="files-file-cell">
         <strong title={row.latest?.filename ?? row.task.title}>{row.latest?.filename ?? <span class="files-empty-dash">—</span>}</strong>
-        <small>{row.task.title}</small>
+        {/* A file task marked complete with nothing attached is the one state
+            an AV lead must not discover on the day. Name it here rather than
+            letting the chase board's "done" stand unqualified. */}
+        <small>{row.task.title}{!hasFile && row.task.status === "done" ? " · marked complete, no file on record" : ""}</small>
       </td>
       <td class="files-speaker-cell">
         <strong>{row.person.name}</strong>
