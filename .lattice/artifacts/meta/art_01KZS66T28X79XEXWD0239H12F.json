@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-11T19:53:48Z",
+  "created_by": "agent:delegator-mrq-76",
+  "custom_fields": {
+    "url": "https://github.com/Stage-11-Agentics/marquee/pull/17"
+  },
+  "id": "art_01KZS66T28X79XEXWD0239H12F",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open GitHub PR for the rebased implementation",
+  "tags": [],
+  "title": "MRQ-76 PR #17",
+  "token_usage": null,
+  "type": "reference"
+}

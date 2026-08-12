@@ -562,11 +562,23 @@ async function handlePublicSubmission(
   slug: string,
   body: z.infer<typeof submitBodySchema>,
 ): Promise<PublicFormState> {
-  await requireTurnstile(context, tokenFromBody(body));
   const resumeToken = resumeTokenFromBody(body);
   const base = await loadPublicForm(context.env.DB, slug, { resumeToken, email: body.email });
   if (!base) throw ApiError.notFound("This conference form is not available.");
   if (resumeToken && !base.submission) throw ApiError.forbidden("Use the resume link that belongs to this abstract, then try again.");
+  /**
+   * A submission carrying a resume token that resolves to this form's own
+   * draft is the continuation of a session that already passed the security
+   * check to create that draft — the same position autosave takes, and for
+   * the same reason. A token is single-use, so demanding a second one here
+   * forces the submitter to solve a fresh challenge between attaching a file
+   * and pressing Submit, which is precisely the dead end this route's own
+   * error message could not explain. Every other path — no resume token, or
+   * one that does not resolve — still faces the full gate.
+   */
+  if (!(resumeToken && base.submission)) {
+    await requireTurnstile(context, tokenFromBody(body));
+  }
   if (base.submission && base.submission.status !== "draft") throw ApiError.conflict("This abstract was already submitted. Use its confirmation link to view it.");
   if (publicFormIsClosed(base.form)) throw ApiError.conflict("This call for speakers is closed. Keep your answers and return when the conference reopens.");
   if (base.state === "at_limit") throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");

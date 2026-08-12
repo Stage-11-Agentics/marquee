@@ -78,6 +78,13 @@ function clampOwnerMaxBytes(configured: number | undefined, fallback: number): n
   return Math.min(Math.floor(configured), ABSOLUTE_MAX_BYTES);
 }
 
+/**
+ * An owner's accept list is authored in whichever vocabulary its surface uses:
+ * a form field stores what the file input consumes (`image/png`), a task
+ * template may store a bare extension (`pdf`, `.pdf`). Both name the same rule,
+ * so both must narrow to it — matching one vocabulary only leaves an accept
+ * list written in the other narrowing to nothing and rejecting every file.
+ */
 function narrowRules(
   base: readonly FileTypeRule[],
   accept: string[] | undefined,
@@ -86,7 +93,7 @@ function narrowRules(
   const wanted = new Set(
     accept.map((entry) => entry.trim().toLowerCase().replace(/^\./, "")),
   );
-  return base.filter((rule) => wanted.has(rule.extension));
+  return base.filter((rule) => wanted.has(rule.extension) || wanted.has(rule.mime));
 }
 
 /**
@@ -108,11 +115,22 @@ export function policyFor(
     case "event_logo":
       return { ownerType, rules: IMAGE_RULES, maxBytes: EVENT_LOGO_MAX_BYTES };
     case "task_upload":
+      return {
+        ownerType,
+        rules: narrowRules(DOCUMENT_RULES, config?.accept),
+        maxBytes: clampOwnerMaxBytes(config?.maxBytes, DEFAULT_FILE_MAX_BYTES),
+      };
+    /**
+     * A public form field declares what it wants — the CFP headshot asks for
+     * images, a slides field asks for documents — so the base is every type the
+     * sniffer can classify and the field's own accept list is what narrows it.
+     * Documents alone made every image field on every public form unsignable.
+     */
     case "draft_file":
     case "submission_file":
       return {
         ownerType,
-        rules: narrowRules(DOCUMENT_RULES, config?.accept),
+        rules: narrowRules([...IMAGE_RULES, ...DOCUMENT_RULES], config?.accept),
         maxBytes: clampOwnerMaxBytes(config?.maxBytes, DEFAULT_FILE_MAX_BYTES),
       };
     default:

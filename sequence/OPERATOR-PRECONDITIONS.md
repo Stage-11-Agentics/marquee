@@ -27,21 +27,27 @@ accounts. Wrong-account work is worse than no work.
 
 ---
 
-## 1. Cloudflare — Workers **Paid** ⬜ BLOCKING
+## 1. Cloudflare — Workers **Paid** ✅ PASS (verified 2026-08-11, MRQ-57)
 
 **Why it matters.** The Free plan caps CPU at **10 ms per invocation**. Marquee
 server-renders a 1,000-row submissions table, generates ICS files, and hashes session tokens —
 each of which blows past 10 ms. This is not a performance nicety; **SSR does not work at all**
 on Free. It costs **$5/month** and the research called it "a non-decision."
 
-**How to check.** Dashboard → Workers & Pages → Plans. Confirm the account reads **Workers
-Paid**, not Free.
+**How to check — by creating a paid resource, not by reading a page.** Both documented
+subscription endpoints lie: `/accounts/{id}/workers/subscription` returns `7003` ("no route")
+and `/accounts/{id}/subscriptions` returns `10000` even with `Account Settings: Read`. Queues
+is a **paid-only feature**, so creating one is the honest test:
+`npx wrangler queues create <name>`.
 
-**Done when.** The plan page says Paid on `projects@stage11.ai`.
+**Done when.** A real Queue creates successfully.
+
+**Evidence (2026-08-11).** `marquee-mail` created on `Projects@stage11.ai's Account`
+(`16483d…`). The account is on Workers Paid.
 
 ---
 
-## 2. Cloudflare — R2 entitlement, proven by fetching an object ⬜ BLOCKING
+## 2. Cloudflare — R2 entitlement, proven by fetching an object ✅ PASS (verified 2026-08-11, MRQ-57)
 
 **Why it matters.** Speaker headshots and slide decks live in R2. Stage 11's R2 entitlement
 has **silently lapsed account-wide before** — every public object URL starts returning 403 and
@@ -54,27 +60,48 @@ proven by a successful fetch.
 
 **Done when.** A real object returns 200 over a public R2 URL.
 
+**Evidence (2026-08-11).** `GET https://videos.stage11.dev/c11-intro.mp4` with
+`Range: bytes=0-1023` returned **HTTP 206** with real bytes. `/accounts/{id}/r2/buckets`
+returned `success: true` with no error `10042`, and `aws s3 ls` listed buckets rather than
+`NotEntitled`. The entitlement is live.
+
 ---
 
-## 3. Cloudflare — `wrangler login` + account ID on the build machine ⬜ BLOCKING
+## 3. Cloudflare — Workers credentials on the build machine ✅ PASS (verified 2026-08-11, MRQ-57)
 
 **Why it matters.** MRQ-57 (the real deploy) is blocked until Cloudflare auth exists on the
 machine. Until then the deployed URL a judge opens does not exist — and the deployed URL *is*
 the submission.
 
-**How to do it.**
+**Where the account ID actually lives.** `code/platform/.credentials/.env` — **not** the
+platform repo root. The root holds only `.env.template` (`op://` references, never hydrated
+here per `secrets.md`), so "pull it from `.env` in the platform repo" sends you to a file that
+does not exist. `.credentials/` is gitignored; the file also carries the R2 token, both R2 S3
+keys, the R2 endpoint, all three zone IDs, and `RESEND_API_KEY`.
+
+**Use a scoped API token, not `wrangler login`.** The OAuth flow starts a throwaway server on
+`localhost:8976` and must stay running to catch the redirect; if the command has exited when
+you approve, consent is granted with nowhere to deliver the token and the browser lands on a
+dead port. A token is also durable, non-interactive, and usable by CI and other agents.
 
 ```sh
-export CLOUDFLARE_ACCOUNT_ID="<from .env in the platform repo>"
-npx wrangler login          # authenticate as projects@stage11.ai
+set -a; source ~/Projects/Stage11/code/platform/.credentials/.env; set +a
+export CLOUDFLARE_API_TOKEN="$MARQUEE_CLOUDFLARE_API_TOKEN"
+export CLOUDFLARE_ACCOUNT_ID
 ```
 
-This is interactive (it opens a browser), which is exactly why an agent cannot do it.
+Token scopes (account): Workers Scripts, D1, Workers KV Storage, Queues, Workers R2 Storage,
+Turnstile — all Edit; Account Settings — Read. Zone (`stage11.dev`): Workers Routes, DNS —
+Edit. Turnstile: Edit is what lets an agent mint the widget by API instead of sending a human
+to the dashboard.
 
-**Done when.** `npx wrangler whoami` shows the Stage11 Projects account.
+**Done when.** `/user/tokens/verify` returns `status: active` and the account resolves to
+`Projects@stage11.ai's Account`.
 
-**Note.** The account ID is supplied through the environment and **never committed** —
-`wrangler.jsonc` still carries `REPLACE_ME-*` placeholders, which MRQ-57 fills in.
+**Evidence (2026-08-11).** `MARQUEE_CLOUDFLARE_API_TOKEN` active to 2027-06-03; account
+`16483d…` resolves to `Projects@stage11.ai's Account` — **not** `Stage11Agentics`. Every
+`REPLACE_ME-*` in `wrangler.jsonc` is now a real resource ID. `R2_ACCOUNT_ID` moved from
+`vars` to a **secret**, because it identifies the account and this repository goes public.
 
 ---
 

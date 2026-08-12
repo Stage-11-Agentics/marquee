@@ -9,6 +9,7 @@ import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { decisionHistory } from "../lib/decision-history";
 import { projectApplicableAnswers, type FormAnswerValue } from "../lib/form-conditions";
 import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
@@ -212,7 +213,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
   `).bind(eventId, submissionId).first<BaseRecordRow>();
   if (!row) throw ApiError.notFound("submission not found");
 
-  const [participants, answers, tracks, decisions, evaluations, comparisons, history, rounds, reviewerOptions] = await Promise.all([
+  const [participants, answers, tracks, decisions, reversals, evaluations, comparisons, history, rounds, reviewerOptions] = await Promise.all([
     db.prepare(`
       SELECT participation.id, participation.person_id, person.name, person.email, person.company,
         person.title, participation.role, participation.position, participation.confirmation_status,
@@ -244,6 +245,22 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       WHERE decision.submission_id = ?
       ORDER BY decision.decided_at DESC, decision.id DESC
     `).bind(submissionId).all<Record<string, unknown>>(),
+    // An acceptance reversal is the most consequential action on this screen —
+    // it can cancel a real person's portal tasks, kill queued mail, and send a
+    // calendar cancellation — and it was the only one leaving no trace in
+    // Decision History. It cannot be a `submission_decisions` row: that table
+    // CHECKs `resulting_status IN ('accepted','waitlisted','rejected')` and the
+    // default reversal outcome is `withdrawn`. The audit log already records
+    // everything needed, so this is a read that was missing, not a write.
+    db.prepare(`
+      SELECT reversal.id, reversal.after_json, reversal.created_at,
+        reversal.actor_person_id, person.name AS actor_name
+      FROM audit_log reversal
+      LEFT JOIN people person ON person.id = reversal.actor_person_id
+      WHERE reversal.event_id = ? AND reversal.entity_id = ?
+        AND reversal.action = 'submission.acceptance_reversed'
+      ORDER BY reversal.created_at DESC, reversal.id DESC
+    `).bind(eventId, submissionId).all<Record<string, unknown>>(),
     db.prepare(`
       SELECT evaluation.id, evaluation.round_id, round.name AS round_name, round.position,
         evaluation.reviewer_person_id, person.name AS reviewer_name, evaluation.recommendation,
@@ -392,7 +409,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
     tracks: tracks.results.map((track) => ({ ...track, is_primary: Boolean(track.is_primary) })),
     participants: participants.results,
     answers: normalizedAnswers,
-    decisions: decisions.results,
+    decisions: decisionHistory(decisions.results, reversals.results),
     evaluations: evaluationEvidence,
     comparisons: comparisonEvidence,
     routing: row.applied_rule_id === null ? null : {

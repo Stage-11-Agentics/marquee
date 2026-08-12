@@ -10,6 +10,10 @@ TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
 # MRQ-14: deterministic fake R2 S3 credentials for local signer tests only.
 # Miniflare has no real account S3 endpoint — MRQ-57 supplies production
 # values as Wrangler secrets, never committed here.
+# R2_ACCOUNT_ID is a secret rather than a var because it identifies the
+# Cloudflare account and this repository is public. It reaches the Worker
+# through `env` either way.
+R2_ACCOUNT_ID=local-fake-account-id
 R2_ACCESS_KEY_ID=local-fake-access-key-id
 R2_SECRET_ACCESS_KEY=local-fake-secret-access-key
 UPLOAD_TOKEN_SECRET=local-fake-upload-token-secret

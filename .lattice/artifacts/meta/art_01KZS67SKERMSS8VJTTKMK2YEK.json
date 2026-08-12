@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-11T19:54:21Z",
+  "created_by": "agent:delegator-mrq-76",
+  "custom_fields": {},
+  "id": "art_01KZS67SKERMSS8VJTTKMK2YEK",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZS67SKERMSS8VJTTKMK2YEK.md",
+    "size_bytes": 882
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Exact-head scope and derivation review passed",
+  "tags": [],
+  "title": "MRQ-76 self-review PASS",
+  "token_usage": null,
+  "type": "note"
+}

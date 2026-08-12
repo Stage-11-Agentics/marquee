@@ -39,6 +39,7 @@ export interface UploadsEnv {
   MEDIA_PUBLIC_ORIGIN: string;
   UPLOAD_TOKEN_SECRET: string;
   UPLOAD_RATE_LIMIT_SECRET: string;
+  LOCAL_UPLOAD_SHIM?: string;
 }
 
 async function hmacHex(secret: string, value: string): Promise<string> {
@@ -68,6 +69,74 @@ async function consumePublicTurnstileToken(cache: KVNamespace, token: string): P
   if (await cache.get(tokenKey)) return false;
   await cache.put(tokenKey, "1", { expirationTtl: 300 });
   return true;
+}
+
+/**
+ * A public form field carries its own accepted types and size ceiling, and
+ * they are read here from the form the draft belongs to rather than from the
+ * request — a stranger names the field, never the policy that governs it.
+ * Returns null when the key names no file field on that form, which is itself
+ * a rejection: an anonymous caller cannot invent an upload slot.
+ */
+async function draftFieldConfig(
+  db: D1Database,
+  draftId: string,
+  fieldKey: string,
+): Promise<UploadOwnerConfig | null> {
+  const field = await db
+    .prepare(
+      `SELECT field.config
+         FROM form_fields field
+         JOIN forms form ON form.id = field.form_id
+         JOIN submissions draft
+           ON draft.form_id = form.id AND draft.event_id = form.event_id
+        WHERE draft.id = ?1 AND field.key = ?2 AND field.type = 'file'`,
+    )
+    .bind(draftId, fieldKey)
+    .first<{ config: string | null }>();
+  if (!field) return null;
+  return parseUploadOwnerConfig(field.config);
+}
+
+/**
+ * A presigned PUT addresses the account's own S3 endpoint, so a local checkout
+ * with no R2 account has nowhere to send the bytes and every upload dies at the
+ * PUT — the public form's required headshot included. With this flag the bytes
+ * go to the Worker's own MEDIA binding instead, through the route below, so a
+ * local operator exercises the real form path rather than a dead end.
+ *
+ * Explicit, and off unless the operator's own `wrangler dev` line says
+ * otherwise (`--var LOCAL_UPLOAD_SHIM:1`), for the same reason
+ * `INSECURE_LOCAL_COOKIES` is: `wrangler dev` rewrites URL, Host and Origin to
+ * the deployed route, so the Worker has no observable signal that it is local
+ * and no configuration value it can infer one from. Never set on a deployed
+ * Worker; wrangler.jsonc pins the deployed default off.
+ */
+function localUploadShimEnabled(env: UploadsEnv): boolean {
+  return env.LOCAL_UPLOAD_SHIM === "1";
+}
+
+const LOCAL_PUT_TTL_MS = 600_000;
+
+async function localPutToken(env: UploadsEnv, attachmentId: string, r2Key: string, expiresAt: number): Promise<string> {
+  return hmacHex(env.UPLOAD_TOKEN_SECRET, `local-put:${attachmentId}:${r2Key}:${expiresAt}`);
+}
+
+async function signUpload(
+  env: UploadsEnv,
+  params: { attachmentId: string; key: string; contentType: string; nowMs: number },
+): Promise<{ url: string; requiredHeaders: Record<string, string>; expiresAt: number }> {
+  if (!localUploadShimEnabled(env)) {
+    const presigned = await presignPut(signingConfig(env), { key: params.key, contentType: params.contentType, nowMs: params.nowMs });
+    return { url: presigned.url, requiredHeaders: presigned.requiredHeaders, expiresAt: presigned.expiresAt };
+  }
+  const expiresAt = params.nowMs + LOCAL_PUT_TTL_MS;
+  const token = await localPutToken(env, params.attachmentId, params.key, expiresAt);
+  return {
+    url: `/api/v1/uploads/local/${encodeURIComponent(params.attachmentId)}?expires=${expiresAt}&token=${token}`,
+    requiredHeaders: { "content-type": params.contentType },
+    expiresAt,
+  };
 }
 
 function signingConfig(env: UploadsEnv): R2SigningConfig {
@@ -184,7 +253,9 @@ async function handlePublicSign(context: Context<ApiEnv>) {
     return uploadError(context, "rate_limited", "per-submission upload cap exceeded", rateLimitHeaders(limits.submission));
   }
 
-  const policy = policyFor("draft_file");
+  const fieldConfig = await draftFieldConfig(env.DB, draftId, fieldKey);
+  if (!fieldConfig) return uploadError(context, "not_found", "form field not found");
+  const policy = policyFor("draft_file", fieldConfig);
   if (!policy) return uploadError(context, "invalid_request", "owner type not presignable");
   const decision = validateDeclared(policy, { filename, contentType, sizeBytes });
   if (!decision.ok) {
@@ -213,7 +284,7 @@ async function handlePublicSign(context: Context<ApiEnv>) {
   });
 
   try {
-    const presigned = await presignPut(signingConfig(env), { key: r2Key, contentType, nowMs });
+    const presigned = await signUpload(env, { attachmentId, key: r2Key, contentType, nowMs });
     const completionToken = await hmacHex(env.UPLOAD_TOKEN_SECRET, `${attachmentId}:draft_file:${draftId}`);
     return context.json({
       attachmentId,
@@ -339,7 +410,7 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
   });
 
   try {
-    const presigned = await presignPut(signingConfig(env), { key: r2Key, contentType, nowMs });
+    const presigned = await signUpload(env, { attachmentId, key: r2Key, contentType, nowMs });
     const completionToken = await hmacHex(env.UPLOAD_TOKEN_SECRET, `${attachmentId}:${ownerType}:${ownerId}`);
     return context.json({
       attachmentId,
@@ -353,6 +424,42 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
     await env.DB.prepare(`DELETE FROM attachments WHERE id = ?1`).bind(attachmentId).run();
     return uploadError(context, "invalid_request", `signing failed: ${(error as Error).message}`);
   }
+}
+
+/**
+ * The local stand-in for a presigned R2 PUT. Refused outright unless the
+ * operator started this Worker with the shim on, and then still only for an
+ * attachment this Worker itself signed: the query token is an HMAC over the
+ * attachment id, its object key and the expiry, so the URL grants exactly one
+ * object for ten minutes and nothing else. It writes bytes; it decides
+ * nothing. The declared size and the magic bytes are still adjudicated by the
+ * ordinary completion path, which deletes the object on any contradiction.
+ */
+async function handleLocalPut(context: Context<ApiEnv>) {
+  const env = uploadsEnv(context);
+  if (!localUploadShimEnabled(env)) return uploadError(context, "not_found", "local upload shim is disabled");
+
+  const attachmentId = context.req.param("id");
+  const expiresAt = Number(context.req.query("expires"));
+  const token = context.req.query("token") ?? "";
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    return uploadError(context, "forbidden", "local upload URL has expired");
+  }
+
+  const row = await env.DB.prepare(
+    `SELECT id, r2_key, content_type, status FROM attachments WHERE id = ?1`,
+  )
+    .bind(attachmentId)
+    .first<{ id: string; r2_key: string; content_type: string; status: "pending" | "ready" }>();
+  if (!row) return uploadError(context, "not_found", "attachment not found");
+
+  const expected = await localPutToken(env, row.id, row.r2_key, expiresAt);
+  if (expected !== token) return uploadError(context, "forbidden", "local upload token does not match this attachment");
+
+  await env.MEDIA.put(row.r2_key, context.req.raw.body, {
+    httpMetadata: { contentType: row.content_type },
+  });
+  return context.json({ ok: true as const });
 }
 
 async function handleComplete(context: Context<ApiEnv>) {
@@ -652,10 +759,34 @@ const serveMedia = defineApiRoute(
   handleMedia as never,
 );
 
+const localUploadPut = defineApiRoute(
+  {
+    method: "put",
+    path: "/api/v1/uploads/local/{id}",
+    operationId: "putLocalUpload",
+    summary: "Accept upload bytes locally in place of a presigned R2 PUT",
+    description:
+      "Local development only, and refused unless the Worker was started with LOCAL_UPLOAD_SHIM=1. Writes the bytes of an already-signed pending attachment through the MEDIA binding so the normal completion path can verify them, for checkouts with no R2 account to presign against.",
+    tags: ["Uploads"],
+    request: { params: idParamsSchema },
+    policy: {
+      auth: { kind: "public" },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(z.object({ ok: z.literal(true) }).openapi("LocalUploadPutResponse"), "The bytes were stored."),
+      ...uploadErrorResponses,
+    },
+  },
+  handleLocalPut as never,
+);
+
 export const apiRoutes = [
   signPublicUpload,
   signTaskUpload,
   completePublicUpload,
   completeTaskUpload,
+  localUploadPut,
   serveMedia,
 ];

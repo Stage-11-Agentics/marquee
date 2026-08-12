@@ -3,27 +3,78 @@
   "branch_links": [],
   "c11_surface": "surface:248",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": "medium",
   "created_at": "2026-08-11T18:44:23Z",
   "created_by": "agent:gap-investigation",
   "custom_fields": {},
   "description": "USER_STORIES Amendment 18 (2026-08-11, client-directed) \u2014 public widgets widened and protected. Binding prototype **v1.10** (`prototypes/pipeline-v1.1/index.html`, public agenda \u2192 `Get embed code`): reproduce the embed dialog one-to-one \u2014 four-format segment (Agenda | Sessions | Speakers | Call for speakers), track select, cards/list layout on Speakers, snippet URL carrying `track`/`layout` params, per-format live preview, inapplicable controls disabled never hidden.\n\n**Build scope (on merged MRQ-22's `src/routes/embed.route.tsx` + `src/ui/embeds/`):**\n1. **AC-273** \u2014 new `sessions` embed kind: flat published-session list (title, track, time), filterable by track/status like the agenda kind; selectable in the dialog; same KV cache/purge path.\n2. **AC-274** \u2014 `layout=cards|list` on the `speakers` kind, chosen in the dialog, carried in the snippet URL; both responsive per AC-90.\n3. **AC-217 + AC-218** (US-16, promoted to live in-scope) \u2014 new `cfp` embed kind: renders form deadline, formats, and a link to the public form; reflects close date automatically including flipping to the closed state with no republish. Track/layout controls disable for this kind.\n4. Tests named with AC prefixes so `trace:ac` covers AC-217, AC-218, AC-273, AC-274 (all `auto`).\n\n**Mechanical contract folds (this ticket, same PR):**\n- `SPEC.md` **Amendment 18**: \u00a75.12 embed dialog gains the four formats + layout/track params; `embeds.kind` enum widens to `agenda|sessions|speakers|cfp`; embeds stay anonymous-only per \u00a75.12's iframe rule; note AC-87\u201390 are protected (no-cut) now MRQ-22 is merged.\n- `EVALUATION.md`: four `auto` rows (AC-217, AC-218 under US-16; AC-273, AC-274 under US-58); header live in-scope and `auto` counts +4; \u00a76 risk row 2 (Q2 embeddable gallery) closes as **resolved \u2014 built and protected**; amendment note appended.\n- `BUILDPLAN.md` next free amendment number: one milestone (~5h) recording this scope, dep M-21/MRQ-22.\n- **Do not touch AC-270\u2013AC-272** \u2014 reserved for the drafted submitter/speaker split. Next mint after this ticket: AC-275.\n\nPrototype and USER_STORIES are already updated by the gap-investigation surface (surface:177) \u2014 do not re-edit them; treat both as read-only contract inputs.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-11T20:44:48Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZS3DKB6XX8D6E51YYZ1D0FR",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZS6GQ73459AH02NVZQ331QP",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZS6JGK7AD3Z2M0Q3N98VPJ6",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZS6KH6EMRJSYSAQZK9GDA23",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZS6KH9NCNQMEGNQ9X8G2SQX",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZS6KHDG021M33H0KWV3QK1R",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZS6KHHBW1DC7MTRPDMB4NJY",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZS6KHNGKQVDRVDA2A0GCWDC",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZS6KHSMAWN4180TE0TMMSXP",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZS6XMAMNYB85WRBKSDQF3CY",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZS27P6K627WQTB1D12PYKV0",
-  "last_event_id": "ev_01KZS2CJGR2A8BZAPG0M04AK79",
-  "last_status_changed_at": "2026-08-11T18:47:03Z",
+  "last_event_id": "ev_01KZS94605QPMTJ4XX94YGD286",
+  "last_status_changed_at": "2026-08-11T20:44:48Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-75",
-  "status": "in_planning",
+  "status": "done",
   "tags": null,
   "title": "Public widgets: sessions + CFP embed kinds, speaker layouts, and the protected re-band",
   "type": "task",
-  "updated_at": "2026-08-11T18:47:03Z",
+  "updated_at": "2026-08-11T20:44:48Z",
   "urgency": null
 }
