@@ -180,3 +180,8 @@
   .portal-profile-grid { grid-template-columns: 1fr; }
   .portal-field.full { grid-column: auto; }
 }
+
+/* File deliverables: the speaker sees the filename in the collapsed row and
+   the full version history when the task is open. */
+.portal-task-file { margin-top: 8px; }
+.portal-task-versions { border-bottom: 1px solid var(--rule-soft); margin-bottom: 12px; padding-bottom: 12px; }

@@ -29,6 +29,7 @@ import { CreateSubmissionPage } from "../submissions/CreateSubmissionPage";
 import { SubmissionRecordPage } from "../submissions/SubmissionRecordPage";
 import { OnboardingPage } from "../onboarding/OnboardingPage";
 import { SessionizeImportPage } from "../import/SessionizeImportPage";
+import { FilesPage } from "../files/FilesPage";
 
 type ResetResponse = {
   job_id?: unknown;
@@ -162,6 +163,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : isForms ? <FormsPage search={location.search} />
             : isAgenda ? <AgendaPage />
             : isOnboarding ? <OnboardingPage navigate={navigate} />
+            : route?.id === "files" ? <FilesPage navigate={navigate} />
             : isImport ? <SessionizeImportPage navigate={navigate} />
             : route?.id === "communications" ? <>
             <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />
