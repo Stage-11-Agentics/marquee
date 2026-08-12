@@ -11,12 +11,36 @@ someone by name.
 Confirm what is actually running before assuming:
 
 ```sh
+npm run check:deploy
+```
+
+It asks both sources — `GET /health` for the sha baked into the running Worker, and
+`github/main` for what should be running — and says which of four things is true:
+
+| status | exit | meaning |
+|---|---|---|
+| `fresh` | 0 | the live Worker is main's head |
+| `cosmetic` | 0 | behind, but only on files that never reach the Worker (board, docs) |
+| `stale` | 1 | behind on `src/`, `migrations/`, or build config — live is a different product |
+| `off-main` | 1 | the live build is not an ancestor of main; someone deployed a branch |
+| `unknown` | 2 | could not determine — treat as stale |
+
+It also reports any name added to `wrangler.jsonc`'s `secrets.required` since the live build,
+because that refuses the next deploy outright (see below). `--live <sha>` dry-runs the
+comparison without deploying: *if I shipped this commit, would the gate pass?*
+
+The raw form, when you want it by hand:
+
+```sh
 curl -fsS https://marquee.stage11.dev/health
 # {"service":"marquee","status":"ok","build":"<short sha>","built_at":"…"}
 ```
 
 `build` is the commit. If it does not match `git rev-parse --short=12 github/main`, the site
 is stale.
+
+**Anything that grades or demos the live site should run `check:deploy` first.** A score taken
+against a stale build measures work the fleet already finished, and costs the whole run.
 
 ---
 
