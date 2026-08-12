@@ -785,6 +785,7 @@ function submitterHeadline(status: string): string {
 }
 
 function submitterStatusLabel(status: string): string {
+  if (status === "submitted") return "Submitted · awaiting review";
   return status.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
