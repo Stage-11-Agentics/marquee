@@ -36,6 +36,7 @@ export interface PublicFormRecord {
   files: PublicFormFile[];
   email: string | null;
   resumeToken: string | null;
+  resumeMissed: boolean;
   lastSavedAt: number | null;
   submittedAt: number | null;
 }
@@ -222,6 +223,7 @@ export async function loadPublicForm(
     files,
     email,
     resumeToken: submission ? options.resumeToken?.trim() || null : null,
+    resumeMissed: Boolean(options.resumeToken?.trim()) && submission === null,
     lastSavedAt: asNumber(submission?.last_saved_at),
     submittedAt: asNumber(submission?.submitted_at),
   };
@@ -240,6 +242,19 @@ function messageForState(state: PublicFormStateName): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * A resume link that resolves to nothing has to say so. Rendering the blank
+ * call for speakers instead answers the one question the holder of the link is
+ * asking — where is my abstract — with a form that looks like it was never
+ * submitted, and leaves them no move but to type it all again.
+ */
+function resumeMissMessage(state: PublicFormStateName): string {
+  const opening = "We could not find an abstract for that link. Check the most recent email from this conference for a working link";
+  return state === "closed"
+    ? `${opening}; this call for speakers is closed to new abstracts.`
+    : `${opening}, or start a new abstract below.`;
 }
 
 export function toPublicFormState(
@@ -284,7 +299,7 @@ export function toPublicFormState(
     submitted_at: record.submittedAt,
     turnstile_site_key: options.turnstileSiteKey ?? null,
     confirmation,
-    message: messageForState(record.state),
+    message: record.resumeMissed ? resumeMissMessage(record.state) : messageForState(record.state),
   };
 }
 

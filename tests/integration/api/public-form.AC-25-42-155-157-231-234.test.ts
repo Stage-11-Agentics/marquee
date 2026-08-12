@@ -206,6 +206,23 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(await rowCount("people")).toBe(0);
   });
 
+  test("AC-40 · a resume link that resolves to nothing says so instead of rendering a blank form", async () => {
+    const missed = await request("/api/v1/public/forms/public-cfp?resume=not-a-real-resume-token");
+    expect(missed.status).toBe(200);
+    const body = await json<{ state: string; message: string | null; answers: Record<string, unknown> }>(missed);
+    expect(body.state).toBe("open");
+    expect(body.answers).toEqual({});
+    expect(body.message).toContain("could not find an abstract for that link");
+    expect(body.message).toContain("start a new abstract below");
+
+    await env.DB.prepare("UPDATE forms SET status = 'closed' WHERE id = ?").bind(FORM_ID).run();
+    const closed = await request("/api/v1/public/forms/public-cfp?resume=not-a-real-resume-token");
+    const closedBody = await json<{ state: string; message: string | null }>(closed);
+    expect(closedBody.state).toBe("closed");
+    expect(closedBody.message).toContain("could not find an abstract for that link");
+    expect(closedBody.message).toContain("closed to new abstracts");
+  });
+
   test("AC-40 + AC-41 + AC-42 · draft resume restores answers and autosave needs only its resume token", async () => {
     const created = await request("/api/v1/public/forms/public-cfp/drafts", {
       method: "POST",

@@ -45,6 +45,25 @@ function answerEmail(answers: Record<string, unknown>): string {
   return typeof answers.speaker_email === "string" ? answers.speaker_email : "";
 }
 
+/**
+ * The confirmation renders the resume link as a same-origin path.
+ *
+ * `resume_url` is absolute because the identical string is emailed, and under
+ * `wrangler dev` its origin is the deployed host rather than the loopback
+ * listener (the request rewrite documented in src/lib/cookies.ts). Following an
+ * absolute href from a local run therefore leaves the machine being validated
+ * and lands on a form that has never seen the token — which renders as the
+ * blank call for speakers. Deployed, the two forms are the same URL.
+ */
+function resumeLinkPath(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
 function publicIssueMessage(issue: { message: string }): string {
   const message = issue.message.toLowerCase();
   if (message.includes("required")) return "Add an answer so the conference team can review this abstract.";
@@ -436,7 +455,7 @@ export function PublicForm({ initial }: PublicFormProps) {
 
   const closed = state.state === "closed" || state.state === "at_limit" || state.state === "submitted";
   if (state.state === "submitted" && state.confirmation) {
-    return <div class="public-form"><PublicHeader state={state} /><main class="public-form-main"><section class="public-confirmation" aria-live="polite"><div class="public-brand-mark">✓</div><h2>{state.confirmation.title}</h2><p>{state.confirmation.message}</p><p>We will write to <strong>{state.confirmation.email}</strong>.</p>{state.resume_url && <p><a href={state.resume_url}>Keep your abstract link</a></p>}{state.confirmation.portal_url && <p><a href={state.confirmation.portal_url}>Open your speaker portal →</a></p>}</section></main><PublicFooter /></div>;
+    return <div class="public-form"><PublicHeader state={state} /><main class="public-form-main"><section class="public-confirmation" aria-live="polite"><div class="public-brand-mark">✓</div><h2>{state.confirmation.title}</h2><p>{state.confirmation.message}</p><p>We will write to <strong>{state.confirmation.email}</strong>.</p>{state.resume_url && <p class="public-resume">Save this link to reopen this confirmation later; the same link is in your confirmation email. <a class="public-resume-link" href={resumeLinkPath(state.resume_url)}>{resumeLinkPath(state.resume_url)}</a></p>}{state.confirmation.portal_url && <p><a href={state.confirmation.portal_url}>Open your speaker portal →</a></p>}</section></main><PublicFooter /></div>;
   }
 
   const minimumParticipants = state.form.min_speakers === 1 ? "one participant" : `${state.form.min_speakers} participants`;
