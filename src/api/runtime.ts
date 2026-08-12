@@ -38,7 +38,9 @@ export type Principal =
       eventIds: readonly string[];
       /** Resolver-loaded event boundary for this organization; absent only on legacy fixtures. */
       organizationEventIds?: readonly string[];
-      /** Issuer memberships are loaded by the canonical credential resolver. */
+      /** The live seat identity for a bound token; null means issuer-backed legacy authority. */
+      actingPersonId: string | null;
+      /** Memberships for the acting seat, or issuer memberships for an unbound token. */
       memberships: readonly MembershipRow[];
       /** Only populated for older isolated fixtures whose token table predates created_by. */
       legacyRole?: MembershipRole;
