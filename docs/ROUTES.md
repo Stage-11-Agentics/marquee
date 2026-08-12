@@ -76,6 +76,7 @@ Registered in `src/routes/*.route.tsx`, outside the SPA.
 | `/f/:slug` | src/routes/public-form.route.tsx |
 | `/p/:slug` | src/routes/public-agenda.route.tsx |
 | `/s/:slug` | src/routes/public-agenda.route.tsx |
+| `/site` | src/routes/public-agenda.route.tsx |
 | `/speakers` | src/routes/public-agenda.route.tsx |
 
 ## Public-page predicate
@@ -89,7 +90,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 
 ```text
 ROUTES (real paths, not hash routes):
-  Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /embed/:slug /embed/config /f/:slug /p/:slug /s/:slug /speakers
+  Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /embed/:slug /embed/config /f/:slug /p/:slug /s/:slug /site /speakers
   Organizer (admin shell): /people /lists /pipeline /crm /directory /contacts /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /roster /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /import
   Review queue: /reviewer
   Speaker portal: /portal

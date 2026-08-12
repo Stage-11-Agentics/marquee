@@ -66,6 +66,18 @@ export function notFoundDocument(shell: string): Response {
 export const publicAgendaRoutes = new Hono<{ Bindings: Env }>();
 
 /**
+ * "The conference site" is what people call this page, and /site is the address
+ * they try — including anyone reading it off our own published route list.
+ * Without this it falls through to the app shell, whose router has no /site and
+ * renders "Route not found": a dead end on a page that is very much alive at
+ * /agenda. Redirect rather than double-render, so the agenda keeps one address.
+ */
+publicAgendaRoutes.get("/site", (context) => {
+  const url = new URL(context.req.url);
+  return context.redirect(`/agenda${url.search}`, 302);
+});
+
+/**
  * `?view=mine` is the same page with a different question asked of it, so it is
  * a URL rather than a client-only mode: linkable, back-button-correct, and
  * server-rendered with the WHOLE program. The starred set is on the device, so

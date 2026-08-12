@@ -98,16 +98,34 @@ function publicIssueMessage(issue: { message: string }): string {
   return "Add the requested detail, then try again.";
 }
 
+/**
+ * A 409, a bare 422, or a 404 carries the one sentence that actually tells the
+ * person what to do — "Your abstract limit is full. Use a saved resume link…",
+ * "This call for speakers is closed…" — and that sentence is already written
+ * for them, not for a log. Replacing it with house copy costs the speaker the
+ * only actionable thing in the response, so those three statuses pass the
+ * server's own words through and keep the house copy as the fallback for a
+ * response that carries no sentence. The rest stay generic because their
+ * server-side text is diagnostic rather than speaker-facing.
+ *
+ * Safe because every 409/422/404 the public form can raise is hand-written
+ * speaker-facing prose (`public-form.routes.ts`); schema validation failures
+ * arrive as 400 from the router's `defaultHook`, and 400 still falls through to
+ * `errorSummary`.
+ */
 function publicErrorMessage(error: unknown): string {
   if (!(error instanceof MarqueeApiError)) return errorSummary(error);
   const message = error.message.toLowerCase();
+  const served = error.message.trim();
   let sentence: string;
   if (error.status === 403 && message.includes("resume")) sentence = "Use the resume link from your email, then try again; your answers are still here.";
   else if (error.status === 403) sentence = "We could not verify the security check. Complete it, then choose Submit again; your answers are still here.";
   else if (error.status === 429) sentence = "This form needs a short pause before another try. Wait a moment, then choose Submit again; your draft is saved.";
   else if (error.status >= 500) sentence = "The conference could not save this submission. Your answers are saved here; try Submit again in a moment.";
-  else if (error.status === 409) sentence = "The conference cannot accept this submission right now. Keep your answers here, then try again after following the message above.";
-  else if (error.status === 404) sentence = "This conference form is no longer available. Return to the conference page and choose the form again.";
+  else if (error.status === 409 || error.status === 422) {
+    sentence = served || "The conference cannot accept this submission right now. Keep your answers here and try again in a moment.";
+  }
+  else if (error.status === 404) sentence = served || "This conference form is no longer available. Return to the conference page and choose the form again.";
   else return errorSummary(error);
   return `${sentence} · ref ${error.reference}`;
 }
@@ -317,7 +335,10 @@ export function PublicForm({ initial }: PublicFormProps) {
     const email = answerEmail(answers);
     if (!email) {
       setDraftEmailPrompt(true);
-      setPageError(null);
+      // Revealing a field at the foot of a long form and focusing it is not
+      // enough on its own — on a nineteen-field call for speakers the reveal
+      // happens off-screen. Say what is needed where the person is looking.
+      setPageError("Add a contact address at the bottom of this form so your draft has somewhere to send its resume link, then choose Save draft again. Your answers are still here.");
       window.setTimeout(() => draftEmailRef.current?.focus(), 0);
       return null;
     }
@@ -413,17 +434,38 @@ export function PublicForm({ initial }: PublicFormProps) {
     if (previous) URL.revokeObjectURL(previous);
   }
 
+  /** Say, on the field itself, why the file the person just chose is not attached. */
+  function setFileError(field: PublicFormField, message: string) {
+    setErrors((current) => ({ ...current, [field.key]: message }));
+  }
+
   async function handleFile(field: PublicFormField, file: File | undefined) {
     if (!file) return;
     setPageError(null);
+    setErrors((current) => {
+      if (!(field.key in current)) return current;
+      const next = { ...current };
+      delete next[field.key];
+      return next;
+    });
     showLocalPreview(field, file);
+    // A file lives on a draft, so a file cannot be attached before one exists.
+    // When the draft cannot be created the person is left holding a filename, a
+    // crop preview, and a status line still reading "No file attached yet." —
+    // so every path out of here has to say what happened, on this field.
     const draftState = await ensureDraft();
-    if (!draftState?.resume_token || !draftState.draft_id) return;
+    if (!draftState?.resume_token || !draftState.draft_id) {
+      setFileError(field, answerEmail(answers)
+        ? "This file was not attached because the draft holding it could not be saved. Read the message at the top of the form, then choose the file again."
+        : "Add your contact address at the bottom of this form first — a file is kept with your draft, and the draft needs somewhere to send your resume link. Then choose the file again.");
+      return;
+    }
     setBusy(true);
     try {
       const token = await requestTurnstileToken();
       if (turnstileRequired() && !token) {
         setPageError("The security check did not finish, so the file was not attached. Complete it at the bottom of this form, then choose the file again; your draft is saved.");
+        setFileError(field, "Not attached — finish the security check at the bottom of this form, then choose the file again.");
         return;
       }
       const signed = await apiFetch<{ attachmentId?: string; completionToken?: string; putUrl?: string; requiredHeaders?: Record<string, string> }>("/api/v1/public/uploads/sign", {
@@ -442,6 +484,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     } catch (error: unknown) {
       resetTurnstile();
       setPageError(publicErrorMessage(error));
+      setFileError(field, "This file was not attached. Read the message at the top of the form, then choose the file again.");
     } finally { setBusy(false); }
   }
 

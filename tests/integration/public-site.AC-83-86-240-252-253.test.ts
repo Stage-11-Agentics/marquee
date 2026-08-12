@@ -342,7 +342,12 @@ test("AC-87, AC-88, AC-90 · anonymous embed configuration emits a live snippet 
   expect(configBody).toContain("Copy embed code");
   expect(configBody).toContain("Live preview");
   expect(configBody).toContain('data-embed-kind="speakers"');
-  expect(configBody).toContain('href="/agenda?event=public-conf">← Agenda</a>');
+  // The embed builder is an organizer tool reached from the sidebar, served
+  // outside the admin shell. Its way out goes back to the shell the organizer
+  // left, not to the public agenda (which is where the public /s/ and /p/ pages
+  // above correctly send a visitor).
+  expect(configBody).toContain('href="/dashboard">← Program home</a>');
+  expect(configBody).not.toContain("← Agenda");
 
   const agenda = await request(`/embed/${EVENT_SLUG}-agenda?event=${EVENT_SLUG}&track=track-public&status=accepted&accent=%23ff00aa`);
   const agendaBody = await agenda.text();
