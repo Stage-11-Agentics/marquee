@@ -439,9 +439,15 @@ export interface EvaluationRoundRow extends MutableRecord {
 }
 
 export interface RubricCriterionRow extends MutableRecord {
+  /** Weights are a numeric-only concept: select and text criteria carry weight 0. */
+  kind: "numeric" | "select" | "text";
   name: string;
+  /** JSON array of choice labels; set only when kind is 'select'. */
+  options: JsonText | null;
   position: number;
   round_id: Id;
+  scale_max: number | null;
+  scale_min: number | null;
   weight_pct: number;
 }
 
