@@ -34,6 +34,10 @@ test("AC-108 · MRQ-137 — an unrecognised sort falls back to the endpoint defa
   expect(listQuery.parse({ sort: "score_asc" }).sort).toBe("score_asc");
   // Without an explicit default, the first key of the endpoint's whitelist wins.
   expect(createListQuerySchema({}, SORTS).parse({ sort: "nope" }).sort).toBe("newest");
+  // The fallback is only as trustworthy as the value it falls back to, and
+  // nothing re-parses it — so a call site that names a sort the endpoint does
+  // not have fails at module load rather than reaching the sort registry.
+  expect(() => createListQuerySchema({}, SORTS, { defaultSort: "score_desc" })).toThrowError(/not one of/);
 });
 
 test("AC-108 · MRQ-137 — malformed paging degrades to the defaults rather than emptying the page", () => {
