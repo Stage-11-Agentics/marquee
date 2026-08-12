@@ -1,5 +1,5 @@
 .table-card { min-width: 0; overflow: hidden; }
-.submissions-page .page-head p { font-family: var(--mono); font-variant-numeric: tabular-nums lining-nums; }
+.submissions-page .page-head p { font-family: var(--mono); font-variant-numeric: tabular-nums lining-nums; min-height: 2.7em; }
 .export-button { min-width: 92px; }
 .export-message { color: transparent; font: 400 10.5px/1.3 var(--mono); min-height: 18px; margin: -12px 0 8px; }
 .export-message.visible { color: var(--danger); }
@@ -17,6 +17,7 @@
 .view-icon-button:hover { color: var(--accent-dark); }
 .saved-view-message { color: transparent; font: 400 10px/1.2 var(--mono); min-height: 24px; padding: 6px 12px 0; }
 .saved-view-message.visible { color: var(--danger); }
+.saved-view-message.success { color: var(--accent-dark); }
 .column-panel { background: var(--sunk); border-bottom: 1px solid var(--line-strong); min-height: 170px; padding: 12px; }
 .column-panel-heading { align-items: start; display: flex; justify-content: space-between; gap: 16px; margin-bottom: 9px; }
 .column-panel-heading div { display: grid; gap: 3px; }
@@ -95,25 +96,53 @@
 .state-row strong, .state-row span, .state-row .button { display: block; margin: 8px auto; }
 .state-row span { color: var(--muted); }
 .state-row.error strong { color: var(--danger); }
+.submissions-refresh-message { align-items: center; color: transparent; display: flex; font: 400 10px/1.2 var(--mono); gap: 8px; justify-content: center; min-height: 30px; padding: 5px 12px; }
+.submissions-refresh-message.visible { color: var(--accent-dark); }
+.submissions-refresh-message > span { flex: 1; text-align: center; }
+.submission-skeleton-row td { height: 58px; }
+.skeleton-checkbox { background: var(--line); border-radius: 3px; display: inline-block; height: 14px; opacity: .8; width: 14px; }
+.skeleton-title { display: grid; gap: 4px; }
+.skeleton-line { background: linear-gradient(90deg, var(--line) 0%, var(--line-strong) 50%, var(--line) 100%); border-radius: 3px; display: block; height: 8px; max-width: 100%; opacity: .8; width: 58%; }
+.skeleton-line.wide { width: 92%; }
+.skeleton-line.medium { width: 66%; }
+.skeleton-line.short { width: 42%; }
 .submissions-pagination { align-items: center; background: var(--sunk); border-top: 1px solid var(--line-strong); color: var(--muted); display: flex; font-size: 10.5px; justify-content: space-between; min-height: 50px; padding: 9px 12px; }
 .page-buttons { align-items: center; display: flex; gap: 6px; }
 .static-page { cursor: default; min-width: 62px; }
 .sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
+/* MRQ-98: keep the saved-view affordance discoverable without allowing a
+   growing chip list to resize the card, and give the primary query control
+   the flexible share of the toolbar. */
+.submissions-page .saved-view-strip { min-width: 0; }
+.submissions-page .saved-view-chips { flex: 1 1 auto; flex-wrap: nowrap; max-height: 34px; overflow-x: auto; overflow-y: hidden; padding-bottom: 1px; scrollbar-width: thin; }
+.submissions-page .saved-view-chip { flex: 0 0 auto; }
+.submissions-page .submissions-toolbar .search-field { flex: 2 1 420px; min-width: min(420px, 42vw); }
+.submissions-page .submissions-toolbar > label:not(.search-field) { flex: 0 1 auto; }
+
 @media (max-width: 1000px) {
-  .saved-view-strip { align-items: flex-start; flex-wrap: wrap; }
-  .saved-view-strip .toolbar-spacer { display: none; }
+  .submissions-page .saved-view-strip { align-items: center; flex-wrap: nowrap; }
+  .submissions-page .saved-view-strip .toolbar-spacer { display: none; }
+  .submissions-page .submissions-toolbar .search-field { flex: 1 1 420px; min-width: 260px; }
+  .submissions-page .submissions-toolbar > label:not(.search-field) { flex: 0 1 auto; }
+}
+
+@media (max-width: 760px) {
+  .submissions-page .saved-view-strip { align-items: flex-start; flex-wrap: wrap; }
+  .submissions-page .saved-view-chips { flex: 1 1 100%; max-width: 100%; order: 3; }
+  .submissions-page .submissions-toolbar .search-field { flex: 1 1 100%; min-width: 100%; }
+  .submissions-page .submissions-toolbar > label:not(.search-field) { flex: 1 1 145px; }
+}
+
+@media (max-width: 1000px) {
   .column-list { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
   .submissions-toolbar { align-items: stretch; flex-wrap: wrap; }
-  .search-field { min-width: 260px; }
   .submissions-toolbar .toolbar-spacer { display: none; }
   .submissions-table { min-width: 980px; }
 }
 
 @media (max-width: 760px) {
   .column-list { grid-template-columns: 1fr; }
-  .search-field { min-width: 100%; }
-  .submissions-toolbar label:not(.search-field) { flex: 1 1 145px; }
   .submissions-toolbar select { width: 100%; }
   .selection-bar.visible { align-items: flex-start; flex-wrap: wrap; }
   .submissions-pagination { align-items: flex-start; gap: 10px; }
