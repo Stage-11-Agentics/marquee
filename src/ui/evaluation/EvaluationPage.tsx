@@ -73,6 +73,7 @@ interface Track {
 
 interface InviteResult {
   invite_sent: boolean;
+  invite_suppressed: boolean;
   /** Present only on demo conferences, where the link is safe to show on screen. */
   magic_link?: string;
   person: { email: string; id: string; name: string };
@@ -224,7 +225,9 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
 
   const inviteReviewer = async (event: Event): Promise<void> => {
     event.preventDefault();
-    if (!committee) return;
+    // The confirmation state keeps the form mounted, so Enter in the link field
+    // would otherwise re-POST and mint a second credential.
+    if (!committee || inviteResult) return;
     setInviteSaving(true);
     setError(null);
     try {
@@ -240,7 +243,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       setLinkCopied(false);
       setNotice(result.invite_sent
         ? `${result.person.name} invited · sign-in link sent to ${result.person.email}`
-        : `${result.person.name} is on the committee · their invitation was logged, so send them the link`);
+        : `${result.person.name} is on the committee · their invitation was not emailed, so send them the link`);
       await load();
     } catch (reason: unknown) {
       setError(errorSummary(reason));
@@ -381,7 +384,9 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
           <span class="subtle">Reviewing {inviteResult.track_ids.length === tracks.length ? "every track" : tracks.filter((track) => inviteResult.track_ids.includes(track.id)).map((track) => track.name).join(", ")}.</span>
           <span class="subtle">{inviteResult.invite_sent
             ? `A sign-in link was emailed to ${inviteResult.person.email}.`
-            : `The invitation to ${inviteResult.person.email} was logged rather than sent — this conference only emails addresses on its allowlist. Send them the link below.`}</span>
+            : inviteResult.invite_suppressed
+              ? `The invitation to ${inviteResult.person.email} was logged rather than sent — this conference only emails addresses on its allowlist.`
+              : `The invitation to ${inviteResult.person.email} could not be queued. They are on the committee; send them a sign-in link yourself.`}</span>
           {inviteResult.magic_link ? <div class="invite-link">
             <input readOnly aria-label="Reviewer sign-in link" value={inviteResult.magic_link} onFocus={(event) => (event.currentTarget as HTMLInputElement).select()} />
             <Button type="button" small onClick={() => void copyInviteLink()}>{linkCopied ? "Copied" : "Copy link"}</Button>
@@ -408,8 +413,9 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         </>}
       </div>
       <footer>
-        {/* The confirmation replaces the form rather than growing beneath it, so
-            no control shifts under the pointer when the invitation lands. */}
+        {/* The confirmation replaces the form rather than growing beneath it:
+            checking a track never moves a control, and the dialog changes state
+            wholesale on submit instead of pushing the buttons down a screen. */}
         <Button type="button" onClick={() => setDialog(null)}>{inviteResult ? "Done" : "Cancel"}</Button>
         {inviteResult
           ? <Button type="button" variant="primary" onClick={openInvite}>Invite another</Button>

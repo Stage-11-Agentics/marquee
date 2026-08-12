@@ -69,7 +69,7 @@
 .scope-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 6px; }
 .scope-check { align-items: center; color: var(--ink); display: flex; font-size: 12px; gap: 6px; }
 .scope-check input { min-height: 0; width: auto; }
-/* Height is reserved so the dialog never moves when the result appears. */
+/* A floor, so a one-line confirmation does not collapse the dialog to a sliver. */
 .invite-result { background: var(--sunk); border: 1px solid var(--line); color: var(--muted); display: grid; font-size: 11px; gap: 6px; line-height: 1.55; min-height: 92px; padding: 10px 12px; }
 .invite-result strong { color: var(--ink); font-size: 12.5px; }
 .invite-link { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }

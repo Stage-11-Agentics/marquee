@@ -758,21 +758,25 @@ const inviteCommitteeReviewer = defineApiRoute(
     // Matched case-insensitively: `uq_people_org_email` is case-sensitive, so a
     // case-sensitive match would invent a second identity for `Nora@` beside
     // `nora@` and mint the sign-in link for the wrong one.
-    const existing = await context.env.DB.prepare(
-      "SELECT id, name FROM people WHERE org_id = ? AND lower(email) = ?",
-    ).bind(event.org_id, email).first<{ id: string; name: string }>();
+    const existing = await context.env.DB.prepare(`
+      SELECT id, name FROM people
+      WHERE org_id = ? AND lower(email) = ?
+      ORDER BY CASE WHEN email = ? THEN 0 ELSE 1 END, created_at ASC, id ASC
+      LIMIT 1
+    `).bind(event.org_id, email, email).first<{ id: string; name: string }>();
     /**
      * A magic link is person-scoped: exchanging one opens a session carrying
      * every membership its person holds, org-wide. So an invitation must never
      * resolve to a program-team member — otherwise "invite a reviewer" is a
      * program lead typing the owner's address and reading back an owner session.
+     * The guard spans the organization for the same reason the credential does:
+     * a staff role on a sibling event still opens that event through this link.
      */
     if (existing) {
       const staff = await context.env.DB.prepare(`
         SELECT 1 AS present FROM memberships
         WHERE person_id = ? AND role IN ('owner', 'program_lead', 'ops')
-          AND (event_id = ? OR event_id IS NULL)
-      `).bind(existing.id, eventId).first<{ present: number }>();
+      `).bind(existing.id).first<{ present: number }>();
       if (staff) {
         throw ApiError.unprocessable(
           "that address belongs to a program-team member, who already has review access",
@@ -816,7 +820,8 @@ const inviteCommitteeReviewer = defineApiRoute(
     const absoluteLink = `${new URL(context.req.url).origin}/api/v1/auth/exchange?token=${link.token}`;
     // A demo conference logs mail to unlisted addresses instead of sending it,
     // so "invitation sent" has to mean sent, not enqueued.
-    let inviteSent = !(await demoMailWouldBeSuppressed(context.env.DB, eventId, email));
+    const inviteSuppressed = await demoMailWouldBeSuppressed(context.env.DB, eventId, email);
+    let inviteQueued = true;
     try {
       const mail = renderMagicLinkLoginMail(absoluteLink);
       const outboxId = await enqueueAuthMail(context.env.DB, {
@@ -830,7 +835,7 @@ const inviteCommitteeReviewer = defineApiRoute(
       });
       await enqueueMailMessage(context.env.MAIL_QUEUE, outboxId);
     } catch (error) {
-      inviteSent = false;
+      inviteQueued = false;
       context.get("logger")?.emit("worker_error", "error", {
         source: "inviteCommitteeReviewer",
         ...errorFields(error),
@@ -839,7 +844,10 @@ const inviteCommitteeReviewer = defineApiRoute(
 
     return context.json({
       committee_id: committeeId,
-      invite_sent: inviteSent,
+      /** Sent means sent: queued, and not swallowed by demo-mail suppression. */
+      invite_sent: inviteQueued && !inviteSuppressed,
+      /** Distinguishes "this conference does not email that address" from a failed enqueue. */
+      invite_suppressed: inviteSuppressed,
       person: { id: personId, name: existing?.name ?? body.name, email },
       person_created: !existing,
       track_ids: trackIds,
