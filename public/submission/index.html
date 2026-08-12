@@ -178,26 +178,31 @@
   acceptance, speaker onboarding, agenda, publish. One loop, no dead ends, on
   infrastructure you own.</h1>
   <div class="mastmeta">
-    <a class="btn primary" href="https://marquee.stage11.dev/signin">Open the live demo — pick a seat</a>
+    <a class="btn primary" href="https://marquee.stage11.dev/submissions?demo=organizer">enter as organizer</a>
+    <a class="btn primary" href="https://marquee.stage11.dev/reviewer?demo=reviewer">enter as reviewer</a>
+    <a class="btn primary" href="https://marquee.stage11.dev/portal?demo=speaker">enter as speaker</a>
     <a class="btn quiet" href="https://github.com/Stage-11-Agentics/marquee">Source · Apache-2.0</a>
-    <span class="stamp">populated with AI Engineer NYC 2026 · 1,001 seeded submissions ·
+  </div>
+  <div class="mastmeta">
+    <span class="stamp">one click each, no signup, no password — every seat is a real session ·
+    populated with AI Engineer NYC 2026, 1,001 seeded submissions ·
     <code>curl marquee.stage11.dev/health</code> names the deployed build</span>
   </div>
 </header>
 
 <section>
   <h2><span class="micro">No signup · no password</span>Three seats, one click each</h2>
-  <p class="lede">Every door at <a href="https://marquee.stage11.dev/signin">/signin</a>
-  opens a real session against the same data — not a preview mode. Sign out on the
-  same page to switch seats.</p>
+  <p class="lede">Each button above (and here) opens a real session against the same
+  data — not a preview mode. To switch seats, sign out at
+  <a href="https://marquee.stage11.dev/signin">/signin</a> and pick another door.</p>
   <div class="seats">
-    <div class="seat"><b>Organizer</b>
+    <div class="seat"><b><a href="https://marquee.stage11.dev/submissions?demo=organizer">Organizer →</a></b>
       <p>The whole program: pipeline dashboard, 1,000-row submissions register,
       form builder, evaluation plans, agenda builder, onboarding chase board, comms.</p></div>
-    <div class="seat"><b>Reviewer</b>
+    <div class="seat"><b><a href="https://marquee.stage11.dev/reviewer?demo=reviewer">Reviewer →</a></b>
       <p>A scoped evaluation queue — only this reviewer's authorized tracks, enforced
       at the API. Approve / Maybe / Deny, anonymous by default.</p></div>
-    <div class="seat"><b>Speaker</b>
+    <div class="seat"><b><a href="https://marquee.stage11.dev/portal?demo=speaker">Speaker →</a></b>
       <p>An accepted speaker's portal: status with its wave, the scheduled slot with
       an arrival plan, onboarding tasks, self-managed bio and files.</p></div>
   </div>
@@ -236,7 +241,7 @@
     </div></li>
     <li><div>
       <div class="st-head"><b>See the speaker's side</b>
-        <span class="st-link"><a href="https://marquee.stage11.dev/signin">/signin</a> → speaker</span></div>
+        <span class="st-link"><a href="https://marquee.stage11.dev/portal?demo=speaker">enter as speaker</a></span></div>
       <div class="st-body">Acceptance status ("Accepted · Wave 1"), the scheduled slot
       with room, building, address and an arrival plan, per-role confirmation,
       self-managed bio, and the onboarding task list — hotel &amp; travel first.</div>
@@ -251,7 +256,7 @@
     </div></li>
     <li><div>
       <div class="st-head"><b>Evaluate</b>
-        <span class="st-link"><a href="https://marquee.stage11.dev/signin">/signin</a> → reviewer</span></div>
+        <span class="st-link"><a href="https://marquee.stage11.dev/reviewer?demo=reviewer">enter as reviewer</a></span></div>
       <div class="st-body">A track-scoped queue. Approve / Maybe / Deny is the primary
       path (keyboard: A M D, 1–5, Enter); the weighted scorecard is optional depth.
       Declare-conflict recuses. Out-of-scope requests 403 — the scoping is real.</div>
