@@ -36,9 +36,8 @@ export interface ThemeDefinition {
 }
 
 export const THEMES: readonly ThemeDefinition[] = [
-  { id: "day", label: "Marquee Day", kind: "palette" },
-  // "Marquis" is deliberate wordplay (the nobleman), not a typo — operator's call.
-  { id: "night", label: "Marquis Night", kind: "palette" },
+  { id: "day", label: "Marquee Light", kind: "palette" },
+  { id: "night", label: "Marquee Night", kind: "palette" },
   { id: "latent-space", label: "latent.space", kind: "register" },
   { id: "ai-engineer", label: "AI Engineer", kind: "register" },
   // Lowercase is deliberate: the register is swyx.io's, and the judges read
