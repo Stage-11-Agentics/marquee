@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "c71dd4458933b4868f39c750701e59bd02d167487f781b11189a1307ce9df364",
+  "documentSha256": "d531f72af11f676337e8cd413db2c7d9865215ca03ee306f276c802f11c7141e",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",
@@ -48,6 +48,7 @@
     "GET /api/v1/events/{eventId}/submissions/{submissionId} getSubmissionRecord",
     "GET /api/v1/events/{eventId}/submissions/{submissionId}/reversal previewSubmissionAcceptanceReversal",
     "GET /api/v1/events/{eventId}/submissions/not-notified/summary getDecidedNotNotifiedSummary",
+    "GET /api/v1/events/{eventId}/task-templates listTaskTemplates",
     "GET /api/v1/events/{eventId}/templates listEmailTemplates",
     "GET /api/v1/events/{eventId}/tracks listEventTracks",
     "GET /api/v1/events/{eventId}/venues listVenues",
@@ -72,6 +73,7 @@
     "PATCH /api/v1/events/{eventId}/rounds/{roundId} updateEvaluationRound",
     "PATCH /api/v1/events/{eventId}/submissions/{submissionId} patchDraftSubmission",
     "PATCH /api/v1/events/{eventId}/submissions/{submissionId}/talk-editing updateSpeakerTalkEditing",
+    "PATCH /api/v1/events/{eventId}/task-templates/{templateId} updateTaskTemplate",
     "PATCH /api/v1/events/{eventId}/templates/{templateId} updateEmailTemplate",
     "PATCH /api/v1/events/{eventId}/tracks/{trackId} updateEventTrack",
     "PATCH /api/v1/events/{eventId}/views/{viewId} updateSavedView",

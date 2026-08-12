@@ -120,6 +120,22 @@ function localUploadShimEnabled(env: UploadsEnv): boolean {
   return env.LOCAL_UPLOAD_SHIM === "1";
 }
 
+function acceptedTaskTypes(config: UploadOwnerConfig | undefined, policy: ReturnType<typeof policyFor>): string[] {
+  const values = config?.accept && config.accept.length > 0
+    ? config.accept
+    : policy?.rules.map((rule) => rule.extension) ?? [];
+  return [...new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean))]
+    .map((value) => value.includes("/") || value.startsWith(".") ? value : `.${value}`);
+}
+
+function taskUploadRejection(violation: string, config: UploadOwnerConfig | undefined, policy: ReturnType<typeof policyFor>): string {
+  if (violation !== "extension") return `rejected: ${violation}`;
+  const accepted = acceptedTaskTypes(config, policy);
+  if (accepted.length === 0) return "That file type is not accepted.";
+  if (accepted.length === 1) return `That file type is not accepted. Choose a ${accepted[0]} file.`;
+  return `That file type is not accepted. Choose one of ${accepted.slice(0, -1).join(", ")}, or ${accepted[accepted.length - 1]}.`;
+}
+
 const LOCAL_PUT_TTL_MS = 600_000;
 
 async function localPutToken(env: UploadsEnv, attachmentId: string, r2Key: string, expiresAt: number): Promise<string> {
@@ -403,7 +419,11 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
   const policy = policyFor(ownerType, ownerConfig);
   if (!policy) return uploadError(context, "invalid_request", "owner type not presignable");
   const decision = validateDeclared(policy, { filename, contentType, sizeBytes });
-  if (!decision.ok) return uploadError(context, "invalid_request", `rejected: ${decision.violation}`);
+  if (!decision.ok) return uploadError(
+    context,
+    "invalid_request",
+    ownerType === "task_upload" ? taskUploadRejection(decision.violation, ownerConfig, policy) : `rejected: ${decision.violation}`,
+  );
 
   const attachmentId = crypto.randomUUID();
   const nowMs = Date.now();
@@ -521,7 +541,10 @@ async function handleComplete(context: Context<ApiEnv>) {
 
   const outcome = await verifyAndComplete(env.MEDIA, row, ownerConfig);
   if (!outcome.ok) {
-    return uploadError(context, "conflict", `completion failed: ${outcome.reason}`);
+    const message = row.owner_type === "task_upload" && outcome.reason === "type_mismatch"
+      ? `completion failed: ${taskUploadRejection("extension", ownerConfig, policyFor("task_upload", ownerConfig))}`
+      : `completion failed: ${outcome.reason}`;
+    return uploadError(context, "conflict", message);
   }
 
   if (row.status !== "ready") {

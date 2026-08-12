@@ -16,6 +16,7 @@ import { CommsScreen } from "../comms/CommsScreen";
 import { DashboardPage } from "../dashboard/DashboardPage";
 import { EvaluationPage } from "../evaluation/EvaluationPage";
 import { EventSettings } from "../settings/EventSettings";
+import { TaskTemplatesPage } from "../settings/TaskTemplatesPage";
 import { ApiTokensPage } from "../settings/ApiTokensPage";
 import { VenuesPage } from "../venues/VenuesPage";
 import { FormsPage } from "../forms/FormsPage";
@@ -155,6 +156,7 @@ export function AppShell({ eventName = "AIE NYC 2026" }: { eventName?: string })
             : isEvaluation ? <EvaluationPage />
             : route?.id === "venues" ? <VenuesPage />
             : isApiTokens ? <ApiTokensPage navigate={navigate} />
+            : route?.id === "task-templates" ? <TaskTemplatesPage />
             : route?.id === "settings" ? <EventSettings navigate={navigate} />
             : isForms ? <FormsPage search={location.search} />
             : isAgenda ? <AgendaPage />
