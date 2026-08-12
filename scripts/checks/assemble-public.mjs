@@ -21,6 +21,7 @@ export const PUBLIC_ROOT_DIRECTORIES = [
   "cli",
   "fixtures",
   "migrations",
+  "public",
   "scripts",
   "src",
   "tests",
