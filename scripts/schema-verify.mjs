@@ -172,8 +172,8 @@ const requiredIndexes = [
 
 assert.equal(initialTables.length, 46, "0001 must define exactly 46 product tables");
 assert.equal(new Set(initialTables).size, 46, "0001 contains duplicate table names");
-assert.equal(expectedTables.length, 48, "Applied migrations must define exactly 48 product tables");
-assert.equal(new Set(expectedTables).size, 48, "Applied migrations contain duplicate table names");
+assert.equal(expectedTables.length, 49, "Applied migrations must define exactly 49 product tables");
+assert.equal(new Set(expectedTables).size, 49, "Applied migrations contain duplicate table names");
 for (const index of requiredIndexes) {
   assert.ok(expectedIndexes.includes(index), `Required schema index is missing: ${index}`);
 }
@@ -213,6 +213,7 @@ try {
   assert.match(firstApply.stdout, /0006_audit_log_request_id\.sql/);
   assert.match(firstApply.stdout, /0007_embed_widget_kinds\.sql/);
   assert.match(firstApply.stdout, /0008_form_field_dates\.sql/);
+  assert.match(firstApply.stdout, /0009_file_comments\.sql/);
   assert.match(firstApply.stdout, /0009_criterion_kinds\.sql/);
   assert.match(firstApply.stdout, /0010_evaluation_round_committees\.sql/);
 
@@ -302,7 +303,7 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 92, "Expected the exact foreign-key graph");
+  assert.equal(foreignKeyRows.length, 95, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 
