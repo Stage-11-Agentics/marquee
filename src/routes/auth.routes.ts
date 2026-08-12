@@ -9,6 +9,12 @@ import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail
 import { getAuth, unauthorized } from "../lib/auth/auth-middleware";
 import { consumeMagicLink, mintMagicLink } from "../lib/auth/magic-links";
 import { createSession, revokeSession, SESSION_TTL_MS } from "../lib/auth/auth-sessions";
+import {
+  DEMO_ORGANIZER_PERSON_ID,
+  DEMO_SPEAKER_PERSON_ID,
+  SHIPPED_DEMO_ORGANIZER_PERSON_ID,
+  SHIPPED_DEMO_SPEAKER_PERSON_ID,
+} from "../lib/reset-demo/demo-fixture";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 
 /**
@@ -29,7 +35,7 @@ function dropRejectedSessionCookie(context: Context<ApiEnv>): void {
   if (context.get("credentialRejected")) clearSessionCookie(context);
 }
 
-const roleSchema = z.enum(["organizer", "speaker"]);
+const roleSchema = z.enum(["organizer", "reviewer", "speaker"]);
 const authErrorSchema = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
 });
@@ -72,9 +78,9 @@ const demoLogin = defineApiRoute(
     method: "post",
     path: "/api/v1/auth/demo",
     operationId: "demoLogin",
-    summary: "Sign in to the demo as an organizer or speaker",
+    summary: "Sign in to the demo as an organizer, reviewer, or speaker",
     description:
-      "Creates a demo session only when a demo-mode event and matching demo persona exist.",
+      "Creates a demo session only when a demo-mode event and matching demo persona exist. A non-staff role never resolves to a persona holding a program-staff seat.",
     tags: ["Auth"],
     request: { body: { content: { "application/json": { schema: demoRequestSchema } } } },
     policy: { auth: { kind: "public" }, rateLimit: { bucket: "write" }, concurrency: "none" },
@@ -97,14 +103,7 @@ const demoLogin = defineApiRoute(
       );
     }
 
-    const persona = await context.env.DB.prepare(
-      `SELECT p.* FROM people p
-       JOIN memberships m ON m.person_id = p.id
-       WHERE p.is_demo = 1 AND m.event_id = ? AND m.role = ?
-       LIMIT 1`,
-    )
-      .bind(event.id, membershipRole)
-      .first<PersonRow>();
+    const persona = await findDemoPersona(context.env.DB, event.id, body.role, membershipRole);
     if (!persona) {
       dropRejectedSessionCookie(context);
       return context.json(
@@ -321,8 +320,70 @@ const getCurrentAuth = defineApiRoute(
 
 const DEMO_ROLE_TO_MEMBERSHIP: Record<string, MembershipRole> = {
   organizer: "owner",
+  reviewer: "reviewer",
   speaker: "speaker",
 };
+
+/** SPEC §4.1's program-staff roles — the seats that carry organizer navigation. */
+const DEMO_STAFF_ROLES: readonly string[] = ["owner", "program_lead", "ops"];
+
+/**
+ * The persona the demo fixture names for a role, when it names one.
+ *
+ * Reviewer names none: it resolves to whichever seeded reviewer sorts first,
+ * which is the honest answer for a role the fixture does not personify.
+ */
+const DEMO_PERSONA_PREFERENCE: Record<string, readonly string[]> = {
+  organizer: [SHIPPED_DEMO_ORGANIZER_PERSON_ID, DEMO_ORGANIZER_PERSON_ID],
+  reviewer: [],
+  speaker: [SHIPPED_DEMO_SPEAKER_PERSON_ID, DEMO_SPEAKER_PERSON_ID],
+};
+
+/**
+ * A demo door has to open the same seat every time, and the *right* seat.
+ *
+ * The seeded program staffer holds `reviewer` alongside `owner` and
+ * `program_lead`, so an unordered `LIMIT 1` can answer "sign me in as a
+ * reviewer" with the organizer — the reviewer door would then present full
+ * organizer navigation, which is not a reviewer demo at all. Two rules fix it:
+ * a non-staff role never resolves to a staff holder, and the remaining
+ * candidates are ordered rather than left to whatever the table returns.
+ */
+async function findDemoPersona(
+  db: D1Database,
+  eventId: string,
+  role: string,
+  membershipRole: MembershipRole,
+): Promise<PersonRow | null> {
+  const preferred = DEMO_PERSONA_PREFERENCE[role] ?? [];
+  const excludeStaff = !DEMO_STAFF_ROLES.includes(membershipRole);
+  const bindings: (string | number)[] = [eventId, membershipRole];
+  const staffExclusion = excludeStaff
+    ? `AND NOT EXISTS (
+         SELECT 1 FROM memberships staff
+         WHERE staff.person_id = p.id
+           AND staff.role IN (${DEMO_STAFF_ROLES.map(() => "?").join(", ")})
+           AND (staff.event_id = ? OR staff.event_id IS NULL)
+       )`
+    : "";
+  if (excludeStaff) bindings.push(...DEMO_STAFF_ROLES, eventId);
+  const preferenceOrder = preferred.length > 0
+    ? `CASE WHEN p.id IN (${preferred.map(() => "?").join(", ")}) THEN 0 ELSE 1 END, `
+    : "";
+  if (preferred.length > 0) bindings.push(...preferred);
+
+  const persona = await db.prepare(
+    `SELECT p.* FROM people p
+     JOIN memberships m ON m.person_id = p.id
+     WHERE p.is_demo = 1 AND m.event_id = ? AND m.role = ?
+     ${staffExclusion}
+     ORDER BY ${preferenceOrder}p.created_at ASC, p.id ASC
+     LIMIT 1`,
+  )
+    .bind(...bindings)
+    .first<PersonRow>();
+  return persona ?? null;
+}
 
 async function findDemoEvent(db: D1Database): Promise<EventRow | null> {
   const event = await db
