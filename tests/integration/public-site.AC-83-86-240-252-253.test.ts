@@ -237,7 +237,7 @@ test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an e
   expect(allDaysBody).toContain(PUBLIC_TITLE);
   expect(allDaysBody).toContain(PRIVATE_TITLE);
   expect(allDaysBody).toContain('name="day" value="all" class="active" role="tab" aria-selected="true"');
-  expect(allDaysBody).not.toContain('href="/api/v1/public/agenda');
+  expect(allDaysBody).toContain('href="/api/v1/public/agenda?event=public-conf"');
 
   const defaultPage = await request(`/agenda?event=${EVENT_SLUG}`);
   const defaultBody = await defaultPage.text();
