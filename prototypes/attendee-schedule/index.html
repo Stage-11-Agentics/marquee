@@ -1,0 +1,838 @@
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+  MARQUEE — ATTENDEE PERSONAL SCHEDULE · CLICKABLE PROTOTYPE
+  Design doc: sequence/attendee-schedule-design.md (interview 2026-08-12)
+
+  THE PHILOSOPHY THIS PROTOTYPE EMBODIES
+  ----------------------------------------------------------------------------
+  Let people star what they want to go to, then effortlessly remember it and
+  get back to it. Every design decision serves that sentence:
+
+    · The star is ONE TAP, everywhere a session appears. No account, no sheet,
+      no confirmation. localStorage, instant.
+    · "My schedule" lives in the HEADER with a live count — one tap away from
+      every page, including session detail. You never hunt for your own picks.
+    · The schedule view reads as a personal ITINERARY: day-grouped,
+      time-ordered, with a quiet NEXT marker — "what am I doing next" answered
+      at a glance in a hallway.
+    · Take it with you: download .ics, subscribe (live webcal), share a link.
+      One short code powers all three.
+    · Overlaps are NOTED, never nagged. Double-starring is a conscious act —
+      undecided picks and fallbacks are legitimate. A small muted chip, no
+      color alarm, no modal.
+
+  Skin: Flight Deck (prototypes/skins/skin-c.html), on the real public-site
+  CSS (PUBLIC_SITE_STYLES) extended with the schedule layer. Card anatomy
+  matches MRQ-120's in-flight rebuild (day + start–end + room · title ·
+  speakers Name — Title, Company · snippet + Show more · format chip + track
+  chips) plus the star slot this feature adds.
+
+  Simulated clock for the NEXT marker: Wed Oct 14, 2026 · 13:40.
+  Starring really persists (localStorage key marquee:proto:attendee-schedule).
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIE NYC 2026 — Agenda · My Schedule prototype</title>
+<style>
+/* ── Production public-site styles (PUBLIC_SITE_STYLES), verbatim base ── */
+:root {
+  --public-bg: #eaeef2;
+  --public-surface: #ffffff;
+  --public-sunk: #f4f7f9;
+  --public-ink: #101820;
+  --public-soft: #2c3a46;
+  --public-muted: #57646f;
+  --public-rule: #c8d2da;
+  --public-rule-soft: #dde4ea;
+  --public-accent: #0b6a72;
+  --public-accent-ink: #084f55;
+  --public-accent-wash: #e2f0f1;
+  --public-warn: #8a5c00;
+  --public-warn-wash: #fdf1dd;
+  --public-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --public-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html { background: var(--public-bg); }
+body { margin: 0; min-width: 320px; }
+.public-site { min-height: 100vh; background: var(--public-bg); color: var(--public-ink); font: 14px/1.45 var(--public-sans); -webkit-font-smoothing: antialiased; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.public-site a { color: inherit; text-decoration: none; }
+.public-site button, .public-site input, .public-site select { color: inherit; font: inherit; }
+.public-site button { cursor: pointer; }
+.num { font-family: var(--public-mono); font-variant-numeric: tabular-nums lining-nums; }
+.public-top { min-height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 clamp(16px, 5vw, 70px); border-bottom: 1px solid var(--public-rule); background: var(--public-surface); position: sticky; top: 0; z-index: 40; }
+.public-brand { display: inline-flex; align-items: center; gap: 10px; min-width: 0; font: 650 12px/1 var(--public-mono); letter-spacing: .08em; text-transform: uppercase; background: none; border: 0; padding: 0; }
+.public-mark { width: 25px; height: 25px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--public-rule); border-radius: 3px; color: var(--public-accent); font: 700 14px/1 Georgia, serif; }
+.public-top-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.public-button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--public-rule); border-radius: 3px; padding: 7px 11px; background: var(--public-surface); font-size: 12px; font-weight: 650; }
+.public-button:hover, .public-button:focus-visible { border-color: var(--public-accent); background: var(--public-accent-wash); outline: none; }
+.public-button.primary { border-color: var(--public-accent); background: var(--public-accent); color: white; }
+.public-main { width: min(1160px, calc(100% - 32px)); margin: 0 auto; padding: clamp(28px, 5vw, 52px) 0 70px; }
+.public-kicker { margin-bottom: 12px; color: var(--public-accent); font: 700 10px/1 var(--public-mono); letter-spacing: .13em; text-transform: uppercase; }
+.public-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+.public-heading h1 { margin: 0 0 7px; font: 550 clamp(30px, 5vw, 44px)/1.02 Georgia, serif; letter-spacing: -.035em; }
+.public-heading p { max-width: 660px; margin: 0; color: var(--public-muted); }
+.public-filters { min-height: 58px; display: grid; grid-template-columns: auto minmax(120px,150px) minmax(110px,140px) minmax(120px,160px) minmax(150px,1fr); align-items: center; gap: 9px; margin-bottom: 14px; padding: 9px; border: 1px solid var(--public-rule); background: var(--public-surface); }
+.public-days { min-height: 38px; display: inline-flex; align-items: stretch; gap: 4px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.public-days::-webkit-scrollbar { display: none; }
+.public-days button { flex: 0 0 100px; width: 100px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-sunk); color: var(--public-muted); font: 650 10px/1 var(--public-mono); white-space: nowrap; }
+.public-days button.active { border-color: var(--public-accent); background: var(--public-accent-wash); color: var(--public-accent); }
+.public-select, .public-search { width: 100%; min-width: 0; height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 0 9px; font-size: 12px; }
+.public-search::placeholder { color: var(--public-muted); }
+.public-agenda-list { min-height: 430px; border: 1px solid var(--public-rule); background: var(--public-surface); }
+.public-agenda-row { display: grid; grid-template-columns: 40px 118px minmax(0,1fr) minmax(150px,.5fr); align-items: start; gap: 13px; min-height: 104px; padding: 16px 16px 16px 12px; border-bottom: 1px solid var(--public-rule-soft); }
+.public-agenda-row > .star-btn { margin-top: -2px; }
+.public-agenda-row:last-child { border-bottom: 0; }
+.public-time { color: var(--public-muted); font: 650 11px/1.35 var(--public-mono); }
+.public-day { display: block; margin-bottom: 3px; color: var(--public-accent); font-size: 10px; }
+.public-time strong { display: block; margin-bottom: 3px; color: var(--public-ink); font-size: 14px; font-variant-numeric: tabular-nums; }
+.public-time span { display: block; line-height: 1.35; }
+.public-session-title { margin: 0; font: 650 17px/1.2 Georgia, serif; letter-spacing: -.01em; }
+.public-session-title a:hover, .public-session-title a:focus-visible { color: var(--public-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.public-speakers { min-height: 20px; margin: 7px 0 0; color: var(--public-muted); font-size: 12px; }
+.public-snippet { margin: 7px 0 0; color: var(--public-soft); font-size: 12.5px; line-height: 1.5; }
+.public-snippet summary { color: var(--public-soft); font: 400 12.5px/1.5 var(--public-sans); cursor: pointer; list-style: none; }
+.public-snippet summary::-webkit-details-marker { display: none; }
+.public-snippet summary::after { content: " more +"; color: var(--public-accent); font: 650 10.5px/1 var(--public-mono); }
+.public-snippet details[open] summary::after { content: " less –"; }
+.public-snippet details p { margin: 6px 0 0; }
+.public-track-list { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; gap: 5px; }
+.public-track-chip { display: inline-flex; min-height: 23px; align-items: center; border: 1px solid var(--public-rule); border-left: 3px solid var(--track-color, var(--public-accent)); border-radius: 2px; padding: 3px 6px; color: var(--public-muted); font: 600 9px/1.2 var(--public-mono); }
+.public-format-chip { display: inline-flex; min-height: 23px; align-items: center; border: 1px solid var(--public-accent); border-radius: 2px; padding: 3px 6px; color: var(--public-accent-ink); background: var(--public-accent-wash); font: 600 9px/1.2 var(--public-mono); letter-spacing: .06em; text-transform: uppercase; }
+.public-empty { min-height: 428px; display: grid; place-items: center; padding: 36px; color: var(--public-muted); text-align: center; }
+.public-empty strong { display: block; margin-bottom: 5px; color: var(--public-ink); font: 650 18px/1.2 Georgia, serif; }
+.public-empty span { display: block; max-width: 400px; }
+.public-empty .public-button { margin-top: 16px; }
+.public-card { border: 1px solid var(--public-rule); background: var(--public-surface); padding: clamp(20px, 4vw, 36px); }
+.public-card h1 { margin: 13px 0 8px; font: 550 clamp(28px, 5vw, 42px)/1.03 Georgia, serif; letter-spacing: -.035em; }
+.public-card h2 { margin: 0 0 9px; font: 650 13px/1.2 var(--public-mono); letter-spacing: .05em; text-transform: uppercase; }
+.public-card p { color: var(--public-soft); line-height: 1.65; }
+.public-detail-meta { margin: 0; color: var(--public-muted); font: 600 11px/1.55 var(--public-mono); }
+.public-divider { height: 1px; margin: 25px 0; background: var(--public-rule-soft); }
+.public-speaker-list { display: grid; gap: 8px; }
+.public-speaker-row { display: flex; align-items: center; gap: 12px; border: 1px solid var(--public-rule-soft); padding: 11px 12px; }
+.public-avatar { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--public-rule); background: var(--public-accent-wash); color: var(--public-accent); font: 700 12px/1 var(--public-mono); }
+.public-footer { border-top: 1px solid var(--public-rule); background: var(--public-surface); margin-top: 40px; }
+.public-footer-inner { width: min(1160px, calc(100% - 32px)); margin: 0 auto; padding: 18px 0; display: flex; justify-content: space-between; gap: 12px; color: var(--public-muted); font: 600 10px/1.6 var(--public-mono); letter-spacing: .08em; text-transform: uppercase; }
+.public-footer-inner button { background: none; border: 0; padding: 0; color: var(--public-accent); font: inherit; letter-spacing: inherit; text-transform: inherit; }
+.public-footer-inner button:hover { text-decoration: underline; }
+
+/* ── Schedule layer (this feature) ──────────────────────────────────── */
+
+/* The star: one tap, fixed slot, never moves. */
+.star-btn { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--public-rule); border-radius: 3px; background: var(--public-surface); color: var(--public-muted); font-size: 17px; line-height: 1; transition: border-color 110ms, background 110ms, color 110ms, transform 110ms; }
+.star-btn:hover, .star-btn:focus-visible { border-color: var(--public-accent); background: var(--public-accent-wash); color: var(--public-accent); outline: none; }
+.star-btn[aria-pressed="true"] { border-color: var(--public-ink); background: var(--public-ink); color: #ffc94d; }
+.star-btn[aria-pressed="true"]:hover, .star-btn[aria-pressed="true"]:focus-visible { border-color: var(--public-ink); background: #22303c; color: #ffd76e; }
+.star-btn .glyph::before { content: "☆"; }
+.star-btn[aria-pressed="true"] .glyph::before { content: "★"; }
+.star-btn.just-starred { transform: scale(1.12); }
+
+/* Header entry: my schedule is one tap from everywhere. Count is fixed-width — never jumps. */
+.view-seg { gap: 0; }
+.view-seg .seg { border-radius: 0; }
+.view-seg .seg:first-child { border-radius: 3px 0 0 3px; }
+.view-seg .seg:last-child { border-radius: 0 3px 3px 0; margin-left: -1px; }
+.view-seg .seg[aria-selected="true"] { border-color: var(--public-accent); background: var(--public-accent); color: #fff; position: relative; z-index: 1; }
+.mysched-btn .count { display: inline-grid; place-items: center; min-width: 22px; height: 20px; border-radius: 2px; padding: 0 4px; background: var(--public-accent-wash); color: var(--public-accent-ink); font: 700 11px/1 var(--public-mono); font-variant-numeric: tabular-nums; }
+.mysched-btn[aria-selected="true"] .count { background: rgba(255,255,255,.18); color: #fff; }
+.mysched-btn.has-stars .glyph { color: #c9920a; }
+.mysched-btn[aria-selected="true"] .glyph { color: #ffc94d; }
+
+/* Itinerary view */
+.sched-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; min-height: 58px; margin-bottom: 14px; padding: 9px 12px; border: 1px solid var(--public-rule); background: var(--public-surface); }
+.sched-summary .counts { color: var(--public-muted); font: 650 11px/1.4 var(--public-mono); }
+.sched-summary .counts strong { color: var(--public-ink); font-size: 14px; margin-right: 8px; }
+.sched-export { display: flex; gap: 7px; flex-wrap: wrap; }
+.day-header { position: sticky; top: 60px; z-index: 10; display: flex; align-items: baseline; gap: 10px; padding: 9px 16px; background: var(--public-sunk); border-bottom: 1px solid var(--public-rule-soft); color: var(--public-accent); font: 700 10.5px/1 var(--public-mono); letter-spacing: .13em; text-transform: uppercase; }
+.day-header small { color: var(--public-muted); font: 600 10px/1 var(--public-mono); letter-spacing: .08em; }
+.next-chip { display: inline-flex; align-items: center; min-height: 18px; margin-left: 8px; border-radius: 2px; padding: 2px 6px; background: var(--public-accent); color: #fff; font: 700 9px/1 var(--public-mono); letter-spacing: .12em; text-transform: uppercase; vertical-align: 2px; }
+.overlap-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 20px; margin-top: 7px; border: 1px solid var(--public-rule-soft); border-radius: 2px; padding: 2px 7px; color: var(--public-muted); background: var(--public-sunk); font: 600 10px/1.3 var(--public-mono); }
+.overlap-chip::before { content: "‖"; color: var(--public-warn); font-weight: 700; }
+
+/* Sheets (share / agents) */
+.sheet-scrim { position: fixed; inset: 0; z-index: 90; background: rgba(16,24,32,.34); display: none; }
+.sheet-scrim.open { display: block; }
+.sheet { position: fixed; z-index: 100; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(560px, calc(100% - 28px)); max-height: min(84vh, 700px); overflow-y: auto; background: var(--public-surface); border: 1px solid var(--public-rule); border-radius: 3px; padding: 22px; display: none; }
+.sheet.open { display: block; }
+.sheet h2 { margin: 0 0 4px; font: 550 22px/1.15 Georgia, serif; letter-spacing: -.02em; }
+.sheet > p { margin: 0 0 16px; color: var(--public-muted); font-size: 12.5px; }
+.sheet-row { border: 1px solid var(--public-rule-soft); border-radius: 3px; padding: 12px; margin-bottom: 10px; }
+.sheet-row h3 { margin: 0 0 3px; font: 650 12px/1.3 var(--public-sans); }
+.sheet-row .hint { margin: 0 0 8px; color: var(--public-muted); font-size: 11.5px; line-height: 1.5; }
+.url-line { display: flex; gap: 7px; align-items: stretch; }
+.url-line code { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-sunk); padding: 7px 9px; font: 600 11px/1.3 var(--public-mono); color: var(--public-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy-btn { flex: 0 0 72px; width: 72px; min-height: 34px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); font: 650 11px/1 var(--public-mono); }
+.copy-btn:hover, .copy-btn:focus-visible { border-color: var(--public-accent); background: var(--public-accent-wash); outline: none; }
+.copy-btn.done { border-color: var(--public-accent); background: var(--public-accent); color: #fff; }
+.sheet-close { margin-top: 8px; width: 100%; }
+.qr { width: 128px; height: 128px; margin: 4px auto 0; display: grid; grid-template-columns: repeat(16,1fr); border: 1px solid var(--public-rule); background: #fff; padding: 8px; }
+.qr i { background: transparent; }
+.qr i.b { background: var(--public-ink); }
+.sync-grid { display: grid; grid-template-columns: 1fr 144px; gap: 12px; align-items: start; }
+.agents-pre { margin: 8px 0 0; border: 1px solid var(--public-rule); background: var(--public-sunk); border-radius: 2px; padding: 10px 12px; overflow-x: auto; font: 600 10.5px/1.7 var(--public-mono); color: var(--public-soft); }
+.agents-pre b { color: var(--public-accent-ink); font-weight: 700; }
+
+/* Prototype chrome */
+.prototype-badge { position: fixed; z-index: 1000; right: 12px; bottom: 12px; background: var(--public-ink); color: #dff2f3; border: 1px solid var(--public-accent); padding: 6px 10px; border-radius: 3px; font: 600 10px/1 var(--public-mono); letter-spacing: .14em; text-transform: uppercase; pointer-events: none; }
+.proto-note { margin-bottom: 18px; border: 1px dashed var(--public-rule); background: var(--public-surface); padding: 10px 14px; color: var(--public-muted); font-size: 12px; line-height: 1.6; }
+.proto-note b { color: var(--public-soft); }
+
+/* Detail page bits */
+.detail-actions { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; margin: 18px 0 0; }
+.back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; color: var(--public-accent); font: 650 11px/1 var(--public-mono); letter-spacing: .06em; text-transform: uppercase; background: none; border: 0; padding: 0; }
+.back-link:hover { text-decoration: underline; }
+
+@media (max-width: 860px) {
+  .public-filters { grid-template-columns: 1fr 1fr; }
+  .public-days { grid-column: 1 / -1; width: 100%; }
+  .public-days button { flex: 1 1 0; width: auto; min-width: 0; padding: 0 2px; font-size: 9px; }
+  .public-agenda-row { grid-template-columns: 40px 86px minmax(0,1fr); gap: 10px; }
+  .public-track-list { grid-column: 3; justify-content: flex-start; }
+  .sync-grid { grid-template-columns: 1fr; }
+  .glance { grid-template-columns: 34px repeat(3, 1fr) !important; }
+}
+@media (max-width: 460px) {
+  .public-top { flex-wrap: wrap; align-items: center; padding-top: 10px; padding-bottom: 10px; row-gap: 8px; }
+  .public-brand { font-size: 11px; }
+  .view-seg { width: 100%; }
+  .view-seg .seg { flex: 1 1 0; min-height: 38px; }
+  .public-filters { grid-template-columns: 1fr 1fr; gap: 7px; }
+  .public-days { grid-column: 1 / -1; }
+  .public-search::placeholder { color: var(--public-muted); }
+  .public-agenda-row { grid-template-columns: 40px minmax(0,1fr); min-height: 132px; padding: 14px 14px 14px 10px; }
+  .public-agenda-row > .star-btn { grid-row: 1 / span 3; }
+  .public-time, .public-track-list, .public-agenda-row > div { grid-column: 2; }
+  .public-session-title { font-size: 16px; }
+  .sched-summary { padding: 9px; }
+  .sched-export { width: 100%; }
+  .sched-export .public-button { flex: 1 1 45%; padding: 7px 4px; font-size: 11px; }
+}
+
+/* ── "At a glance" time blocks (My Schedule) ────────────────────────── */
+.glance { display: grid; grid-template-columns: 34px repeat(3, 1fr); gap: 0 10px; margin-bottom: 14px; padding: 12px; border: 1px solid var(--public-rule); background: var(--public-surface); }
+.glance-head { grid-row: 1; padding-bottom: 7px; color: var(--public-accent); font: 700 9.5px/1.3 var(--public-mono); letter-spacing: .1em; text-transform: uppercase; }
+.glance-head small { display: block; color: var(--public-muted); letter-spacing: .06em; }
+.glance-axis { grid-row: 2; position: relative; height: 234px; }
+.glance-axis span { position: absolute; right: 6px; transform: translateY(-50%); color: var(--public-muted); font: 600 9px/1 var(--public-mono); }
+.glance-lane { grid-row: 2; position: relative; height: 234px; border: 1px solid var(--public-rule-soft); background: var(--public-sunk); background-image: repeating-linear-gradient(to bottom, var(--public-rule-soft) 0 1px, transparent 1px 26px); }
+.glance-block { position: absolute; left: 3px; right: 3px; overflow: hidden; display: flex; align-items: flex-start; gap: 5px; border: 1px solid var(--public-accent); border-left-width: 3px; border-radius: 2px; background: var(--public-accent-wash); padding: 2px 5px; text-align: left; cursor: pointer; min-height: 17px; }
+.glance-block:hover, .glance-block:focus-visible { background: var(--public-accent); color: #fff; outline: none; }
+.glance-block:hover small, .glance-block:focus-visible small { color: rgba(255,255,255,.85); }
+.glance-block small { flex: 0 0 auto; color: var(--public-accent-ink); font: 700 9px/1.5 var(--public-mono); font-variant-numeric: tabular-nums; }
+.glance-block strong { flex: 1 1 auto; min-width: 0; font: 650 10px/1.35 var(--public-sans); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.glance-block.lane-a { right: calc(50% + 2px); }
+.glance-block.lane-b { left: calc(50% + 2px); }
+.glance-block.is-next { border-color: var(--public-accent); box-shadow: inset 0 0 0 1px var(--public-accent); }
+.glance-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--public-muted); font: 600 10px/1 var(--public-mono); }
+.glance-now { position: absolute; left: 0; right: 0; z-index: 2; border-top: 2px solid #b02a1f; pointer-events: none; }
+.glance-now span { position: absolute; left: 0; top: -8px; padding: 1px 4px; background: #b02a1f; color: #fff; border-radius: 2px; font: 700 8.5px/1.5 var(--public-mono); font-variant-numeric: tabular-nums; }
+.glance-tip { position: fixed; z-index: 200; width: 264px; background: var(--public-surface); border: 1px solid var(--public-accent); border-radius: 3px; padding: 10px 12px; pointer-events: none; display: none; }
+.glance-tip.show { display: block; }
+.glance-tip .t-time { color: var(--public-accent); font: 700 10px/1.4 var(--public-mono); font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+.glance-tip .t-title { margin: 3px 0 4px; font: 650 14px/1.25 Georgia, serif; letter-spacing: -.01em; color: var(--public-ink); }
+.glance-tip .t-meta { color: var(--public-muted); font-size: 11px; line-height: 1.45; }
+.glance-tip .t-overlap { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; border: 1px solid var(--public-rule-soft); border-radius: 2px; padding: 1px 6px; color: var(--public-muted); background: var(--public-sunk); font: 600 9.5px/1.4 var(--public-mono); }
+.glance-tip .t-overlap::before { content: "‖"; color: var(--public-warn); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="public-site">
+  <header class="public-top">
+    <button class="public-brand" data-nav="agenda" aria-label="AIE NYC 2026 — agenda home">
+      <span class="public-mark">M</span><span>AIE ·  NYC 2026</span>
+    </button>
+    <div class="public-top-actions view-seg" role="tablist" aria-label="View">
+      <button class="public-button seg" id="agendaBtn" role="tab" data-nav-view="agenda">Conference agenda</button>
+      <button class="public-button seg mysched-btn" id="myschedBtn" role="tab" data-nav-view="mine">
+        <span class="glyph" aria-hidden="true">★</span> My schedule <span class="count num" id="schedCount">0</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="public-main" id="view"><!-- rendered --></main>
+
+  <footer class="public-footer">
+    <div class="public-footer-inner">
+      <span>AIE NYC 2026 · Oct 13 – 15 · Sheraton Times Square + Marriott Marquis</span>
+      <button id="agentsLink">For agents ↗</button>
+    </div>
+  </footer>
+</div>
+
+<!-- Share / sync sheet -->
+<div class="sheet-scrim" id="scrim"></div>
+<div class="sheet" id="shareSheet" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+  <h2 id="shareTitle">Your schedule, everywhere</h2>
+  <p>One code — <code class="num">MQ-K7TQM3RA</code> — powers all three. No account needed.</p>
+  <div class="sheet-row">
+    <h3>Subscribe in your calendar</h3>
+    <p class="hint">Live feed — restar a session here and your calendar updates by itself. The strongest way to never miss a pick.</p>
+    <div class="url-line">
+      <code>webcal://marquee.stage11.dev/api/v1/public/schedules/MQ-K7TQM3RA.ics</code>
+      <button class="copy-btn" data-copy="webcal://marquee.stage11.dev/api/v1/public/schedules/MQ-K7TQM3RA.ics">Copy</button>
+    </div>
+  </div>
+  <div class="sheet-row">
+    <h3>Share with a friend</h3>
+    <p class="hint">Read-only. They see your picks and can import a copy into their own schedule — their stars stay theirs.</p>
+    <div class="url-line">
+      <code>https://marquee.stage11.dev/agenda?sched=MQ-K7TQM3RA</code>
+      <button class="copy-btn" data-copy="https://marquee.stage11.dev/agenda?sched=MQ-K7TQM3RA">Copy</button>
+    </div>
+  </div>
+  <button class="public-button sheet-close" data-close>Done</button>
+</div>
+
+<!-- Open on your phone sheet -->
+<div class="sheet" id="phoneSheet" role="dialog" aria-modal="true" aria-labelledby="phoneTitle">
+  <h2 id="phoneTitle">Open on your phone</h2>
+  <p>Scan and your phone picks up right where this leaves off — same stars, same schedule, both devices can edit. The link carries your private write key in the URL fragment, so it never reaches our logs. Don't share this one; use <b>Share</b> for friends.</p>
+  <div class="qr" id="qr" style="width:180px;height:180px;grid-template-columns:repeat(16,1fr)" aria-label="QR code (prototype placeholder)"></div>
+  <div class="url-line" style="margin-top:14px">
+    <code>https://marquee.stage11.dev/agenda?sched=MQ-K7TQM3RA#k=w9…</code>
+    <button class="copy-btn" data-copy="https://marquee.stage11.dev/agenda?sched=MQ-K7TQM3RA#k=w9x2v4">Copy</button>
+  </div>
+  <button class="public-button sheet-close" data-close>Done</button>
+</div>
+
+<!-- Brief your agent sheet -->
+<div class="sheet" id="briefSheet" role="dialog" aria-modal="true" aria-labelledby="briefTitle">
+  <h2 id="briefTitle">Brief your agent</h2>
+  <p>One block, ready to paste into any agent. Your picks are inline so it works immediately; the live URLs let the agent re-check and act on your behalf.</p>
+  <pre class="agents-pre" id="briefText" style="max-height:280px;overflow-y:auto;white-space:pre-wrap"></pre>
+  <div class="url-line" style="margin-top:10px">
+    <code id="briefHint" style="border:0;background:none;padding-left:0">Paste into Claude, ChatGPT, or your own agent</code>
+    <button class="copy-btn" id="briefCopy" style="flex-basis:110px;width:110px">Copy briefing</button>
+  </div>
+  <button class="public-button sheet-close" data-close>Done</button>
+</div>
+
+<!-- For agents sheet -->
+<div class="sheet" id="agentsSheet" role="dialog" aria-modal="true" aria-labelledby="agentsTitle">
+  <h2 id="agentsTitle">For agents</h2>
+  <p>Everything on this site is anonymous, typed JSON. An agent can build its human's conference schedule end-to-end without a browser:</p>
+  <pre class="agents-pre"><b>GET</b>  /api/v1/public/agenda?event=aie-nyc-2026
+      → the full published program: sessions, times, rooms,
+        buildings, tracks, formats, speakers
+
+<b>POST</b> /api/v1/public/schedules
+      { "eventSlug": "aie-nyc-2026",
+        "sessionIds": ["ses_…", "ses_…"] }
+      → { "code": "MQ-K7TQM3RA", "writeKey": "…",
+          "urls": { "share": …, "sync": …, "webcal": …, "ics": … },
+          "overlaps": [] }
+
+<b>GET</b>  /api/v1/public/schedules/MQ-K7TQM3RA
+      → the set with full session objects + computed overlaps
+
+<b>PUT</b>  /api/v1/public/schedules/MQ-K7TQM3RA
+      (X-Schedule-Write-Key header) → replace the set</pre>
+  <p style="margin-top:12px">Driving the UI instead? Every session card carries stable hooks: <code style="font-family:var(--public-mono);font-size:11px">data-public-session-id / -slug / -start / -end / -day</code>.</p>
+  <button class="public-button sheet-close" data-close>Done</button>
+</div>
+
+<div class="prototype-badge">Prototype · v0.1</div>
+
+<script>
+/* ══════════════ Mock program — realistic AIE NYC 2026 seed shape ══════════ */
+const TRACK_COLORS = { Finance:"#635bff", Agents:"#db4c3f", Evals:"#0d9488", Infra:"#d97706", "Open Models":"#2563eb", RAG:"#9333ea", Security:"#0f766e", Leadership:"#0369a1" };
+const DAYS = [
+  { id:"d1", tab:"TUE OCT 13", label:"Tuesday, Oct 13", date:"2026-10-13" },
+  { id:"d2", tab:"WED OCT 14", label:"Wednesday, Oct 14", date:"2026-10-14" },
+  { id:"d3", tab:"THU OCT 15", label:"Thursday, Oct 15", date:"2026-10-15" },
+];
+const S = (id, day, start, end, room, building, title, speakers, fmt, tracks, snippet, abstract) =>
+  ({ id, slug:id, day, start, end, room, building, title, speakers, fmt, tracks, snippet, abstract });
+
+const SESSIONS = [
+  // ── Tuesday Oct 13
+  S("ses-keynote-1","d1","09:00","09:45","Metropolitan Ballroom","Sheraton",
+    "The Year Agents Went to Work",
+    [{n:"Priya Raghunathan",t:"Chief Scientist",c:"Continual AI"}],
+    "Keynote",["Agents","Leadership"],
+    "What changed when agents stopped being demos and started holding pagers: a year of production postmortems, the patterns that survived, and the ones that didn't.",
+    "What changed when agents stopped being demos and started holding pagers. Drawing on a year of production postmortems across forty deployments, this keynote maps the patterns that survived contact with real traffic — checkpoint-and-resume, tool budgets, adversarial verification — and the popular architectures that quietly disappeared. Closes with the three bets we're making for next year."),
+  S("ses-eval-pipe","d1","10:15","11:00","Central Park Ballroom","Sheraton",
+    "Your Eval Suite Is Lying to You: Distribution Shift in Production Scoring",
+    [{n:"Marcus Chen",t:"Head of Evaluation",c:"Ledger Labs"},{n:"Žofia Königová",t:"Staff ML Engineer",c:"Ledger Labs"}],
+    "Talk",["Evals"],
+    "Static eval sets rot. We instrumented six months of production traffic against our frozen suite and measured exactly how fast — then rebuilt scoring as a living pipeline.",
+    "Static eval sets rot. We instrumented six months of production traffic against our frozen suite and measured exactly how fast the two distributions diverged — 11% task-mix drift in the first six weeks. This talk walks through rebuilding scoring as a living pipeline: stratified sampling from production, judge-model rotation to fight sycophancy drift, and the weekly delta report that made regressions boring again."),
+  S("ses-rag-graveyard","d1","10:15","11:00","New York Ballroom","Sheraton",
+    "The RAG Graveyard: Six Retrieval Architectures We Killed and Why",
+    [{n:"Dele Adeyemi",t:"Principal Engineer",c:"Northwind Health"}],
+    "Talk",["RAG"],
+    "Hybrid search, HyDE, parent-document, graph-RAG, agentic retrieval, and rerank-everything: what each actually cost us in latency, money, and answer quality on 40M clinical documents.",
+    "Hybrid search, HyDE, parent-document retrieval, graph-RAG, agentic retrieval, and rerank-everything: we ran all six against 40M clinical documents with real clinician queries. This talk is the autopsy — per-architecture latency, cost, and blinded answer-quality numbers, why five of them lost, and the boring two-stage design that won."),
+  S("ses-fin-risk","d1","11:30","12:15","Metropolitan Ballroom","Sheraton",
+    "Underwriting With a Model in the Loop: What the Regulator Actually Asked Us",
+    [{n:"Sarah Okonkwo-Bailey",t:"VP, Model Risk",c:"Meridian Capital"},{n:"James Whitfield",t:"General Counsel",c:"Meridian Capital"}],
+    "Panel",["Finance","Leadership"],
+    "Eighteen months of putting language models inside a regulated underwriting flow — the audit trail we built, the questions examiners asked, and the ones we couldn't answer.",
+    "Eighteen months of putting language models inside a regulated underwriting flow. We share the audit-trail architecture that satisfied our examiners, the exact questions they asked (and the two we couldn't answer on the spot), and the model-risk documentation pattern that's since become our template for every AI system that touches a credit decision."),
+  S("ses-workshop-tools","d1","14:00","15:30","Marquis Room A","Marriott Marquis",
+    "Workshop: Designing Tool APIs Agents Don't Misuse",
+    [{n:"Yuki Tanaka",t:"Developer Experience Lead",c:"Fathom Systems"}],
+    "Workshop",["Agents","Infra"],
+    "Hands-on: take a real, messy internal API and reshape it until an agent stops misusing it. Bring a laptop; we provide the misbehaving agent.",
+    "Hands-on workshop. You'll take a real, messy internal API and iteratively reshape it — naming, error surfaces, idempotency, argument schemas — until a deliberately careless agent stops misusing it. Bring a laptop; we provide the misbehaving agent, the harness, and the scoring. You leave with a checklist your platform team can apply on Monday."),
+  S("ses-open-slm","d1","14:00","14:45","Expo Stage","Sheraton",
+    "Small Models, Sharp Knives: 3B-Parameter Specialists That Beat Frontier Generalists",
+    [{n:"Ana Lucía Herrera",t:"Research Engineer",c:"Colectivo ML"}],
+    "Talk",["Open Models"],
+    "Where a fine-tuned 3B model genuinely wins — extraction, routing, structured rewrite — with the training recipes and the honest list of places it never will.",
+    "Where a fine-tuned 3B model genuinely wins: extraction, routing, structured rewrite, anything with a narrow output contract. We publish the full training recipes, the data-curation loop that mattered more than architecture, and the honest list of tasks where no amount of fine-tuning closed the gap to frontier generalists."),
+
+  // ── Wednesday Oct 14  (14:00 pair overlaps by design — conflict demo)
+  S("ses-sec-injection","d2","09:30","10:15","Metropolitan Ballroom","Sheraton",
+    "Prompt Injection Is a Solved Problem (We're Just Not Using the Solutions)",
+    [{n:"Rachel Lindqvist",t:"Head of AI Security",c:"Bastion"}],
+    "Talk",["Security"],
+    "Capability sandboxing, taint tracking, and dual-model verification each kill whole classes of injection. A tour of the defenses that work and the incentive problem keeping them unshipped.",
+    "Capability sandboxing, taint tracking on untrusted spans, and dual-model verification each kill whole classes of injection attack — we demonstrate all three live against a public gauntlet. The uncomfortable half of the talk: why so few production systems ship any of them, and the incentive problem that keeps the median agent one pasted email away from exfiltration."),
+  S("ses-infra-inference","d2","10:45","11:30","New York Ballroom","Sheraton",
+    "Serving 400 Tokens/Second Without Owning a Single GPU",
+    [{n:"Tomás Ferreira do Nascimento",t:"Infrastructure Lead",c:"Playbill"},{n:"Grace Osei",t:"SRE",c:"Playbill"}],
+    "Talk",["Infra"],
+    "Provider arbitrage, speculative routing, and cache-aware prompt design: the multi-vendor serving layer that halved our p99 and our bill in the same quarter.",
+    "Provider arbitrage, speculative routing across three inference vendors, and cache-aware prompt design. We walk through the serving layer that halved both our p99 latency and our per-token bill in the same quarter — including the routing policy source, the cache-hit economics, and the two vendor incidents that validated the whole design."),
+  S("ses-agents-memory","d2","14:00","14:45","Central Park Ballroom","Sheraton",
+    "Memory Architectures for Agents That Work a Whole Quarter",
+    [{n:"David Kim",t:"Founding Engineer",c:"Tenure"}],
+    "Talk",["Agents"],
+    "Beyond session summaries: episodic stores, belief revision, and the forgetting policies that keep a 90-day agent from drowning in its own history.",
+    "Beyond session summaries. Tenure's agents hold engagements that run a full quarter, and the naive approaches — grow the context, summarize harder — both failed by week three. This talk covers our episodic store, belief revision when new facts contradict old ones, and the forgetting policies that keep a 90-day agent from drowning in its own history."),
+  S("ses-evals-judges","d2","14:30","15:15","Marquis Room B","Marriott Marquis",
+    "Judge Models on Trial: Measuring the Measurers",
+    [{n:"Fatima Al-Rashid",t:"Research Scientist",c:"Verity"},{n:"Ben Okafor",t:"ML Engineer",c:"Verity"}],
+    "Talk",["Evals"],
+    "We audited nine LLM-as-judge setups against expert panels: where they agree, where they collapse, and the calibration harness that made two of them trustworthy.",
+    "We audited nine LLM-as-judge configurations against blinded expert panels across 4,000 comparisons: where they agree with humans, where they collapse (verbosity bias, position bias, self-preference), and the calibration harness — anchored rubrics, swap tests, refusal audits — that promoted two of the nine to trustworthy. All harness code is released."),
+  S("ses-leadership-org","d2","16:00","16:45","Metropolitan Ballroom","Sheraton",
+    "Reorganizing Around Agents: What Happened When We Gave Every Team a Fleet",
+    [{n:"Claire Beaumont-Ng",t:"CTO",c:"Halcyon Group"}],
+    "Fireside",["Leadership","Agents"],
+    "A year after giving all 30 product teams an agent budget instead of contractor headcount: what shipped, what broke, and how the org chart bent.",
+    "A year after giving all thirty product teams an agent budget instead of contractor headcount. A candid fireside on what actually shipped, the two teams that broke their services, the review-culture correction that followed, and how the org chart bent — plus the numbers our CFO now shows the board."),
+
+  // ── Thursday Oct 15
+  S("ses-rag-live","d3","09:30","10:15","New York Ballroom","Sheraton",
+    "Live Index or Stale Answers: Streaming Ingestion for RAG at 2M Docs/Day",
+    [{n:"Piotr Wiśniewski",t:"Staff Engineer",c:"Copperline"}],
+    "Talk",["RAG","Infra"],
+    "Freshness SLAs for retrieval: the streaming ingestion path, embedding backfill economics, and what 'the answer changed while you were reading it' does to trust.",
+    "Freshness SLAs for retrieval. Copperline indexes two million documents a day; this talk covers the streaming ingestion path, the embedding backfill economics that nearly killed the project, consistency between the vector store and the source of truth, and what 'the answer changed while you were reading it' does to user trust."),
+  S("ses-fin-agents","d3","10:45","11:30","Expo Stage","Sheraton",
+    "The Reconciliation Agent That Closed Our Books Four Days Early",
+    [{n:"Nina Vasquez",t:"Controller",c:"Brightline Logistics"},{n:"Raj Mehta",t:"Automation Lead",c:"Brightline Logistics"}],
+    "Talk",["Finance","Agents"],
+    "A finance-team-built agent now clears 92% of intercompany mismatches unattended. The controls that made audit sign off, told by the controller who owns the number.",
+    "A finance-team-built agent now clears 92% of intercompany mismatches unattended, and month-end close moved from day nine to day five. Told jointly by the controller who owns the number and the engineer who built it: the exception taxonomy, the four-eyes control that made external audit comfortable, and the mismatch classes still reserved for humans."),
+  S("ses-closing","d3","15:00","15:45","Metropolitan Ballroom","Sheraton",
+    "Closing: The Conference Talk Generator That Wrote This Talk",
+    [{n:"The Program Committee",t:"",c:"AIE NYC"}],
+    "Keynote",["Leadership"],
+    "Every trend from three days, synthesized — by the pipeline we built to do exactly that. The committee grades its output live, then argues with it.",
+    "Every trend from three days of talks, synthesized — by the retrieval-and-writing pipeline we built to do exactly that, running on the conference's own session transcripts. The program committee grades its output live on stage, argues with its conclusions, and closes with the honest case for what conference programming looks like when the program can read itself."),
+];
+
+/* ══════════════ State ══════════════ */
+const LS_KEY = "marquee:proto:attendee-schedule";
+const NOW = { date:"2026-10-14", time:"13:40" };            // simulated hallway moment
+let starred = new Set(JSON.parse(localStorage.getItem(LS_KEY) || "[]"));
+let view = { name:"agenda" };                                // agenda | mine | session
+let filters = { day:"all", track:"", fmt:"", room:"", q:"" };
+
+const $ = (s, el=document) => el.querySelector(s);
+const byId = id => SESSIONS.find(s => s.id === id);
+const save = () => localStorage.setItem(LS_KEY, JSON.stringify([...starred]));
+const esc = t => t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const dayOf = s => DAYS.find(d => d.id === s.day);
+const mins = t => +t.slice(0,2)*60 + +t.slice(3,5);
+const overlap = (a,b) => a.day===b.day && mins(a.start) < mins(b.end) && mins(b.start) < mins(a.end);
+
+function overlapsFor(s, set) {
+  return set.filter(o => o.id !== s.id && overlap(s,o));
+}
+function nextUpId() {
+  const mine = SESSIONS.filter(s => starred.has(s.id));
+  const future = mine.filter(s => dayOf(s).date > NOW.date || (dayOf(s).date === NOW.date && s.end > NOW.time));
+  future.sort((a,b) => (dayOf(a).date + a.start).localeCompare(dayOf(b).date + b.start));
+  return future[0]?.id ?? null;
+}
+
+/* ══════════════ Renderers ══════════════ */
+function speakersLine(s) {
+  return s.speakers.map(p => `<span>${esc(p.n)}${p.t ? ` — ${esc(p.t)}, ${esc(p.c)}` : ""}</span>`).join(" · ");
+}
+function chips(s) {
+  const t = s.tracks.map(tr => `<span class="public-track-chip" style="--track-color:${TRACK_COLORS[tr]}">${esc(tr)}</span>`).join("");
+  return `<div class="public-track-list"><span class="public-format-chip">${esc(s.fmt)}</span>${t}</div>`;
+}
+function starBtn(s) {
+  const on = starred.has(s.id);
+  return `<button class="star-btn" data-star="${s.id}" aria-pressed="${on}" aria-label="${on ? "Remove from" : "Add to"} my schedule: ${esc(s.title)}"><span class="glyph" aria-hidden="true"></span></button>`;
+}
+function card(s, { showDay=true, inMine=false } = {}) {
+  const d = dayOf(s);
+  const ov = inMine ? overlapsFor(s, SESSIONS.filter(x => starred.has(x.id))) : [];
+  const next = inMine && s.id === nextUpId();
+  return `<article class="public-agenda-row" data-public-session-id="${s.id}" data-public-session-slug="${s.slug}"
+      data-public-session-start="${d.date}T${s.start}" data-public-session-end="${d.date}T${s.end}" data-public-session-day="${s.day}">
+    ${starBtn(s)}
+    <time class="public-time" datetime="${d.date}T${s.start}">
+      ${showDay ? `<span class="public-day">${d.label.split(",")[0]}, ${d.label.split(" ").slice(1).join(" ")}</span>` : ""}
+      <strong class="num">${s.start} – ${s.end}</strong>
+      <span>${esc(s.room)}</span><span>${esc(s.building)}</span>
+    </time>
+    <div>
+      <h2 class="public-session-title"><a href="#" data-open="${s.id}">${esc(s.title)}</a>${next ? `<span class="next-chip">Next</span>` : ""}</h2>
+      <p class="public-speakers">${speakersLine(s)}</p>
+      <div class="public-snippet"><details><summary>${esc(s.snippet)}</summary><p>${esc(s.abstract)}</p></details></div>
+      ${ov.map(o => `<span class="overlap-chip">overlaps ${esc(o.title.length > 44 ? o.title.slice(0,43)+"…" : o.title)} · ${o.start}</span>`).join(" ")}
+    </div>
+  ${chips(s)}
+  </article>`;
+}
+
+function renderAgenda() {
+  const list = SESSIONS.filter(s =>
+    (filters.day === "all" || s.day === filters.day) &&
+    (!filters.track || s.tracks.includes(filters.track)) &&
+    (!filters.fmt || s.fmt === filters.fmt) &&
+    (!filters.room || s.room === filters.room) &&
+    (!filters.q || (s.title + " " + s.speakers.map(p=>p.n+" "+p.c).join(" ")).toLowerCase().includes(filters.q.toLowerCase()))
+  );
+  const tracks = Object.keys(TRACK_COLORS);
+  const fmts = [...new Set(SESSIONS.map(s=>s.fmt))];
+  const rooms = [...new Set(SESSIONS.map(s=>s.room))];
+  const groups = DAYS.filter(d => list.some(s => s.day === d.id));
+  $("#view").innerHTML = `
+    <div class="public-kicker">Oct 13 → Oct 15 · Sheraton New York Times Square</div>
+    <div class="public-heading"><div>
+      <h1>Agenda</h1>
+      <p>Practical sessions for people building and operating AI. Star what you want to go to — your schedule follows you.</p>
+    </div></div>
+    <div class="proto-note"><b>Prototype.</b> Try: star a few sessions → open <b>★ My schedule</b> (top right) → on Wednesday, star both the <b>14:00</b> and <b>14:30</b> talks to see the overlap note → then <b>Share</b>. Stars persist across reloads. Simulated clock: Wed Oct 14, 13:40.</div>
+    <form class="public-filters" onsubmit="return false">
+      <div class="public-days" role="tablist" aria-label="Agenda day">
+        <button type="button" data-day="all" class="${filters.day==="all"?"active":""}" role="tab" aria-selected="${filters.day==="all"}">All days</button>
+        ${DAYS.map(d => `<button type="button" data-day="${d.id}" class="${filters.day===d.id?"active":""}" role="tab" aria-selected="${filters.day===d.id}">${d.tab}</button>`).join("")}
+      </div>
+      <select class="public-select" id="fTrack" aria-label="Filter by track"><option value="">All tracks</option>${tracks.map(t=>`<option ${filters.track===t?"selected":""}>${t}</option>`).join("")}</select>
+      <select class="public-select" id="fFmt" aria-label="Filter by format"><option value="">All formats</option>${fmts.map(f=>`<option ${filters.fmt===f?"selected":""}>${f}</option>`).join("")}</select>
+      <select class="public-select" id="fRoom" aria-label="Filter by location"><option value="">All locations</option>${rooms.map(r=>`<option ${filters.room===r?"selected":""}>${r}</option>`).join("")}</select>
+      <input class="public-search" id="fQ" value="${esc(filters.q)}" placeholder="Search title or speaker" aria-label="Search the agenda">
+    </form>
+    <section class="public-agenda-list" aria-label="Published agenda sessions">
+      ${list.length ? groups.map(d => `
+        <div class="day-header">${d.label} <small class="num">${list.filter(s=>s.day===d.id).length} sessions</small></div>
+        ${list.filter(s=>s.day===d.id).map(s => card(s, { showDay:false })).join("")}
+      `).join("") : `
+        <div class="public-empty"><div>
+          <strong>No published sessions match</strong>
+          <span>Clear a filter to bring the program back into view.</span>
+          <button class="public-button primary" data-clear-filters>Show full agenda</button>
+        </div></div>`}
+    </section>`;
+  wireAgenda();
+}
+
+/* At-a-glance time blocks: 09:00–18:00 axis, overlaps side-by-side. */
+const GLANCE_START = 9 * 60, GLANCE_END = 18 * 60, GLANCE_SPAN = GLANCE_END - GLANCE_START;
+function glancePanel(mine) {
+  const pct = m => ((m - GLANCE_START) / GLANCE_SPAN * 100).toFixed(2);
+  const hours = [9, 12, 15, 18];
+  const nextId = nextUpId();
+  const lanes = day => {
+    const list = mine.filter(s => s.day === day).sort((a,b) => a.start.localeCompare(b.start));
+    return list.map(s => {
+      const twin = list.find(o => o.id !== s.id && overlap(s,o));
+      const earlier = twin && (mins(s.start) < mins(twin.start) || (mins(s.start) === mins(twin.start) && s.id < twin.id));
+      const cls = twin ? (earlier ? "lane-a" : "lane-b") : "";
+      return `<button class="glance-block ${cls} ${s.id === nextId ? "is-next" : ""}" data-open="${s.id}" data-tip="${s.id}"
+        style="top:${pct(mins(s.start))}%;height:${(Math.max(mins(s.end)-mins(s.start), 30) / GLANCE_SPAN * 100).toFixed(2)}%">
+        <small class="num">${s.start}</small><strong>${esc(s.title)}</strong>
+      </button>`;
+    }).join("");
+  };
+  return `<div class="glance" aria-label="My schedule at a glance">
+    <div class="glance-head"></div>
+    ${DAYS.map(d => `<div class="glance-head">${d.tab}<small class="num">${mine.filter(s=>s.day===d.id).length || "—"} starred</small></div>`).join("")}
+    <div class="glance-axis">${hours.map(h => `<span style="top:${pct(h*60)}%">${String(h).padStart(2,"0")}</span>`).join("")}</div>
+    ${DAYS.map(d => `<div class="glance-lane">
+      ${mine.some(s=>s.day===d.id) ? lanes(d.id) : `<span class="glance-empty">—</span>`}
+      ${d.date === NOW.date ? `<div class="glance-now" style="top:${pct(mins(NOW.time))}%"><span>NOW ${NOW.time}</span></div>` : ""}
+    </div>`).join("")}
+  </div>`;
+}
+
+function renderMine() {
+  const mine = SESSIONS.filter(s => starred.has(s.id))
+    .sort((a,b) => (dayOf(a).date + a.start).localeCompare(dayOf(b).date + b.start));
+  const perDay = DAYS.map(d => ({ d, n: mine.filter(s=>s.day===d.id).length })).filter(x => x.n);
+  $("#view").innerHTML = `
+    <div class="public-kicker">Your itinerary · AIE NYC 2026</div>
+    <div class="public-heading"><div>
+      <h1>My schedule</h1>
+      <p>Everything you've starred, in the order your conference happens. Stars live on this device until you sync or share.</p>
+    </div></div>
+    ${mine.length ? `
+    <div class="sched-summary">
+      <span class="counts num"><strong>${mine.length} session${mine.length===1?"":"s"}</strong>${perDay.map(x=>`${x.d.label.split(",")[0]} ${x.n}`).join(" · ")}</span>
+      <div class="sched-export">
+        <button class="public-button" id="openPhone">Open on your phone</button>
+        <button class="public-button" id="dlIcs">Download .ics</button>
+        <button class="public-button" data-share>Subscribe / share</button>
+        <button class="public-button" id="briefAgent">Brief your agent</button>
+      </div>
+    </div>
+    ${glancePanel(mine)}
+    <section class="public-agenda-list" aria-label="My starred sessions">
+      ${DAYS.filter(d => mine.some(s=>s.day===d.id)).map(d => `
+        <div class="day-header">${d.label} <small class="num">${mine.filter(s=>s.day===d.id).length} starred</small></div>
+        ${mine.filter(s=>s.day===d.id).map(s => card(s, { showDay:false, inMine:true })).join("")}
+      `).join("")}
+    </section>` : `
+    <section class="public-agenda-list">
+      <div class="public-empty"><div>
+        <strong>Nothing starred yet</strong>
+        <span>Tap ☆ on any session and it lands here — your own conference, in time order. No account needed.</span>
+        <button class="public-button primary" data-nav="agenda">Browse the agenda</button>
+      </div></div>
+    </section>`}`;
+  $("#dlIcs")?.addEventListener("click", downloadIcs);
+  $("#briefAgent")?.addEventListener("click", () => {
+    $("#briefText").textContent = buildBriefing();
+    openSheet("briefSheet");
+  });
+  $("#openPhone")?.addEventListener("click", () => openSheet("phoneSheet"));
+  wireCommon();
+}
+
+function renderSession(id) {
+  const s = byId(id); if (!s) return renderAgenda();
+  const d = dayOf(s);
+  const marquis = s.building === "Marriott Marquis";
+  const access = marquis
+    ? "Use the Broadway lobby for conference access. Allow three minutes for building security."
+    : "Photo ID required at the main entrance. Allow ten minutes for building security.";
+  const address = marquis ? "New York Marriott Marquis, 1535 Broadway, New York, NY 10036" : "Sheraton New York Times Square, 811 7th Ave, New York, NY 10019";
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+  const from = view.from === "mine" ? "mine" : "agenda";
+  $("#view").innerHTML = `
+    <button class="back-link" data-nav="${from}">← ${from === "mine" ? "My schedule" : "Agenda"}</button>
+    <div class="public-card" data-public-session-id="${s.id}" data-public-session-slug="${s.slug}"
+         data-public-session-start="${d.date}T${s.start}" data-public-session-end="${d.date}T${s.end}" data-public-session-day="${s.day}">
+      <p class="public-detail-meta">${d.label} · <span class="num">${s.start} – ${s.end}</span> · ${esc(s.room)}, ${esc(s.building)} · ${esc(s.fmt)}</p>
+      <h1>${esc(s.title)}</h1>
+      <div class="detail-actions">
+        ${starBtn(s)}
+        <button class="public-button" data-ics-one="${s.id}">Add to calendar (.ics)</button>
+        <a class="public-button" target="_blank" rel="noopener" href="${gcalUrl(s)}">Google</a>
+        <a class="public-button" target="_blank" rel="noopener" href="${outlookUrl(s)}">Outlook</a>
+      </div>
+      <div class="public-divider"></div>
+      <p>${esc(s.abstract)}</p>
+      <div class="public-divider"></div>
+      <h2>Speakers</h2>
+      <div class="public-speaker-list">
+        ${s.speakers.map(p => `<div class="public-speaker-row">
+          <span class="public-avatar">${esc(p.n.split(" ").map(w=>w[0]).slice(0,2).join(""))}</span>
+          <div><strong>${esc(p.n)}</strong><br><small style="color:var(--public-muted)">${p.t ? esc(p.t)+", " : ""}${esc(p.c)}</small></div>
+        </div>`).join("")}
+      </div>
+      <div class="public-divider"></div>
+      <h2>Getting there</h2>
+      <p class="public-detail-meta" style="text-transform:none;letter-spacing:0">
+        <a href="${mapsUrl}" target="_blank" rel="noopener" style="color:var(--public-accent);text-decoration:underline;text-underline-offset:3px">${esc(s.building)} — Directions ↗</a><br>
+        ${esc(access)}</p>
+    </div>`;
+  $(`[data-ics-one]`)?.addEventListener("click", () => downloadIcs([s]));
+  wireCommon();
+}
+
+/* ══════════════ Agent briefing ══════════════ */
+function buildBriefing() {
+  const mine = SESSIONS.filter(s => starred.has(s.id))
+    .sort((a,b) => (dayOf(a).date + a.start).localeCompare(dayOf(b).date + b.start));
+  const lines = mine.map(s => {
+    const d = dayOf(s);
+    return `- ${d.label.split(",")[0]} ${d.date} · ${s.start}–${s.end} · "${s.title}" — ${s.room}, ${s.building}${s.speakers[0] ? ` (${s.speakers.map(p=>p.n).join(", ")})` : ""}`;
+  });
+  const pairs = [];
+  mine.forEach((a,i) => mine.slice(i+1).forEach(b => { if (overlap(a,b)) pairs.push(`"${a.title}" and "${b.title}" overlap on ${dayOf(a).label} (${a.start}–${a.end} vs ${b.start}–${b.end}) — an intentional either/or; help me decide closer to the day.`); }));
+  return `This is my conference schedule for AIE NYC 2026 (Oct 13–15, New York), managed on Marquee.
+
+My starred sessions (${mine.length}):
+${lines.join("\n")}
+${pairs.length ? `\nNoted overlaps:\n${pairs.map(p=>"- "+p).join("\n")}\n` : ""}
+Venues: Sheraton New York Times Square (811 7th Ave) and New York Marriott Marquis (1535 Broadway) — about 5 minutes apart on foot, allow 10 with building security.
+
+Live data, no auth required:
+- My schedule (JSON, includes overlap pairs): https://marquee.stage11.dev/api/v1/public/schedules/MQ-K7TQM3RA
+- Calendar feed (live): webcal://marquee.stage11.dev/api/v1/public/schedules/MQ-K7TQM3RA.ics
+- Full program (JSON): https://marquee.stage11.dev/api/v1/public/agenda?event=aie-nyc-2026
+
+Things you can do for me: check the JSON before advising (I restar things), warn me when back-to-back picks are in different buildings, suggest non-conflicting alternatives from the full program, and build my day-of walking plan.`;
+}
+
+/* ══════════════ ICS + links ══════════════ */
+const icsStamp = (date, time) => date.replaceAll("-","") + "T" + time.replace(":","") + "00";
+function icsFor(list) {
+  const ev = s => ["BEGIN:VEVENT",
+    `UID:${s.id}@marquee.stage11.dev`,
+    `DTSTART;TZID=America/New_York:${icsStamp(dayOf(s).date, s.start)}`,
+    `DTEND;TZID=America/New_York:${icsStamp(dayOf(s).date, s.end)}`,
+    `SUMMARY:${s.title.replaceAll(",","\\,")}`,
+    `LOCATION:${s.room}\\, ${s.building}`,
+    `URL:https://marquee.stage11.dev/s/${s.slug}`,
+    "END:VEVENT"].join("\r\n");
+  return ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Marquee//Attendee Schedule//EN",
+    "X-WR-CALNAME:My AIE NYC 2026 schedule", ...list.map(ev), "END:VCALENDAR"].join("\r\n");
+}
+function downloadIcs(list) {
+  const set = Array.isArray(list) ? list : SESSIONS.filter(s => starred.has(s.id));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([icsFor(set)], { type:"text/calendar" }));
+  a.download = set.length === 1 ? `${set[0].slug}.ics` : "my-aie-nyc-2026.ics";
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function outlookUrl(s) {
+  const d = dayOf(s).date;
+  return `https://outlook.live.com/calendar/0/action/compose?rru=addevent&subject=${encodeURIComponent(s.title)}&startdt=${d}T${s.start}:00&enddt=${d}T${s.end}:00&location=${encodeURIComponent(s.room + ", " + s.building)}`;
+}
+function gcalUrl(s) {
+  const d = dayOf(s).date.replaceAll("-","");
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(s.title)}&dates=${d}T${s.start.replace(":","")}00/${d}T${s.end.replace(":","")}00&ctz=America/New_York&location=${encodeURIComponent(s.room + ", " + s.building)}`;
+}
+
+/* ══════════════ Wiring ══════════════ */
+function updateCount() {
+  $("#schedCount").textContent = starred.size;
+  $("#myschedBtn").classList.toggle("has-stars", starred.size > 0);
+}
+function toggleStar(id, btn) {
+  const adding = !starred.has(id);
+  adding ? starred.add(id) : starred.delete(id);
+  save(); updateCount();
+  if (adding && btn) {
+    btn.classList.add("just-starred");
+    setTimeout(() => btn.classList.remove("just-starred"), 130);
+  }
+  if (view.name === "mine") { renderMine(); }             // itinerary re-sorts / empties honestly
+  else {
+    document.querySelectorAll(`[data-star="${id}"]`).forEach(b => {
+      const on = starred.has(id);
+      b.setAttribute("aria-pressed", on);
+      b.setAttribute("aria-label", `${on ? "Remove from" : "Add to"} my schedule`);
+    });
+  }
+}
+function wireCommon() {
+  document.querySelectorAll("[data-star]").forEach(b =>
+    b.addEventListener("click", () => toggleStar(b.dataset.star, b)));
+  document.querySelectorAll("[data-open]").forEach(a =>
+    a.addEventListener("click", e => { e.preventDefault(); view = { name:"session", id:a.dataset.open, from: view.name === "session" ? view.from : view.name }; renderSession(a.dataset.open); window.scrollTo(0,0); }));
+  document.querySelectorAll("[data-nav]").forEach(b =>
+    b.addEventListener("click", () => { view = { name:b.dataset.nav }; route(); window.scrollTo(0,0); }));
+  document.querySelectorAll("[data-share]").forEach(b =>
+    b.addEventListener("click", () => openSheet("shareSheet")));
+}
+function wireAgenda() {
+  wireCommon();
+  document.querySelectorAll("[data-day]").forEach(b =>
+    b.addEventListener("click", () => { filters.day = b.dataset.day; renderAgenda(); }));
+  $("#fTrack").addEventListener("change", e => { filters.track = e.target.value; renderAgenda(); });
+  $("#fFmt").addEventListener("change", e => { filters.fmt = e.target.value; renderAgenda(); });
+  $("#fRoom").addEventListener("change", e => { filters.room = e.target.value; renderAgenda(); });
+  let t; $("#fQ").addEventListener("input", e => { clearTimeout(t); t = setTimeout(() => { filters.q = e.target.value; renderAgenda(); $("#fQ").focus(); const v=$("#fQ"); v.setSelectionRange(v.value.length, v.value.length); }, 220); });
+  $("[data-clear-filters]")?.addEventListener("click", () => { filters = { day:"all", track:"", fmt:"", room:"", q:"" }; renderAgenda(); });
+}
+function route() {
+  const effective = view.name === "session" ? (view.from ?? "agenda") : view.name;
+  $("#agendaBtn").setAttribute("aria-selected", effective === "agenda");
+  $("#myschedBtn").setAttribute("aria-selected", effective === "mine");
+  if (view.name === "mine") renderMine();
+  else if (view.name === "session") renderSession(view.id);
+  else renderAgenda();
+}
+
+/* Glance hover card */
+const tipEl = document.createElement("div");
+tipEl.className = "glance-tip";
+document.body.appendChild(tipEl);
+function showTip(block) {
+  const s = byId(block.dataset.tip); if (!s) return;
+  const d = dayOf(s);
+  const ov = overlapsFor(s, SESSIONS.filter(x => starred.has(x.id)));
+  tipEl.innerHTML = `
+    <div class="t-time">${d.tab} · <span class="num">${s.start} – ${s.end}</span></div>
+    <div class="t-title">${esc(s.title)}</div>
+    <div class="t-meta">${esc(s.room)}, ${esc(s.building)}${s.speakers[0] ? `<br>${s.speakers.map(p=>esc(p.n)).join(" · ")}` : ""}</div>
+    ${ov.map(o => `<span class="t-overlap">overlaps ${esc(o.title.length > 30 ? o.title.slice(0,29)+"…" : o.title)}</span>`).join("")}`;
+  const r = block.getBoundingClientRect();
+  tipEl.classList.add("show");
+  const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+  let x = Math.min(Math.max(8, r.left), window.innerWidth - tw - 8);
+  let y = r.bottom + 6;
+  if (y + th > window.innerHeight - 8) y = r.top - th - 6;
+  tipEl.style.left = x + "px";
+  tipEl.style.top = y + "px";
+}
+function hideTip() { tipEl.classList.remove("show"); }
+document.addEventListener("mouseover", e => {
+  const b = e.target.closest?.(".glance-block");
+  b ? showTip(b) : hideTip();
+});
+document.addEventListener("focusin", e => {
+  const b = e.target.closest?.(".glance-block");
+  b ? showTip(b) : hideTip();
+});
+document.addEventListener("scroll", hideTip, { passive: true });
+
+/* Sheets */
+function openSheet(id) { $("#scrim").classList.add("open"); $("#"+id).classList.add("open"); }
+function closeSheets() { $("#scrim").classList.remove("open"); document.querySelectorAll(".sheet").forEach(s => s.classList.remove("open")); }
+$("#scrim").addEventListener("click", closeSheets);
+document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeSheets));
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheets(); });
+document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy); } catch {}
+  b.classList.add("done"); b.textContent = "Copied";
+  setTimeout(() => { b.classList.remove("done"); b.textContent = "Copy"; }, 1400);
+}));
+$("#agentsLink").addEventListener("click", () => openSheet("agentsSheet"));
+$("#briefCopy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#briefText").textContent); } catch {}
+  const b = $("#briefCopy");
+  b.classList.add("done"); b.textContent = "Copied";
+  setTimeout(() => { b.classList.remove("done"); b.textContent = "Copy briefing"; }, 1400);
+});
+document.querySelectorAll("[data-nav-view]").forEach(b =>
+  b.addEventListener("click", () => { view = { name: b.dataset.navView }; route(); window.scrollTo(0,0); }));
+
+/* Fake QR (deterministic pattern, prototype placeholder) */
+(() => {
+  const qr = $("#qr"); let seed = 42;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let i = 0; i < 256; i++) {
+    const c = document.createElement("i");
+    const x = i % 16, y = (i / 16) | 0;
+    const finder = (x < 5 && y < 5) || (x > 10 && y < 5) || (x < 5 && y > 10);
+    if (finder ? (x%4!==2 || y%4!==2 ? (x===0||y===0||x===4||y===4||x===11||x===15||y===11||y===15||(x===2&&y===2)||(x===13&&y===2)||(x===2&&y===13)) : true) : rnd() > .52) c.className = "b";
+    qr.appendChild(c);
+  }
+})();
+
+updateCount();
+route();
+</script>
+</body>
+</html>
