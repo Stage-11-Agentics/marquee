@@ -20,7 +20,9 @@ const exportQuery = z.object({ format: z.literal("csv").default("csv") });
 
 const evaluationInput = z.object({
   comment: z.string().max(20_000).default(""),
-  criteria_scores: z.record(z.string(), z.union([z.number(), z.string().max(20_000)])).nullable().optional(),
+  criteria_scores: z.record(z.string(), z.union([z.number(), z.string().max(20_000)]))
+    .refine((scores: Record<string, number | string>) => Object.keys(scores).length <= 40, "a scorecard carries at most 40 criteria")
+    .nullable().optional(),
   recommendation,
   score: z.number().nullable().optional(),
 });
@@ -238,6 +240,8 @@ async function reviewerQueue(
  * reviewer no way to check what they recorded — and left an organizer's claim
  * that the values were stored unverifiable from the reviewer's own surface.
  */
+const COMPLETED_PAGE = 50;
+
 async function completedSubmissionIds(
   db: D1Database,
   eventId: string,
@@ -259,7 +263,8 @@ async function completedSubmissionIds(
       AND submission.event_id = ?
       AND (assignment.reviewer_person_id = ? OR (member.person_id IS NOT NULL AND committee.event_id = ?))
     ORDER BY evaluation.updated_at DESC, assignment.submission_id
-  `).bind(personId, personId, roundId, eventId, personId, eventId).all<{ submission_id: string }>();
+    LIMIT ?
+  `).bind(personId, personId, roundId, eventId, personId, eventId, COMPLETED_PAGE + 1).all<{ submission_id: string }>();
   return result.results.map((row) => row.submission_id);
 }
 
@@ -520,6 +525,7 @@ async function reviewerQueuePayload(
   const completed = personId === null ? [] : await completedQueue(db, principal, eventId, round, personId);
   return {
     completed,
+    completed_truncated: completed.length >= COMPLETED_PAGE,
     current_id: data[0]?.id ?? null,
     current_index: data.length ? 0 : null,
     data,
@@ -549,7 +555,8 @@ async function completedQueue(
   round: RoundRow,
   personId: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const candidates = await completedSubmissionIds(db, eventId, round.id, personId);
+  const found = await completedSubmissionIds(db, eventId, round.id, personId);
+  const candidates = found.slice(0, COMPLETED_PAGE);
   if (candidates.length === 0) return [];
   const authorizations = await authorizeReviewerQueueScope({
     db, principal, eventId, roundEventId: eventId, roundId: round.id, submissionIds: candidates, operation: "queue",

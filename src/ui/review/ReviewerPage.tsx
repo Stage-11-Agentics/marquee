@@ -43,6 +43,7 @@ interface CompletedItem extends QueueItem {
 
 interface QueueEnvelope {
   completed?: CompletedItem[];
+  completed_truncated?: boolean;
   current_id?: string | null;
   current_index?: number | null;
   data: QueueItem[];
@@ -190,6 +191,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
   const [roundId, setRoundId] = useState<string | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [completed, setCompleted] = useState<CompletedItem[]>([]);
+  const [completedTruncated, setCompletedTruncated] = useState(false);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [roundName, setRoundName] = useState("Initial review");
@@ -228,6 +230,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
       setScopes(queueResponse.scopes);
       setCriteria(queueResponse.round.criteria ?? []);
       setCompleted(queueResponse.completed ?? []);
+      setCompletedTruncated(Boolean(queueResponse.completed_truncated));
       setQueue(queueResponse.data);
       setCurrentId(queueResponse.current_id ?? queueResponse.data[0]?.id ?? null);
       if (queueResponse.round.mode === "comparison") {
@@ -485,7 +488,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
       {completed.length > 0 && <section class="reviewer-completed" aria-label="Completed reviews">
         <header class="reviewer-completed-head">
           <div><span class="eyebrow">Completed</span><h2><span class="tabular">{completed.length}</span> review{completed.length === 1 ? "" : "s"} submitted</h2></div>
-          <span class="subtle">Reopen any of them to see exactly what was recorded.</span>
+          <span class="subtle">{completedTruncated ? "Your most recent reviews. Reopen any of them to see exactly what was recorded." : "Reopen any of them to see exactly what was recorded."}</span>
         </header>
         <div class="reviewer-completed-list">
           {completed.map((item) => <button type="button" class="reviewer-completed-row" key={item.id} onClick={() => void openDetailFor(item.id)}>
