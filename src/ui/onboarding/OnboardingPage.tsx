@@ -223,11 +223,14 @@ function ComposeDrawer({ eventId, rows, onClose }: { eventId: string; rows: Onbo
   </aside>;
 }
 
-export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, navigate }: { eventId?: string; navigate?: (target: string) => void }): JSX.Element {
+export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, search = "", navigate }: { eventId?: string; search?: string; navigate?: (target: string) => void }): JSX.Element {
   const [filters, setFilters] = useState({ filter: "all" as OnboardingFilter, taskType: "", track: "", search: "" });
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawer, setDrawer] = useState<{ kind: "speaker"; personId: string } | { kind: "compose" } | null>(null);
+  // Quick-search has always returned speaker hits carrying `?person=`; until now
+  // nothing on the receiving end read it, so the link went nowhere.
+  const deepLinkedPerson = new URLSearchParams(search).get("person");
   const [origin, setOrigin] = useState<HTMLElement | null>(null);
   const [inviteState, setInviteState] = useState<{ kind: "idle" | "sending" } | { kind: "success"; result: PortalInviteResponse } | { kind: "error"; message: string }>({ kind: "idle" });
   const filterIdentity = JSON.stringify(filters);
@@ -255,6 +258,10 @@ export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, navigate }: { event
     const timer = window.setInterval(() => load(false), 5_000);
     return () => { disposed = true; active?.abort(); window.clearInterval(timer); };
   }, [eventId, filterIdentity]);
+
+  useEffect(() => {
+    if (deepLinkedPerson) setDrawer({ kind: "speaker", personId: deepLinkedPerson });
+  }, [deepLinkedPerson]);
 
   useEffect(() => {
     if (!drawer) return;

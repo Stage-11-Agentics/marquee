@@ -18,7 +18,7 @@ test("CONTRACT · the sidebar reproduces the binding prototype navigation order"
   expect([...routesFor("home"), ...routesFor("pipeline"), ...routesFor("modules")].map((route) => route.label)).toEqual([
     "Program home", "Program board", "Abstracts & sessions", "Add a session",
     "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published",
-    "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Files", "Communications", "Tasks", "Speaker portal", "Conference site",
+    "Speakers", "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Files", "Communications", "Tasks", "Speaker portal", "Conference site",
     "Embeds", "Conference settings",
     "Speaker follow-ups",
   ]);
@@ -57,6 +57,10 @@ test("CONTRACT · route matching preserves lifecycle query routes and dynamic re
 test("AC-106 · API tokens and the sidebar API docs link resolve as real routes", () => {
   expect(matchRoute("/settings/api")?.id).toBe("api-tokens");
   expect(matchRoute("/api/docs")?.id).toBe("api-docs");
+});
+
+test("CONTRACT · EMB-15 · organizer embeds are discoverable at the mandated builder route", () => {
+  expect(matchRoute("/embed/config")).toMatchObject({ id: "embeds", label: "Embeds", external: true });
 });
 
 test("CONTRACT · the table installs no route for a module this product does not have", () => {
