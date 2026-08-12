@@ -144,6 +144,37 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   await env.DB.prepare("DELETE FROM buildings WHERE id = 'building-public-annex'").run();
 });
 
+test("EMB-04 + EMB-12 · public speaker detail and embeds render seeded avatars with a truthful initials fallback", async () => {
+  const fallback = await request(`/p/public-speaker?event=${EVENT_SLUG}`);
+  const fallbackBody = await fallback.text();
+  expect(fallback.status).toBe(200);
+  expect(fallbackBody).toContain("PS");
+  expect(fallbackBody).not.toContain("/headshots/");
+
+  await env.DB.prepare("UPDATE people SET name = 'Grace Isford' WHERE id = 'person-public'").run();
+
+  const detail = await request(`/p/grace-isford?event=${EVENT_SLUG}`);
+  const detailBody = await detail.text();
+  expect(detail.status).toBe(200);
+  expect(detailBody).toContain('src="/headshots/grace-isford.svg"');
+  expect(detailBody).toContain("Grace Isford synthetic avatar");
+
+  const cards = await request(`/embed/${EVENT_SLUG}-speakers?event=${EVENT_SLUG}`);
+  const cardsBody = await cards.text();
+  expect(cards.status).toBe(200);
+  expect(cardsBody).toContain('src="/headshots/grace-isford.svg"');
+
+  const list = await request(`/embed/${EVENT_SLUG}-speakers?event=${EVENT_SLUG}&layout=list`);
+  const listBody = await list.text();
+  expect(list.status).toBe(200);
+  expect(listBody).toContain('src="/headshots/grace-isford.svg"');
+
+  const api = await request(`/api/v1/public/agenda?event=${EVENT_SLUG}`);
+  const payload = await api.json<{ sessions: Array<{ speakers: Array<{ name: string; headshotUrl: string | null }> }> }>();
+  const speaker = payload.sessions.flatMap((session) => session.speakers).find((candidate) => candidate.name === "Grace Isford");
+  expect(speaker?.headshotUrl).toBe("/headshots/grace-isford.svg");
+});
+
 test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an explicit all-days tab, and keeps the API scope aligned", async () => {
   await env.DB.prepare("UPDATE agenda_items SET starts_at = ?, is_published = 1 WHERE id = 'agenda-private'")
     .bind(Date.UTC(2026, 9, 13, 14))

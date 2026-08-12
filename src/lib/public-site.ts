@@ -5,6 +5,7 @@ import { participantAudienceFilterSql, participantListSql } from "./participants
 import { showsBuildingComparisonCount } from "./venue-disclosure";
 import { slugify } from "./ids";
 import { roomDisplayLabel } from "./venues";
+import { syntheticPublicHeadshotUrl } from "./public-headshots";
 
 export const EMBED_CACHE_TTL_SECONDS = 30;
 const CLOUDFLARE_KV_MIN_TTL_SECONDS = 60;
@@ -46,6 +47,7 @@ export interface PublicSpeakerSummary {
   title: string | null;
   company: string | null;
   bio: string | null;
+  headshotUrl: string | null;
   socialLinks: string[];
 }
 
@@ -278,7 +280,7 @@ function parseSocialLinks(value: string | null | undefined): string[] {
   return Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed : [];
 }
 
-function parseSpeakers(value: string): PublicSpeakerSummary[] {
+export function parseSpeakers(value: string): PublicSpeakerSummary[] {
   const raw = parseJson<Array<Record<string, unknown>>>(value, []);
   return raw.flatMap((speaker) => {
     if (typeof speaker.id !== "string" || typeof speaker.name !== "string") return [];
@@ -289,6 +291,10 @@ function parseSpeakers(value: string): PublicSpeakerSummary[] {
       title: typeof speaker.title === "string" ? speaker.title : null,
       company: typeof speaker.company === "string" ? speaker.company : null,
       bio: typeof speaker.bio === "string" ? speaker.bio : null,
+      headshotUrl: syntheticPublicHeadshotUrl(
+        speaker.name,
+        speaker.is_demo === 1 || speaker.is_demo === true,
+      ),
       socialLinks: parseSocialLinks(typeof speaker.social_links === "string" ? speaker.social_links : undefined),
     }];
   });
@@ -370,6 +376,7 @@ function sessionRowsQuery(
             title: "speaker.title",
             company: "speaker.company",
             bio: "speaker.bio",
+            is_demo: "speaker.is_demo",
             social_links: "speaker.social_links",
           },
         })} AS speakers_json,

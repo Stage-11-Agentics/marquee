@@ -7,7 +7,7 @@ import type {
   PublicEvent,
   PublicTrack,
 } from "../../lib/public-site";
-import { PublicShell, PUBLIC_SITE_STYLES } from "../public/agenda/PublicAgendaPage";
+import { PublicShell, PUBLIC_SITE_STYLES, PublicSpeakerAvatar } from "../public/agenda/PublicAgendaPage";
 
 const EMBED_KIND_LABEL: Record<EmbedKind, string> = {
   agenda: "Agenda",
@@ -35,15 +35,19 @@ export const EMBED_STYLES = `
 .embed-tracks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
 .embed-track { border-left: 3px solid var(--track-color, var(--embed-accent)); border-top: 1px solid var(--public-rule); border-right: 1px solid var(--public-rule); border-bottom: 1px solid var(--public-rule); padding: 3px 5px; color: var(--public-muted); font: 600 8px/1.2 var(--public-mono); }
 .embed-speaker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 9px; padding: 12px 16px 16px; }
-.embed-speaker { min-width: 0; border: 1px solid var(--public-rule); border-top: 2px solid var(--embed-accent); padding: 12px; background: var(--public-surface); }
+.embed-speaker { min-width: 0; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; border: 1px solid var(--public-rule); border-top: 2px solid var(--embed-accent); padding: 12px; background: var(--public-surface); }
+.embed-speaker-avatar { --avatar-size: 44px; }
+.embed-speaker-copy { min-width: 0; }
 .embed-speaker h2 { margin: 0; overflow-wrap: anywhere; font: 650 16px/1.15 Georgia, serif; }
 .embed-speaker p { margin: 4px 0 0; color: var(--public-muted); font-size: 10px; }
 .embed-speaker small { display: block; margin-top: 12px; color: var(--public-soft); font: 600 9px/1.35 var(--public-mono); }
 .embed-speaker-list { display: grid; gap: 0; padding: 4px 16px 16px; }
-.embed-speaker-row { display: flex; align-items: baseline; gap: 7px; padding: 9px 0; border-bottom: 1px solid var(--public-rule-soft); font-size: 12px; }
+.embed-speaker-row { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--public-rule-soft); font-size: 12px; }
+.embed-speaker-row .embed-speaker-avatar { --avatar-size: 36px; }
+.embed-speaker-row-copy { min-width: 0; }
 .embed-speaker-row:last-child { border-bottom: 0; }
 .embed-speaker-row strong { font: 650 13px/1.2 Georgia, serif; }
-.embed-speaker-row span { color: var(--public-muted); font-size: 10px; }
+.embed-speaker-row-copy span { color: var(--public-muted); font-size: 10px; }
 .embed-flat-list { display: grid; gap: 0; background: var(--public-surface); }
 .embed-flat-row { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; padding: 11px 16px; border-bottom: 1px solid var(--public-rule-soft); }
 .embed-flat-row:last-child { border-bottom: 0; }
@@ -154,7 +158,10 @@ function formatDeadline(epochMs: number): string {
 function speakerCards(speakers: PublicEmbedData["speakers"]): JSX.Element {
   return (
     <section class="embed-speaker-grid" aria-label="Published speakers">
-      {speakers.map((speaker) => <article class="embed-speaker" key={speaker.id}><h2>{speaker.name}</h2><p>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</p><small>{speaker.sessions.length} {speaker.sessions.length === 1 ? "published session" : "published sessions"}</small></article>)}
+      {speakers.map((speaker) => <article class="embed-speaker" key={speaker.id}>
+        <PublicSpeakerAvatar speaker={speaker} className="embed-speaker-avatar" />
+        <div class="embed-speaker-copy"><h2>{speaker.name}</h2><p>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</p><small>{speaker.sessions.length} {speaker.sessions.length === 1 ? "published session" : "published sessions"}</small></div>
+      </article>)}
     </section>
   );
 }
@@ -162,7 +169,10 @@ function speakerCards(speakers: PublicEmbedData["speakers"]): JSX.Element {
 function speakerList(speakers: PublicEmbedData["speakers"]): JSX.Element {
   return (
     <ul class="embed-speaker-list" aria-label="Published speakers">
-      {speakers.map((speaker) => <li class="embed-speaker-row" key={speaker.id}><strong>{speaker.name}</strong><span>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</span></li>)}
+      {speakers.map((speaker) => <li class="embed-speaker-row" key={speaker.id}>
+        <PublicSpeakerAvatar speaker={speaker} className="embed-speaker-avatar" />
+        <div class="embed-speaker-row-copy"><strong>{speaker.name}</strong><span>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</span></div>
+      </li>)}
     </ul>
   );
 }
