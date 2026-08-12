@@ -77,7 +77,7 @@ beforeEach(async () => {
   ]);
 });
 
-test("MRQ-136 · a name-form track link renders the agenda's track select on that track", async () => {
+test("CONTRACT · MRQ-136 a name-form track link renders the agenda's track select on that track", async () => {
   const byName = await body(`/agenda?event=${EVENT_SLUG}&track=Workshops`);
   expect(byName).toContain("Workshop session");
   expect(byName).not.toContain("Stage session");
@@ -91,7 +91,7 @@ test("MRQ-136 · a name-form track link renders the agenda's track select on tha
   expect(unfiltered).toContain("<option selected value>All tracks</option>");
 });
 
-test("MRQ-136 · name-form format and location links render their own selects on the facet in effect", async () => {
+test("CONTRACT · MRQ-136 name-form format and location links render their own selects on the facet in effect", async () => {
   const byFormat = await body(`/agenda?event=${EVENT_SLUG}&format=Workshop`);
   expect(byFormat).toContain('<option selected value="format-workshop">Workshop</option>');
   expect(byFormat).not.toContain("<option selected value>All formats</option>");
@@ -101,7 +101,7 @@ test("MRQ-136 · name-form format and location links render their own selects on
   expect(byRoom).not.toContain("<option selected value>All locations</option>");
 });
 
-test("MRQ-136 · a day link highlights its tab whether it carries the date or the label", async () => {
+test("CONTRACT · MRQ-136 a day link highlights its tab whether it carries the date or the label", async () => {
   const byDate = await body(`/agenda?event=${EVENT_SLUG}&day=2026-10-13`);
   expect(byDate).toContain('name="day" value="2026-10-13" class="active"');
   expect(byDate).toContain('name="day" value="all" class ');
@@ -115,7 +115,7 @@ test("MRQ-136 · a day link highlights its tab whether it carries the date or th
   expect(unfiltered).toContain('name="day" value="all" class="active"');
 });
 
-test("MRQ-136 · the embed widget's controls hold the same line for a name-form track", async () => {
+test("CONTRACT · MRQ-136 the embed widget's controls hold the same line for a name-form track", async () => {
   const embed = await body(`/embed/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}&track=Workshops`);
   expect(embed).toContain("Workshop session");
   expect(embed).not.toContain("Stage session");
