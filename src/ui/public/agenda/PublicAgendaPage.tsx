@@ -1,14 +1,15 @@
 /** @jsxImportSource preact */
 import type { ComponentChildren, JSX } from "preact";
 
-import type {
-  PublicAgendaData,
-  PublicEvent,
-  PublicSession,
-  PublicSpeaker,
-  PublicSpeakerDirectoryData,
-  PublicSpeakerSummary,
-  PublicVenueDisclosure,
+import {
+  publicAbstractSnippet,
+  type PublicAgendaData,
+  type PublicEvent,
+  type PublicSession,
+  type PublicSpeaker,
+  type PublicSpeakerDirectoryData,
+  type PublicSpeakerSummary,
+  type PublicVenueDisclosure,
 } from "../../../lib/public-site";
 
 export const PUBLIC_SITE_STYLES = `
@@ -50,7 +51,10 @@ export const PUBLIC_SITE_STYLES = `
 .public-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
 .public-heading h1 { margin: 0 0 7px; font: 550 clamp(30px, 5vw, 44px)/1.02 Georgia, serif; letter-spacing: -.035em; }
 .public-heading p { max-width: 660px; margin: 0; color: var(--public-muted); }
-.public-filters { min-height: 58px; display: grid; grid-template-columns: auto minmax(150px, 190px) minmax(190px, 1fr); align-items: center; gap: 9px; margin-bottom: 14px; padding: 9px; border: 1px solid var(--public-rule); background: var(--public-surface); }
+.public-filters { min-height: 110px; display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)) minmax(180px, 1.3fr); align-items: center; gap: 9px; margin-bottom: 14px; padding: 9px; border: 1px solid var(--public-rule); background: var(--public-surface); }
+.public-filters > .public-days { grid-column: 1 / -1; }
+.public-facet { display: grid; gap: 3px; min-width: 0; }
+.public-facet > span { color: var(--public-muted); font: 650 9px/1 var(--public-mono); letter-spacing: .09em; text-transform: uppercase; }
 .public-days { min-height: 38px; display: inline-flex; align-items: stretch; gap: 4px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .public-days::-webkit-scrollbar { display: none; }
 .public-days button { flex: 0 0 96px; width: 96px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-sunk); color: var(--public-muted); font: 650 10px/1 var(--public-mono); white-space: nowrap; }
@@ -58,19 +62,37 @@ export const PUBLIC_SITE_STYLES = `
 .public-select, .public-search { width: 100%; min-width: 0; height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 0 9px; font-size: 12px; }
 .public-search::placeholder { color: var(--public-muted); }
 .public-agenda-list { min-height: 430px; border: 1px solid var(--public-rule); background: var(--public-surface); }
+.public-day-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: 38px; margin: 0; padding: 11px 16px; border-bottom: 1px solid var(--public-rule); background: var(--public-accent-wash); font: 650 12px/1 var(--public-mono); letter-spacing: .07em; text-transform: uppercase; }
+.public-day-head small { color: var(--public-muted); font: 600 10px/1 var(--public-mono); font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: .04em; }
+.public-slot-head { position: sticky; top: 38px; z-index: 1; min-height: 27px; margin: 0; padding: 7px 16px; border-bottom: 1px solid var(--public-rule-soft); background: var(--public-sunk); color: var(--public-soft); font: 650 10px/1.3 var(--public-mono); letter-spacing: .09em; font-variant-numeric: tabular-nums; }
 .public-agenda-row { display: grid; grid-template-columns: 118px minmax(0, 1fr) minmax(145px, .55fr); align-items: start; gap: 15px; min-height: 104px; padding: 16px; border-bottom: 1px solid var(--public-rule-soft); }
 .public-agenda-row:last-child { border-bottom: 0; }
-.public-time { color: var(--public-muted); font: 650 11px/1.35 var(--public-mono); }
+.public-time { color: var(--public-muted); font: 650 11px/1.35 var(--public-mono); font-variant-numeric: tabular-nums; }
 .public-day { display: block; margin-bottom: 3px; color: var(--public-accent); font-size: 10px; }
-.public-time strong { display: block; margin-bottom: 3px; color: var(--public-ink); font-size: 15px; }
+.public-time strong { display: block; margin-bottom: 1px; color: var(--public-ink); font-size: 15px; }
 .public-time span { display: block; line-height: 1.35; }
+.public-until { margin-bottom: 3px; }
 .public-session-title { margin: 0; font: 650 17px/1.2 Georgia, serif; letter-spacing: -.01em; }
 .public-session-title a:hover, .public-session-title a:focus-visible { color: var(--public-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .public-speakers { min-height: 20px; margin: 8px 0 0; color: var(--public-muted); font-size: 12px; }
 .public-speakers a { text-decoration: underline; text-decoration-color: var(--public-rule); text-underline-offset: 3px; }
 .public-speakers a:hover, .public-speakers a:focus-visible { color: var(--public-accent); }
+.public-speaker-role { color: var(--public-soft); }
+.public-abstract { min-height: 34px; margin: 9px 0 0; color: var(--public-soft); font-size: 12px; line-height: 1.55; }
+.public-more { margin-top: 5px; }
+.public-more > summary { display: inline-block; color: var(--public-accent); font: 650 11px/1.3 var(--public-mono); cursor: pointer; list-style: none; }
+.public-more > summary::-webkit-details-marker { display: none; }
+.public-more > summary::after { content: " ▾"; }
+.public-more[open] > summary::after { content: " ▴"; }
+.public-more > summary:hover, .public-more > summary:focus-visible { text-decoration: underline; text-underline-offset: 3px; outline: none; }
+.public-more p { margin: 6px 0 0; color: var(--public-soft); font-size: 12px; line-height: 1.55; }
+.public-more a { color: var(--public-accent); font: 650 11px/1.3 var(--public-mono); }
+.public-card-meta { display: grid; gap: 9px; align-content: start; }
+.public-meta-row { display: grid; gap: 4px; justify-items: flex-end; }
+.public-meta-row > span { color: var(--public-muted); font: 650 9px/1 var(--public-mono); letter-spacing: .09em; text-transform: uppercase; }
 .public-track-list { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; gap: 5px; }
 .public-track-chip { display: inline-flex; min-height: 23px; align-items: center; border: 1px solid var(--public-rule); border-left: 3px solid var(--track-color, var(--public-accent)); border-radius: 2px; padding: 3px 6px; color: var(--public-muted); font: 600 9px/1.2 var(--public-mono); }
+.public-format-chip { display: inline-flex; min-height: 23px; align-items: center; border: 1px solid var(--public-accent); border-radius: 2px; padding: 3px 6px; background: var(--public-accent-wash); color: var(--public-accent); font: 600 9px/1.2 var(--public-mono); }
 .public-empty { min-height: 428px; display: grid; place-items: center; padding: 36px; color: var(--public-muted); text-align: center; }
 .public-empty strong { display: block; margin-bottom: 5px; color: var(--public-ink); font: 650 18px/1.2 Georgia, serif; }
 .public-empty span { display: block; }
@@ -103,22 +125,24 @@ export const PUBLIC_SITE_STYLES = `
 .public-not-found h1 { margin: 12px 0 7px; font: 550 30px/1.1 Georgia, serif; }
 @media (max-width: 760px) {
   .public-heading { display: block; }
-  .public-filters { grid-template-columns: 1fr 1fr; }
+  .public-filters { min-height: 150px; grid-template-columns: 1fr 1fr; }
   .public-directory-filters { grid-template-columns: minmax(0, 1fr); }
   .public-days { grid-column: 1 / -1; width: 100%; }
   .public-days button { flex: 1 1 0; width: auto; min-width: 0; padding: 0 2px; font-size: 9px; }
   .public-agenda-row { grid-template-columns: 86px minmax(0, 1fr); gap: 10px; }
-  .public-track-list { grid-column: 2; justify-content: flex-start; }
+  .public-card-meta { grid-column: 2; }
+  .public-meta-row { justify-items: flex-start; }
+  .public-track-list { justify-content: flex-start; }
 }
 @media (max-width: 460px) {
   .public-top { align-items: flex-start; padding-top: 12px; padding-bottom: 12px; }
   .public-top-actions { gap: 4px; }
   .public-top-actions .public-button { min-height: 30px; padding: 5px 7px; font-size: 10px; }
-  .public-filters { grid-template-columns: 1fr; }
+  .public-filters { min-height: 236px; grid-template-columns: 1fr; }
   .public-directory-filters { grid-template-columns: minmax(0, 1fr); }
   .public-days { grid-column: auto; }
   .public-agenda-row { grid-template-columns: 1fr; min-height: 132px; padding: 14px; }
-  .public-track-list { grid-column: auto; }
+  .public-card-meta { grid-column: auto; }
   .public-session-title { font-size: 16px; }
 }
 `;
@@ -212,10 +236,141 @@ function TrackChips({ session }: { session: PublicSession }): JSX.Element {
   );
 }
 
+function FormatChip({ session }: { session: PublicSession }): JSX.Element {
+  return <span class="public-format-chip">{session.format?.name ?? "—"}</span>;
+}
+
+/**
+ * Format and Track carry their own labels rather than sitting in one
+ * undifferentiated chip row: a reader (or an agent reading a screenshot)
+ * should never have to guess which taxonomy a chip belongs to. Both rows
+ * always render — "—" where a session carries no value — so a card's height
+ * does not change with its data.
+ */
+function CardMeta({ session }: { session: PublicSession }): JSX.Element {
+  return (
+    <div class="public-card-meta">
+      <div class="public-meta-row"><span>Format</span><FormatChip session={session} /></div>
+      <div class="public-meta-row"><span>Track</span><TrackChips session={session} /></div>
+    </div>
+  );
+}
+
+function speakerRole(speaker: PublicSpeakerSummary): string {
+  return [speaker.title, speaker.company].filter(Boolean).join(", ");
+}
+
+/** Job title and company have always been in the projection; the card just never showed them. */
+function SpeakerLine({ session }: { session: PublicSession }): JSX.Element {
+  return (
+    <p class="public-speakers">
+      {session.speakers.length > 0 ? session.speakers.map((speaker, index) => (
+        <span key={speaker.id}>
+          {index > 0 ? " · " : ""}
+          <a href={speakerHref(speaker.slug)}>{speaker.name}</a>
+          {speakerRole(speaker) ? <span class="public-speaker-role"> — {speakerRole(speaker)}</span> : null}
+        </span>
+      )) : "—"}
+    </p>
+  );
+}
+
+/**
+ * The description a list page can afford: a server-truncated snippet plus a
+ * `<details>` expansion. No JavaScript is involved — these pages are SSR
+ * strings — and the whole abstract never ships to a list of a hundred cards.
+ */
+function SessionAbstract({ session }: { session: PublicSession }): JSX.Element {
+  const snippet = publicAbstractSnippet(session.abstract);
+  if (!snippet) return <p class="public-abstract">—</p>;
+  return (
+    <>
+      <p class="public-abstract">{snippet.head}{snippet.rest ? "…" : ""}</p>
+      {snippet.rest ? (
+        <details class="public-more">
+          <summary>Show more</summary>
+          <p>{snippet.rest}{snippet.clipped ? "…" : ""}</p>
+          {snippet.clipped ? <a href={sessionHref(session.slug)}>Read the full abstract →</a> : null}
+        </details>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The per-card contract. `data-public-session-id` predates this render tree;
+ * slug, start and day join it so a later client module (a star control, a
+ * personal schedule) binds to stable hooks instead of editing this markup.
+ */
+function SessionCard({ session }: { session: PublicSession }): JSX.Element {
+  return (
+    <article
+      class="public-agenda-row"
+      data-public-session-id={session.id}
+      data-public-session-slug={session.slug}
+      data-public-session-start={session.startsAt}
+      data-public-session-day={session.date}
+    >
+      <time class="public-time" dateTime={`${session.date}T${session.time}`}>
+        <span class="public-day">{session.day}</span>
+        <strong>{session.time}</strong>
+        <span class="public-until">→ {session.endTime}</span>
+        <span>{session.roomLabel}</span>
+      </time>
+      <div>
+        <h3 class="public-session-title"><a href={sessionHref(session.slug)}>{session.title}</a></h3>
+        <SpeakerLine session={session} />
+        <SessionAbstract session={session} />
+      </div>
+      <CardMeta session={session} />
+    </article>
+  );
+}
+
+interface AgendaTimeSlot {
+  time: string;
+  sessions: PublicSession[];
+}
+
+interface AgendaDayGroup {
+  date: string;
+  label: string;
+  count: number;
+  slots: AgendaTimeSlot[];
+}
+
+/**
+ * Day sections with time-slot headers inside them. EMB-06 passes on a clearly
+ * time-slotted list and this is the honest reading of a conference schedule on
+ * a phone; the room-column grid is deliberately not built.
+ */
+function groupSessions(sessions: PublicSession[]): AgendaDayGroup[] {
+  const groups: AgendaDayGroup[] = [];
+  for (const session of sessions) {
+    let group = groups.at(-1);
+    if (!group || group.date !== session.date) {
+      group = { date: session.date, label: session.day, count: 0, slots: [] };
+      groups.push(group);
+    }
+    group.count += 1;
+    let slot = group.slots.at(-1);
+    if (!slot || slot.time !== session.time) {
+      slot = { time: session.time, sessions: [] };
+      group.slots.push(slot);
+    }
+    slot.sessions.push(session);
+  }
+  return groups;
+}
+
 export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Element {
   const eventQuery = `event=${encodeURIComponent(data.event.slug)}`;
-  const hasFilters = Boolean(data.filters.track || data.filters.q || (data.filters.day && data.filters.day !== "all"));
+  const hasFilters = Boolean(
+    data.filters.track || data.filters.format || data.filters.room || data.filters.q
+      || (data.filters.day && data.filters.day !== "all"),
+  );
   const venueName = data.venue?.buildingName ?? data.event.venue ?? "Online";
+  const groups = groupSessions(data.sessions);
   return (
     <PublicShell
       event={data.event}
@@ -242,30 +397,46 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
               </button>
             ))}
           </div>
-          <label>
-            <span class="sr-only">Track</span>
+          <label class="public-facet">
+            <span>Track</span>
             <select class="public-select" name="track" aria-label="Filter by track" value={data.filters.track ?? ""}>
               <option value="">All tracks</option>
               {data.tracks.map((track) => <option value={track.id} key={track.id}>{track.name}</option>)}
             </select>
           </label>
-          <label>
-            <span class="sr-only">Search</span>
+          <label class="public-facet">
+            <span>Format</span>
+            <select class="public-select" name="format" aria-label="Filter by format" value={data.filters.format ?? ""}>
+              <option value="">All formats</option>
+              {data.formats.map((format) => <option value={format.id} key={format.id}>{format.name}</option>)}
+            </select>
+          </label>
+          <label class="public-facet">
+            <span>Location</span>
+            <select class="public-select" name="room" aria-label="Filter by location" value={data.filters.room ?? ""}>
+              <option value="">All locations</option>
+              {data.rooms.map((room) => <option value={room.id} key={room.id}>{room.label}</option>)}
+            </select>
+          </label>
+          <label class="public-facet">
+            <span>Search</span>
             <input class="public-search" name="q" value={data.filters.q ?? ""} placeholder="Search title or speaker" aria-label="Search the agenda" />
           </label>
         </form>
         <section class="public-agenda-list" aria-live="polite" aria-label="Published agenda sessions">
-          {data.sessions.length > 0 ? data.sessions.map((session) => (
-            <article class="public-agenda-row" data-public-session-id={session.id} key={session.id}>
-              <time class="public-time" dateTime={`${session.date}T${session.time}`}>{data.filters.day === "all" ? <span class="public-day">{session.day}</span> : null}<strong>{session.time}</strong><span>{session.roomLabel}</span></time>
-              <div>
-                <h2 class="public-session-title"><a href={sessionHref(session.slug)}>{session.title}</a></h2>
-                <p class="public-speakers">
-                  {session.speakers.length > 0 ? session.speakers.map((speaker, index) => <span key={speaker.id}>{index > 0 ? " · " : ""}<a href={speakerHref(speaker.slug)}>{speaker.name}</a></span>) : "—"}
-                </p>
-              </div>
-              <TrackChips session={session} />
-            </article>
+          {groups.length > 0 ? groups.map((group) => (
+            <div class="public-agenda-day" data-public-agenda-day={group.date} key={group.date}>
+              <h2 class="public-day-head">
+                <span class="public-day">{group.label}</span>
+                <small>{group.count} {group.count === 1 ? "session" : "sessions"}</small>
+              </h2>
+              {group.slots.map((slot) => (
+                <div class="public-agenda-slot" key={`${group.date}-${slot.time}`}>
+                  <h3 class="public-slot-head">{slot.time}</h3>
+                  {slot.sessions.map((session) => <SessionCard session={session} key={session.id} />)}
+                </div>
+              ))}
+            </div>
           )) : (
             <div class="public-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/agenda?${eventQuery}` : "/"}>{hasFilters ? "Show full agenda" : "Return to conference"}</a></div></div>
           )}
@@ -282,9 +453,10 @@ export function PublicSessionPage({ event, venue, session }: { event: PublicEven
       <main class="public-main">
         <article class="public-card">
           <div class="public-kicker">{venueName}</div>
-          <div class="public-track-list" style={{ justifyContent: "flex-start" }}><TrackChips session={session} /></div>
+          <div class="public-track-list" style={{ justifyContent: "flex-start" }}><FormatChip session={session} /><TrackChips session={session} /></div>
           <h1>{session.title}</h1>
-          <p class="public-detail-meta">{session.day} · {session.time} · {session.roomLabel} · {session.durationMin} minutes</p>
+          <p class="public-detail-meta">{session.day} · {session.time}–{session.endTime} · {session.roomLabel} · {session.durationMin} minutes</p>
+          <p class="public-detail-meta">Format: {session.format?.name ?? "—"} · Track: {session.tracks.map((track) => track.name).join(", ") || "—"}</p>
           <div class="public-divider" />
           <h2>About this session</h2>
           <p>{session.abstract || "—"}</p>

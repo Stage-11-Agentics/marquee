@@ -2,10 +2,14 @@
 import type { JSX } from "preact";
 
 import { EMBED_KINDS, type EmbedKind, type EmbedLayout } from "../../db/schema";
-import type {
-  PublicEmbedData,
-  PublicEvent,
-  PublicTrack,
+import {
+  publicAbstractSnippet,
+  type PublicEmbedData,
+  type PublicEvent,
+  type PublicFormat,
+  type PublicRoom,
+  type PublicSession,
+  type PublicTrack,
 } from "../../lib/public-site";
 import { PublicShell, PUBLIC_SITE_STYLES, PublicSpeakerAvatar } from "../public/agenda/PublicAgendaPage";
 
@@ -23,7 +27,7 @@ export const EMBED_STYLES = `
 .embed-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 14px 16px 10px; border-bottom: 2px solid var(--embed-accent); background: var(--public-surface); }
 .embed-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 14px/1.2 Georgia, serif; }
 .embed-header span { flex: 0 0 auto; color: var(--public-muted); font: 600 9px/1 var(--public-mono); text-transform: uppercase; letter-spacing: .08em; }
-.embed-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px; padding: 10px 16px; background: var(--public-sunk); border-bottom: 1px solid var(--public-rule-soft); }
+.embed-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 10px 16px; background: var(--public-sunk); border-bottom: 1px solid var(--public-rule-soft); }
 .embed-control { width: 100%; min-width: 0; height: 31px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 0 7px; font-size: 11px; }
 .embed-list { display: grid; gap: 0; background: var(--public-surface); }
 .embed-session { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 11px; padding: 13px 16px; border-bottom: 1px solid var(--public-rule-soft); }
@@ -32,7 +36,16 @@ export const EMBED_STYLES = `
 .embed-session time strong { display: block; margin-bottom: 3px; color: var(--public-ink); font-size: 13px; }
 .embed-session h2 { margin: 0; color: var(--embed-accent); font: 650 14px/1.25 Georgia, serif; }
 .embed-session p { margin: 4px 0 0; color: var(--public-muted); font-size: 10px; }
+.embed-abstract { min-height: 26px; margin: 6px 0 0; color: var(--public-soft); font-size: 10px; line-height: 1.5; }
+.embed-more { margin-top: 4px; }
+.embed-more > summary { display: inline-block; color: var(--embed-accent); font: 650 9px/1.2 var(--public-mono); cursor: pointer; list-style: none; }
+.embed-more > summary::-webkit-details-marker { display: none; }
+.embed-more > summary::after { content: " ▾"; }
+.embed-more[open] > summary::after { content: " ▴"; }
+.embed-more p { margin: 5px 0 0; color: var(--public-soft); font-size: 10px; line-height: 1.5; }
 .embed-tracks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.embed-meta-label { color: var(--public-muted); font: 650 8px/1.2 var(--public-mono); letter-spacing: .08em; text-transform: uppercase; align-self: center; }
+.embed-format { border: 1px solid var(--embed-accent); background: var(--public-accent-wash); padding: 3px 5px; color: var(--embed-accent); font: 600 8px/1.2 var(--public-mono); }
 .embed-track { border-left: 3px solid var(--track-color, var(--embed-accent)); border-top: 1px solid var(--public-rule); border-right: 1px solid var(--public-rule); border-bottom: 1px solid var(--public-rule); padding: 3px 5px; color: var(--public-muted); font: 600 8px/1.2 var(--public-mono); }
 .embed-speaker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 9px; padding: 12px 16px 16px; }
 .embed-speaker { min-width: 0; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; border: 1px solid var(--public-rule); border-top: 2px solid var(--embed-accent); padding: 12px; background: var(--public-surface); }
@@ -51,10 +64,6 @@ export const EMBED_STYLES = `
 .embed-speaker-row strong { font: 650 13px/1.2 Georgia, serif; }
 .embed-speaker-row-copy span { color: var(--public-muted); font-size: 10px; }
 .embed-flat-list { display: grid; gap: 0; background: var(--public-surface); }
-.embed-flat-row { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; padding: 11px 16px; border-bottom: 1px solid var(--public-rule-soft); }
-.embed-flat-row:last-child { border-bottom: 0; }
-.embed-flat-row h2 { margin: 0; flex: 1 1 auto; min-width: 0; color: var(--public-ink); font: 650 13px/1.3 Georgia, serif; }
-.embed-flat-row time { flex: 0 0 auto; color: var(--public-muted); font: 650 10px/1 var(--public-mono); }
 .embed-cfp { padding: 18px 16px 22px; }
 .embed-cfp strong { display: block; margin-bottom: 6px; color: var(--embed-accent); font: 650 17px/1.25 Georgia, serif; }
 .embed-cfp p { margin: 0 0 10px; color: var(--public-muted); font-size: 12px; }
@@ -86,7 +95,7 @@ export const EMBED_STYLES = `
 .embed-copy { display: flex; justify-content: flex-end; margin-top: 7px; }
 .embed-copy button { min-height: 32px; border: 1px solid var(--public-accent); border-radius: 2px; background: var(--public-accent); color: white; padding: 6px 10px; font-size: 11px; font-weight: 650; }
 @media (max-width: 680px) { .embed-config-grid { grid-template-columns: 1fr; } .embed-preview { min-height: 360px; } .embed-field-row { grid-template-columns: 1fr; } }
-@media (max-width: 375px) { .embed-session { grid-template-columns: 70px minmax(0, 1fr); padding: 11px; } .embed-flat-row { padding: 9px 11px; } .embed-header, .embed-controls, .embed-speaker-grid, .embed-speaker-list, .embed-cfp { padding-left: 11px; padding-right: 11px; } .embed-speaker-grid { grid-template-columns: 1fr; } }
+@media (max-width: 375px) { .embed-session { grid-template-columns: 70px minmax(0, 1fr); padding: 11px; } .embed-header, .embed-controls, .embed-speaker-grid, .embed-speaker-list, .embed-cfp { padding-left: 11px; padding-right: 11px; } .embed-controls { grid-template-columns: 1fr; } .embed-speaker-grid { grid-template-columns: 1fr; } }
 `;
 
 export const EMBED_CONFIG_SCRIPT = `
@@ -185,14 +194,52 @@ function speakerList(speakers: PublicEmbedData["speakers"], eventSlug: string): 
   );
 }
 
+function speakerCredits(session: PublicSession): string {
+  return session.speakers
+    .map((speaker) => [speaker.name, [speaker.title, speaker.company].filter(Boolean).join(", ")].filter(Boolean).join(" — "))
+    .join(" · ") || "—";
+}
+
+/** Same bounded snippet + zero-JS expansion the public agenda cards use. */
+function sessionAbstract(session: PublicSession): JSX.Element {
+  const snippet = publicAbstractSnippet(session.abstract);
+  if (!snippet) return <p class="embed-abstract">—</p>;
+  return (
+    <>
+      <p class="embed-abstract">{snippet.head}{snippet.rest ? "…" : ""}</p>
+      {snippet.rest ? (
+        <details class="embed-more">
+          <summary>Show more</summary>
+          <p>{snippet.rest}{snippet.clipped ? "…" : ""}</p>
+        </details>
+      ) : null}
+    </>
+  );
+}
+
+function sessionChips(session: PublicSession): JSX.Element {
+  return (
+    <div class="embed-tracks">
+      <span class="embed-meta-label">Format</span>
+      <span class="embed-format">{session.format?.name ?? "—"}</span>
+      <span class="embed-meta-label">Track</span>
+      {session.tracks.length > 0 ? session.tracks.map(trackChip) : <span class="embed-track">—</span>}
+    </div>
+  );
+}
+
 function sessionsFlatList(sessions: PublicEmbedData["sessions"]): JSX.Element {
   return (
     <section class="embed-flat-list" aria-label="Published sessions">
       {sessions.map((session) => (
-        <article class="embed-flat-row" key={session.id}>
-          <h2>{session.title}</h2>
-          <div class="embed-tracks">{session.tracks.map(trackChip)}</div>
-          <time>{session.day} · {session.time}</time>
+        <article class="embed-session" data-public-session-id={session.id} data-public-session-slug={session.slug} key={session.id}>
+          <time><strong>{session.time}</strong>{session.day}<br />→ {session.endTime}<br />{session.roomLabel}</time>
+          <div>
+            <h2>{session.title}</h2>
+            <p>{speakerCredits(session)}</p>
+            {sessionAbstract(session)}
+            {sessionChips(session)}
+          </div>
         </article>
       ))}
     </section>
@@ -218,7 +265,7 @@ function cfpBody(cfp: PublicEmbedData["cfp"]): JSX.Element {
 export function EmbedPage({ data }: { data: PublicEmbedData }): JSX.Element {
   const accent = data.config.accent ?? data.event.accent ?? "#0b6a72";
   const action = EMBED_KIND_LABEL[data.kind];
-  const hasFilters = Boolean(data.filters.track || data.filters.status);
+  const hasFilters = Boolean(data.filters.track || data.filters.format || data.filters.room || data.filters.status);
   const layout: EmbedLayout = data.filters.layout ?? "cards";
   const agendaHref = `/agenda?event=${encodeURIComponent(data.event.slug)}`;
   return (
@@ -229,6 +276,14 @@ export function EmbedPage({ data }: { data: PublicEmbedData }): JSX.Element {
           <select class="embed-control" name="track" aria-label="Filter embed by track" value={data.filters.track ?? ""}>
             <option value="">All tracks</option>
             {data.tracks.map((track) => <option value={track.id} key={track.id}>{track.name}</option>)}
+          </select>
+          <select class="embed-control" name="format" aria-label="Filter embed by format" value={data.filters.format ?? ""}>
+            <option value="">All formats</option>
+            {data.formats.map((format) => <option value={format.id} key={format.id}>{format.name}</option>)}
+          </select>
+          <select class="embed-control" name="room" aria-label="Filter embed by location" value={data.filters.room ?? ""}>
+            <option value="">All locations</option>
+            {data.rooms.map((room) => <option value={room.id} key={room.id}>{room.label}</option>)}
           </select>
           <select class="embed-control" name="status" aria-label="Filter embed by status" value={data.filters.status ?? ""}>
             <option value="">All statuses</option>
@@ -246,8 +301,18 @@ export function EmbedPage({ data }: { data: PublicEmbedData }): JSX.Element {
           : <div class="embed-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : agendaHref}>{hasFilters ? "Show full agenda" : "Open the conference agenda"}</a></div></div>
       ) : (
         data.sessions.length > 0 ? <section class="embed-list" aria-label="Published agenda">
-          {data.sessions.map((session) => <article class="embed-session" key={session.id}><time><strong>{session.time}</strong>{session.day}<br />{session.roomLabel}</time><div><h2>{session.title}</h2><p>{session.speakers.map((speaker) => speaker.name).join(" · ") || "—"}</p><div class="embed-tracks">{session.tracks.map(trackChip)}</div></div></article>)}
-        </section> : <div class="embed-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : agendaHref}>{hasFilters ? "Show full agenda" : "Open the conference agenda"}</a></div></div>
+          {data.sessions.map((session) => (
+            <article class="embed-session" data-public-session-id={session.id} data-public-session-slug={session.slug} key={session.id}>
+              <time><strong>{session.time}</strong>{session.day}<br />→ {session.endTime}<br />{session.roomLabel}</time>
+              <div>
+                <h2>{session.title}</h2>
+                <p>{speakerCredits(session)}</p>
+                {sessionAbstract(session)}
+                {sessionChips(session)}
+              </div>
+            </article>
+          ))}
+        </section> :<div class="embed-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : agendaHref}>{hasFilters ? "Show full agenda" : "Open the conference agenda"}</a></div></div>
       )}
     </div>
   );

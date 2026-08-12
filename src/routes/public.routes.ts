@@ -18,6 +18,8 @@ const publicQuery = z.object({
   event_slug: z.string().min(1).max(120).optional(),
   day: z.string().min(1).max(40).optional(),
   track: z.string().min(1).max(120).optional(),
+  format: z.string().min(1).max(120).optional(),
+  room: z.string().min(1).max(120).optional(),
   q: z.string().trim().min(1).max(200).optional(),
   status: z.string().min(1).max(40).optional(),
   accent: z.string().regex(/^#[0-9a-f]{3,8}$/i).optional(),
@@ -45,6 +47,8 @@ const getPublicAgenda = defineApiRoute(
       eventSlug: query.event ?? query.event_slug,
       day: query.day,
       track: query.track,
+      format: query.format,
+      room: query.room,
       q: query.q,
       status: query.status,
     });
@@ -119,7 +123,14 @@ const getPublicEmbed = defineApiRoute(
       eventSlug: query.event ?? query.event_slug,
     });
     if (!resolved) throw ApiError.notFound("public embed not found");
-    const filters = { track: query.track ?? null, status: query.status ?? null, accent: query.accent ?? null, layout: query.layout ?? null };
+    const filters = {
+      track: query.track ?? null,
+      format: query.format ?? null,
+      room: query.room ?? null,
+      status: query.status ?? null,
+      accent: query.accent ?? null,
+      layout: query.layout ?? null,
+    };
     const key = publicEmbedCacheKey(resolved.event.id, resolved.slug, filters);
     const cached = await readPublicEmbedCache(context.env.CACHE, key);
     if (cached) {
