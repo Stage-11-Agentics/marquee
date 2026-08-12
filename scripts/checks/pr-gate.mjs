@@ -4,7 +4,24 @@ import { resolve } from "node:path";
 import { REPOSITORY_ROOT, emit, parseArguments, recordSpeedHarness } from "./lib/command.mjs";
 
 const args = parseArguments();
-if (!args.ticket || !/^MRQ-\d+$/.test(String(args.ticket))) throw new Error("pr-gate requires --ticket MRQ-N");
+/**
+ * A ticket is accepted, not demanded.
+ *
+ * Requiring one made the full gate unrunnable for work that has no ticket —
+ * eval triage, a follow-up on someone else's PR, a review agent's own fix — and
+ * the fallback everyone reached for was running the four `check:*` scripts by
+ * hand. That hand-written list is not this list: it silently omits `check:clocks`
+ * and the merged AC trace, which is exactly the pair that reached CI red on #99
+ * after a green local run. The gate is the thing that knows what CI runs, so the
+ * gate has to be the thing anyone can run.
+ *
+ * With a ticket, the AC trace is scoped to it. Without one, it runs `--scope=merged`
+ * exactly as CI does. A malformed ticket is still an error, because a typo that
+ * silently widened the scope would be worse than being told.
+ */
+if (args.ticket !== undefined && !/^MRQ-\d+$/.test(String(args.ticket))) {
+  throw new Error(`pr-gate: --ticket must look like MRQ-N (got "${args.ticket}"); omit it entirely to gate unticketed work`);
+}
 const tsc = resolve(REPOSITORY_ROOT, "node_modules/.bin/tsc");
 const vite = resolve(REPOSITORY_ROOT, "node_modules/.bin/vite");
 
@@ -19,7 +36,7 @@ const checks = [
   ["route map", "npm", ["run", "check:routes"]],
   ["fixture clocks", "npm", ["run", "check:clocks"]],
   ["hermetic fast suite", "npm", ["test"]],
-  ["merged AC trace", "npm", ["run", "trace:ac", "--", "--scope=merged", `--ticket=${args.ticket}`]],
+  ["merged AC trace", "npm", ["run", "trace:ac", "--", "--scope=merged", ...(args.ticket ? [`--ticket=${args.ticket}`] : [])]],
 ];
 
 const startedAt = performance.now();
@@ -50,7 +67,7 @@ for (const [name, binary, commandArgs] of checks) {
       source: "local pr-gate wall clock",
       environment: "local worktree; not deployed evidence",
     });
-    emit({ command: "pr-gate", ticket: args.ticket, status: "fail", failedCheck: name });
+    emit({ command: "pr-gate", ticket: args.ticket ?? null, status: "fail", failedCheck: name });
     process.exit(code);
   }
 }
@@ -73,7 +90,7 @@ if (overBudget) {
 }
 emit({
   command: "pr-gate",
-  ticket: args.ticket,
+  ticket: args.ticket ?? null,
   status: overBudget ? "pass-over-budget" : "pass",
   elapsedMs,
   budgetMs: PR_GATE_BUDGET_MS,
