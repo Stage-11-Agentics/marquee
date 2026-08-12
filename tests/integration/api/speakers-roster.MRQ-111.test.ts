@@ -15,7 +15,12 @@ import { applyMigrations, env } from "../apply-migrations";
  * edits round-trip through the same normalizer the portal uses.
  */
 
-const NOW = Date.UTC(2026, 7, 12, 9, 0, 0);
+// Anchored to the real clock. Fixtures here are written as offsets from NOW
+// ("expires in a day", "due tomorrow") but the code under test reads the real
+// Date.now(), so a hardcoded anchor silently changes what those offsets mean as
+// the wall clock passes them — sessions expire and windows close with no commit
+// behind the failure. Only the anchor moves.
+const NOW = Date.now();
 const ORG_ID = "org_mrq111";
 const EVENT_ID = "evt_mrq111";
 const ORIGIN = "https://marquee.stage11.dev";
