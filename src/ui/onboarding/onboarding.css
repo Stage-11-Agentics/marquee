@@ -33,7 +33,14 @@
 .onboarding-filter-count { color: var(--muted); font: 500 10px/1 var(--mono); margin-left: auto; padding-bottom: 10px; }
 .onboarding-demo-safe { color: var(--accent-dark); display: block; font: 600 9px/1.2 var(--mono); margin-top: 8px; }
 .onboarding-matrix-wrap { overflow-x: auto; }
-.onboarding-matrix { border-collapse: collapse; min-width: 920px; table-layout: fixed; width: 100%; }
+/*
+  Every column states a width and the table is at least as wide as their sum, so
+  a conference with many task templates scrolls the wrap rather than squeezing
+  every column past legibility. A flat min-width cannot do that job: it does not
+  grow with the column count, so each added template came out of the columns that
+  stated no width.
+*/
+.onboarding-matrix { border-collapse: collapse; min-width: max-content; table-layout: fixed; width: 100%; }
 .onboarding-matrix th, .onboarding-matrix td { border-bottom: 1px solid var(--line); padding: 10px 8px; vertical-align: middle; }
 .onboarding-matrix thead th { background: var(--sunk); color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .1em; position: sticky; text-align: left; text-transform: uppercase; top: 0; z-index: 2; }
 .onboarding-matrix thead th:not(:first-child) { border-left: 1px solid var(--line); }
@@ -42,16 +49,22 @@
 .onboarding-select-column { padding-left: 12px !important; width: 38px; }
 .onboarding-action-column { text-align: right !important; width: 76px; }
 /*
-  Every other column in this fixed-layout table states a width, so the speaker
-  column was the one that absorbed the shortfall — at nine task templates it
-  collapsed to 60px while the button inside it held a 180px floor, and the name
-  and company line printed straight across the track beside it. The matrix is
-  built to scroll (the wrap is overflow-x: auto); it is not built to overlap.
-  A stated width keeps the column out of that role, and the floor comes off the
-  button so nothing inside a cell can outgrow the cell again.
+  Fixed layout takes each column's width from the first row and shares whatever
+  is left equally between the columns that state none, so a column without a
+  stated width shrinks as task templates are added. The speaker column was one
+  of those: it collapsed to 60px while the button inside it held a 180px floor,
+  and the name and company line printed straight across the track beside it.
+  A stated width keeps it out of that role, and the floor comes off the button
+  so nothing inside a cell can outgrow the cell again.
 */
 .onboarding-speaker-column { width: 220px; }
 .onboarding-matrix tbody th.onboarding-speaker-column { overflow: hidden; }
+/*
+  The task and last-contact columns were in that same role. `.onboarding-cell`
+  already stated 100px, but only on the body `<td>` — fixed layout reads the
+  first row, so the header cell is where the width has to land for it to count.
+*/
+.onboarding-task-column, .onboarding-last-contact-column { width: 100px; }
 .onboarding-track-column { width: 138px; }
 .onboarding-track { align-items: center; display: flex; font: 10px/1.25 var(--mono); gap: 5px; white-space: nowrap; }
 .onboarding-track + .onboarding-track { margin-top: 4px; }

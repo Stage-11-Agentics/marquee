@@ -38,3 +38,26 @@ test("the matrix scrolls rather than squeezing, and the cell clips either way", 
   assert.match(css, /\.onboarding-matrix-wrap \{[^}]*overflow-x: auto/);
   assert.match(css, /\.onboarding-matrix tbody th\.onboarding-speaker-column \{[^}]*overflow: hidden/);
 });
+
+/**
+ * Stating a width on one column only moves the problem: whatever is left is
+ * still shared between the columns that state none, and the task columns are
+ * the ones that grow in number. Measured at six templates in a 1024px viewport,
+ * a stated speaker column pushed the task cells to 64px and the due dates ran
+ * into each other with no gap. Every column in the header row states a width,
+ * and the table is at least as wide as their sum, so the wrap scrolls instead.
+ */
+test("every column in the header row states a width, whatever the template count", async () => {
+  const css = await read("src/ui/onboarding/onboarding.css");
+  const page = await read("src/ui/onboarding/OnboardingPage.tsx");
+
+  // Fixed layout reads the first row, so a width on the body `<td>` alone does
+  // not count — the header cell has to carry the class.
+  assert.match(page, /<th scope="col" class="onboarding-task-column" key=\{task\.id\}>/);
+  assert.match(page, /<th scope="col" class="onboarding-last-contact-column">Last contact<\/th>/);
+  assert.match(css, /\.onboarding-task-column, \.onboarding-last-contact-column \{[^}]*width: \d+px/);
+
+  // A flat pixel min-width does not grow with the column count, which is the
+  // whole reason the columns were squeezed in the first place.
+  assert.match(css, /\.onboarding-matrix \{[^}]*min-width: max-content/);
+});
