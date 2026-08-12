@@ -3,11 +3,17 @@
 .brand { align-items: center; display: flex; gap: 10px; padding: 2px 8px 21px; }
 .brand-mark { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent-dark); display: grid; flex: 0 0 28px; font: 600 13px/1 var(--mono); height: 28px; place-items: center; width: 28px; }
 .brand-name { font: 600 13px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; }
+/* The caption and the ＋ share one row. The ＋ has a fixed 32px box so the
+   caption's width never depends on whether the glyph is rendered. */
+.event-context-row { align-items: stretch; display: flex; gap: 6px; margin: 0 4px 18px; width: calc(100% - 8px); }
 /* A caption naming the conference in view. Flat on purpose: a border and a
    hover state would read as a picker, and nothing here picks anything. */
-.event-context { border-left: 2px solid var(--line-strong); margin: 0 4px 18px; padding: 2px 10px; text-align: left; width: calc(100% - 8px); }
+.event-context { border-left: 2px solid var(--line-strong); flex: 1; min-width: 0; padding: 2px 10px; text-align: left; }
 .event-context small { color: var(--muted); display: block; font: 600 9px/1 var(--mono); letter-spacing: .16em; margin-bottom: 5px; text-transform: uppercase; }
 .event-context strong { color: var(--ink); display: block; font: 600 12px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The ＋ is the one control here, and it does go somewhere. */
+.event-add { align-items: center; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); display: flex; flex: 0 0 32px; font: 400 15px/1 var(--mono); justify-content: center; transition: border-color 110ms, background 110ms, color 110ms; width: 32px; }
+.event-add:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
 .nav-label { border-bottom: 1px solid var(--line); color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .2em; margin: 14px 10px 6px; padding-bottom: 4px; text-transform: uppercase; }
 .nav { display: grid; }
 .nav a { align-items: center; border-left: 2px solid transparent; border-radius: 0 var(--radius) var(--radius) 0; color: var(--ink-soft); display: flex; font-size: 12.5px; gap: 9px; min-height: 34px; padding: 8px 10px; transition: background 110ms, color 110ms, border-color 110ms; }
@@ -134,7 +140,7 @@
 @media (max-width: 1000px) {
   .app-shell { grid-template-columns: 68px minmax(0, 1fr); }
   .sidebar { padding: 16px 9px; }
-  .brand-name, .event-context, .nav-label, .nav a span:not(.nav-icon), .sidebar-foot { display: none; }
+  .brand-name, .event-context-row, .nav-label, .nav a span:not(.nav-icon), .sidebar-foot { display: none; }
   .brand { padding: 0 10px 18px; }
   .nav a { justify-content: center; }
   .nav-icon { font-size: 14px; }
@@ -142,7 +148,7 @@
 @media (max-width: 760px) {
   .app-shell { display: block; }
   .sidebar { border-right: 0; border-top: 1px solid var(--line-strong); bottom: 0; flex-direction: row; height: 54px; left: 0; overflow-x: auto; padding: 6px; position: fixed; right: 0; top: auto; z-index: 300; }
-  .sidebar .brand, .event-context, .nav-label, .sidebar-foot { display: none; }
+  .sidebar .brand, .event-context-row, .nav-label, .sidebar-foot { display: none; }
   .nav { display: flex; justify-content: space-around; min-width: max-content; width: 100%; }
   .nav a { border-bottom: 2px solid transparent; border-left: 0; border-radius: var(--radius); min-height: 40px; min-width: 47px; }
   .nav a.active { border-bottom-color: var(--accent); border-left-color: transparent; }

@@ -31,6 +31,8 @@ import { OnboardingPage } from "../onboarding/OnboardingPage";
 import { SpeakersPage } from "../speakers/SpeakersPage";
 import { SessionizeImportPage } from "../import/SessionizeImportPage";
 import { FilesPage } from "../files/FilesPage";
+import { CreateConferencePage } from "../setup/CreateConferencePage";
+import { HandoffPage } from "../setup/HandoffPage";
 
 type ResetResponse = {
   job_id?: unknown;
@@ -124,6 +126,10 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const isSpeakers = location.pathname === "/roster";
   const isImport = location.pathname === "/import";
   const isApiTokens = location.pathname === "/settings/api";
+  // The handoff is the second half of the claim, not an admin screen: it is
+  // reached seconds after a session first exists, before there is a conference
+  // to draw navigation around.
+  if (location.pathname === "/handoff") return <HandoffPage navigate={navigate} />;
   if (location.pathname === "/portal") return <PortalPage />;
   if (location.pathname === "/co-speaker") return <CoSpeakerPage />;
   if (location.pathname === "/reviewer") return <ReviewerPage />;
@@ -156,6 +162,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : isProgramBoard ? <ProgramBoardPage navigate={navigate} />
             : isSubmissionNew ? <CreateSubmissionPage navigate={navigate} />
             : isSubmissionRecord ? <SubmissionRecordPage submissionId={decodeURIComponent(location.pathname.slice("/submissions/".length))} navigate={navigate} />
+            : route?.id === "conference-new" ? <CreateConferencePage navigate={navigate} />
             : route?.id === "dashboard" ? <DashboardPage navigate={navigate} />
             : isEvaluation ? <EvaluationPage />
             : route?.id === "venues" ? <VenuesPage />

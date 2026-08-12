@@ -280,6 +280,10 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  // null while the instance has not answered yet: the dialog must not fire on a
+  // guess, in either direction.
+  const [mailConfigured, setMailConfigured] = useState<boolean | null>(null);
+  const [mailWarning, setMailWarning] = useState(false);
   const requestedFormId = new URLSearchParams(search).get("form");
   const selectedField = form?.fields.find((field) => field.id === selectedFieldId) ?? null;
 
@@ -313,6 +317,19 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
   };
 
   useEffect(() => { void loadCatalog(); }, [eventId, requestedFormId]);
+  // Read once per mount: whether this instance can send mail decides whether
+  // opening intake needs the acknowledgment. A failed read leaves it null, and
+  // null never raises the dialog — the panel is honest or it is silent.
+  useEffect(() => {
+    let cancelled = false;
+    void apiFetch<{ data: { rows: { key: string; configured: boolean }[] } }>("/api/v1/instance/status", { route: "/api/v1/instance/status" })
+      .then((body) => {
+        if (cancelled) return;
+        setMailConfigured(body.data.rows.find((row) => row.key === "mail")?.configured ?? null);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => { if (selectedId) void loadForm(selectedId); else setForm(null); }, [selectedId, eventId]);
   useEffect(() => {
     const condition = selectedField?.condition?.all[0];
@@ -350,9 +367,34 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
       void mutate("duplicate", async () => { const copy = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}/duplicate`, "/api/v1/events/{eventId}/forms/{formId}/duplicate", { method: "POST" }); setSelectedId(copy.id); setForm(copy); await loadCatalog(); });
   };
 
+  const runLifecycle = (next: "publish" | "close" | "reopen", acknowledgeMailUnconfigured = false) => {
+    if (!form) return;
+    void mutate(next, async () => {
+      const updated = await request<FormDetail>(
+        `/api/v1/events/${eventId}/forms/${form.id}/${next}`,
+        LIFECYCLE_ROUTES[next],
+        next === "publish" && acknowledgeMailUnconfigured
+          ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ acknowledge_mail_unconfigured: true }) }
+          : { method: "POST" },
+      );
+      setForm(updated);
+      await loadCatalog();
+    });
+  };
+
+  /**
+   * Opening intake on a mail-less instance is warned about once, never blocked
+   * (ruling D8, AC-285). The operator may be handling mail elsewhere; what they
+   * must not do is find out from an angry speaker. Acknowledging records the
+   * decision server-side with its actor and time.
+   */
   const setLifecycle = (next: "publish" | "close" | "reopen") => {
     if (!form) return;
-    void mutate(next, async () => { const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}/${next}`, LIFECYCLE_ROUTES[next], { method: "POST" }); setForm(updated); await loadCatalog(); });
+    if (next !== "publish" || mailConfigured !== false) {
+      runLifecycle(next);
+      return;
+    }
+    setMailWarning(true);
   };
 
   /**
@@ -427,6 +469,23 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
     <PageHeader title="CFP forms" copy={`${catalog.length} conference form${catalog.length === 1 ? "" : "s"} · each audience, field list, rules, and response state stays isolated.`} actions={<><Button onClick={duplicateForm} disabled={busy !== null}>Duplicate</Button><Button onClick={addForm} disabled={busy !== null}>+ New form</Button>{form.status === "open" ? <Button variant="primary" onClick={() => setLifecycle("close")} disabled={busy !== null}>Close form</Button> : <Button variant="primary" onClick={() => setLifecycle(form.status === "closed" ? "reopen" : "publish")} disabled={busy !== null}>{form.status === "closed" ? "Reopen form" : "Publish changes"}</Button>}</>} />
     <section class="forms-catalog" aria-label="Conference forms">{catalog.map((item) => <button key={item.id} class={`forms-catalog-card ${item.id === form.id ? "active" : ""}`} onClick={() => setSelectedId(item.id)}><Chip tone={formStatusTone(item.status)}>{item.status}</Chip><strong>{item.name}</strong><span>{item.kind === "abstract" ? "Abstracts" : "Sessions"} · {item.visibility}</span><small>{item.response_count.toLocaleString()} responses · {item.public_url ?? "private until published"}</small></button>)}</section>
     {message && <div class="forms-error" role="status"><strong>Form update needs attention</strong><span>{message}</span></div>}
+    {mailWarning && <div class="forms-mail-warning" role="alertdialog" aria-modal="true" aria-labelledby="mail-warning-title">
+      <div class="forms-mail-warning-card">
+        <span class="eyebrow">Open intake</span>
+        <h2 id="mail-warning-title">This instance can’t send mail yet</h2>
+        <p>The call for speakers will be live to the world, but until mail is configured:</p>
+        <ul>
+          <li>submitters get no confirmation email;</li>
+          <li>accepted speakers get no decision mail;</li>
+          <li>no calendar invites are delivered.</li>
+        </ul>
+        <p class="subtle">Everything queues honestly in the outbox — nothing pretends to send.</p>
+        <div class="forms-mail-warning-actions">
+          <Button onClick={() => setMailWarning(false)}>Configure mail first</Button>
+          <Button variant="primary" onClick={() => { setMailWarning(false); runLifecycle("publish", true); }}>Open intake anyway</Button>
+        </div>
+      </div>
+    </div>}
     <div class="forms-builder">
       <aside class="card forms-steps" aria-label="Form builder steps">
         <CardHeader title="Build steps" />

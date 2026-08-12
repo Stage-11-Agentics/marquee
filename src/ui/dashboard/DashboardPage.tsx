@@ -6,6 +6,8 @@ import { apiFetch, backoffDelayMs } from "../shell/api-client";
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { clientBuildSha } from "../shell/error-reporting";
 import { ErrorBanner, ErrorBoundary, StaleBand } from "../shell/ErrorSurface";
+import { InstancePanel } from "../setup/InstancePanel";
+import { SetupChecklistCard } from "../setup/SetupChecklistCard";
 import { DASHBOARD_REVALIDATE_MS } from "./dashboard-constants";
 import "./dashboard.css";
 
@@ -81,10 +83,21 @@ function WaveRow({ wave, navigate }: { wave: DashboardWave; navigate: Props["nav
   </div>;
 }
 
-function DashboardContents({ snapshot, navigate }: { snapshot: DashboardSnapshot; navigate: Props["navigate"] }): JSX.Element {
+function DashboardContents({ snapshot, navigate, eventId }: { snapshot: DashboardSnapshot; navigate: Props["navigate"]; eventId: string }): JSX.Element {
   const { attention } = snapshot;
   const hasProgram = snapshot.pipeline.some((item) => item.count > 0);
+  // Setup surfaces belong to a conference that has not started yet. A running
+  // programme has answered these questions already, and a dashboard that keeps
+  // asking is a dashboard nobody reads — so the checklist and the Instance panel
+  // appear exactly while they are the operator's next move.
+  const inSetup = !hasProgram;
   return <>
+    {inSetup && <ErrorBoundary label="Conference setup">
+      <SetupChecklistCard eventId={eventId} navigate={navigate} />
+    </ErrorBoundary>}
+    {inSetup && <ErrorBoundary label="The instance panel">
+      <InstancePanel />
+    </ErrorBoundary>}
     <section class="card instrument dashboard-pipeline-card" aria-label="Seven-stage program pipeline">
       <div class="dashboard-pipeline">{snapshot.pipeline.map((item) => <PipelineStage key={item.id} item={item} navigate={navigate} />)}</div>
     </section>
@@ -221,7 +234,7 @@ export function DashboardPage({ eventId = "evt_aie-ny-2026", navigate }: Props):
     <StaleBand ageMs={stale && state.loadedAt !== null ? Date.now() - state.loadedAt : null} retrying={state.error !== null} />
     {state.error !== null && <ErrorBanner title="Dashboard refresh failed" error={state.error} onRetry={retryNow} route={DASHBOARD_ROUTE} />}
     <ErrorBoundary label="The pipeline">
-      {state.snapshot ? <DashboardContents snapshot={state.snapshot} navigate={navigate} /> : <DashboardLoading />}
+      {state.snapshot ? <DashboardContents snapshot={state.snapshot} navigate={navigate} eventId={eventId} /> : <DashboardLoading />}
     </ErrorBoundary>
     <footer class="dashboard-build"><span class="build-stamp">build {clientBuildSha()}</span></footer>
   </div>;

@@ -3,6 +3,7 @@ import type { JSX } from "preact";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { instanceIsUnclaimed } from "../lib/auth/instance-claim";
 import { ICON_LINKS } from "../lib/head-icons";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
 import { hasSpeakerTaskCancellationColumn, submissionStatusPredicate } from "./submissions.queries";
@@ -208,6 +209,63 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
   );
 }
 
+/**
+ * What a deployment shows at its root URL before anyone owns it.
+ *
+ * It states who the first user is meant to be and how the software learns it is
+ * them — and nothing else. There is no signup form, because an unclaimed Worker
+ * is on a public URL from its first second; there are no counts, no conference
+ * name, and no hint of what is in the database, because a stranger who finds
+ * the URL must learn nothing from it (AC-277).
+ *
+ * This page is unreachable on any instance that has an owner, and the seeded
+ * demo has one — so a seeded deployment's landing is byte-identical to what it
+ * was before this existed.
+ */
+export function UnclaimedLandingPage(): JSX.Element {
+  return (
+    <div class="landing unclaimed">
+      <header class="landing-nav">
+        <a class="brand" href="/" aria-label="Marquee home">
+          <span class="brand-mark">M</span>
+          <span class="brand-name">Marquee</span>
+        </a>
+        <div class="landing-links">
+          <a class="button" href="https://github.com/Stage-11-Agentics/marquee">View on GitHub ↗</a>
+        </div>
+      </header>
+
+      <main class="hero unclaimed-hero">
+        <div class="hero-copy">
+          <div class="eyebrow">Fresh install · unclaimed</div>
+          <h1>Nobody owns this instance yet.</h1>
+          <p>
+            Initial setup is run by an agent: point your coding agent at the repository and{" "}
+            <strong>SKILL.md</strong> walks it from clone to a one-time claim link. The link is
+            printed in the deploy terminal, because on day zero that terminal is the only proof of
+            ownership there is — identity here never depends on mail, which is itself a thing setup
+            configures.
+          </p>
+          <p>Ownership lands on a person, not on an agent: a human opens the claim link.</p>
+          <div class="unclaimed-command">
+            <span class="subtle">No link in hand? Print a fresh one — it works forever.</span>
+            <code>node cli/marquee.mjs setup claim-link --url "$MARQUEE_URL" --json</code>
+          </div>
+          <div class="hero-note">
+            A used claim link is inert. Re-running the command is the recovery path for a locked-out
+            instance.
+          </div>
+        </div>
+      </main>
+
+      <footer class="landing-foot">
+        <span>Apache-2.0 · Self-hosted · API-first</span>
+        <span>Unclaimed instance</span>
+      </footer>
+    </div>
+  );
+}
+
 const LANDING_STYLES = `
 .landing { min-height: 100vh; background: var(--bg); display: grid; grid-template-rows: auto 1fr auto; }
 .landing-nav { padding: 20px clamp(20px,5vw,70px); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--panel); }
@@ -273,6 +331,29 @@ export function renderLandingDocument(shell: string, data: LandingData): string 
     .replace("</body>", `<script data-marquee-landing>${LANDING_SCRIPT}</script></body>`);
 }
 
+const UNCLAIMED_STYLES = `
+.unclaimed-hero { grid-template-columns: 1fr; max-width: 780px; }
+.unclaimed-hero .hero-copy p { max-width: 62ch; }
+.unclaimed-command { margin-top: 22px; border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--sunk); padding: 12px 14px; display: grid; gap: 8px; }
+.unclaimed-command code { font: 400 11.5px/1.6 var(--mono); color: var(--ink); word-break: break-all; }
+`;
+
+/**
+ * Rendered only when the zero-owner guard says so. Deliberately a separate
+ * function from `renderLandingDocument`: the demo landing's markup, styles, and
+ * script must not change by a byte because this page exists.
+ */
+export function renderUnclaimedLandingDocument(shell: string): string {
+  const markup = renderToString(<UnclaimedLandingPage />);
+  const document = shell.includes("<div id=\"app\"></div>")
+    ? shell.replace('<div id="app"></div>', `<div id="app">${markup}</div>`)
+    : FALLBACK_DOCUMENT.replace('<div id="app"></div>', `<div id="app">${markup}</div>`);
+  return document.replace(
+    "</head>",
+    `<style data-marquee-landing>${LANDING_STYLES}${UNCLAIMED_STYLES}</style></head>`,
+  );
+}
+
 async function assetShell(assets: Fetcher, request: Request): Promise<string> {
   const url = new URL("/index.html", request.url);
   const response = await assets.fetch(new Request(url, { method: "GET" }));
@@ -283,6 +364,26 @@ async function assetShell(assets: Fetcher, request: Request): Promise<string> {
 export const landingRoutes = new Hono<{ Bindings: Env }>();
 
 landingRoutes.get("/", async (context) => {
+  // The guard, first and hard: an instance with any org-wide owner renders the
+  // page it always rendered. A failure to read the guard resolves to "claimed",
+  // because showing an unclaimed landing on a working conference would be far
+  // worse than showing the demo landing on a fresh install.
+  let unclaimed = false;
+  try {
+    unclaimed = await instanceIsUnclaimed(context.env.DB);
+  } catch (error) {
+    loggerForEnv(context.env).emit("worker_error", "error", {
+      source: "landingClaimGuard",
+      ...errorFields(error),
+    });
+  }
+  if (unclaimed) {
+    context.header("Cache-Control", "no-store");
+    return context.html(
+      renderUnclaimedLandingDocument(await assetShell(context.env.ASSETS, context.req.raw)),
+    );
+  }
+
   let data: LandingData;
   try {
     data = await loadLandingData(context.env.DB);

@@ -58,6 +58,8 @@ export const routeTable: readonly RouteDefinition[] = [
   // declared here because it is a real route, and a route map that omits a real
   // route is the same defect as one that invents a route that is not.
   { id: "co-speaker", path: "/co-speaker", label: "Co-speaker confirmation", icon: "", group: "utility", external: true },
+  { id: "conference-new", path: "/conferences/new", label: "Create conference", icon: "", group: "utility" },
+  { id: "handoff", path: "/handoff", label: "Instance handoff", icon: "", group: "utility" },
   { id: "venues", path: "/settings/venues", label: "Venues", icon: "⌖", group: "utility" },
   { id: "submission-detail", path: "/submissions/:id", label: "Submission record", icon: "", group: "utility" },
   // `/tasks` is where the sidebar sends an organizer; this row keeps the older
