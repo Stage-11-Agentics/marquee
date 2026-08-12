@@ -66,7 +66,7 @@ function MappingPanel({ title, preview, mapping, labels, onChange, note }: {
   </Card>;
 }
 
-export function SessionizeImportPage({ eventId = "evt_aie-ny-2026", navigate }: { eventId?: string; navigate?: (target: string) => void }): JSX.Element {
+export function SessionizeImportPage({ eventId, navigate }: { eventId: string; navigate?: (target: string) => void }): JSX.Element {
   const [step, setStep] = useState<ImportStep>("upload");
   const [sessionsFile, setSessionsFile] = useState<File | null>(null);
   const [speakersFile, setSpeakersFile] = useState<File | null>(null);

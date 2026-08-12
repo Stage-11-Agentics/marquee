@@ -6,7 +6,6 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
 import "./review.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 
 interface Scope {
   color: string;
@@ -188,7 +187,7 @@ function recommendationLabel(value: ReviewState["recommendation"]): string {
   return "Choose one recommendation";
 }
 
-export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string }): JSX.Element {
+export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
   const [plan, setPlan] = useState<ReviewerPlan | null>(null);
   const [roundId, setRoundId] = useState<string | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);

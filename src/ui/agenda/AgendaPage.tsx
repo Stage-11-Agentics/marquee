@@ -19,7 +19,6 @@ import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import { localParts, sessionDay, sessionTime, TIME_SLOTS, TrackBoard } from "./track-board";
 import "./agenda.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const DAY_MS = 86_400_000;
 const AGENDA_ROUTE = "/api/v1/events/{eventId}/agenda";
 const AGENDA_ITEMS_ROUTE = "/api/v1/events/{eventId}/agenda/items";
@@ -27,7 +26,7 @@ const AGENDA_ITEM_ROUTE = "/api/v1/events/{eventId}/agenda/items/{itemId}";
 const AGENDA_PUBLISH_ROUTE = "/api/v1/events/{eventId}/agenda/publish";
 
 interface Props {
-  eventId?: string;
+  eventId: string;
 }
 
 interface DayOption {
@@ -589,7 +588,7 @@ function PublicationPanel({
   </section>;
 }
 
-export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
+export function AgendaPage({ eventId }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", snapshot: null });
   const [view, setView] = useState<AgendaView>("day");
   const [day, setDay] = useState("");

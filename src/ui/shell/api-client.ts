@@ -289,6 +289,32 @@ export function onForbidden(listener: () => void): () => void {
   return () => { forbiddenListeners.delete(listener); };
 }
 
+/**
+ * Every request in flight belongs to the conference that was on screen when it
+ * was sent. Switching conferences ends that generation.
+ *
+ * Remounting the page tree makes a late response *invisible*, not *cancelled* —
+ * the request still lands, still costs the origin a round trip, and on a slow
+ * connection still holds a connection open for a screen nobody is looking at.
+ * So the switch says so out loud, and every caller's own AbortController still
+ * composes on top of this one.
+ */
+let requestGeneration = new AbortController();
+
+export function abortInFlightRequests(): void {
+  requestGeneration.abort(new DOMException("the conference on screen changed", "AbortError"));
+  requestGeneration = new AbortController();
+}
+
+function scopedSignal(callerSignal: AbortSignal | null | undefined): AbortSignal {
+  if (!callerSignal) return requestGeneration.signal;
+  // `AbortSignal.any` is the composition primitive; a runtime without it keeps
+  // the caller's own signal rather than losing it.
+  return typeof AbortSignal.any === "function"
+    ? AbortSignal.any([callerSignal, requestGeneration.signal])
+    : callerSignal;
+}
+
 export async function apiFetch<Result>(
   path: string,
   options: ApiFetchOptions = {},
@@ -296,7 +322,7 @@ export async function apiFetch<Result>(
   const { route = path, ...init } = options;
   let response: Response;
   try {
-    response = await fetch(path, init);
+    response = await fetch(path, { ...init, signal: scopedSignal(init.signal) });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     // A dropped connection and a broken server are different problems with

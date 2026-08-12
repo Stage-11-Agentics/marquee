@@ -5,7 +5,6 @@ import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "../shell/components";
 import "./evaluation.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 
 type CriterionKind = "numeric" | "select" | "text";
 
@@ -122,7 +121,7 @@ interface InviteResult {
 }
 
 interface EvaluationPageProps {
-  eventId?: string;
+  eventId: string;
 }
 
 async function api<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
@@ -148,7 +147,7 @@ function formatDate(value: number | null): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(value);
 }
 
-export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPageProps): JSX.Element {
+export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -329,12 +329,16 @@ const listEvents = defineApiRoute(
       return [{ row, role }];
     });
 
+    // Tallied through the organization rather than through a list of ids: one
+    // bound parameter regardless of how many conferences an organization runs,
+    // where a placeholder per id would meet D1's 100-binding cap eventually and
+    // silently.
     const counts = new Map<string, number>();
     if (visible.length > 0) {
-      const ids = visible.map((entry) => entry.row.id);
       const tallies = await context.env.DB.prepare(
-        `SELECT event_id, COUNT(*) AS total FROM submissions WHERE event_id IN (${ids.map(() => "?").join(", ")}) GROUP BY event_id`,
-      ).bind(...ids).all<{ event_id: string; total: number }>();
+        `SELECT event_id, COUNT(*) AS total FROM submissions
+         WHERE event_id IN (SELECT id FROM events WHERE org_id = ?) GROUP BY event_id`,
+      ).bind(auth.orgId).all<{ event_id: string; total: number }>();
       for (const tally of tallies.results) counts.set(tally.event_id, Number(tally.total));
     }
 

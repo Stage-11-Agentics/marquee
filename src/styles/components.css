@@ -3,17 +3,52 @@
 .brand { align-items: center; display: flex; gap: 10px; padding: 2px 8px 21px; }
 .brand-mark { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent-dark); display: grid; flex: 0 0 28px; font: 600 13px/1 var(--mono); height: 28px; place-items: center; width: 28px; }
 .brand-name { font: 600 13px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; }
-/* The caption and the ＋ share one row. The ＋ has a fixed 32px box so the
+/* The switcher and the ＋ share one row. The ＋ has a fixed 32px box so the
    caption's width never depends on whether the glyph is rendered. */
+.event-switcher-root { position: relative; }
 .event-context-row { align-items: stretch; display: flex; gap: 6px; margin: 0 4px 18px; width: calc(100% - 8px); }
-/* A caption naming the conference in view. Flat on purpose: a border and a
-   hover state would read as a picker, and nothing here picks anything. */
-.event-context { border-left: 2px solid var(--line-strong); flex: 1; min-width: 0; padding: 2px 10px; text-align: left; }
+/*
+  The conference name, now a control that opens the switcher.
+
+  Its box is deliberately the caption's box, to the pixel: the same left rule,
+  the same 2px 10px padding, the same row. The prototype draws a fully bordered
+  switcher, and adopting that would grow this element by two hairlines and push
+  every navigation row below it down — a control that moves the page when it
+  gains a purpose. Hover and expanded change color, never geometry.
+*/
+.event-context { background: none; border: 0; border-left: 2px solid var(--line-strong); border-radius: 0; color: inherit; display: grid; flex: 1; font: inherit; gap: 6px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-width: 0; padding: 2px 10px; text-align: left; transition: border-color 110ms, background 110ms; width: 100%; }
+button.event-context { cursor: pointer; }
+button.event-context:hover, button.event-context[aria-expanded="true"] { background: var(--accent-soft); border-left-color: var(--accent); }
+.event-context-copy { min-width: 0; }
 .event-context small { color: var(--muted); display: block; font: 600 9px/1 var(--mono); letter-spacing: .16em; margin-bottom: 5px; text-transform: uppercase; }
 .event-context strong { color: var(--ink); display: block; font: 600 12px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The ＋ is the one control here, and it does go somewhere. */
+.event-caret { color: var(--muted); font: 400 9px/1 var(--mono); }
+/* The ＋ is the one control here that goes somewhere else. */
 .event-add { align-items: center; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); display: flex; flex: 0 0 32px; font: 400 15px/1 var(--mono); justify-content: center; transition: border-color 110ms, background 110ms, color 110ms; width: 32px; }
 .event-add:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+
+/* The popover — a compact instrument list, not a menu. */
+.switcher-pop { background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); left: 4px; padding: 4px; position: absolute; top: calc(100% - 12px); width: 264px; z-index: 60; }
+.switcher-pop .pop-filter { padding: 4px; }
+.switcher-pop .pop-filter input { background: var(--sunk); border: 1px solid var(--line); border-radius: var(--radius); font: 400 11.5px/1.2 var(--mono); padding: 6px 8px; width: 100%; }
+.switcher-pop .pop-filter input:focus { border-color: var(--accent); outline: none; }
+.pop-label { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .16em; padding: 6px 8px 4px; text-transform: uppercase; }
+.pop-item { background: none; border: 1px solid transparent; border-radius: var(--radius); color: inherit; display: grid; gap: 2px 8px; grid-template-columns: minmax(0, 1fr) auto; padding: 7px 8px; text-align: left; width: 100%; }
+.pop-item:hover, .pop-item.kbd-focus, .pop-item:focus-visible { background: var(--accent-soft); border-color: var(--accent); outline: none; }
+.pop-item .name { font: 600 11.5px/1.25 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pop-item .dates { color: var(--muted); font: 400 10px/1.2 var(--mono); grid-row: 2; }
+.pop-item .gauge { color: var(--muted); font: 400 10px/1.2 var(--mono); grid-column: 2; grid-row: 2; text-align: right; }
+.pop-item.past .name { color: var(--muted); font-weight: 400; }
+.pop-item.current { background: var(--sunk); }
+.pop-item.current .name::after { color: var(--accent); content: " ·"; }
+.switcher-pop .chip { background: var(--panel); border: 1px solid var(--line-strong); border-radius: 2px; color: var(--ink-soft); font: 600 8px/1 var(--mono); justify-self: end; letter-spacing: .12em; min-width: 44px; padding: 3px 5px; text-align: center; }
+.switcher-pop .chip.live { border-color: var(--ok); color: var(--ok); }
+.switcher-pop .chip.draft { border-color: var(--warn); color: var(--warn); }
+.switcher-pop .chip.demo { border-color: var(--accent); color: var(--accent-dark); }
+.pop-rule { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+.pop-create { background: none; border: 1px solid transparent; border-radius: var(--radius); color: var(--accent-dark); cursor: pointer; display: block; font: 600 11px/1 var(--mono); padding: 8px; text-align: left; width: 100%; }
+.pop-create:hover, .pop-create.kbd-focus, .pop-create:focus-visible { background: var(--accent-soft); border-color: var(--accent); outline: none; }
+.pop-hint { border-top: 1px solid var(--line); color: var(--muted); font: 400 9px/1.4 var(--mono); margin-top: 2px; padding: 5px 8px 4px; }
 .nav-label { border-bottom: 1px solid var(--line); color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .2em; margin: 14px 10px 6px; padding-bottom: 4px; text-transform: uppercase; }
 .nav { display: grid; }
 .nav a { align-items: center; border-left: 2px solid transparent; border-radius: 0 var(--radius) var(--radius) 0; color: var(--ink-soft); display: flex; font-size: 12.5px; gap: 9px; min-height: 34px; padding: 8px 10px; transition: background 110ms, color 110ms, border-color 110ms; }

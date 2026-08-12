@@ -26,6 +26,7 @@ export interface AuthMeResponse {
   kind: "session" | "api_token";
   person_id?: string;
   memberships?: { event_id: string | null; role: string }[];
+  demo_event_id?: string | null;
   demo_event_name?: string | null;
   person_name?: string | null;
   person_email?: string | null;
@@ -33,7 +34,12 @@ export interface AuthMeResponse {
 
 let authMeRequest: Promise<AuthMeResponse> | null = null;
 
-function loadAuthMe(): Promise<AuthMeResponse> {
+/**
+ * One boot payload, read once per page. Identity, the seat, and the conference
+ * selection all want it, and three separate requests for the same answer is
+ * three chances for them to disagree.
+ */
+export function loadAuthMe(): Promise<AuthMeResponse> {
   if (!authMeRequest) {
     authMeRequest = apiFetch<AuthMeResponse>(AUTH_ME_ROUTE, {
       headers: { accept: "application/json" },

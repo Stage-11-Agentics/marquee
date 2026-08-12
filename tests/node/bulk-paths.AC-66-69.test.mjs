@@ -172,6 +172,13 @@ function nonMapPlaceholderSites(modules) {
 
 const EXPECTED_PLACEHOLDER_SITES = [
   {
+    file: "src/lib/events/copy-event.ts",
+    owner: "planEventCopy",
+    binding: null,
+    expression: 'columns.map(() => "?")',
+    classification: "one placeholder per COLUMN of a single-row INSERT; the column list comes from the source row, so it is bounded by the widest table in the copy manifest (forms, ~20) and cannot approach D1's binding cap",
+  },
+  {
     file: "src/lib/files/versions.ts",
     owner: "readAttachments",
     binding: "result",
