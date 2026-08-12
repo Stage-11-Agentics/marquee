@@ -760,11 +760,15 @@ const inviteCommitteeReviewer = defineApiRoute(
     ).bind(event.org_id, email).first<{ id: string; name: string }>();
     const personId = existing?.id ?? newUlid(now);
 
+    // `is_demo = 0` like every other runtime person writer: the flag marks the
+    // shipped synthetic sample, not everyone who exists on a demo conference.
+    // Flagging invitees would also let the newest invitation capture the demo
+    // reviewer door, which is meant to open a seeded persona with real work.
     const statements = existing ? [] : [context.env.DB.prepare(`
       INSERT INTO people
         (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, '[]', ?, 'marquee', ?, ?)
-    `).bind(personId, event.org_id, email, body.name, body.title ?? null, body.company ?? null, event.demo_mode === 1 ? 1 : 0, now, now)];
+      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, '[]', 0, 'marquee', ?, ?)
+    `).bind(personId, event.org_id, email, body.name, body.title ?? null, body.company ?? null, now, now)];
     statements.push(
       reviewerMembershipStatement(context.env.DB, event.org_id, eventId, personId, now),
       committeeMemberStatement(context.env.DB, committeeId, personId, "reviewer", now),

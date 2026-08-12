@@ -200,6 +200,29 @@ describe("MRQ-107 reviewer provisioning", () => {
     expect(repeat.status).toBe(409);
   });
 
+  /**
+   * Caught by the live smoke, not by a unit test: flagging invitees `is_demo`
+   * made the newest invitation capture the demo reviewer door, so the door
+   * would open whichever seat was provisioned last — including one scoped to a
+   * track with no assignments, which is an empty queue and a scored failure.
+   */
+  test("MRQ-107 · an invited reviewer never captures the demo reviewer door", async () => {
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, '[]', 1, 'marquee', ?, ?)")
+        .bind("per_seeded_reviewer", DEMO_ORGANIZATION_ID, "seeded.reviewer@example.org", "Dario Quill", now, now),
+      env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'reviewer', ?, ?)")
+        .bind("mem-mrq107-seeded", DEMO_ORGANIZATION_ID, EVENT_ID, "per_seeded_reviewer", now, now),
+    ]);
+    const invited = await json<InviteResponse>(await invite({ name: "Priya Raman", email: "priya@example.org", track_ids: [TRACK_AGENTS] }));
+
+    const door = await request("/api/v1/auth/demo", { method: "POST", body: JSON.stringify({ role: "reviewer" }) }, "");
+    expect(door.status).toBe(200);
+    const persona = await json<{ person: { id: string } }>(door);
+    expect(persona.person.id).toBe("per_seeded_reviewer");
+    expect(persona.person.id).not.toBe(invited.person.id);
+  });
+
   test("MRQ-107 · an anonymous caller cannot provision a reviewer", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/committees/${COMMITTEE_ID}/invites`, {
       method: "POST",
