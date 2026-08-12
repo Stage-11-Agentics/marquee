@@ -130,7 +130,11 @@ describe.sequential("MRQ-29 quick search", () => {
     expect(new Set(body.data.map((result) => result.type))).toEqual(new Set(["Abstract", "Session", "Speaker", "Form"]));
     expect(body.data.find((result) => result.id === ABSTRACT_ID)).toMatchObject({ type: "Abstract", href: `/submissions/${ABSTRACT_ID}` });
     expect(body.data.find((result) => result.id === SESSION_ID)).toMatchObject({ type: "Session", href: `/submissions/${SESSION_ID}` });
-    expect(body.data.find((result) => result.id === SPEAKER_ID)).toMatchObject({ type: "Speaker", href: `/onboarding?person=${SPEAKER_ID}` });
+    // MRQ-111: a roster person now lands on the record the hit names. The link
+    // was always shaped like a deep link; nothing read `?person=` until the
+    // roster existed. The path is /roster because /speakers is the public
+    // directory; the sidebar label the organizer reads is still "Speakers".
+    expect(body.data.find((result) => result.id === SPEAKER_ID)).toMatchObject({ type: "Speaker", href: `/roster?person=${SPEAKER_ID}` });
     expect(body.data.find((result) => result.id === MAIN_FORM_ID)).toMatchObject({ type: "Form", href: `/forms?form=${MAIN_FORM_ID}` });
   });
 

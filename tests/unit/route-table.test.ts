@@ -18,7 +18,7 @@ test("CONTRACT · the sidebar reproduces the binding prototype navigation order"
   expect([...routesFor("home"), ...routesFor("pipeline"), ...routesFor("modules")].map((route) => route.label)).toEqual([
     "Program home", "Program board", "Abstracts & sessions", "Add a session",
     "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published",
-    "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Files", "Communications", "Tasks", "Speaker portal", "Conference site",
+    "Speakers", "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Files", "Communications", "Tasks", "Speaker portal", "Conference site",
     "Embeds", "Conference settings",
     "Speaker follow-ups",
   ]);

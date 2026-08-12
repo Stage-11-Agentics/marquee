@@ -98,7 +98,8 @@ test("AC-104 · fuzzy name/title matching normalizes diacritics and preserves ca
   assert.match(matcher, /normalize\("NFD"\)/);
   assert.match(matcher, /function subsequenceScore/);
   assert.match(searchRoute, /href: `\/submissions\/\$\{encodeURIComponent\(row\.id\)\}`/);
-  assert.match(searchRoute, /href: `\/onboarding\?person=\$\{encodeURIComponent\(row\.id\)\}`/);
+  assert.match(searchRoute, /`\/roster\?person=\$\{encodeURIComponent\(row\.id\)\}`/);
+  assert.match(searchRoute, /`\/onboarding\?person=\$\{encodeURIComponent\(row\.id\)\}`/);
   assert.match(searchRoute, /href: `\/forms\?form=\$\{encodeURIComponent\(row\.id\)\}`/);
   assert.match(searchRoute, /requireSubmissionRead\(context, eventId\)/);
   assert.match(searchRoute, /form_admins scoped_admin/);

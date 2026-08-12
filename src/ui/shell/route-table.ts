@@ -25,6 +25,12 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "onboarding", path: "/onboarding", label: "Onboarding", icon: "5", group: "pipeline", sidebar: true },
   { id: "scheduled", path: "/submissions?status=scheduled", label: "Scheduled", icon: "6", group: "pipeline", sidebar: true },
   { id: "published", path: "/submissions?status=published", label: "Published", icon: "7", group: "pipeline", sidebar: true },
+  // The organizer's person list. The label is the noun organizers and the
+  // conference world use — "Speakers" — not a synonym that reads as a synonym.
+  // The PATH is /roster because /speakers is the public directory's SSR route
+  // (`public-agenda.route.tsx`), which resolves before the SPA fallback. The
+  // label is what the organizer reads; the path is only where the shell mounts.
+  { id: "speakers", path: "/roster", label: "Speakers", icon: "◍", group: "modules", sidebar: true },
   { id: "forms", path: "/forms", label: "CFP forms", icon: "□", group: "modules", sidebar: true },
   { id: "evaluation", path: "/evaluation", label: "Evaluation plan", icon: "◇", group: "modules", sidebar: true },
   { id: "reviewer", path: "/reviewer", label: "Review queue", icon: "✓", group: "modules", sidebar: true },

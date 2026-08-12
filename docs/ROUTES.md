@@ -31,6 +31,7 @@ everything else is drawn inside the organizer shell.
 | `/onboarding` | Onboarding | organizer | yes | client push |
 | `/submissions?status=scheduled` | Scheduled | organizer | yes | client push |
 | `/submissions?status=published` | Published | organizer | yes | client push |
+| `/roster` | Speakers | organizer | yes | client push |
 | `/forms` | CFP forms | organizer | yes | client push |
 | `/evaluation` | Evaluation plan | organizer | yes | client push |
 | `/reviewer` | Review queue | reviewer | yes | client push |
@@ -80,7 +81,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 ```text
 ROUTES (real paths, not hash routes):
   Public, no auth: / /:eventSlug/:kind/embed /agenda /embed/:slug /embed/config /f/:slug /p/:slug /s/:slug /speakers
-  Organizer (admin shell): /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /settings/venues /submissions/:id /settings/tasks /settings/api /import
+  Organizer (admin shell): /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /roster /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /settings/venues /submissions/:id /settings/tasks /settings/api /import
   Review queue: /reviewer
   Speaker portal: /portal
   Co-speaker confirmation: /co-speaker

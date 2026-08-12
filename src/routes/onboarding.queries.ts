@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import { listVersionsFor, listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
+import { ONBOARDING_PERSON_SOURCE } from "./speakers.queries";
 
 export const ONBOARDING_FILTERS = ["all", "overdue", "incomplete", "risk"] as const;
 export type OnboardingFilter = (typeof ONBOARDING_FILTERS)[number];
@@ -301,7 +302,9 @@ function buildRows(
     }
     const tasks = templates.map((template) => cellFromTask(template, chosenTasks.get(template.id), now));
     const owedCount = personTasks.filter((task) => isOwedTask(task)).length;
-    if (owedCount === 0) continue;
+    // A speaker who has finished everything used to vanish from the only screen
+    // that claimed to list speakers. The board keeps its chase semantics through
+    // the `incomplete` filter instead; "All" now genuinely means all.
     const personSessions = sessions.get(person.id) ?? [];
     const tracks = personSessions
       .flatMap((session) => session.tracks)
@@ -397,14 +400,13 @@ async function listPeople(db: D1Database, eventId: string): Promise<SpeakerBaseR
     `SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
             person.headshot_attachment_id,
             MAX(outbox.created_at) AS last_contact
-     FROM memberships membership
-     JOIN people person ON person.id = membership.person_id
-     LEFT JOIN outbox ON outbox.event_id = membership.event_id AND outbox.person_id = person.id
-     WHERE membership.event_id = ? AND membership.role = 'speaker'
+     FROM people person
+     LEFT JOIN outbox ON outbox.event_id = ? AND outbox.person_id = person.id
+     WHERE person.id IN (${ONBOARDING_PERSON_SOURCE})
      GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio,
               person.headshot_attachment_id
      ORDER BY person.name COLLATE NOCASE, person.id ASC`,
-  ).bind(eventId).all<SpeakerBaseRow>();
+  ).bind(eventId, eventId, eventId, eventId).all<SpeakerBaseRow>();
   return result.results.map((row) => ({ ...row, last_contact: row.last_contact === null ? null : Number(row.last_contact) }));
 }
 
@@ -568,13 +570,12 @@ export async function getOnboardingSpeaker(
     `SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
             person.headshot_attachment_id,
             MAX(outbox.created_at) AS last_contact
-     FROM memberships membership
-     JOIN people person ON person.id = membership.person_id
-     LEFT JOIN outbox ON outbox.event_id = membership.event_id AND outbox.person_id = person.id
-     WHERE membership.event_id = ? AND membership.person_id = ? AND membership.role = 'speaker'
+     FROM people person
+     LEFT JOIN outbox ON outbox.event_id = ? AND outbox.person_id = person.id
+     WHERE person.id = ? AND person.id IN (${ONBOARDING_PERSON_SOURCE})
      GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio,
               person.headshot_attachment_id`,
-  ).bind(eventId, personId).first<SpeakerBaseRow>();
+  ).bind(eventId, personId, eventId, eventId, eventId).first<SpeakerBaseRow>();
   if (!person) return null;
   const [templates, taskRows, sessions, profileFiles] = await Promise.all([
     listTemplates(db, eventId),

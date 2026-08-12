@@ -254,8 +254,14 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(afterBody.attention.overdue_submissions.count).toBeLessThan(beforeBody.attention.overdue_submissions.count);
     const chaseAfter = await request(`/api/v1/events/${EVENT_ID}/onboarding`, {}, ownerCookie);
     const chaseAfterBody = await chaseAfter.json<{ rows: Array<{ cells: Record<string, { state: string; glyph: string }>; person: { id: string; name: string } }> }>();
-    expect(chaseAfterBody.rows.find((row) => row.person.id === SPEAKER_ID)).toBeUndefined();
-    expect(chaseAfterBody.rows.find((row) => row.person.id === OTHER_PERSON_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "risk", glyph: "×" });
+    // MRQ-111: a speaker who has finished everything stays on the board with a
+    // clear row rather than disappearing from the only screen that claims to
+    // list speakers. "Still owes something" is the `incomplete` filter's job.
+    expect(chaseAfterBody.rows.find((row) => row.person.id === SPEAKER_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "done", glyph: "\u2713" });
+    expect(chaseAfterBody.rows.find((row) => row.person.id === OTHER_PERSON_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "risk", glyph: "\u00d7" });
+    const chaseIncomplete = await request(`/api/v1/events/${EVENT_ID}/onboarding?filter=incomplete`, {}, ownerCookie);
+    const chaseIncompleteBody = await chaseIncomplete.json<{ rows: Array<{ person: { id: string } }> }>();
+    expect(chaseIncompleteBody.rows.find((row) => row.person.id === SPEAKER_ID)).toBeUndefined();
   });
 
   test("AC-49 · overdue tasks carry a textual marker and a distinct overdue data state", async () => {

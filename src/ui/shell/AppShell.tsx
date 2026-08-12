@@ -28,6 +28,7 @@ import { ProgramBoardPage } from "../board/ProgramBoardPage";
 import { CreateSubmissionPage } from "../submissions/CreateSubmissionPage";
 import { SubmissionRecordPage } from "../submissions/SubmissionRecordPage";
 import { OnboardingPage } from "../onboarding/OnboardingPage";
+import { SpeakersPage } from "../speakers/SpeakersPage";
 import { SessionizeImportPage } from "../import/SessionizeImportPage";
 import { FilesPage } from "../files/FilesPage";
 
@@ -120,6 +121,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const isForms = location.pathname === "/forms";
   const isAgenda = location.pathname === "/agenda-builder";
   const isOnboarding = location.pathname === "/onboarding";
+  const isSpeakers = location.pathname === "/roster";
   const isImport = location.pathname === "/import";
   const isApiTokens = location.pathname === "/settings/api";
   if (location.pathname === "/portal") return <PortalPage />;
@@ -162,7 +164,8 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : route?.id === "settings" ? <EventSettings navigate={navigate} />
             : isForms ? <FormsPage search={location.search} />
             : isAgenda ? <AgendaPage />
-            : isOnboarding ? <OnboardingPage navigate={navigate} />
+            : isSpeakers ? <SpeakersPage search={location.search} navigate={navigate} />
+            : isOnboarding ? <OnboardingPage search={location.search} navigate={navigate} />
             : route?.id === "files" ? <FilesPage navigate={navigate} />
             : isImport ? <SessionizeImportPage navigate={navigate} />
             : route?.id === "communications" ? <>

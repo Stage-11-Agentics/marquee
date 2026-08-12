@@ -8,6 +8,7 @@ import taskCancellationWebhooksMigrationSql from "../../migrations/0005_task_can
 import auditRequestIdMigrationSql from "../../migrations/0006_audit_log_request_id.sql?raw";
 import embedWidgetKindsMigrationSql from "../../migrations/0007_embed_widget_kinds.sql?raw";
 import formFieldDatesMigrationSql from "../../migrations/0008_form_field_dates.sql?raw";
+import personCustomFieldsMigrationSql from "../../migrations/0009_person_custom_fields.sql?raw";
 import fileCommentsMigrationSql from "../../migrations/0009_file_comments.sql?raw";
 import criterionKindsMigrationSql from "../../migrations/0009_criterion_kinds.sql?raw";
 import boundFormOptionsMigrationSql from "../../migrations/0010_bound_form_options.sql?raw";
@@ -77,6 +78,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(auditRequestIdMigrationSql),
     ...splitStatements(embedWidgetKindsMigrationSql),
     ...splitStatements(formFieldDatesMigrationSql),
+    ...splitStatements(personCustomFieldsMigrationSql),
     ...splitStatements(fileCommentsMigrationSql),
     ...splitStatements(criterionKindsMigrationSql),
     ...splitStatements(boundFormOptionsMigrationSql),
