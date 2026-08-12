@@ -3,11 +3,15 @@ import type { ComponentChildren, JSX } from "preact";
 import { useState } from "preact/hooks";
 
 import type { AgendaSession, AgendaSnapshot } from "../../api/agenda";
+import {
+  agendaGridPosition,
+  DEFAULT_AGENDA_GRID_GRANULARITY,
+  generateAgendaGridSlots,
+  type AgendaGridSlot,
+} from "../../lib/agenda-grid";
 
-export const TIME_SLOTS = Array.from(
-  { length: 12 },
-  (_, index) => `${String(index + 9).padStart(2, "0")}:00`,
-);
+/** Default slot labels retained for callers that only need the board's default list. */
+export const TIME_SLOTS = generateAgendaGridSlots(DEFAULT_AGENDA_GRID_GRANULARITY).map((slot) => slot.time);
 
 export interface TrackDay {
   value: string;
@@ -50,6 +54,7 @@ export interface TrackBoardProps {
   snapshot: AgendaSnapshot;
   sessions: readonly AgendaSession[];
   days: readonly TrackDay[];
+  slots?: readonly AgendaGridSlot[];
   onDrop: (event: DragEvent, day: string, time: string, roomId: string, trackId?: string) => void;
   renderTile: (session: AgendaSession) => JSX.Element;
 }
@@ -58,14 +63,18 @@ export function TrackBoard({
   snapshot,
   sessions,
   days,
+  slots = generateAgendaGridSlots(),
   onDrop,
   renderTile,
 }: TrackBoardProps): JSX.Element {
   const fallbackRoom = snapshot.rooms[0];
+  const slotColumns = `repeat(${Math.max(slots.length, 1)}, minmax(105px, 1fr))`;
   return <div class="agenda-track-board" data-track-board>
-    <div class="agenda-track-time-axis" aria-hidden="true">
+    <div class="agenda-track-time-axis" aria-hidden="true" style={{ gridTemplateColumns: `110px ${slotColumns}` }}>
       <span class="agenda-track-axis-label">Track · day</span>
-      {TIME_SLOTS.map((time) => <span class="agenda-track-time tabular" key={time}>{time}</span>)}
+      {slots.map((slot) => <span class={`agenda-track-time tabular${slot.isHour ? "" : " is-micro"}`} key={slot.time} aria-label={slot.time}>
+        {slot.isHour ? slot.time : <span class="agenda-track-micro-tick" aria-hidden="true" />}
+      </span>)}
     </div>
     {snapshot.tracks.map((track) => {
       const laneSessions = sessions.filter((session) => session.track_id === track.id);
@@ -84,17 +93,25 @@ export function TrackBoard({
         <div class="agenda-track-days">
           {days.map((day) => <div class="agenda-track-day" data-track-day-band={day.value} key={day.value}>
             <div class="agenda-track-day-label"><strong>{day.label.split(" · ")[0]}</strong><span>{day.label.split(" · ").slice(1).join(" · ")}</span></div>
-            <div class="agenda-track-slots">
-              {TIME_SLOTS.map((time) => <DropCell
+            <div class="agenda-track-slots" style={{ gridTemplateColumns: slotColumns }}>
+              {slots.map((slot) => <DropCell
                 class="agenda-track-slot"
-                ariaLabel={`Place Session in ${track.name} on ${day.label} at ${time}`}
+                ariaLabel={`Place Session in ${track.name} on ${day.label} at ${slot.time}`}
                 dataTrackDay={day.value}
-                dataTrackTime={time}
-                key={`${day.value}-${time}`}
-                onDrop={(event) => { if (fallbackRoom) onDrop(event, day.value, time, fallbackRoom.id, track.id); }}
+                dataTrackTime={slot.time}
+                key={`${day.value}-${slot.time}`}
+                onDrop={(event) => { if (fallbackRoom) onDrop(event, day.value, slot.time, fallbackRoom.id, track.id); }}
               >{laneSessions
-                .filter((session) => sessionDay(session, snapshot.event.timezone) === day.value && sessionTime(session, snapshot.event.timezone) === time)
-                .map(renderTile)}
+                .filter((session) => sessionDay(session, snapshot.event.timezone) === day.value)
+                .flatMap((session) => {
+                  const position = agendaGridPosition(sessionTime(session, snapshot.event.timezone), slots);
+                  if (!position || position.slot.time !== slot.time) return [];
+                  return [<div
+                    class="agenda-session-position agenda-session-position-horizontal"
+                    key={session.id}
+                    style={{ left: `${position.offsetRatio * 100}%` }}
+                  >{renderTile(session)}</div>];
+                })}
               </DropCell>)}
             </div>
           </div>)}

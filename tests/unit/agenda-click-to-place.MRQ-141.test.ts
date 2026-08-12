@@ -6,6 +6,7 @@ import { renderToString } from "preact-render-to-string";
 import { describe, expect, test } from "vitest";
 
 import type { AgendaPoolItem, AgendaSession, AgendaSnapshot } from "../../src/api/agenda";
+import { generateAgendaGridSlots } from "../../src/lib/agenda-grid";
 import {
   agendaPlacementRequest,
   DayBoard,
@@ -157,6 +158,69 @@ describe("CONTRACT · MRQ-141 click-to-place", () => {
       expect(markup).toContain('type="button"');
       expect(markup).toContain('aria-label="Place at 10:00 · Room 2A"');
     }
+  });
+
+  test("CONTRACT · selected click slots expose :15 targets while odd stored starts remain visible", () => {
+    const fiveSlots = generateAgendaGridSlots(5);
+    const armedDay = renderToString(h(DayBoard, {
+      snapshot,
+      sessions: [],
+      day: DAY.value,
+      slots: fiveSlots,
+      onDrop: noop,
+      onPlace: noop,
+      armedPlacement: armed,
+      placementBusy: false,
+      onDragStart: noop,
+      onResize: noop,
+      onMove: noop,
+      onUnplace: noop,
+      onRoomOpen: noop,
+      conflicts: new Map(),
+    }));
+    expect(armedDay).toContain('aria-label="Place at 10:15 · Room 2A"');
+    expect(armedDay).toContain('aria-label="Place at 10:20 · Room 2A"');
+
+    const odd = scheduledSession();
+    odd.starts_at = Date.UTC(2026, 9, 12, 10, 20);
+    const oddDay = renderToString(h(DayBoard, {
+      snapshot: { ...snapshot, unscheduled: [], sessions: [odd] },
+      sessions: [odd],
+      day: DAY.value,
+      slots: generateAgendaGridSlots(15),
+      onDrop: noop,
+      onPlace: noop,
+      armedPlacement: null,
+      placementBusy: false,
+      onDragStart: noop,
+      onResize: noop,
+      onMove: noop,
+      onUnplace: noop,
+      onRoomOpen: noop,
+      conflicts: new Map(),
+    }));
+    expect(oddDay).toContain('data-session-id="agenda-session"');
+    expect(oddDay).toContain("Scheduled access · 10:20");
+    expect(oddDay).toMatch(/class="agenda-session-position" style="top:[^%]+%;"/);
+
+    const armedOddDay = renderToString(h(DayBoard, {
+      snapshot: { ...snapshot, sessions: [odd] },
+      sessions: [odd],
+      day: DAY.value,
+      slots: generateAgendaGridSlots(15),
+      onDrop: noop,
+      onPlace: noop,
+      armedPlacement: armed,
+      placementBusy: false,
+      onDragStart: noop,
+      onResize: noop,
+      onMove: noop,
+      onUnplace: noop,
+      onRoomOpen: noop,
+      conflicts: new Map(),
+    }));
+    expect(armedOddDay).toContain('data-session-id="agenda-session"');
+    expect(armedOddDay).not.toContain('aria-label="Place at 10:15 · Room 2A"');
   });
 
   test("CONTRACT · pool selection and scheduled tiles expose the non-mouse controls", () => {
