@@ -54,14 +54,10 @@
     }
   ],
   "id": "task_01KZT044ZTEHBEY9FKST6TR8FD",
-  "last_event_id": "ev_01KZT6P2K4EF9VNK4MJE05MTCE",
+  "last_event_id": "ev_01KZVP4CD94FT699CF080F07X6",
   "last_status_changed_at": "2026-08-12T05:21:23Z",
   "linked_files": [],
-  "needs_human": {
-    "flagged_by": "agent:delegator-mrq-94",
-    "reason": "Final fixes are ready at 4f331ad, but the Lattice review-cycle limit is reached (3/3); human review/approval is needed before another review cycle.",
-    "since": "2026-08-12T05:08:55Z"
-  },
+  "needs_human": null,
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 3,
@@ -71,6 +67,6 @@
   "tags": null,
   "title": "Public agenda: day-one default fakes an empty conference, \"Show full agenda\" is a no-op, JSON link is exposed, and there is no way home",
   "type": "bug",
-  "updated_at": "2026-08-12T05:21:23Z",
+  "updated_at": "2026-08-12T19:10:35Z",
   "urgency": null
 }

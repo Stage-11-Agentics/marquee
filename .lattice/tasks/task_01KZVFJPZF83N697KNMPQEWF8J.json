@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:540",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 3,
+  "comment_count": 4,
   "complexity": "high",
   "created_at": "2026-08-12T17:16:04Z",
   "created_by": {
@@ -28,10 +28,15 @@
       "id": "ev_01KZVMJSYYR7G6H9DKE9TX36T5",
       "role": "review",
       "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVN98YZMCSWXCV9E01TH0BH",
+      "role": "validation",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZVFJPZF83N697KNMPQEWF8J",
-  "last_event_id": "ev_01KZVMKXV9SGZRECTRBSCB0AZF",
+  "last_event_id": "ev_01KZVN98YZMCSWXCV9E01TH0BH",
   "last_status_changed_at": "2026-08-12T18:44:07Z",
   "linked_files": [],
   "priority": "high",
@@ -48,6 +53,6 @@
   ],
   "title": "Evaluation is an open seat \u2014 agent evaluator identity, badge, skill, and seeded evidence",
   "type": "task",
-  "updated_at": "2026-08-12T18:44:07Z",
+  "updated_at": "2026-08-12T18:55:47Z",
   "urgency": null
 }
