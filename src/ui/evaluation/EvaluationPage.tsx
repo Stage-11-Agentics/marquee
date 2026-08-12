@@ -226,8 +226,9 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const inviteReviewer = async (event: Event): Promise<void> => {
     event.preventDefault();
     // The confirmation state keeps the form mounted, so Enter in the link field
-    // would otherwise re-POST and mint a second credential.
-    if (!committee || inviteResult) return;
+    // would otherwise re-POST. Credentials are not idempotent the way the rows
+    // are: a second submit mints a second magic link and a second invitation.
+    if (!committee || inviteResult || inviteSaving) return;
     setInviteSaving(true);
     setError(null);
     try {

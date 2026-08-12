@@ -150,7 +150,9 @@ export async function demoMailWouldBeSuppressed(
   db: D1Database,
   eventId: string,
   toEmail: string,
+  sendPolicy: string = "demo_safe",
 ): Promise<boolean> {
+  if (sendPolicy === "always_live") return false;
   const event = await db
     .prepare("SELECT demo_mode FROM events WHERE id = ?")
     .bind(eventId)
@@ -161,8 +163,7 @@ export async function demoMailWouldBeSuppressed(
 }
 
 async function shouldSuppress(db: D1Database, row: OutboxRow): Promise<boolean> {
-  if (row.send_policy === "always_live") return false;
-  return demoMailWouldBeSuppressed(db, row.event_id, row.to_email);
+  return demoMailWouldBeSuppressed(db, row.event_id, row.to_email, row.send_policy);
 }
 
 async function claimRow(db: D1Database, id: string, now: number): Promise<OutboxRow | null> {

@@ -779,7 +779,7 @@ const inviteCommitteeReviewer = defineApiRoute(
       `).bind(existing.id).first<{ present: number }>();
       if (staff) {
         throw ApiError.unprocessable(
-          "that address belongs to a program-team member, who already has review access",
+          "that address belongs to a program-team member, so it cannot be given a reviewer invitation",
           "email",
         );
       }

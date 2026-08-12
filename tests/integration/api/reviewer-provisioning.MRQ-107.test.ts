@@ -76,6 +76,7 @@ async function seedFixture(): Promise<void> {
 
 interface InviteResponse {
   invite_sent: boolean;
+  invite_suppressed: boolean;
   magic_link?: string;
   person: { email: string; id: string; name: string };
   person_created: boolean;
@@ -256,6 +257,24 @@ describe("MRQ-107 reviewer provisioning", () => {
     const seat = await env.DB.prepare("SELECT COUNT(*) AS n FROM committee_members WHERE committee_id = ? AND person_id = ?")
       .bind(COMMITTEE_ID, ORGANIZER_ID).first<{ n: number }>();
     expect(Number(seat?.n)).toBe(0);
+  });
+
+  /**
+   * "Sent" has to mean sent. A demo conference logs mail to any address outside
+   * its allowlist, so a dialog that claims delivery there is a label that lies —
+   * and the organizer only discovers it when the reviewer never arrives.
+   */
+  test("CONTRACT · an invitation reports delivery only when the conference will actually send it", async () => {
+    const suppressed = await json<InviteResponse>(await invite({ name: "Nora Vale", email: "nora@example.org", track_ids: [TRACK_AGENTS] }));
+    expect(suppressed.invite_suppressed).toBe(true);
+    expect(suppressed.invite_sent).toBe(false);
+
+    const now = Date.now();
+    await env.DB.prepare("INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at) VALUES (?, ?, 'demo_safe_allowlist', ?, ?, ?)")
+      .bind("setting-mrq107-allowlist", EVENT_ID, JSON.stringify(["dario@example.org"]), now, now).run();
+    const delivered = await json<InviteResponse>(await invite({ name: "Dario Quill", email: "dario@example.org", track_ids: [TRACK_AGENTS] }));
+    expect(delivered.invite_suppressed).toBe(false);
+    expect(delivered.invite_sent).toBe(true);
   });
 
   test("CONTRACT · an anonymous caller cannot provision a reviewer", async () => {
