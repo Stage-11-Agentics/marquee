@@ -1,6 +1,23 @@
 import { describe, expect, test } from "vitest";
 
-import { acceptedAnyParams, isAcceptedStageDeadEnd } from "../../src/ui/submissions/list-request";
+import { acceptedAnyParams, acceptedStageUndercount, isAcceptedStageDeadEnd } from "../../src/ui/submissions/list-request";
+
+describe("MRQ-106 · Ready to place tells you what it is not", () => {
+  test("the gap is the trigger, not the zero", () => {
+    // The seed this ships against answers `?status=accepted` with ONE record
+    // out of 62 accepted talks. A list of one reads as an answer in a way an
+    // empty list does not, so it needs the other count more, not less.
+    expect(acceptedStageUndercount("accepted", 1, 62)).toBe(true);
+    expect(acceptedStageUndercount("accepted", 0, 62)).toBe(true);
+    // Nothing to say when the stage holds every accepted talk.
+    expect(acceptedStageUndercount("accepted", 62, 62)).toBe(false);
+    // Never on another filter, and never before both numbers are known.
+    expect(acceptedStageUndercount("accepted_any", 0, 62)).toBe(false);
+    expect(acceptedStageUndercount("waved", 0, 62)).toBe(false);
+    expect(acceptedStageUndercount("accepted", null, 62)).toBe(false);
+    expect(acceptedStageUndercount("accepted", 1, null)).toBe(false);
+  });
+});
 
 describe("MRQ-106 · the Ready-to-place dead end offers a way out", () => {
   test("the dead end is the stage filter finding nothing, and nothing else", () => {

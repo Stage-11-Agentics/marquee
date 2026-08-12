@@ -25,6 +25,13 @@ test("MRQ-106 · the Ready-to-place escape holds its space before the count arri
   assert.match(styles, /\.state-row \.accepted-escape \{[^}]*min-height: 18px/);
   // The count reads as a number, not as prose.
   assert.match(styles, /\.state-row \.accepted-escape strong \{[^}]*font-variant-numeric: tabular-nums/);
+
+  // The non-empty half: the note above the table reserves its line and its
+  // control from the moment the filter is on, so the table never moves.
+  assert.match(page, /class=\{`accepted-any-note \$\{undercounted \? "visible" : ""\}`\}/);
+  assert.match(page, /"Accepted-count space reserved"/);
+  assert.match(styles, /\.accepted-any-note \{[^}]*color: transparent[^}]*min-height: 30px/);
+  assert.match(styles, /\.accepted-any-note \.button \{ visibility: hidden; \}/);
 });
 
 test("MRQ-106 · the route map is generated and gated, never hand-written", async () => {

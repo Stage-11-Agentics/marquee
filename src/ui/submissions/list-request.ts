@@ -27,11 +27,21 @@ export function isCurrentSubmissionsRequest(requestId: number, currentRequestId:
 
 /**
  * `accepted` is a pipeline *stage*: it holds records whose onboarding is done.
- * `accepted_any` is the stored decision fact. So a conference with 150 accepted
- * talks answers `?status=accepted` with an empty list, which reads as "nothing
- * was accepted" to anyone who typed the obvious URL. That state earns an escape
- * hatch; every other empty list already has one.
+ * `accepted_any` is the stored decision fact. So `?status=accepted` on a
+ * conference that accepted 62 talks answers with the one talk whose onboarding
+ * has finished — and reads, to anyone who typed the obvious URL, as "this
+ * conference accepted one talk".
+ *
+ * The gap is the whole problem, not the zero: an empty list at least looks like
+ * a filter that missed, while a list of one looks like an answer. Both get the
+ * count of the other reading and a link to it.
  */
+export function acceptedStageUndercount(status: string, stageTotal: number | null, acceptedAnyTotal: number | null): boolean {
+  if (status !== "accepted" || stageTotal === null || acceptedAnyTotal === null) return false;
+  return acceptedAnyTotal > stageTotal;
+}
+
+/** The dead-end half: the stage filter found nothing at all. */
 export function isAcceptedStageDeadEnd(status: string, total: number | null): boolean {
   return status === "accepted" && total === 0;
 }

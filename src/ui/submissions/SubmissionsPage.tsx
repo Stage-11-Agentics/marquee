@@ -14,6 +14,7 @@ import { Button, PageHeader } from "../shell/components";
 import type { NavigationOptions } from "../shell/router";
 import {
   acceptedAnyParams,
+  acceptedStageUndercount,
   buildSubmissionsQuery,
   isAcceptedStageDeadEnd,
   isCurrentSubmissionsRequest,
@@ -520,13 +521,15 @@ export function SubmissionsPage({
   const envelope = state.kind === "ready" ? state.envelope : null;
   const rows = envelope?.data ?? [];
   const acceptedStageDeadEnd = isAcceptedStageDeadEnd(status, envelope?.total ?? null);
+  const acceptedStageFilter = status === "accepted";
+  const undercounted = acceptedStageUndercount(status, envelope?.total ?? null, acceptedAnyTotal);
   const acceptedAnyQuery = useMemo(() => acceptedAnyParams(params), [search]);
 
-  // Fired only from inside the dead end, and only for a count — one row, so the
-  // list this product treats speed as a feature of pays nothing on every other
-  // render (R7).
+  // Fired only while the Ready-to-place filter is on, and only for a count —
+  // one row, so the list this product treats speed as a feature of pays nothing
+  // on every other view (R7).
   useEffect(() => {
-    if (!acceptedStageDeadEnd) {
+    if (!acceptedStageFilter) {
       setAcceptedAnyTotal(null);
       return;
     }
@@ -542,7 +545,7 @@ export function SubmissionsPage({
       // that loaded fine. The reserved slot simply stays empty.
       .catch(() => { if (!controller.signal.aborted) setAcceptedAnyTotal(null); });
     return () => controller.abort();
-  }, [eventId, acceptedStageDeadEnd, acceptedAnyQuery, reloadKey]);
+  }, [eventId, acceptedStageFilter, acceptedAnyQuery, reloadKey]);
   const selectedCount = selectionCount(selectedIds, allMatching, envelope?.total ?? 0);
   const first = envelope && envelope.total > 0 ? (envelope.page - 1) * envelope.per_page + 1 : 0;
   const last = envelope ? Math.min(envelope.page * envelope.per_page, envelope.total) : 0;
@@ -692,6 +695,16 @@ export function SubmissionsPage({
       actions={<><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
     />
     <div class={`export-message ${exportError ? "visible" : ""}`} role="status">{exportError || "Export status space reserved"}</div>
+    {/*
+      Ready to place is a stage, not the decision. Its list is a true answer to
+      a question nobody asked, sitting under a URL that reads like the question
+      everybody asks — so the other reading, and the way to it, sit beside the
+      count. The line holds its space from the moment the filter is on, so the
+      table below it never moves when the count lands.
+    */}
+    {acceptedStageFilter && <div class={`accepted-any-note ${undercounted ? "visible" : ""}`} role="status">{undercounted
+      ? <><span><strong class="tabular">{envelope?.total.toLocaleString()}</strong> in Ready to place · <strong class="tabular">{acceptedAnyTotal?.toLocaleString()}</strong> accepted overall. Ready to place holds accepted talks whose onboarding tasks are finished.</span><Button small onClick={() => navigate(`/submissions?${acceptedAnyQuery.toString()}`)}>View all accepted</Button></>
+      : "Accepted-count space reserved"}</div>}
     {notifiedQueue && <div class={`notify-message ${notifyError || notifyMessage ? "visible" : ""}`} role="status">{notifyError || notifyMessage || "Notification status space reserved"}</div>}
     <section class="card table-card" aria-busy={state.kind === "loading" || refreshing}>
       <div class="saved-view-strip" aria-label="Saved conference views">
