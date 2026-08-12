@@ -31,3 +31,11 @@ No rubric item names this screen — it is the fallback the judge reaches when t
 - Accepted: submitter-only people intentionally join the existing event search candidate set because the typeahead reuses that endpoint. The result type stays `Speaker` for compatibility, but the fallback subtitle says `Conference person` rather than falsely calling a submitter-only record a speaker; the positive test asserts this choice.
 - Clarified: submitter selection is required in the UI and the UI always sends either `submitter_person_id` or an explicit inline `submitter` object. The API's actor fallback remains for backwards-compatible direct callers and is not claimed as removed.
 - Accepted: the typeahead sends ordinary query requests without the global-search prefetch/session cache headers, so it sees an inline-created person on the next query. The server's five-second cache remains limited to the existing explicit prefetch path.
+
+## Plan-Review Cycle 2 Resolutions (AUTHORITATIVE)
+
+- Fixed: the field-detail helper now handles both `unprocessable` and schema `malformed_request` envelopes, and the create form preserves the server message for either code in its global alert. The unit contract covers a dotted `submitter.email` issue.
+- Fixed: the tracks multi-select is controlled through each option's `selected` state rather than an array-valued select prop, so multi-selection survives Preact rerenders. Control edits clear their own stale field errors.
+- Fixed: inline person creation reuses an existing organization person on case-insensitive email match, avoiding the misleading conflict treatment and allowing event participation to be attached without duplicate people.
+- Fixed: the event search person query uses separate participation and submitter branches under the existing visibility scope, includes email in search text, and removes the unrelated membership-wide `Speaker` taxonomy expansion. The compound query is wrapped for SQLite ordering.
+- Fixed: agenda placement targets use labelled `group` roles rather than dozens of landmark `region`s, and a new source-contract test covers the picker controls and all board drop-cell call sites.
