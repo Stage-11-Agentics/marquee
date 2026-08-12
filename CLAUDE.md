@@ -91,6 +91,20 @@ git worktree add ../Marquee-worktrees/<branch> <branch>
   uncommitted changes are almost always a sibling agent's live work. Ask, or leave it.
   If the tree looks broken, raise a c11 flag rather than reaching for `stash` or
   `reset` — recovering a stash nobody knew to look in costs far more than waiting.
+- **Never `git stash` anywhere in this repo — the stash stack is shared by every
+  worktree.** Linked worktrees keep their own index and HEAD but share one `.git`,
+  and `refs/stash` lives there. Two agents who stash at the same moment swap
+  stacks: the second `git stash pop` takes the first agent's entry into the wrong
+  worktree, and each of them silently loses their own work while acquiring a
+  stranger's. This is not hypothetical — it happened twice in one minute on
+  2026-08-12 (MRQ-136 and MRQ-138), and both agents had to recover from dangling
+  commits found with `git fsck`.
+  - Need a clean tree to test a before-and-after? **Commit to your branch and use
+    `git checkout <sha> -- <paths>`**, or a scratch worktree. A branch costs nothing.
+  - If you have already popped someone else's stash: their content is still a
+    reachable commit. `git log -g refs/stash` lists live entries; a dropped one is
+    dangling and findable with `git fsck --dangling`. `git stash apply <sha>` restores
+    it. Tell the owning agent the sha rather than trying to push it back on the stack.
 - The board is committed to `main` on purpose. Conflicts in `.lattice/events/*.jsonl`
   and `ids.json` are survivable and visible; uncommitted board state disappears silently.
 
