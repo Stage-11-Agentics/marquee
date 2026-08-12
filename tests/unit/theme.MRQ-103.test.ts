@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { THEMES, THEME_STORAGE_KEY, applyTheme, isThemeId, readTheme, writeTheme } from "../../src/ui/shell/theme";
+import { THEMES, THEME_STORAGE_KEY, SWYXY_MODE_STORAGE_KEY, applyTheme, applySwyxyMode, isThemeId, readSwyxyMode, readTheme, writeSwyxyMode, writeTheme } from "../../src/ui/shell/theme";
 
 const root = resolve(import.meta.dirname, "../..");
 
@@ -36,6 +36,11 @@ function installDom(storage: FakeStorage | null): void {
 function currentAttribute(): string | undefined {
   return (globalThis as unknown as { document: { documentElement: { dataset: Record<string, string> } } })
     .document.documentElement.dataset.theme;
+}
+
+function currentSwyxyMode(): string | undefined {
+  return (globalThis as unknown as { document: { documentElement: { dataset: Record<string, string> } } })
+    .document.documentElement.dataset.swyxyMode;
 }
 
 let storage: FakeStorage;
@@ -110,11 +115,94 @@ describe("MRQ-103 · theme system", () => {
     }
   });
 
-  test("CONTRACT · every registered theme has a matching tokens.css block, so the select cannot offer a dead option", () => {
+  test("CONTRACT · every registered theme has a matching scoped stylesheet block, so the select cannot offer a dead option", () => {
     const tokens = readFileSync(resolve(root, "src/styles/tokens.css"), "utf8");
     for (const theme of THEMES) {
       if (theme.id === "day") continue; // Day is the bare :root.
-      expect(tokens).toContain(`html[data-theme="${theme.id}"]`);
+      if (theme.kind === "palette") {
+        // Palette themes live in tokens.css, per the MRQ-103 invariant.
+        expect(tokens).toContain(`html[data-theme="${theme.id}"]`);
+      } else {
+        // Register themes live in their own scoped stylesheets.
+        const sheet = readFileSync(resolve(root, `src/styles/themes/${theme.id}.css`), "utf8");
+        expect(sheet).toContain(`html[data-theme="${theme.id}"]`);
+      }
     }
+  });
+});
+
+describe("theme round · register themes", () => {
+  test("registry carries ids, picker labels, and kinds for both theme classes", () => {
+    expect(THEMES.map((theme) => theme.id)).toEqual(["day", "night", "latent-space", "ai-engineer", "swyxy"]);
+    expect(THEMES.map((theme) => theme.kind)).toEqual(["palette", "palette", "register", "register", "register"]);
+    const labels = Object.fromEntries(THEMES.map((theme) => [theme.id, theme.label]));
+    // swyxy and latent.space are lowercase on purpose — judge-facing casing.
+    expect(labels["latent-space"]).toBe("latent.space");
+    expect(labels["ai-engineer"]).toBe("AI Engineer");
+    expect(labels.swyxy).toBe("swyxy");
+    expect(isThemeId("latent-space")).toBe(true);
+    expect(isThemeId("ai-engineer")).toBe(true);
+    expect(isThemeId("swyxy")).toBe(true);
+    expect(isThemeId("swyx")).toBe(false);
+  });
+
+  test("a register theme sets the attribute its stylesheet keys on and round-trips through storage", () => {
+    writeTheme("latent-space");
+    expect(currentAttribute()).toBe("latent-space");
+    expect(storage.store.get(THEME_STORAGE_KEY)).toBe("latent-space");
+    expect(readTheme()).toBe("latent-space");
+    writeTheme("ai-engineer");
+    expect(currentAttribute()).toBe("ai-engineer");
+    expect(readTheme()).toBe("ai-engineer");
+  });
+
+  test("swyxy light is the attribute-less default inside the theme, mirroring Day's rule", () => {
+    writeTheme("swyxy");
+    expect(currentAttribute()).toBe("swyxy");
+    expect(readSwyxyMode()).toBe("light");
+    expect(currentSwyxyMode()).toBeUndefined();
+  });
+
+  test("the dark word flips swyxy to its dark palette and persists as the one theme choice", () => {
+    writeTheme("swyxy");
+    writeSwyxyMode("dark");
+    expect(currentSwyxyMode()).toBe("dark");
+    expect(storage.store.get(SWYXY_MODE_STORAGE_KEY)).toBe("dark");
+    expect(readSwyxyMode()).toBe("dark");
+    // The theme itself is still the single "swyxy" choice.
+    expect(storage.store.get(THEME_STORAGE_KEY)).toBe("swyxy");
+    // A fresh visit stamps the mode from storage along with the theme.
+    delete (globalThis as unknown as { document: { documentElement: { dataset: Record<string, string> } } })
+      .document.documentElement.dataset.swyxyMode;
+    applyTheme("swyxy");
+    expect(currentSwyxyMode()).toBe("dark");
+  });
+
+  test("switching away from swyxy clears the mode attribute; corrupt mode storage falls back to light", () => {
+    writeTheme("swyxy");
+    writeSwyxyMode("dark");
+    writeTheme("night");
+    expect(currentSwyxyMode()).toBeUndefined();
+    storage.store.set(SWYXY_MODE_STORAGE_KEY, "midnight");
+    expect(readSwyxyMode()).toBe("light");
+  });
+
+  test("mode storage that throws still yields light rather than an exception, and unpersistable flips still apply", () => {
+    storage.throwOn = "get";
+    expect(() => readSwyxyMode()).not.toThrow();
+    expect(readSwyxyMode()).toBe("light");
+    storage.throwOn = "set";
+    expect(() => writeSwyxyMode("dark")).not.toThrow();
+    expect(currentSwyxyMode()).toBe("dark");
+  });
+
+  test("the pre-paint script stamps the mode and loads register fonts, so the first paint is already the register", () => {
+    const shell = readFileSync(resolve(root, "index.html"), "utf8");
+    expect(shell).toContain(SWYXY_MODE_STORAGE_KEY);
+    expect(shell).toContain("swyxyMode");
+    expect(shell).toContain("Syncopate");
+    expect(shell).toContain("Plus+Jakarta+Sans");
+    // Day and Night stay font-free: no font link exists outside the register map.
+    expect(shell).not.toContain("rel=\"stylesheet\" href=\"https://fonts.googleapis.com");
   });
 });
