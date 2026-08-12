@@ -36,6 +36,22 @@ interface SendResponse {
   outbox_rows: Array<{ person_id: string; entity_id: string; outbox_id: string; inserted: boolean }>;
 }
 
+interface PortalInvite {
+  person_id: string;
+  name: string;
+  email: string;
+  invited_at: number;
+  outbox_id: string;
+  outbox_inserted: boolean;
+  magic_link?: string;
+}
+
+interface PortalInviteResponse {
+  ok: true;
+  message: string;
+  invites: PortalInvite[];
+}
+
 const FALLBACK_TEMPLATE: EmailTemplate = {
   key: "reminder_generic",
   name: "Generic reminder",
@@ -80,6 +96,7 @@ function reminderSubmission(row: OnboardingRow): string | null {
 
 function SpeakerDrawer({ eventId, personId, onClose }: { eventId: string; personId: string; onClose: () => void }): JSX.Element {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; detail: OnboardingSpeakerDetail }>({ kind: "loading" });
+  const [inviteState, setInviteState] = useState<{ kind: "idle" | "sending" } | { kind: "success"; result: PortalInviteResponse } | { kind: "error"; message: string }>({ kind: "idle" });
   useEffect(() => {
     const controller = new AbortController();
     setState({ kind: "loading" });
@@ -88,6 +105,19 @@ function SpeakerDrawer({ eventId, personId, onClose }: { eventId: string; person
       .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error) }); });
     return () => controller.abort();
   }, [eventId, personId]);
+
+  const invite = async () => {
+    setInviteState({ kind: "sending" });
+    try {
+      const result = await requestJson<PortalInviteResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/speakers/invite`, "/api/v1/events/{eventId}/speakers/invite", {
+        method: "POST",
+        body: JSON.stringify({ person_ids: [personId] }),
+      });
+      setInviteState({ kind: "success", result });
+    } catch (error: unknown) {
+      setInviteState({ kind: "error", message: errorSummary(error) });
+    }
+  };
 
   return <aside class="onboarding-drawer" role="dialog" aria-modal="true" aria-labelledby="speaker-drawer-title">
     <header class="onboarding-drawer-head"><div><span class="onboarding-kicker">Speaker context</span><h2 id="speaker-drawer-title">{state.kind === "ready" ? state.detail.person.name : "Loading speaker"}</h2></div><Button small aria-label="Close speaker context" onClick={onClose}>Close</Button></header>
@@ -99,6 +129,7 @@ function SpeakerDrawer({ eventId, personId, onClose }: { eventId: string; person
       <section class="onboarding-drawer-section"><h3>Tasks</h3><div class="onboarding-context-list">{state.detail.tasks.map((task) => <div class="onboarding-context-row" key={`${task.template_id}-${task.task_id ?? "unassigned"}`}><span class={`onboarding-glyph state-${task.state}`} aria-label={task.state}>{task.glyph}</span><div><strong>{task.title}</strong><span>{task.state} · due {formatDate(task.due_at)}</span></div></div>)}</div></section>
       <section class="onboarding-drawer-section"><h3>Sessions</h3><div class="onboarding-context-list">{state.detail.sessions.length === 0 ? <p>—</p> : state.detail.sessions.map((session) => <div class="onboarding-context-row" key={session.id}><span class="onboarding-context-mark">◌</span><div><strong>{session.title}</strong><span>{session.tracks.map((track) => track.name).join(" · ") || "No track"}{session.agenda ? ` · ${formatDateTime(session.agenda.starts_at)} · ${session.agenda.room ?? "No room"}` : " · not scheduled"}</span></div></div>)}</div></section>
       <section class="onboarding-drawer-section"><h3>Message history</h3><div class="onboarding-context-list">{state.detail.messages.length === 0 ? <p>Nothing sent yet.</p> : state.detail.messages.map((message) => <div class="onboarding-message-row" key={message.id}><div><strong>{message.subject}</strong><span>{formatDateTime(message.created_at)} · {message.to_email}</span></div><Chip tone={message.status === "sent" ? "success" : message.status === "suppressed" ? "warning" : ""}>{message.status === "suppressed" ? "demo-safe" : message.status}</Chip><p>{message.text}</p></div>)}</div></section>
+      <section class="onboarding-drawer-section onboarding-invite-section"><div class="onboarding-invite-heading"><div><h3>Portal access</h3><p>Send a one-time sign-in link and record the invitation on this conference.</p></div><Button small variant="primary" onClick={() => void invite()} disabled={inviteState.kind === "sending"}>{inviteState.kind === "sending" ? "Queueing…" : "Invite to portal"}</Button></div>{inviteState.kind === "success" ? <div class="onboarding-invite-result" aria-live="polite"><strong>{inviteState.result.message}</strong>{inviteState.result.invites.map((item) => item.magic_link ? <a href={item.magic_link} key={item.outbox_id}>Open {item.name}'s portal link</a> : <span key={item.outbox_id}>Outbox row {item.outbox_id} recorded; delivery remains provider-controlled.</span>)}</div> : null}{inviteState.kind === "error" ? <div class="onboarding-inline-error" role="alert">Invitation failed: {inviteState.message}</div> : null}</section>
     </div> : null}
   </aside>;
 }
@@ -181,6 +212,7 @@ export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, navigate }: { event
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawer, setDrawer] = useState<{ kind: "speaker"; personId: string } | { kind: "compose" } | null>(null);
   const [origin, setOrigin] = useState<HTMLElement | null>(null);
+  const [inviteState, setInviteState] = useState<{ kind: "idle" | "sending" } | { kind: "success"; result: PortalInviteResponse } | { kind: "error"; message: string }>({ kind: "idle" });
   const filterIdentity = JSON.stringify(filters);
   const ready = state.kind === "ready" ? state.snapshot : null;
   const rows = ready?.rows ?? [];
@@ -232,6 +264,20 @@ export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, navigate }: { event
     setSelected(new Set([row.id]));
     openDrawer({ kind: "compose" }, event.currentTarget as HTMLElement);
   };
+  const inviteSelected = async () => {
+    const personIds = [...new Set(selectedRows.map((row) => row.person.id))];
+    if (personIds.length === 0) return;
+    setInviteState({ kind: "sending" });
+    try {
+      const result = await requestJson<PortalInviteResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/speakers/invite`, "/api/v1/events/{eventId}/speakers/invite", {
+        method: "POST",
+        body: JSON.stringify({ person_ids: personIds }),
+      });
+      setInviteState({ kind: "success", result });
+    } catch (error: unknown) {
+      setInviteState({ kind: "error", message: errorSummary(error) });
+    }
+  };
   const taskTypes = ready?.facets.task_types ?? [];
   const tracks = ready?.facets.tracks ?? [];
   const counts = ready?.counts ?? { all: 0, overdue: 0, incomplete: 0, risk: 0 };
@@ -239,7 +285,8 @@ export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, navigate }: { event
   const clearFilters = () => setFilters({ filter: "all", taskType: "", track: "", search: "" });
 
   return <div class="onboarding-page">
-    <PageHeader title="Onboarding" copy={ready ? `${counts.incomplete} accepted speakers still owe something. The most behind are first; every task and reminder is visible here.` : "Reading the conference chase board…"} actions={<button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0} onClick={(event) => openDrawer({ kind: "compose" }, event.currentTarget)}>{`Send reminder (${selectedRows.length})`}</button>} />
+    <PageHeader title="Onboarding" copy={ready ? `${counts.incomplete} accepted speakers still owe something. The most behind are first; every task and reminder is visible here.` : "Reading the conference chase board…"} actions={<><Button small onClick={() => navigate?.("/import")}>Import speakers</Button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0 || inviteState.kind === "sending"} onClick={() => void inviteSelected()}>{inviteState.kind === "sending" ? "Inviting…" : `Invite to portal (${selectedRows.length})`}</button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0} onClick={(event) => openDrawer({ kind: "compose" }, event.currentTarget)}>{`Send reminder (${selectedRows.length})`}</button></>} />
+    <div class="onboarding-invite-result-slot" aria-live="polite">{inviteState.kind === "success" ? <div class="onboarding-invite-result"><strong>{inviteState.result.message}</strong>{inviteState.result.invites.map((item) => item.magic_link ? <a href={item.magic_link} key={item.outbox_id}>Open {item.name}'s portal link</a> : <span key={item.outbox_id}>{item.name}: outbox row {item.outbox_id} recorded; delivery remains provider-controlled.</span>)}</div> : null}{inviteState.kind === "error" ? <div class="onboarding-inline-error" role="alert">Invitation failed: {inviteState.message}</div> : null}</div>
     {ready ? <>
       <div class="onboarding-metrics" aria-label="Onboarding metrics">
         <button class={`onboarding-metric ${filters.filter === "incomplete" ? "active" : ""}`} type="button" aria-pressed={filters.filter === "incomplete"} onClick={() => setFilters((current) => ({ ...current, filter: "incomplete" }))}><span>Accepted speakers</span><strong class="tabular">{ready.metrics.accepted_speakers}</strong><small>{counts.incomplete} still owe something</small></button>

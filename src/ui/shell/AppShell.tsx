@@ -162,7 +162,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : isForms ? <FormsPage search={location.search} />
             : isAgenda ? <AgendaPage />
             : isOnboarding ? <OnboardingPage navigate={navigate} />
-            : isImport ? <SessionizeImportPage />
+            : isImport ? <SessionizeImportPage navigate={navigate} />
             : route?.id === "communications" ? <>
             <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />
             <CommsScreen />
