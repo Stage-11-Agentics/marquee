@@ -129,6 +129,7 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   expect(speaker.status).toBe(200);
   expect(speakerBody).toContain('href="/s/visible-session-title"');
   expect(speakerBody).toContain('class="public-brand" href="/"');
+  expect(speakerBody).toContain('href="/speakers?event=public-conf">← Speakers</a>');
   expect(speakerBody).toContain('href="/agenda?event=public-conf">← Agenda</a>');
   expect(speakerBody).toContain("Sheraton New York Times Square");
 

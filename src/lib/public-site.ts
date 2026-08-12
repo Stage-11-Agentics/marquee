@@ -121,6 +121,34 @@ export interface PublicSpeaker extends PublicSpeakerSummary {
   sessions: Array<Pick<PublicSession, "id" | "slug" | "title" | "day" | "date" | "time" | "roomLabel">>;
 }
 
+/**
+ * Public speaker records only carry a display name, so keep the directory's
+ * family-name heuristic explicit and modest: honor the common "Family, Given"
+ * form, otherwise use the final whitespace-delimited token. A mononym stays
+ * whole, and hyphenated/diacritic names remain intact instead of being
+ * normalized into a guess about their spelling or cultural name order.
+ */
+export function publicSpeakerSurname(name: string): string {
+  const normalized = name.trim().replace(/\s+/g, " ");
+  if (!normalized) return "";
+  const comma = normalized.indexOf(",");
+  if (comma > 0) {
+    const familyName = normalized.slice(0, comma).trim();
+    if (familyName) return familyName;
+  }
+  const parts = normalized.split(" ");
+  return parts.length > 1 ? parts.at(-1)! : normalized;
+}
+
+export function comparePublicSpeakerDirectoryEntries(
+  left: Pick<PublicSpeakerSummary, "id" | "name">,
+  right: Pick<PublicSpeakerSummary, "id" | "name">,
+): number {
+  return publicSpeakerSurname(left.name).localeCompare(publicSpeakerSurname(right.name))
+    || left.name.localeCompare(right.name)
+    || left.id.localeCompare(right.id);
+}
+
 export interface PublicEmbedConfig {
   kind: EmbedKind;
   tracks: string[];
@@ -726,7 +754,7 @@ export async function loadPublicSpeakerDirectory(
   return {
     event,
     venue,
-    speakers: [...speakersById.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    speakers: [...speakersById.values()].sort(comparePublicSpeakerDirectoryEntries),
     filters: { q: filters.q?.trim() || null },
   };
 }
