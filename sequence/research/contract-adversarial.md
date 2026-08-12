@@ -81,7 +81,7 @@ Second, independently: Wave 0's declared dependency chain is **M-01 (3 h) → M-
 **What is actually in this repo's history and tip** (verified):
 
 - `sequence/research/sources/competition-brief-full.pdf` — 13 MB, the organizers' complete 37-page brief, recovered from a non-public source.
-- `sequence/research/sources/competitor-context-doc-2026-08-08.md` — **another entrant's** consolidated context document, archived from Discord.
+- `sequence/research/sources/competitor-context-doc-2026-08-08.md` — **another entrant's** consolidated context document, archived from Discord. **Deleted 2026-08-12** before the repository went public; this finding was acted on rather than accepted.
 - `sequence/research/sources/competition-brief.md` (513 KB), `brief-image1.png`, `sessionboard-kb-urls.txt`.
 - `/Users/atin/…` absolute paths in 5 tracked files (`USER_STORIES.md` line 905 and four agent briefs).
 - `sequence/run-state.md` and the `briefs/` tree: Stage 11 account posture (Workers Paid, R2 entitlement, Resend tier, Airtable seats), Forgejo/`stage11.systems` internals, c11 workspace and surface IDs, the model-fleet composition.

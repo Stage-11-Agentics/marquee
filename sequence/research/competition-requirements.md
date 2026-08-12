@@ -424,7 +424,7 @@ A competitor shared a consolidated context doc in Discord (archived → `sources
 |---|---|
 | `competition-brief.md` | The official brief (Google Doc export), with base64 image — **text-only capture; superseded by the PDF below for the appendix** |
 | `competition-brief-full.pdf` | **The complete brief** — 37 pages incl. the bonus-rules page (speed/API/Forge) and the ~40-screenshot annotated Sessionboard appendix (§1.6). Recovered 2026-08-08 night via Google Doc PDF export |
-| `competitor-context-doc-2026-08-08.md` | Competitor's consolidated context doc from Discord (third-party synthesis; verification in §7.5 Batch 2) |
+| `competitor-context-doc-2026-08-08.md` | **Removed 2026-08-12, before this repository went public.** It was another entrant's consolidated context doc, shared in the Discord — not ours to republish. The verification it prompted stands in §7.5 Batch 2; only the archived copy is gone. |
 | `brief-image1.png` | Decoded from the brief — Sessionboard product mega-menu (Program / CRM / Marketing / CMS + AI Agents). Note: swyx's own email `swyx@ai.engineer` is visible in the subscribe field, confirming he captured it while logged in. |
 | `walkthrough-transcript.txt` | Timestamped, deduped transcript of the walkthrough (9:55) |
 | `walkthrough.en-orig.vtt`, `walkthrough.en.vtt` | Raw auto-caption files |

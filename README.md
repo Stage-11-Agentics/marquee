@@ -3,6 +3,31 @@
 Marquee is an open-source conference program workspace: CFP, review,
 acceptance, speaker onboarding, agenda, and public publishing in one loop.
 
+## Try it: **<https://marquee.stage11.dev>**
+
+A populated instance of AI Engineer New York 2026 — **1,001 submissions**, a
+live review round, a built agenda, and a public program. Not a screenshot tour
+and not a signup gate.
+
+Open **<https://marquee.stage11.dev/signin>** and pick a seat. Organizer,
+reviewer, or speaker, one click each, no password: every door opens a real
+session against the same data, not a preview mode.
+
+| Seat | What it opens |
+|---|---|
+| **Organizer** | The program: submissions, review plans, agenda builder, speaker onboarding, comms |
+| **Reviewer** | A scoped evaluation queue — only the tracks that reviewer is assigned |
+| **Speaker** | The portal: acceptance status, onboarding tasks, bio and file uploads |
+
+Nothing needs a login first: the public call for papers is at
+[`/f/cfp`](https://marquee.stage11.dev/f/cfp), the published program at
+[`/program`](https://marquee.stage11.dev/program), the speaker directory at
+[`/speakers`](https://marquee.stage11.dev/speakers), and the API reference at
+[`/api/docs`](https://marquee.stage11.dev/api/docs).
+`curl https://marquee.stage11.dev/health` reports the commit that is deployed.
+
+## The stack
+
 The foundation is Cloudflare Workers. D1 is the source of truth; R2 handles
 uploads, KV handles cache, and Queues keep mail, mirror, and operations work
 off the request path. The API is a first-class product surface, generated from
@@ -36,18 +61,22 @@ field, and gives you three off switches. Every error surface also shows a short
 reference code that greps straight to the log line behind it — the support
 handshake is one paste, not a screen-sharing session.
 
-## Status: local now, hosted after account setup
+## Status: running locally and hosted
 
-The local application runs today with Wrangler dev and Miniflare. The recipe
+Both paths are real and both are written down here. **Locally**, the recipe
 below builds the Worker, creates a fresh local D1, applies every migration,
-seeds the deterministic demo data, starts the real Worker, and checks both its
-health endpoint and a non-zero submissions response.
+seeds the deterministic demo data, starts the real Worker under Wrangler dev
+and Miniflare, and checks both its health endpoint and a non-zero submissions
+response. **Hosted**, [Deploy to Cloudflare](#deploy-to-cloudflare) is that same
+sequence against a real account — it is how <https://marquee.stage11.dev> is
+built and shipped, and there is no step in it that this repository omits.
 
-The hosted path is documented separately because it needs a real Cloudflare
-account on Workers Paid, R2 entitlement, created D1/KV/R2/Queues resources,
-production secrets, and a domain. Deploying to a real Cloudflare account is not
-covered in this checkout. The `REPLACE_ME-*` and `replace-me-*` values in
-`wrangler.jsonc` are a deliberate stop sign: do not deploy them.
+The hosted path needs a Cloudflare account on Workers Paid (the free plan's
+10 ms CPU ceiling is below what server-rendering a thousand-row table costs),
+R2 entitlement, and your own D1, KV, R2, and Queues resources. `wrangler.jsonc`
+here holds the IDs and routes of *our* deployment rather than placeholders, so
+the first thing a self-hoster changes is that file. Nothing in it is a secret —
+production credentials are Wrangler secrets and are not in this repository.
 
 ## API and integration surface
 
