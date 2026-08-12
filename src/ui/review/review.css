@@ -145,3 +145,27 @@
   .review-file-row { grid-template-columns: 38px minmax(0, 1fr); }
   .review-file-row > .chip { grid-column: 2; justify-self: start; }
 }
+
+/* The round's own scorecard, as the organizer configured it. A rating strip is
+   generated over the configured scale, so a 1–10 round is not silently a 1–5. */
+.review-criteria { display: grid; gap: 12px; margin-top: 15px; }
+.review-criteria > .subtle { color: var(--muted); font: 600 10px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.review-criterion { display: grid; gap: 6px; }
+.review-criterion-name { font-size: 12px; font-weight: 600; }
+.review-criteria .score-buttons { grid-template-columns: repeat(auto-fit, minmax(34px, 1fr)); margin-top: 0; }
+.review-criterion select, .review-criterion textarea { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 12px; line-height: 1.45; min-height: 34px; outline: none; padding: 7px 9px; width: 100%; }
+.review-criterion textarea { min-height: 64px; resize: vertical; }
+.review-criterion select:focus, .review-criterion textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+/* Completed work stays visible. A submitted review used to vanish, which left a
+   reviewer no way to check what they had recorded. */
+.reviewer-completed { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 16px; }
+.reviewer-completed-head { align-items: baseline; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin-bottom: 10px; }
+.reviewer-completed-head h2 { font-size: 14px; margin: 5px 0 0; }
+.reviewer-completed-list { display: grid; gap: 6px; }
+.reviewer-completed-row { align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; display: grid; font: inherit; gap: 10px; grid-template-columns: 18px minmax(0, 1fr) auto auto; min-height: 42px; padding: 8px 11px; text-align: left; width: 100%; }
+.reviewer-completed-row:hover { border-color: var(--accent); }
+.completed-mark { color: var(--success); font: 600 12px/1 var(--mono); }
+.completed-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.completed-open { color: var(--muted); font-size: 11px; }
+.saved-criteria { margin-top: 10px; }

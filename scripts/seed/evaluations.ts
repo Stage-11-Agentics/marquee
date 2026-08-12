@@ -136,7 +136,7 @@ export function run(ctx: SeedContext): void {
     plan_id: PLAN_ID,
     position: 1,
     name: "Final selection",
-    mode: "comparison",
+    mode: "scorecard",
     anonymized: 0,
     target_reviews_per_submission: 3,
     opens_at: Date.UTC(2026, 7, 29, 16),
@@ -145,20 +145,37 @@ export function run(ctx: SeedContext): void {
     updated_at: ctx.now,
   });
 
-  const criteria = [
-    ["Program fit", 40], ["Audience value", 35], ["Clarity", 25],
+  // Each round carries its own scorecard, and round one exercises all three
+  // criterion kinds: a chair opening the demo sees what the editor can build,
+  // not a bank of identical sliders.
+  const roundOneCriteria = [
+    { name: "Program fit", kind: "numeric", weight_pct: 40, scale_min: 1, scale_max: 5, options: null },
+    { name: "Audience value", kind: "numeric", weight_pct: 35, scale_min: 1, scale_max: 5, options: null },
+    { name: "Clarity", kind: "numeric", weight_pct: 25, scale_min: 1, scale_max: 5, options: null },
+    { name: "Recommendation", kind: "select", weight_pct: 0, scale_min: null, scale_max: null, options: JSON.stringify(["Accept", "Maybe", "Reject"]) },
+    { name: "Comments", kind: "text", weight_pct: 0, scale_min: null, scale_max: null, options: null },
   ] as const;
-  criteria.forEach(([name, weight], position) => {
-    ctx.add("rubric_criteria", {
-      id: seedId("rbc", name),
-      round_id: ROUND_ONE_ID,
-      name,
-      weight_pct: weight,
-      position,
-      created_at: ctx.now,
-      updated_at: ctx.now,
+  const roundTwoCriteria = [
+    { name: "Final score", kind: "numeric", weight_pct: 100, scale_min: 1, scale_max: 10, options: null },
+    { name: "Committee notes", kind: "text", weight_pct: 0, scale_min: null, scale_max: null, options: null },
+  ] as const;
+  for (const [roundId, criteria] of [[ROUND_ONE_ID, roundOneCriteria], [ROUND_TWO_ID, roundTwoCriteria]] as const) {
+    criteria.forEach((criterion, position) => {
+      ctx.add("rubric_criteria", {
+        id: seedId("rbc", `${roundId}-${criterion.name}`),
+        round_id: roundId,
+        name: criterion.name,
+        kind: criterion.kind,
+        options: criterion.options,
+        scale_min: criterion.scale_min,
+        scale_max: criterion.scale_max,
+        weight_pct: criterion.weight_pct,
+        position,
+        created_at: ctx.now,
+        updated_at: ctx.now,
+      });
     });
-  });
+  }
 
   ctx.add("committees", {
     id: COMMITTEE_ID,
