@@ -17,7 +17,15 @@ const OWNER_ID = "per_demo_organizer";
 const FORM_ID = "form-portal";
 const SUBMISSION_ID = "sub-portal-talk";
 const REVIEW_SUBMISSION_ID = "sub-portal-review";
-const NOW = Date.UTC(2026, 7, 11, 15, 0, 0);
+// Anchored to the real clock, not to a calendar date. Task state and form
+// windows are derived from Date.now() in production, so every fixture here
+// means "a day before now" or "a day after now" — relative offsets. Pinned to
+// an absolute date, those offsets silently change meaning as the wall clock
+// passes them: this file's `NOW + 86_400_000` fixtures were written as "due
+// tomorrow", and on 2026-08-12T15:00Z they became "due in the past", flipping
+// a task from risk to overdue and closing a form window that a test expects
+// open. The suite went red with no commit behind it. Only the anchor moves.
+const NOW = Date.now();
 
 let speakerCookie = "";
 let otherSpeakerCookie = "";
