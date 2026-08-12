@@ -97,6 +97,12 @@
 .speaker-list-row strong { font: 500 12px/1.3 var(--sans); }
 .speaker-list-row span { color: var(--muted); font: 10px/1.2 var(--mono); }
 
+.speaker-files-groups { display: grid; gap: 8px; }
+.speaker-files-group { border: 1px solid var(--line); display: grid; gap: 6px; min-width: 0; padding: 9px 10px; }
+.speaker-files-group-head { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; min-width: 0; }
+.speaker-files-group-head strong { font: 500 12px/1.3 var(--sans); }
+.speaker-files-group-meta { color: var(--muted); font: 10px/1.2 var(--mono); text-align: right; white-space: nowrap; }
+
 @media (max-width: 720px) {
   .speaker-form-grid { grid-template-columns: minmax(0, 1fr); }
   .speaker-board-tools { align-items: stretch; flex-direction: column; }

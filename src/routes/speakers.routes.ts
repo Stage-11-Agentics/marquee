@@ -23,6 +23,7 @@ import {
   type PersonProfileColumns,
 } from "../lib/person-profile";
 import { speakerMembershipStatement } from "../lib/speaker-membership";
+import { listSpeakerFiles } from "./speaker-files.queries";
 import { getSpeaker, listSpeakers } from "./speakers.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -197,6 +198,36 @@ const readSpeaker = defineApiRoute(
     const speaker = await getSpeaker(context.env.DB, eventId, personId);
     if (!speaker) throw ApiError.notFound("speaker not found");
     return context.json({ speaker }, 200);
+  },
+);
+
+/**
+ * The media origin is a Worker binding rather than an API binding, exactly as
+ * `uploads.routes.ts` and `files.routes.ts` treat it.
+ */
+function mediaOrigin(context: Context<ApiEnv>): string {
+  return (context.env as unknown as { MEDIA_PUBLIC_ORIGIN?: string }).MEDIA_PUBLIC_ORIGIN ?? "";
+}
+
+const readSpeakerFiles = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/speakers/{personId}/files",
+    operationId: "listEventSpeakerFiles",
+    summary: "List everything one speaker has sent the conference",
+    description:
+      "The speaker's profile photo and every requested deliverable, each with filename, upload date, size, and full version history. Version numbers and the current version are derived from the owner's latest-pointer, never stored. Every returned file URL is an unauthenticated capability URL on the media origin.",
+    tags: ["Speakers", "Files"],
+    request: { params: speakerParams },
+    policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(z.unknown(), "Speaker files"), ...errorResponses([401, 403, 404, 429, 500]) },
+  },
+  async (context) => {
+    const { eventId, personId } = context.req.valid("param");
+    await eventFor(context.env.DB, eventId);
+    const speaker = await getSpeaker(context.env.DB, eventId, personId);
+    if (!speaker) throw ApiError.notFound("speaker not found");
+    return context.json({ data: await listSpeakerFiles(context.env.DB, eventId, personId, mediaOrigin(context)) }, 200);
   },
 );
 
@@ -457,4 +488,4 @@ const patchSpeaker = defineApiRoute(
   },
 );
 
-export const apiRoutes = [listRoster, readSpeaker, createSpeaker, patchSpeaker];
+export const apiRoutes = [listRoster, readSpeaker, readSpeakerFiles, createSpeaker, patchSpeaker];

@@ -5,6 +5,7 @@ import type { SpeakerRow, SpeakerStatus } from "../../routes/speakers.queries";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Chip } from "../shell/components";
 import { SpeakerAvatar } from "./SpeakerAvatar";
+import { SpeakerFilesPanel } from "./SpeakerFilesPanel";
 
 const STATUS_ORDER: SpeakerStatus[] = ["pending", "invited", "confirmed", "declined"];
 const STATUS_LABELS: Record<SpeakerStatus, string> = {
@@ -201,8 +202,7 @@ export function SpeakerRecord({
         </div>
       </section>
 
-      {/* Reserved for MRQ-112's speaker files panel; it owns the serve path and the render. */}
-      <section class="speaker-section speaker-files" aria-label="Speaker files" />
+      <SpeakerFilesPanel eventId={eventId} personId={personId} />
 
       <section class="speaker-section">
         <h3>Onboarding</h3>
