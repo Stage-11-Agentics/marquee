@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const policyPath = resolve(repositoryRoot, "code/platform/r2-cors.json");
+const policyPath = resolve(repositoryRoot, "scripts/platform/r2-cors.json");
 const wranglerPath = resolve(repositoryRoot, "node_modules/.bin/wrangler");
 const allowedBuckets = new Set(["marquee-media", "marquee-media-preview"]);
 
@@ -38,7 +38,8 @@ child.once("error", (error) => {
   throw error;
 });
 
-const exitCode = await new Promise((resolveExit) => {
+const exitCode = await new Promise((resolveExit, rejectExit) => {
+  child.once("error", rejectExit);
   child.once("exit", (code, signal) => resolveExit(code ?? (signal ? 1 : 0)));
 });
 

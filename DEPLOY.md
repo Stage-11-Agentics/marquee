@@ -106,6 +106,21 @@ the production origin, the signed upload's `PUT` and headers, and a deliberately
 wrong origin. Run it after every deploy; it is the guard against the local
 `LOCAL_UPLOAD_SHIM` hiding a broken cross-origin path.
 
+The reviewed source of truth is `scripts/platform/r2-cors.json`. Apply it from a
+clean checkout with the existing scoped credential:
+
+```sh
+CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
+CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" \
+node scripts/platform/apply-r2-cors.mjs
+```
+
+The apply wrapper defaults to `marquee-media`; set
+`MARQUEE_R2_CORS_BUCKET=marquee-media-preview` only when a browser path uses the
+preview bucket. Local development uses `LOCAL_UPLOAD_SHIM=1`, so it deliberately
+does not exercise a real cross-origin R2 PUT and the production policy grants no
+localhost origin.
+
 **Guardrail G6: the session cookie must carry no `Domain` attribute.** `stage11.dev` is
 HSTS-preloaded and a parent-domain cookie would leak across it. Expect exactly
 `mq_session=…; Max-Age=…; Path=/; HttpOnly; Secure; SameSite=Lax`.

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { emit, writeReport } from "./lib/command.mjs";
+
 const productionOrigin = process.env.MARQUEE_CORS_PRODUCTION_ORIGIN ?? "https://marquee.stage11.dev";
 const wrongOrigin = process.env.MARQUEE_CORS_WRONG_ORIGIN ?? "https://not-allowed.example";
 const probeUrl = process.env.MARQUEE_R2_CORS_URL;
@@ -46,14 +48,15 @@ requireIncludes(header(allowed, "access-control-allow-headers"), "content-type",
 requireIncludes(header(allowed, "access-control-allow-headers"), "if-none-match", "Access-Control-Allow-Headers");
 
 const rejected = await preflight(wrongOrigin);
-if (rejected.headers.get("access-control-allow-origin") === wrongOrigin) {
+const rejectedAllowOrigin = rejected.headers.get("access-control-allow-origin");
+if (rejected.ok || rejectedAllowOrigin !== null) {
   throw new Error(`R2 preflight incorrectly allowed the deliberately wrong origin ${wrongOrigin}.`);
 }
 
-console.log(JSON.stringify({
+const result = {
   command: "check:r2-cors",
   status: "pass",
-  probeUrl: parsedProbeUrl.origin + parsedProbeUrl.pathname,
+  probePath: parsedProbeUrl.pathname,
   productionOrigin,
   productionPreflight: {
     status: allowed.status,
@@ -64,6 +67,8 @@ console.log(JSON.stringify({
   wrongOrigin: {
     origin: wrongOrigin,
     status: rejected.status,
-    allowOrigin: rejected.headers.get("access-control-allow-origin"),
+    allowOrigin: rejectedAllowOrigin,
   },
-}));
+};
+const report = await writeReport("artifacts/checks/r2-cors.json", result);
+emit({ ...result, report });

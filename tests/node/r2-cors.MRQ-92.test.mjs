@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 const root = resolve(import.meta.dirname, "../..");
-const policyPath = resolve(root, "code/platform/r2-cors.json");
+const policyPath = resolve(root, "scripts/platform/r2-cors.json");
 const applyPath = resolve(root, "scripts/platform/apply-r2-cors.mjs");
 const checkPath = resolve(root, "scripts/checks/check-r2-cors.mjs");
 const e2ePath = resolve(root, "scripts/checks/run-e2e.mjs");
@@ -18,8 +18,6 @@ test("CONTRACT · the reviewed R2 policy names real origins and browser upload r
   assert.equal(policy.rules.length, 1);
   assert.deepEqual(rule.allowed.origins, [
     "https://marquee.stage11.dev",
-    "http://127.0.0.1:8787",
-    "http://localhost:8787",
   ]);
   assert.deepEqual(rule.allowed.methods, ["PUT"]);
   assert.deepEqual(rule.allowed.headers, ["content-type", "if-none-match"]);
@@ -53,9 +51,12 @@ test("CONTRACT · the deployed check proves the production preflight and rejects
 
 test("CONTRACT · speaker upload transport failures keep diagnostics and show retry copy", () => {
   const portal = readFileSync(portalPath, "utf8");
+  const uploadClient = readFileSync(resolve(root, "src/ui/upload/upload-client.ts"), "utf8");
 
   assert.match(portal, /console\.error\("Speaker upload failed", caught\)/);
   assert.match(portal, /speakerUploadFailureMessage\(caught\)/);
+  assert.match(portal, /isUploadAborted\(caught\)/);
+  assert.match(uploadClient, /UPLOAD_PUT_NETWORK_ERROR/);
   assert.match(portal, /Retry upload/);
   assert.doesNotMatch(portal, /upload PUT network error/);
 });

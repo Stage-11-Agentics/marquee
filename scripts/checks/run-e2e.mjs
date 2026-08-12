@@ -20,5 +20,6 @@ if (!specifications.some((name) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(name))) {
 } else if (!process.env.MARQUEE_E2E_URL) {
   throw new Error("e2e requires MARQUEE_E2E_URL; local dev is not a substitute");
 } else {
+  await import("./check-r2-cors.mjs");
   await import("@playwright/test/cli");
 }
