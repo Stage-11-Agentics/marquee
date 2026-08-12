@@ -18,7 +18,7 @@
 | 2026-08-08 ~16:16 EDT | AIE's real workflow reconstructed: they run **4 events/yr on Sessionize today**; AIE NYC 2026 CFP is public and live. |
 | 2026-08-08 ~16:18 EDT | Sessionboard KB deep-read: forms, evaluations (round-based), agenda/conflicts, automated emails, portal tasks, roles. First full pass complete. |
 | 2026-08-08 evening | **Discord batch 1** (Atin paste; Discord Intel agent). swyx answers day-1 threads: **Q1 answered** (mirror permitted, bonus = Airtable as source of truth), **Q5 answered** (conditional fine; routing = tracks↔reviewers, *one or more* on both sides), review-workflow floor set (`unreviewed → approve/maybe/deny`), agenda floor narrowed (day/room + DnD + conflicts "enough"), onboarding task list enumerated, emails/ICS "should work on an MVP basis," Accelevents skip re-confirmed, **another follow-up video promised "today" covering email/calendar depth**. R4/R5 notes amended; **R51–R52 added**; §7 updated; rulings log added below §7. |
-| 2026-08-08 night | **Full brief PDF recovered** → `sources/competition-brief-full.pdf` (37 pp, ~40 annotated screenshots — the original text-only capture missed the entire SCREENSHOTS appendix and one rules page). Lead: a competitor's consolidated context doc (archived → `sources/competitor-context-doc-2026-08-08.md`) referenced content we didn't hold. **New explicit brief bonuses: speed/performance, API, Forge hosting (teeny)** → R7 re-sourced, **R53–R54 added**; submission deliverables confirmed (form + repo + deployed site — **no entrant walkthrough video**); swyx's in-screenshot annotations captured (§1.6); Q2 evidence updated; batch-2 rulings-log entry added. |
+| 2026-08-08 night | **Full brief PDF recovered** → `sources/competition-brief-full.pdf` (37 pp, ~40 annotated screenshots — the original text-only capture missed the entire SCREENSHOTS appendix and one rules page). Lead: a competitor's consolidated context doc (archived, then deleted 2026-08-12 before the public flip — see the source manifest) referenced content we didn't hold. **New explicit brief bonuses: speed/performance, API, Forge hosting (teeny)** → R7 re-sourced, **R53–R54 added**; submission deliverables confirmed (form + repo + deployed site — **no entrant walkthrough video**); swyx's in-screenshot annotations captured (§1.6); Q2 evidence updated; batch-2 rulings-log entry added. |
 
 **Requirements status: STILL MOVING.** Two more videos are promised (Saturday = *today*, Sunday = *tomorrow*), after which requirements FREEZE. Nothing below is frozen yet. See [Timeline](#timeline--logistics).
 
@@ -400,7 +400,7 @@ Every material item from Atin's pastes, one row each, newest batch first. Severi
 
 ### Batch 2 — competitor CONTEXT.md verification + full-brief recovery, 2026-08-08 night
 
-A competitor shared a consolidated context doc in Discord (archived → `sources/competitor-context-doc-2026-08-08.md`). Verification against primary sources, which its screenshot claims led us to recover:
+A competitor shared a consolidated context doc in Discord (archived at the time; deleted 2026-08-12 before the public flip — it was not ours to republish). Verification against primary sources, which its screenshot claims led us to recover:
 
 | Claim | Verdict | Impact |
 |---|---|---|

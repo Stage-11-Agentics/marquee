@@ -20,8 +20,8 @@ session against the same data, not a preview mode.
 | **Speaker** | The portal: acceptance status, onboarding tasks, bio and file uploads |
 
 Nothing needs a login first: the public call for papers is at
-[`/f/cfp`](https://marquee.stage11.dev/f/cfp), the published program at
-[`/program`](https://marquee.stage11.dev/program), the speaker directory at
+[`/f/cfp`](https://marquee.stage11.dev/f/cfp), the published agenda at
+[`/agenda`](https://marquee.stage11.dev/agenda), the speaker directory at
 [`/speakers`](https://marquee.stage11.dev/speakers), and the API reference at
 [`/api/docs`](https://marquee.stage11.dev/api/docs).
 `curl https://marquee.stage11.dev/health` reports the commit that is deployed.
