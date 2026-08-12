@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 import reviewerPageSource from "../../src/ui/review/ReviewerPage.tsx?raw";
 import shellSource from "../../src/ui/shell/AppShell.tsx?raw";
 
+const evaluationPageSource = readFileSync(fileURLToPath(new URL("../../src/ui/evaluation/EvaluationPage.tsx", import.meta.url)), "utf8");
+const submissionRecordPageSource = readFileSync(fileURLToPath(new URL("../../src/ui/submissions/SubmissionRecordPage.tsx", import.meta.url)), "utf8");
+
 const reviewerStyles = readFileSync(fileURLToPath(new URL("../../src/ui/review/review.css", import.meta.url)), "utf8");
 
 test("AC-61, AC-158, AC-159 · the reviewer surface supports keyboard review at mobile width without admin chrome", () => {
@@ -61,4 +64,17 @@ test("CONTRACT · MRQ-108 · the reviewer renders the round's own scorecard and 
   expect(reviewerPageSource).toContain("Reopen");
   expect(reviewerPageSource).toContain("data-saved-criteria");
   expect(reviewerStyles).toContain(".reviewer-completed-row");
+});
+
+test("MRQ-110 · reviewer and chair surfaces label recusals and send reminders through their write routes", () => {
+  expect(reviewerPageSource).toContain('data-reviewer-control="declare-conflict"');
+  expect(reviewerPageSource).toContain("abstained: recusal.abstained ? 1 : 0");
+  expect(evaluationPageSource).toContain('`/api/v1/events/${eventId}/rounds/${round.id}/reviewers/${personId}/remind`');
+  expect(evaluationPageSource).toContain('"/api/v1/events/{eventId}/rounds/{roundId}/reviewers/{personId}/remind", {');
+  expect(evaluationPageSource).toContain('method: "POST"');
+  expect(evaluationPageSource).toContain("Reviewer pool");
+  expect(evaluationPageSource).toContain("1 recusal · needs reassignment");
+  expect(submissionRecordPageSource).toContain("Conflict declared");
+  expect(submissionRecordPageSource).toContain("Reviewer recused; no recommendation recorded.");
+  expect(submissionRecordPageSource).toContain("filter((evaluation) => !evaluation.abstained)");
 });

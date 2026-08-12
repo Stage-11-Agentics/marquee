@@ -149,6 +149,9 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
       body: JSON.stringify({ mode: "n_per_submission", reviewers_per_submission: 1, submission_ids: [SUBMISSION_COMPARISON_THREE] }),
     });
     expect(distributed.status).toBe(200);
+    const pool = await env.DB.prepare("SELECT person_id FROM committee_members WHERE committee_id = ? ORDER BY person_id").bind(COMMITTEE_ID).all<{ person_id: string }>();
+    const assigned = await env.DB.prepare("SELECT reviewer_person_id FROM round_assignments WHERE round_id = ? AND submission_id = ? ORDER BY reviewer_person_id").bind(ROUND_ONE_ID, SUBMISSION_COMPARISON_THREE).all<{ reviewer_person_id: string | null }>();
+    expect(assigned.results.map((row) => row.reviewer_person_id)).toEqual(pool.results.map((row) => row.person_id));
   });
 
   test("ABS-12 · declaring a conflict persists an abstention, completes the assignment, and leaves aggregates untouched", async () => {
@@ -169,6 +172,17 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect(detailBody.rounds.find((round) => round.id === ROUND_ONE_ID)?.progress.recusals).toBeGreaterThanOrEqual(1);
     expect(detailBody.summary.recusals).toBeGreaterThanOrEqual(1);
     expect(detailBody.summary.evaluations).toBeGreaterThanOrEqual(0);
+
+    const record = await request(`/api/v1/events/${EVENT_ID}/submissions/${SUBMISSION_A_ONLY}`);
+    expect(record.status).toBe(200);
+    const recordBody = await json<{
+      evaluations: Array<{ abstained: boolean; round_id: string }>;
+      evaluation: { rounds: Array<{ id: string; evaluations: Array<{ abstained: boolean }>; reviewers: Array<{ coverage: { reviewed: number } }> }> };
+    }>(record);
+    expect(recordBody.evaluations.find((evaluation) => evaluation.round_id === ROUND_ONE_ID)?.abstained).toBe(true);
+    const recordRound = recordBody.evaluation.rounds.find((round) => round.id === ROUND_ONE_ID);
+    expect(recordRound?.evaluations.some((evaluation) => evaluation.abstained)).toBe(true);
+    expect(recordRound?.reviewers[0]?.coverage.reviewed).toBe(0);
   });
 
   test("ABS-09 · reviewer reminders use a narrow idempotent reviewer outbox path", async () => {
@@ -190,6 +204,11 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     const duplicate = await request(reminderPath, { method: "POST" });
     expect(duplicate.status).toBe(202);
     expect((await json<{ queued: boolean }>(duplicate)).queued).toBe(false);
+
+    const missingReviewer = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/reviewers/person-does-not-exist/remind`, { method: "POST" });
+    expect(missingReviewer.status).toBe(404);
+    const completedRound = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_TWO_ID}/reviewers/${ORGANIZER_ID}/remind`, { method: "POST" });
+    expect(completedRound.status).toBe(409);
   });
 
   test("AC-98 · exactly two ordered rounds can carry independent modes and scorecards", async () => {

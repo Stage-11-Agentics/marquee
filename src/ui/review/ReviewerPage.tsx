@@ -363,12 +363,14 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
 
   const saveRecusal = async (): Promise<void> => {
     if (!current || !roundId || saving) return;
+    const recusal: ReviewState = { ...(drafts[current.id] ?? EMPTY_REVIEW), abstained: true, criteria: {}, recommendation: null, score: null };
+    setDrafts((previous) => ({ ...previous, [current.id]: recusal }));
     setSaving(true);
     setError(null);
     try {
       await api(`/api/v1/events/${eventId}/rounds/${roundId}/submissions/${current.id}/evaluations`, {
         method: "POST",
-        body: JSON.stringify({ comment: currentReview.comment, criteria_scores: null, recommendation: null, score: null, abstained: 1 }),
+        body: JSON.stringify({ comment: recusal.comment, criteria_scores: Object.keys(recusal.criteria).length ? recusal.criteria : null, recommendation: recusal.recommendation, score: recusal.score, abstained: recusal.abstained ? 1 : 0 }),
       });
       const oldIndex = currentIndex;
       const nextQueue = queue.filter((item) => item.id !== current.id);

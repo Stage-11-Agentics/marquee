@@ -164,9 +164,17 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         return;
       }
       const detail = await api<Plan>(`/api/v1/events/${eventId}/plans/${current.id}`, "/api/v1/events/{eventId}/plans/{planId}");
+      // The plan is useful even when reviewer coverage is temporarily unavailable;
+      // keep the primary render independent from the optional reminder affordance.
+      setPlan(detail);
+      setPlanName(detail.name);
+      setInstructions(detail.instructions);
+      setRoundDrafts(Object.fromEntries(detail.rounds.map((round) => [round.id, round.name])));
+      setReviewerTarget(detail.rounds[0]?.target_reviews_per_submission ?? 3);
+      setLoading(false);
       const progressEntries = await Promise.all(detail.rounds.map(async (round) => {
         const result = await api<{ data: Array<{ assigned_count: number; outstanding_count: number; recusal_count: number; reviewed_count: number; reviewer_person_id: string | null }> }>(
-          `/api/v1/events/${eventId}/rounds/${round.id}/assignments`,
+          `/api/v1/events/${eventId}/rounds/${round.id}/assignments?summary=1`,
           "/api/v1/events/{eventId}/rounds/{roundId}/assignments",
         );
         const byReviewer: Record<string, { assigned_count: number; outstanding_count: number; recusal_count: number; reviewed_count: number }> = {};
@@ -182,11 +190,6 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         return [round.id, byReviewer] as const;
       }));
       setReviewerProgress(Object.fromEntries(progressEntries));
-      setPlan(detail);
-      setPlanName(detail.name);
-      setInstructions(detail.instructions);
-      setRoundDrafts(Object.fromEntries(detail.rounds.map((round) => [round.id, round.name])));
-      setReviewerTarget(detail.rounds[0]?.target_reviews_per_submission ?? 3);
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     } finally {
@@ -328,7 +331,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
 
   const remindReviewer = async (round: Round, personId: string): Promise<void> => {
     try {
-      const response = await api<{ queued: boolean; outstanding: number }>(`/api/v1/events/${eventId}/rounds/${round.id}/reviewers/${personId}/remind`, {
+      const response = await api<{ queued: boolean; outstanding: number }>(`/api/v1/events/${eventId}/rounds/${round.id}/reviewers/${personId}/remind`, "/api/v1/events/{eventId}/rounds/{roundId}/reviewers/{personId}/remind", {
         method: "POST",
       });
       setNotice(response.queued ? `Reviewer reminder queued · ${response.outstanding} outstanding` : "Reviewer reminder already queued for this round");
@@ -407,7 +410,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       <span class="subtle">{round.target_reviews_per_submission} reviews per submission · {round.mode === "comparison" ? `${round.progress.comparisons} comparisons` : `${round.progress.evaluations} scorecards`}</span>
       <div class="progress-track"><i style={{ width: `${percent(round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations, Math.max(1, round.progress.assigned_submissions * round.target_reviews_per_submission))}%` }} /></div>
       <div class="wave-date"><span class="tabular">{round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations}</span> complete · <span class="tabular">{Math.max(0, round.progress.assigned_submissions * round.target_reviews_per_submission - (round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations))}</span> remaining</div>
-      <div class="round-recusal-status">{round.progress.recusals === 1 ? "1 recusal - needs reassignment" : round.progress.recusals > 1 ? `${round.progress.recusals} recusals - needs reassignment` : "\u00a0"}</div>
+      <div class="round-recusal-status">{round.progress.recusals === 1 ? "1 recusal · needs reassignment" : round.progress.recusals > 1 ? `${round.progress.recusals} recusals · needs reassignment` : "\u00a0"}</div>
       <div class="round-meta"><span>{round.anonymized ? "Anonymous review" : "Identity visible"}</span><span class="tabular">{formatDate(round.opens_at)} → {formatDate(round.closes_at)}</span></div>
       <label class="round-setting"><span>Reviewer pool</span><select aria-label={`Round ${index + 1} reviewer pool`} value={round.committee_id ?? ""} onChange={(event) => void updateRound(round, { committee_id: (event.currentTarget as HTMLSelectElement).value || null })}><option value="">No pool selected</option>{plan?.committees.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     </div>

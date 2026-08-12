@@ -430,6 +430,12 @@ test("AC-126 · the manifest route exposes authenticated template storage throug
   const body = await response.json<{ data: Array<{ id: string; key: string; enabled: number }> }>();
   expect(body.data).toHaveLength(9);
   expect(body.data.map((template) => template.key)).toEqual(expect.arrayContaining([...TRIGGER_TEMPLATE_KEYS]));
+  const rejectedAuthTemplate = await app.request("/api/v1/events/evt_mail/templates", {
+    method: "POST",
+    headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+    body: JSON.stringify({ key: "magic_link_login", name: "Auth", subject: "Auth", body_md: "{{auth.link}}", enabled: true }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(rejectedAuthTemplate.status).toBe(400);
   const defaultRejection = body.data.find((template) => template.key === "rejection");
   expect(defaultRejection?.id).toBe("default_evt_mail_rejection");
   const disabled = await app.request(

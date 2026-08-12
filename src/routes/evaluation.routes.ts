@@ -144,7 +144,7 @@ const directAssignmentInput = z.object({
   reviewer_person_id: z.string().min(1),
 });
 const assignmentsInput = z.union([distributionAssignmentsInput, directAssignmentInput]);
-const assignmentListQuery = z.object({ submission_id: z.string().min(1).optional() });
+const assignmentListQuery = z.object({ submission_id: z.string().min(1).optional(), summary: z.enum(["0", "1"]).default("0") });
 const promotionSelector = bulkSelectorWireSchema(submissionFilterSchema, z.string().min(1));
 const promoteInput = z.object({
   preview: z.boolean().default(true),
@@ -358,7 +358,7 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
         ORDER BY track.position, track.id
       `).bind(eventId, person.id).all<Record<string, string>>();
       const reviewCount = await db.prepare(
-        "SELECT COUNT(*) AS count FROM evaluations evaluation JOIN evaluation_rounds round ON round.id = evaluation.round_id WHERE round.plan_id = ? AND evaluation.reviewer_person_id = ?",
+        "SELECT COUNT(*) AS count FROM evaluations evaluation JOIN evaluation_rounds round ON round.id = evaluation.round_id WHERE round.plan_id = ? AND evaluation.reviewer_person_id = ? AND evaluation.abstained = 0",
       ).bind(planId, person.id).first<{ count: number }>();
       memberRows.push({
         ...person,
@@ -841,7 +841,38 @@ const listRoundAssignments = defineApiRoute(
     const { eventId, roundId } = context.req.valid("param");
     requireProgram(context, eventId, false);
     await roundForEvent(context.env.DB, eventId, roundId);
-    const { submission_id: submissionId } = context.req.valid("query");
+    const { submission_id: submissionId, summary } = context.req.valid("query");
+    if (summary === "1" && !submissionId) {
+      const rows = await context.env.DB.prepare(`
+        SELECT assignment.reviewer_person_id,
+          person.name AS reviewer_name, person.company AS reviewer_company,
+          COUNT(*) AS assigned_count,
+          COUNT(CASE WHEN evaluation.abstained = 0 THEN evaluation.id END) AS reviewed_count,
+          COUNT(CASE WHEN evaluation.abstained = 1 THEN evaluation.id END) AS recusal_count
+        FROM round_assignments assignment
+        LEFT JOIN people person ON person.id = assignment.reviewer_person_id
+        LEFT JOIN evaluations evaluation
+          ON evaluation.round_id = assignment.round_id
+         AND evaluation.submission_id = assignment.submission_id
+         AND evaluation.reviewer_person_id = assignment.reviewer_person_id
+        WHERE assignment.round_id = ?
+          AND assignment.reviewer_person_id IS NOT NULL
+        GROUP BY assignment.reviewer_person_id, person.name, person.company
+        ORDER BY person.name COLLATE NOCASE, assignment.reviewer_person_id
+      `).bind(roundId).all<Record<string, string | number | null>>();
+      return context.json({ data: rows.results.map((row) => {
+        const assigned = Number(row.assigned_count ?? 0);
+        const reviewed = Number(row.reviewed_count ?? 0);
+        const recusals = Number(row.recusal_count ?? 0);
+        return {
+          ...row,
+          assigned_count: assigned,
+          reviewed_count: reviewed,
+          recusal_count: recusals,
+          outstanding_count: Math.max(0, assigned - reviewed - recusals),
+        };
+      }) }, 200);
+    }
     const clauses = ["assignment.round_id = ?"];
     const bindings: unknown[] = [roundId];
     if (submissionId) {
