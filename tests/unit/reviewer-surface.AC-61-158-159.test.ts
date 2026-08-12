@@ -47,7 +47,7 @@ test("AC-158 + AC-159 · the mobile reviewer keeps thumb controls and a stable b
   expect(reviewerStyles).toMatch(/\.reviewer-detail \{ border-left: 0;.*height: 100dvh;/);
 });
 
-test("MRQ-108 · the reviewer renders the round's own scorecard and keeps completed reviews reopenable", () => {
+test("CONTRACT · MRQ-108 · the reviewer renders the round's own scorecard and keeps completed reviews reopenable", () => {
   // All three criterion kinds have a control on the reviewer side (ABS-03).
   expect(reviewerPageSource).toContain('criterion.kind === "numeric"');
   expect(reviewerPageSource).toContain('criterion.kind === "select"');

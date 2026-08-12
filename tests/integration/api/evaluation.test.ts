@@ -335,7 +335,7 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     const evaluation = await env.DB.prepare("SELECT recommendation FROM evaluations WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?").bind(ROUND_ONE_ID, SUBMISSION_ID, ORGANIZER_ID).first<{ recommendation: string }>();
     expect(evaluation?.recommendation).toBe("maybe");
   });
-  test("MRQ-108 · a scorecard carries rating, dropdown, and free-text criteria, per round, and they survive a reload", async () => {
+  test("CONTRACT · MRQ-108 · a scorecard carries rating, dropdown, and free-text criteria, per round, and they survive a reload", async () => {
     const put = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/criteria`, {
       method: "PUT",
       body: JSON.stringify({ criteria: [
@@ -367,7 +367,7 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect(two[0]?.scale_max).toBe(10);
   });
 
-  test("MRQ-108 · weights stay a rating-only rule, so a dropdown-and-text scorecard saves without one", async () => {
+  test("CONTRACT · MRQ-108 · weights stay a rating-only rule, so a dropdown-and-text scorecard saves without one", async () => {
     const noRatings = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}/criteria`, {
       method: "PUT",
       body: JSON.stringify({ criteria: [
@@ -407,7 +407,7 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect(emptyDropdown.status).toBe(422);
   });
 
-  test("MRQ-108 · a round's name, dates, and anonymization are editable and a backwards range is refused on its field", async () => {
+  test("CONTRACT · MRQ-108 · a round's name, dates, and anonymization are editable and a backwards range is refused on its field", async () => {
     const patched = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}`, {
       method: "PATCH",
       body: JSON.stringify({ name: "Initial Review", opens_at: Date.UTC(2026, 7, 1), closes_at: Date.UTC(2026, 9, 15), anonymized: true }),
