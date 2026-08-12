@@ -183,6 +183,7 @@ interface RoundRow {
   plan_id: string;
   position: number;
   target_reviews_per_submission: number;
+  timezone: string;
 }
 
 interface CriterionRow {
@@ -239,13 +240,21 @@ async function planForEvent(db: D1Database, eventId: string, planId: string): Pr
 async function roundForEvent(db: D1Database, eventId: string, roundId: string): Promise<RoundRow> {
   const round = await db.prepare(`
     SELECT round.id, round.plan_id, round.position, round.name, round.mode,
-      round.anonymized, round.committee_id, round.target_reviews_per_submission, round.opens_at, round.closes_at
+      round.anonymized, round.committee_id, round.target_reviews_per_submission, round.opens_at, round.closes_at,
+      event.timezone
     FROM evaluation_rounds round
     JOIN evaluation_plans plan ON plan.id = round.plan_id
+    JOIN events event ON event.id = plan.event_id
     WHERE round.id = ? AND plan.event_id = ?
   `).bind(roundId, eventId).first<RoundRow>();
   if (!round) throw ApiError.notFound("evaluation round not found");
   return round;
+}
+
+function localDayKey(timestamp: number, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "2-digit", timeZone: timezone, year: "numeric" }).formatToParts(new Date(timestamp));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 /**
@@ -949,7 +958,7 @@ const remindRoundReviewer = defineApiRoute(
     if (!reviewer) throw ApiError.notFound("reviewer not found");
     const outstanding = Math.max(0, Number(reviewer.assigned_count) - Number(reviewer.reviewed_count) - Number(reviewer.recusal_count));
     if (outstanding === 0) throw ApiError.conflict("reviewer has no outstanding assignments");
-    const reminderDay = new Date().toISOString().slice(0, 10);
+    const reminderDay = localDayKey(Date.now(), round.timezone);
     const outbox = await enqueueOutbox({
       db: context.env.DB,
       entityId: `${roundId}:${personId}:${reminderDay}`,

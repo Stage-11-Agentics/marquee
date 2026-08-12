@@ -154,8 +154,8 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const committeeForRound = (round: Round): Plan["committees"][number] | undefined =>
     plan?.committees.find((item) => item.id === round.committee_id);
 
-  const load = async (): Promise<void> => {
-    setLoading(true);
+  const load = async ({ quiet = false }: { quiet?: boolean } = {}): Promise<void> => {
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const summaries = await api<{ data: PlanSummary[] }>(`/api/v1/events/${eventId}/plans`, "/api/v1/events/{eventId}/plans");
@@ -343,7 +343,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         method: "POST",
       });
       setNotice(response.queued ? `Reviewer reminder queued · ${response.outstanding} outstanding` : "Reviewer reminder already queued for this round");
-      await load();
+      await load({ quiet: true });
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     }
@@ -432,7 +432,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       <div class="committee-intro"><span><strong>{round.name}</strong> · {roundCommittee?.name ?? "No reviewer pool selected"}</span><span>{round.target_reviews_per_submission} reviews per abstract</span></div>
       {roundCommittee ? <><div class="committee-list">{roundCommittee.members.map((member) => {
         const progress = reviewerProgress[round.id]?.[member.id];
-        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{progress ? `${progress.reviewed_count} / ${progress.assigned_count} reviewed` : "No assignments yet"}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{progress?.outstanding_count ? <Button small variant="ghost" onClick={() => void remindReviewer(round, member.id)}>Remind</Button> : <span class="tabular subtle">{member.progress} complete</span>}</span></div>;
+        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{progress ? `${progress.reviewed_count} / ${progress.assigned_count} reviewed` : "No assignments yet"}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{progress?.outstanding_count ? <Button small variant="ghost" onClick={() => void remindReviewer(round, member.id)}>Remind</Button> : progress ? <span class="tabular subtle">{progress.reviewed_count} complete</span> : <span class="tabular subtle">Coverage unavailable</span>}</span></div>;
       })}</div><Button class="full-width ghost" onClick={() => setDialog("committee")}>View all {roundCommittee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>Choose a reviewer pool on this round card before distributing assignments.</span><Button small variant="primary" onClick={() => setDialog("committee")}>Manage committee</Button></div>}
     </section>;
   };

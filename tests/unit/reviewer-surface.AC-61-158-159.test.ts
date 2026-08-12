@@ -71,6 +71,8 @@ test("CONTRACT · MRQ-110 · reviewer and chair surfaces label recusals and send
   expect(reviewerPageSource).toContain("const commitReview = async");
   expect(reviewerPageSource).toContain("abstained: review.abstained ? 1 : 0");
   expect(reviewerPageSource).toContain("review: optimisticReview");
+  const commitReview = reviewerPageSource.slice(reviewerPageSource.indexOf("const commitReview"), reviewerPageSource.indexOf("const saveNext"));
+  expect(commitReview.indexOf("await api")).toBeLessThan(commitReview.indexOf("setDrafts((previous) => ({ ...previous, [current.id]: review })"));
   expect(evaluationPageSource).toContain('`/api/v1/events/${eventId}/rounds/${round.id}/reviewers/${personId}/remind`');
   expect(evaluationPageSource).toContain('"/api/v1/events/{eventId}/rounds/{roundId}/reviewers/{personId}/remind", {');
   expect(evaluationPageSource).toContain('method: "POST"');
