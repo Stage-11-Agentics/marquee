@@ -55,11 +55,16 @@ A collaborator works through it, so it is where the work has to live.
     button just adds a second round trip.
   - Do not merge on a red gate, on unresolved review comments, or when the PR says it is
     waiting on something. Say what is blocking it instead.
-- **Private stays private.** What gets published is a separate, curated artifact: the orphan
-  branch `mrq-42-assembly` (tip `f4240644`), which carries the app tree without `sequence/`
-  internals, `OPERATOR-PRECONDITIONS.md`, or the `.lattice` board. **Never push `main` to a
-  public repo, and never merge the orphan into `main`** — it would delete everything the
-  orphan omits, including the whole board.
+- **This repository goes public as it stands, history and all** (Atin, 2026-08-12). The
+  competition requires an open-source repo, and the answer is to flip this one rather than
+  push a curated artifact: `sequence/` and the `.lattice` board are the record of how the
+  product was actually built, which is worth more to a reader than a tidy tree. The earlier
+  plan — publishing the orphan branch `mrq-42-assembly` — is superseded. That branch is
+  still not to be merged into `main`; the merge would delete everything it omits.
+- **Write every commit as if it were already public, because it is.** All 820-odd commits
+  are readable, so deleting a file at `HEAD` hides nothing that was there before. No
+  credential value has ever been committed (gitleaks, full history, 2026-08-12) and it must
+  stay that way: secrets are Wrangler secrets and `.dev.vars`, never a commit.
 
 ## The primary checkout is the Lattice board's home, never a workspace
 
