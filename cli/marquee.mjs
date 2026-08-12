@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
+
 import { COMMAND_REGISTRY, commandsUnder, renderHelp } from "./registry.mjs";
 import { MarqueeClient } from "./client.mjs";
 import { renderDiagnosticBundle, tailLogs } from "./diagnostics.mjs";
@@ -22,6 +25,7 @@ const VALUE_OPTIONS = new Set([
   "--set",
   "--query",
   "--if-match",
+  "--file",
 ]);
 const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle"]);
 const LIST_FILTER_KEYS = new Set(["kind", "status", "track", "format", "wave", "task", "placement", "q"]);
@@ -232,6 +236,64 @@ async function waitForReset(client, jobId) {
   throw new Error(`the event seed reset did not finish within 30 seconds (last status: ${last?.status ?? "unknown"})`);
 }
 
+const PEOPLE_FILTER_KEYS = new Set(["q", "company", "title", "tag", "stage", "list_id", "event_id"]);
+const AUDIENCE_FILTER_KEYS = new Set(["person_ids", "list_id"]);
+
+function requirePersonId(command, arguments_) {
+  const personId = arguments_[0];
+  if (!personId) usageError(`${command.usage} requires a person ID`);
+  return personId;
+}
+
+/** The organization-level half of the CLI: People, Lists, and the pipeline. */
+async function executeOrgCommand(command, verb, arguments_, options, client) {
+  const [root] = command.path;
+  if (root === "people" && verb === "list") {
+    const filters = parseFilters(optionValues(options, "--filter"), PEOPLE_FILTER_KEYS, "filter");
+    return client.get("/api/v1/org/people", { query: queryFromListFilters(filters, options) });
+  }
+  if (root === "people" && verb === "show") {
+    return client.get(`/api/v1/org/people/${encodeURIComponent(requirePersonId(command, arguments_))}`);
+  }
+  if (root === "people" && verb === "note") {
+    const personId = requirePersonId(command, arguments_);
+    return client.post(`/api/v1/org/people/${encodeURIComponent(personId)}/notes`, requireSetValues(command, options));
+  }
+  if (root === "people" && verb === "tag") {
+    const personId = requirePersonId(command, arguments_);
+    return client.post(`/api/v1/org/people/${encodeURIComponent(personId)}/tags`, requireSetValues(command, options));
+  }
+  if (root === "people" && verb === "import") {
+    const path = option(options, "--file");
+    if (!path) usageError(`${command.usage} requires --file`);
+    const csv = await readFile(path, "utf8");
+    return client.post("/api/v1/org/imports", { csv, filename: basename(path) });
+  }
+  if (root === "people" && verb === "email") {
+    const audience = requireFilters(command, options, AUDIENCE_FILTER_KEYS);
+    const subject = option(options, "--subject");
+    const body = option(options, "--body");
+    if (subject === undefined || body === undefined) usageError("people email requires both --subject and --body");
+    const personIds = audience.person_ids === undefined
+      ? undefined
+      : Array.isArray(audience.person_ids) ? audience.person_ids : [audience.person_ids];
+    return client.post("/api/v1/org/comms/send", {
+      ...(personIds ? { person_ids: personIds } : {}),
+      ...(audience.list_id ? { list_id: audience.list_id } : {}),
+      subject,
+      body,
+    });
+  }
+  if (root === "lists" && verb === "list") return client.get("/api/v1/org/lists");
+  if (root === "lists" && verb === "save") return client.post("/api/v1/org/lists", requireSetValues(command, options));
+  if (root === "pipeline" && verb === "board") return client.get("/api/v1/org/pipeline");
+  if (root === "pipeline" && verb === "move") {
+    const personId = requirePersonId(command, arguments_);
+    return client.post(`/api/v1/org/people/${encodeURIComponent(personId)}/stage`, requireSetValues(command, options));
+  }
+  usageError(`unsupported command: ${command.path.join(" ")}`);
+}
+
 async function execute(command, arguments_, options, flags, client) {
   const [root, verb] = command.path;
   // Setup runs against an instance that has no credential yet, so these come
@@ -296,6 +358,14 @@ async function execute(command, arguments_, options, flags, client) {
       event: option(options, "--event"),
     });
     return { streamed: true };
+  }
+
+  // People, Lists, and the pipeline are organization-level. They run before the
+  // event id is resolved because they do not have one — asking the API for a
+  // conference in order not to use it would be a wasted request and a confusing
+  // failure when a token is scoped to no single conference.
+  if (root === "people" || root === "lists" || root === "pipeline") {
+    return executeOrgCommand(command, verb, arguments_, options, client);
   }
 
   const eventId = await resolveEventId(client, command, arguments_, options);
