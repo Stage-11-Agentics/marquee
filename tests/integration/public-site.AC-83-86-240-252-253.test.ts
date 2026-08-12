@@ -106,6 +106,7 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   expect(body).toContain("Main Stage</span>");
   expect(body).toContain('href="/s/visible-session-title"');
   expect(body).toContain('href="/p/public-speaker"');
+  expect(body).toContain('href="/speakers?event=public-conf">Speakers</a>');
   expect(body).not.toContain("Projector");
   expect(body).not.toContain("PRIVATE ROOM NOTE");
   expect(body).not.toContain("Photo ID required");
