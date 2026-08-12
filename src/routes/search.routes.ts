@@ -137,9 +137,9 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
       // find them; MRQ-111 added a speaker record they have no row on. So the
       // destination follows the person: someone on the roster opens their
       // record, and anyone else keeps the chase-board link they had before.
-      // Sending a non-roster person to /speakers would 404 in the drawer.
+      // Sending a non-roster person to the roster would 404 in the drawer.
       href: row.on_roster === 1
-        ? `/speakers?person=${encodeURIComponent(row.id)}`
+        ? `/roster?person=${encodeURIComponent(row.id)}`
         : `/onboarding?person=${encodeURIComponent(row.id)}`,
       searchText: [row.name, row.email, row.title ?? "", row.company ?? "", row.id],
     } satisfies SearchCandidate)),

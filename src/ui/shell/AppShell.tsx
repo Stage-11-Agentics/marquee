@@ -121,7 +121,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const isForms = location.pathname === "/forms";
   const isAgenda = location.pathname === "/agenda-builder";
   const isOnboarding = location.pathname === "/onboarding";
-  const isSpeakers = location.pathname === "/speakers";
+  const isSpeakers = location.pathname === "/roster";
   const isImport = location.pathname === "/import";
   const isApiTokens = location.pathname === "/settings/api";
   if (location.pathname === "/portal") return <PortalPage />;
@@ -164,13 +164,9 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : route?.id === "settings" ? <EventSettings navigate={navigate} />
             : isForms ? <FormsPage search={location.search} />
             : isAgenda ? <AgendaPage />
-<<<<<<< HEAD
-            : isOnboarding ? <OnboardingPage navigate={navigate} />
-            : route?.id === "files" ? <FilesPage navigate={navigate} />
-=======
             : isSpeakers ? <SpeakersPage search={location.search} navigate={navigate} />
             : isOnboarding ? <OnboardingPage search={location.search} navigate={navigate} />
->>>>>>> 3a594bc (MRQ-111 speaker roster: memberships bridge, speakers API, roster page)
+            : route?.id === "files" ? <FilesPage navigate={navigate} />
             : isImport ? <SessionizeImportPage navigate={navigate} />
             : route?.id === "communications" ? <>
             <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />

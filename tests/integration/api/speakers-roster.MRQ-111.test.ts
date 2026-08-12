@@ -326,17 +326,25 @@ test("CONTRACT · MRQ-111 · CNT-10 · an email collision is case-insensitive, m
   expect(Number(duplicates?.count)).toBe(1);
 });
 
-test("CONTRACT · MRQ-111 · SPK-01 · quick search never types a non-roster person as a Speaker", async () => {
-  // The roster admits only live submissions, so a rejected-only speaker has no
-  // record. Typing them "Speaker" would send the organizer to a 404 through a
-  // link this ticket made live.
-  const response = await request(`/api/v1/events/${EVENT_ID}/search?q=Sam`);
-  expect(response.status).toBe(200);
-  const body = await response.json<{ data: Array<{ type: string; id: string }> }>();
-  expect(body.data.filter((hit) => hit.type === "Speaker").map((hit) => hit.id)).not.toContain(REJECTED_PERSON);
+test("CONTRACT · MRQ-111 · SPK-01 · quick search only sends roster people to a roster record", async () => {
+  // MRQ-127 widened these candidates to submitters so its person picker can
+  // reach them, and the roster admits only live submissions — so the two sets
+  // genuinely differ. The destination has to follow the person, or a hit the
+  // picker needs becomes a 404 in the record drawer.
+  const rejected = await request(`/api/v1/events/${EVENT_ID}/search?q=Sam`);
+  expect(rejected.status).toBe(200);
+  const rejectedHits = (await rejected.json<{ data: Array<{ id: string; href: string }> }>()).data
+    .filter((hit) => hit.id === REJECTED_PERSON);
+  expect(rejectedHits.length).toBeGreaterThan(0);
+  expect(rejectedHits.every((hit) => !hit.href.startsWith("/roster"))).toBe(true);
+  expect((await request(`/api/v1/events/${EVENT_ID}/speakers/${REJECTED_PERSON}`)).status).toBe(404);
 
-  const record = await request(`/api/v1/events/${EVENT_ID}/speakers/${REJECTED_PERSON}`);
-  expect(record.status).toBe(404);
+  // And a real roster speaker does get the record link.
+  const onRoster = await request(`/api/v1/events/${EVENT_ID}/search?q=Marcus`);
+  const marcus = (await onRoster.json<{ data: Array<{ id: string; href: string }> }>()).data
+    .find((hit) => hit.id === ACCEPTED_SPEAKER);
+  expect(marcus?.href).toBe(`/roster?person=${ACCEPTED_SPEAKER}`);
+  expect((await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`)).status).toBe(200);
 });
 
 test("CONTRACT · MRQ-111 · SPK-04 · confirming a speaker keeps the original invitation date on both stores", async () => {

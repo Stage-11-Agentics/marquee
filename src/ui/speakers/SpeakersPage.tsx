@@ -131,8 +131,8 @@ export function SpeakersPage({
   // The record lives in the URL, so an organizer can send someone a speaker,
   // quick-search can deep-link one, and a reload lands back on the same record
   // rather than dumping the reader at the top of the roster.
-  const openRecord = (personId: string) => navigate?.(`/speakers?person=${encodeURIComponent(personId)}`);
-  const closeRecord = () => navigate?.("/speakers");
+  const openRecord = (personId: string) => navigate?.(`/roster?person=${encodeURIComponent(personId)}`);
+  const closeRecord = () => navigate?.("/roster");
 
   useEffect(() => {
     if (!deepLinkedPerson) return;
