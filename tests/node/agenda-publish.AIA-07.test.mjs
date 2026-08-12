@@ -14,6 +14,9 @@ test("CONTRACT · AIA-07 batch publication is an accepted, scheduled, dual-table
   assert.match(route, /UPDATE submissions AS submission/);
   assert.match(route, /auditStatementFromSelect/);
   assert.match(route, /const auditStatements = submissionIds\.map/);
+  assert.match(route, /MAX_BATCH_PUBLISH_IDS/);
+  assert.match(route, /submission\.id IN \(SELECT CAST\(value AS TEXT\) FROM json_each\(\?\)\)/);
+  assert.match(route, /candidate_submission\.id IN \(SELECT CAST\(value AS TEXT\) FROM json_each\(\?\)\)/);
   assert.match(route, /the selected Sessions changed while publishing/);
   assert.match(queries, /item\.is_published = 0/);
   assert.match(queries, /submission\.status = 'accepted'/);
@@ -22,6 +25,8 @@ test("CONTRACT · AIA-07 batch publication is an accepted, scheduled, dual-table
 
 test("CONTRACT · AIA-07 + CFP-15 publication preview and agenda drop targets expose truthful refs", () => {
   assert.match(page, /live <span aria-hidden="true">·<\/span> .*not yet public/);
+  assert.match(page, /Select all/);
+  assert.match(page, /Publish in batches of up to/);
   assert.match(page, /Review publication/);
   assert.match(page, /Publish \$\{selectedCandidates\.length\} to public agenda/);
   assert.match(page, /role="group"\n    aria-label=\{ariaLabel\}\n    data-agenda-drop-target="true"/);

@@ -1,6 +1,7 @@
 import { ApiError } from "../api/errors";
 import { assertCasUpdated, compareAndSwapResource, requireIfMatch, strongEtag } from "../api/concurrency";
 import {
+  MAX_BATCH_PUBLISH_IDS,
   SCHEDULABLE_STATUS_OPTIONS,
   normalizeSchedulableStatuses,
   type AgendaSnapshot,
@@ -186,12 +187,11 @@ const settingsBody = z.object({
 const errors = errorResponses([400, 401, 403, 404, 409, 422, 429, 500]);
 
 const batchPublishBody = z.object({
-  submission_ids: z.array(z.string().min(1)).min(1).max(40),
+  submission_ids: z.array(z.string().min(1)).min(1).max(MAX_BATCH_PUBLISH_IDS),
 });
 
 const batchPublishResponse = z.object({
   published_count: z.number().int().nonnegative(),
-  skipped_submission_ids: z.array(z.string()),
   live: z.number().int().nonnegative(),
   not_yet_public: z.number().int().nonnegative(),
   public_agenda_url: z.string(),
@@ -230,9 +230,10 @@ const batchPublishRoute = defineApiRoute(
 
     const actor = await publicationActor(context);
     const now = Date.now();
-    const agendaItemIds = submissionIds.map((submissionId) => candidates.get(submissionId)!.agenda_item_id);
-    const itemPlaceholders = agendaItemIds.map(() => "?").join(", ");
-    const submissionPlaceholders = submissionIds.map(() => "?").join(", ");
+    // One JSON binding keeps a real program under D1's binding limit. The
+    // statement-count cap above is for the per-record audit rows in this
+    // transaction, not for SQL placeholder expansion.
+    const submissionIdsJson = JSON.stringify(submissionIds);
     const database = context.env.DB;
     // The count guard makes the agenda update all-or-nothing when a reversal
     // wins the race between the preview read and this command. It also keeps
@@ -241,7 +242,7 @@ const batchPublishRoute = defineApiRoute(
       UPDATE agenda_items AS item
       SET is_published = 1, updated_at = ?
       WHERE item.event_id = ? AND item.kind = 'session' AND item.is_published = 0
-        AND item.id IN (${itemPlaceholders})
+        AND item.submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
         AND (
           SELECT COUNT(DISTINCT candidate.submission_id)
           FROM agenda_items candidate
@@ -252,9 +253,9 @@ const batchPublishRoute = defineApiRoute(
             AND candidate.kind = 'session'
             AND candidate.is_published = 0
             AND candidate_submission.status = 'accepted'
-            AND candidate.id IN (${itemPlaceholders})
+            AND candidate_submission.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
         ) = ?
-    `).bind(now, eventId, ...agendaItemIds, eventId, ...agendaItemIds, submissionIds.length);
+    `).bind(now, eventId, submissionIdsJson, eventId, submissionIdsJson, submissionIds.length);
     // The first update marks the exact agenda rows. The second mirrors the
     // per-record publisher's dual-table write, but only for rows stamped by
     // this batch, so a rejected/withdrawn record cannot become public.
@@ -262,7 +263,7 @@ const batchPublishRoute = defineApiRoute(
       UPDATE submissions AS submission
       SET is_published = 1, updated_at = ?
       WHERE submission.event_id = ?
-        AND submission.id IN (${submissionPlaceholders})
+        AND submission.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
         AND EXISTS (
           SELECT 1 FROM agenda_items item
           WHERE item.event_id = submission.event_id
@@ -271,7 +272,7 @@ const batchPublishRoute = defineApiRoute(
             AND item.is_published = 1
             AND item.updated_at = ?
         )
-    `).bind(now, eventId, ...submissionIds, now);
+    `).bind(now, eventId, submissionIdsJson, now);
     // Keep one audit row per submission while retaining one D1 batch call.
     // Each helper-built INSERT ... SELECT has predicates that make audit
     // output conditional on both writes having actually landed.
@@ -305,7 +306,6 @@ const batchPublishRoute = defineApiRoute(
     const publication = await readAgendaPublication(database, eventId, current.event.slug);
     return context.json({
       published_count: publishedCount,
-      skipped_submission_ids: [],
       live: publication.live,
       not_yet_public: publication.not_yet_public,
       public_agenda_url: publication.public_agenda_url,

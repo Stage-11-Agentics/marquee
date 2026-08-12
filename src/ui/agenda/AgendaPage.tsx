@@ -12,7 +12,7 @@ import type {
   AgendaSnapshot,
   AgendaView,
 } from "../../api/agenda";
-import { AGENDA_VIEWS, durationIsAllowed, viewNames } from "../../api/agenda";
+import { AGENDA_VIEWS, durationIsAllowed, MAX_BATCH_PUBLISH_IDS, viewNames } from "../../api/agenda";
 import { displayRoomLabel, showsBuildingComparison, showsBuildingComparisonCount, visibleVenueConflicts } from "../../lib/venue-disclosure";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
@@ -485,12 +485,14 @@ function PublicationCandidateRow({
   candidate,
   timezone,
   selected,
+  disabled = false,
   onToggle,
   review = false,
 }: {
   candidate: AgendaPublishCandidate;
   timezone: string;
   selected?: boolean;
+  disabled?: boolean;
   onToggle?: (id: string) => void;
   review?: boolean;
 }): JSX.Element {
@@ -500,6 +502,7 @@ function PublicationCandidateRow({
     {!review && <input
       type="checkbox"
       checked={selected === true}
+      disabled={disabled}
       aria-label={`Select ${candidate.title} for publication`}
       onChange={() => onToggle?.(candidate.submission_id)}
     />}
@@ -518,9 +521,11 @@ function PublicationPanel({
   step,
   busy,
   onToggle,
+  onSelectAll,
   onReview,
   onBack,
   onPublish,
+  error,
 }: {
   publication: AgendaPublication;
   timezone: string;
@@ -528,12 +533,18 @@ function PublicationPanel({
   step: PublicationStep;
   busy: boolean;
   onToggle: (id: string) => void;
+  onSelectAll: (ids: readonly string[]) => void;
   onReview: () => void;
   onBack: () => void;
   onPublish: () => void;
+  error: string;
 }): JSX.Element {
   const selected = new Set(selectedIds);
   const selectedCandidates = publication.candidates.filter((candidate) => selected.has(candidate.submission_id));
+  const selectableCandidates = publication.candidates.slice(0, MAX_BATCH_PUBLISH_IDS);
+  const allSelectableSelected = selectableCandidates.length > 0 && selectableCandidates.every((candidate) => selected.has(candidate.submission_id));
+  const selectAllLabel = `Select all ${selectableCandidates.length} ${selectableCandidates.length === 1 ? "Session" : "Sessions"}`;
+  const toggleAll = () => onSelectAll(allSelectableSelected ? [] : selectableCandidates.map((candidate) => candidate.submission_id));
   return <section class="card agenda-publication-panel" aria-labelledby="agenda-publication-title">
     <header class="agenda-publication-head">
       <div>
@@ -546,14 +557,20 @@ function PublicationPanel({
     {step === "select" ? <>
       <div class="agenda-publication-intro">Select scheduled accepted Sessions to make their title, time, room, and speakers visible on the public agenda.</div>
       {publication.candidates.length ? <div class="agenda-publication-list" role="list" aria-label="Scheduled Sessions not yet public">
+        <div class="agenda-publication-select-all">
+          <label><input type="checkbox" checked={allSelectableSelected} aria-label={selectAllLabel} onChange={toggleAll} />{selectAllLabel}</label>
+          {publication.candidates.length > MAX_BATCH_PUBLISH_IDS && <span class="subtle">Publish in batches of up to {MAX_BATCH_PUBLISH_IDS} Sessions.</span>}
+        </div>
         {publication.candidates.map((candidate) => <PublicationCandidateRow
           key={candidate.submission_id}
           candidate={candidate}
           timezone={timezone}
           selected={selected.has(candidate.submission_id)}
+          disabled={!selected.has(candidate.submission_id) && selectedCandidates.length >= MAX_BATCH_PUBLISH_IDS}
           onToggle={onToggle}
         />)}
       </div> : <div class="agenda-publication-empty" role="status"><strong>Everything scheduled is public.</strong><span>Accepted Sessions will appear here after they are placed on the agenda.</span></div>}
+      {error && <div class="agenda-publication-error" role="alert">{error}</div>}
       <footer class="agenda-publication-actions">
         <span class="subtle"><span class="tabular">{selectedCandidates.length}</span> selected</span>
         <Button variant="primary" disabled={!selectedCandidates.length || busy} onClick={onReview}>Review publication</Button>
@@ -563,6 +580,7 @@ function PublicationPanel({
       <div class="agenda-publication-list" role="list" aria-label="Publication preview">
         {selectedCandidates.map((candidate) => <PublicationCandidateRow key={candidate.submission_id} candidate={candidate} timezone={timezone} review />)}
       </div>
+      {error && <div class="agenda-publication-error" role="alert">{error}</div>}
       <footer class="agenda-publication-actions">
         <Button variant="ghost" disabled={busy} onClick={onBack}>Back to selection</Button>
         <Button variant="primary" disabled={!selectedCandidates.length || busy} onClick={onPublish}>{busy ? "Publishing…" : `Publish ${selectedCandidates.length} to public agenda`}</Button>
@@ -580,6 +598,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
   const [roomPanelId, setRoomPanelId] = useState<string | null>(null);
   const [conflictsOpen, setConflictsOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [publicationError, setPublicationError] = useState("");
   const [publicationNotice, setPublicationNotice] = useState<PublicationNotice | null>(null);
   const [publishSelection, setPublishSelection] = useState<string[]>([]);
   const [publicationStep, setPublicationStep] = useState<PublicationStep>("select");
@@ -714,6 +733,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     if (!publishSelection.length) return;
     setPublicationBusy(true);
     setNotice("");
+    setPublicationError("");
     try {
       const result = await apiFetch<{ published_count: number; public_agenda_url: string }>(
         `/api/v1/events/${encodeURIComponent(eventId)}/agenda/publish`,
@@ -729,7 +749,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
       setPublicationStep("select");
       await load();
     } catch (error: unknown) {
-      setNotice(errorSummary(error));
+      setPublicationError(errorSummary(error));
       await load();
     } finally {
       setPublicationBusy(false);
@@ -786,9 +806,11 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
       selectedIds={publishSelection}
       step={publicationStep}
       busy={publicationBusy}
-      onToggle={(id) => setPublishSelection((current) => current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id])}
-      onReview={() => setPublicationStep("review")}
-      onBack={() => setPublicationStep("select")}
+      error={publicationError}
+      onToggle={(id) => { setPublicationError(""); setPublishSelection((current) => current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id]); }}
+      onSelectAll={(ids) => { setPublicationError(""); setPublishSelection([...ids]); }}
+      onReview={() => { setPublicationError(""); setPublicationStep("review"); }}
+      onBack={() => { setPublicationError(""); setPublicationStep("select"); }}
       onPublish={() => void publishSelected()}
     />
     <div class="agenda-toolbar card">

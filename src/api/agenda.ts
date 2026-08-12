@@ -6,6 +6,12 @@ export type AgendaView = (typeof AGENDA_VIEWS)[number];
 /** The default is deliberately narrow: acceptance is the hand-off into scheduling. */
 export const DEFAULT_SCHEDULABLE_STATUSES = ["accepted"] as const;
 
+/**
+ * Keep the publication batch below D1's 100-statement batch limit: two writes
+ * plus one conditional audit statement per selected Session.
+ */
+export const MAX_BATCH_PUBLISH_IDS = 90;
+
 export const SCHEDULABLE_STATUS_OPTIONS = [
   "draft",
   "submitted",

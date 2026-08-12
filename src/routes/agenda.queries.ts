@@ -505,7 +505,7 @@ export async function readAgendaPublication(
       FROM agenda_items item
       JOIN submissions submission ON submission.id = item.submission_id AND submission.event_id = item.event_id
       WHERE item.event_id = ? AND item.kind = 'session'
-        AND item.is_published = 1 AND submission.status = 'accepted'
+        AND item.is_published = 1 AND submission.status NOT IN ('rejected', 'withdrawn')
     `).bind(eventId).first<{ count: number | null }>(),
     database.prepare(`
       SELECT item.id AS agenda_item_id, submission.id AS submission_id, submission.title,
