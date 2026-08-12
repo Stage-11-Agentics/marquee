@@ -59,6 +59,27 @@ test("CONTRACT · MRQ-114 · the page reads assignments and assignable people fr
   assert.match(page, /row\.status === "done" \? "Complete" : "Pending"/);
 });
 
+test("CONTRACT · MRQ-114 · draft edits compose instead of overwriting each other", () => {
+  // Found by driving the real page: ticking two speakers in one frame kept only
+  // the second, and ticking a speaker after typing a due date wiped the date —
+  // every handler was spreading the `draft` captured at render time. Each one
+  // now takes the previous state as an argument, so concurrent edits compose.
+  assert.doesNotMatch(page, /setDraft\(\{ \.\.\.draft/, "a handler still spreads a stale draft");
+  assert.doesNotMatch(page, /setEditDraft\(\{ \.\.\.editDraft/, "an edit handler still spreads a stale draft");
+  assert.match(page, /onChange: \(update: \(previous: readonly string\[\]\) => string\[\]\) => void/);
+  assert.match(page, /onChange\(\(previous\) => previous\.includes\(personId\)/);
+});
+
+test("CONTRACT · MRQ-114 · the task name cannot collapse out of its row", () => {
+  // `.settings-row-heading` is a flex line built for two items and `strong`
+  // carries `overflow: hidden`, which zeroes a flex item's automatic minimum
+  // size — adding the kind badge made every task name render at width 0 at
+  // narrow widths. The name gets its own grid row instead.
+  assert.match(page, /class="settings-row-heading task-template-heading"/);
+  assert.match(page, /class="task-heading-meta"/);
+  assert.match(styles, /\.task-template-heading[^\n]*display: grid/);
+});
+
 test("CONTRACT · MRQ-114 · every surface renders a task deadline as the same calendar day", () => {
   // `formatDate` in these pages reads the browser's local zone, so an instant
   // near a day boundary shows one date to the organizer and another to a

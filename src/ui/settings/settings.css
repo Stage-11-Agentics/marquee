@@ -108,6 +108,14 @@
 .task-assignee-option strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-assignee-option small { color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* The name owns its own row. `.settings-row-heading` is a flex line built for
+   two items, and `strong` carries `overflow: hidden` — which zeroes a flex
+   item's automatic minimum size, so adding the kind badge collapsed the task
+   name to nothing at narrow widths instead of ellipsing it. A grid gives the
+   name the full width and lets the metadata wrap beneath it. */
+.task-template-heading { align-items: start; display: grid; gap: 5px; }
+.task-template-heading strong { min-width: 0; }
+.task-heading-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; min-height: 18px; }
 .task-kind-badge { background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10.5px; padding: 2px 8px; white-space: nowrap; }
 .task-row-status { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; min-height: 34px; }
 .task-row-actions { display: flex; gap: 6px; margin-left: auto; }

@@ -156,19 +156,25 @@ function AssigneePicker({
 }: {
   assignees: readonly Assignee[];
   selected: readonly string[];
-  onChange: (next: string[]) => void;
+  /**
+   * Emits a transform, not a snapshot. Ticking two speakers in the same frame
+   * would otherwise apply both against the selection captured at render time,
+   * and the second tick would silently drop the first — on the one control
+   * whose entire job is picking several people at once.
+   */
+  onChange: (update: (previous: readonly string[]) => string[]) => void;
   idPrefix: string;
 }): JSX.Element {
   const selectedSet = new Set(selected);
   const toggle = (personId: string): void => {
-    onChange(selectedSet.has(personId) ? selected.filter((id) => id !== personId) : [...selected, personId]);
+    onChange((previous) => previous.includes(personId) ? previous.filter((id) => id !== personId) : [...previous, personId]);
   };
   return <div class="task-assignee-picker">
     <div class="task-assignee-head">
       <span class="eyebrow">Assign to speakers</span>
       <span class="task-assignee-count tabular">{selected.length} selected</span>
-      <button class="button small" type="button" onClick={() => onChange(assignees.map((person) => person.id))} disabled={assignees.length === 0 || selected.length === assignees.length}>Select all</button>
-      <button class="button small" type="button" onClick={() => onChange([])} disabled={selected.length === 0}>Clear</button>
+      <button class="button small" type="button" onClick={() => onChange(() => assignees.map((person) => person.id))} disabled={assignees.length === 0 || selected.length === assignees.length}>Select all</button>
+      <button class="button small" type="button" onClick={() => onChange(() => [])} disabled={selected.length === 0}>Clear</button>
     </div>
     {assignees.length === 0
       ? <p class="task-assignee-empty">No speakers yet. Add speakers or accept a session, then assign this task to them.</p>
@@ -468,20 +474,20 @@ export function TaskTemplatesPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.El
     <header class="card-head"><div><h2>New task</h2><span class="subtle">Speakers see the name, the instructions, and the deadline.</span></div></header>
     <div class="card-body">
       <div class="task-compose-fields">
-        <label class="field span-2"><span>Task name</span><input value={draft.name} placeholder="Upload Session Presentation" onInput={(event) => setDraft({ ...draft, name: event.currentTarget.value })} /></label>
+        <label class="field span-2"><span>Task name</span><input value={draft.name} placeholder="Upload Session Presentation" onInput={(event) => { const value = event.currentTarget.value; setDraft((current) => ({ ...current, name: value })); }} /></label>
         <div class="field span-2">
           <span>What the speaker does</span>
           <div class="task-segment" role="group" aria-label="Task type">
-            {TASK_KINDS.map((entry) => <button key={entry.kind} class={`task-segment-button ${draft.kind === entry.kind ? "is-selected" : ""}`} type="button" aria-pressed={draft.kind === entry.kind} onClick={() => setDraft({ ...draft, kind: entry.kind })}>{entry.label}</button>)}
+            {TASK_KINDS.map((entry) => <button key={entry.kind} class={`task-segment-button ${draft.kind === entry.kind ? "is-selected" : ""}`} type="button" aria-pressed={draft.kind === entry.kind} onClick={() => setDraft((current) => ({ ...current, kind: entry.kind }))}>{entry.label}</button>)}
           </div>
           <small class="task-kind-hint">{TASK_KINDS.find((entry) => entry.kind === draft.kind)?.hint}</small>
         </div>
-        <label class="field span-2"><span>Instructions</span><textarea rows={2} value={draft.description} placeholder="Final slide deck as a PDF, 16:9 aspect ratio." onInput={(event) => setDraft({ ...draft, description: event.currentTarget.value })} /></label>
-        {draft.kind === "form" && <label class="field span-2"><span>Form</span><select value={draft.formId} onChange={(event) => setDraft({ ...draft, formId: event.currentTarget.value })}><option value="">Choose a form…</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}</select></label>}
-        <div class="field span-2"><span>Deadline</span><DeadlineFields dueMode={draft.dueMode} dueDate={draft.dueDate} dueOffsetDays={draft.dueOffsetDays} idPrefix="task-new" onChange={(patch) => setDraft({ ...draft, ...patch })} /></div>
+        <label class="field span-2"><span>Instructions</span><textarea rows={2} value={draft.description} placeholder="Final slide deck as a PDF, 16:9 aspect ratio." onInput={(event) => { const value = event.currentTarget.value; setDraft((current) => ({ ...current, description: value })); }} /></label>
+        {draft.kind === "form" && <label class="field span-2"><span>Form</span><select value={draft.formId} onChange={(event) => { const value = event.currentTarget.value; setDraft((current) => ({ ...current, formId: value })); }}><option value="">Choose a form…</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}</select></label>}
+        <div class="field span-2"><span>Deadline</span><DeadlineFields dueMode={draft.dueMode} dueDate={draft.dueDate} dueOffsetDays={draft.dueOffsetDays} idPrefix="task-new" onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))} /></div>
       </div>
-      <AssigneePicker assignees={assignees} selected={draft.assignTo} idPrefix="task-new-assignee" onChange={(next) => setDraft({ ...draft, assignTo: next })} />
-      <label class="task-auto-assign"><input type="checkbox" checked={draft.autoAssign} onChange={(event) => setDraft({ ...draft, autoAssign: event.currentTarget.checked })} /><span>Also give this task to every speaker accepted from now on</span></label>
+      <AssigneePicker assignees={assignees} selected={draft.assignTo} idPrefix="task-new-assignee" onChange={(update) => setDraft((current) => ({ ...current, assignTo: update(current.assignTo) }))} />
+      <label class="task-auto-assign"><input type="checkbox" checked={draft.autoAssign} onChange={(event) => { const checked = event.currentTarget.checked; setDraft((current) => ({ ...current, autoAssign: checked })); }} /><span>Also give this task to every speaker accepted from now on</span></label>
       <div class="task-compose-error" role="alert">{createError ?? ""}</div>
       <div class="task-compose-actions">
         <button class="button" type="button" onClick={() => { setComposing(false); setCreateError(null); }} disabled={state.templates.length === 0}>Cancel</button>
@@ -513,10 +519,12 @@ export function TaskTemplatesPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.El
             const done = rows.filter((row) => row.status === "done").length;
             const isOpen = expanded.includes(template.id);
             return <article class="settings-row task-template-row" key={template.id}>
-              <div class="settings-row-heading">
+              <div class="settings-row-heading task-template-heading">
                 <strong>{template.name}</strong>
-                <span class="task-kind-badge">{kindLabel(template.kind)}</span>
-                <span class="subtle tabular">{deadlineLabel(template)}</span>
+                <span class="task-heading-meta">
+                  <span class="task-kind-badge">{kindLabel(template.kind)}</span>
+                  <span class="subtle tabular">{deadlineLabel(template)}</span>
+                </span>
               </div>
               <p class="task-template-description">{template.description || "No instructions yet."}</p>
               <div class="task-row-status">
@@ -531,14 +539,14 @@ export function TaskTemplatesPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.El
               </div>
               {editing === template.id && <div class="task-row-edit">
                 <div class="task-compose-fields">
-                  <label class="field span-2"><span>Task name</span><input value={editDraft.name} onInput={(event) => setEditDraft({ ...editDraft, name: event.currentTarget.value })} /></label>
-                  <label class="field span-2"><span>Instructions</span><textarea rows={2} value={editDraft.description} onInput={(event) => setEditDraft({ ...editDraft, description: event.currentTarget.value })} /></label>
-                  <div class="field span-2"><span>Deadline</span><DeadlineFields dueMode={editDraft.dueMode} dueDate={editDraft.dueDate} dueOffsetDays={editDraft.dueOffsetDays} idPrefix={`task-edit-${template.id}`} onChange={(patch) => setEditDraft({ ...editDraft, ...patch })} /></div>
+                  <label class="field span-2"><span>Task name</span><input value={editDraft.name} onInput={(event) => { const value = event.currentTarget.value; setEditDraft((current) => ({ ...current, name: value })); }} /></label>
+                  <label class="field span-2"><span>Instructions</span><textarea rows={2} value={editDraft.description} onInput={(event) => { const value = event.currentTarget.value; setEditDraft((current) => ({ ...current, description: value })); }} /></label>
+                  <div class="field span-2"><span>Deadline</span><DeadlineFields dueMode={editDraft.dueMode} dueDate={editDraft.dueDate} dueOffsetDays={editDraft.dueOffsetDays} idPrefix={`task-edit-${template.id}`} onChange={(patch) => setEditDraft((current) => ({ ...current, ...patch }))} /></div>
                 </div>
                 <div class="task-compose-actions"><button class="button primary" type="button" onClick={() => void saveEdit(template.id)} disabled={rowBusy === template.id}>{rowBusy === template.id ? "Saving…" : "Save task"}</button></div>
               </div>}
               {assignFor === template.id && <div class="task-row-assign">
-                <AssigneePicker assignees={assignees} selected={assignSelection} idPrefix={`task-assign-${template.id}`} onChange={setAssignSelection} />
+                <AssigneePicker assignees={assignees} selected={assignSelection} idPrefix={`task-assign-${template.id}`} onChange={(update) => setAssignSelection((current) => update(current))} />
                 <div class="task-compose-actions"><button class="button primary" type="button" onClick={() => void assignTemplate(template.id)} disabled={assignSelection.length === 0 || rowBusy === template.id}>{rowBusy === template.id ? "Assigning…" : `Assign to ${assignSelection.length} speaker${assignSelection.length === 1 ? "" : "s"}`}</button></div>
               </div>}
               {isOpen && <div class="task-assignment-list">
