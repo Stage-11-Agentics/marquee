@@ -14,7 +14,7 @@ const membership = (status: "pending" | "confirmed" | "declined", invitedAt: num
   invited_at: invitedAt,
 });
 
-test("MRQ-111 · SPK-04 · one decline is the headline, however many roles are confirmed", () => {
+test("CONTRACT · MRQ-111 · SPK-04 · one decline is the headline, however many roles are confirmed", () => {
   expect(rollupSpeakerStatus(
     [
       { confirmation_status: "confirmed", invited_at: 1 },
@@ -24,7 +24,7 @@ test("MRQ-111 · SPK-04 · one decline is the headline, however many roles are c
   )).toBe("declined");
 });
 
-test("MRQ-111 · SPK-04 · every role confirmed is Confirmed; one outstanding is not", () => {
+test("CONTRACT · MRQ-111 · SPK-04 · every role confirmed is Confirmed; one outstanding is not", () => {
   expect(rollupSpeakerStatus(
     [{ confirmation_status: "confirmed", invited_at: 1 }, { confirmation_status: "confirmed", invited_at: 1 }],
     null,
@@ -35,19 +35,19 @@ test("MRQ-111 · SPK-04 · every role confirmed is Confirmed; one outstanding is
   )).toBe("invited");
 });
 
-test("MRQ-111 · SPK-04 · Invited is Pending plus a real invitation, not a fourth stored value", () => {
+test("CONTRACT · MRQ-111 · SPK-04 · Invited is Pending plus a real invitation, not a fourth stored value", () => {
   expect(rollupSpeakerStatus([{ confirmation_status: "pending", invited_at: null }], null)).toBe("pending");
   expect(rollupSpeakerStatus([{ confirmation_status: "pending", invited_at: 1 }], null)).toBe("invited");
 });
 
-test("MRQ-111 · SPK-04 · sessions outrank the membership row whenever any exist", () => {
+test("CONTRACT · MRQ-111 · SPK-04 · sessions outrank the membership row whenever any exist", () => {
   // The organizer marked the conference-level status Confirmed, then the
   // speaker declined their only session in the portal. The session is the
   // newer, more specific fact and the badge must say so.
   expect(rollupSpeakerStatus([{ confirmation_status: "declined", invited_at: 1 }], membership("confirmed"))).toBe("declined");
 });
 
-test("MRQ-111 · SPK-04 · a speaker with no sessions falls through to the membership row", () => {
+test("CONTRACT · MRQ-111 · SPK-04 · a speaker with no sessions falls through to the membership row", () => {
   expect(rollupSpeakerStatus([], membership("confirmed"))).toBe("confirmed");
   expect(rollupSpeakerStatus([], membership("pending", 42))).toBe("invited");
   expect(rollupSpeakerStatus([], membership("pending"))).toBe("pending");

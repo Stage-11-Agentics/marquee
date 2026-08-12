@@ -102,7 +102,7 @@ beforeEach(async () => {
   ]);
 });
 
-test("MRQ-111 · SPK-01 · the roster lists every speaker regardless of how they arrived", async () => {
+test("CONTRACT · MRQ-111 · SPK-01 · the roster lists every speaker regardless of how they arrived", async () => {
   const created = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -126,7 +126,7 @@ test("MRQ-111 · SPK-01 · the roster lists every speaker regardless of how they
   expect(names).not.toContain("Jordan Alvarez");
 });
 
-test("MRQ-111 · 24n · the acceptance boundary writes the membership row the portal reads", async () => {
+test("CONTRACT · MRQ-111 · 24n · the acceptance boundary writes the membership row the portal reads", async () => {
   const before = await env.DB
     .prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND role = 'speaker'")
     .bind(EVENT_ID)
@@ -150,7 +150,7 @@ test("MRQ-111 · 24n · the acceptance boundary writes the membership row the po
   expect(Number(again?.count)).toBe(1);
 });
 
-test("MRQ-111 · SPK-02 · an organizer bio edit survives a re-read and is attributable", async () => {
+test("CONTRACT · MRQ-111 · SPK-02 · an organizer bio edit survives a re-read and is attributable", async () => {
   const created = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -179,7 +179,7 @@ test("MRQ-111 · SPK-02 · an organizer bio edit survives a re-read and is attri
   expect(audit.results.every((row) => row.actor_person_id === ORGANIZER)).toBe(true);
 });
 
-test("MRQ-111 · SPK-04 · a status override persists, writes through to sessions, and filters", async () => {
+test("CONTRACT · MRQ-111 · SPK-04 · a status override persists, writes through to sessions, and filters", async () => {
   const patched = await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -200,7 +200,7 @@ test("MRQ-111 · SPK-04 · a status override persists, writes through to session
   expect(others.rows.map((row) => row.id)).not.toContain(ACCEPTED_SPEAKER);
 });
 
-test("MRQ-111 · SPK-04 · a session-less speaker can still be confirmed before scheduling", async () => {
+test("CONTRACT · MRQ-111 · SPK-04 · a session-less speaker can still be confirmed before scheduling", async () => {
   const created = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -219,7 +219,7 @@ test("MRQ-111 · SPK-04 · a session-less speaker can still be confirmed before 
   expect((await reread.json<{ speaker: { status: string } }>()).speaker.status).toBe("confirmed");
 });
 
-test("MRQ-111 · SPK-15 · logistics fields round-trip and clear honestly", async () => {
+test("CONTRACT · MRQ-111 · SPK-15 · logistics fields round-trip and clear honestly", async () => {
   await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -230,7 +230,7 @@ test("MRQ-111 · SPK-15 · logistics fields round-trip and clear honestly", asyn
   expect(body.speaker.custom_fields).toEqual({ Arrival: "Arrival May 11, aisle seat", Dietary: "Vegetarian" });
 });
 
-test("MRQ-111 · SPK-01 · search narrows to one speaker and clearing restores the roster", async () => {
+test("CONTRACT · MRQ-111 · SPK-01 · search narrows to one speaker and clearing restores the roster", async () => {
   const all = await roster();
   expect(all.rows.length).toBeGreaterThan(1);
   const narrowed = await roster("?q=Marcus");
@@ -242,7 +242,7 @@ test("MRQ-111 · SPK-01 · search narrows to one speaker and clearing restores t
   expect(restored.rows.length).toBe(all.rows.length);
 });
 
-test("MRQ-111 · CNT-10 · one email is one person: a re-added speaker joins rather than duplicates", async () => {
+test("CONTRACT · MRQ-111 · CNT-10 · one email is one person: a re-added speaker joins rather than duplicates", async () => {
   const first = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -254,13 +254,13 @@ test("MRQ-111 · CNT-10 · one email is one person: a re-added speaker joins rat
   expect(body.rows.find((row) => row.id === ACCEPTED_SPEAKER)?.bio).toBe("Re-entered by hand.");
 });
 
-test("MRQ-111 · SPK-08 · every speaker payload carries the headshot pointer MRQ-112 renders", async () => {
+test("CONTRACT · MRQ-111 · SPK-08 · every speaker payload carries the headshot pointer MRQ-112 renders", async () => {
   const body = await roster();
   expect(body.rows.length).toBeGreaterThan(0);
   for (const row of body.rows) expect(row).toHaveProperty("headshot_attachment_id");
 });
 
-test("MRQ-111 · SPK-01 · the roster is the speaker list, not the CFP funnel", async () => {
+test("CONTRACT · MRQ-111 · SPK-01 · the roster is the speaker list, not the CFP funnel", async () => {
   const body = await roster();
   const names = body.rows.map((row) => row.name);
   // A person the conference rejected is not one of its speakers, and neither is
@@ -271,7 +271,7 @@ test("MRQ-111 · SPK-01 · the roster is the speaker list, not the CFP funnel", 
   expect(names).toContain("Dana Kowalski");
 });
 
-test("MRQ-111 · SPK-02 · adding a speaker who already exists never clears their profile", async () => {
+test("CONTRACT · MRQ-111 · SPK-02 · adding a speaker who already exists never clears their profile", async () => {
   // Marcus arrived through the CFP with a full profile. An organizer re-enters
   // his name and email in the Add form and saves, filling nothing else in.
   const again = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
@@ -286,7 +286,7 @@ test("MRQ-111 · SPK-02 · adding a speaker who already exists never clears thei
   expect(speaker.company).toBe("Latticework Systems");
 });
 
-test("MRQ-111 · SPK-04 · setting a speaker back to Pending clears the invitation on both stores", async () => {
+test("CONTRACT · MRQ-111 · SPK-04 · setting a speaker back to Pending clears the invitation on both stores", async () => {
   await env.DB.prepare("UPDATE participations SET invited_at = ? WHERE id = 'par_mrq111_accepted'").bind(NOW).run();
   await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
     method: "PATCH",
@@ -299,7 +299,7 @@ test("MRQ-111 · SPK-04 · setting a speaker back to Pending clears the invitati
   expect((await reread.json<{ speaker: { status: string } }>()).speaker.status).toBe("pending");
 });
 
-test("MRQ-111 · SPK-02 · renaming onto another person's email is a field error, not a 500", async () => {
+test("CONTRACT · MRQ-111 · SPK-02 · renaming onto another person's email is a field error, not a 500", async () => {
   const response = await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -310,7 +310,7 @@ test("MRQ-111 · SPK-02 · renaming onto another person's email is a field error
   expect(JSON.stringify(body)).toContain("email");
 });
 
-test("MRQ-111 · CNT-10 · an email collision is case-insensitive, matching how identity resolves", async () => {
+test("CONTRACT · MRQ-111 · CNT-10 · an email collision is case-insensitive, matching how identity resolves", async () => {
   // `createSpeaker` resolves identity with `lower(email)`, so an exact-match
   // guard let a case variant through and created two people sharing one address.
   const response = await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
@@ -326,7 +326,7 @@ test("MRQ-111 · CNT-10 · an email collision is case-insensitive, matching how 
   expect(Number(duplicates?.count)).toBe(1);
 });
 
-test("MRQ-111 · SPK-01 · quick search never types a non-roster person as a Speaker", async () => {
+test("CONTRACT · MRQ-111 · SPK-01 · quick search never types a non-roster person as a Speaker", async () => {
   // The roster admits only live submissions, so a rejected-only speaker has no
   // record. Typing them "Speaker" would send the organizer to a 404 through a
   // link this ticket made live.
@@ -339,7 +339,7 @@ test("MRQ-111 · SPK-01 · quick search never types a non-roster person as a Spe
   expect(record.status).toBe(404);
 });
 
-test("MRQ-111 · SPK-04 · confirming a speaker keeps the original invitation date on both stores", async () => {
+test("CONTRACT · MRQ-111 · SPK-04 · confirming a speaker keeps the original invitation date on both stores", async () => {
   const invitedOn = NOW - 30 * 86_400_000;
   await env.DB.prepare("UPDATE participations SET invited_at = ? WHERE id = 'par_mrq111_accepted'").bind(invitedOn).run();
   await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
