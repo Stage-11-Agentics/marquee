@@ -45,6 +45,43 @@ test("AC-106 · the document advertises both auth schemes and the shared error e
   expect(document.paths["/api/v1/me/uploads/sign"].post.operationId).toBe("signTaskUpload");
 });
 
+test("MRQ-146 · concurrency claims and headers describe only agenda mutations", async () => {
+  const body = await (await SELF.fetch(`${ORIGIN}/api/openapi.json`)).text();
+  const document = JSON.parse(body) as {
+    info: { description: string };
+    paths: Record<string, Record<string, {
+      operationId?: string;
+      parameters?: Array<{ in?: string; name?: string }>;
+    }>>;
+  };
+
+  expect(document.info.description).toContain("only to the two agenda item mutation operations that require it");
+  expect(body.match(/If-Match/g) ?? []).toHaveLength(1);
+
+  const ifMatchOperations = Object.values(document.paths)
+    .flatMap((operations) => Object.values(operations))
+    .filter((operation) => operation.parameters?.some(
+      (parameter) => parameter.in === "header" && parameter.name?.toLowerCase() === "if-match",
+    ))
+    .map((operation) => operation.operationId)
+    .sort();
+  expect(ifMatchOperations).toEqual(["removeAgendaItem", "updateAgendaItem"]);
+});
+
+test("MRQ-146 · the skill is served as markdown rather than the SPA shell", async () => {
+  const response = await SELF.fetch(`${ORIGIN}/SKILL.md`);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toContain("text/markdown");
+
+  const body = await response.text();
+  expect(body.split("\n").slice(0, 3)).toEqual([
+    "# Marquee",
+    "",
+    "Marquee is a conference operating system. Use its API or CLI as the source of truth for program work; keep each action explicit and inspect the returned state.",
+  ]);
+  expect(body).not.toMatch(/^<!doctype html>/i);
+});
+
 test("AC-106 · the ETag digests the exact bytes served, so a caller can verify the document", async () => {
   const response = await SELF.fetch(`${ORIGIN}/api/openapi.json`);
   const body = await response.text();
