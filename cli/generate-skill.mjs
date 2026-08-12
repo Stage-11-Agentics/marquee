@@ -61,31 +61,47 @@ node cli/marquee.mjs remind "$EVENT_ID" --filter task_state=open --subject "One 
 
 An empty exact selection is a deliberate no-op. Keep recipient selectors narrow and verify the queued count in the response.
 
-## Agenda
+## Configure
 
-Export the Agenda as JSON or CSV. Scheduling is an API operation against an accepted Session and requires a room and start time.
+A conference carries its own name, dates, timezone, and venue, and the tracks and formats every later surface inherits. Read \`event show\` first: it returns the formats and tracks with their IDs, which scheduling needs.
 
 \`\`\`sh
+node cli/marquee.mjs event set "$EVENT_ID" --set name="AI Engineer NYC 2026" --set timezone=America/New_York --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs tracks add "$EVENT_ID" --set name=Agents --set color=#3B82F6 --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs formats add "$EVENT_ID" --set name="Lightning" --set default_duration_min=10 --set min_duration_min=5 --set max_duration_min=10 --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+\`\`\`
+
+\`--set\` values parse as JSON when they can, so \`10\` is a number and \`null\` is null. Quote to force a string: \`--set name='"2026"'\`.
+
+## Agenda
+
+Placing a Session needs a room ID and a start time in epoch milliseconds. \`agenda export\` returns the rooms, the placed sessions, and the unscheduled pool; \`search\` turns a talk's name into its ID.
+
+\`\`\`sh
+node cli/marquee.mjs search "$EVENT_ID" --query "retrieval" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 node cli/marquee.mjs agenda export "$EVENT_ID" --format csv --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN"
-# POST /api/v1/events/{eventId}/submissions/{submissionId}/schedule
-curl -fsS -X POST "$MARQUEE_URL/api/v1/events/$EVENT_ID/submissions/$SUBMISSION_ID/schedule" \\
-  -H "Authorization: Bearer $MARQUEE_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  --data '{"starts_at":1760000000000,"duration_min":30,"room_id":"ROOM_ID"}'
+node cli/marquee.mjs submissions schedule "$EVENT_ID" "$SUBMISSION_ID" --set starts_at=1760000000000 --set duration_min=30 --set room_id="$ROOM_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+\`\`\`
+
+Moving or unplacing an item is guarded by that item's version, so two agents cannot silently overwrite each other. The CLI reads the current ETag from the Agenda and sends it; a stale version fails with a conflict rather than clobbering the other write.
+
+\`\`\`sh
+node cli/marquee.mjs agenda place "$EVENT_ID" --set submission_id="$SUBMISSION_ID" --set starts_at=1760000000000 --set room_id="$ROOM_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs agenda move "$EVENT_ID" "$ITEM_ID" --set starts_at=1760003600000 --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs agenda remove "$EVENT_ID" "$ITEM_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 \`\`\`
 
 Scheduling changes the working Agenda; check the returned Session before moving on.
 
 ## Publish
 
-Publish only after the Session is accepted and scheduled. Publishing is also API-only and returns the updated Session record.
+Publish only after the Session is accepted and scheduled — publishing an unscheduled Session is refused.
 
 \`\`\`sh
-# POST /api/v1/events/{eventId}/submissions/{submissionId}/publish
-curl -fsS -X POST "$MARQUEE_URL/api/v1/events/$EVENT_ID/submissions/$SUBMISSION_ID/publish" \\
-  -H "Authorization: Bearer $MARQUEE_TOKEN" \\
-  -H "Accept: application/json"
+node cli/marquee.mjs submissions publish "$EVENT_ID" "$SUBMISSION_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 \`\`\`
+
+The published Session appears on the public program and in the embeddable agenda and speaker widgets.
 
 ## Diagnose
 

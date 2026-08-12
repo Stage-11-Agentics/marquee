@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-104",
+  "owns": [],
+  "exercises": ["AC-138", "AC-139", "AC-140", "AC-141", "AC-142", "AC-143", "AC-144"],
+  "notes": "MRQ-104 widens the CLI from 11 commands over 11 API operations to 24 over 24, so the walkthrough loop's configure, schedule, agenda and publish steps are drivable from a terminal rather than from raw requests. It adds no API surface — check:api's operation count and registry hash are unchanged — so it claims no AC of its own and instead deepens the existing US-69 and US-70 criteria: AC-138 (the covered workflow set), AC-139 (one parseable JSON value per command), AC-140 (token auth against any instance), AC-141 (help for every command), and AC-142 through AC-144 (the generated skill now teaches every workflow as a command, with no curl). AC-145's isolated-agent proof remains MRQ-44's."
+}

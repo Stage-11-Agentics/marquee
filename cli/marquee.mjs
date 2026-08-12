@@ -19,6 +19,9 @@ const VALUE_OPTIONS = new Set([
   "--request-id",
   "--level",
   "--event",
+  "--set",
+  "--query",
+  "--if-match",
 ]);
 const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle"]);
 const LIST_FILTER_KEYS = new Set(["kind", "status", "track", "format", "wave", "task", "placement", "q"]);
@@ -119,9 +122,40 @@ function parseFilters(values, allowed, label) {
   return result;
 }
 
+/**
+ * Body fields for a `--set` command. Values parse as JSON where they can, so
+ * `30` is a number and `null` is null, while an unparseable value like
+ * `Workshop` stays the string it looks like. A string that would parse as
+ * something else is quoted through: `--set name='"2026"'`.
+ */
+function parseSetValues(command, options) {
+  const allowed = new Set(command.set ?? []);
+  const body = {};
+  for (const value of optionValues(options, "--set")) {
+    const separator = value.indexOf("=");
+    if (separator < 1) usageError("--set must use key=value");
+    const key = value.slice(0, separator);
+    if (!allowed.has(key)) {
+      usageError(`unsupported --set key: ${key}\n\nlegal keys: ${[...allowed].join(", ")}`);
+    }
+    const raw = value.slice(separator + 1);
+    try {
+      body[key] = JSON.parse(raw);
+    } catch {
+      body[key] = raw;
+    }
+  }
+  return body;
+}
+
+function requireSetValues(command, options) {
+  const body = parseSetValues(command, options);
+  if (Object.keys(body).length === 0) usageError(`${command.usage} requires --set`);
+  return body;
+}
+
 function eventIdFrom(command, arguments_, options) {
-  const expected = command.path.at(-1) === "show" || command.path[0] !== "event" || command.path[0] === "tasks" || command.path[0] === "remind" || command.path[0] === "agenda";
-  if (!expected) return undefined;
+  if (!command.event) return undefined;
   const positional = arguments_[0];
   const selected = positional ?? option(options, "--event-id") ?? process.env.MARQUEE_EVENT_ID;
   if (!selected) usageError(`${command.usage} requires an event ID (or MARQUEE_EVENT_ID)`);
@@ -168,6 +202,24 @@ function csvRows(value) {
   return [keys.join(","), ...rows.map((row) => keys.map((key) => csvCell(row?.[key])).join(","))].join("\n");
 }
 
+/**
+ * The strong ETag for one placed agenda item. `updateAgendaItem` and
+ * `removeAgendaItem` are the only two If-Match routes in the product, and the
+ * agenda snapshot already carries each session's tag — so the caller states an
+ * item ID and the CLI supplies the precondition, rather than making a human
+ * carry a version string between two commands. `--if-match` stays available for
+ * a script that already holds one.
+ */
+async function agendaItemEtag(client, eventId, itemId, options) {
+  const supplied = option(options, "--if-match");
+  if (supplied) return supplied;
+  const agenda = await client.get(`/api/v1/events/${encodeURIComponent(eventId)}/agenda`);
+  const item = (agenda?.sessions ?? []).find((session) => session.id === itemId);
+  if (!item) usageError(`no agenda item ${itemId} is placed on this conference's agenda`);
+  if (!item.etag) throw new Error(`the agenda returned item ${itemId} without an ETag`);
+  return item.etag;
+}
+
 async function waitForReset(client, jobId) {
   const deadline = Date.now() + 30_000;
   let last;
@@ -200,6 +252,10 @@ async function execute(command, arguments_, options, flags, client) {
   if (root === "event" && verb === "show") {
     const eventId = await resolveEventId(client, command, arguments_, options);
     return client.get(`/api/v1/events/${encodeURIComponent(eventId)}`);
+  }
+  if (root === "event" && verb === "set") {
+    const eventId = await resolveEventId(client, command, arguments_, options);
+    return client.patch(`/api/v1/events/${encodeURIComponent(eventId)}`, requireSetValues(command, options));
   }
 
   // Diagnostics and logs are about the deployment, not about one conference,
@@ -256,9 +312,48 @@ async function execute(command, arguments_, options, flags, client) {
       ...(template ? { template_key: template } : { subject, body }),
     });
   }
+  if (root === "submissions" && (verb === "schedule" || verb === "publish")) {
+    const submissionId = arguments_[1];
+    if (!submissionId) usageError(`${command.usage} requires a submission ID`);
+    const base = `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`;
+    return verb === "schedule"
+      ? client.post(`${base}/schedule`, requireSetValues(command, options))
+      : client.post(`${base}/publish`);
+  }
+  if (root === "tracks" || root === "formats") {
+    const collection = `/api/v1/events/${encodeURIComponent(eventId)}/${root}`;
+    if (verb === "list") return client.get(collection);
+    if (verb === "add") return client.post(collection, requireSetValues(command, options));
+    const id = arguments_[1];
+    if (!id) usageError(`${command.usage} requires a ${root.slice(0, -1)} ID`);
+    return client.remove(`${collection}/${encodeURIComponent(id)}`);
+  }
+  if (root === "search") {
+    const query = option(options, "--query");
+    if (!query) usageError(`${command.usage} requires --query`);
+    return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/search`, { query: { q: query } });
+  }
   if (root === "agenda" && verb === "export") {
     const agenda = await client.get(`/api/v1/events/${encodeURIComponent(eventId)}/agenda`);
     return option(options, "--format") === "csv" ? { __csv: csvRows(agenda), __value: agenda } : agenda;
+  }
+  if (root === "agenda" && verb === "place") {
+    return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/agenda/items`, requireSetValues(command, options));
+  }
+  if (root === "agenda" && (verb === "move" || verb === "remove")) {
+    const itemId = arguments_[1];
+    if (!itemId) usageError(`${command.usage} requires an agenda item ID`);
+    const path = `/api/v1/events/${encodeURIComponent(eventId)}/agenda/items/${encodeURIComponent(itemId)}`;
+    // The body is parsed before the ETag is read so a bad --set key fails
+    // without spending a request on the agenda.
+    const body = verb === "move" ? requireSetValues(command, options) : undefined;
+    const headers = { "if-match": await agendaItemEtag(client, eventId, itemId, options) };
+    if (verb === "move") return client.patch(path, body, { headers });
+    // The API answers a removal with 204 and no body, which is right for HTTP
+    // and useless on stdout: a bare `null` cannot be told from a command that
+    // did nothing. The CLI states what it did instead of echoing the silence.
+    await client.remove(path, { headers });
+    return { removed: itemId, event_id: eventId };
   }
   usageError(`unsupported command: ${command.path.join(" ")}`);
 }
@@ -298,6 +393,16 @@ export async function main(argv = process.argv.slice(2)) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // `marquee submissions list … | head` closes stdout early. Node's default is
+  // to raise EPIPE as an unhandled error event and print a stack trace, which
+  // is the wrong answer for a command built to be piped: the reader got what it
+  // asked for, so the writer exits quietly.
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on("error", (error) => {
+      if (error.code === "EPIPE") process.exit(0);
+      throw error;
+    });
+  }
   main().catch((error) => {
     process.stderr.write(`marquee: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
