@@ -86,6 +86,9 @@
 .onboarding-invite-heading { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
 .onboarding-invite-heading h3 { margin-bottom: 6px; }
 .onboarding-invite-heading button { flex: 0 0 auto; }
+.onboarding-file-groups { display: grid; gap: 12px; }
+.onboarding-file-group { background: var(--sunk); border: 1px solid var(--line); display: grid; gap: 8px; padding: 10px; }
+.onboarding-file-group > strong { font: 600 10px/1.25 var(--mono); letter-spacing: .04em; }
 .onboarding-context-list { display: grid; gap: 8px; }
 .onboarding-context-row { align-items: start; display: grid; gap: 9px; grid-template-columns: 24px minmax(0, 1fr); }
 .onboarding-context-mark, .onboarding-context-row .onboarding-glyph { align-items: center; display: grid; font: 600 12px/1 var(--mono); height: 22px; justify-content: center; width: 22px; }
