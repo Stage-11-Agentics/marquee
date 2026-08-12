@@ -16,7 +16,6 @@ import {
   ERROR_TREATMENTS,
   MarqueeApiError,
   describeError,
-  errorSummary,
   fieldError,
   referenceCode,
 } from "../../src/ui/shell/api-client";
@@ -85,11 +84,11 @@ describe("the reference code", () => {
 
     const details = new MarqueeApiError({
       code: "malformed_request",
-        message: "The submission has invalid values.",
-        status: 422,
-        details: { issues: [{ fieldKey: "submitter.email", message: "Enter a reachable email address." }] },
-        route: "/api/v1/events/{eventId}/submissions",
-      });
+      message: "The submission has invalid values.",
+      status: 422,
+      details: { issues: [{ fieldKey: "submitter.email", message: "Enter a reachable email address." }] },
+      route: "/api/v1/events/{eventId}/submissions",
+    });
     expect(fieldError(details, ["submitter.email"])).toBe("Enter a reachable email address.");
     expect(details.message).toBe("The submission has invalid values.");
   });
