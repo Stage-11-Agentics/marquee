@@ -1,0 +1,1 @@
+Verdict: PASS\n\nReviewed commit: c655b213c3d5d491a762c17e5d88b6e8c61849e0\nAdditional change since d7f41b8: updated existing test fixtures for the required eventId and nullable headshot field; no runtime logic changed.\n\nFindings: none.

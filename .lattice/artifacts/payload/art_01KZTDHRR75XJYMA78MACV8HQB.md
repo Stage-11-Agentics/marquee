@@ -1,0 +1,37 @@
+# Plan Review: MRQ-112 — Headshots render and speaker files panel
+
+Reviewer: Claude (plan-review cycle 1). Claims verified against the working tree at `github/main` (`23a06b0`), the T-D2 contract in `sequence/eval-response-tickets.md`, the `.eval-kit` rubric YAMLs, the Lattice board, and the live remote branches.
+
+### 1. Verdict
+
+**PASS** — Implementation can proceed. The issues below should be resolved by appending to the plan's Resolutions section at implementation start; none requires a re-planning cycle.
+
+### 2. Summary
+
+The plan translates T-D2 (SPK-08 w3, SPK-10 w2, CNT-10 half) into four scoped work items: a serve path for `person_headshot` attachments, three `<img>` render sites, a speaker-record files panel consuming MRQ-115's exports, and targeted tests. Every factual claim I checked is accurate: the preview handler at `uploads.routes.ts:576-610` does join strictly through `submission_answers` (person headshots are unreachable); the portal profile (`PortalPage.tsx:385`) uploads a headshot but renders only a local crop preview, never the persisted image after reload; the stated base commit is the current `github/main` tip; `pr-gate` does require `--ticket`. The key concern is sequencing against two unstarted siblings: MRQ-115 (`in_planning`; its branch exists but holds only a plan commit — the exports this ticket consumes are not yet written) and MRQ-111 (`in_planning`; owns the new roster/record surfaces that are two of this ticket's three render targets).
+
+### 3. Issues
+
+**[MAJOR] Scope §2 / Ownership — Roster-row and speaker-record render targets are not pinned to concrete files, and their owner (MRQ-111) has not started**
+The plan names `uploads.routes.ts` precisely but describes the UI work only as "portal headshot render, organizer roster/record renders." MRQ-111 (Speaker roster and person CRUD) is `in_planning` with no published branch, so the "new Speakers roster/record surfaces" the plan defers to do not exist and have no committed shape. Meanwhile the codebase already has organizer-side surfaces that satisfy the rubric today: the onboarding speakers list and `SpeakerDrawer` in `src/ui/onboarding/OnboardingPage.tsx` (the drawer already shows an initials avatar at line 97). SPK-08's pass line only needs "the organizer's view of Priya's record" to show the headshot — it does not require MRQ-111's new roster. Leaving the render target as "whatever MRQ-111 ships" makes two of three rubric render sites hostage to an unstarted sibling's timeline.
+**Recommendation:** Pin the organizer render targets to the existing surfaces now — `OnboardingPage.tsx` roster rows and `SpeakerDrawer` (plus `SubmissionRecordPage.tsx` if that is the "speaker record" the drawer opens from) — and record in the Resolutions section that migrating the render into MRQ-111's new surfaces is that ticket's (or a follow-up's) integration step. This makes SPK-08/CNT-10 evidence independent of MRQ-111 timing while keeping the coordination note intact.
+
+**[MINOR] Ground truth §base / Verification — The rebase trigger "once the parent ref is published" is already true, but the parent has no code**
+`github/mrq-115-files-library` now exists, but its only commit is the MRQ-115 plan file — `listVersionsFor` and `FileVersions` are not yet written. A literal reading of the plan's trigger ("once the parent ref is published, rebase") would have the implementer rebase onto a branch containing nothing usable and then be blocked on scope item 3. The plan's scope ordering already permits the right move; make it explicit.
+**Recommendation:** Restate the trigger as "once MRQ-115's implementation lands on its branch (exports present), rebase and integrate item 3." Sequence explicitly: items 1, 2, and the non-panel tests are implementable off the current base immediately; item 3 and its tests are the only work gated on the parent. This maximizes parallel progress and keeps the stacked-PR contract intact.
+
+**[MINOR] Scope §1 — Dual authorization for the serve path spans two session models; the plan should name the mechanism**
+The existing preview handler authorizes via `requireSubmissionRead`/`requireDraftRead` (organizer program access). The portal authenticates differently (portal session, `auth.personId` in `portal.routes.ts`), and portal client calls go through `/api/v1/me/...`, not organizer event routes. "Widen the preview handler if it can safely authorize both" glosses the real decision: either the person-headshot route accepts both session kinds with explicit branch logic, or the portal gets its own `/api/v1/me/headshot`-style read and the organizer surfaces use the event-scoped path. The plan's Cycle-1 self-resolution ("one serve path with explicit dual authorization") picks the former but doesn't say how the portal session reaches an `/events/{eventId}/...` route.
+**Recommendation:** At implementation start, append the concrete auth decision to Resolutions: which middleware authorizes the owning speaker, and what URL each of the three render sites uses. Preserve the stated invariants (event/person scoping, ready-only, previewable-raster-only, 404 without bytes on every deny) as test cases — the plan already lists them well.
+
+**[MINOR] Ground truth §rubric — "CNT-10 half" is not decomposed**
+CNT-10 requires the organizer to *edit* bio and *upload* a headshot from the admin area with persistence. An organizer-side PATCH accepting `headshot_attachment_id` already exists (`portal.routes.ts:1131-1174`), and T-D2's contract assigns this ticket the render/serve half — but the plan never states which half it claims or which ticket owns the organizer-side headshot *upload UI* that CNT-10's pass line ("newly uploaded headshot.png … after save and reload") implies. If neither MRQ-111 nor MRQ-112 owns that upload control, the CNT-10 point drops between tickets.
+**Recommendation:** State explicitly in the plan which CNT-10 evidence this ticket produces (persisted photo renders on the record after reload) and flag to the orchestrator, in the completion comment if not resolvable now, which ticket owns the organizer-side headshot upload control.
+
+### 4. Positive Observations
+
+- **Every verifiable claim in the plan is true.** The `uploads.routes.ts:604-608` join diagnosis, the portal never-renders-after-reload failure, the base commit identity, the `pr-gate --ticket` requirement, and the rubric anchors all check out against the tree and the eval-kit YAMLs. This is a plan grounded in read code, not summaries.
+- **The ownership boundary is stated crisply and matches the contract.** "Write no attachments SQL; consume `listVersionsFor` + `FileVersions`; T-F owns sign/complete" reproduces T-D2's dissolution of the D↔F hazard exactly, and the non-goals list (no migrations, no R2-origin wiring, no parallel data model) closes off the trap doors the contract explicitly rejected.
+- **Security posture on the serve path is thought through at plan level** — event/person scoping, pending/unowned/cross-event non-disclosure, raster-only inline serving, and preservation of the existing submission-answer contract are all named before a line is written.
+- **Layout-stability and fallback rules** (fixed avatar box, initials on missing/pending/failed) carry the project's elements-never-jump rule into the plan rather than leaving it to taste.
+- **The verification section is honest about evidence**: real Worker path, observed-vs-inferred separation, load-aware pr-gate retry, and the stacked-PR body line are all specified in advance.

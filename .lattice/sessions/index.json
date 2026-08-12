@@ -1,10 +1,14 @@
 {
   "active_sessions": {
+    "AgentEvaluator-1": "sess_01KZVFR1QPQ9PMT7PY3B0RRWP0",
+    "EvalIntake-1": "sess_01KZVFJPQ119CRD98KZJZNMD8E",
     "feedback-intake-1": "sess_01KZSZXGH17A7VWN1TA7QNT7WG",
     "intake-1": "sess_01KZT6C1JSV9KWWS2F5EZSN5V6",
     "merge-agent-1": "sess_01KZT4CNZA5J534NFWXB4DDE8Y"
   },
   "serial_counters": {
+    "AgentEvaluator": 1,
+    "EvalIntake": 1,
     "feedback-intake": 1,
     "intake": 1,
     "merge-agent": 1

@@ -1,0 +1,62 @@
+{
+  "assigned_to": "agent:delegator-mrq-106",
+  "branch_links": [],
+  "c11_surface": "surface:415",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 4,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:29Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "Wave-0 sweep, ships first. (1) VERIFY the headshot upload fix (1fc2e2e) works on the LIVE public CFP form at marquee.stage11.dev \u2014 browser session, real file; it cost 63 turns in run 1 and is unverified post-fix; report the result loudly before anything else. (2) Fix the four false routes in .eval-kit/evalconfig.json submissionNotes (/site does not exist; /comms -> /communications; /settings/webhooks does not exist; /agenda is public, builder is /agenda-builder) AND build a generator: script in scripts/checks/ emitting the ROUTES block from route-table.ts + app.tsx public predicate, failing the PR gate on drift. (3) Sidebar rows: Embeds -> /embed/config; sidebar:true for /submissions; entry for /submissions/new. (4) Restore the removed 'Agenda data' feed link on the public agenda. (5) ?status=accepted escape hatch: when stage filter yields 0 but accepted_any>0, inline note 'N accepted overall - view all' with param-swap link. (6) De-dress the fake event switcher (Sidebar.tsx:11 event-switcher class around a plain /dashboard link). NOTE: submissionNotes edits live in .eval-kit/evalconfig.json which is gitignored third-party \u2014 edit it in place in the PRIMARY checkout (allowed exception, it is not committed), and put the generator + a committed copy of truthful notes text in the repo. Full spec: section T-Z of sequence/eval-response-tickets.md. Register rows 51-52 + free-wins list.",
+  "done_at": "2026-08-12T18:47:38Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTF0Y5TB54ET53CYYDF7VEK",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFTCMWC0T8HXAD4MRKZHGB",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGBEJ7WANQYXT5DGT9X2E7",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGCTQ1KE08BJ643W6A89WP",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMTC2QCB5BPNG52BT80CN5",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMTC2QCB5BPNG52BT80CN4",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRBKER2402878P6WSR8N6",
+  "last_event_id": "ev_01KZVMTC2QCB5BPNG52BT80CN8",
+  "last_status_changed_at": "2026-08-12T18:47:38Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-106",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Wave 0: eval free wins and truthful notes",
+  "type": "task",
+  "updated_at": "2026-08-12T18:47:38Z",
+  "urgency": null
+}

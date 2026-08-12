@@ -1,0 +1,63 @@
+{
+  "assigned_to": "agent:delegator-mrq-131",
+  "branch_links": [],
+  "comment_count": 5,
+  "complexity": null,
+  "created_at": "2026-08-12T15:20:09Z",
+  "created_by": "agent:claude-crm-scope",
+  "custom_fields": {},
+  "description": "Build the organization-level speaker record \u2014 the cross-conference half of Marquee that the event-scoped roster cannot be. One large ticket by operator choice; the SCOPE list below is in build order and each numbered block is a shippable stage if a delegator wants to stage it.\n\nWHY, HONESTLY: the eval kit's Speaker CRM is an OPTIONAL area and is worth 0.0 on the headline score \u2014 .eval-kit/src/report.ts:166 filters optional areas out before overallPct, and the graders' default config does not even run it. Do not build this for points. Build it because (a) roughly two thirds of it is capability the required Speaker Management area already demands (SPK-01/02/03/11/13/14/15 \u2014 ~6.4 real overall points), so most of it is being paid for anyway, and (b) a conference organization's speaker network is the asset that outlives any one conference. The full arithmetic, per-item register, and the reopen trigger are in sequence/research/speaker-crm-scope.md \u2014 read \u00a75 before arguing scope.\n\nREAD FIRST, in order: (1) sequence/research/speaker-crm-scope.md \u2014 the scope memo, especially \u00a72 (data model) and \u00a75 (verdict + arithmetic); (2) prototypes/crm/index.html \u2014 THE BINDING DESIGN for this ticket; reproduce it one-to-one, including the scope-overlay-free production view; (3) CLAUDE.md \"Rules of the road\" \u2014 the person-centric roster invariant is binding and non-negotiable; (4) DESIGN.md \u2014 Flight Deck, and the sidebar structure the prototype already matches (v1.11 switcher geometry, numbered 1\u20137 pipeline stages); (5) sequence/multi-event-design.md \u00a72.3 \u2014 the copy contract, which states independently that people are org-scoped and never copy.\n\nLANGUAGE IS PART OF THE SPEC. The area is called People. Never \"CRM\", \"Directory\", or \"Contacts\" in any user-facing string \u2014 that is address-book register and PHILOSOPHY \u00a76 forbids it. A saved group is a List, not a Segment; its two kinds are Live (a saved filter, picks up new matches) and Fixed (exactly these people). \"People\" is also on the eval scenario's own name-recognition list, so the plain word costs nothing.\n\nSCOPE, in build order:\n1. People list \u2014 route /crm, /directory, /contacts, /people all resolve (agents guess URLs; each 404 costs turns). Nav entry \"People\" in an ORGANIZATION group ABOVE the conference switcher \u2014 the switcher is the scope boundary and that placement is the whole point. Server-side search/filter/sort/pagination over people, leaning on idx_people_org_name. ONE list query with an optional event_id; the conference roster at /speakers is the same query with the filter applied. Two nav entries, one implementation \u2014 a second implementation is a defect.\n2. Person profile \u2014 one scrolling drawer, not a tab chain: identity, tags, internal notes, Connections (sessions across every conference, from participations), Activity (audit_log + outbox). Notes and stage moves must be SERVER-persisted and survive a reload; the run-1 \"Draft saved locally\" defect is the cautionary tale.\n3. Annotations \u2014 ONE append-only table, person_events(id, org_id, person_id, kind, value_json, actor_person_id, created_at). kind='note' serves notes, 'tag' serves tags, 'stage' serves the pipeline's current stage; because the table is append-only the stage HISTORY falls out free rather than needing its own table, and the table itself is the activity feed. Do not add person_notes/person_tags as separate tables.\n4. Lists \u2014 person_lists(kind live|fixed, config_json) + members for fixed. The save control is contextual: with nothing selected it reads \"Save filter as list\" and defaults to Live; with rows ticked it reads \"Save selected as list\" and defaults to Fixed. Fixed width so nothing jumps.\n5. Import \u2014 instructions-first per the prototype and MRQ-130's brief pattern, PLUS a working file-drop that hits the same endpoint. The drop-zone is not optional: the identical requirement is SPK-03 in the required area. No column-mapping wizard \u2014 auto-map by header and return unmapped[].\n6. Bulk email from a selection \u2014 reuse the existing comms stack, which already takes a person_ids selector (comms.routes.ts canAddressPersonOnly), renders {{speaker.first_name}}, previews, and logs to outbox. Directory-side entry point only; do not build a second mail path.\n7. KPI strip at the top of People \u2014 counts plus one populated widget (top companies from a GROUP BY). This is the \"dashboard\"; it is a header, not a page.\n8. Sourcing pipeline \u2014 kanban over person_events stage rows, six named stages including terminal won/lost. Cards move by a \"Move to\" menu, NOT drag \u2014 consequential actions live on the control, per the existing program-board ruling. Card detail shows notes and the timestamped stage history.\n9. Add to conference \u2014 DEPENDS ON MRQ-129. One participations row; nothing is re-keyed because people are already org-scoped.\n\nAGENT-NATIVE (PHILOSOPHY \u00a73, not optional): endpoints under /api/v1/org/* declared through defineApiRoute so they land in /api/openapi.json and /api/docs automatically; marquee people/lists/pipeline CLI verbs; a SKILL.md chapter through cli/generate-skill.mjs. check:api registry/OpenAPI parity applies to every new route.\n\nBOUNDARIES: no new dependencies. Org-level writes may attribute to the single existing event id where a table carries event_id NOT NULL (imports, outbox, audit_log, attachments) \u2014 this is a deliberate, documented shortcut while the product is single-org; do not undertake the nullable-event_id migration inside this ticket. Suite budget 45 s: prefer tests/node for pure logic; consolidate Worker-backed integration files.\n\nNOT IN SCOPE: duplicate detection and merge (highest defect risk per point in the area \u2014 FK re-pointing across participations, memberships, outbox, speaker_tasks, attachments); interest forms; email engagement tracking.\n\nPROCESS: fresh worktree off github/main; commit early and often; PR via gh pr create --repo Stage-11-Agentics/marquee --base main. Post-deadline scope \u2014 do not merge before the competition freeze clears (cf. MRQ-105).",
+  "done_at": "2026-08-12T17:07:12Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZV9XJYKYEC9WMJWN05XD4N4",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVBSM30P4ZV1SAJ2TAAX5E2",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVC698K9AWFWRPV3JRJAFNA",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVC6E3AHWEFXMM0GMCP4SYF",
+      "role": "validation",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZV8YEGMR0EERJRFJ6A5B4BK",
+  "last_event_id": "ev_01KZVFCZZX7JE6J7Z036NV1DH4",
+  "last_status_changed_at": "2026-08-12T17:07:12Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-12T15:20:18Z",
+      "created_by": "agent:claude-crm-scope",
+      "note": null,
+      "target_task_id": "task_01KZV8TM97AM2PB5W247RQGXFB",
+      "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-12T15:20:19Z",
+      "created_by": "agent:claude-crm-scope",
+      "note": null,
+      "target_task_id": "task_01KZV8XBXS7SAFWM57Z99JSNSE",
+      "type": "related_to"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-131",
+  "status": "done",
+  "tags": null,
+  "title": "People \u2014 the org-level speaker record, Lists, and the sourcing pipeline",
+  "type": "task",
+  "updated_at": "2026-08-12T17:12:57Z",
+  "urgency": null
+}

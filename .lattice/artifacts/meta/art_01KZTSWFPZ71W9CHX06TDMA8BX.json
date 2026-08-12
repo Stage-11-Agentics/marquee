@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T10:56:56Z",
+  "created_by": "agent:delegator-mrq-110",
+  "custom_fields": {},
+  "id": "art_01KZTSWFPZ71W9CHX06TDMA8BX",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTSWFPZ71W9CHX06TDMA8BX.md",
+    "size_bytes": 1780
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Exact HEAD 28094db: pr-gate, API/trace/schema/seed, targeted tests, and local Worker curl validation all pass; c11 browser open was unavailable after socket timeouts.",
+  "tags": [],
+  "title": "validation (local gate, schema, seed, live Worker)",
+  "token_usage": null,
+  "type": "file"
+}

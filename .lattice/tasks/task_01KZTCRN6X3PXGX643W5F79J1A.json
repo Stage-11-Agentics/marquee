@@ -1,0 +1,87 @@
+{
+  "assigned_to": "agent:delegator-mrq-127",
+  "branch_links": [],
+  "c11_surface": "surface:431",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 2,
+  "complexity": "low",
+  "created_at": "2026-08-12T07:07:39Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "No rubric item names this screen \u2014 it is the fallback the judge reaches when the public path fails, and 10 weighted points of run-1 damage flowed through it (CFP-06/13/15). (1) CreateSubmissionPage: track multi-select and format select fed from the existing settings endpoints (event-settings.routes.ts:228,339) replacing raw 'track_agents'/'format_talk' text inputs. (2) SUBMITTER: person search/typeahead over people with inline create-person fallback and a REQUIRED choice \u2014 the blank 'Submitter person ID' field is what made 'AIE Program Committee' the speaker of record across three judged items. (3) Field-level 422 surfacing: api-client.ts:89 currently flattens every constraint failure into 'That change would leave the program in a state it cannot be in.' \u2014 surface the API's field-level detail on the field. Human lens: an organizer entering a phoned-in proposal at 11pm knows the speaker's NAME, not a ULID; the opaque error does not just block, it refuses to say why. Full spec: section T-N3. Register row 50.",
+  "done_at": "2026-08-12T18:48:58Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDNWQDQF3EBA814ADG8RT3",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTETZ1JG4YQPS4N8XCR1PCD",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTG1NAR5GJ6TTSRB74TFZT0",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGNQHV8GHV0HV19HG0P8C3",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGP1PCJF1F0TJJD482S9CE",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGPMNWJ43PJP2R3CHYWDHZ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGR818NC8BGPQV5B35S3Y2",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGTJ24D41KEFHQ22VSBYS0",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTGTVZ528R7QBM0JB0A7FQV",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVMWT054ZRNB9YEHFJHK22V",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWT054ZRNB9YEHFJHK22T",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRN6X3PXGX643W5F79J1A",
+  "last_event_id": "ev_01KZVMWT054ZRNB9YEHFJHK22Y",
+  "last_status_changed_at": "2026-08-12T18:48:58Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 2,
+  "schema_version": 1,
+  "short_id": "MRQ-127",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Create-submission pickers and honest errors",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:58Z",
+  "urgency": null
+}

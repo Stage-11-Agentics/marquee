@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T16:54:24Z",
+  "created_by": "agent:delegator-mrq-132",
+  "custom_fields": {},
+  "id": "art_01KZVEB16P5A3JE0QM7PZC3ZHH",
+  "model": null,
+  "payload": {
+    "content_type": "text/calendar",
+    "file": "art_01KZVEB16P5A3JE0QM7PZC3ZHH.ics",
+    "size_bytes": 3811
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-132 validation \u00b7 my-schedule.ics",
+  "token_usage": null,
+  "type": "file"
+}

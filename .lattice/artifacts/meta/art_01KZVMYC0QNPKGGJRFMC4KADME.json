@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:49:49Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMYC0QNPKGGJRFMC4KADME",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMYC0QNPKGGJRFMC4KADME.md",
+    "size_bytes": 784
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE, having drifted BACKWARDS at 'backlog'. PR #106 ('Seed the autosave limiter instead of racing it: AC-42 could not trip under load') merged 2026-08-12T17:",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

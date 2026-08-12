@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:15:00Z",
+  "created_by": "agent:mrq-133-builder",
+  "custom_fields": {},
+  "id": "art_01KZVJYKPPVD9FZFE7BSQXMQC6",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVJYKPPVD9FZFE7BSQXMQC6.md",
+    "size_bytes": 15990
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "code-review (review)",
+  "token_usage": null,
+  "type": "file"
+}

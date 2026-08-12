@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T07:28:18Z",
+  "created_by": "agent:delegator-mrq-119",
+  "custom_fields": {},
+  "id": "art_01KZTDYFGFN0C8XVHZHPYM96BF",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTDYFGFN0C8XVHZHPYM96BF.md",
+    "size_bytes": 860
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS for commit 6dc922f; click/blur ordering covered.",
+  "tags": [],
+  "title": "MRQ-119 browser-path re-review",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T07:53:05Z",
+  "created_by": "agent:delegator-mrq-109",
+  "custom_fields": {},
+  "id": "art_01KZTFBVGV08V85NDENYVA6B4C",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZTFBVGV08V85NDENYVA6B4C.png",
+    "size_bytes": 122472
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-109 evaluation-page",
+  "token_usage": null,
+  "type": "file"
+}

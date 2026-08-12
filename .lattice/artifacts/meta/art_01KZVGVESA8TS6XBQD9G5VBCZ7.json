@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T17:38:20Z",
+  "created_by": "agent:delegator-mrq-132",
+  "custom_fields": {},
+  "id": "art_01KZVGVESA8TS6XBQD9G5VBCZ7",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVGVESA8TS6XBQD9G5VBCZ7.md",
+    "size_bytes": 6278
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "MRQ-132 shipped as PR #102 (https://github.com/Stage-11-Agentics/marquee/pull/102), six commits on mrq-132-attendee-schedule off github/main@6d8ee25. NOT deployed \u2014 merging does not ship (DEPLOY.md), ",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

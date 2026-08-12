@@ -1,0 +1,43 @@
+{
+  "assigned_to": "agent:delegator-mrq-130",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": null,
+  "created_at": "2026-08-12T15:19:34Z",
+  "created_by": "agent:claude-crm-scope",
+  "custom_fields": {},
+  "description": "Add a shared \"hand this to your agent\" affordance: a copyable, plain-language brief written TO an agent, offered on the operator surfaces where a capable agent does the job faster than a human clicking. PHILOSOPHY \u00a73 claims every capability is reachable programmatically and that we ship the affordances that make agents effective \u2014 this is that claim made visible in the product instead of asserted in a document.\n\nSTRICTLY ADDITIVE \u2014 operator ruling, 2026-08-12. Every surface keeps its existing UI in full. A brief is an extra path, never a replacement, and never a licence to simplify away a control to make room. A screen that loses a working affordance to fit a brief has failed this ticket. Even on People \u2192 import, where the brief leads visually, the file-drop stays and must work standalone.\n\nWHAT A BRIEF CONTAINS \u2014 all four, or it is not paste-ready:\n1. Where this instance lives \u2014 the real URL of the running deployment, never a placeholder.\n2. The machine-readable entry point, told as an instruction: \"read /api/openapi.json first\".\n3. The auth path \u2014 an API token, and where to mint one (Settings \u2192 API tokens).\n4. A definition of done: what to report back, including any undo handle (e.g. import_id).\n\nA brief that omits auth sends the operator's agent into a 401. A brief that omits the definition of done gets a \"done!\" with no receipt. Both are failures of this ticket, not of the agent.\n\nSURFACES \u2014 one brief each, written for that job. These are copy, not a template with holes; a generic brief with the nouns swapped is a fail:\n- People \u2192 import (already prototyped: prototypes/crm/index.html, the \"Import people\" modal \u2014 reproduce it one-to-one)\n- CFP setup \u2192 build a call for papers from a description of the conference\n- Communications / chase \u2192 find who is behind and send the right nudge\n- Agenda builder \u2192 place the accepted sessions, respecting conflicts\n- Speaker portal, organizer side \u2192 prepare and send a speaker's onboarding\n\nSHAPE: one shared presentational component (brief text + full-width Copy button + the muted \"or drive it yourself\" endpoint line), five pieces of per-surface copy. Clipboard via navigator.clipboard with a visible confirmation; a select-all fallback where it is unavailable. Voice per DESIGN.md \u2014 the brief is written as the operator would speak to their own agent, first person, no exclamation marks.\n\nBOUNDARIES: no new dependencies. Not a chat panel, not an in-app assistant, no model is called and nothing leaves the browser \u2014 Marquee renders text the operator copies. The endpoint reference stays a muted single line, not a second code block.\n\nREAD FIRST: PHILOSOPHY.md \u00a73; DESIGN.md (voice, craft rules); prototypes/crm/index.html \"Import people\" modal; SKILL.md and cli/generate-skill.mjs for the vocabulary the briefs should echo.\n\nPROCESS: fresh worktree off github/main; PR via gh pr create --repo Stage-11-Agentics/marquee --base main. Post-deadline scope \u2014 do not merge before the competition freeze clears (cf. MRQ-105).",
+  "done_at": "2026-08-12T16:06:39Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZV9T52W2AWHBZMC8J30CBFM",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVAYZGAENXSF05RH1K96G8W",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVB83BN8C8P3R3QDAQW1836",
+      "role": "validation",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZV8XBXS7SAFWM57Z99JSNSE",
+  "last_event_id": "ev_01KZVBKKNHZYNST2WNF40WT6NW",
+  "last_status_changed_at": "2026-08-12T16:06:39Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-130",
+  "status": "done",
+  "tags": null,
+  "title": "Hand this to your agent \u2014 copyable agent briefs on operator surfaces",
+  "type": "task",
+  "updated_at": "2026-08-12T16:06:40Z",
+  "urgency": null
+}

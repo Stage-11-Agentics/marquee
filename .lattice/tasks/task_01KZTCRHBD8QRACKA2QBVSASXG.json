@@ -1,0 +1,102 @@
+{
+  "assigned_to": "agent:delegator-mrq-119",
+  "branch_links": [],
+  "c11_surface": "surface:491",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 6,
+  "complexity": "low",
+  "created_at": "2026-08-12T07:07:35Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "CFP-07 (w1) + the judge-flagged credibility major. You own PublicForm.tsx. (1) DELETE the 'Draft saved locally - just now' lie (PublicForm.tsx:469, renders whenever no resume token exists; ensureDraft()'s only caller is handleFile) \u2014 reserve the status line's space so removal doesn't shift the row (house rule: elements never jump). (2) 'Save draft' control in the footer. TRAP: ensureDraft hard-requires an email but the eval scenario enters ONLY a title \u2014 ask for the address inline at the moment of saving instead of erroring. (3) Truthful saved states; existing autosave effect takes over once a resume token exists. (4) Show the resume link ON SCREEN, copyable (the judge cannot read mail; a human with slow mail has no other way back). (5) Fix the 'up to four participants' copy vs the single co-speaker slot \u2014 make the copy true. The entire draft backend already ships (create/patch, resume tokens, draft_resume mail, resumed banner): a finished feature with no button. Full spec: section T-H. Register rows 44,45 + 15's copy defect.",
+  "done_at": "2026-08-12T18:48:57Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDDAQXZE8FRM57C7SSFTBX",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTDG8KVFTF4WBED0TPVKAFK",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTDN3NZDXQ1JN7ZXQ8GJMEW",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTDSPEJQR5G2GM4SDSBZF7Z",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTDWCHGPEZ9FZRQEESBGYJJ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTDYFGFN0C8XVHZHPYM96BF",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTE15YKZ8GSJ5TQ2D8VDMDC",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTJ9STPF97J7R6VB5AFSGSB",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTJ9SXQMA0N5KA2FQSD78BC",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTJCHXVGY2R4DBS3Z1HCMVG",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTJCJ0VNPEJWHMNWG2H4VBJ",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTJE79CS15GRNVHEENXHC07",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWS3VSFX265QSSE7M4FYV",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWS3VSFX265QSSE7M4FYT",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRHBD8QRACKA2QBVSASXG",
+  "last_event_id": "ev_01KZVMWS3VSFX265QSSE7M4FYY",
+  "last_status_changed_at": "2026-08-12T18:48:57Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 4,
+  "schema_version": 1,
+  "short_id": "MRQ-119",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "The public form saves drafts truthfully",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:57Z",
+  "urgency": null
+}

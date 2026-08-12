@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:47:38Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMTC2QCB5BPNG52BT80CN4",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMTC2QCB5BPNG52BT80CN4.md",
+    "size_bytes": 329
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE. PR #75 (mrq-106-wave0-sweep) merged 2026-08-12T14:14:29Z; merge commit ccb78850 confirmed an ancestor of github/main via 'git merge-base --is-ancestor'.",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

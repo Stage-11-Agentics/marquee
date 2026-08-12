@@ -1,0 +1,1 @@
+Verdict: PASS\n\nReviewed commit: 485095cb83fffe12b3185654d73d7418c74608b1\nAdditional change since c655b21: classified the two inherited MRQ-115 version-query owner chunks in the repository placeholder inventory; explicit OWNER_CHUNK=80 remains below D1 bind limits.\n\nFindings: none.

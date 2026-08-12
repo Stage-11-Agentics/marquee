@@ -1,0 +1,31 @@
+# MRQ-124: Batch publish in the agenda builder
+
+AIA-07 (w2). Per-record publish exists (SubmissionRecordPage 'Publish Session') but the seed leaves exactly ONE unpublished session — near-unfindable. Build a builder-level BATCH publish in /agenda-builder: persistent counter in the chrome ('23 live - 1 not yet public'), select-unpublished -> publish N with a diff preview (titles/times/rooms/speakers about to go public), success state, link to the public agenda. KEEP the status='accepted' guard — the reversal-safety comment at the publish route (submission-record.routes.ts ~893) explains why (a stage-based test would publish a withdrawn speaker; this bug class was already caught once pre-merge). Auto-schedule is OUT (0.56 pts, ruled won't-do). Also: give agenda-builder slots real accessible roles/labels — CFP-S4 burned 9 turns because drop targets expose no refs; costs CFP-15 (w2) and every AIA item. Full spec: section T-L. Register rows 31,32 + sweep finding 6.
+
+## Delivery plan
+
+1. Inspect the existing agenda API/UI and per-record publish path, then preserve the canonical event authorization and `status='accepted'` predicate. Do not broaden publishing to withdrawn, rejected, draft, or merely scheduled records; do not add auto-scheduling.
+2. Add a builder-scoped batch publish read/write contract using the existing route/query conventions. The read model will expose the persistent published/unpublished counts and the exact unpublished accepted records available to publish. The write will validate the selected IDs and accepted status inside one transaction, publish the eligible records together, and return the resulting public-agenda URL and count so the UI can refresh from server truth.
+3. Add the discoverable builder chrome: a stable live counter (`N live · M not yet public`), a clearly labelled unpublished selection control, an honest diff preview showing title/time/room/speaker for every selected record, a success state, and a link to the public agenda. Keep status regions space-reserved so toggling/loading/success does not move surrounding controls.
+4. Give agenda slots and drop targets explicit, useful accessible roles and labels (including room/time context and unscheduled pool semantics), preserving the existing five-view agenda behavior and drag/resize interactions. No public AV/notes leakage or route-table expansion.
+5. Add targeted unit/integration/UI contract tests covering AIA-07, the accepted-only guard (including a rejected/withdrawn negative control), count refresh, preview fields, successful public link, empty/no-op behavior, and accessible slot labels. Run only the touched-file targeted tests during iteration, then the mandatory ticket gate.
+
+## Verification and handoff
+
+- Review the diff adversarially for batch partial writes, stale counts, selected IDs outside the event, unpublished data leakage, and controls that claim success without a server response.
+- Record a review artifact against the final branch HEAD, run `npm run pr-gate -- --ticket MRQ-124` after checking fleet load, and paste the exact gate result into the completion comment.
+- Validate the running `/agenda-builder` flow where the local harness supports it: observe the counter, select an unpublished accepted record, inspect the diff, publish, reload, and follow the public-agenda link. If browser tooling is unavailable, attach a precise N/A explanation rather than calling source tests browser proof.
+- PR body will cite MRQ-124, T-L, AIA-07, CFP-15, and the accepted-status/reversal-safety constraint; terminal Lattice status is `pr_open`.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+- **Eligibility clarified:** batch-publishable means a scheduled Session with an `agenda_items` row of `kind='session'`, its submission stored as `status='accepted'`, and the agenda row currently `is_published=0`. Both live counter terms and the selection/preview list derive from this joined truth; unscheduled accepted submissions are not publishable and are not counted as "not yet public".
+- **Write-time safety strengthened:** perform the friendly eligibility read first, but build the actual dual-table updates (`agenda_items` and `submissions`) as one `DB.batch()` per selected record with event, slot, unpublished, and stored-accepted predicates in the SQL `WHERE` clauses. Reconcile affected rows before reporting success; never let a concurrent reversal publish a withdrawn/rejected speaker or leave the two tables split.
+- **File scope made explicit:** expected implementation files are `src/routes/agenda.routes.ts`, `src/routes/agenda.queries.ts`, `src/api/agenda.ts`, `src/ui/agenda/AgendaPage.tsx`, `src/ui/agenda/agenda.css`, `src/ui/agenda/track-board.tsx`, and targeted tests. No contract documents or `.eval-kit` files will be edited.
+- **Accessibility narrowed to the observed gap:** preserve the existing list/table and tablist ARIA; add stable accessible names/roles to empty slot/drop-target cells with room/day/time context, the unscheduled pool, and occupied draggable tiles where needed. Avoid a blanket markup churn.
+
+## Reset 2026-08-12 by agent:delegator-mrq-124
+
+## Reset 2026-08-12 by agent:delegator-mrq-124
+
+## Reset 2026-08-12 by agent:delegator-mrq-124

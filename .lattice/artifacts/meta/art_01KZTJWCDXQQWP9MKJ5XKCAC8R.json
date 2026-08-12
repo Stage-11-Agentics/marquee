@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T08:54:33Z",
+  "created_by": "agent:delegator-mrq-117",
+  "custom_fields": {},
+  "id": "art_01KZTJWCDXQQWP9MKJ5XKCAC8R",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTJWCDXQQWP9MKJ5XKCAC8R.md",
+    "size_bytes": 637
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-117 final exact-HEAD running Worker validation after gate repair PASS",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T06:31:42Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZTAPTS2C4KCHKXKF519W3QR",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZTAPTS2C4KCHKXKF519W3QR.png",
+    "size_bytes": 490085
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Exact-head local c11 browser screenshot after rebase onto github/main.",
+  "tags": [],
+  "title": "MRQ-102 final speaker follow-ups browser proof",
+  "token_usage": null,
+  "type": "file"
+}

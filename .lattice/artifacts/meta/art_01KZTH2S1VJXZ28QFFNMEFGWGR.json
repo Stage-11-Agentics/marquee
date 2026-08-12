@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-12T08:23:05Z",
+  "created_by": "agent:delegator-mrq-111",
+  "custom_fields": {
+    "url": "https://github.com/Stage-11-Agentics/marquee/pull/80"
+  },
+  "id": "art_01KZTH2S1VJXZ28QFFNMEFGWGR",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "PR #80",
+  "token_usage": null,
+  "type": "reference"
+}

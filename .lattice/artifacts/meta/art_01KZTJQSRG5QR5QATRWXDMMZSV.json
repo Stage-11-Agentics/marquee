@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-12T08:52:02Z",
+  "created_by": "agent:delegator-mrq-120",
+  "custom_fields": {
+    "url": "https://github.com/Stage-11-Agentics/marquee/pull/86"
+  },
+  "id": "art_01KZTJQSRG5QR5QATRWXDMMZSV",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open PR for MRQ-120 at exact HEAD 4bd50674b185.",
+  "tags": [],
+  "title": "GitHub PR #86",
+  "token_usage": null,
+  "type": "reference"
+}

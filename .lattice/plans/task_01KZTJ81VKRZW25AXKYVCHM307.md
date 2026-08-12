@@ -1,0 +1,3 @@
+# MRQ-128: Restore /settings/webhooks organizer surface
+
+Live defect observed 2026-08-12 against deployed build b526d5d56753 (built_at 2026-08-12T08:34:43Z), which matches github/main exactly. An authenticated c11 browser visit to GET /settings/webhooks returns HTTP 200 but renders the shared shell empty state: “Route not found” and “This route is not installed.” The deployed /api/openapi.json also has no webhook paths (only /api/v1/events/{eventId}/comms/* matches the webhook search). MRQ-30/AC-241 specifies this organizer surface and its endpoint CRUD/test/delivery-log flow; implement the missing route/API surface and validate the real browser path, rather than treating the SPA 200 as success.

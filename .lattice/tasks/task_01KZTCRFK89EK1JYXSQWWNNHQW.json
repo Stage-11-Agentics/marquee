@@ -1,0 +1,72 @@
+{
+  "assigned_to": "agent:delegator-mrq-115",
+  "branch_links": [],
+  "c11_surface": "surface:420",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 2,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:33Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "Keystone: CNT-13 (w1) directly, but it is the only door to the organizer half of CNT-04 (w2), CNT-05 (w2), CNT-14 (w2) \u2014 ~23% of the area on one screen \u2014 PLUS the CNT-02 (w3) rescue (the portal never shows an uploaded filename; after upload the speaker sees a checkmark and no evidence of what they uploaded). NO MIGRATION: every presign already mints a new attachment row (unique r2_key), old rows persist, speaker_tasks.attachment_id is the latest-pointer. (1) src/lib/files/versions.ts: listVersionsFor(db, ownerType, ownerId) with ROW_NUMBER version numbers and is_latest DERIVED as attachments.id = speaker_tasks.attachment_id \u2014 derive, never store. (2) FileVersions component mounted in the portal task row ('slides.pdf - v2 of 2 - uploaded ...' + prior versions each downloadable) and in the library. Export both \u2014 the speaker-files ticket consumes them. (3) /files route, sidebar label EXACTLY 'Files' (the spec enumerates the agent's guesses). GET .../files: attachments->speaker_tasks->submissions/people; filename, session, speaker, uploaded, version count, size; row expands to versions. 'Copy link' per row over existing publicMediaUrl with the honest caveat (unauthenticated capability URL). (4) Skip the per-session Files tab (rubric forgives). Human lens: list EXPECTED deliverables too \u2014 one row per speaker x file-task, filled or empty, chaseable \u2014 the screen an AV lead runs the show from. Full spec: section T-F1. Register rows 26,28 + CNT-02 rescue.",
+  "done_at": "2026-08-12T18:48:57Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDJNDHXKN6BZKFF1K2VH9P",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTF64384TXGEE3CPQDFGYKE",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTF7KZ5RV0D02PDCVR24EP5",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTG9Q02HGVQ1322WAVN15SY",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGB4HBVN9HQ80H6P7YQAH3",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTH0XCD4TMP7ZBXB3EM9ZK4",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWRNFV08RVYZKCFWFX2X5",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWRNFV08RVYZKCFWFX2X4",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRFK89EK1JYXSQWWNNHQW",
+  "last_event_id": "ev_01KZVMWRNGS6GHPA9JJFQ8SSYA",
+  "last_status_changed_at": "2026-08-12T18:48:57Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-115",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Files library and version lists",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:57Z",
+  "urgency": null
+}

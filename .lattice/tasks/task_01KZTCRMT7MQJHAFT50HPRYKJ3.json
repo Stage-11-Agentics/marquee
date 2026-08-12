@@ -1,0 +1,82 @@
+{
+  "assigned_to": "agent:delegator-mrq-126",
+  "branch_links": [],
+  "c11_surface": "surface:492",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 3,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:39Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "8 weighted points (CFP-01 w3, CFP-06 w3, CFP-15 w2) PLUS a live data-loss trap: the server binds format/track by NAME at submit time and hard-rejects on mismatch (public-form.routes.ts:184-213) \u2014 rename a format in Settings and every in-flight public form rejects submissions with 'Choose a format from the list' pointing at a dropdown that visibly contains it. (1) First-class bound field: form_fields.config.source = formats|tracks; builder renders 'Options come from Conference settings -> Formats' read-only with a link instead of the comma text box (FormsPage.tsx:149); public form renders live rows; migrate the seeded format/tracks fields; keep free-text options for genuinely custom selects. (2) SAME SURFACE, biggest turn payoff of the whole sweep: collapse the builder's add-a-field loop from ~9-10 agent turns to ~3 \u2014 one inline row (type + label + required + options, single save), STABLE element refs across re-renders (run 1: the editor re-render invalidated refs, agent issued select 3x per field; ~30 of 70 turns to add 3 fields; the steps that died at the cap carry ~9 weighted points). Nine turns per field is also nine interactions for a human building a 20-field CFP. Full spec: section T-N2. Register rows 47,51.",
+  "done_at": "2026-08-12T18:48:58Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDK808FKK7SZR13C685DV0",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZV6H1QFSP90TR56ASTRB9BY",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZV6HXR9X97HJJN99N2X5BM8",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZV6P39HSFVFB25DWH9P1YEE",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZV71DBFWHBNSGFP4Z5SDRPP",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZV71PGR935N3VCW5GGNYQG1",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZV71ZJW6XPHQPXA6EQRYQFS",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZV737MNMSJ3YP5WFSB84T1Z",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWSWMZS81TPNR22AADGWN",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWSWMZS81TPNR22AADGWM",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRMT7MQJHAFT50HPRYKJ3",
+  "last_event_id": "ev_01KZVMWSWMZS81TPNR22AADGWR",
+  "last_status_changed_at": "2026-08-12T18:48:58Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-126",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Bound form options and builder ergonomics",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:58Z",
+  "urgency": null
+}

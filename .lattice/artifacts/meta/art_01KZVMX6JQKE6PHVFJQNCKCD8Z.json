@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:49:11Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMX6JQKE6PHVFJQNCKCD8Z",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMX6JQKE6PHVFJQNCKCD8Z.md",
+    "size_bytes": 349
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE. PR #28 (mrq-86-decided-record-cue) merged 2026-08-12T00:04:11Z, merge commit a042d14d, confirmed an ancestor of github/main. The ticket sat at pr_open a",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

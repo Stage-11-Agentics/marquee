@@ -1,13 +1,13 @@
 {
   "assigned_to": "agent:claude-ux-polish",
   "branch_links": [],
-  "comment_count": 2,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-11T21:18:13Z",
   "created_by": "agent:claude-ux-polish",
   "custom_fields": {},
   "description": "Evidence: `sequence/UX-SWEEP-FINDINGS.md` (Pass A), `/submissions/sub_what-rl-means-for-agents`.\n\n## What was seen\n\nThe record is already `Accepted` and `Scheduled`, yet the **Record action** card shows live **Accept / Maybe / Reject** buttons with no visual indication a decision was already made. An organizer reading the screen cannot tell at a glance whether they are making a first decision or changing an existing one.\n\n## What is NOT the bug\n\nThe re-decide affordance itself is **intentional**. MRQ-83 (PR #21) deliberately restored decision buttons on declined/waitlisted/withdrawn records precisely so an organizer can change their mind, and `can_decide` (`submission-record.routes.ts:418`) now includes `declined`. **Do not undo that.** Do not add a confirmation step \u2014 the decision dialog is already one, and R7 grades speed.\n\n## Scope\n\nThe gap is the *cue*. Add the smallest honest signal that the buttons are a re-decision rather than a first decision, in DESIGN.md Flight Deck tokens and voice. The card header already carries a `.subtle` slot (`SubmissionRecordPage.tsx:143`) whose copy is currently unconditional; `record.decisions` is already on the payload, ordered newest-first (`submission-record.routes.ts:245`), so the latest decision and its date are in hand with no API change.\n\nOut of scope: a new confirmation step, disabling the current decision's button, any change to `can_decide`, and any new API field.\n\n## Constraints\n\n- **Elements never jump** (DESIGN.md). A swapped string must reserve its space \u2014 the header must be the same height decided and undecided, and must not grow when a decision is taken on-screen.\n- No API change, no migration.\n- Organizer-facing copy: plain language, no field names, no status slugs. `Maybe` is the waitlist's display name.\n- Test titles must begin `AC-<n> \u00b7 ` or `CONTRACT \u00b7 ` or `trace:ac` fails.\n\n## Verification\n\nAn undecided record and a decided record side by side in a browser: the decided one names its decision, the undecided one does not, and the two card headers are the same height. Take a decision on-screen and confirm the card does not change size.\n\n## File ownership\n\nOWNS: `src/ui/submissions/SubmissionRecordPage.tsx`, `src/ui/submissions/record.css`, its own tests. Must not touch `src/ui/public/form/PublicForm.tsx` (MRQ-81) or `BOARD_STAGE_SQL`.",
-  "done_at": null,
+  "done_at": "2026-08-12T18:49:11Z",
   "evidence_refs": [
     {
       "id": "ev_01KZSCCMJSGBC6CKAGFBQF8SCR",
@@ -23,21 +23,31 @@
       "id": "ev_01KZSDGYFF8VPCN6G01M92Y8PE",
       "role": "validation",
       "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVMX6JQKE6PHVFJQNCKCD90",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMX6JQKE6PHVFJQNCKCD8Z",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZSB1BQHJE2MGW5VVTCMYK3Z",
-  "last_event_id": "ev_01KZSDGYFF8VPCN6G01M92Y8PE",
-  "last_status_changed_at": "2026-08-11T21:41:51Z",
+  "last_event_id": "ev_01KZVMX6JQKE6PHVFJQNCKCD93",
+  "last_status_changed_at": "2026-08-12T18:49:11Z",
   "linked_files": [],
   "priority": "low",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-86",
-  "status": "pr_open",
+  "status": "done",
   "tags": null,
   "title": "An already-decided record gives no signal that a decision is locked in",
   "type": "bug",
-  "updated_at": "2026-08-11T22:01:41Z",
+  "updated_at": "2026-08-12T18:49:11Z",
   "urgency": null
 }

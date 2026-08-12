@@ -1,0 +1,57 @@
+{
+  "assigned_to": "agent:delegator-mrq-111",
+  "branch_links": [],
+  "c11_surface": "surface:418",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 5,
+  "complexity": "high",
+  "created_at": "2026-08-12T07:07:32Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "SPK-01 (w3), SPK-02 (w3), SPK-04 (w2), SPK-15 (w1 rider), CNT-10 share. (1) FIX THE MEMBERSHIPS GAP FIRST: grep 'INTO memberships' src/ returns only the demo reseeder \u2014 runtime-created speakers are invisible on any memberships-derived surface. Either write memberships(role=speaker) at the acceptance boundary or make the roster participation-derived; the onboarding board must read the same truth. Remove owedCount===0 vanishing for roster purposes (onboarding.queries.ts:300). (2) /speakers route + sidebar 'Speakers', new speakers.routes.ts over people JOIN participations JOIN submissions(event) \u2014 same join quick-search uses. Search + filters. (3) Add/edit speaker incl BIO (admin create currently inserts bio as literal NULL, submission-record.routes.ts:671); SHARE the portal's updateProfile normalizer (portal.routes.ts:1303) \u2014 two normalizers = SPK-08 divergence. Audit rows on organizer edits. (4) Status: per-session confirmation_status rollup badge + filter + organizer override; NO new person-level status column. (5) Riders: custom_fields JSON + logistics section; wire the dead ?person= quick-search deep link on roster + onboarding. Constraint from CRM scoping: keep the model person-centric so a future CRM layers on cleanly. Full spec: section T-D1. Register rows 16,17,19,20,24n.",
+  "done_at": "2026-08-12T18:48:56Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTG0ZDXAQ2JX936H6NM4HR8",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTH1D7SR6PE0YMREQ13CXDJ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTH2S1VJXZ28QFFNMEFGWGR",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWRASS795HPKTZW09VMDG",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWRASS795HPKTZW09VMDF",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRDTTEA6EYHPMW6Q58R0G",
+  "last_event_id": "ev_01KZVMWRATH4654K3Q0GRXWW8Q",
+  "last_status_changed_at": "2026-08-12T18:48:56Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-111",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Speaker roster and person CRUD",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:56Z",
+  "urgency": null
+}

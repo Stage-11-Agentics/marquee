@@ -1,0 +1,1 @@
+Board reconciliation 2026-08-12: verified DONE. PR #76 (mrq-123-embeds-admin) merged 2026-08-12T14:56:59Z; merge commit 0e7e8bb9 confirmed an ancestor of github/main via 'git merge-base --is-ancestor'. Ticket had drifted at pr_open. The repo has zero open and zero closed-unmerged PRs, so nothing is waiting on review. Status corrected to reflect merge, not PR-open.

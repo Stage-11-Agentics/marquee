@@ -1,0 +1,67 @@
+{
+  "assigned_to": "agent:delegator-mrq-118",
+  "branch_links": [],
+  "c11_surface": "surface:421",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 2,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:35Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "CNT-09 (w2), CNT-11 (w2), feeds CNT-12 (w3) \u2014 the largest lever in the content area; the triage assumed an editor that does not exist. patchDraft hard-rejects non-drafts (submission-record.routes.ts:793) and the record page renders its editor only for drafts \u2014 organizers cannot edit accepted session content AT ALL. (1) Extend the record editor to accepted/scheduled (explicit status allowlist; published behind a confirm). (2) Every write emits before/after audit rows composed into the same batch() as the change (src/lib/audit.ts:50-66 pattern). (3) LIFT the portal's proven history machinery (historyFor at portal.routes.ts:868-889 already joins people for actor_name and renders 'Priya Raman - 12 Aug - updated title') into src/lib/history.ts; add the missing people-join to the admin history query (~2 lines) and stop rendering the literal string 'user' (SubmissionRecordPage.tsx:173 prints actor_kind). (4) RESTORE IS A FORWARD EDIT: re-apply before_json through the same write path, emit content_restored with its own before/after; never rewrite or delete audit rows. Ownership: you own session content editing + the history component on the submission record; the roster ticket owns the speaker record and consumes your component. Full spec: section T-G. Register row 30.",
+  "done_at": "2026-08-12T18:48:57Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDGX8APGRWSEK7E50ZE1QY",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTEPB1D1VP0EVS8Z2NMVRQ0",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTHK1WTDKRDXWA6FJCEYBM4",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTHKRVNVF580Y43Z44S926Q",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTHN6N8SYEHR5NGMW4AE688",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWS0A5ZMSARGVYWZK1D0C",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWS0A5ZMSARGVYWZK1D0B",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRGWRY1STQ51AW4C6CGG5",
+  "last_event_id": "ev_01KZVMWS0A5ZMSARGVYWZK1D0F",
+  "last_status_changed_at": "2026-08-12T18:48:57Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-118",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Organizer content editing with named history and restore",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:57Z",
+  "urgency": null
+}

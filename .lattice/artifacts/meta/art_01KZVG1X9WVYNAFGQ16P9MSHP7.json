@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T17:24:22Z",
+  "created_by": "agent:delegator-mrq-129",
+  "custom_fields": {},
+  "id": "art_01KZVG1X9WVYNAFGQ16P9MSHP7",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVG1X9WVYNAFGQ16P9MSHP7.md",
+    "size_bytes": 3380
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "MERGED TO MAIN as #108 (main tip 97e0920f), operator-directed 2026-08-12. PR #104 landed MRQ-129 on mrq-105-cold-start first; #108 carried that plus MRQ-105's seven never-PR'd tail commits to main, re",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

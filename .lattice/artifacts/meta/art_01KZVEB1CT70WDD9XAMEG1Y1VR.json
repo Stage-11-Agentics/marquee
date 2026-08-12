@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T16:54:24Z",
+  "created_by": "agent:delegator-mrq-132",
+  "custom_fields": {},
+  "id": "art_01KZVEB1CT70WDD9XAMEG1Y1VR",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZVEB1CT70WDD9XAMEG1Y1VR.png",
+    "size_bytes": 2762
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-132 validation \u00b7 qr.png",
+  "token_usage": null,
+  "type": "file"
+}

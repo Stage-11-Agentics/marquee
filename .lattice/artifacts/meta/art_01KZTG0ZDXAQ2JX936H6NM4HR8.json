@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T08:04:37Z",
+  "created_by": "agent:delegator-mrq-111",
+  "custom_fields": {},
+  "id": "art_01KZTG0ZDXAQ2JX936H6NM4HR8",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTG0ZDXAQ2JX936H6NM4HR8.md",
+    "size_bytes": 2619
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-111 live validation \u2014 Worker + browser",
+  "token_usage": null,
+  "type": "file"
+}

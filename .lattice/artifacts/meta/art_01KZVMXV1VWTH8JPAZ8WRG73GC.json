@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:49:32Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMXV1VWTH8JPAZ8WRG73GC",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMXV1VWTH8JPAZ8WRG73GC.md",
+    "size_bytes": 648
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE, and it had drifted BACKWARDS \u2014 the ticket read 'backlog' while its fix was already on main. PR #31 (mrq-82-reversal-decision-history, 'the one action th",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

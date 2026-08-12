@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T16:26:23Z",
+  "created_by": "agent:claude-opus-mrq-105",
+  "custom_fields": {},
+  "id": "art_01KZVCQQJN7HAM24B7Y21ZD25T",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVCQQJN7HAM24B7Y21ZD25T.md",
+    "size_bytes": 2743
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged to main as f77a4f5 (squash, PR #97) on operator instruction 2026-08-12 12:25 EDT \u2014 the human merge gate, exercised ~12.5h before the competition freeze clears. Merging does not deploy (DEPLOY.m",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

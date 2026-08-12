@@ -1,0 +1,62 @@
+{
+  "assigned_to": "agent:delegator-mrq-114",
+  "branch_links": [],
+  "c11_surface": "surface:419",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 5,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:33Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "CNT-01 (w3, the content area's entry point) + SPK-05 (w2); 16 of CNT's 31 item-weight flows downstream (CNT-02/04/05/07/08/13 evidence needs a created task). The acceptance cascade already mints tasks at runtime (jobs/cascade/decisions.ts:362) \u2014 this is AUTHORING + ad-hoc assignment, not a task engine. (1) Full CRUD on task_templates: POST/DELETE + PATCH beyond file_config (task-templates.routes.ts currently GET + file-config-PATCH only). Fields: name, kind acknowledge|file|form, description, due_at OR due_offset_days (CHECK makes them mutually exclusive \u2014 the eval wants literal dates like 2027-05-01, so the UI must expose due_at); kind=form requires form_id. (2) POST for direct speaker-task assignment: title, due date, MULTI-speaker select, bypassing auto_assign. (3) Fix TaskTemplatesPage: remove the file-kind-only filter (:173), give the empty state the control it instructs you to use (:183), sidebar/settings link (EventSettings links venues but not tasks). Full spec: section T-E. Register rows 24,25.",
+  "done_at": "2026-08-12T14:45:30Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDNCRM5G5NGMYNEMF59Q8P",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGPKWNDQWEGFQR61SN077E",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGQEHDATGBCJMF6JPZQGP7",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTHKEPA9B25EX522ZZHYJM2",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZV6Z0BT7A1VY14ZPAXE9C9X",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZV6Z0BT7A1VY14ZPAXE9C9W",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRF5XFS0EEWZB3VT7RFWX",
+  "last_event_id": "ev_01KZV6Z0BT7A1VY14ZPAXE9CA0",
+  "last_status_changed_at": "2026-08-12T14:45:30Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-114",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Task authoring: templates and assignment",
+  "type": "task",
+  "updated_at": "2026-08-12T14:45:30Z",
+  "urgency": null
+}

@@ -1,7 +1,7 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 1,
+  "comment_count": 2,
   "complexity": null,
   "created_at": "2026-08-11T19:40:51Z",
   "created_by": "agent:claude-cli",
@@ -10,7 +10,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZS5F32B87HHQCNSVCSB95FR",
-  "last_event_id": "ev_01KZS5FFVHHW02CZPNG30WDK1S",
+  "last_event_id": "ev_01KZVMZMTSKZCABZ0ACJX1XX7P",
   "last_status_changed_at": "2026-08-11T19:40:51Z",
   "linked_files": [],
   "priority": "high",
@@ -22,6 +22,6 @@
   "tags": null,
   "title": "Recovery \u2014 let an organizer fix an address and actually resend",
   "type": "task",
-  "updated_at": "2026-08-11T19:41:04Z",
+  "updated_at": "2026-08-12T18:50:31Z",
   "urgency": null
 }

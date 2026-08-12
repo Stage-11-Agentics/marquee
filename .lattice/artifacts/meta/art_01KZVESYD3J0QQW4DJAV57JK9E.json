@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T17:02:33Z",
+  "created_by": "agent:delegator-mrq-129",
+  "custom_fields": {},
+  "id": "art_01KZVESYD3J0QQW4DJAV57JK9E",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZVESYD3J0QQW4DJAV57JK9E.png",
+    "size_bytes": 369673
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "cfp-18-empty-submissions.png",
+  "token_usage": null,
+  "type": "file"
+}

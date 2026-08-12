@@ -1,0 +1,92 @@
+BEGIN:VCALENDAR
+PRODID:-//Stage 11//Marquee//EN
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:My AI Engineer New York 2026 schedule
+X-WR-TIMEZONE:America/New_York
+BEGIN:VTIMEZONE
+TZID:America/New_York
+X-LIC-LOCATION:America/New_York
+BEGIN:DAYLIGHT
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0400
+TZNAME:EDT
+DTSTART:19700308T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+TZNAME:EST
+DTSTART:19701101T020000
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:sub_beyond-the-consensus-navigating-ais-frontier-in-2025@marquee.stage1
+ 1.dev
+DTSTAMP:20260812T165001Z
+SEQUENCE:0
+DTSTART;TZID=America/New_York:20261012T090000
+DTEND;TZID=America/New_York:20261012T094500
+SUMMARY:Beyond the Consensus: Navigating AI’s Frontier in 2025
+DESCRIPTION:With Grace Isford.\n\nLux Capital Partner Grace Isford discusse
+ s the AI Frontier in NYC\, sharing 10 'hot takes' on where the industry is
+  going from a technical perspective. She covers key considerations for tec
+ hnical leaders building agentic systems\, as well as the second-degree imp
+ lications of LLMs for human behavior.
+LOCATION:Metropolitan Ballroom · Sheraton New York Times Square\, 811 7th 
+ Ave\, New York\, NY 10019
+URL:http://localhost:8801/s/beyond-the-consensus-navigating-ai-s-frontier-i
+ n-2025
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+UID:sub_how-to-build-an-ai-strategy-that-fails@marquee.stage11.dev
+DTSTAMP:20260812T165001Z
+SEQUENCE:0
+DTSTART;TZID=America/New_York:20261012T090000
+DTEND;TZID=America/New_York:20261012T094500
+SUMMARY:How To Build an AI Strategy That Fails
+DESCRIPTION:With Hamel Husain\, Grace Isford\, Leigh Pember.\n\nWant to gua
+ rantee your AI initiatives are great boardroom presentations but don't act
+ ually work? This talk explores the most reliable ways to waste time\, mone
+ y\, and resources while building AI strategies. One proven method? Cultiva
+ te the perfect disconnect between those building AI solutions and the exec
+ utives charting the strategic direction. \n\n For business leaders\, navig
+ ating the AI space is overwhelming. There's a sea of advice on how to allo
+ cate resources\, hire and execute on AI\, but much of it comes from source
+ s that aren't hands-on with the technology. Without practical experience\,
+ …
+LOCATION:Marquis Room A · New York Marriott Marquis\, 1535 Broadway\, New 
+ York\, NY 10036
+URL:http://localhost:8801/s/how-to-build-an-ai-strategy-that-fails
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+UID:sub_balancing-innovation-with-security-and-safety-in-multi-agent-system
+ s@marquee.stage11.dev
+DTSTAMP:20260812T165001Z
+SEQUENCE:0
+DTSTART;TZID=America/New_York:20261012T100000
+DTEND;TZID=America/New_York:20261012T104500
+SUMMARY:Balancing Innovation with Security & Safety
+DESCRIPTION:With Don Bosco Durai.\n\nMulti-agent systems are revolutionizin
+ g industries\, driving innovation with autonomous agents that collaborate 
+ in dynamic environments. But with great complexity comes great vulnerabili
+ ty. \nIf you’ve ever worried about adversarial behaviors\, privacy breac
+ hes\, or data leakages in these systems\, you’re not alone. These threat
+ s can erode trust and jeopardize the integrity of even the most cutting-ed
+ ge applications. \nWhat if there were ways to safeguard these systems with
+ out stifling innovation? Enter a balanced approach that combines robust se
+ curity frameworks with adaptive\, innovation-friendly…
+LOCATION:New York Ballroom · Sheraton New York Times Square\, 811 7th Ave\
+ , New York\, NY 10019
+URL:http://localhost:8801/s/balancing-innovation-with-security-safety
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR

@@ -1,0 +1,112 @@
+{
+  "assigned_to": "agent:delegator-mrq-124",
+  "branch_links": [],
+  "c11_surface": "surface:488",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 12,
+  "complexity": "low",
+  "created_at": "2026-08-12T07:07:38Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "AIA-07 (w2). Per-record publish exists (SubmissionRecordPage 'Publish Session') but the seed leaves exactly ONE unpublished session \u2014 near-unfindable. Build a builder-level BATCH publish in /agenda-builder: persistent counter in the chrome ('23 live - 1 not yet public'), select-unpublished -> publish N with a diff preview (titles/times/rooms/speakers about to go public), success state, link to the public agenda. KEEP the status='accepted' guard \u2014 the reversal-safety comment at the publish route (submission-record.routes.ts ~893) explains why (a stage-based test would publish a withdrawn speaker; this bug class was already caught once pre-merge). Auto-schedule is OUT (0.56 pts, ruled won't-do). Also: give agenda-builder slots real accessible roles/labels \u2014 CFP-S4 burned 9 turns because drop targets expose no refs; costs CFP-15 (w2) and every AIA item. Full spec: section T-L. Register rows 31,32 + sweep finding 6.",
+  "done_at": "2026-08-12T18:48:58Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTD9VZCWS5S907KZNHJQC9N",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTEFF4KMBX394PD2S91AYV1",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTER63D5XA45HDTJ9Y003J5",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTETE2ENBD9PH06C2QFK0FD",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTF06NYTQ8CHM1Y6BWREV0V",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTFCRYFCG1B8NA8R6DAF3PQ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTFF5E8TZYFG9ZEEH2SHVZV",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTFQQCK622K3B5SVPQDEYY8",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTGZREDRJKVKN4F1JWM9WFE",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTHA4YPSZ4720WGK11W1QKV",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTJHP0SPT0J4HTQDAFB00SJ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTJRD9X0YX0E2QDDNE9BY83",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTJS9DSEXW25K6BWAE2YBCF",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTK11R0WPZDD3F8Z5VF02HH",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVMWSNFXN71HAY08MEDZE4K",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWSNFXN71HAY08MEDZE4J",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRM03HTS5Z8SJ26H57YGY",
+  "last_event_id": "ev_01KZVMWSNFXN71HAY08MEDZE4P",
+  "last_status_changed_at": "2026-08-12T18:48:58Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 4,
+  "schema_version": 1,
+  "short_id": "MRQ-124",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Batch publish in the agenda builder",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:58Z",
+  "urgency": null
+}
