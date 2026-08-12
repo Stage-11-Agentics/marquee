@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { parseSpeakers } from "../../src/lib/public-site";
 
 describe("MRQ-122 public speaker projection", () => {
-  test("EMB-04 + EMB-12 · exposes demo avatar URLs and keeps the intentional fallback", () => {
+  test("CONTRACT · MRQ-122 · EMB-04 + EMB-12 · exposes demo avatar URLs and keeps the intentional fallback", () => {
     const speakers = parseSpeakers(JSON.stringify([
       { id: "person-avatar", name: "Grace Isford", title: null, company: null, bio: null, is_demo: 1, social_links: "[]" },
       { id: "person-fallback", name: "Aarush Selvan", title: null, company: null, bio: null, is_demo: 1, social_links: "[]" },

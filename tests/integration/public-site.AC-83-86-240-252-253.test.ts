@@ -144,7 +144,7 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   await env.DB.prepare("DELETE FROM buildings WHERE id = 'building-public-annex'").run();
 });
 
-test("EMB-04 + EMB-12 · public speaker detail and embeds render seeded avatars with a truthful initials fallback", async () => {
+test("AC-84, AC-88, AC-274 · public speaker detail and embeds render seeded avatars with a truthful initials fallback", async () => {
   const fallback = await request(`/p/public-speaker?event=${EVENT_SLUG}`);
   const fallbackBody = await fallback.text();
   expect(fallback.status).toBe(200);

@@ -15,7 +15,7 @@ import {
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const assetDirectory = resolve(repositoryRoot, "public/headshots");
 
-test("EMB-04 + EMB-12 · the seeded avatar manifest is local, synthetic, and intentionally incomplete", () => {
+test("CONTRACT · MRQ-122 · EMB-04 + EMB-12 · the seeded avatar manifest is local, synthetic, and intentionally incomplete", () => {
   assert.equal(SYNTHETIC_PUBLIC_HEADSHOT_SLUGS.length, 27);
   assert.equal(INTENTIONAL_PUBLIC_HEADSHOT_FALLBACK_SLUGS.length, 3);
   for (const slug of SYNTHETIC_PUBLIC_HEADSHOT_SLUGS) {
