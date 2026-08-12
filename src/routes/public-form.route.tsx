@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { notFoundDocument } from "./public-agenda.route";
 import { loadPublicForm, toPublicFormState } from "./public-form.shared";
 import { PublicForm } from "../ui/public/form/PublicForm";
 import { PUBLIC_FORM_STYLES } from "../ui/public/form/styles";
@@ -39,7 +40,9 @@ publicFormRoutes.get("/f/:slug", async (context) => {
     resumeToken: query.get("resume") ?? undefined,
     email: query.get("email") ?? undefined,
   });
-  if (!record) return context.notFound();
+  // A slug that resolves to no form is a public dead end, so it gets the same
+  // branded card as a bad session or speaker slug rather than a bare 404.
+  if (!record) return notFoundDocument(await assetShell(context.env.ASSETS, context.req.raw));
   const state = toPublicFormState(record, {
     origin: new URL(context.req.url).origin,
     turnstileSiteKey: context.env.TURNSTILE_SITE_KEY,

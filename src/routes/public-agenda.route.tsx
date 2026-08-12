@@ -45,7 +45,12 @@ export function renderPublicDocument(
     .replace("</body>", options.script ? `<script data-marquee-public>${options.script}</script></body>` : "</body>");
 }
 
-function notFoundDocument(shell: string): Response {
+/**
+ * The one branded public 404. Every public route renders through this, so a
+ * bad slug on any of them lands on the same card with the same way back —
+ * a raw `notFound()` on one route is the inconsistency this exists to prevent.
+ */
+export function notFoundDocument(shell: string): Response {
   return new Response(
     renderPublicDocument(shell, renderToString(<PublicNotFoundPage />), { title: "Unavailable" }),
     { status: 404, headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } },

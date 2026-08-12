@@ -45,6 +45,8 @@ interface SavedView {
     sort: "newest" | "updated" | "title" | "score";
     columns: SubmissionColumnId[];
   };
+  /** This view's own matching total — never the list currently on screen. */
+  count: number | null;
   created_at: number | null;
   updated_at: number | null;
 }
@@ -65,6 +67,19 @@ const STATUS_OPTIONS = [
   ["published", "Published"],
   ["not_notified", "Decided · not notified"],
 ] as const;
+
+/**
+ * The decision set the single-record Record Action card offers, in its words.
+ * `notifies` is not cosmetic: a waitlist deliberately queues no mail, so the
+ * confirm button must not promise a message this action will never send.
+ */
+const BULK_ACTIONS = [
+  { action: "accept", label: "Accept", variant: "primary", question: "Accept", confirm: "Accept and notify", notifies: true },
+  { action: "waitlist", label: "Maybe", variant: "", question: "Waitlist", confirm: "Waitlist", notifies: false },
+  { action: "reject", label: "Reject", variant: "danger", question: "Reject", confirm: "Reject and notify", notifies: true },
+] as const;
+
+type BulkAction = (typeof BULK_ACTIONS)[number]["action"];
 
 const SORT_OPTIONS = [
   ["newest", "Newest"],
@@ -202,6 +217,11 @@ export function SubmissionsPage({
   const [notifying, setNotifying] = useState(false);
   const [notifyMessage, setNotifyMessage] = useState("");
   const [notifyError, setNotifyError] = useState("");
+  const [bulkRequest, setBulkRequest] = useState<BulkAction | null>(null);
+  const [bulkFeedback, setBulkFeedback] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [bulkError, setBulkError] = useState("");
 
   const page = Number(queryValue(params, "page", "1"));
   const status = queryValue(params, "status");
@@ -242,7 +262,9 @@ export function SubmissionsPage({
       })
       .finally(() => { if (!controller.signal.aborted) setViewsLoading(false); });
     return () => controller.abort();
-  }, [eventId, draftQueue, notifiedQueue]);
+    // reloadKey: a bulk decision moves records between views, so their badge
+    // counts are re-read with the list rather than left stale on screen.
+  }, [eventId, draftQueue, notifiedQueue, reloadKey]);
 
   useEffect(() => {
     if (notifiedQueue) setActiveViewId("decided-not-notified");
@@ -367,6 +389,9 @@ export function SubmissionsPage({
   useEffect(() => {
     setSelectedIds(new Set());
     setAllMatching(false);
+    setBulkRequest(null);
+    setBulkMessage("");
+    setBulkError("");
   }, [queryIdentity]);
 
   useEffect(() => {
@@ -451,6 +476,53 @@ export function SubmissionsPage({
     }
   };
 
+  /**
+   * "Select all N matching" is a promise about records this page has never
+   * loaded, so it travels as the filter itself and the server resolves it —
+   * the 50 rows in the DOM are never mistaken for the selection.
+   */
+  const bulkSelector = (): { ids: string[] } | { filter: Record<string, string> } => {
+    if (!allMatching) return { ids: [...selectedIds] };
+    const filter: Record<string, string> = {};
+    for (const key of ["kind", "status", "track", "format", "wave", "task", "placement", "q"]) {
+      const value = params.get(key);
+      if (value) filter[key] = value;
+    }
+    return { filter };
+  };
+
+  const runBulk = async (action: BulkAction) => {
+    setBulkBusy(true);
+    setBulkError("");
+    setBulkMessage("");
+    try {
+      const result = await apiFetch<{ succeeded: number; failed: number; outbox_enqueued: number }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/bulk`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            selector: bulkSelector(),
+            action,
+            ...(bulkFeedback.trim() ? { feedback_md: bulkFeedback.trim() } : {}),
+          }),
+          route: "/api/v1/events/{eventId}/submissions/bulk",
+        },
+      );
+      const verb = action === "waitlist" ? "waitlisted" : action === "accept" ? "accepted" : "rejected";
+      setBulkMessage(`${result.succeeded.toLocaleString()} ${verb}${result.failed ? ` · ${result.failed.toLocaleString()} could not move` : ""}${result.outbox_enqueued ? ` · ${result.outbox_enqueued.toLocaleString()} notification${result.outbox_enqueued === 1 ? "" : "s"} queued` : ""}.`);
+      setBulkRequest(null);
+      setBulkFeedback("");
+      setSelectedIds(new Set());
+      setAllMatching(false);
+      setReloadKey((value) => value + 1);
+    } catch (error: unknown) {
+      setBulkError(errorSummary(error));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const notifySpeakers = async () => {
     setNotifying(true);
     setNotifyMessage("");
@@ -488,7 +560,7 @@ export function SubmissionsPage({
         <span class="eyebrow">Views</span>
         <div class="saved-view-chips">
           {views.map((view) => <span class={`saved-view-chip ${activeViewId === view.id ? "active" : ""}`} key={view.id}>
-            <button type="button" onClick={() => applyView(view)} disabled={viewBusy}>{view.name}{view.id === "drafts-needing-attention" && envelope && <span class="tabular view-count">{envelope.total.toLocaleString()}</span>}{view.id === "decided-not-notified" && envelope && <span class="tabular view-count">{envelope.total.toLocaleString()}</span>}</button>
+            <button type="button" onClick={() => applyView(view)} disabled={viewBusy}>{view.name}{view.count !== null && <span class="tabular view-count">{view.count.toLocaleString()}</span>}</button>
             {!view.built_in && <><button type="button" class="view-icon-button" aria-label={`Rename ${view.name}`} onClick={() => void renameView(view)} disabled={viewBusy}>✎</button><button type="button" class="view-icon-button" aria-label={`Delete ${view.name}`} onClick={() => void deleteView(view)} disabled={viewBusy}>×</button></>}
           </span>)}
           {!viewsLoading && views.length === 0 && <span class="subtle">No saved views yet.</span>}
@@ -520,8 +592,25 @@ export function SubmissionsPage({
       </form>
 
       <div class={`selection-bar ${selectedCount ? "visible" : ""}`} aria-live="polite">
-        {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span>Bulk actions land on the exact matching selector.</span></> : <span aria-hidden="true">Selection space reserved</span>}
+        {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span class="selection-actions">{BULK_ACTIONS.map((option) => <Button key={option.action} small variant={option.variant} disabled={bulkBusy} onClick={() => { setBulkRequest(option.action); setBulkFeedback(""); setBulkError(""); }}>{option.label}</Button>)}</span></> : <span aria-hidden="true">Selection space reserved</span>}
       </div>
+      <div class={`bulk-message ${bulkError || bulkMessage ? "visible" : ""}`} role="status">{bulkError || bulkMessage || "Bulk action status space reserved"}</div>
+      {bulkRequest && (() => {
+        const option = BULK_ACTIONS.find((entry) => entry.action === bulkRequest)!;
+        const scope = allMatching ? "matching records" : selectedCount === 1 ? "record" : "records";
+        return <div class="bulk-decision-dialog" role="group" aria-labelledby="bulk-decision-heading">
+          <div class="bulk-decision-dialog-head">
+            <div><span class="eyebrow">Confirm bulk action</span><h2 id="bulk-decision-heading">{option.question} {selectedCount.toLocaleString()} {scope}?</h2></div>
+            <button type="button" aria-label="Close bulk decision dialog" onClick={() => setBulkRequest(null)}>×</button>
+          </div>
+          <p>The decision is written on every selected record. {option.notifies ? "The same normalized feedback is saved on each decision row and rendered through the standard conference email." : "A waitlist is not announced: the feedback is saved on each decision row, and no message is queued."}</p>
+          <label class="field"><span>Feedback for the speakers · optional</span><textarea rows={5} value={bulkFeedback} onInput={(event) => setBulkFeedback(event.currentTarget.value)} placeholder="Share context every one of these speakers can act on." /></label>
+          <div class="bulk-decision-actions">
+            <Button type="button" onClick={() => setBulkRequest(null)} disabled={bulkBusy}>Cancel</Button>
+            <Button type="button" variant={option.variant} disabled={bulkBusy} onClick={() => void runBulk(option.action)}>{bulkBusy ? "Saving…" : `${option.confirm} ${selectedCount.toLocaleString()}`}</Button>
+          </div>
+        </div>;
+      })()}
 
       <div class="submissions-table-wrap">
         <table class="submissions-table">

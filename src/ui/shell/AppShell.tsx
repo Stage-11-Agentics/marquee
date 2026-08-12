@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./ErrorSurface";
 import { OverlayHost, ToastHost, type OverlayState } from "./OverlayHosts";
 import { matchRoute } from "./route-table";
 import { useBrowserRouter } from "./router";
+import { SeatBlockedPage, useSeat } from "./seat";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { QuickSearch } from "./QuickSearch";
@@ -42,6 +43,7 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   const [searchOpen, setSearchOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState("");
+  const { seat, blocked } = useSeat();
   const closeOverlay = useCallback(() => setOverlay(null), []);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
@@ -119,6 +121,10 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
   if (location.pathname === "/portal") return <PortalPage />;
   if (location.pathname === "/co-speaker") return <CoSpeakerPage />;
   if (location.pathname === "/reviewer") return <ReviewerPage />;
+  // A seat that cannot use this surface gets an answer, not a full organizer
+  // navigation drawn around a wall — the seat's own routes are already handled
+  // above, so this only ever replaces admin chrome.
+  if (blocked) return <SeatBlockedPage seat={seat} navigate={navigate} />;
   return <>
     <div class="app-shell">
       <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} resetting={resetting} onReset={() => void resetDemo()} />
