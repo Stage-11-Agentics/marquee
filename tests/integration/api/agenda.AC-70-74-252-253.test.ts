@@ -46,6 +46,44 @@ async function seedFixture(): Promise<void> {
 describe.sequential("MRQ-20 agenda API", () => {
   beforeAll(seedFixture, 10_000);
 
+  test("CONTRACT · AIA-07 batch publish previews only scheduled accepted Sessions and mirrors both publication flags", async () => {
+    const initial = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
+    const initialBody = await initial.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string; title: string; room: string; building: string; speakers: Array<{ name: string }> }> } }>();
+    expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 1 });
+    expect(initialBody.publication.candidates[0]).toMatchObject({ submission_id: "sub-agenda-placed", title: "Already placed", room: "Room 101", building: "North Hall" });
+    expect(initialBody.publication.candidates[0]?.speakers[0]?.name).toBe("Demo Organizer");
+
+    await env.DB.prepare("UPDATE submissions SET status = 'withdrawn' WHERE id = ? AND event_id = ?").bind("sub-agenda-placed", DEMO_EVENT_ID).run();
+    const withdrawn = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
+      method: "POST",
+      body: JSON.stringify({ submission_ids: ["sub-agenda-placed"] }),
+    });
+    expect(withdrawn.status).toBe(409);
+    expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 0 });
+
+    await env.DB.prepare("UPDATE submissions SET status = 'accepted' WHERE id = ? AND event_id = ?").bind("sub-agenda-placed", DEMO_EVENT_ID).run();
+    const mixed = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
+      method: "POST",
+      body: JSON.stringify({ submission_ids: ["sub-agenda-placed", "sub-agenda-accepted"] }),
+    });
+    expect(mixed.status).toBe(409);
+    expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 0 });
+
+    const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
+      method: "POST",
+      body: JSON.stringify({ submission_ids: ["sub-agenda-placed"] }),
+    });
+    expect(published.status).toBe(200);
+    expect(await published.json<{ published_count: number; live: number; not_yet_public: number; public_agenda_url: string }>()).toMatchObject({
+      published_count: 1,
+      live: 1,
+      not_yet_public: 0,
+      public_agenda_url: "/agenda?event=aie-nyc-2026",
+    });
+    expect(await env.DB.prepare("SELECT is_published FROM submissions WHERE id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 1 });
+    expect(await env.DB.prepare("SELECT action, entity_type FROM audit_log WHERE entity_id = ? AND action = 'published'").bind("sub-agenda-placed").first<{ action: string; entity_type: string }>()).toMatchObject({ action: "published", entity_type: "submission" });
+  });
+
   test("AC-70 · GET derives the unscheduled pool from accepted and unplaced submissions", async () => {
     const response = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
     expect(response.status).toBe(200);
