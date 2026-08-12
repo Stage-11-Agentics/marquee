@@ -34,6 +34,7 @@ jobs:
       - run: npx tsc -p tsconfig.test.json --noEmit
       - run: npx vite build
       - run: npm run check:design
+      - run: npm run check:clocks
       - run: npm test
         timeout-minutes: 5
       - run: npm run trace:ac -- --scope=merged
