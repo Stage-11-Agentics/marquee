@@ -222,7 +222,7 @@ export function SpeakersPage({
             {rows.map((row) => <tr key={row.id}>
               <th scope="row">
                 <button class="speaker-link" type="button" onClick={() => openRecord(row.id)}>
-                  <SpeakerAvatar name={row.name} attachmentId={row.headshot_attachment_id} />
+                  <SpeakerAvatar eventId={eventId} personId={row.id} name={row.name} attachmentId={row.headshot_attachment_id} />
                   <span><strong>{row.name}</strong><small>{row.email}</small></span>
                 </button>
               </th>

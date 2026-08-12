@@ -4,9 +4,12 @@ import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail";
 import { mintPortalMagicLink } from "../lib/auth/magic-links";
+import { getAuth } from "../lib/auth/auth-middleware";
+import { authHasRole } from "../lib/auth/scope-resolution";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
+const speakerParams = eventParams.extend({ personId: z.string().min(1) });
 const inviteBody = z.object({
   person_ids: z.array(z.string().min(1)).min(1).max(100),
 });
@@ -24,6 +27,7 @@ const inviteResponse = z.object({
   message: z.string(),
   invites: z.array(inviteResult),
 });
+const portalPreviewResponse = z.object({ url: z.string().url(), person_id: z.string() });
 
 const inviteSpeakers = defineApiRoute(
   {
@@ -117,4 +121,52 @@ const inviteSpeakers = defineApiRoute(
   },
 );
 
-export const apiRoutes = [inviteSpeakers];
+const previewSpeakerPortal = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/speakers/{personId}/portal-preview",
+    operationId: "previewSpeakerPortal",
+    summary: "Open a speaker portal preview",
+    description: "Mints a one-time organizer-only portal link without notifying the speaker or changing conference status.",
+    tags: ["Speaker roster"],
+    request: { params: speakerParams },
+    policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(portalPreviewResponse, "A one-time portal preview URL"), ...errorResponses([401, 403, 404, 429, 500]) },
+  },
+  async (context) => {
+    const { eventId, personId } = context.req.valid("param");
+    const auth = getAuth(context);
+    if (!auth || !authHasRole(auth, "ops", eventId)) throw ApiError.forbidden("portal previews are for organizers only");
+    const speaker = await context.env.DB.prepare(
+      `SELECT person.id
+       FROM people person
+       JOIN events conference ON conference.id = ? AND conference.org_id = person.org_id
+       WHERE person.id = ?
+         AND (
+           EXISTS (
+             SELECT 1 FROM memberships membership
+             WHERE membership.org_id = person.org_id AND membership.event_id = conference.id
+               AND membership.person_id = person.id AND membership.role = 'speaker'
+           )
+           OR EXISTS (
+             SELECT 1 FROM participations participation
+             JOIN submissions submission ON submission.id = participation.submission_id
+             WHERE submission.event_id = conference.id AND participation.person_id = person.id
+           )
+         )
+       LIMIT 1`,
+    ).bind(eventId, personId).first<{ id: string }>();
+    if (!speaker) throw ApiError.notFound("speaker not found");
+
+    const link = await mintPortalMagicLink(context.env.DB, {
+      personId: speaker.id,
+      purpose: "login",
+      redirectTo: "/portal?viewing_as=speaker",
+      now: Date.now(),
+    });
+    const url = `${new URL(context.req.url).origin}/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`;
+    return context.json({ url, person_id: speaker.id }, 200);
+  },
+);
+
+export const apiRoutes = [inviteSpeakers, previewSpeakerPortal];

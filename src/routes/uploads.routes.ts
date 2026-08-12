@@ -765,6 +765,11 @@ const personHeadshotParamsSchema = z.object({
   eventId: z.string().min(1),
   personId: z.string().min(1),
 });
+const organizerHeadshotSignBodySchema = z.object({
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(120),
+  sizeBytes: z.number().int().positive(),
+});
 
 const signPublicUpload = defineApiRoute(
   {
@@ -814,6 +819,98 @@ const signTaskUpload = defineApiRoute(
     },
   },
   handleAuthenticatedSign as never,
+);
+
+const signOrganizerHeadshot = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/people/{personId}/headshot/sign",
+    operationId: "signOrganizerPersonHeadshot",
+    summary: "Create an organizer headshot upload presign",
+    description:
+      "Creates a person-owned headshot upload only for an organizer who can edit the conference speaker record. Completion uses the shared authenticated upload verifier.",
+    tags: ["Uploads", "Speaker roster"],
+    request: {
+      params: personHeadshotParamsSchema,
+      body: { content: { "application/json": { schema: organizerHeadshotSignBodySchema } } },
+    },
+    policy: {
+      auth: { kind: "grants", grants: ["program:write"] },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(uploadPresignResponseSchema, "A presigned R2 PUT and completion token."),
+      ...uploadErrorResponses,
+    },
+  },
+  (async (context: Context<ApiEnv>) => {
+    const eventId = context.req.param("eventId") ?? "";
+    const personId = context.req.param("personId") ?? "";
+    const body = await context.req.json<z.infer<typeof organizerHeadshotSignBodySchema>>();
+    const auth = getAuth(context);
+    if (!auth || !authHasRole(auth, "program_lead", eventId)) {
+      return uploadError(context, "forbidden", "organizer access is required for a headshot upload");
+    }
+
+    const speaker = await context.env.DB.prepare(
+      `SELECT person.id
+       FROM people person
+       JOIN events conference ON conference.id = ?1 AND conference.org_id = person.org_id
+       WHERE person.id = ?2
+         AND (
+           EXISTS (
+             SELECT 1 FROM memberships membership
+             WHERE membership.org_id = person.org_id AND membership.event_id = conference.id
+               AND membership.person_id = person.id AND membership.role = 'speaker'
+           )
+           OR EXISTS (
+             SELECT 1 FROM participations participation
+             JOIN submissions submission ON submission.id = participation.submission_id
+             WHERE submission.event_id = conference.id AND participation.person_id = person.id
+           )
+         )
+       LIMIT 1`,
+    ).bind(eventId, personId).first<{ id: string }>();
+    if (!speaker) return uploadError(context, "not_found", "speaker not found");
+
+    const env = uploadsEnv(context);
+    const policy = policyFor("person_headshot");
+    if (!policy) return uploadError(context, "invalid_request", "headshot uploads are not configured");
+    const decision = validateDeclared(policy, body);
+    if (!decision.ok) return uploadError(context, "invalid_request", `rejected: ${decision.violation}`);
+
+    const attachmentId = crypto.randomUUID();
+    const nowMs = Date.now();
+    const r2Key = objectKeyFor({ eventId, ownerType: "person_headshot", attachmentId, extension: extensionOf(body.filename) });
+    await insertPendingAttachment(env.DB, {
+      id: attachmentId,
+      eventId,
+      ownerType: "person_headshot",
+      ownerId: personId,
+      filename: sanitizeFilename(body.filename),
+      contentType: body.contentType,
+      sizeBytes: body.sizeBytes,
+      r2Key,
+      nowMs,
+    });
+
+    try {
+      const presigned = await signUpload(env, { attachmentId, key: r2Key, contentType: body.contentType, nowMs });
+      const completionToken = await hmacHex(env.UPLOAD_TOKEN_SECRET, `${attachmentId}:person_headshot:${personId}`);
+      return context.json({
+        attachmentId,
+        putUrl: presigned.url,
+        requiredHeaders: presigned.requiredHeaders,
+        expiresAt: presigned.expiresAt,
+        completionToken,
+        maxBytes: policy.maxBytes,
+      }, 200);
+    } catch (error) {
+      await env.DB.prepare("DELETE FROM attachments WHERE id = ?1").bind(attachmentId).run();
+      return uploadError(context, "invalid_request", `signing failed: ${(error as Error).message}`);
+    }
+  }) as never,
 );
 
 const completePublicUpload = defineApiRoute(
@@ -976,6 +1073,7 @@ const previewPersonHeadshot = defineApiRoute(
 export const apiRoutes = [
   signPublicUpload,
   signTaskUpload,
+  signOrganizerHeadshot,
   completePublicUpload,
   completeTaskUpload,
   localUploadPut,
