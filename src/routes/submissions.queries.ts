@@ -458,7 +458,61 @@ function notificationForRow(row: SubmissionQueryRow): NonNullable<SubmissionList
   }
 }
 
-const ITEM_SELECT = `
+const AGENT_REVIEWS_SELECT = `
+  COALESCE((
+    SELECT json_group_array(json_object(
+      'id', evaluation.id,
+      'name', reviewer.name,
+      'score', evaluation.score,
+      'recommendation', evaluation.recommendation,
+      'comment', evaluation.comment
+    ))
+    FROM evaluations evaluation
+    JOIN people reviewer
+      ON reviewer.id = evaluation.reviewer_person_id
+     AND reviewer.kind = 'agent'
+    JOIN evaluation_rounds evaluation_round ON evaluation_round.id = evaluation.round_id
+    WHERE evaluation.submission_id = s.id
+      AND evaluation.abstained = 0
+      AND evaluation_round.mode = 'scorecard'
+  ), '[]') AS agent_reviews_json`;
+
+interface ReviewQueryCapabilities {
+  includeReviewerIdentity: boolean;
+  includeAgentReviews: boolean;
+}
+
+async function reviewQueryCapabilities(database: D1Database): Promise<ReviewQueryCapabilities> {
+  const [hasReviewerIdentity, hasPeopleKind, hasAgentEvaluationFields, hasEvaluationRound] = await Promise.all([
+    hasColumns(database, "evaluations", ["reviewer_person_id"]),
+    hasColumns(database, "people", ["kind"]),
+    hasColumns(database, "evaluations", [
+      "id",
+      "submission_id",
+      "reviewer_person_id",
+      "round_id",
+      "score",
+      "recommendation",
+      "comment",
+      "abstained",
+    ]),
+    hasColumns(database, "evaluation_rounds", ["id", "mode"]),
+  ]);
+  const includeReviewerIdentity = hasReviewerIdentity && hasPeopleKind;
+  return {
+    includeReviewerIdentity,
+    includeAgentReviews: includeReviewerIdentity && hasAgentEvaluationFields && hasEvaluationRound,
+  };
+}
+
+function itemSelect(
+  includeVenueDisclosure: boolean,
+  reviewCapabilities: ReviewQueryCapabilities,
+): string {
+  const agentReviews = reviewCapabilities.includeAgentReviews
+    ? AGENT_REVIEWS_SELECT
+    : "'[]' AS agent_reviews_json";
+  return `
   s.id,
   s.kind,
   s.title,
@@ -485,24 +539,8 @@ const ITEM_SELECT = `
       ORDER BY st.is_primary DESC, carried.position ASC, carried.id ASC
     ) ordered
   ), '[]') AS tracks_json,
-  ${reviewAggregateColumns("s.id")},
-  COALESCE((
-    SELECT json_group_array(json_object(
-      'id', evaluation.id,
-      'name', reviewer.name,
-      'score', evaluation.score,
-      'recommendation', evaluation.recommendation,
-      'comment', evaluation.comment
-    ))
-    FROM evaluations evaluation
-    JOIN people reviewer
-      ON reviewer.id = evaluation.reviewer_person_id
-     AND reviewer.kind = 'agent'
-    JOIN evaluation_rounds evaluation_round ON evaluation_round.id = evaluation.round_id
-    WHERE evaluation.submission_id = s.id
-      AND evaluation.abstained = 0
-      AND evaluation_round.mode = 'scorecard'
-  ), '[]') AS agent_reviews_json,
+  ${reviewAggregateColumns("s.id", reviewCapabilities.includeReviewerIdentity)},
+  ${agentReviews},
   s.submitted_at,
   s.updated_at,
   s.origin,
@@ -511,20 +549,17 @@ const ITEM_SELECT = `
   room.name AS room,
   building.name AS building,
   event.timezone,
-  ai.is_published AS agenda_published`;
+  ai.is_published AS agenda_published, ${includeVenueDisclosure ? `(SELECT COUNT(DISTINCT pinned_building.id)
+    FROM buildings pinned_building
+    WHERE pinned_building.event_id = event.id
+      AND pinned_building.lat IS NOT NULL
+      AND pinned_building.lng IS NOT NULL)` : "0"} AS pinned_building_count`;
+}
 
 async function hasColumns(database: D1Database, table: string, required: readonly string[]): Promise<boolean> {
   const result = await database.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
   const columns = new Set(result.results.map((column) => column.name));
   return required.every((column) => columns.has(column));
-}
-
-function itemSelect(includeVenueDisclosure: boolean): string {
-  return `${ITEM_SELECT}, ${includeVenueDisclosure ? `(SELECT COUNT(DISTINCT pinned_building.id)
-    FROM buildings pinned_building
-    WHERE pinned_building.event_id = event.id
-      AND pinned_building.lat IS NOT NULL
-      AND pinned_building.lng IS NOT NULL)` : "0"} AS pinned_building_count`;
 }
 
 function answerValue(row: DraftAnswerRow): unknown {
@@ -616,8 +651,9 @@ async function listDraftsNeedingAttention(
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const { where, bindings } = filterParts(filters, includeCancelledAt);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const reviewCapabilities = await reviewQueryCapabilities(database);
   const rows = await database.prepare(`
-    SELECT ${itemSelect(includeVenueDisclosure)},
+    SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)},
       s.form_id,
       s.last_saved_at,
       submitter.id AS submitter_id,
@@ -656,9 +692,10 @@ export async function listSubmissions(
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const { where, bindings } = filterParts(filters, includeCancelledAt);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
   const data = database.prepare(`
-    SELECT ${itemSelect(includeVenueDisclosure)}
+    SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)}
     ${FROM}
     WHERE ${where}
     ORDER BY ${stableOrder}
@@ -677,12 +714,13 @@ async function listNotNotifiedSubmissions(
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database
     .prepare(`SELECT COUNT(DISTINCT s.id) AS total ${NOTIFICATION_FROM} WHERE ${where}`)
     .bind(...bindings);
   const data = database
     .prepare(`
-      SELECT ${itemSelect(includeVenueDisclosure)}, ${NOTIFICATION_SELECT}
+      SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)}, ${NOTIFICATION_SELECT}
       ${NOTIFICATION_FROM}
       WHERE ${where}
       ORDER BY ${stableOrder}
