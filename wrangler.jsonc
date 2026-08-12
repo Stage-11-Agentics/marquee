@@ -52,6 +52,7 @@
       "/join/*",
       "/f/*",
       "/agenda*",
+      "/site",
       "/speakers*",
       "/s/*",
       "/p/*",

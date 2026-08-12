@@ -170,10 +170,16 @@ function segmentsAgree(patternSegments, pathSegments) {
   for (let index = 0; index < Math.max(patternSegments.length, pathSegments.length); index += 1) {
     const patternSegment = patternSegments[index];
     const pathSegment = pathSegments[index];
-    // A trailing `*` swallows the rest of the path — `/f/*` covers `/f/:slug`.
-    // A `*` in the middle stands for exactly one segment, so `/*/agenda/embed`
-    // does not quietly claim to cover `/signin`.
-    if (patternSegment === "*" && index === patternSegments.length - 1) return true;
+    // Wrangler's `*` spans slashes, so a wildcard in the LAST pattern segment
+    // swallows everything left of the path: `/f/*` covers `/f/:slug`, and
+    // `/agenda*` covers `/agenda/agents`. A `*` in the middle stands for exactly
+    // one segment, so `/*/agenda/embed` does not quietly claim to cover
+    // `/signin`.
+    if (index === patternSegments.length - 1 && patternSegment?.endsWith("*")) {
+      return pathSegment === undefined
+        ? patternSegment === "*"
+        : pathSegment.startsWith(patternSegment.slice(0, -1));
+    }
     if (patternSegment === undefined || pathSegment === undefined) return false;
     if (patternSegment === "*") continue;
     // A Hono parameter stands for any literal, and vice versa.
