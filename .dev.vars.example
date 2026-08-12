@@ -19,6 +19,11 @@ R2_SECRET_ACCESS_KEY=local-fake-secret-access-key
 UPLOAD_TOKEN_SECRET=local-fake-upload-token-secret
 UPLOAD_RATE_LIMIT_SECRET=local-fake-upload-rate-limit-secret
 
+# Resend delivery truth. Create a webhook for the deployed Worker, then copy
+# its whsec_ signing secret here for local verification. Keep this commented
+# until you have a real secret; never commit the value.
+# RESEND_WEBHOOK_SECRET=whsec_<base64-signing-secret>
+
 # Observability. Both are optional and both have safe defaults; they are listed
 # here so the levers docs/OBSERVABILITY.md describes have a visible home.
 # LOG_LEVEL: debug | info | warn | error | silent. Default info.

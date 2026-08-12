@@ -21,15 +21,37 @@ export interface RateLimitDecision {
   resetAt: number;
 }
 
-async function hmacHex(secret: string, value: string): Promise<string> {
+type HmacSecret = string | Uint8Array;
+
+async function importHmacKey(secret: HmacSecret): Promise<CryptoKey> {
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(secret),
+    typeof secret === "string" ? new TextEncoder().encode(secret) : new Uint8Array(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"],
+    ["sign", "verify"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
+  return key;
+}
+
+/** Shared Web Crypto HMAC seam for local tokens and provider signatures. */
+export async function hmacSha256(secret: HmacSecret, value: string): Promise<ArrayBuffer> {
+  const key = await importHmacKey(secret);
+  return crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
+}
+
+/** Verify a signature with Web Crypto so callers do not grow ad-hoc HMAC code. */
+export async function verifyHmacSha256(
+  secret: HmacSecret,
+  value: string,
+  signature: Uint8Array,
+): Promise<boolean> {
+  const key = await importHmacKey(secret);
+  return crypto.subtle.verify("HMAC", key, new Uint8Array(signature), new TextEncoder().encode(value));
+}
+
+async function hmacHex(secret: string, value: string): Promise<string> {
+  const signature = await hmacSha256(secret, value);
   return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 

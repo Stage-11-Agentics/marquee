@@ -99,6 +99,17 @@ export const ATTACHMENT_OWNER_TYPES = [
 export const ATTACHMENT_STATUSES = ["pending", "ready"] as const;
 export const OUTBOX_STATUSES = ["queued", "sent", "suppressed", "failed"] as const;
 export const OUTBOX_SEND_POLICIES = ["demo_safe", "always_live"] as const;
+export const OUTBOX_DELIVERY_STATES = ["unknown", "delivered", "bounced_hard", "bounced_soft", "complained"] as const;
+export const OUTBOX_BOUNCE_TYPES = ["Permanent", "Transient", "Undetermined"] as const;
+export const OUTBOX_BOUNCE_SUBTYPES = [
+  "NoEmail",
+  "MailboxFull",
+  "Suppressed",
+  "MessageTooLarge",
+  "ContentRejected",
+  "AttachmentRejected",
+  "General",
+] as const;
 export const CALENDAR_METHODS = ["REQUEST", "CANCEL"] as const;
 export const WEBHOOK_EVENT_TYPES = [
   "submission.created",
@@ -138,6 +149,9 @@ export type AttachmentOwnerType = (typeof ATTACHMENT_OWNER_TYPES)[number];
 export type AttachmentStatus = (typeof ATTACHMENT_STATUSES)[number];
 export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
 export type OutboxSendPolicy = (typeof OUTBOX_SEND_POLICIES)[number];
+export type OutboxDeliveryState = (typeof OUTBOX_DELIVERY_STATES)[number];
+export type OutboxBounceType = (typeof OUTBOX_BOUNCE_TYPES)[number];
+export type OutboxBounceSubtype = (typeof OUTBOX_BOUNCE_SUBTYPES)[number];
 export type CalendarMethod = (typeof CALENDAR_METHODS)[number];
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
 export type WebhookDeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
@@ -381,6 +395,12 @@ export interface EmailTemplateRow extends MutableRecord {
 }
 
 export interface OutboxRow extends MutableRecord {
+  bounce_subtype: OutboxBounceSubtype | null;
+  bounce_type: OutboxBounceType | null;
+  delivered_at: EpochMilliseconds | null;
+  delivery_event_created_at: EpochMilliseconds | null;
+  delivery_event_id: string | null;
+  delivery_state: OutboxDeliveryState;
   entity_id: Id | null;
   error: string | null;
   event_id: Id;

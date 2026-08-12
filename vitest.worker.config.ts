@@ -9,6 +9,7 @@ export default defineConfig({
         bindings: {
           TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
           TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+          RESEND_WEBHOOK_SECRET: "whsec_dGVzdC13ZWJob29rLXNlY3JldA==",
           // The suite drives thousands of requests; at the default `info` each
           // one writes a JSON line that vitest then intercepts and re-emits.
           // That buries the test output that IS the oracle, and the suite runs

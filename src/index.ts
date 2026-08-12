@@ -37,6 +37,7 @@ export interface Env {
   CLIENT_TELEMETRY?: string;
   MAIL_QUEUE: Queue<unknown>;
   RESEND_API_KEY?: string;
+  RESEND_WEBHOOK_SECRET?: string;
   MEDIA: R2Bucket;
   MIRROR_QUEUE: Queue<unknown>;
   OPERATIONS_QUEUE: Queue<unknown>;

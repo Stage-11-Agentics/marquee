@@ -190,11 +190,14 @@ async function suppressRow(db: D1Database, row: OutboxRow, now: number): Promise
     .run();
 }
 
-async function markSent(db: D1Database, row: OutboxRow, providerMessageId: string, now: number): Promise<void> {
+async function markSent(db: D1Database, row: OutboxRow, providerMessageId: string | null, now: number): Promise<void> {
   await db
     .prepare(
       `UPDATE outbox
-       SET status = 'sent', provider_message_id = ?, error = NULL, sent_at = ?, updated_at = ?
+       SET status = 'sent', provider_message_id = ?, delivery_state = 'unknown',
+           bounce_type = NULL, bounce_subtype = NULL, delivered_at = NULL,
+           delivery_event_id = NULL, delivery_event_created_at = NULL,
+           error = NULL, sent_at = ?, updated_at = ?
        WHERE id = ? AND error = ?`,
     )
     .bind(providerMessageId, now, now, row.id, PROCESSING_SENTINEL)
@@ -248,7 +251,11 @@ export async function processMailOutbox(
       if (!provider) throw new Error("mail provider is unavailable");
       const providerIds = await provider.sendBatch(plain);
       for (const [index, row] of plain.entries()) {
-        await markSent(db, row, providerIds[index] ?? providerIds[0] ?? `batch:${row.idempotency_key}`, now);
+        // A batch response must never borrow another row's id. A synthetic or
+        // first-row fallback would make an inbound bounce land on the wrong
+        // speaker; a missing id stays unknown and the health surface says so.
+        const providerId = providerIds[index]?.trim() || null;
+        await markSent(db, row, providerId, now);
         sent += 1;
       }
     } catch (error) {

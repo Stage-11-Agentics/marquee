@@ -129,6 +129,7 @@ export interface ApiBindings {
   /** Optional virtual binding for embedders that compose the API directly. */
   AUTH?: CredentialResolver;
   MAIL_QUEUE: Queue<unknown>;
+  RESEND_WEBHOOK_SECRET?: string;
   /** `debug | info | warn | error`; anything else falls back to `info`. */
   LOG_LEVEL?: string;
 }

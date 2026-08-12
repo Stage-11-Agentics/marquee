@@ -19,6 +19,7 @@ import {
   deriveDeliveryHealth,
   readInfrastructure,
   type CalendarFacts,
+  type DeliverySignalFacts,
   type DeliveryHealthFacts,
   type DeliveryHealthSnapshot,
   type FormFact,
@@ -65,6 +66,7 @@ const owedSchema = z.object({
     "waiting_too_long",
     "held_back_demo",
     "held_back",
+    "delivery_retrying",
     "undelivered",
     "send_blocked",
     "no_address",
@@ -152,8 +154,8 @@ const SPEAKER_PICK = `
  * The one query that matters: who was decided and has not been told.
  *
  * The decision is the latest one on the submission; the message is the outbox
- * row that decision produced, preferring a delivered one so a later retry can
- * never make a delivered decision look owed.
+ * row that decision produced, preferring the sent row so a later retry can
+ * supersede an older failed or provider-rejected attempt.
  */
 const OWED_FROM = `
 FROM submissions s
@@ -178,7 +180,10 @@ LEFT JOIN outbox ob
   )
 WHERE s.event_id = ?
   AND d.resulting_status IN ('accepted', 'rejected')
-  AND COALESCE(ob.status, '') <> 'sent'`;
+  AND (
+    COALESCE(ob.status, '') <> 'sent'
+    OR ob.delivery_state IN ('bounced_hard', 'bounced_soft', 'complained')
+  )`;
 
 interface OwedQueryRow {
   submission_id: string;
@@ -191,6 +196,7 @@ interface OwedQueryRow {
   outbox_created_at: number | null;
   suppressed_reason: string | null;
   outbox_error: string | null;
+  delivery_state: string | null;
   last_write_source: string | null;
 }
 
@@ -209,6 +215,7 @@ async function readOwed(database: D1Database, eventId: string): Promise<{ rows: 
             ob.created_at AS outbox_created_at,
             ob.suppressed_reason AS suppressed_reason,
             ob.error AS outbox_error,
+            ob.delivery_state AS delivery_state,
             (SELECT health_person.name ${SPEAKER_PICK}) AS person_name,
             (SELECT health_person.email ${SPEAKER_PICK}) AS person_email
           ${OWED_FROM}
@@ -232,6 +239,13 @@ async function readOwed(database: D1Database, eventId: string): Promise<{ rows: 
         outbox_created_at: optionalNumber(row.outbox_created_at),
         suppressed_reason: row.suppressed_reason,
         has_error: status === "failed" && row.outbox_error !== null,
+        delivery_state: row.delivery_state === "unknown"
+          || row.delivery_state === "delivered"
+          || row.delivery_state === "bounced_hard"
+          || row.delivery_state === "bounced_soft"
+          || row.delivery_state === "complained"
+          ? row.delivery_state
+          : null,
         // Carried, never rendered: the derivation classifies it into an
         // organizer sentence. Only a real failure's text is passed on, so a
         // claimed-but-unfinished row's processing sentinel cannot be mistaken
@@ -252,7 +266,7 @@ async function readOutbox(database: D1Database, eventId: string, now: number): P
         COUNT(CASE WHEN status = 'queued' THEN 1 END) AS queued,
         COUNT(CASE WHEN status = 'sent' THEN 1 END) AS sent,
         COUNT(CASE WHEN status = 'suppressed' THEN 1 END) AS suppressed,
-        COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed,
+        COUNT(CASE WHEN status = 'failed' AND COALESCE(delivery_state, 'unknown') = 'unknown' THEN 1 END) AS failed,
         COUNT(CASE
           WHEN status = 'queued' AND created_at < ? AND (scheduled_for IS NULL OR scheduled_for <= ?)
           THEN 1 END) AS stuck_queued,
@@ -375,24 +389,52 @@ async function readMirror(database: D1Database): Promise<MirrorFacts> {
 
 async function readWebhooks(database: D1Database, eventId: string): Promise<WebhookFacts> {
   return tolerant(async () => {
-    const row = await database
-      .prepare(`
-        SELECT
-          (SELECT COUNT(*) FROM webhook_endpoints WHERE event_id = ?) AS endpoints,
-          COUNT(CASE WHEN wd.status = 'failed' THEN 1 END) AS failed,
-          COUNT(CASE WHEN wd.status = 'queued' AND wd.attempts > 0 THEN 1 END) AS retrying
-        FROM webhook_deliveries wd
-        JOIN webhook_endpoints we ON we.id = wd.endpoint_id
-        WHERE we.event_id = ?
-      `)
-      .bind(eventId, eventId)
-      .first<{ endpoints: number | null; failed: number | null; retrying: number | null }>();
-    return {
-      endpoints: whole(row?.endpoints),
-      failed: whole(row?.failed),
-      retrying: whole(row?.retrying),
+    const [outbound, delivery] = await Promise.all([
+      database
+        .prepare(`
+          SELECT
+            (SELECT COUNT(*) FROM webhook_endpoints WHERE event_id = ?) AS endpoints,
+            COUNT(CASE WHEN wd.status = 'failed' THEN 1 END) AS failed,
+            COUNT(CASE WHEN wd.status = 'queued' AND wd.attempts > 0 THEN 1 END) AS retrying
+          FROM webhook_deliveries wd
+          JOIN webhook_endpoints we ON we.id = wd.endpoint_id
+          WHERE we.event_id = ?
+        `)
+        .bind(eventId, eventId)
+        .first<{ endpoints: number | null; failed: number | null; retrying: number | null }>(),
+      database
+        .prepare(`
+          SELECT
+            COUNT(CASE WHEN delivery_state = 'delivered' THEN 1 END) AS delivered,
+            COUNT(CASE WHEN delivery_state = 'bounced_hard' THEN 1 END) AS bounced_hard,
+            COUNT(CASE WHEN delivery_state = 'bounced_soft' THEN 1 END) AS bounced_soft,
+            COUNT(CASE WHEN delivery_state = 'complained' THEN 1 END) AS complained,
+            COUNT(CASE WHEN delivery_state = 'unknown' THEN 1 END) AS unknown
+          FROM outbox
+          WHERE event_id = ? AND status IN ('sent', 'failed')
+        `)
+        .bind(eventId)
+        .first<Record<string, number | null>>(),
+    ]);
+    const inbound: DeliverySignalFacts = {
+      delivered: whole(delivery?.delivered),
+      bounced_hard: whole(delivery?.bounced_hard),
+      bounced_soft: whole(delivery?.bounced_soft),
+      complained: whole(delivery?.complained),
+      unknown: whole(delivery?.unknown),
     };
-  }, { endpoints: 0, failed: 0, retrying: 0 });
+    return {
+      endpoints: whole(outbound?.endpoints),
+      failed: whole(outbound?.failed),
+      retrying: whole(outbound?.retrying),
+      delivery: inbound,
+    };
+  }, {
+    endpoints: 0,
+    failed: 0,
+    retrying: 0,
+    delivery: { delivered: 0, bounced_hard: 0, bounced_soft: 0, complained: 0, unknown: 0 },
+  });
 }
 
 export async function readDeliveryHealthFacts(
