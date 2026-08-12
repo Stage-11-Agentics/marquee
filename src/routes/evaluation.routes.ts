@@ -774,9 +774,24 @@ const createCommittee = defineApiRoute(
     const id = crypto.randomUUID();
     const now = Date.now();
     try {
-      await context.env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(id, eventId, body.name, now, now).run();
+      await context.env.DB.batch([
+        context.env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(id, eventId, body.name, now, now),
+        context.env.DB.prepare(`
+          UPDATE evaluation_rounds
+          SET committee_id = ?, updated_at = ?
+          WHERE committee_id IS NULL
+            AND plan_id IN (SELECT id FROM evaluation_plans WHERE event_id = ?)
+        `).bind(id, now, eventId),
+      ]);
     } catch { throw ApiError.conflict("a committee with that identity already exists"); }
-    return context.json({ id, event_id: eventId, name: body.name, members: [] }, 201);
+    const attachedRounds = await context.env.DB.prepare(`
+      SELECT round.id, round.name, round.position
+      FROM evaluation_rounds round
+      JOIN evaluation_plans plan ON plan.id = round.plan_id
+      WHERE plan.event_id = ? AND round.committee_id = ?
+      ORDER BY round.position, round.id
+    `).bind(eventId, id).all<{ id: string; name: string; position: number }>();
+    return context.json({ id, event_id: eventId, name: body.name, members: [], attached_rounds: attachedRounds.results }, 201);
   },
 );
 
