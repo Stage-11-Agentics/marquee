@@ -45,6 +45,17 @@
 .record-person strong { font-size: 12px; }
 .record-person span, .record-person small { color: var(--muted); font-size: 10.5px; }
 .record-person .chip { justify-self: start; margin-top: 3px; }
+/* The submitter row carries no Remove control. The reserved height keeps its
+   card exactly as tall as every other one, so the grid does not go ragged
+   the moment a record has one participant who cannot be detached. */
+.record-person-foot { align-items: center; display: flex; gap: 7px; justify-content: space-between; min-height: 25px; }
+.record-person-foot .chip { margin-top: 0; }
+.record-person-remove { flex: 0 0 auto; }
+.record-participant-add { display: grid; margin-top: 10px; }
+.record-participant-actions { align-items: end; display: flex; gap: 9px; justify-content: space-between; }
+.record-participant-actions .field { display: grid; gap: 4px; min-width: 0; }
+.record-participant-actions .field span { color: var(--muted); font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.record-participant-actions select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 10.5px; min-height: 30px; padding: 4px; }
 .record-answer-list, .record-history, .record-rounds { display: grid; gap: 8px; }
 .record-answer { border-bottom: 1px solid var(--line); display: grid; gap: 4px; padding: 3px 0 9px; }
 .record-answer:last-child { border-bottom: 0; }

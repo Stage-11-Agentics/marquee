@@ -41,6 +41,17 @@ const personInput = z.object({
   position: z.number().int().min(0).optional(),
 });
 
+/**
+ * The roles an organizer can attach after intake. `submitter` is deliberately
+ * absent: a record has exactly one, it is written when the record is created,
+ * and a second one would make authorship ambiguous everywhere it is read.
+ */
+const participantInput = personInput.omit({ role: true, position: true }).extend({
+  role: z.enum(["speaker", "co_speaker", "moderator", "chairperson", "sponsor_contact"]).default("co_speaker"),
+});
+
+const participantParams = submissionParams.extend({ participationId: z.string().min(1) });
+
 const answerInput = z.object({
   field_id: z.string().min(1),
   value_text: z.string().nullable().optional(),
@@ -225,6 +236,70 @@ async function audit(
     now: Date.now(),
     requestId: actor.requestId,
   });
+}
+
+type PersonDetails = {
+  person_id?: string | undefined;
+  name?: string | undefined;
+  email?: string | undefined;
+  company?: string | null | undefined;
+  title?: string | null | undefined;
+  bio?: string | null | undefined;
+};
+
+/**
+ * A person born on an organizer surface.
+ *
+ * The bio used to be a literal NULL here, so a speaker created through the
+ * admin record was born with a hole the organizer could not see and the portal
+ * round-trip could not explain. Both organizer doors — record creation and the
+ * participants panel — mint people through this one statement so a person's
+ * shape cannot depend on which screen typed them in.
+ */
+function newPersonStatement(db: D1Database, orgId: string, personId: string, input: PersonDetails, now: number): D1PreparedStatement {
+  return db.prepare(`
+    INSERT INTO people
+      (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', 0, 'marquee', ?, ?)
+  `).bind(personId, orgId, input.email ?? null, input.name ?? null, input.title ?? null, input.company ?? null, input.bio?.trim() || null, now, now);
+}
+
+/**
+ * The person a participant control is talking about: an existing organization
+ * record when `person_id` is given, the person already holding that address
+ * when one is known, and a new person otherwise. The INSERT is returned rather
+ * than run so the caller can land it in the same batch as the participation it
+ * exists for — a person with no participation is a stray the organizer never
+ * asked for.
+ */
+async function resolvePerson(
+  db: D1Database,
+  orgId: string,
+  input: PersonDetails,
+  now: number,
+): Promise<{ personId: string; statements: D1PreparedStatement[] }> {
+  if (input.person_id) {
+    const person = await db.prepare("SELECT id FROM people WHERE id = ? AND org_id = ?").bind(input.person_id, orgId).first<{ id: string }>();
+    if (!person) throw ApiError.unprocessable("person does not belong to this organization", "person_id");
+    return { personId: input.person_id, statements: [] };
+  }
+  if (!input.name || !input.email) throw ApiError.unprocessable("a new participant needs a name and email", "participants");
+  const existing = await db.prepare("SELECT id FROM people WHERE org_id = ? AND lower(email) = lower(?)").bind(orgId, input.email).first<{ id: string }>();
+  if (existing) return { personId: existing.id, statements: [] };
+  const personId = newUlid();
+  return { personId, statements: [newPersonStatement(db, orgId, personId, input, now)] };
+}
+
+async function submissionFor(db: D1Database, eventId: string, submissionId: string): Promise<{ id: string; status: string }> {
+  const row = await db.prepare("SELECT id, status FROM submissions WHERE id = ? AND event_id = ?").bind(submissionId, eventId).first<{ id: string; status: string }>();
+  if (!row) throw ApiError.notFound("submission not found");
+  return row;
+}
+
+/** Appended, not inserted: an addition never reorders the people already listed. */
+async function nextParticipantPosition(db: D1Database, submissionId: string): Promise<number> {
+  const row = await db.prepare("SELECT MAX(position) AS highest FROM participations WHERE submission_id = ?").bind(submissionId).first<{ highest: number | null }>();
+  return (row?.highest ?? -1) + 1;
 }
 
 /**
@@ -726,6 +801,11 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       can_resend_decision: ["accepted", "rejected"].includes(row.status)
         && decisions.results.some((decision) => decision.resulting_status === row.status)
         && canWriteProgram,
+      // Who is on stage is not content editing: a co-presenter is added to a
+      // record at any status, including one already accepted and scheduled —
+      // which is exactly when the organizer finds out about them. The one gate
+      // is the grant the participants routes enforce.
+      can_edit_participants: canWriteProgram,
     },
   };
 }
@@ -846,14 +926,7 @@ const createSubmission = defineApiRoute(
         return existing.id;
       }
       const id = newUlid();
-      // The bio used to be a literal NULL here, so a speaker created through the
-      // admin record was born with a hole the organizer could not see and the
-      // portal round-trip could not explain.
-      personStatements.push(context.env.DB.prepare(`
-        INSERT INTO people
-          (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', 0, 'marquee', ?, ?)
-      `).bind(id, event.org_id, input.email, input.name, input.title ?? null, input.company ?? null, input.bio?.trim() || null, now, now));
+      personStatements.push(newPersonStatement(context.env.DB, event.org_id, id, input, now));
       knownPeople.add(id);
       return id;
     };
@@ -1194,4 +1267,121 @@ const publishSubmission = defineApiRoute(
   },
 );
 
-export const apiRoutes = [createSubmission, getSubmissionRecord, patchDraft, updateSubmissionContent, restoreSubmissionContent, scheduleSubmission, publishSubmission];
+/**
+ * A co-presenter joins a session after intake far more often than before it.
+ * The record already RENDERED its participants; without these two routes the
+ * only way to add one was to re-run the public form, which is not a thing an
+ * organizer can do on someone else's behalf.
+ *
+ * Both doors take `program:write`, the same grant the content editor takes:
+ * who is on stage is program content.
+ */
+const addParticipant = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}/participants",
+    operationId: "addSubmissionParticipant",
+    summary: "Attach a participant to a submission",
+    description:
+      "Adds a co-presenter, moderator, or chairperson after intake. Pass person_id for someone already in the organization, or name and email to create them; an address already known to the organization is matched rather than duplicated.",
+    tags: ["Submissions"],
+    request: { params: submissionParams, body: { content: { "application/json": { schema: participantInput } } } },
+    policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    // 200 is the already-attached answer: the record is returned either way,
+    // and only one of the two paths actually created something.
+    responses: { 200: recordResponse, 201: recordResponse, ...errors },
+  },
+  async (context) => {
+    const { eventId, submissionId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    const event = await eventFor(context.env.DB, eventId);
+    await submissionFor(context.env.DB, eventId, submissionId);
+    const now = Date.now();
+    const resolved = await resolvePerson(context.env.DB, event.org_id, body, now);
+    const existing = await context.env.DB.prepare(
+      "SELECT id FROM participations WHERE submission_id = ? AND person_id = ? AND role = ?",
+    ).bind(submissionId, resolved.personId, body.role).first<{ id: string }>();
+    // Adding the same person in the same role twice is the organizer clicking
+    // Add on a row that is already there. It is not an error worth a red
+    // banner, but it must not create the duplicate the dedupe in
+    // `participantListSql` then has to hide — and it is not a creation either,
+    // so it answers 200 rather than claiming a 201 no reader could find.
+    if (existing) return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+    const position = await nextParticipantPosition(context.env.DB, submissionId);
+    const participationId = newUlid();
+    const actor = await actorFor(context);
+    await context.env.DB.batch([
+      ...resolved.statements,
+      // `ON CONFLICT DO NOTHING` against uq_participations_person_submission_role
+      // rather than trusting the read above: the check and this write are two
+      // round trips, so two simultaneous Adds both pass the check. Without it
+      // the loser of that race surfaces the constraint failure as a 500 —
+      // the data stays correct either way, but a double-click deserves the
+      // same quiet no-op as a second click a minute later.
+      context.env.DB.prepare(`
+        INSERT INTO participations
+          (id, submission_id, person_id, role, position, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'pending', NULL, NULL, ?, ?)
+        ON CONFLICT (person_id, submission_id, role) DO NOTHING
+      `).bind(participationId, submissionId, resolved.personId, body.role, position, now, now),
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "participant_added",
+        entityType: "submission",
+        entityId: submissionId,
+        after: { participation_id: participationId, person_id: resolved.personId, role: body.role },
+        now,
+        requestId: actor.requestId,
+      }),
+    ]);
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 201);
+  },
+);
+
+const removeParticipant = defineApiRoute(
+  {
+    method: "delete",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}/participants/{participationId}",
+    operationId: "removeSubmissionParticipant",
+    summary: "Detach a participant from a submission",
+    description:
+      "Removes one participation. The submitter cannot be removed: the record's authorship, its resume link, and its speaker mail all key to that row.",
+    tags: ["Submissions"],
+    request: { params: participantParams },
+    policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: recordResponse, ...errors },
+  },
+  async (context) => {
+    const { eventId, submissionId, participationId } = context.req.valid("param");
+    await eventFor(context.env.DB, eventId);
+    await submissionFor(context.env.DB, eventId, submissionId);
+    const participation = await context.env.DB.prepare(
+      "SELECT id, person_id, role FROM participations WHERE id = ? AND submission_id = ?",
+    ).bind(participationId, submissionId).first<{ id: string; person_id: string; role: string }>();
+    if (!participation) throw ApiError.notFound("participant not found on this record");
+    if (participation.role === "submitter") {
+      throw ApiError.unprocessable("the submitter cannot be removed from their own record", "participationId");
+    }
+    const actor = await actorFor(context);
+    const now = Date.now();
+    await context.env.DB.batch([
+      context.env.DB.prepare("DELETE FROM participations WHERE id = ? AND submission_id = ?").bind(participationId, submissionId),
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "participant_removed",
+        entityType: "submission",
+        entityId: submissionId,
+        before: { participation_id: participationId, person_id: participation.person_id, role: participation.role },
+        now,
+        requestId: actor.requestId,
+      }),
+    ]);
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+  },
+);
+
+export const apiRoutes = [createSubmission, getSubmissionRecord, patchDraft, updateSubmissionContent, restoreSubmissionContent, scheduleSubmission, publishSubmission, addParticipant, removeParticipant];

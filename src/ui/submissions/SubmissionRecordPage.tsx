@@ -19,9 +19,21 @@ const ASSIGNMENT_DELETE_ROUTE = "/api/v1/events/{eventId}/rounds/{roundId}/assig
 const COMMS_SEND_ROUTE = "/api/v1/events/{eventId}/comms/send";
 const CONTENT_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/content";
 const CONTENT_RESTORE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/content/restore";
+const PARTICIPANTS_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/participants";
+const PARTICIPANT_DELETE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/participants/{participationId}";
+const SEARCH_ROUTE = "/api/v1/events/{eventId}/search";
+
+/**
+ * The roles an organizer attaches after intake, in the order a program team
+ * reaches for them. `submitter` is not offered: a record has exactly one and it
+ * is settled at intake — the server refuses it too, so offering it here would
+ * be a control whose only outcome is an error.
+ */
+const ATTACHABLE_ROLES = ["co_speaker", "speaker", "moderator", "chairperson", "sponsor_contact"] as const;
 
 
 interface Participant { id: string; person_id: string; name: string; email: string; company: string | null; role: string; confirmation_status: "pending" | "confirmed" | "declined"; confirmed_at: number | null; invited_at: number | null; }
+interface SearchResult { type: string; id: string; title: string; subtitle: string; }
 interface Reviewer { id: string; name: string; kind: "human" | "agent"; company: string | null; track_ids: string[]; }
 interface Assignment { assignment_id: string; reviewer_person_id: string; reviewer_name: string; reviewer_kind: "human" | "agent"; status: string; coverage: { assigned: number; reviewed: number }; }
 interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; reviewers: Assignment[]; evaluations: Array<{ abstained: boolean; score: number | null; recommendation: string | null; comment: string; reviewer_kind: "human" | "agent" }>; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
@@ -39,7 +51,7 @@ interface RecordData {
   comparisons: Array<{ round_id: string; round_name: string; reviewer_name: string; reviewer_kind: "human" | "agent"; ranking: unknown; submission_ids: string[] }>;
   evaluation: { rounds: Round[]; reviewer_options: Reviewer[] };
   history: Array<{ id: string; action: string; actor_kind: string | null; actor_name: string | null; created_at: number; before: unknown; after: unknown; restorable: boolean }>;
-  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean };
+  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_edit_participants: boolean };
 }
 
 interface Props { eventId: string; submissionId: string; navigate: (target: string) => void; }
@@ -104,6 +116,15 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [messageError, setMessageError] = useState("");
   const [messageNotice, setMessageNotice] = useState("");
   const [resendNotice, setResendNotice] = useState("");
+  const [participantMode, setParticipantMode] = useState<"existing" | "new">("existing");
+  const [participantRole, setParticipantRole] = useState<string>("co_speaker");
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [participantResults, setParticipantResults] = useState<SearchResult[]>([]);
+  const [participantSearchState, setParticipantSearchState] = useState<"idle" | "loading" | "error">("idle");
+  const [selectedParticipant, setSelectedParticipant] = useState<SearchResult | null>(null);
+  const [newParticipantName, setNewParticipantName] = useState("");
+  const [newParticipantEmail, setNewParticipantEmail] = useState("");
+  const [participantError, setParticipantError] = useState("");
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
   useEffect(() => {
@@ -114,6 +135,67 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
       .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); });
     return () => controller.abort();
   }, [eventId, submissionId, reloadKey]);
+
+  /** The create screen's picker, on the record: same search, same debounce. */
+  useEffect(() => {
+    const query = participantQuery.trim();
+    if (participantMode !== "existing" || selectedParticipant || query.length < 2) {
+      setParticipantResults([]);
+      setParticipantSearchState("idle");
+      return;
+    }
+    const controller = new AbortController();
+    setParticipantSearchState("loading");
+    const timer = window.setTimeout(() => {
+      apiFetch<{ data: SearchResult[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=${encodeURIComponent(query)}`, { signal: controller.signal, route: SEARCH_ROUTE })
+        .then((payload) => {
+          if (controller.signal.aborted) return;
+          setParticipantResults(payload.data.filter((result) => result.type === "Speaker"));
+          setParticipantSearchState("idle");
+        })
+        .catch(() => { if (!controller.signal.aborted) setParticipantSearchState("error"); });
+    }, 160);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [eventId, participantMode, participantQuery, selectedParticipant]);
+
+  /**
+   * Participant writes report inline, not through `act`.
+   *
+   * `act` replaces the whole record with an error screen, which is right for a
+   * decision that failed and wrong here: "that address is already on this
+   * record" must not cost the organizer the record they were reading.
+   */
+  const participantWrite = async (name: string, path: string, init: RequestInit, route: string) => {
+    setBusy(name);
+    setParticipantError("");
+    try {
+      await apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route });
+      reload();
+      return true;
+    } catch (error: unknown) {
+      setParticipantError(errorSummary(error));
+      return false;
+    } finally { setBusy(""); }
+  };
+
+  const addParticipant = async (event: Event) => {
+    event.preventDefault();
+    if (participantMode === "existing" && !selectedParticipant) { setParticipantError("Choose a person from the list, or add a new person."); return; }
+    if (participantMode === "new" && (!newParticipantName.trim() || !newParticipantEmail.trim())) { setParticipantError("A new participant needs a name and an email address."); return; }
+    const person = participantMode === "existing"
+      ? { person_id: selectedParticipant!.id }
+      : { name: newParticipantName.trim(), email: newParticipantEmail.trim() };
+    const added = await participantWrite("add-participant", "/participants", { method: "POST", body: JSON.stringify({ ...person, role: participantRole }) }, PARTICIPANTS_ROUTE);
+    if (!added) return;
+    setSelectedParticipant(null);
+    setParticipantQuery("");
+    setNewParticipantName("");
+    setNewParticipantEmail("");
+  };
+
+  const removeParticipant = async (participationId: string) => {
+    await participantWrite(`remove-participant-${participationId}`, `/participants/${encodeURIComponent(participationId)}`, { method: "DELETE" }, PARTICIPANT_DELETE_ROUTE);
+  };
 
   const act = async (name: string, path: string, init: RequestInit = {}, route = SUBMISSION_ROUTE) => {
     setBusy(name);
@@ -239,6 +321,11 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // restore has a single door that requires `program:write` at every status.
   // One shared answer would be wrong for somebody in either direction.
   const canEditContent = record.actions.can_edit_content;
+  // Server-computed from the grant the participants routes enforce, for the
+  // same reason the content editor is: a Remove button that returns 403 is a
+  // dead end, and the people who can read this record are not the people who
+  // can change who is on stage.
+  const canEditParticipants = record.actions.can_edit_participants;
   return <div class="submission-record-page">
     <PageHeader title="Submission record" copy={`${record.id} · ${record.kind === "session" ? "Session" : "Abstract"} · ${record.origin} origin`} actions={<Chip tone={headerChipTone(record)}>{record.stage_label}</Chip>} />
     <div class="record-layout">
@@ -252,7 +339,40 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }, SCHEDULE_ROUTE); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}
         {record.actions.can_publish && <Card><CardHeader title="Public site"><span class="subtle">The working slot is private until this action is confirmed.</span></CardHeader><CardBody><div class="record-action-row"><Button variant="primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm("Make this scheduled Session public?")) void act("publish", "/publish", { method: "POST" }, PUBLISH_ROUTE); }}>Publish Session</Button><span class="subtle">The scheduled day, time, room, speakers, title, and description become public together.</span></div></CardBody></Card>}
-        <Card><CardHeader title="Participants"><span class="tabular">{record.participants.length}</span></CardHeader><CardBody><div class="record-participants">{record.participants.length ? record.participants.map((participant) => <div class="record-person" key={participant.id}><strong>{participant.name}</strong><span>{statusLabel(participant.role)} · {participant.company || "Company not provided"}</span><small>{participant.email}</small><Chip tone={participant.confirmation_status === "confirmed" ? "success" : participant.confirmation_status === "declined" ? "alarm" : ""}>{participant.confirmation_status === "confirmed" ? "Role confirmed" : participant.confirmation_status === "declined" ? "Role declined" : "Role response pending"}</Chip></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div></CardBody></Card>
+        <Card><CardHeader title="Participants"><span class="tabular">{record.participants.length}</span></CardHeader><CardBody>
+          <div class="record-participants">{record.participants.length ? record.participants.map((participant) => <div class="record-person" key={participant.id}><strong>{participant.name}</strong><span>{statusLabel(participant.role)} · {participant.company || "Company not provided"}</span><small>{participant.email}</small><div class="record-person-foot"><Chip tone={participant.confirmation_status === "confirmed" ? "success" : participant.confirmation_status === "declined" ? "alarm" : ""}>{participant.confirmation_status === "confirmed" ? "Role confirmed" : participant.confirmation_status === "declined" ? "Role declined" : "Role response pending"}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove</Button>}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
+          {canEditParticipants && <form class="record-participant-add" onSubmit={(event) => void addParticipant(event)}>
+            <fieldset class="record-person-picker" aria-describedby="record-participant-error">
+              <legend>Add a participant</legend>
+              <p class="field-note">A co-presenter who turns up after intake belongs on the record the same way the submitter does. Search people already on this conference, or add someone new.</p>
+              <div class="record-picker-tabs" role="tablist" aria-label="Participant choice">
+                <button type="button" role="tab" aria-selected={participantMode === "existing"} class={participantMode === "existing" ? "active" : ""} onClick={() => { setParticipantMode("existing"); setParticipantError(""); }}>Choose existing person</button>
+                <button type="button" role="tab" aria-selected={participantMode === "new"} class={participantMode === "new" ? "active" : ""} onClick={() => { setParticipantMode("new"); setSelectedParticipant(null); setParticipantResults([]); setParticipantError(""); }}>Add new person</button>
+              </div>
+              {participantMode === "existing" && <div class="record-picker-body">
+                {selectedParticipant ? <div class="record-selected-person"><span><strong>{selectedParticipant.title}</strong><small>{selectedParticipant.subtitle}</small></span><Button type="button" small onClick={() => { setSelectedParticipant(null); setParticipantQuery(""); }}>Change person</Button></div> : <>
+                  <label class="sr-only" for="record-participant-search">Search people</label><input id="record-participant-search" value={participantQuery} onInput={(event) => { setParticipantQuery(event.currentTarget.value); setSelectedParticipant(null); setParticipantError(""); }} placeholder="Search people by name…" autoComplete="off" aria-controls="record-participant-results" />
+                  <div id="record-participant-results" class="record-person-suggestions" role="listbox" aria-label="People search results">
+                    {participantSearchState === "loading" && <span class="record-picker-placeholder">Searching people…</span>}
+                    {participantSearchState === "error" && <span class="record-picker-placeholder error">People search unavailable. Try again.</span>}
+                    {participantSearchState === "idle" && participantQuery.trim().length < 2 && <span class="record-picker-placeholder">Type at least 2 characters to search.</span>}
+                    {participantSearchState === "idle" && participantQuery.trim().length >= 2 && participantResults.length === 0 && <span class="record-picker-placeholder">No matching people. Add a new person if this is a new contact.</span>}
+                    {participantResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedParticipant(person); setParticipantQuery(person.title); setParticipantResults([]); setParticipantError(""); }}><strong>{person.title}</strong><small>{person.subtitle}</small></button>)}
+                  </div>
+                </>}
+              </div>}
+              {participantMode === "new" && <div class="record-new-person-grid">
+                <label class="field"><span>Name</span><input value={newParticipantName} onInput={(event) => { setNewParticipantName(event.currentTarget.value); setParticipantError(""); }} placeholder="Full name" /></label>
+                <label class="field"><span>Email</span><input type="email" value={newParticipantEmail} onInput={(event) => { setNewParticipantEmail(event.currentTarget.value); setParticipantError(""); }} placeholder="name@example.com" /></label>
+              </div>}
+              <div class="record-participant-actions">
+                <label class="field"><span>Role</span><select aria-label="Participant role" value={participantRole} onChange={(event) => setParticipantRole(event.currentTarget.value)}>{ATTACHABLE_ROLES.map((role) => <option value={role} key={role}>{statusLabel(role)}</option>)}</select></label>
+                <Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "add-participant" ? "Adding…" : "Add participant"}</Button>
+              </div>
+              <span id="record-participant-error" class={`record-inline-message ${participantError ? "error" : ""}`} role={participantError ? "alert" : undefined}>{participantError || " "}</span>
+            </fieldset>
+          </form>}
+        </CardBody></Card>
         <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
         <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <div class="record-answer" key={`${evaluation.round_id}-${evaluation.reviewer_name}-${index}`}><small>{evaluation.round_name} · Scorecard · <ReviewerName name={evaluation.reviewer_name} kind={evaluation.reviewer_kind} /></small><strong>{evaluation.abstained ? "Conflict declared" : `${evaluation.score === null ? "—" : evaluation.score.toFixed(2)} · ${evaluation.recommendation || "No recommendation"}`}</strong><span>{evaluation.abstained ? "Reviewer recused; no recommendation recorded." : evaluation.comment || "—"}</span></div>)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
         <Card><CardHeader title="History"><span class="subtle">Every change, who made it, and when.</span></CardHeader><CardBody><ContentHistory entries={record.history} onRestore={record.actions.can_restore_content ? ((entryId) => void restoreVersion(entryId, isLivePublicly)) : undefined} busy={Boolean(busy)} label={statusLabel} moment={moment} livePublicly={isLivePublicly} /></CardBody></Card>
