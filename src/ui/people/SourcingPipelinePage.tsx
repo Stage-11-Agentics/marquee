@@ -91,7 +91,7 @@ export function SourcingPipelinePage({
               ><span class="people-card-name">{card.name}</span></button>
               <div class="people-card-company">{card.company ?? "—"}</div>
               <div class="people-card-foot">
-                <span class="people-card-score">{card.score === null ? "No score" : `Score ${card.score}`}</span>
+                <span class="people-card-score">{card.score === null ? "—" : `Score ${card.score}`}</span>
                 <select
                   class="people-moveto"
                   aria-label={`Move ${card.name} to another stage`}

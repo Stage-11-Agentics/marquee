@@ -133,9 +133,11 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
   });
   const openPerson = (personId: string) => navigate?.(`/people?person=${encodeURIComponent(personId)}`);
   const closePerson = () => navigate?.("/people");
+  // An import receipt — "14 created · 2 updated · 1 skipped" — is a number the
+  // organizer has to actually read, so the line stays up long enough to read it.
   const announce = (message: string) => {
     setToast(message);
-    window.setTimeout(() => setToast(""), 3200);
+    window.setTimeout(() => setToast(""), 8000);
   };
 
   return <div class="people-page">

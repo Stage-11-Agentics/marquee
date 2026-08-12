@@ -82,6 +82,12 @@ export function PersonDrawer({
     }
   };
 
+  const saveTag = async () => {
+    const tag = tagDraft.trim();
+    if (!tag) return;
+    await run(async () => { await addTag(personId, tag); setTagDraft(""); });
+  };
+
   const person = record?.person;
 
   return <>
@@ -130,12 +136,7 @@ export function PersonDrawer({
             </div>
             <form
               style={{ display: "flex", gap: "6px" }}
-              onSubmit={(event) => {
-                event.preventDefault();
-                const tag = tagDraft.trim();
-                if (!tag) return;
-                void run(async () => { await addTag(personId, tag); setTagDraft(""); });
-              }}
+              onSubmit={(event) => { event.preventDefault(); void saveTag(); }}
             >
               <input
                 class="people-tag-input"
@@ -143,6 +144,14 @@ export function PersonDrawer({
                 aria-label="Add a tag"
                 value={tagDraft}
                 onInput={(event) => setTagDraft((event.currentTarget as HTMLInputElement).value)}
+                // Enter in a one-field form is how anyone types a tag, and
+                // implicit form submission is not reliable in every engine the
+                // product is driven in. The key is handled rather than assumed.
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  void saveTag();
+                }}
               />
               <Button small type="submit" disabled={busy}>Add</Button>
             </form>
