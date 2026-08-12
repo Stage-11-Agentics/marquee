@@ -30,8 +30,16 @@ async function request(path: string): Promise<Response> {
   return app.request(path, {}, { ...env, ASSETS: assets } as unknown as Env);
 }
 
+/**
+ * `/settings/webhooks` is deliberately NOT in this list. It was, until MRQ-128
+ * (#127) added the webhooks surface to the route table while this branch was
+ * open — and the fix then served it, correctly, as a page. That is the whole
+ * argument for deriving the client-route set from `routeTable` rather than
+ * writing one here: the route another agent added was covered before anyone
+ * thought about it, and the only thing that broke was a hand-picked example.
+ */
 test("CONTRACT · an unknown path is a 404, not a 200 shell", async () => {
-  for (const path of ["/this-route-does-not-exist", "/nonsense/deep/path", "/program", "/settings/webhooks"]) {
+  for (const path of ["/this-route-does-not-exist", "/nonsense/deep/path", "/program", "/not/a/page"]) {
     const response = await request(path);
     expect(response.status, `${path} must not answer 200`).toBe(404);
     expect(await response.text()).toContain("That page does not exist.");
