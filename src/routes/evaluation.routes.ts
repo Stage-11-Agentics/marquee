@@ -66,6 +66,12 @@ interface NormalizedCriterion {
  * side, which looks like the product losing the organizer's work.
  */
 function normalizeCriteria(criteria: ReadonlyArray<CriterionInput>): NormalizedCriterion[] {
+  const positions = criteria.map((criterion) => criterion.position);
+  if (new Set(positions).size !== positions.length) {
+    // The round/position pair is unique, so duplicates fail inside batch() as an
+    // opaque conflict. Name the problem instead.
+    throw ApiError.unprocessable("each criterion needs its own position", "position");
+  }
   return criteria.map((criterion) => {
     const options = criterion.options ?? [];
     if (criterion.kind === "select" && options.length === 0) {
