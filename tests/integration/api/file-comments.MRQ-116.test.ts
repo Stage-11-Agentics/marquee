@@ -64,7 +64,7 @@ beforeEach(async () => {
   await env.DB.prepare("UPDATE speaker_tasks SET attachment_id = ? WHERE id = ? AND event_id = ?").bind(V1_ID, TASK_ID, EVENT_ID).run();
 });
 
-test("CNT-05 · speaker comment survives replacement and organizer replies on the slot thread", async () => {
+test("CONTRACT · MRQ-116 speaker comment survives replacement and organizer replies on the slot thread", async () => {
   const speakerPost = await request(`/api/v1/me/tasks/${TASK_ID}/comments`, {
     method: "POST",
     body: JSON.stringify({ body: "Draft deck - final version coming Friday.", attachment_id: V1_ID }),
@@ -100,7 +100,7 @@ test("CNT-05 · speaker comment survives replacement and organizer replies on th
   expect(thread.comments.map((comment) => comment.attachment_version)).toEqual([1, 2]);
 });
 
-test("CNT-05 · invalid attachment is refused with no comment write", async () => {
+test("CONTRACT · MRQ-116 invalid attachment is refused with no comment write", async () => {
   const before = await commentCount();
   const response = await request(`/api/v1/me/tasks/${TASK_ID}/comments`, {
     method: "POST",
@@ -110,7 +110,7 @@ test("CNT-05 · invalid attachment is refused with no comment write", async () =
   expect(await commentCount()).toBe(before);
 });
 
-test("CNT-05 · speaker cannot read the organizer Files comment route", async () => {
+test("CONTRACT · MRQ-116 speaker cannot read the organizer Files comment route", async () => {
   const response = await request(`/api/v1/events/${EVENT_ID}/files/${TASK_ID}/comments`);
   expect(response.status).toBe(403);
 });
