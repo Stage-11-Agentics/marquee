@@ -1,5 +1,6 @@
 import { resolveSort, executeListPage, parsePagination, type SortRegistry } from "../api/pagination";
 import type { FormFieldRow, FormRow } from "../db/schema";
+import { boundSourceOf, resolveBoundOptions } from "../lib/bound-options";
 import { fieldPreviewProjection, parseFormCondition } from "../lib/form-conditions";
 
 export const FORM_SORTS = {
@@ -189,12 +190,23 @@ export async function countFormResponses(db: D1Database, formId: string): Promis
   return Number(row?.total ?? 0);
 }
 
+/**
+ * The one place form fields are read. Bound options are resolved here rather
+ * than per-caller so no path — admin detail, the fields list, reorder, the
+ * public form, or the submit validation that reads the same fields — can be
+ * added later that forgets to, and serve an option list the resolver will
+ * reject.
+ */
 export async function listFormFields(db: D1Database, formId: string): Promise<FormFieldView[]> {
   const rows = await db
     .prepare("SELECT * FROM form_fields WHERE form_id = ? ORDER BY position ASC, id ASC")
     .bind(formId)
     .all<FormFieldRow>();
-  return rows.results.map(normalizeField);
+  const fields = rows.results.map(normalizeField);
+  if (!fields.some((field) => boundSourceOf(field))) return fields;
+  const form = await db.prepare("SELECT event_id FROM forms WHERE id = ?").bind(formId).first<{ event_id: string }>();
+  if (!form) return fields;
+  return resolveBoundOptions(db, form.event_id, fields);
 }
 
 export async function listFormAdmins(db: D1Database, formId: string): Promise<FormAdminView[]> {

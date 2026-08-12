@@ -10,6 +10,7 @@ import embedWidgetKindsMigrationSql from "../../migrations/0007_embed_widget_kin
 import formFieldDatesMigrationSql from "../../migrations/0008_form_field_dates.sql?raw";
 import fileCommentsMigrationSql from "../../migrations/0009_file_comments.sql?raw";
 import criterionKindsMigrationSql from "../../migrations/0009_criterion_kinds.sql?raw";
+import boundFormOptionsMigrationSql from "../../migrations/0010_bound_form_options.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -78,6 +79,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(formFieldDatesMigrationSql),
     ...splitStatements(fileCommentsMigrationSql),
     ...splitStatements(criterionKindsMigrationSql),
+    ...splitStatements(boundFormOptionsMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

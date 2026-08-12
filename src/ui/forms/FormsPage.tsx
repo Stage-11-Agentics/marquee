@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
+import { BOUND_SOURCE_LABELS, BOUND_SOURCES, type BoundSource, isBoundSource } from "../../lib/bound-options";
 import { fieldPreviewProjection, isFieldApplicable, type FormAnswerValue, type FormCondition } from "../../lib/form-conditions";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "../shell/components";
@@ -137,6 +138,79 @@ function selectOptions(field: FormField): string[] {
   return Array.isArray(field.config.options) ? field.config.options.filter((option): option is string => typeof option === "string") : [];
 }
 
+function isSelectType(type: FieldType): boolean {
+  return type === "single_select" || type === "multi_select";
+}
+
+/** The conference setting a select field draws its options from, if any. */
+function fieldSource(field: { type: FieldType; config: Record<string, unknown> }): BoundSource | null {
+  if (!isSelectType(field.type)) return null;
+  return isBoundSource(field.config.source) ? field.config.source : null;
+}
+
+const SOURCE_CHOICES: Array<{ value: "" | BoundSource; label: string }> = [
+  { value: "", label: "Custom list" },
+  ...BOUND_SOURCES.map((source) => ({ value: source, label: `Conference ${source}` })),
+];
+
+/**
+ * A field key is an identifier the API validates; an organizer types a label.
+ * Deriving one from the other is what removes a whole interaction from adding
+ * a field, so the derivation has to survive labels that are punctuation,
+ * emoji, or a duplicate of one already used.
+ */
+export function fieldKeyFromLabel(label: string, taken: readonly string[]): string {
+  const base = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/^[^a-z]+/, "")
+    .slice(0, 100);
+  const root = base || `field_${Date.now().toString(36)}`;
+  if (!taken.includes(root)) return root;
+  for (let suffix = 2; suffix < 200; suffix += 1) {
+    const candidate = `${root}_${suffix}`;
+    if (!taken.includes(candidate)) return candidate;
+  }
+  return `${root}_${Date.now().toString(36)}`;
+}
+
+export function parseOptionList(value: string): string[] {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+/**
+ * Where a select's options come from. Bound to a conference setting, the list
+ * is not editable here on purpose: the options a submitter is offered are the
+ * rows the submit path resolves against, and an editable copy is how the two
+ * drift apart during a rename.
+ */
+function OptionsEditor({ field, onConfig }: { field: FormField; onConfig: (key: string, value: unknown) => void }): JSX.Element {
+  const source = fieldSource(field);
+  const options = selectOptions(field);
+  return <div class="forms-options-box" data-options-source={source ?? "custom"}>
+    <div class="field">
+      <label for={`field-options-source-${field.id}`}>Options come from</label>
+      <select id={`field-options-source-${field.id}`} value={source ?? ""} onChange={(event) => {
+        const next = (event.currentTarget as HTMLSelectElement).value;
+        // Binding drops the copy; unbinding keeps the resolved list as the
+        // starting point for the custom one the organizer just asked for.
+        if (next) onConfig("options", undefined);
+        onConfig("source", next || undefined);
+      }}>
+        {SOURCE_CHOICES.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+      </select>
+    </div>
+    {source
+      ? <div class="forms-bound-note">
+          <span>Options come from Conference settings → {BOUND_SOURCE_LABELS[source]}. Editing them there updates this form and every open submission.</span>
+          <a href={`/settings#${source}`}>Edit {BOUND_SOURCE_LABELS[source].toLowerCase()} ↗</a>
+          <div class="forms-bound-values" aria-label={`Current ${source}`}>{options.length ? options.map((option) => <span class="chip" key={option}>{option}</span>) : <span class="subtle">No {source} configured yet — add the first one in Conference settings.</span>}</div>
+        </div>
+      : <div class="field"><label for={`field-options-${field.id}`}>Options · comma separated</label><input id={`field-options-${field.id}`} value={options.join(", ")} onInput={(event) => onConfig("options", parseOptionList((event.currentTarget as HTMLInputElement).value))} /></div>}
+  </div>;
+}
+
 function FieldValidationEditor({ field, onConfig }: { field: FormField; onConfig: (key: string, value: unknown) => void }): JSX.Element {
   const numberInput = (key: string, label: string) => <div class="field"><label>{label}</label><input type="number" value={typeof field.config[key] === "number" ? String(field.config[key]) : ""} onInput={(event) => { const raw = (event.currentTarget as HTMLInputElement).value; onConfig(key, raw === "" ? undefined : Number(raw)); }} /></div>;
   const hasTextRules = field.type === "short_text" || field.type === "long_text" || field.type === "email" || field.type === "url";
@@ -146,7 +220,7 @@ function FieldValidationEditor({ field, onConfig }: { field: FormField; onConfig
     <div class="forms-validation-heading"><strong>Field validation</strong><span>Applied only when this field is visible.</span></div>
     {hasTextRules && <div class="grid-2">{numberInput("minLength", "Minimum characters")}{numberInput("maxLength", "Maximum characters")}</div>}
     {field.type === "number" && <div class="grid-2">{numberInput("min", "Minimum value")}{numberInput("max", "Maximum value")}</div>}
-    {hasOptions && <div class="field"><label>Options · comma separated</label><input value={selectOptions(field).join(", ")} onInput={(event) => onConfig("options", (event.currentTarget as HTMLInputElement).value.split(",").map((item) => item.trim()).filter(Boolean))} /></div>}
+    {hasOptions && <OptionsEditor field={field} onConfig={onConfig} />}
     {field.type === "multi_select" && <div class="grid-2">{numberInput("minItems", "Minimum choices")}{numberInput("maxItems", "Maximum choices")}</div>}
     {hasFileRules && <><div class="field"><label>Accepted content types · comma separated</label><input value={Array.isArray(field.config.accept) ? field.config.accept.filter((item): item is string => typeof item === "string").join(", ") : ""} onInput={(event) => onConfig("accept", (event.currentTarget as HTMLInputElement).value.split(",").map((item) => item.trim()).filter(Boolean))} /></div>{numberInput("maxBytes", "Maximum bytes")}</>}
     {hasTextRules && <div class="field"><label>Pattern · optional regular expression</label><input value={typeof field.config.pattern === "string" ? field.config.pattern : ""} onInput={(event) => onConfig("pattern", (event.currentTarget as HTMLInputElement).value || undefined)} placeholder="^[A-Z]" /></div>}
@@ -193,6 +267,10 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, FormAnswerValue>>({});
   const [newFieldType, setNewFieldType] = useState<FieldType>("short_text");
+  const [newFieldLabel, setNewFieldLabel] = useState("");
+  const [newFieldRequired, setNewFieldRequired] = useState(false);
+  const [newFieldOptions, setNewFieldOptions] = useState("");
+  const [newFieldSource, setNewFieldSource] = useState<"" | BoundSource>("");
   const [conditionTrigger, setConditionTrigger] = useState("");
   const [conditionValue, setConditionValue] = useState("Yes");
   const [adminPersonId, setAdminPersonId] = useState("");
@@ -274,10 +352,31 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
     void mutate(next, async () => { const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}/${next}`, LIFECYCLE_ROUTES[next], { method: "POST" }); setForm(updated); await loadCatalog(); });
   };
 
-  const addField = () => {
+  /**
+   * One request creates a field the organizer can actually use. The builder
+   * used to post a placeholder and then require the row to be selected and
+   * every property edited in a second panel — nine interactions per field for
+   * a human, and the same nine turns for an agent, against a subtree that
+   * re-rendered underneath them between each one.
+   */
+  const addField = (overrides: { label?: string; type?: FieldType } = {}) => {
     if (!form) return;
-    const key = `field_${Date.now().toString(36)}`;
-    void mutate("field", async () => { const created = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields`, "/api/v1/events/{eventId}/forms/{formId}/fields", { method: "POST", body: JSON.stringify({ key, label: "New question", type: newFieldType, required: false, config: newFieldType.includes("select") ? { options: ["Yes", "No"] } : {} }) }); setForm((current) => current ? { ...current, fields: [...current.fields, created] } : current); setSelectedFieldId(created.id); });
+    const type = overrides.type ?? newFieldType;
+    const label = (overrides.label ?? newFieldLabel).trim() || "New question";
+    const key = fieldKeyFromLabel(label, form.fields.map((field) => field.key));
+    const bound = isSelectType(type) && newFieldSource ? newFieldSource : null;
+    const options = isSelectType(type) && !bound ? parseOptionList(newFieldOptions) : [];
+    const config: Record<string, unknown> = bound ? { source: bound } : options.length ? { options } : {};
+    void mutate("field", async () => {
+      const created = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields`, "/api/v1/events/{eventId}/forms/{formId}/fields", { method: "POST", body: JSON.stringify({ key, label, type, required: newFieldRequired, config }) });
+      setForm((current) => current ? { ...current, fields: [...current.fields, created] } : current);
+      // The add row keeps focus and its own identity; stealing the detail
+      // editor here is what invalidated the element a caller had just
+      // addressed, costing a re-query per field.
+      setNewFieldLabel("");
+      setNewFieldOptions("");
+      setNewFieldRequired(false);
+    });
   };
 
   const saveField = () => {
@@ -332,8 +431,16 @@ export function FormsPage({ eventId = "evt_aie-ny-2026", search = "" }: Props): 
       <section class="card forms-editor" aria-label="Form editor">
         <CardHeader title={STEP_NAMES[step] ?? "Form fields"}><Chip tone={formStatusTone(form.status)}>{form.status}</Chip></CardHeader>
         <CardBody>{step === 2 ? <>
-          <div class="forms-editor-intro"><div><strong>Fields in public order</strong><span>Drag is optional; the arrows are keyboard-safe and persist the same order.</span></div><div class="forms-add-field"><select value={newFieldType} onChange={(event) => setNewFieldType((event.currentTarget as HTMLSelectElement).value as FieldType)} aria-label="New field type">{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><Button small onClick={addField} disabled={busy !== null}>＋ Add a field</Button></div></div>
-          <div class="forms-field-list">{form.fields.length ? [...form.fields].sort((left, right) => left.position - right.position).map((field, index) => { const summary = field.condition ? conditionSummary(field.condition) : ""; return <button key={field.id} class={`forms-field-row ${field.id === selectedFieldId ? "active" : ""}`} data-builder-field={field.key} onClick={() => setSelectedFieldId(field.id)}><span class="forms-drag-handle" aria-hidden="true">⋮⋮</span><span class="forms-field-order">{String(index + 1).padStart(2, "0")}</span><span class="forms-field-copy"><strong data-field-label={field.label}>{field.label}{field.required ? " *" : ""}</strong><small data-condition-summary={summary}>{fieldTypeLabel(field.type)} · {field.required ? "Required" : "Optional"}{summary ? ` · When ${summary}` : ""}</small></span><span class="forms-field-actions"><span class="chip">{field.type}</span><span class="forms-arrow" aria-hidden="true">→</span></span></button>; }) : <div class="forms-field-empty"><strong>No fields yet</strong><span>Add the first question to give the public form a place to start.</span><Button small variant="primary" onClick={addField}>＋ Add first field</Button></div>}</div>
+          <div class="forms-editor-intro"><div><strong>Fields in public order</strong><span>Drag is optional; the arrows are keyboard-safe and persist the same order.</span></div></div>
+          <form class="forms-add-row" data-field-add="row" aria-label="Add a field" onSubmit={(event) => { event.preventDefault(); addField(); }}>
+            <div class="field"><label for="new-field-label">New field label</label><input id="new-field-label" name="new-field-label" data-field-add="label" value={newFieldLabel} placeholder="Key takeaway" onInput={(event) => setNewFieldLabel((event.currentTarget as HTMLInputElement).value)} /></div>
+            <div class="field"><label for="new-field-type">Type</label><select id="new-field-type" name="new-field-type" data-field-add="type" value={newFieldType} onChange={(event) => setNewFieldType((event.currentTarget as HTMLSelectElement).value as FieldType)}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>
+            <div class="field"><label for="new-field-source">Options come from</label><select id="new-field-source" name="new-field-source" data-field-add="source" value={newFieldSource} disabled={!isSelectType(newFieldType)} onChange={(event) => setNewFieldSource((event.currentTarget as HTMLSelectElement).value as "" | BoundSource)}>{SOURCE_CHOICES.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></div>
+            <div class="field"><label for="new-field-options">Options · comma separated</label><input id="new-field-options" name="new-field-options" data-field-add="options" value={newFieldSource && isSelectType(newFieldType) ? "" : newFieldOptions} disabled={!isSelectType(newFieldType) || Boolean(newFieldSource)} placeholder={!isSelectType(newFieldType) ? "Select fields only" : newFieldSource ? `From Conference settings → ${BOUND_SOURCE_LABELS[newFieldSource]}` : "Beginner, Intermediate, Advanced"} onInput={(event) => setNewFieldOptions((event.currentTarget as HTMLInputElement).value)} /></div>
+            <label class="forms-check forms-add-required" for="new-field-required"><input id="new-field-required" name="new-field-required" data-field-add="required" type="checkbox" checked={newFieldRequired} onChange={(event) => setNewFieldRequired((event.currentTarget as HTMLInputElement).checked)} /> Required</label>
+            <Button id="new-field-submit" data-field-add="submit" type="submit" variant="primary" disabled={busy !== null}>{busy === "field" ? "Adding…" : "Add field"}</Button>
+          </form>
+          <div class="forms-field-list">{form.fields.length ? [...form.fields].sort((left, right) => left.position - right.position).map((field, index) => { const summary = field.condition ? conditionSummary(field.condition) : ""; return <button key={field.id} class={`forms-field-row ${field.id === selectedFieldId ? "active" : ""}`} data-builder-field={field.key} onClick={() => setSelectedFieldId(field.id)}><span class="forms-drag-handle" aria-hidden="true">⋮⋮</span><span class="forms-field-order">{String(index + 1).padStart(2, "0")}</span><span class="forms-field-copy"><strong data-field-label={field.label}>{field.label}{field.required ? " *" : ""}</strong><small data-condition-summary={summary}>{fieldTypeLabel(field.type)} · {field.required ? "Required" : "Optional"}{summary ? ` · When ${summary}` : ""}</small></span><span class="forms-field-actions"><span class="chip">{field.type}</span><span class="forms-arrow" aria-hidden="true">→</span></span></button>; }) : <div class="forms-field-empty"><strong>No fields yet</strong><span>Add the first question to give the public form a place to start.</span><Button small variant="primary" onClick={() => addField()}>＋ Add first field</Button></div>}</div>
           {selectedField && <div class="forms-field-editor"><div class="forms-editor-heading"><div><span class="eyebrow">Editing field</span><h3>{selectedField.label}</h3></div><div class="forms-reorder-actions"><Button small onClick={() => moveField(-1)}>↑</Button><Button small onClick={() => moveField(1)}>↓</Button><Button small variant="danger" onClick={deleteField}>Delete</Button></div></div><div class="grid-2"><div class="field"><label>Field key</label><input value={selectedField.key} onInput={(event) => setFieldValue("key", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Field type</label><select value={selectedField.type} onChange={(event) => setFieldValue("type", (event.currentTarget as HTMLSelectElement).value)}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div></div><div class="field"><label>Label</label><input value={selectedField.label} onInput={(event) => setFieldValue("label", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Help text</label><textarea value={selectedField.help_text ?? ""} onInput={(event) => setFieldValue("help_text", (event.currentTarget as HTMLTextAreaElement).value)} /></div><label class="forms-check"><input type="checkbox" checked={selectedField.required} onChange={(event) => setFieldValue("required", (event.currentTarget as HTMLInputElement).checked)} /> Required when this field applies</label><FieldValidationEditor field={selectedField} onConfig={setFieldConfig} /><div class="forms-condition-box"><div><strong>Conditional visibility</strong><span>Persisted as <code>{"{ all: [{ fieldKey, op, value }] }"}</code>; hidden values are never written.</span></div><div class="grid-2"><div class="field"><label>Show when this field</label><select value={conditionTrigger} onChange={(event) => setConditionTrigger((event.currentTarget as HTMLSelectElement).value)}><option value="">Always show</option>{form.fields.filter((field) => field.id !== selectedField.id).map((field) => <option key={field.id} value={field.key}>{field.label}</option>)}</select></div><div class="field"><label>Equals</label><input value={conditionValue} onInput={(event) => setConditionValue((event.currentTarget as HTMLInputElement).value)} disabled={!conditionTrigger} /></div></div></div><Button variant="primary" onClick={saveField} disabled={busy !== null}>{busy === "field" ? "Saving…" : "Save field"}</Button></div>}
         </> : <StepPanel step={step} form={form} setForm={setForm} saveForm={saveForm} setLifecycle={setLifecycle} busy={busy} adminPersonId={adminPersonId} setAdminPersonId={setAdminPersonId} addAdmin={addAdmin} removeAdmin={removeAdmin} />}</CardBody>
       </section>
