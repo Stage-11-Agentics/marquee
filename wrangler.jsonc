@@ -56,6 +56,13 @@
       "/s/*",
       "/p/*",
       "/embed/*",
+      // The prototype's copyable snippet shape, `/{event}/{kind}/embed`. It
+      // leads with a parameter, so it has no fixed prefix to list — one entry
+      // per embed kind is the only way to name it here.
+      "/*/agenda/embed",
+      "/*/sessions/embed",
+      "/*/speakers/embed",
+      "/*/cfp/embed",
       "/i/*"
     ],
     "not_found_handling": "single-page-application"
