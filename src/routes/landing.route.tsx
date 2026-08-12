@@ -354,11 +354,21 @@ export function renderUnclaimedLandingDocument(shell: string): string {
   );
 }
 
-async function assetShell(assets: Fetcher, request: Request): Promise<string> {
-  const url = new URL("/index.html", request.url);
-  const response = await assets.fetch(new Request(url, { method: "GET" }));
-  if (!response.ok) return FALLBACK_DOCUMENT;
-  return response.text();
+/**
+ * The built document, or an honest minimum. A deployment whose ASSETS binding
+ * is missing still serves this page rather than a 500 — the shell only supplies
+ * chrome, and losing it must not lose the page.
+ */
+async function assetShell(assets: Fetcher | undefined, request: Request): Promise<string> {
+  if (!assets) return FALLBACK_DOCUMENT;
+  try {
+    const url = new URL("/index.html", request.url);
+    const response = await assets.fetch(new Request(url, { method: "GET" }));
+    if (!response.ok) return FALLBACK_DOCUMENT;
+    return response.text();
+  } catch {
+    return FALLBACK_DOCUMENT;
+  }
 }
 
 export const landingRoutes = new Hono<{ Bindings: Env }>();
