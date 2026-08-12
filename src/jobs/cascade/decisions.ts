@@ -684,15 +684,18 @@ export async function notifyExistingDecisions(input: {
       continue;
     }
     selected += 1;
-    const result = await enqueueDecisionRetry({
+    const templateKey = candidate.resulting_status === "accepted" ? "acceptance" : "rejection";
+    const retryKey = await sha256Hex(`${templateKey}:${candidate.decision_id}:${newUlid(now)}`);
+    const result = await enqueueDecisionMail({
       db: input.db,
       queue: input.queue,
       eventId: input.eventId,
       submission,
-      decisionId: candidate.decision_id,
+      status: candidate.resulting_status,
       decision: candidate.decision,
-      resultingStatus: candidate.resulting_status,
       feedbackMd: candidate.feedback_md,
+      entityId: candidate.decision_id,
+      idempotencyKey: retryKey,
       now,
     });
     if (result.id) outboxIds.push(result.id);
