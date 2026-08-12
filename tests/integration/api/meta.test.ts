@@ -57,7 +57,10 @@ test("CONTRACT · MRQ-146 · concurrency claims and headers describe only agenda
     }>>;
   };
 
-  expect(document.info.description).toContain("only to the two agenda item mutation operations that require it");
+  // MRQ-150 restates MRQ-146's claim in full rather than in one clause: the scope is
+  // still agenda items only, and the document now says what everything else does instead.
+  expect(document.info.description).toContain("Optimistic concurrency is scoped to **agenda items**");
+  expect(document.info.description).toContain("Every other mutation is last-write-wins.");
   expect(body.match(/If-Match/g) ?? []).toHaveLength(1);
 
   const ifMatchOperations = Object.values(document.paths)
