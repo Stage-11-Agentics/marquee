@@ -84,16 +84,19 @@
 .portal-task-action:hover { background: var(--accent-wash); border-color: var(--accent); }
 .portal-task-action:disabled { color: var(--muted); cursor: default; }
 .portal-task-payload { border-top: 1px solid var(--rule); grid-column: 2 / 4; padding-top: 14px; }
-.portal-subject-task { display: grid; gap: 14px; min-height: 360px; }
+.portal-subject-task { display: grid; gap: 14px; }
 .portal-talk-task { min-height: 310px; }
 .portal-profile-task { min-height: 470px; }
-.portal-talk-editor { display: grid; gap: 10px; min-height: 184px; }
+.portal-talk-editor { display: grid; gap: 10px; }
 .portal-talk-editor-compact { min-height: 212px; }
+.portal-talk-editor h3 { display: -webkit-box; font-size: 14px; line-height: 1.35; margin: 0; min-height: 2.7em; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.portal-talk-editor .portal-talk-description { display: -webkit-box; max-height: 6.2em; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .portal-subject-card { background: var(--surface); border: 1px solid var(--rule); display: grid; gap: 9px; min-height: 142px; padding: 12px; }
 .portal-subject-head { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
 .portal-subject-head h3 { font-size: 13px; line-height: 1.35; margin: 2px 0 0; }
 .portal-subject-kicker { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
 .portal-subject-note { color: var(--muted); font-size: 10px; line-height: 1.45; margin: 0; }
+.portal-profile-task .portal-subject-card .portal-talk-description { display: -webkit-box; max-height: 6.2em; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .portal-subject-editor { min-height: 180px; }
 .portal-subject-confirm { border-top: 1px solid var(--rule-soft); padding-top: 12px; }
 .portal-profile-compact { min-height: 190px; }

@@ -122,23 +122,28 @@ export function run(ctx: SeedContext): void {
       });
 
       if (personIndex < 18) {
-        ctx.add("speaker_tasks", {
-          id: seedId("tsk", `${personId}-${TEMPLATE_IDS.finalizeDescription}`),
-          event_id: EVENT_ID,
-          person_id: personId,
-          submission_id: submissionId,
-          template_id: TEMPLATE_IDS.finalizeDescription,
-          title: "Finalize talk description",
-          kind: "acknowledge",
-          description: "Confirm the title and abstract before publication.",
-          due_at: ctx.now + 9 * 24 * 60 * 60 * 1000,
-          status: "open",
-          completed_at: null,
-          response_json: null,
-          attachment_id: null,
-          last_write_source: "marquee",
-          created_at: ctx.now,
-          updated_at: ctx.now,
+        [
+          [TEMPLATE_IDS.finalizeDescription, "Finalize talk description", "Confirm the title and abstract before publication."],
+          [TEMPLATE_IDS.finalizeBio, "Finalize bio & photos", "Review your bio and headshot before publication."],
+        ].forEach(([templateId, title, description]) => {
+          ctx.add("speaker_tasks", {
+            id: seedId("tsk", `${personId}-${templateId}`),
+            event_id: EVENT_ID,
+            person_id: personId,
+            submission_id: submissionId,
+            template_id: templateId,
+            title,
+            kind: "acknowledge",
+            description,
+            due_at: ctx.now + 9 * 24 * 60 * 60 * 1000,
+            status: "open",
+            completed_at: null,
+            response_json: null,
+            attachment_id: null,
+            last_write_source: "marquee",
+            created_at: ctx.now,
+            updated_at: ctx.now,
+          });
         });
       }
     },

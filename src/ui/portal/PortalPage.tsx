@@ -1,3 +1,5 @@
+/** @jsxImportSource preact */
+
 import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
@@ -6,6 +8,7 @@ import { putFileToR2, type UploadProgressHandlers } from "../upload/upload-clien
 import { formatBytes, validateClientUpload } from "../upload/upload-policy";
 import type { SignedUpload } from "../../lib/r2/protocol";
 import { isFieldApplicable } from "../../lib/form-conditions";
+import { seedId } from "../../lib/ids";
 import "./portal.css";
 
 type PortalField = {
@@ -49,13 +52,13 @@ type PortalTask = {
 // These are deterministic seed IDs, not new task kinds. The template identity
 // lets the two subject-bearing acknowledgement tasks opt into their subject
 // surface while every other acknowledgement keeps the generic checkbox.
-const FINALIZE_TALK_TEMPLATE_ID = "tpl_finalize-talk-description";
-const FINALIZE_BIO_TEMPLATE_ID = "tpl_finalize-bio-and-photos";
+const FINALIZE_TALK_TEMPLATE_ID = seedId("tpl", "finalize-talk-description");
+const FINALIZE_BIO_TEMPLATE_ID = seedId("tpl", "finalize-bio-and-photos");
 type SubjectTaskKind = "talk" | "profile";
 
 function subjectTaskKind(task: PortalTask): SubjectTaskKind | null {
-  if (task.kind !== "acknowledge" || task.submission_id === null) return null;
-  if (task.template_id === FINALIZE_TALK_TEMPLATE_ID) return "talk";
+  if (task.kind !== "acknowledge") return null;
+  if (task.template_id === FINALIZE_TALK_TEMPLATE_ID && task.submission_id !== null) return "talk";
   if (task.template_id === FINALIZE_BIO_TEMPLATE_ID) return "profile";
   return null;
 }
@@ -237,7 +240,7 @@ type TaskSurfaceProps = {
   onComplete: () => Promise<void>;
 };
 
-function TaskSurface({ task, submission, person, onComplete }: TaskSurfaceProps): JSX.Element {
+export function TaskSurface({ task, submission, person, onComplete }: TaskSurfaceProps): JSX.Element {
   const subject = subjectTaskKind(task);
   if (subject === "talk" && submission) return <TalkTaskSurface task={task} submission={submission} onComplete={onComplete} />;
   if (subject === "profile" && person) return <ProfileTaskSurface task={task} person={person} onComplete={onComplete} />;
@@ -359,8 +362,8 @@ function TalkEditor({ submission, onSaved, compact = false }: { submission: Port
   return <div class={`portal-talk-editor${compact ? " portal-talk-editor-compact" : ""}`}>
     <div class="portal-payload-actions"><h3 title={submission.title}>{submission.title}</h3><button class="portal-task-action" type="button" disabled={!submission.talk_editable} onClick={() => setEditing((current) => !current)}>{!submission.talk_editable ? "Closed" : editing ? "Close" : "Edit talk"}</button></div>
     {editing ? <form onSubmit={save}>
-      <div class="portal-field"><label for={`talk-title-${submission.id}`}>Talk title</label><input id={`talk-title-${submission.id}`} value={title} onInput={(event) => setTitle((event.currentTarget as HTMLInputElement).value)} /></div>
-      <div class="portal-field"><label for={`talk-description-${submission.id}`}>Description</label><textarea id={`talk-description-${submission.id}`} value={description} onInput={(event) => setDescription((event.currentTarget as HTMLTextAreaElement).value)} /></div>
+      <div class="portal-field"><label for={`${compact ? "task-" : ""}talk-title-${submission.id}`}>Talk title</label><input id={`${compact ? "task-" : ""}talk-title-${submission.id}`} value={title} onInput={(event) => setTitle((event.currentTarget as HTMLInputElement).value)} /></div>
+      <div class="portal-field"><label for={`${compact ? "task-" : ""}talk-description-${submission.id}`}>Description</label><textarea id={`${compact ? "task-" : ""}talk-description-${submission.id}`} value={description} onInput={(event) => setDescription((event.currentTarget as HTMLTextAreaElement).value)} /></div>
       <div class="portal-payload-actions"><span class="portal-payload-error">{error ?? "Editing closes when the conference call for proposals closes."}</span><button class="portal-button" type="submit" disabled={busy}>{busy ? "Saving…" : "Save talk"}</button></div>
     </form> : <><p class="portal-talk-description">{submission.description || "—"}</p>{!submission.talk_editable ? <p class="portal-subject-note">Talk editing is closed because the conference call for proposals is closed.</p> : null}</>}
   </div>;
@@ -662,3 +665,4 @@ function PortalPage(): JSX.Element {
 }
 
 export { PortalPage };
+export type { PortalPerson, PortalSubmission, PortalTask };
