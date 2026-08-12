@@ -6,6 +6,7 @@ import { OverlayHost, ToastHost, type OverlayState } from "../shell/OverlayHosts
 import { QuickSearch } from "../shell/QuickSearch";
 import { Sidebar } from "../shell/Sidebar";
 import { Topbar } from "../shell/Topbar";
+import { useIdentity } from "../shell/identity";
 import { matchRoute } from "../shell/route-table";
 import { DeliveryHealthPage } from "./DeliveryHealthPage";
 import { runDemoReset } from "./demo-reset";
@@ -18,11 +19,12 @@ import { runDemoReset } from "./demo-reset";
  */
 export function DeliveryHealthShell({
   eventName = "AIE NYC 2026",
-  userInitials = "MC",
   eventId = "evt_aie-ny-2026",
-}: { eventName?: string; userInitials?: string; eventId?: string }): JSX.Element {
+}: { eventName?: string; eventId?: string }): JSX.Element {
   const [overlay, setOverlay] = useState<OverlayState | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const identity = useIdentity();
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState("");
 
@@ -56,9 +58,11 @@ export function DeliveryHealthShell({
         <Topbar
           eventName={eventName}
           routeName={route?.label ?? "Delivery health"}
-          userInitials={userInitials}
+          identity={identity}
+          userMenuOpen={userMenuOpen}
           openSearch={() => setSearchOpen(true)}
-          openUser={() => unavailable("Program lead", "Account preferences land with authentication and conference administration.")}
+          toggleUser={() => setUserMenuOpen((open) => !open)}
+          closeUser={() => setUserMenuOpen(false)}
         />
         <div class="page">
           {/* The shell's own boundary, as the admin shell keeps: a screen that

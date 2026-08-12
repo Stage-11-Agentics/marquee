@@ -59,6 +59,11 @@ const authMeResponseSchema = z.object({
   memberships: z.array(z.object({ event_id: z.string().nullable(), role: z.string() })).optional(),
   scopes: z.object({ permissions: z.array(z.string()), event_ids: z.array(z.string()) }).optional(),
   demo_event_id: z.string().nullable(),
+  // Who the session belongs to, in the operator's own words. The shell has the
+  // person id already; an id is not an answer to "which hat am I wearing", and
+  // that is the question a judge asks after switching demo personas.
+  person_name: z.string().nullable().optional(),
+  person_email: z.string().nullable().optional(),
 });
 
 const demoLogin = defineApiRoute(
@@ -283,6 +288,10 @@ const getCurrentAuth = defineApiRoute(
     if (!auth) return unauthorized(context);
     const demoEvent = await findDemoEvent(context.env.DB);
     if (auth.kind === "session") {
+      const person = await context.env.DB
+        .prepare("SELECT name, email FROM people WHERE id = ?")
+        .bind(auth.personId)
+        .first<{ name: string | null; email: string | null }>();
       return context.json({
         kind: "session" as const,
         person_id: auth.personId,
@@ -292,6 +301,8 @@ const getCurrentAuth = defineApiRoute(
           role: membership.role,
         })),
         demo_event_id: demoEvent?.id ?? null,
+        person_name: person?.name ?? null,
+        person_email: person?.email ?? null,
       }, 200);
     }
     return context.json({

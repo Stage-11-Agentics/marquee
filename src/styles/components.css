@@ -26,11 +26,37 @@
 .breadcrumbs { color: var(--muted); font: 400 11.5px/1 var(--mono); letter-spacing: .02em; white-space: nowrap; }
 .breadcrumbs strong { color: var(--ink); font-weight: 600; }
 .global-search { margin-left: auto; position: relative; width: min(330px, 38vw); }
-.global-search button { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--muted); height: 30px; padding: 0 55px 0 31px; text-align: left; width: 100%; }
+/*
+  The placeholder is a full sentence and the bar is a fixed 52px. Left to wrap,
+  a squeezed search control grows to three lines and pushes itself out through
+  the top of the chrome, so it truncates instead — a narrow search box is a
+  cosmetic loss, a broken topbar is not.
+*/
+.global-search button { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--muted); height: 30px; overflow: hidden; padding: 0 55px 0 31px; text-align: left; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 .global-search button:hover, .global-search button:focus-visible { background: var(--panel); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); outline: 0; }
 .search-glyph { font-size: 13px; left: 10px; pointer-events: none; position: absolute; top: 7px; }
 .shortcut { background: var(--panel); border: 1px solid var(--line-strong); border-radius: 2px; font: 600 9.5px/1 var(--mono); padding: 2px 5px; pointer-events: none; position: absolute; right: 7px; top: 6px; }
-.top-user { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); display: grid; flex: 0 0 28px; font: 600 10.5px/1 var(--mono); height: 28px; letter-spacing: .06em; place-items: center; width: 28px; }
+.top-identity { display: grid; flex: 0 0 168px; gap: 2px; justify-items: end; overflow: hidden; width: 168px; }
+.top-identity strong { color: var(--ink); font-size: 11.5px; font-weight: 600; letter-spacing: -.01em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-identity span { color: var(--muted); font: 400 9.5px/1 var(--mono); letter-spacing: .06em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.top-user-anchor { flex: 0 0 28px; position: relative; }
+.top-user { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); display: grid; font: 600 10.5px/1 var(--mono); height: 28px; letter-spacing: .06em; place-items: center; width: 28px; }
+.top-user:hover, .top-user:focus-visible { border-color: var(--accent); color: var(--ink); outline: 0; }
+.account-menu { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); display: grid; min-width: 214px; padding: 4px; position: absolute; right: 0; top: 34px; z-index: 60; }
+.account-identity { border-bottom: 1px solid var(--line); display: grid; gap: 3px; padding: 9px 10px 10px; }
+.account-identity strong { color: var(--ink); font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-identity .subtle { color: var(--muted); font: 400 10.5px/1.3 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-role { color: var(--accent-dark); font: 600 9.5px/1 var(--mono); letter-spacing: .06em; margin-top: 3px; text-transform: uppercase; }
+.account-action { background: transparent; border: 0; border-radius: var(--radius); color: var(--ink); font-size: 12px; min-height: 32px; padding: 0 10px; text-align: left; width: 100%; }
+.account-action:hover:not(:disabled), .account-action:focus-visible { background: var(--sunk); color: var(--danger); outline: 0; }
+.account-action:disabled { color: var(--muted); }
+/*
+  The name and role need 168px of their own and the search box needs its full
+  width before them; below this there is not room for both, so the written
+  identity folds away first. The avatar never does — it is the only door out of
+  a session, and a sign-out you cannot reach is a sign-out that does not exist.
+*/
+@media (max-width: 1220px) { .top-identity { display: none; } }
 .page { margin: 0 auto; max-width: 1500px; padding: 26px 30px 56px; }
 .page-head { align-items: flex-start; display: flex; gap: 18px; justify-content: space-between; margin-bottom: 20px; min-height: 66px; }
 .page-head h1 { font-size: 22px; font-weight: 600; letter-spacing: -.018em; line-height: 1.2; margin: 0 0 6px; }
@@ -116,7 +142,7 @@
   .nav a { border-bottom: 2px solid transparent; border-left: 0; border-radius: var(--radius); min-height: 40px; min-width: 47px; }
   .nav a.active { border-bottom-color: var(--accent); border-left-color: transparent; }
   .topbar { padding: 0 14px; }
-  .breadcrumbs, .top-user { display: none; }
+  .breadcrumbs { display: none; }
   .global-search { margin-left: 0; width: 100%; }
   .page { padding: 22px 16px 88px; }
   .page-head { display: grid; }
