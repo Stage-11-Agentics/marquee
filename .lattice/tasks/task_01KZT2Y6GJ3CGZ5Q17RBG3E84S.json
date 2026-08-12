@@ -3,7 +3,7 @@
   "branch_links": [],
   "c11_surface": "surface:338",
   "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
-  "comment_count": 2,
+  "comment_count": 8,
   "complexity": null,
   "created_at": "2026-08-12T04:15:55Z",
   "created_by": {
@@ -28,21 +28,61 @@
       "id": "ev_01KZT3JZBWSHM9GR5THST7ENQ1",
       "role": "review",
       "source_type": "comment"
+    },
+    {
+      "id": "art_01KZT40Y7FJ513ZSV0V150HFCV",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT41Y1DWGTWVD5Z83QYXW0H",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZT4CSYQE0AZ8VTNSHEJ8SXK",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT4DJRFQ1VXDGQKGWDTSHGF",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT5GKGK581SPWKS91FXKBXY",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT62ENTZ1EB0FBQ5A72W4MB",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT68W6NGVEE47RPWHTY4NXW",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZT6ADF8B6H3M11Y6Q7VJW0P",
+      "role": "validation",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZT2Y6GJ3CGZ5Q17RBG3E84S",
-  "last_event_id": "ev_01KZT3QG6MXPNTR7JGFMTK6A49",
-  "last_status_changed_at": "2026-08-12T04:29:44Z",
+  "last_event_id": "ev_01KZT6ADF8B6H3M11Y6Q7VJW0P",
+  "last_status_changed_at": "2026-08-12T05:12:31Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
-  "reopened_count": 1,
+  "reopened_count": 2,
   "schema_version": 1,
   "short_id": "MRQ-98",
-  "status": "planned",
+  "status": "pr_open",
   "tags": null,
   "title": "Submissions list jumps on every view switch, feels slow, and its search placeholder states a count that is not true",
   "type": "bug",
-  "updated_at": "2026-08-12T04:29:44Z",
+  "updated_at": "2026-08-12T05:15:01Z",
   "urgency": null
 }

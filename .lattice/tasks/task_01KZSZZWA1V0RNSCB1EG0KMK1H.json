@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-cli",
   "branch_links": [],
-  "comment_count": 7,
+  "comment_count": 8,
   "complexity": null,
   "created_at": "2026-08-12T03:24:24Z",
   "created_by": {
@@ -15,7 +15,7 @@
   },
   "custom_fields": {},
   "description": "The \"Finalize talk description\" speaker task shows only an acknowledgement\ncheckbox \u2014 the talk description it names is nowhere in the task. Operator\nfeedback from the live site (2026-08-11): *\"all I see is a checkbox for I have\nread and acknowledged this task, but where is the actual talk description\"*.\n\n## What is happening\n\nThe task is seeded as `kind: \"acknowledge\"` \u2014 `scripts/seed/event.ts:351`:\n\n    [TEMPLATE_IDS.finalizeDescription, \"Finalize talk description\", \"acknowledge\",\n      \"Confirm the abstract and title we will publish on the event site.\", 10, null, null, 2, 0]\n\n`PortalPage.tsx:275-277` renders every `acknowledge` task identically: one\ncheckbox reading *\"I have read and acknowledge this task.\"* So a task whose whole\npurpose is **review and confirm this specific text** presents no text, no editor,\nand no route to one.\n\nThe talk description *is* editable in the portal \u2014 `TalkCard` (PortalPage.tsx:388)\nhas a title + description form behind an \"Edit talk\" toggle, gated on\n`submission.talk_editable`, saving to `PATCH /api/v1/me/submissions/:id/talk`. It\njust lives in a different panel further down the page, with nothing connecting the\ntwo. The speaker is asked to confirm something they are never shown.\n\nThis breaks the product's own principle \u2014 the system does the chase work, and a\ntask should carry what it asks for. It is also on the walkthrough path.\n\n## What it should be\n\nMake the task self-sufficient. The speaker should be able to complete\n\"Finalize talk description\" without hunting the page:\n\n- **Show the talk.** The task renders the current title and description it is\n  asking about \u2014 the actual text, not a reference to it.\n- **Let them fix it in place.** Editing is the point of \"finalize\"; a speaker who\n  reads their abstract and spots a typo should not have to scroll away and find a\n  second editor. Reuse the existing edit path (`PATCH /api/v1/me/submissions/:id/talk`)\n  and the existing `talk_editable` gate \u2014 do not add a second write route or fork\n  `TalkCard`'s form. Factor out what both need.\n- **Acknowledge means something.** The confirm control should read as confirming\n  *this abstract*, not \"this task\". Rewrite the copy accordingly.\n- **Respect the gate.** When `talk_editable` is false (CFP closed), show the text\n  read-only with the reason, matching `TalkCard`'s existing \"Closed\" behavior.\n- **Don't strand the general case.** Other `acknowledge` tasks (\"Announce your\n  participation\", \"Invite colleagues\") have no subject to show and must keep working\n  unchanged. The task's `submission_id` is the natural hook for a subject-bearing\n  variant; a bare `acknowledge` keeps today's checkbox.\n\nDecide and state in the PR whether this is a **new task kind** (e.g. `confirm_talk`,\nseeded and typed end to end) or a **presentation-level specialization** of\n`acknowledge` keyed on the template. The specialization is the smaller, lower-risk\nchange and is likely right given the deadline; a new kind is cleaner but touches\nthe schema CHECK constraint, the route zod enums, and the seed. Pick one, justify\nit in a sentence, do not do both.\n\n`Finalize bio & photos` (`scripts/seed/event.ts:354`) has the identical defect \u2014 it\nasks a speaker to review a bio and headshot it never shows, and the profile editor\nlives in yet another panel. **Fix it the same way in this ticket** if the chosen\napproach generalizes cleanly; if it does not, say so and leave a note rather than\nhalf-doing it.\n\n## Constraints\n\n- Flight Deck aesthetic per `DESIGN.md`; reuse existing portal form/field classes\n  rather than new one-off styles.\n- **Elements never jump** (global UI rule): entering and leaving edit mode must not\n  shift the rest of the task list \u2014 reserve the space.\n- Suite budget 45s, gate budget 120s.\n\n## Acceptance\n\n- Opening \"Finalize talk description\" in the speaker portal shows the actual talk\n  title and abstract inside the task.\n- A speaker can edit and save from within the task, and the saved text appears in\n  `TalkCard` and on the public site without a reload dance.\n- The confirm control's copy refers to the abstract, not to \"this task\".\n- With the CFP closed, the text is visible read-only with a stated reason and no\n  edit affordance.\n- Other acknowledge-only tasks are visually and functionally unchanged.\n- Validated on the **live deployed site** at https://marquee.stage11.dev as a\n  speaker, with a screenshot in the PR.\n- `npm test` green within budget; PR open against `Stage-11-Agentics/marquee` `main`.",
-  "done_at": null,
+  "done_at": "2026-08-12T04:41:19Z",
   "evidence_refs": [
     {
       "id": "art_01KZT0KH03A52JAB4GBWR4ZWYY",
@@ -39,18 +39,18 @@
     }
   ],
   "id": "task_01KZSZZWA1V0RNSCB1EG0KMK1H",
-  "last_event_id": "ev_01KZT3JZ1SRGHMMSPG9NG94EM6",
-  "last_status_changed_at": "2026-08-12T04:23:49Z",
+  "last_event_id": "ev_01KZT4CQAP4Y9CQWW390S2C8N7",
+  "last_status_changed_at": "2026-08-12T04:41:19Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-93",
-  "status": "pr_open",
+  "status": "done",
   "tags": null,
   "title": "\"Finalize talk description\" shows a checkbox and no talk \u2014 the task never renders what it asks you to confirm",
   "type": "bug",
-  "updated_at": "2026-08-12T04:27:15Z",
+  "updated_at": "2026-08-12T04:41:19Z",
   "urgency": null
 }

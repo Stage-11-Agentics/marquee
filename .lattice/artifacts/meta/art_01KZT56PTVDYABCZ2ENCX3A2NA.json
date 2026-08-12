@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T04:55:31Z",
+  "created_by": "agent:codex-mrq-91",
+  "custom_fields": {},
+  "id": "art_01KZT56PTVDYABCZ2ENCX3A2NA",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZT56PTVDYABCZ2ENCX3A2NA.md",
+    "size_bytes": 935
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PR #44 is merged at GitHub merge commit e2f1dbf9ac32e9084920f7309065734eb22f7871 from exact head 54f5f65d7aa7edd0104b05da4095c237c54d3b9d, rebased onto github/main f7bae44253ed236794466b9c106b76a31d14",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

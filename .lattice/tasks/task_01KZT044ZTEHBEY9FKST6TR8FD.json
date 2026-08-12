@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:delegator-mrq-94",
   "branch_links": [],
-  "comment_count": 6,
+  "comment_count": 10,
   "complexity": null,
   "created_at": "2026-08-12T03:26:44Z",
   "created_by": {
@@ -26,21 +26,46 @@
       "id": "art_01KZT2R9PA68N7NEDGG4X5DCNH",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT3ZG4G69T3MWMKK0MPVBTJ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT4P8SSHEV0NHMKVXZBMXFB",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT58TXTW4VDRD0C5GW288Q7",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZT61MA2WGPW6G8VW3D2MKQQ",
+      "role": "validation",
+      "source_type": "comment"
     }
   ],
   "id": "task_01KZT044ZTEHBEY9FKST6TR8FD",
-  "last_event_id": "ev_01KZT3G0A6RCJ8S7R70XXPWQQ5",
-  "last_status_changed_at": "2026-08-12T04:25:38Z",
+  "last_event_id": "ev_01KZT61Q39DTGGMHJDZN43EK05",
+  "last_status_changed_at": "2026-08-12T05:10:16Z",
   "linked_files": [],
+  "needs_human": {
+    "flagged_by": "agent:delegator-mrq-94",
+    "reason": "Final fixes are ready at 4f331ad, but the Lattice review-cycle limit is reached (3/3); human review/approval is needed before another review cycle.",
+    "since": "2026-08-12T05:08:55Z"
+  },
   "priority": "high",
   "relationships_out": [],
-  "reopened_count": 1,
+  "reopened_count": 3,
   "schema_version": 1,
   "short_id": "MRQ-94",
-  "status": "review",
+  "status": "pr_open",
   "tags": null,
   "title": "Public agenda: day-one default fakes an empty conference, \"Show full agenda\" is a no-op, JSON link is exposed, and there is no way home",
   "type": "bug",
-  "updated_at": "2026-08-12T04:25:38Z",
+  "updated_at": "2026-08-12T05:10:16Z",
   "urgency": null
 }
