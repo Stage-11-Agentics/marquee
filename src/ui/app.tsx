@@ -24,6 +24,7 @@ const isPublicPage =
   window.location.pathname === "/" ||
   window.location.pathname.startsWith("/f/") ||
   window.location.pathname === "/agenda" ||
+  window.location.pathname === "/speakers" ||
   window.location.pathname.startsWith("/s/") ||
   window.location.pathname.startsWith("/p/") ||
   window.location.pathname.startsWith("/embed/") ||

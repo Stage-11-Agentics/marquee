@@ -4,6 +4,7 @@ import { app, type Env } from "../../src/index";
 import {
   loadPublicAgenda,
   loadPublicEmbed,
+  loadPublicSpeakerDirectory,
   publicEmbedCacheKey,
   purgePublicEmbedCache,
   readPublicEmbedCache,
@@ -105,6 +106,7 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   expect(body).toContain("Main Stage</span>");
   expect(body).toContain('href="/s/visible-session-title"');
   expect(body).toContain('href="/p/public-speaker"');
+  expect(body).toContain('href="/speakers?event=public-conf">Speakers</a>');
   expect(body).not.toContain("Projector");
   expect(body).not.toContain("PRIVATE ROOM NOTE");
   expect(body).not.toContain("Photo ID required");
@@ -173,6 +175,47 @@ test("AC-84, AC-88, AC-274 · public speaker detail and embeds render seeded ava
   const payload = await api.json<{ sessions: Array<{ speakers: Array<{ name: string; headshotUrl: string | null }> }> }>();
   const speaker = payload.sessions.flatMap((session) => session.speakers).find((candidate) => candidate.name === "Grace Isford");
   expect(speaker?.headshotUrl).toBe("/headshots/grace-isford.svg");
+});
+
+test("CONTRACT · MRQ-121 · EMB-05/12/13/14 · the public speaker directory is searchable, deduplicated, published-only, and linked from both embed layouts", async () => {
+  const unpublishedSearch = await request(`/speakers?event=${EVENT_SLUG}&q=Private%20Co`);
+  const unpublishedSearchBody = await unpublishedSearch.text();
+  expect(unpublishedSearch.status).toBe(200);
+  expect(unpublishedSearchBody).toContain("No published speakers match");
+  expect(unpublishedSearchBody).not.toContain(PRIVATE_SPEAKER);
+
+  await env.DB.batch([
+    env.DB.prepare("UPDATE participations SET person_id = ? WHERE id = 'par-private'").bind("person-public"),
+    env.DB.prepare("UPDATE agenda_items SET is_published = 1 WHERE id = 'agenda-private'"),
+  ]);
+
+  const data = await loadPublicSpeakerDirectory(env.DB, { eventSlug: EVENT_SLUG });
+  expect(data?.speakers.map((speaker) => speaker.name)).toEqual(["Public Speaker"]);
+
+  const directory = await request(`/speakers?event=${EVENT_SLUG}`);
+  const directoryBody = await directory.text();
+  expect(directory.status).toBe(200);
+  expect(directoryBody).toContain("<h1>Speakers</h1>");
+  expect(directoryBody).toContain("Principal Engineer · Public Co");
+  expect(directoryBody).toContain('href="/p/public-speaker?event=public-conf"');
+  expect(directoryBody).not.toContain(PRIVATE_SPEAKER);
+  expect((directoryBody.match(/href="\/p\/public-speaker\?event=public-conf"/g) ?? []).length).toBe(1);
+
+  const byCompany = await request(`/speakers?event=${EVENT_SLUG}&q=Public%20Co`);
+  const byCompanyBody = await byCompany.text();
+  expect(byCompany.status).toBe(200);
+  expect(byCompanyBody).toContain("Public Speaker");
+  expect(byCompanyBody).toContain('name="q"');
+
+  const cards = await request(`/embed/${EVENT_SLUG}-speakers?event=${EVENT_SLUG}`);
+  const cardsBody = await cards.text();
+  expect(cards.status).toBe(200);
+  expect(cardsBody).toContain('class="embed-speaker" href="/p/public-speaker?event=public-conf"');
+
+  const list = await request(`/embed/${EVENT_SLUG}-speakers?event=${EVENT_SLUG}&layout=list`);
+  const listBody = await list.text();
+  expect(list.status).toBe(200);
+  expect(listBody).toContain('class="embed-speaker-row" href="/p/public-speaker?event=public-conf"');
 });
 
 test("CONTRACT · MRQ-94 · the public agenda defaults to all days, exposes an explicit all-days tab, and keeps the API scope aligned", async () => {

@@ -6,6 +6,7 @@ import type {
   PublicEvent,
   PublicSession,
   PublicSpeaker,
+  PublicSpeakerDirectoryData,
   PublicSpeakerSummary,
   PublicVenueDisclosure,
 } from "../../../lib/public-site";
@@ -87,6 +88,14 @@ export const PUBLIC_SITE_STYLES = `
 .public-speaker-link small, .public-session-link small { display: block; margin-top: 3px; color: var(--public-muted); }
 .public-profile { display: flex; align-items: flex-start; gap: 14px; }
 .public-avatar { --avatar-size: 48px; width: var(--avatar-size); height: var(--avatar-size); display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--public-rule); background: var(--public-accent-wash); color: var(--public-accent); font: 700 12px/1 var(--public-mono); object-fit: cover; }
+.public-speaker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.public-directory-filters { grid-template-columns: minmax(0, 1fr); }
+.public-directory-card { display: flex; align-items: flex-start; gap: 13px; min-height: 132px; border: 1px solid var(--public-rule); background: var(--public-surface); padding: 16px; }
+.public-directory-card:hover, .public-directory-card:focus-visible { border-color: var(--public-accent); background: var(--public-accent-wash); outline: none; }
+.public-directory-card .public-avatar { --avatar-size: 56px; font-size: 13px; }
+.public-directory-card h2 { margin: 0; font: 650 18px/1.15 Georgia, serif; }
+.public-directory-card p { margin: 6px 0 0; color: var(--public-muted); font-size: 11px; line-height: 1.45; }
+.public-directory-card small { display: block; margin-top: 12px; color: var(--public-accent); font: 650 9px/1 var(--public-mono); letter-spacing: .06em; text-transform: uppercase; }
 .public-profile h1 { margin-top: 0; }
 .public-not-found { max-width: 680px; margin: 40px auto; text-align: center; }
 .public-not-found .public-card { min-height: 300px; display: grid; place-items: center; }
@@ -95,6 +104,7 @@ export const PUBLIC_SITE_STYLES = `
 @media (max-width: 760px) {
   .public-heading { display: block; }
   .public-filters { grid-template-columns: 1fr 1fr; }
+  .public-directory-filters { grid-template-columns: minmax(0, 1fr); }
   .public-days { grid-column: 1 / -1; width: 100%; }
   .public-days button { flex: 1 1 0; width: auto; min-width: 0; padding: 0 2px; font-size: 9px; }
   .public-agenda-row { grid-template-columns: 86px minmax(0, 1fr); gap: 10px; }
@@ -105,6 +115,7 @@ export const PUBLIC_SITE_STYLES = `
   .public-top-actions { gap: 4px; }
   .public-top-actions .public-button { min-height: 30px; padding: 5px 7px; font-size: 10px; }
   .public-filters { grid-template-columns: 1fr; }
+  .public-directory-filters { grid-template-columns: minmax(0, 1fr); }
   .public-days { grid-column: auto; }
   .public-agenda-row { grid-template-columns: 1fr; min-height: 132px; padding: 14px; }
   .public-track-list { grid-column: auto; }
@@ -209,7 +220,7 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
     <PublicShell
       event={data.event}
       title="Agenda"
-      actions={<a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a>}
+      actions={<><a class="public-button" href={`/speakers?${eventQuery}`}>Speakers</a><a class={`public-button ${data.sessions.length > 0 ? "primary" : ""}`.trim()} href={`/embed/config?${eventQuery}`}>Get embed code</a></>}
     >
       <main class="public-main">
         <div class="public-kicker">{data.event.startsOn} → {data.event.endsOn} · {venueName}</div>
@@ -307,6 +318,52 @@ export function PublicSpeakerAvatar({
   return speaker.headshotUrl
     ? <img class={classes} src={speaker.headshotUrl} alt={`${speaker.name} synthetic avatar`} width="48" height="48" loading="lazy" />
     : <span class={classes} role="img" aria-label={`${speaker.name} initials avatar`}>{initials(speaker.name)}</span>;
+}
+
+export function PublicSpeakerDirectoryPage({ data }: { data: PublicSpeakerDirectoryData }): JSX.Element {
+  const eventQuery = `event=${encodeURIComponent(data.event.slug)}`;
+  const hasSearch = Boolean(data.filters.q);
+  const venueName = data.venue?.buildingName ?? data.event.venue ?? "Online";
+  return (
+    <PublicShell
+      event={data.event}
+      title="Speakers"
+      actions={<a class="public-button" href={`/agenda?${eventQuery}`}>← Agenda</a>}
+    >
+      <main class="public-main">
+        <div class="public-kicker">{data.event.startsOn} → {data.event.endsOn} · {venueName}</div>
+        <div class="public-heading">
+          <div>
+            <h1>Speakers</h1>
+            <p>Meet the people shaping this conference. Open a profile to see their published sessions.</p>
+          </div>
+        </div>
+        <form class="public-filters public-directory-filters" method="get" action="/speakers">
+          <input type="hidden" name="event" value={data.event.slug} />
+          <label>
+            <span class="sr-only">Search speakers</span>
+            <input class="public-search" name="q" value={data.filters.q ?? ""} placeholder="Search speakers or companies" aria-label="Search speakers or companies" />
+          </label>
+        </form>
+        {data.speakers.length > 0 ? (
+          <section class="public-speaker-grid" aria-label="Published speakers">
+            {data.speakers.map((speaker) => (
+              <a class="public-directory-card" href={`${speakerHref(speaker.slug)}?${eventQuery}`} key={speaker.id}>
+                <PublicSpeakerAvatar speaker={speaker} />
+                <div>
+                  <h2>{speaker.name}</h2>
+                  <p>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</p>
+                  <small>View profile →</small>
+                </div>
+              </a>
+            ))}
+          </section>
+        ) : (
+          <div class="public-empty"><div><strong>{hasSearch ? "No published speakers match" : "No published speakers yet"}</strong><span>{hasSearch ? "Try a different name or company." : "The conference team has not published any speakers yet."}</span>{hasSearch ? <a class="public-button primary" href={`/speakers?${eventQuery}`}>Show all speakers</a> : <a class="public-button primary" href={`/agenda?${eventQuery}`}>View the agenda</a>}</div></div>
+        )}
+      </main>
+    </PublicShell>
+  );
 }
 
 export function PublicSpeakerPage({ event, venue, speaker }: { event: PublicEvent; venue: PublicVenueDisclosure; speaker: PublicSpeaker }): JSX.Element {
