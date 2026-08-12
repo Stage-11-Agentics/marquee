@@ -16,7 +16,11 @@ test("CONTRACT · CFP-03 both shells receive a required API-backed event name", 
   assert.match(app, /<AppShell eventName=\{eventName\} \/>/);
   assert.match(app, /<DeliveryHealthShell eventName=\{eventName\} \/>/);
   assert.match(shell, /\{ eventName \}: \{ eventName: string \}/);
-  assert.match(health, /\{ eventName: string; eventId\?: string \}/);
+  // The health shell still receives the name as a required prop; its
+  // conference id now comes from the context both render roots sit inside,
+  // which is the only way a separate root can be scoped at all.
+  assert.match(health, /\{ eventName \}: \{ eventName: string \}/);
+  assert.match(health, /useEventContext\(\)/);
   assert.match(identity, /demo_event_name\?: string \| null/);
   assert.match(auth, /demo_event_name: z\.string\(\)\.nullable\(\)/);
   assert.match(identity, /EVENT_NAME_CHANGED/);

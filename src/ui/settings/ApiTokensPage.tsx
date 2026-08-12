@@ -3,7 +3,6 @@ import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { EmptyState, PageHeader } from "../shell/components";
-import { DEFAULT_EVENT_ID } from "../venues/venue-writer";
 import "./settings.css";
 
 const API_GRANTS = [
@@ -32,7 +31,7 @@ interface ApiToken {
 }
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   navigate: (target: string) => void;
 }
 
@@ -89,7 +88,7 @@ function TokenRow({ token, onRevoke }: { token: ApiToken; onRevoke: (token: ApiT
   </tr>;
 }
 
-export function ApiTokensPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props): JSX.Element {
+export function ApiTokensPage({ eventId, navigate }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", tokens: [] });
   const [reloadKey, setReloadKey] = useState(0);
   const [showCreate, setShowCreate] = useState(false);

@@ -5,7 +5,6 @@ import { apiFetch, errorSummary, fieldError, MarqueeApiError } from "../shell/ap
 import { Button, Card, CardBody, PageHeader } from "../shell/components";
 import "./record.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const SUBMISSIONS_ROUTE = "/api/v1/events/{eventId}/submissions";
 const FORMATS_ROUTE = "/api/v1/events/{eventId}/formats";
 const TRACKS_ROUTE = "/api/v1/events/{eventId}/tracks";
@@ -42,7 +41,7 @@ type LoadState =
   | { kind: "error"; model: null; message: string };
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   navigate: (target: string) => void;
 }
 
@@ -56,7 +55,7 @@ function CreateSettings({ state }: { state: LoadState }): JSX.Element {
   return <></>;
 }
 
-export function CreateSubmissionPage({ eventId = DEFAULT_EVENT_ID, navigate }: Props): JSX.Element {
+export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element {
   const [settings, setSettings] = useState<LoadState>({ kind: "loading", model: null });
   const [kind, setKind] = useState<"abstract" | "session">("session");
   const [title, setTitle] = useState("");

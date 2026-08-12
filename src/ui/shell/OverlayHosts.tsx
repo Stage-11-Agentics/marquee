@@ -43,6 +43,20 @@ export function OverlayHost({ state, onClose, children }: { state: OverlayState 
   return <div class="modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section ref={ref} class="modal" role="dialog" aria-modal="true" aria-label={state.title} tabIndex={-1}>{body}</section></div>;
 }
 
+export const TOAST_EVENT = "marquee:toast";
+
+/**
+ * A receipt from a screen that is about to be navigated away from.
+ *
+ * "Created, and here is exactly what came with it" has to survive the
+ * navigation that follows it, and the screen that earned the message is
+ * unmounted by then. The toast host outlives it, so the message is announced
+ * to the shell rather than held by the page.
+ */
+export function announce(message: string): void {
+  window.dispatchEvent(new CustomEvent(TOAST_EVENT, { detail: message }));
+}
+
 export function ToastHost({ message }: { message?: string }): JSX.Element {
   return <div class={`toast ${message ? "show" : ""}`} role="status" aria-live="polite">{message}</div>;
 }

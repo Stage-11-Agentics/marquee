@@ -9,7 +9,6 @@ import { formatDueDate } from "../../lib/task-due";
 import { FileVersions } from "../files/FileVersions";
 import "./onboarding.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const CUSTOM_TEMPLATE = "__custom__";
 const FILTER_LABELS: Record<OnboardingFilter, string> = {
   all: "All",
@@ -224,7 +223,7 @@ function ComposeDrawer({ eventId, rows, onClose }: { eventId: string; rows: Onbo
   </aside>;
 }
 
-export function OnboardingPage({ eventId = DEFAULT_EVENT_ID, search = "", navigate }: { eventId?: string; search?: string; navigate?: (target: string) => void }): JSX.Element {
+export function OnboardingPage({ eventId, search = "", navigate }: { eventId: string; search?: string; navigate?: (target: string) => void }): JSX.Element {
   const [filters, setFilters] = useState({ filter: "all" as OnboardingFilter, taskType: "", track: "", search: "" });
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());

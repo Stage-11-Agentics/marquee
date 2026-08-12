@@ -11,7 +11,8 @@ The command registry is:
 - `node cli/marquee.mjs setup claim-link`
 - `node cli/marquee.mjs setup health`
 - `node cli/marquee.mjs setup instance`
-- `node cli/marquee.mjs event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz>`
+- `node cli/marquee.mjs event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz> [--from <event-id>] [--copy <sets>]`
+- `node cli/marquee.mjs event list`
 - `node cli/marquee.mjs forms create <event-id> --set name=<name> --set slug=<slug> --set kind=abstract`
 - `node cli/marquee.mjs forms list <event-id>`
 - `node cli/marquee.mjs evaluation plan <event-id> --set name=<name>`
@@ -96,6 +97,22 @@ node cli/marquee.mjs evaluation plan "$EVENT_ID" --set name="Program committee" 
 Sane defaults are already set — one speaker minimum, format durations prefilled. Change only what the operator asked for. `setup instance` reports mail, uploads, spam protection, and domain, each derived from what is really configured; read it before you report anything about this deployment.
 
 7. **Stop before intake.** Do not publish the call for speakers. Report what you did, the instance status rows (mail included), and where the last step lives: opening intake is the operator's click, from the dashboard, with the consequences on screen.
+
+## Next year's conference
+
+Most conferences are serial: the next one is the last one with new dates. `event list` names every conference this credential can read, and `event create --from` carries the structure across — never the people or their records.
+
+```sh
+node cli/marquee.mjs event list --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs event create --set name="AI Engineer NYC 2027" --set starts_on=2027-10-18 --set ends_on=2027-10-20 --set timezone=America/New_York --from "$EVENT_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs event create --set name="AI Engineer Code 2027" --set starts_on=2027-03-02 --set ends_on=2027-03-03 --set timezone=America/New_York --from "$EVENT_ID" --copy formats,tracks,forms --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
+
+`--from` alone carries formats, tracks, CFP forms, task templates, email templates, and the evaluation plan's structure; `--copy` narrows that to the sets you name. Venues are never carried unless you ask for them. The response's `copied` object is the receipt — read it rather than assuming, because two sets are conditional: CFP forms cannot travel without the formats and tracks their dropdowns are bound to, and form-kind task templates cannot travel without their forms. Asking for the illegal combination is refused with a sentence naming what is missing.
+
+What never travels: submissions, speakers' conference data, reviews and scores, the agenda, decision waves, uploads, messages, committees, and the audit log. People are organization-scoped, so a returning speaker is already the same person — there is nothing to copy. Copied forms arrive **closed** with no dates, and the copied evaluation plan arrives as a **draft**: opening intake and opening review are decisions, not side effects of creating a record.
+
+Every command that reads or writes conference data takes an event ID, so once the new conference exists it is addressed exactly like the old one.
 
 ## Seed
 

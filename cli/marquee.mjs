@@ -3,7 +3,7 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 
-import { COMMAND_REGISTRY, commandsUnder, renderHelp } from "./registry.mjs";
+import { COMMAND_REGISTRY, COPY_SETS, commandsUnder, renderHelp } from "./registry.mjs";
 import { MarqueeClient } from "./client.mjs";
 import { renderDiagnosticBundle, tailLogs } from "./diagnostics.mjs";
 
@@ -25,6 +25,8 @@ const VALUE_OPTIONS = new Set([
   "--set",
   "--query",
   "--if-match",
+  "--from",
+  "--copy",
   "--file",
 ]);
 const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle"]);
@@ -150,6 +152,28 @@ function parseSetValues(command, options) {
     }
   }
   return body;
+}
+
+/**
+ * `--from` and `--copy` in the shape the endpoint wants.
+ *
+ * An unknown set name fails here, with the legal list, rather than as a 400
+ * from the server: the agent is usually mid-loop and a local error names the
+ * fix. `--copy` without `--from` is a typo worth catching too — it reads as if
+ * something was going to be carried, and nothing would be.
+ */
+function copyRequest(options) {
+  const from = option(options, "--from");
+  const sets = option(options, "--copy");
+  if (!from && !sets) return {};
+  if (!from) usageError("--copy needs --from: name the conference the structure comes from");
+  if (!sets) return { copy_from: from };
+  const chosen = sets.split(",").map((value) => value.trim()).filter(Boolean);
+  const unknown = chosen.filter((value) => !COPY_SETS.includes(value));
+  if (unknown.length > 0) {
+    usageError(`unsupported --copy set: ${unknown.join(", ")}\n\nlegal sets: ${COPY_SETS.join(", ")}`);
+  }
+  return { copy_from: from, copy: Object.fromEntries(COPY_SETS.map((set) => [set, chosen.includes(set)])) };
 }
 
 function requireSetValues(command, options) {
@@ -313,8 +337,11 @@ async function execute(command, arguments_, options, flags, client) {
   if (root === "organizers" && verb === "invite") {
     return client.post("/api/v1/org/invites");
   }
+  if (root === "event" && verb === "list") {
+    return client.get("/api/v1/events");
+  }
   if (root === "event" && verb === "create") {
-    return client.post("/api/v1/events", requireSetValues(command, options));
+    return client.post("/api/v1/events", { ...requireSetValues(command, options), ...copyRequest(options) });
   }
   if (root === "event" && verb === "seed") {
     const current = await client.get("/api/v1/auth/me");
