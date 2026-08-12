@@ -13,6 +13,7 @@ import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { comparisonWinCounts, validateComparisonRanking } from "../lib/evaluation-comparisons";
 import { errorFields } from "../lib/observability/log";
 import { reviewerCanBeAssignedToSubmission } from "../lib/reviewer-scope";
+import { parseCriterionOptions } from "../lib/rubric-criteria";
 import { selectSubmissionIds, submissionFilterSchema } from "./submissions.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -25,12 +26,77 @@ const reviewerScopeParams = committeeParams.extend({ personId: z.string().min(1)
 const roundMode = z.enum(["scorecard", "comparison"]);
 const assignmentMode = z.enum(["everyone", "n_per_submission"]);
 
+const criterionKind = z.enum(["numeric", "select", "text"]);
+
+/**
+ * A criterion is a scorecard field, not just a weighted number. Numeric criteria
+ * carry a scale and a weight; select criteria carry their choices; text criteria
+ * carry neither. Weights stay a numeric-only concept — see `normalizeCriteria`,
+ * which zeroes the others rather than rejecting them, so an organizer never has
+ * to learn a rule the product invented.
+ */
 const criterionInput = z.object({
   id: z.string().min(1).optional(),
+  kind: criterionKind.default("numeric"),
   name: z.string().trim().min(1).max(160),
+  options: z.array(z.string().trim().min(1).max(160)).max(20).optional(),
   position: z.number().int().min(0),
+  scale_max: z.number().nullable().optional(),
+  scale_min: z.number().nullable().optional(),
   weight_pct: z.number().min(0).max(100),
 });
+
+type CriterionInput = z.infer<typeof criterionInput>;
+
+interface NormalizedCriterion {
+  id?: string;
+  kind: "numeric" | "select" | "text";
+  name: string;
+  options: string | null;
+  position: number;
+  scale_max: number | null;
+  scale_min: number | null;
+  weight_pct: number;
+}
+
+/**
+ * Non-numeric criteria hold no weight, so the total-100 rule stays about ratings,
+ * and the shape each kind may carry is enforced here rather than left to the
+ * caller: a dropdown without choices renders as an empty control on the reviewer
+ * side, which looks like the product losing the organizer's work.
+ */
+function normalizeCriteria(criteria: ReadonlyArray<CriterionInput>): NormalizedCriterion[] {
+  const positions = criteria.map((criterion) => criterion.position);
+  if (new Set(positions).size !== positions.length) {
+    // The round/position pair is unique, so duplicates fail inside batch() as an
+    // opaque conflict. Name the problem instead.
+    throw ApiError.unprocessable("each criterion needs its own position", "position");
+  }
+  return criteria.map((criterion) => {
+    const options = criterion.options ?? [];
+    if (criterion.kind === "select" && options.length === 0) {
+      throw ApiError.unprocessable("a dropdown criterion needs at least one option", "options", { criterion: criterion.name });
+    }
+    if (criterion.kind !== "select" && options.length > 0) {
+      throw ApiError.unprocessable("only a dropdown criterion carries options", "options", { criterion: criterion.name });
+    }
+    const min = criterion.scale_min ?? null;
+    const max = criterion.scale_max ?? null;
+    if (criterion.kind === "numeric" && min !== null && max !== null && min >= max) {
+      throw ApiError.unprocessable("a rating scale must end above where it starts", "scale_max", { criterion: criterion.name });
+    }
+    return {
+      id: criterion.id,
+      kind: criterion.kind,
+      name: criterion.name,
+      options: criterion.kind === "select" ? JSON.stringify(options) : null,
+      position: criterion.position,
+      scale_max: criterion.kind === "numeric" ? max : null,
+      scale_min: criterion.kind === "numeric" ? min : null,
+      weight_pct: criterion.kind === "numeric" ? criterion.weight_pct : 0,
+    };
+  });
+}
 
 const roundInput = z.object({
   anonymized: z.boolean().default(false),
@@ -63,7 +129,7 @@ const planInput = z.object({
 });
 
 const planPatch = planInput.partial();
-const criteriaInput = z.object({ criteria: z.array(criterionInput).min(1) });
+const criteriaInput = z.object({ criteria: z.array(criterionInput).max(40) });
 const committeeInput = z.object({ name: z.string().trim().min(1).max(160) });
 const memberInput = z.object({ person_id: z.string().min(1), role: z.string().trim().min(1).max(80).default("reviewer") });
 const scopeInput = z.object({ track_ids: z.array(z.string().min(1)).min(1) });
@@ -133,9 +199,13 @@ interface RoundRow {
 
 interface CriterionRow {
   id: string;
+  kind: "numeric" | "select" | "text";
   name: string;
+  options: string | null;
   position: number;
   round_id: string;
+  scale_max: number | null;
+  scale_min: number | null;
   weight_pct: number;
 }
 
@@ -190,10 +260,17 @@ async function roundForEvent(db: D1Database, eventId: string, roundId: string): 
   return round;
 }
 
-function assertCriteriaTotal(criteria: ReadonlyArray<{ weight_pct: number }>): void {
-  const total = criteria.reduce((sum, criterion) => sum + criterion.weight_pct, 0);
+/**
+ * Weighting is a claim about ratings, so only rating criteria are counted. A
+ * scorecard of one dropdown and one comment box is a real scorecard and saves
+ * without a weight anywhere in it.
+ */
+function assertCriteriaTotal(criteria: ReadonlyArray<{ kind?: string; weight_pct: number }>): void {
+  const numeric = criteria.filter((criterion) => (criterion.kind ?? "numeric") === "numeric");
+  if (numeric.length === 0) return;
+  const total = numeric.reduce((sum, criterion) => sum + criterion.weight_pct, 0);
   if (Math.abs(total - 100) > 0.0001) {
-    throw ApiError.unprocessable("scorecard criteria must total exactly 100%", "criteria", { total });
+    throw ApiError.unprocessable("rating criteria must total exactly 100%", "criteria", { total });
   }
 }
 
@@ -205,11 +282,11 @@ function assertTwoRounds(rounds: ReadonlyArray<{ position?: number }>): void {
   }
 }
 
-async function criteriaForRound(db: D1Database, roundId: string): Promise<CriterionRow[]> {
+async function criteriaForRound(db: D1Database, roundId: string): Promise<Array<Record<string, unknown>>> {
   const result = await db.prepare(
-    "SELECT id, round_id, name, weight_pct, position FROM rubric_criteria WHERE round_id = ? ORDER BY position, id",
+    "SELECT id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position FROM rubric_criteria WHERE round_id = ? ORDER BY position, id",
   ).bind(roundId).all<CriterionRow>();
-  return result.results;
+  return result.results.map((criterion) => ({ ...criterion, options: parseCriterionOptions(criterion.options) }));
 }
 
 interface EventIdentityRow {
@@ -478,10 +555,10 @@ const createPlan = defineApiRoute(
       statements.push(context.env.DB.prepare(
         "INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, target_reviews_per_submission, opens_at, closes_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).bind(roundId, planId, position, round.name, round.mode, round.anonymized ? 1 : 0, round.target_reviews_per_submission, round.opens_at ?? null, round.closes_at ?? null, now, now));
-      for (const criterion of round.criteria ?? []) {
+      for (const criterion of normalizeCriteria(round.criteria ?? [])) {
         statements.push(context.env.DB.prepare(
-          "INSERT INTO rubric_criteria (id, round_id, name, weight_pct, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ).bind(criterion.id ?? crypto.randomUUID(), roundId, criterion.name, criterion.weight_pct, criterion.position, now, now));
+          "INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ).bind(criterion.id ?? crypto.randomUUID(), roundId, criterion.name, criterion.kind, criterion.options, criterion.scale_min, criterion.scale_max, criterion.weight_pct, criterion.position, now, now));
       }
     }
     await context.env.DB.batch(statements);
@@ -562,9 +639,9 @@ const addRound = defineApiRoute(
     const statements = [context.env.DB.prepare(
       "INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, target_reviews_per_submission, opens_at, closes_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(roundId, planId, position, body.name, body.mode, body.anonymized ? 1 : 0, body.target_reviews_per_submission, body.opens_at ?? null, body.closes_at ?? null, now, now)];
-    for (const criterion of body.criteria ?? []) statements.push(context.env.DB.prepare(
-      "INSERT INTO rubric_criteria (id, round_id, name, weight_pct, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(criterion.id ?? crypto.randomUUID(), roundId, criterion.name, criterion.weight_pct, criterion.position, now, now));
+    for (const criterion of normalizeCriteria(body.criteria ?? [])) statements.push(context.env.DB.prepare(
+      "INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).bind(criterion.id ?? crypto.randomUUID(), roundId, criterion.name, criterion.kind, criterion.options, criterion.scale_min, criterion.scale_max, criterion.weight_pct, criterion.position, now, now));
     try { await context.env.DB.batch(statements); } catch { throw ApiError.conflict("that evaluation round position is already in use"); }
     return context.json(await planDetail(context.env.DB, eventId, planId), 201);
   },
@@ -635,9 +712,9 @@ const replaceCriteria = defineApiRoute(
     const round = await roundForEvent(context.env.DB, eventId, roundId);
     const now = Date.now();
     const statements = [context.env.DB.prepare("DELETE FROM rubric_criteria WHERE round_id = ?").bind(roundId)];
-    for (const criterion of body.criteria) statements.push(context.env.DB.prepare(
-      "INSERT INTO rubric_criteria (id, round_id, name, weight_pct, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(criterion.id ?? crypto.randomUUID(), roundId, criterion.name, criterion.weight_pct, criterion.position, now, now));
+    for (const criterion of normalizeCriteria(body.criteria)) statements.push(context.env.DB.prepare(
+      "INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).bind(criterion.id ?? crypto.randomUUID(), roundId, criterion.name, criterion.kind, criterion.options, criterion.scale_min, criterion.scale_max, criterion.weight_pct, criterion.position, now, now));
     await context.env.DB.batch(statements);
     return context.json({ round, criteria: await criteriaForRound(context.env.DB, roundId) }, 200);
   },
