@@ -72,6 +72,70 @@
 @media (max-width: 720px) { .task-template-preset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .task-template-limits { align-items: stretch; grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .task-template-preset-grid { grid-template-columns: 1fr; } .task-template-unconfigured { align-items: stretch; flex-direction: column; } .task-template-unconfigured .button { width: 100%; } }
 
+/* Task authoring. The house rule is that elements never jump, so anything that
+   changes with state reserves its space up front: the notice slot and the
+   inline error keep their height when empty, the segment buttons keep their
+   width when their label bolds, and every count is tabular. */
+.task-notice-slot { display: grid; gap: 8px; min-height: 20px; }
+.task-compose { margin-bottom: 14px; }
+.task-compose .card-body { display: grid; gap: 14px; }
+.task-compose-fields { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.task-compose-fields .field { display: grid; gap: 5px; min-width: 0; }
+.task-compose-fields .field > span { color: var(--muted); font-size: 11px; }
+.task-compose-fields textarea { font: inherit; resize: vertical; }
+.task-compose-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.task-compose-error { color: var(--danger, #b34848); font-size: 12px; min-height: 17px; }
+.task-kind-hint { color: var(--muted); font-size: 11px; min-height: 15px; }
+.task-auto-assign { align-items: center; color: var(--ink-soft); display: flex; font-size: 12px; gap: 8px; }
+
+.task-segment { display: flex; flex-wrap: wrap; gap: 6px; }
+.task-segment-button { background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; color: var(--ink-soft); cursor: pointer; font: inherit; font-size: 12px; min-height: 32px; padding: 6px 10px; text-align: center; width: 132px; }
+.task-segment-button:hover { border-color: var(--accent); }
+.task-segment-button.is-selected { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-color: var(--accent); color: var(--ink); }
+.task-deadline { align-items: end; display: grid; gap: 12px; grid-template-columns: auto minmax(160px, 220px); }
+.task-deadline-input .field { display: grid; gap: 5px; }
+.task-deadline-input .field > span { color: var(--muted); font-size: 11px; }
+
+.task-assignee-picker { border: 1px solid var(--line); border-radius: 7px; display: grid; gap: 10px; padding: 12px; }
+.task-assignee-head { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.task-assignee-head .eyebrow { margin-right: auto; }
+.task-assignee-count { color: var(--muted); font-size: 11px; min-width: 78px; text-align: right; }
+.task-assignee-empty { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; min-height: 18px; }
+.task-assignee-search { background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); font: inherit; font-size: 12px; min-height: 34px; padding: 7px 9px; width: 100%; }
+.task-assignee-list { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); max-height: 230px; overflow-y: auto; }
+.task-assignee-option { align-items: center; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; display: flex; gap: 8px; min-height: 44px; padding: 7px 9px; }
+.task-assignee-option:hover { border-color: var(--accent); }
+.task-assignee-option span { display: grid; gap: 2px; min-width: 0; }
+.task-assignee-option strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-assignee-option small { color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The name owns its own row. `.settings-row-heading` is a flex line built for
+   two items, and `strong` carries `overflow: hidden` — which zeroes a flex
+   item's automatic minimum size, so adding the kind badge collapsed the task
+   name to nothing at narrow widths instead of ellipsing it. A grid gives the
+   name the full width and lets the metadata wrap beneath it. */
+.task-template-heading { align-items: start; display: grid; gap: 5px; }
+.task-template-heading strong { min-width: 0; }
+.task-heading-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; min-height: 18px; }
+.task-kind-badge { background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10.5px; padding: 2px 8px; white-space: nowrap; }
+.task-row-status { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; min-height: 34px; }
+.task-row-actions { display: flex; gap: 6px; margin-left: auto; }
+.task-row-edit, .task-row-assign { border-top: 1px solid var(--line); display: grid; gap: 12px; padding-top: 12px; }
+.task-assignment-list { border-top: 1px solid var(--line); padding-top: 10px; }
+.task-assignment-table { border-collapse: collapse; width: 100%; }
+.task-assignment-table th, .task-assignment-table td { border-bottom: 1px solid var(--line); font-size: 11.5px; padding: 8px 10px; text-align: left; vertical-align: top; }
+.task-assignment-table thead th { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.task-assignment-table tbody tr:last-child th, .task-assignment-table tbody td:last-child { border-bottom: 0; }
+.task-assignment-table tbody th { font-weight: 500; }
+.task-assignment-table tbody th strong { display: block; font-size: 12px; }
+.task-assignment-table tbody th small { color: var(--muted); font-size: 10.5px; }
+.task-status { border-radius: 999px; display: inline-block; font-size: 10.5px; min-width: 72px; padding: 2px 8px; text-align: center; }
+.task-status-open { background: var(--sunk); border: 1px solid var(--line-strong); color: var(--ink-soft); }
+.task-status-done { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border: 1px solid var(--accent); color: var(--ink); }
+.task-template-file-policy { border-top: 1px solid var(--line); padding-top: 12px; }
+.tabular { font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) { .task-compose-fields { grid-template-columns: 1fr; } .task-compose-fields .span-2 { grid-column: auto; } .task-deadline { grid-template-columns: 1fr; } .task-row-actions { margin-left: 0; width: 100%; } }
+
 .api-tokens-page { gap: 18px; }
 .token-list-heading { align-items: end; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding: 8px 0 10px; }
 .token-list-heading h2 { font-size: 16px; margin: 6px 0 0; }
