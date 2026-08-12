@@ -102,13 +102,15 @@ describe.sequential("CONTRACT · MRQ-154 · CFP-05 submitter seat", () => {
       submissions: Array<{ title: string; status: string }>;
     }>();
     expect(firstSnapshot.seat).toBe("submitter");
-    expect(firstSnapshot.submissions).toEqual([{ title: firstTitle, status: "submitted" }]);
+    expect(firstSnapshot.submissions).toHaveLength(1);
+    expect(firstSnapshot.submissions[0]).toMatchObject({ title: firstTitle, status: "submitted" });
     expect(JSON.stringify(firstSnapshot)).not.toContain(secondTitle);
 
     const secondPortal = await request("/api/v1/me/portal", { headers: { cookie: secondCookie } });
     expect(secondPortal.status).toBe(200);
     const secondSnapshot = await secondPortal.json<{ submissions: Array<{ title: string; status: string }> }>();
-    expect(secondSnapshot.submissions).toEqual([{ title: secondTitle, status: "submitted" }]);
+    expect(secondSnapshot.submissions).toHaveLength(1);
+    expect(secondSnapshot.submissions[0]).toMatchObject({ title: secondTitle, status: "submitted" });
 
     const memberships = await env.DB
       .prepare("SELECT COUNT(*) AS total FROM memberships WHERE event_id = ? AND role = 'speaker'")

@@ -43,7 +43,12 @@ describe("CONTRACT · MRQ-154 · submitter status semantics", () => {
   });
 
   test("CONTRACT · MRQ-154 · accepted and rejected treatment remains the established speaker vocabulary", () => {
-    expect(render(snapshot({ submissions: [submission({ status: "accepted" })] }))).toContain("Your abstract was accepted");
-    expect(render(snapshot({ submissions: [submission({ status: "rejected" })] }))).toContain("Your abstract was not selected");
+    const accepted = render(snapshot({ submissions: [submission({ status: "accepted" })] }));
+    expect(accepted).toContain("Your abstract was accepted");
+    expect(accepted).toContain(">Accepted<");
+
+    const rejected = render(snapshot({ submissions: [submission({ status: "rejected" })] }));
+    expect(rejected).toContain("Your abstract was not selected");
+    expect(rejected).toContain(">Rejected<");
   });
 });
