@@ -436,6 +436,65 @@ test("AC-286 · demo removal deletes only demo-scoped rows, leaves the rest byte
   expect(await env.DB.prepare("SELECT * FROM events WHERE id = 'evt_mine'").first()).toEqual(mineBefore);
 });
 
+test("AC-285 · intake opens on a mail-less instance and records the acknowledgment, and nothing server-side blocks it", async () => {
+  const { cookie, orgId, personId } = await seedClaimedInstance();
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?)",
+    ).bind("evt_ack", orgId, "Great Lakes Infra Days", "gl-infra-days", "2027-04-14", "2027-04-15", "America/New_York", NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO forms (id, event_id, name, slug, kind, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'abstract', 'draft', ?, ?)",
+    ).bind("frm_ack", "evt_ack", "Call for speakers", "cfp", NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO forms (id, event_id, name, slug, kind, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'abstract', 'draft', ?, ?)",
+    ).bind("frm_plain", "evt_ack", "Sponsor sessions", "sponsors", NOW, NOW),
+  ]);
+
+  // Mail is genuinely unconfigured here — the same read the dialog is raised
+  // from — and the publish still goes through. Warn-and-record, never block.
+  const status = await request("/api/v1/instance/status", { headers: { cookie } });
+  const rows = (await status.json() as { data: { rows: { key: string; configured: boolean }[] } }).data.rows;
+  expect(rows.find((row) => row.key === "mail")?.configured).toBe(false);
+
+  const acknowledged = await request("/api/v1/events/evt_ack/forms/frm_ack/publish", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ acknowledge_mail_unconfigured: true }),
+  });
+  expect(acknowledged.status).toBe(200);
+  expect((await acknowledged.json() as { status: string }).status).toBe("open");
+
+  // Recorded with its actor and its time, so the decision is a matter of
+  // record rather than a dialog nobody can prove was shown.
+  const audit = await env.DB.prepare(
+    "SELECT actor_person_id, actor_kind, entity_id, created_at FROM audit_log WHERE action = 'form.published_without_mail'",
+  ).all<{ actor_person_id: string; actor_kind: string; entity_id: string; created_at: number }>();
+  expect(audit.results).toHaveLength(1);
+  expect(audit.results[0]?.actor_person_id).toBe(personId);
+  expect(audit.results[0]?.actor_kind).toBe("user");
+  expect(audit.results[0]?.entity_id).toBe("frm_ack");
+  expect(Number(audit.results[0]?.created_at)).toBeGreaterThan(0);
+
+  // Cancelling is the absence of a request: the form the organizer backed out
+  // of is still a draft, and no acknowledgment was written for it.
+  expect(
+    (await env.DB.prepare("SELECT status FROM forms WHERE id = 'frm_plain'").first<{ status: string }>())?.status,
+  ).toBe("draft");
+
+  // With mail configured the client sends no acknowledgment; the same route
+  // publishes directly and writes no second audit row.
+  const direct = await request("/api/v1/events/evt_ack/forms/frm_plain/publish", {
+    method: "POST",
+    headers: { cookie },
+  });
+  expect(direct.status).toBe(200);
+  expect((await direct.json() as { status: string }).status).toBe("open");
+  const auditAfter = await env.DB.prepare(
+    "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'form.published_without_mail'",
+  ).first<{ total: number }>();
+  expect(Number(auditAfter?.total)).toBe(1);
+});
+
 test("AC-276 · a claim token presented to the sign-in exchange is refused without being spent", async () => {
   const minted = await mintClaimLink(env.DB, { origin: ORIGIN });
   const token = tokenFromUrl(minted!.url);
