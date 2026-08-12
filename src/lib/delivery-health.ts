@@ -311,7 +311,7 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
         state: "held_back_demo",
         level: "ok",
         reason: "Held back on purpose — this conference is in demo mode.",
-        what_to_do: "Turn demo mode off in Conference settings when you are ready to send for real.",
+        what_to_do: "Nothing to do. Open the message in Communications to read exactly what this speaker would have received.",
       };
     }
     return {
@@ -605,7 +605,7 @@ function emailCapability(facts: DeliveryHealthFacts): CapabilityStatus {
       ...base,
       level: "ok",
       headline: "Email is held back on purpose — this conference is in demo mode.",
-      detail: `${count(facts.outbox.suppressed)} ${plural(facts.outbox.suppressed, "message is", "messages are")} written and waiting. Turn demo mode off in Conference settings to send for real.`,
+      detail: `${count(facts.outbox.suppressed)} ${plural(facts.outbox.suppressed, "message is", "messages are")} written and logged in Communications, where you can read exactly what each one would have said.`,
     };
   }
   return {

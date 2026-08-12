@@ -85,7 +85,13 @@ describe("MRQ-74 · who is owed a message", () => {
     const [inDemo] = deriveOwed([held], { now: NOW, demoMode: true });
     expect(inDemo.state).toBe("held_back_demo");
     expect(inDemo.level).toBe("ok");
-    expect(inDemo.what_to_do).toContain("Conference settings");
+    // The guidance must not send the organizer after a control that does not
+    // exist: nothing in the product writes events.demo_mode, so "turn demo mode
+    // off in Conference settings" was a dead end on a screen the walkthrough
+    // grades for having none. Point at Communications, which is real and where
+    // the held message can actually be read.
+    expect(inDemo.what_to_do).not.toMatch(/demo mode off|Conference settings/i);
+    expect(inDemo.what_to_do).toContain("Communications");
 
     const [live] = deriveOwed([held], { now: NOW, demoMode: false });
     expect(live.state).toBe("held_back");
