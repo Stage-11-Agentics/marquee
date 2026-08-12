@@ -26,6 +26,7 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "reviewer", path: "/reviewer", label: "Review queue", icon: "✓", group: "modules", sidebar: true },
   { id: "agenda", path: "/agenda-builder", label: "Agenda", icon: "▦", group: "modules", sidebar: true },
   { id: "communications", path: "/communications", label: "Communications", icon: "✉", group: "modules", sidebar: true },
+  { id: "tasks", path: "/tasks", label: "Tasks", icon: "☑", group: "modules", sidebar: true },
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "○", group: "modules", sidebar: true, external: true },
   { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "modules", sidebar: true, external: true },
   { id: "settings", path: "/settings", label: "Conference settings", icon: "⚙", group: "modules", sidebar: true },
@@ -38,6 +39,8 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "venues", path: "/settings/venues", label: "Venues", icon: "⌖", group: "utility" },
   { id: "submission-detail", path: "/submissions/:id", label: "Submission record", icon: "", group: "utility" },
   { id: "submission-new", path: "/submissions/new", label: "Create submission", icon: "", group: "utility" },
+  // `/tasks` is where the sidebar sends an organizer; this row keeps the older
+  // settings path working for anything that already links to it.
   { id: "task-templates", path: "/settings/tasks", label: "Task templates", icon: "", group: "utility" },
   { id: "api-tokens", path: "/settings/api", label: "API tokens", icon: "", group: "utility" },
   { id: "api-docs", path: "/api/docs", label: "API & CLI", icon: "⌘", group: "utility" },
