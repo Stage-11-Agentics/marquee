@@ -17,3 +17,11 @@ test("AC-248 · the column chooser renders the fixed registry and disables Title
   assert.match(submissionsPage, /persistColumns\(view\.config\.columns\)/);
   assert.match(submissionsPage, /localStorage\.setItem\(`marquee\.columns\.\$\{eventId\}`/);
 });
+
+test("CONTRACT · MRQ-97 keeps accepted as a stored fact and groups the stage filter", () => {
+  assert.match(submissionsPage, /\["accepted_any", "Accepted \(any stage\)"\]/);
+  assert.match(submissionsPage, /<optgroup label=\{group\.label\}>/);
+  assert.match(submissionsPage, /status-filter \$\{status \? "has-selection" : "is-default"\}/);
+  assert.match(submissionsPage, /return status\[0\]!\.toUpperCase\(\) \+ status\.slice\(1\);/);
+  assert.doesNotMatch(submissionsPage, /status === "accepted"\) return "Ready to place"/);
+});
