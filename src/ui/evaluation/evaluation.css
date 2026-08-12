@@ -107,6 +107,7 @@
 .invite-result strong { color: var(--ink); font-size: 12.5px; }
 .invite-link { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
 .invite-link input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font: 400 11px/1.4 var(--mono); min-height: 32px; padding: 6px 8px; width: 100%; }
+.invite-link-readable { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); display: block; font: 400 11px/1.4 var(--mono); grid-column: 1 / -1; overflow-wrap: anywhere; padding: 6px 8px; user-select: text; white-space: normal; }
 
 @media (max-width: 900px) {
   .criterion-row { display: flex; flex-wrap: wrap; }

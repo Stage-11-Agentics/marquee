@@ -144,6 +144,27 @@ function percent(done: number, total: number): number {
   return total === 0 ? 0 : Math.min(100, Math.max(0, Math.round((done / total) * 100)));
 }
 
+/** Count CSV records without mistaking a quoted line break for another row. */
+function csvDataRowCount(csv: string): number {
+  if (!csv) return 0;
+  let records = 1;
+  let quoted = false;
+  for (let index = 0; index < csv.length; index += 1) {
+    const character = csv[index];
+    if (character === '"') {
+      if (quoted && csv[index + 1] === '"') {
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "\n" && !quoted) {
+      records += 1;
+    }
+  }
+  if (csv.endsWith("\n")) records -= 1;
+  return Math.max(0, records - 1);
+}
+
 /**
  * Round boundaries are calendar days, stored as UTC midnight — so they are read
  * back in UTC, matching the date pickers beside them. Rendering the same value
@@ -448,6 +469,28 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
     }
   };
 
+  const exportResults = async (event: MouseEvent): Promise<void> => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    const filename = "review-results.csv";
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/v1/events/${eventId}/plans/${plan?.id}/results/export?format=csv`, { credentials: "same-origin" });
+      if (!response.ok) throw new Error(`the export request failed with status ${response.status}`);
+      const csv = await response.text();
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      setNotice(`Exported ${csvDataRowCount(csv).toLocaleString()} rows · ${filename}`);
+    } catch (reason: unknown) {
+      setError(errorSummary(reason));
+    }
+  };
+
   const distribute = async (event: Event): Promise<void> => {
     event.preventDefault();
     const targetRound = plan?.rounds.find((round) => round.id === (assignmentRoundId ?? firstRound?.id));
@@ -582,7 +625,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
   return <>
     <PageHeader title="Evaluation plan" copy="Evaluation is open. Add an Agent evaluator seat with its own credential, prompt, and rubric, then let the committee decide." actions={<>
       <a class="button primary" href="/submissions?sort=score">View results →</a>
-      <a class="button" href={`/api/v1/events/${eventId}/plans/${plan.id}/results/export?format=csv`} download="review-results.csv">Export scores (CSV)</a>
+      <a class="button" href={`/api/v1/events/${eventId}/plans/${plan.id}/results/export?format=csv`} download="review-results.csv" onClick={(event) => void exportResults(event)}>Export scores (CSV)</a>
       <Button onClick={() => void load()}>Refresh</Button>
       <Button onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Distribute assignments</Button>
       <Button variant="primary" onClick={() => setDialog("plan")}>+ New evaluation plan</Button>
@@ -669,6 +712,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
           {inviteResult.magic_link ? <div class="invite-link">
             <input readOnly aria-label="Reviewer sign-in link" value={inviteResult.magic_link} onFocus={(event) => (event.currentTarget as HTMLInputElement).select()} />
             <Button type="button" small onClick={() => void copyInviteLink()}>{linkCopied ? "Copied" : "Copy link"}</Button>
+            <code class="invite-link-readable" aria-label="Full reviewer sign-in link">{inviteResult.magic_link}</code>
           </div> : null}
         </div> : <>
           <label class="field">Name<input aria-label="Reviewer name" value={inviteName} placeholder="Nora Vale" onInput={(event) => setInviteName((event.currentTarget as HTMLInputElement).value)} /></label>

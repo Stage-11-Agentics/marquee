@@ -257,6 +257,7 @@ export function SubmissionsPage({
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [exportNotice, setExportNotice] = useState("");
   /**
    * The results export needs an evaluation plan. Resolved in the background so
    * the button appears only when there is something behind it — a download
@@ -588,6 +589,7 @@ export function SubmissionsPage({
   const exportMatching = async () => {
     setExporting(true);
     setExportError("");
+    setExportNotice("");
     try {
       const exportParams = new URLSearchParams(params);
       exportParams.set("per_page", "100");
@@ -616,6 +618,7 @@ export function SubmissionsPage({
       link.download = "marquee-submissions.csv";
       link.click();
       URL.revokeObjectURL(url);
+      setExportNotice(`Exported ${exported.length.toLocaleString()} rows · marquee-submissions.csv`);
     } catch (error: unknown) {
       setExportError(errorSummary(error));
     } finally {
@@ -732,7 +735,7 @@ export function SubmissionsPage({
         : "Loading the conference submission register…"}
       actions={<><span class="results-export-slot">{resultsPlanId && <a class="button" href={`/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`} download="review-results.csv">Export scores (CSV)</a>}</span><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
     />
-    <div class={`export-message ${exportError ? "visible" : ""}`} role="status">{exportError || "Export status space reserved"}</div>
+    <div class={`export-message ${exportError || exportNotice ? "visible" : ""} ${exportNotice && !exportError ? "success" : ""}`} role="status">{exportError || exportNotice || "Export status space reserved"}</div>
     {/*
       Ready to place is a stage, not the decision. Its list is a true answer to
       a question nobody asked, sitting under a URL that reads like the question
