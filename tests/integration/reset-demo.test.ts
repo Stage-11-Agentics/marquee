@@ -46,7 +46,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   saved_views: 0,
   audit_log: 0,
   calendar_invites: 0,
-  speaker_tasks: 324,
+  speaker_tasks: 342,
   task_templates: 6,
   agenda_items: 25,
   embeds: 0,
