@@ -52,6 +52,8 @@ test("EMB-15 · saved embeds require organizer grants and return named, toggleab
   expect((await disabled.json() as { data: { enabled: boolean } }).data.enabled).toBe(false);
   const resolved = await env.DB.prepare("SELECT enabled FROM embeds WHERE id = ?").bind(createdBody.data.id).first<{ enabled: number }>();
   expect(resolved?.enabled).toBe(0);
+  const hidden = await request(`/api/v1/public/embeds/${createdBody.data.slug}`, {}, "");
+  expect(hidden.status).toBe(404);
 
   const listed = await request(`/api/v1/events/${EVENT_ID}/embeds`);
   expect(listed.status).toBe(200);
