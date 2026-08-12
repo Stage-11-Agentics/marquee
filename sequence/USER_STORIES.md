@@ -1010,3 +1010,48 @@ Three moves, no renumbering:
 3. **AC-87 – AC-90 leave the cuttable band** (recorded in `EVALUATION.md`): MRQ-22 is merged, so a cut would remove working code from a judged area. Q2 closes as resolved-built.
 
 **AC-270 – AC-272 remain reserved** for the drafted submitter/speaker split above; this amendment deliberately mints from **AC-273** so a later if-capacity opening does not collide. Next mint: **AC-275**.
+
+---
+
+## Amendment 19 — the cold start, from the true step zero (2026-08-12, client-directed)
+
+*Four stories minted: **US-83 – US-86**. Thirteen criteria minted: **AC-275 – AC-287**. Source: the cold-start design interview (rulings D1–D8, `prototypes/cold-start/DECISIONS.md`), binding prototype **v1.11**, human-side contract `docs/GETTING-STARTED.md`, agent-side contract `prototypes/cold-start/SKILL-SETUP-CHAPTER.md`.*
+
+*Why these exist: the product's cold start began at "Create the conference," silently presuming a deployed instance, an org row, and an authenticated owner — and the only auth is a magic link that needs mail, which is itself a setup output. Nothing designed how a person becomes the owner, and nothing in the build lets a conference be created at all. These stories are the **post-deadline band**: they join no Wednesday gate count and are built by MRQ-105 after the freeze (see `EVALUATION.md` §2.4).*
+
+*US-82 and AC-270 – AC-272 remain reserved for the submitter/speaker split; this amendment mints stories from **US-83** and criteria from **AC-275**.*
+
+### US-83 · Become the owner of a fresh install *(new, post-deadline)*
+
+**As a** technical organizer who has just deployed Marquee to my own Cloudflare account, **I want** the deploy to hand me a one-time claim link that makes me the owner, **so that** I can get into my own instance before mail exists, without a signup page a stranger could find first.
+
+- **AC-275**: A CLI command (registry name to be reconciled at build time; the contract calls it `setup claim-link`) mints a single-use claim token against an instance with an empty `people` table, storing only its hash and printing the claim URL once. Re-running it invalidates any unused prior token and prints a fresh one — the stated, permanent recovery path for a locked-out instance. It prints nothing secret beyond the URL itself.
+- **AC-276**: Opening a valid claim link and confirming name and email creates the organization row if none exists, the owner person, an org-wide `owner` membership, and a session — in one flow, with the token consumed inside the same statement that reads it. A used, expired, or unknown token renders one inert page that names the CLI re-run as the recovery and reveals nothing about the instance's state. The email is deliberately unverified: claiming must not depend on mail.
+- **AC-277**: An instance with no `owner` membership renders the unclaimed landing at `/` — it states that setup is agent-run and that the deploy terminal prints the claim link, and it exposes no other data or route that would confirm or deny anything to a stranger. Once claimed, the unclaimed landing is unreachable. `POST /api/v1/auth/magic-link`'s response behaviour is unchanged in every mode.
+- **AC-278**: Immediately after claiming, the owner is offered a scoped API token for their agent — minted through the existing `api_tokens` path (no new token kind), shown once, named, and revocable in Settings → API tokens. Declining the offer is first-class: every subsequent step is reachable through the screens without it.
+
+### US-84 · Start a conference on my own instance *(new, post-deadline)*
+
+**As an** instance owner, **I want** to create a conference through the API or the screens, **so that** my first conference is mine — not a hand-edited copy of someone else's demo.
+
+- **AC-279**: `POST /api/v1/events` (owner or program lead) creates a conference from name, dates, timezone, and venue, generating its slug. The new conference appears in the event switcher, and every event-scoped screen renders its honest empty state against it (AC-161 semantics) rather than erroring or borrowing another event's data.
+- **AC-280**: `/conferences/new` and the event switcher's `＋` drive that same endpoint. On an already-claimed, already-configured instance the flow is conference-scoped exactly as prototype v1.11 draws it: no claim step, no instance-level steps, the five-step checklist scoped to the new conference, and the prior conference one click away.
+- **AC-281**: The CLI gains the setup verbs the SKILL chapter names (create the conference; set tracks, formats, rooms; draft the call for speakers; set the evaluation plan), each driving the same routes as the screens, and `SKILL.md` gains the setup chapter **through `renderSkill()`** so the byte-equality gate still passes. The chapter's sequence instructs handing the claim link to a human and **stops before publish** — no CLI path in the chapter opens intake.
+
+### US-85 · Invite the second organizer *(new, post-deadline)*
+
+**As an** instance owner, **I want** to invite co-organizers with a link and manage who has access, **so that** my team can get in before mail is configured and a leaver's access ends the moment I remove them.
+
+- **AC-282**: An owner or program lead mints a single-use, expiring org invite link. The recipient opens it, confirms their name and email, and receives a person row, an org membership, and a session — the claim-link mechanics reused, not reimplemented. Pending invites are listed and revocable; a revoked or used link renders the same inert page as a dead claim link.
+- **AC-283**: The organizers surface lists every member and pending invite. Removing an organizer revokes their sessions immediately and preserves every record they authored, still attributed. The last remaining owner cannot remove themself. With mail configured, the invite can also be sent through the outbox; without mail, the copy-the-link path is complete and states that mail sending unlocks later.
+
+### US-86 · An instance that tells the truth about itself *(new, post-deadline)*
+
+**As an** operator on a half-configured install, **I want** the instance to say what is configured and warn me at the exact moment a gap becomes dangerous, **so that** missing mail is a known state instead of a trap my submitters find for me.
+
+- **AC-284**: An instance-status read (admin scope) reports mail, uploads, spam protection, and domain as configured-or-not from the real presence of their bindings and secrets — never from a stored flag that can drift. The Instance panel renders one row per concern in fixed positions; an unconfigured row carries the exact command that fixes it.
+- **AC-285**: Publishing a form on a mail-less instance interposes one explicit acknowledgment that names the consequences (no confirmations, no decision mail, no invites; sends queue honestly in the outbox). Acknowledging proceeds and is recorded; it never hard-blocks. With mail configured, no dialog appears.
+- **AC-286**: Removing the demo is one action: it deletes exactly the `is_demo`-scoped rows, flips `demo_mode` to 0, is idempotent, and leaves every non-demo row byte-untouched. It is confirmable in the UI with the same consequences-first dialog language as every other destructive action.
+- **AC-287**: The shipping PR closes the documentation loop: `docs/GETTING-STARTED.md`'s status banner and the README's "lands with the cold-start build" caveat are removed in the same change that makes them true, asserted by a static scan so the docs cannot describe a future that has already arrived.
+
+**Next mint: AC-288.**

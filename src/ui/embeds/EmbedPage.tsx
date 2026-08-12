@@ -202,6 +202,7 @@ export function EmbedPage({ data }: { data: PublicEmbedData }): JSX.Element {
   const action = EMBED_KIND_LABEL[data.kind];
   const hasFilters = Boolean(data.filters.track || data.filters.status);
   const layout: EmbedLayout = data.filters.layout ?? "cards";
+  const agendaHref = `/agenda?event=${encodeURIComponent(data.event.slug)}`;
   return (
     <div class="embed-site" data-embed-kind={data.kind} style={{ "--embed-accent": accent }}>
       <header class="embed-header"><strong>{data.event.name} · {action}{data.venue?.buildingName ? ` · ${data.venue.buildingName}` : ""}</strong><span>Published program</span></header>
@@ -221,14 +222,14 @@ export function EmbedPage({ data }: { data: PublicEmbedData }): JSX.Element {
       ) : null}
       {data.kind === "cfp" ? cfpBody(data.cfp) : data.kind === "speakers" ? (
         data.speakers.length > 0 ? (layout === "list" ? speakerList(data.speakers) : speakerCards(data.speakers))
-          : <div class="embed-empty"><div><strong>{hasFilters ? "No published speakers match" : "No published speakers yet"}</strong><span>{hasFilters ? "Clear a filter to bring the gallery back into view." : "The conference team has not published any speakers yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : "/agenda"}>{hasFilters ? "Show all speakers" : "Open the conference agenda"}</a></div></div>
+          : <div class="embed-empty"><div><strong>{hasFilters ? "No published speakers match" : "No published speakers yet"}</strong><span>{hasFilters ? "Clear a filter to bring the gallery back into view." : "The conference team has not published any speakers yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : agendaHref}>{hasFilters ? "Show all speakers" : "Open the conference agenda"}</a></div></div>
       ) : data.kind === "sessions" ? (
         data.sessions.length > 0 ? sessionsFlatList(data.sessions)
-          : <div class="embed-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : "/agenda"}>{hasFilters ? "Show full agenda" : "Open the conference agenda"}</a></div></div>
+          : <div class="embed-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : agendaHref}>{hasFilters ? "Show full agenda" : "Open the conference agenda"}</a></div></div>
       ) : (
         data.sessions.length > 0 ? <section class="embed-list" aria-label="Published agenda">
           {data.sessions.map((session) => <article class="embed-session" key={session.id}><time><strong>{session.time}</strong>{session.day}<br />{session.roomLabel}</time><div><h2>{session.title}</h2><p>{session.speakers.map((speaker) => speaker.name).join(" · ") || "—"}</p><div class="embed-tracks">{session.tracks.map(trackChip)}</div></div></article>)}
-        </section> : <div class="embed-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : "/agenda"}>{hasFilters ? "Show full agenda" : "Open the conference agenda"}</a></div></div>
+        </section> : <div class="embed-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : agendaHref}>{hasFilters ? "Show full agenda" : "Open the conference agenda"}</a></div></div>
       )}
     </div>
   );
@@ -281,7 +282,7 @@ export function EmbedConfigPage({
   const notApplicable = kind === "cfp";
   const layoutApplies = kind === "speakers";
   return (
-    <PublicShell event={event} title="Embed configuration" actions={<a class="public-button" href="/agenda">← Agenda</a>}>
+    <PublicShell event={event} title="Embed configuration" actions={<a class="public-button" href={`/agenda?event=${encodeURIComponent(event.slug)}`}>← Agenda</a>}>
       <main class="embed-config">
         <div class="public-kicker">Public surfaces · no login required</div>
         <div class="embed-config-grid">

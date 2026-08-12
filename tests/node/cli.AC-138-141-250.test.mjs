@@ -27,6 +27,7 @@ async function startApi() {
   const requests = [];
   let resetRead = 0;
   let seeded = false;
+  let agendaVersion = 1;
   const server = createServer(async (request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
     const body = await readRequestBody(request);
@@ -69,7 +70,57 @@ async function startApi() {
       return jsonResponse(response, 202, { selected: 1, queued: 1, duplicate: 0, outbox_ids: ["outbox_test"], outbox_rows: [], received: body });
     }
     if (request.method === "GET" && url.pathname === "/api/v1/events/evt_test/agenda") {
-      return jsonResponse(response, 200, { sessions: [{ id: "slot_test", title: "Test Session", room: "Room A" }], rooms: [], conflicts: [] });
+      return jsonResponse(response, 200, {
+        sessions: [{ id: "slot_test", title: "Test Session", room: "Room A", etag: `"slot_test:${agendaVersion}"` }],
+        rooms: [],
+        conflicts: [],
+      });
+    }
+    if (request.method === "PATCH" && url.pathname === "/api/v1/events/evt_test") {
+      return jsonResponse(response, 200, { data: { event: { id: "evt_test", ...body }, formats: [], tracks: [] } });
+    }
+    if (url.pathname === "/api/v1/events/evt_test/tracks") {
+      if (request.method === "GET") return jsonResponse(response, 200, { data: [{ id: "trk_test", name: "Agents" }] });
+      if (request.method === "POST") return jsonResponse(response, 201, { data: { id: "trk_new", ...body } });
+    }
+    if (request.method === "DELETE" && url.pathname === "/api/v1/events/evt_test/tracks/trk_test") {
+      return jsonResponse(response, 200, { deleted: "trk_test" });
+    }
+    if (url.pathname === "/api/v1/events/evt_test/formats") {
+      if (request.method === "GET") return jsonResponse(response, 200, { data: [{ id: "fmt_test", name: "Lightning" }] });
+      if (request.method === "POST") return jsonResponse(response, 201, { data: { id: "fmt_new", ...body } });
+    }
+    if (request.method === "DELETE" && url.pathname === "/api/v1/events/evt_test/formats/fmt_test") {
+      return jsonResponse(response, 200, { deleted: "fmt_test" });
+    }
+    if (request.method === "GET" && url.pathname === "/api/v1/events/evt_test/search") {
+      return jsonResponse(response, 200, { data: [{ id: "sub_test", kind: "session", title: "Test Session" }] });
+    }
+    if (request.method === "POST" && url.pathname === "/api/v1/events/evt_test/submissions/sub_test/schedule") {
+      return jsonResponse(response, 200, { id: "sub_test", status: "accepted", scheduled: body });
+    }
+    if (request.method === "POST" && url.pathname === "/api/v1/events/evt_test/submissions/sub_test/publish") {
+      return jsonResponse(response, 200, { id: "sub_test", status: "accepted", is_published: true });
+    }
+    if (request.method === "POST" && url.pathname === "/api/v1/events/evt_test/agenda/items") {
+      return jsonResponse(response, 201, { id: "slot_new", ...body, etag: '"slot_new:1"' });
+    }
+    if (url.pathname === "/api/v1/events/evt_test/agenda/items/slot_test") {
+      // The stub enforces the real precondition: only the agenda's current
+      // version may write, and a stale tag is a 409 exactly as D1's CAS is.
+      const ifMatch = request.headers["if-match"];
+      if (ifMatch !== `"slot_test:${agendaVersion}"`) {
+        return jsonResponse(response, 409, {
+          error: { code: "conflict", message: "stale ETag: the resource changed since the supplied version" },
+        });
+      }
+      agendaVersion += 1;
+      if (request.method === "PATCH") {
+        return jsonResponse(response, 200, { id: "slot_test", ...body, etag: `"slot_test:${agendaVersion}"` });
+      }
+      // The real route answers 204 with no body; the stub matches it so the
+      // CLI's own removal summary is what the test actually exercises.
+      if (request.method === "DELETE") { response.writeHead(204); return response.end(); }
     }
     return jsonResponse(response, 404, { error: { message: `unhandled ${request.method} ${url.pathname}` } });
   });
@@ -145,6 +196,96 @@ test("AC-138 + AC-139 + AC-140 + AC-250 · every CLI workflow uses bearer auth, 
     } finally {
       await secondApi.close();
     }
+  } finally {
+    await api.close();
+  }
+});
+
+test("AC-138 + AC-139 + AC-140 · the configure, schedule, publish and search verbs drive the loop with no raw request", async () => {
+  const api = await startApi();
+  try {
+    const runs = [];
+    runs.push(await runCli(scopedArgs(api.url, "event", "set", "evt_test", "--set", "name=AI Engineer NYC 2026", "--set", "timezone=America/New_York"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "tracks", "list", "evt_test"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "tracks", "add", "evt_test", "--set", "name=Agents", "--set", "color=#3B82F6"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "tracks", "remove", "evt_test", "trk_test"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "formats", "list", "evt_test"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "formats", "add", "evt_test", "--set", "name=Lightning", "--set", "default_duration_min=10", "--set", "min_duration_min=5", "--set", "max_duration_min=10"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "formats", "remove", "evt_test", "fmt_test"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "search", "evt_test", "--query", "retrieval"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "submissions", "schedule", "evt_test", "sub_test", "--set", "starts_at=1760000000000", "--set", "duration_min=30", "--set", "room_id=room_a"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "submissions", "publish", "evt_test", "sub_test"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "agenda", "place", "evt_test", "--set", "submission_id=sub_test", "--set", "starts_at=1760000000000", "--set", "room_id=room_a"), api.url));
+
+    for (const run of runs) {
+      assert.equal(run.code, 0, run.stderr);
+      assert.equal(run.stderr, "");
+      assert.doesNotThrow(() => JSON.parse(run.stdout), run.stdout);
+    }
+    assert.ok(api.requests.every((request) => request.headers.authorization === `Bearer ${TOKEN}`));
+
+    // AC-139's real content: --set coerces through JSON, so the API receives the
+    // numbers and strings its schema declares rather than everything as text.
+    const scheduled = api.requests.find((request) => request.path.endsWith("/schedule"));
+    assert.deepEqual(scheduled.body, { starts_at: 1760000000000, duration_min: 30, room_id: "room_a" });
+    const format = api.requests.find((request) => request.path.endsWith("/formats") && request.method === "POST");
+    assert.deepEqual(format.body, { name: "Lightning", default_duration_min: 10, min_duration_min: 5, max_duration_min: 10 });
+    const track = api.requests.find((request) => request.path.endsWith("/tracks") && request.method === "POST");
+    assert.deepEqual(track.body, { name: "Agents", color: "#3B82F6" }, "an unparseable value stays the string it looks like");
+    const settings = api.requests.find((request) => request.method === "PATCH" && request.path === "/api/v1/events/evt_test");
+    assert.deepEqual(settings.body, { name: "AI Engineer NYC 2026", timezone: "America/New_York" });
+    const search = api.requests.find((request) => request.path.endsWith("/search"));
+    assert.equal(search.query.q, "retrieval");
+    const publish = api.requests.find((request) => request.path.endsWith("/publish"));
+    assert.equal(publish.method, "POST");
+  } finally {
+    await api.close();
+  }
+});
+
+test("CONTRACT · agenda writes from the CLI carry the item's current ETag, and a stale one is refused", async () => {
+  const api = await startApi();
+  try {
+    const move = await runCli(scopedArgs(api.url, "agenda", "move", "evt_test", "slot_test", "--set", "starts_at=1760003600000"), api.url);
+    assert.equal(move.code, 0, move.stderr);
+    const patch = api.requests.find((request) => request.method === "PATCH" && request.path.endsWith("/agenda/items/slot_test"));
+    assert.equal(patch.headers["if-match"], '"slot_test:1"', "the CLI reads the tag off the agenda snapshot");
+    assert.deepEqual(patch.body, { starts_at: 1760003600000 });
+
+    // The move above advanced the stub's version. A caller holding the old tag
+    // must be refused rather than silently overwriting the newer write.
+    const stale = await runCli(scopedArgs(api.url, "agenda", "remove", "evt_test", "slot_test", "--if-match", '"slot_test:1"'), api.url);
+    assert.equal(stale.code, 1, "a stale ETag fails");
+    assert.match(stale.stderr, /stale ETag/);
+    assert.equal(stale.stdout, "", "a failed command writes nothing to stdout");
+
+    // Reading the tag fresh succeeds against the very same item.
+    const fresh = await runCli(scopedArgs(api.url, "agenda", "remove", "evt_test", "slot_test"), api.url);
+    assert.equal(fresh.code, 0, fresh.stderr);
+    assert.deepEqual(
+      JSON.parse(fresh.stdout),
+      { removed: "slot_test", event_id: "evt_test" },
+      "a 204 still yields one meaningful JSON value on stdout",
+    );
+    const removals = api.requests.filter((request) => request.method === "DELETE" && request.path.endsWith("/agenda/items/slot_test"));
+    assert.deepEqual(
+      removals.map((request) => request.headers["if-match"]),
+      ['"slot_test:1"', '"slot_test:2"'],
+      "the refused attempt carried the stale tag; the retry read the current one",
+    );
+  } finally {
+    await api.close();
+  }
+});
+
+test("CONTRACT · an unsupported --set key fails locally and names the legal ones", async () => {
+  const api = await startApi();
+  try {
+    const run = await runCli(scopedArgs(api.url, "tracks", "add", "evt_test", "--set", "colour=#3B82F6"), api.url);
+    assert.equal(run.code, 1);
+    assert.match(run.stderr, /unsupported --set key: colour/);
+    assert.match(run.stderr, /legal keys: name, color, position/);
+    assert.equal(api.requests.length, 0, "a bad key never reaches the API");
   } finally {
     await api.close();
   }

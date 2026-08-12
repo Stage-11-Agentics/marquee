@@ -78,15 +78,10 @@
       "id": "ev_01KZT6P2RK57Q4X146KJBNRM5S",
       "role": "review",
       "source_type": "comment"
-    },
-    {
-      "id": "art_01KZT713WGWG1EFPWQ69AMQ2HJ",
-      "role": "review",
-      "source_type": "artifact"
     }
   ],
   "id": "task_01KZT2Y6GJ3CGZ5Q17RBG3E84S",
-  "last_event_id": "ev_01KZT713WJQ74PBDRFYJBV8N0X",
+  "last_event_id": "ev_01KZT6P3PRV28KKV8FTHFFH3YQ",
   "last_status_changed_at": "2026-08-12T05:21:24Z",
   "linked_files": [],
   "priority": "high",
@@ -98,6 +93,6 @@
   "tags": null,
   "title": "Submissions list jumps on every view switch, feels slow, and its search placeholder states a count that is not true",
   "type": "bug",
-  "updated_at": "2026-08-12T05:27:25Z",
+  "updated_at": "2026-08-12T05:21:24Z",
   "urgency": null
 }

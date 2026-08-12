@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 
 import type { Env } from "../index";
+import { ICON_LINKS } from "../lib/head-icons";
 
 export const calendarRoutes = new Hono<{ Bindings: Env }>();
 
@@ -46,7 +47,7 @@ calendarRoutes.get("/s/:submissionId", async (context) => {
   if (!row) return context.notFound();
   const location = row.building_name ? `${row.room_name} · ${row.building_name}` : row.room_name;
   context.header("Cache-Control", "no-store");
-  return context.html(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(row.title)} · ${escapeHtml(row.event_name)}</title></head><body><main><h1>${escapeHtml(row.title)}</h1><p>${escapeHtml(location)}</p></main></body></html>`);
+  return context.html(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(row.title)} · ${escapeHtml(row.event_name)}</title>${ICON_LINKS}</head><body><main><h1>${escapeHtml(row.title)}</h1><p>${escapeHtml(location)}</p></main></body></html>`);
 });
 
 function escapeHtml(value: string): string {

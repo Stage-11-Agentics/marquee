@@ -313,8 +313,8 @@ export function run(ctx: SeedContext): void {
 
   const hotelFields: Array<[string, string, string, number, number]> = [
     // [key, label, type, required, position]
-    ["arrival_date", "Arrival date", "short_text", 1, 0],
-    ["departure_date", "Departure date", "short_text", 1, 1],
+    ["arrival_date", "Arrival date", "date", 1, 0],
+    ["departure_date", "Departure date", "date", 1, 1],
     ["notes", "Anything we should know?", "long_text", 0, 2],
   ];
   for (const [key, label, type, required, position] of hotelFields) {

@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { ICON_LINKS } from "../lib/head-icons";
 import {
   loadPublicAgenda,
   loadPublicSession,
@@ -17,7 +18,7 @@ import {
   PublicSpeakerPage,
 } from "../ui/public/agenda/PublicAgendaPage";
 
-const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Public program</title></head><body><div id="app"></div><script type="module" src="/src/ui/app.tsx"></script></body></html>`;
+const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Public program</title>${ICON_LINKS}</head><body><div id="app"></div><script type="module" src="/src/ui/app.tsx"></script></body></html>`;
 
 async function assetShell(assets: Fetcher | undefined, request: Request): Promise<string> {
   if (!assets || typeof assets.fetch !== "function") return FALLBACK_DOCUMENT;

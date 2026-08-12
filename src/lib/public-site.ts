@@ -79,7 +79,7 @@ export interface PublicAgendaData {
   tracks: PublicTrack[];
   sessions: PublicSession[];
   filters: {
-    day: string | null;
+    day: string;
     track: string | null;
     q: string | null;
     status: string | null;
@@ -478,7 +478,7 @@ export async function loadPublicAgenda(
   const query = sessionRowsQuery(event, filters);
   const rows = await database.prepare(query.sql).bind(...query.bindings).all<PublicSessionRow>();
   const allSessions = toPublicSessions(rows.results, event, venue.showComparison);
-  const selectedDay = filters.allDays ? null : filters.day ?? event.startsOn;
+  const selectedDay = filters.allDays || !filters.day || filters.day === "all" ? null : filters.day;
   const sessions = selectedDay
     ? allSessions.filter((session) => session.date === selectedDay || session.day === selectedDay)
     : allSessions;
@@ -489,7 +489,7 @@ export async function loadPublicAgenda(
     tracks: catalog,
     sessions,
     filters: {
-      day: selectedDay,
+      day: selectedDay ?? "all",
       track: filters.track ?? null,
       q: filters.q?.trim() || null,
       status: filters.status ?? null,

@@ -112,6 +112,8 @@ async function seedFixture(): Promise<void> {
       ["template-portal-ack", "acknowledge", "Read the speaker agreement", null, NOW - 86_400_000],
       ["template-portal-file", "file", "Upload your deck", null, NOW + 86_400_000],
       ["template-portal-form", "form", "Complete speaker details", FORM_ID, NOW + 172_800_000],
+      ["template-portal-finalize-talk", "acknowledge", "Finalize talk description", null, NOW + 259_200_000],
+      ["template-portal-finalize-bio", "acknowledge", "Finalize bio & photos", null, NOW + 345_600_000],
     ].map(([id, kind, name, formId, dueAt]) => env.DB.prepare(
       `INSERT INTO task_templates (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 0, ?, ?)`,
@@ -121,11 +123,15 @@ async function seedFixture(): Promise<void> {
        VALUES ('task-portal-ack', ?, ?, ?, 'template-portal-ack', 'Read the speaker agreement', 'acknowledge', 'Acknowledge the current speaker agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?),
               ('task-portal-file', ?, ?, ?, 'template-portal-file', 'Upload your deck', 'file', 'Upload the requested deck file.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?),
               ('task-portal-form', ?, ?, ?, 'template-portal-form', 'Complete speaker details', 'form', 'Answer the visible conditional fields.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?),
+              ('task-portal-subject-talk', ?, ?, ?, 'template-portal-finalize-talk', 'Finalize talk description', 'acknowledge', 'Confirm the title and abstract before publication.', ?, 'done', ?, '{"acknowledged":true}', NULL, 'marquee', ?, ?),
+              ('task-portal-subject-bio', ?, ?, ?, 'template-portal-finalize-bio', 'Finalize bio & photos', 'acknowledge', 'Review your bio and add a headshot for the speaker gallery.', ?, 'done', ?, '{"acknowledged":true}', NULL, 'marquee', ?, ?),
               ('task-portal-other', ?, ?, ?, 'template-portal-ack', 'Other speaker private task', 'acknowledge', 'This belongs only to another speaker.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?)`,
     ).bind(
       EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW - 86_400_000, NOW, NOW,
       EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 86_400_000, NOW, NOW,
       EVENT_ID, SPEAKER_ID, REVIEW_SUBMISSION_ID, NOW + 172_800_000, NOW, NOW,
+      EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 259_200_000, NOW, NOW, NOW,
+      EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 345_600_000, NOW, NOW, NOW,
       EVENT_ID, OTHER_PERSON_ID, "sub-portal-other", NOW + 86_400_000, NOW, NOW,
     ),
     env.DB.prepare(
@@ -181,6 +187,26 @@ describe.sequential("MRQ-16 speaker portal", () => {
     const { body } = await portal();
     expect(body.tasks.map((task: { id: string }) => task.id).slice(0, 3)).toEqual(["task-portal-ack", "task-portal-file", "task-portal-form"]);
     expect(body.tasks[0]).toMatchObject({ title: "Read the speaker agreement", kind: "acknowledge", status: "open", due_at: NOW - 86_400_000 });
+  });
+
+  test("CONTRACT · MRQ-93 · subject-bearing acknowledgement tasks retain their template identity while generic acknowledgement stays generic", async () => {
+    const { body } = await portal();
+    expect(body.tasks.find((task: { id: string }) => task.id === "task-portal-subject-talk")).toMatchObject({
+      template_id: "template-portal-finalize-talk",
+      submission_id: SUBMISSION_ID,
+      kind: "acknowledge",
+      payload: { kind: "acknowledge", acknowledged: true },
+    });
+    expect(body.tasks.find((task: { id: string }) => task.id === "task-portal-subject-bio")).toMatchObject({
+      template_id: "template-portal-finalize-bio",
+      submission_id: SUBMISSION_ID,
+      kind: "acknowledge",
+    });
+    expect(body.tasks.find((task: { id: string }) => task.id === "task-portal-ack")).toMatchObject({
+      template_id: "template-portal-ack",
+      kind: "acknowledge",
+      payload: { kind: "acknowledge", acknowledged: false },
+    });
   });
 
   test("AC-47 · acknowledge, file, and form task registry entries open real payload surfaces and validate completion", async () => {

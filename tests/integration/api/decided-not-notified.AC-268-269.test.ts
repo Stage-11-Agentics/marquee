@@ -1,6 +1,7 @@
 import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, test } from "vitest";
 
+import { NOTIFY_DECISIONS_BATCH_SIZE } from "../../../src/jobs/cascade/decisions";
 import { sha256Hex } from "../../../src/lib/auth/random-token";
 import { applyMigrations } from "../apply-migrations";
 
@@ -220,5 +221,138 @@ describe.sequential("MRQ-68 decided not notified", () => {
       href: "/submissions?status=not_notified",
       note: "Every decision has reached its speaker",
     });
+  });
+
+  test("CONTRACT · a non-demo suppression remains retryable", async () => {
+    const submissionId = "sub-mrq68-live-suppressed";
+    const decisionId = "decision-mrq68-live-suppressed";
+    const outboxId = "outbox-mrq68-live-suppressed";
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, last_write_source, submitted_at, created_at, updated_at)
+         VALUES (?, ?, 'abstract', 'Live suppressed decision', 'accepted', 'public', 'person-mrq68-good', 'marquee', ?, ?, ?)`,
+      ).bind(submissionId, EVENT_ID, NOW, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+         VALUES (?, ?, 'person-mrq68-good', 'speaker', 0, ?, ?)`,
+      ).bind("par-mrq68-live-suppressed", submissionId, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO submission_decisions
+          (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
+         VALUES (?, ?, ?, 'approve', 'accepted', 'Live suppression feedback', 'person-mrq68-actor', ?, NULL, ?, ?)`,
+      ).bind(decisionId, EVENT_ID, submissionId, NOW, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO outbox
+          (id, event_id, template_key, entity_id, person_id, to_email, subject, html, text, status,
+           suppressed_reason, idempotency_key, error, sent_at, created_at, updated_at)
+         VALUES (?, ?, 'acceptance', ?, 'person-mrq68-good', 'speaker@mrq68.test', 'Held', '<p>Held</p>', 'Held', 'suppressed',
+           'demo_mode_not_allowlisted', ?, NULL, NULL, ?, ?)`,
+      ).bind(outboxId, EVENT_ID, decisionId, "key-mrq68-live-suppressed", NOW, NOW),
+      env.DB.prepare("UPDATE events SET demo_mode = 0 WHERE id = ?").bind(EVENT_ID),
+    ]);
+    await env.DB.prepare("UPDATE submission_decisions SET outbox_id = ? WHERE id = ?").bind(outboxId, decisionId).run();
+
+    const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, { method: "POST", headers: authHeaders() });
+    expect(response.status).toBe(202);
+    const result = await response.json<{ selected: number; queued: number; remaining: number; next_cursor: string | null; outbox_ids: string[] }>();
+    expect(result).toMatchObject({ selected: 1, queued: 1, remaining: 0, next_cursor: null });
+
+    await env.DB.batch([
+      env.DB.prepare("UPDATE outbox SET status = 'sent', sent_at = ?, updated_at = ? WHERE id = ?").bind(NOW + 1, NOW + 1, result.outbox_ids[0]),
+      env.DB.prepare("UPDATE events SET demo_mode = 1 WHERE id = ?").bind(EVENT_ID),
+    ]);
+  });
+
+  test("CONTRACT · demo bulk notification is bounded, resumable, and converges on suppressed rows", async () => {
+    const candidateCount = 612;
+    const candidates = Array.from({ length: candidateCount }, (_, index) => {
+      const suffix = String(index).padStart(4, "0");
+      return {
+        submissionId: `sub-mrq68-bulk-${suffix}`,
+        participationId: `par-mrq68-bulk-${suffix}`,
+        decisionId: `decision-mrq68-bulk-${suffix}`,
+      };
+    });
+
+    for (let offset = 0; offset < candidates.length; offset += 25) {
+      const chunk = candidates.slice(offset, offset + 25);
+      await env.DB.batch([
+        ...chunk.map((candidate, index) => env.DB.prepare(
+          `INSERT INTO submissions
+            (id, event_id, kind, title, status, origin, submitter_person_id, last_write_source, submitted_at, created_at, updated_at)
+           VALUES (?, ?, 'abstract', ?, 'accepted', 'public', 'person-mrq68-good', 'marquee', ?, ?, ?)`,
+        ).bind(candidate.submissionId, EVENT_ID, `Bulk decision ${offset + index}`, NOW + offset + index, NOW + offset + index, NOW + offset + index)),
+        ...chunk.map((candidate) => env.DB.prepare(
+          `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+           VALUES (?, ?, 'person-mrq68-good', 'speaker', 0, ?, ?)`,
+        ).bind(candidate.participationId, candidate.submissionId, NOW, NOW)),
+        ...chunk.map((candidate, index) => env.DB.prepare(
+          `INSERT INTO submission_decisions
+            (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
+           VALUES (?, ?, ?, 'approve', 'accepted', NULL, 'person-mrq68-actor', ?, NULL, ?, ?)`,
+        ).bind(candidate.decisionId, EVENT_ID, candidate.submissionId, NOW + offset + index, NOW + offset + index, NOW + offset + index)),
+      ]);
+    }
+
+    type NotifyResult = {
+      selected: number;
+      queued: number;
+      skipped_no_address: number;
+      remaining: number;
+      next_cursor: string | null;
+      outbox_ids: string[];
+    };
+    const notify = async (cursor?: string | null): Promise<NotifyResult> => {
+      const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+      const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify${query}`, { method: "POST", headers: authHeaders() });
+      expect(response.status).toBe(202);
+      return response.json<NotifyResult>();
+    };
+    const suppress = async (ids: string[]): Promise<void> => {
+      await env.DB.prepare(
+        `UPDATE outbox
+         SET status = 'suppressed', suppressed_reason = 'demo_mode_not_allowlisted', updated_at = ?
+         WHERE id IN (SELECT value FROM json_each(?))`,
+      ).bind(NOW, JSON.stringify(ids)).run();
+    };
+
+    const first = await notify();
+    expect(first).toMatchObject({
+      selected: NOTIFY_DECISIONS_BATCH_SIZE,
+      queued: NOTIFY_DECISIONS_BATCH_SIZE,
+      skipped_no_address: 0,
+      remaining: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE,
+    });
+    expect(first.next_cursor).toBeTruthy();
+    await suppress(first.outbox_ids);
+
+    const second = await notify(first.next_cursor);
+    expect(second).toMatchObject({
+      selected: NOTIFY_DECISIONS_BATCH_SIZE,
+      queued: NOTIFY_DECISIONS_BATCH_SIZE,
+      skipped_no_address: 0,
+      remaining: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 2,
+    });
+    expect(second.next_cursor).toBeTruthy();
+    await suppress(second.outbox_ids);
+
+    const third = await notify(second.next_cursor);
+    expect(third).toMatchObject({ selected: NOTIFY_DECISIONS_BATCH_SIZE, queued: NOTIFY_DECISIONS_BATCH_SIZE, skipped_no_address: 0, remaining: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 3 });
+    expect(third.next_cursor).toBeTruthy();
+    await suppress(third.outbox_ids);
+
+    const fourth = await notify(third.next_cursor);
+    expect(fourth).toMatchObject({ selected: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 3, queued: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 3, skipped_no_address: 0, remaining: 0, next_cursor: null });
+    await suppress(fourth.outbox_ids);
+
+    const final = await notify();
+    expect(final).toEqual({ selected: 0, queued: 0, skipped_no_address: 0, remaining: 0, next_cursor: null, outbox_ids: [] });
+    const outbox = await env.DB.prepare(
+      `SELECT COUNT(*) AS total, COUNT(DISTINCT entity_id) AS decisions
+       FROM outbox WHERE event_id = ? AND entity_id LIKE 'decision-mrq68-bulk-%'`,
+    ).bind(EVENT_ID).first<{ total: number; decisions: number }>();
+    expect(outbox).toEqual({ total: candidateCount, decisions: candidateCount });
+    expect((await summary()).total).toBe(0);
   });
 });

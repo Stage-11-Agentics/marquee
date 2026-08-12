@@ -12,7 +12,7 @@ const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 test("AC-142 + AC-143 + AC-144 · the shipped skill is generated, concrete, product-vocabulary safe, and public", async () => {
   const skill = await readFile(resolve(ROOT, "SKILL.md"), "utf8");
   assert.equal(skill, renderSkill(), "SKILL.md must be regenerated from the command registry");
-  for (const heading of ["Seed", "Triage", "Chase", "Agenda", "Publish"]) {
+  for (const heading of ["Seed", "Configure", "Triage", "Chase", "Agenda", "Publish"]) {
     assert.match(skill, new RegExp(`^## ${heading}$`, "m"));
   }
   for (const term of ["Abstract", "Session", "Evaluation plan", "Committee", "Portal", "Task", "Agenda"]) {
@@ -21,8 +21,21 @@ test("AC-142 + AC-143 + AC-144 · the shipped skill is generated, concrete, prod
   for (const command of COMMAND_REGISTRY) {
     assert.match(skill, new RegExp(escapeRegex(`node cli/marquee.mjs ${command.usage.replace(/^marquee /, "")}`)));
   }
-  assert.match(skill, /POST \/api\/v1\/events\/\{eventId\}\/submissions\/\{submissionId\}\/schedule/);
-  assert.match(skill, /POST \/api\/v1\/events\/\{eventId\}\/submissions\/\{submissionId\}\/publish/);
+  // AC-143 allows a workflow to name a CLI command *or* a raw API call. Every
+  // workflow now has a command, so the skill teaches one surface rather than
+  // two — an agent that has to drop to curl mid-loop has found a gap, and the
+  // absence of curl is what proves there is not one.
+  assert.doesNotMatch(skill, /\bcurl\b/, "every workflow in the skill is a CLI command, not a raw request");
+  for (const workflow of [
+    "submissions schedule",
+    "submissions publish",
+    "agenda place",
+    "agenda move",
+    "search",
+    "event set",
+  ]) {
+    assert.match(skill, new RegExp(escapeRegex(`node cli/marquee.mjs ${workflow} `)), `${workflow} is demonstrated, not just listed`);
+  }
   assert.doesNotMatch(skill, /proposal|talk submission|CFP entry|panel review/i);
   for (const forbidden of [
     ["Stage", "11"].join(" "),

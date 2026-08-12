@@ -16,6 +16,7 @@ import { CommsScreen } from "../comms/CommsScreen";
 import { DashboardPage } from "../dashboard/DashboardPage";
 import { EvaluationPage } from "../evaluation/EvaluationPage";
 import { EventSettings } from "../settings/EventSettings";
+import { TaskTemplatesPage } from "../settings/TaskTemplatesPage";
 import { ApiTokensPage } from "../settings/ApiTokensPage";
 import { VenuesPage } from "../venues/VenuesPage";
 import { FormsPage } from "../forms/FormsPage";
@@ -50,7 +51,6 @@ export function AppShell({ eventName = "AIE NYC 2026" }: { eventName?: string })
   const closeOverlay = useCallback(() => setOverlay(null), []);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
-  const unavailable = useCallback((title: string, copy: string) => setOverlay({ kind: "modal", title, copy }), []);
   const resetDemo = useCallback(async () => {
     if (resetting) return;
     if (!window.confirm("Reset the demo conference? This removes demo edits, submissions, uploads, and queued work.")) return;
@@ -130,11 +130,13 @@ export function AppShell({ eventName = "AIE NYC 2026" }: { eventName?: string })
   if (blocked) return <SeatBlockedPage seat={seat} navigate={navigate} />;
   return <>
     <div class="app-shell">
-      <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} resetting={resetting} onReset={() => void resetDemo()} />
+      <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} />
       <main class="main">
         <Topbar
           eventName={eventName}
           routeName={routeName}
+          pathname={location.pathname}
+          navigate={navigate}
           identity={identity}
           userMenuOpen={userMenuOpen}
           openSearch={openSearch}
@@ -155,6 +157,7 @@ export function AppShell({ eventName = "AIE NYC 2026" }: { eventName?: string })
             : isEvaluation ? <EvaluationPage />
             : route?.id === "venues" ? <VenuesPage />
             : isApiTokens ? <ApiTokensPage navigate={navigate} />
+            : route?.id === "task-templates" ? <TaskTemplatesPage />
             : route?.id === "settings" ? <EventSettings navigate={navigate} />
             : isForms ? <FormsPage search={location.search} />
             : isAgenda ? <AgendaPage />

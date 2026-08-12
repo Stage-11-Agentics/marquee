@@ -206,6 +206,11 @@ export interface DeliveryHealthSnapshot {
   generated_at: number;
   event_id: string;
   demo_mode: boolean;
+  /**
+   * Kept in the response for API compatibility. The speaker page uses the
+   * explicit `summarizeSpeakerFollowups` derivation and the system page uses
+   * `summarizeSystemHealth`; neither page races these two domains together.
+   */
   summary: { level: HealthLevel; headline: string; detail: string };
   capabilities: readonly CapabilityStatus[];
   quota: SendQuota;
@@ -311,7 +316,7 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
         state: "held_back_demo",
         level: "ok",
         reason: "Held back on purpose — this conference is in demo mode.",
-        what_to_do: "Turn demo mode off in Conference settings when you are ready to send for real.",
+        what_to_do: "Nothing to do. Open the message in Communications to read exactly what this speaker would have received.",
       };
     }
     return {
@@ -411,6 +416,7 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
   const remaining = Math.max(0, limit - sentToday);
   const shortfall = Math.max(0, waiting - remaining);
   const detailTail = `${count(sentToday)} of ${count(limit)} sent today · ${count(remaining)} left`;
+  const sourceNote = "This allowance comes from your connected email configuration. A conference using its own production Resend key sets its own ceiling.";
 
   if (remaining === 0) {
     return {
@@ -421,8 +427,8 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
       level: "alarm",
       headline: "Today's send allowance is used up.",
       detail: waiting > 0
-        ? `${count(waiting)} ${plural(waiting, "message is", "messages are")} waiting and none can go out until tomorrow. ${detailTail}.`
-        : `Anything sent now waits until tomorrow. ${detailTail}.`,
+        ? `${count(waiting)} ${plural(waiting, "message is", "messages are")} waiting and none can go out until tomorrow. ${detailTail}. ${sourceNote}`
+        : `Anything sent now waits until tomorrow. ${detailTail}. ${sourceNote}`,
     };
   }
   if (shortfall > 0) {
@@ -433,7 +439,7 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
       remaining,
       level: "alarm",
       headline: `${count(shortfall)} ${plural(shortfall, "speaker would not", "speakers would not")} hear from you today.`,
-      detail: `${count(waiting)} ${plural(waiting, "message is", "messages are")} waiting and only ${count(remaining)} can go out. Send the rest tomorrow, or split the wave. ${detailTail}.`,
+      detail: `${count(waiting)} ${plural(waiting, "message is", "messages are")} waiting and only ${count(remaining)} can go out. Send the rest tomorrow, or split the wave. ${detailTail}. ${sourceNote}`,
     };
   }
   if (sentToday + waiting >= limit * 0.8) {
@@ -444,7 +450,7 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
       remaining,
       level: "warn",
       headline: "Today's send allowance is nearly spent.",
-      detail: `A wave larger than ${count(remaining)} ${plural(remaining, "message", "messages")} will not finish today. ${detailTail}.`,
+      detail: `A wave larger than ${count(remaining)} ${plural(remaining, "message", "messages")} will not finish today. ${detailTail}. ${sourceNote}`,
     };
   }
   return {
@@ -454,7 +460,7 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
     remaining,
     level: "ok",
     headline: "There is room to send today.",
-    detail: `A wave of up to ${count(remaining)} ${plural(remaining, "message", "messages")} goes out today. ${detailTail}.`,
+    detail: `A wave of up to ${count(remaining)} ${plural(remaining, "message", "messages")} goes out today. ${detailTail}. ${sourceNote}`,
   };
 }
 
@@ -572,7 +578,6 @@ function submissionsCapability(facts: DeliveryHealthFacts): CapabilityStatus {
 
 function emailCapability(facts: DeliveryHealthFacts): CapabilityStatus {
   const base = { id: "email", label: "Sending email", href: "/communications" as string | null };
-  const owedAlarms = facts.owed.filter((fact) => owedVerdict(fact, { now: facts.now, demoMode: facts.demo_mode }).level === "alarm").length;
   if (facts.outbox.failed > 0) {
     return {
       ...base,
@@ -581,15 +586,7 @@ function emailCapability(facts: DeliveryHealthFacts): CapabilityStatus {
       // left. What came back after a successful send is not something this
       // screen is told.
       headline: `${count(facts.outbox.failed)} ${plural(facts.outbox.failed, "message", "messages")} could not be sent.`,
-      detail: "Those people were never told. Work the ledger below — each row names the reason and opens the record it belongs to.",
-    };
-  }
-  if (owedAlarms > 0) {
-    return {
-      ...base,
-      level: "alarm",
-      headline: `${count(owedAlarms)} ${plural(owedAlarms, "speaker is", "speakers are")} owed a message that never arrived.`,
-      detail: "Their decision is recorded but nothing reached them. The ledger below has each one.",
+      detail: "Those messages never left the connected mail account. Check the mail configuration before trying again.",
     };
   }
   if (facts.outbox.stuck_queued > 0) {
@@ -605,7 +602,7 @@ function emailCapability(facts: DeliveryHealthFacts): CapabilityStatus {
       ...base,
       level: "ok",
       headline: "Email is held back on purpose — this conference is in demo mode.",
-      detail: `${count(facts.outbox.suppressed)} ${plural(facts.outbox.suppressed, "message is", "messages are")} written and waiting. Turn demo mode off in Conference settings to send for real.`,
+      detail: `${count(facts.outbox.suppressed)} ${plural(facts.outbox.suppressed, "message is", "messages are")} written and logged in Communications, where you can read exactly what each one would have said.`,
     };
   }
   return {
@@ -842,33 +839,65 @@ function readCrons(source: Record<string, unknown>): CronFact[] {
   });
 }
 
-function summarize(
-  capabilities: readonly CapabilityStatus[],
-  urgent: number,
+export interface HealthSummary {
+  level: HealthLevel;
+  headline: string;
+  detail: string;
+}
+
+/**
+ * The people page has one job: show who has not heard from the organizer and
+ * whether the connected mail account can carry the next wave. Capability rows
+ * are intentionally absent from this derivation.
+ */
+export function summarizeSpeakerFollowups(
+  owedTotal: number,
+  owedUrgent: number,
   waitingCount: number,
   quota: SendQuota,
-  facts: DeliveryHealthFacts,
-): { level: HealthLevel; headline: string; detail: string } {
-  if (urgent > 0) {
+  sentLast7Days = 0,
+): HealthSummary {
+  if (owedTotal > 0) {
+    const level = owedUrgent > 0 || quota.level === "alarm"
+      ? "alarm"
+      : quota.level === "warn" ? "warn" : "ok";
     return {
-      level: "alarm",
-      headline: `${count(urgent)} ${plural(urgent, "speaker has", "speakers have")} not heard from you.`,
-      detail: "Their decision is recorded and the message never reached them. Start at the top of the ledger — each row opens its record.",
+      level,
+      headline: `${count(owedTotal)} ${plural(owedTotal, "speaker has", "speakers have")} not heard from you.`,
+      detail: owedUrgent > 0
+        ? "Their decision is recorded and the message has not reached them. Open the follow-up list — each row opens its record."
+        : quota.level === "alarm"
+          ? "Today's send allowance will not carry these messages. See the allowance below, then open the follow-up list to see the exact state."
+        : "These messages are still in flight or held on purpose. Open the follow-up list to see the exact state.",
     };
   }
-  const failing = capabilities.filter((capability) => capability.level === "alarm");
-  if (failing.length > 0) return { level: "alarm", headline: failing[0].headline, detail: failing[0].detail };
   if (quota.level === "alarm") return { level: "alarm", headline: quota.headline, detail: quota.detail };
-  const warning = capabilities.filter((capability) => capability.level === "warn");
-  if (warning.length > 0) return { level: "warn", headline: warning[0].headline, detail: warning[0].detail };
   if (quota.level === "warn") return { level: "warn", headline: quota.headline, detail: quota.detail };
-  const waiting = waitingCount;
   return {
     level: "ok",
     headline: "Everyone who has been decided has been told.",
-    detail: waiting === 0
-      ? `${count(facts.outbox.sent_last_7_days)} ${plural(facts.outbox.sent_last_7_days, "message", "messages")} sent in the last seven days. Nothing is stuck.`
-      : `${count(waiting)} ${plural(waiting, "message is", "messages are")} in flight and nothing is stuck.`,
+    detail: waitingCount === 0
+      ? `${count(sentLast7Days)} ${plural(sentLast7Days, "message", "messages")} sent in the last seven days. Nothing is stuck.`
+      : `${count(waitingCount)} ${plural(waitingCount, "message is", "messages are")} in flight and nothing is stuck.`,
+  };
+}
+
+/**
+ * The system page has one job: report capability and infrastructure health.
+ * It never receives owed-speaker or quota facts, so a person-facing gap cannot
+ * become its headline.
+ */
+export function summarizeSystemHealth(capabilities: readonly CapabilityStatus[]): HealthSummary {
+  const failing = capabilities.find((capability) => capability.level === "alarm");
+  if (failing) return { level: "alarm", headline: failing.headline, detail: failing.detail };
+  const warning = capabilities.find((capability) => capability.level === "warn");
+  if (warning) return { level: "warn", headline: warning.headline, detail: warning.detail };
+  const unknown = capabilities.find((capability) => capability.level === "unknown");
+  if (unknown) return { level: "unknown", headline: `The ${unknown.label} check has not reported yet.`, detail: unknown.detail };
+  return {
+    level: "ok",
+    headline: "System health is clear.",
+    detail: "All eight capability checks are reporting normally.",
   };
 }
 
@@ -900,7 +929,7 @@ export function deriveDeliveryHealth(
     generated_at: facts.now,
     event_id: facts.event_id,
     demo_mode: facts.demo_mode,
-    summary: summarize(capabilities, urgent, judged.length, quota, facts),
+    summary: summarizeSpeakerFollowups(facts.owed_total, urgent, quota.waiting, quota, facts.outbox.sent_last_7_days),
     capabilities,
     quota,
     totals: {

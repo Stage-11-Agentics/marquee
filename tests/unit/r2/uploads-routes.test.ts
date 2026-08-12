@@ -68,7 +68,7 @@ CREATE TABLE form_fields (
   id TEXT PRIMARY KEY, form_id TEXT NOT NULL, key TEXT NOT NULL, label TEXT NOT NULL,
   help_text TEXT,
   type TEXT NOT NULL CHECK (
-    type IN ('short_text', 'long_text', 'single_select', 'multi_select', 'url', 'email', 'file', 'number')
+    type IN ('short_text', 'long_text', 'single_select', 'multi_select', 'url', 'email', 'file', 'number', 'date')
   ),
   required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1)),
   position INTEGER NOT NULL,

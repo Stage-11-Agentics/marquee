@@ -6,6 +6,10 @@ import { REPOSITORY_ROOT, runStub } from "./lib/command.mjs";
 const e2eDirectory = resolve(REPOSITORY_ROOT, "tests/e2e");
 const specifications = await readdir(e2eDirectory).catch(() => []);
 
+if (process.env.MARQUEE_E2E_URL) {
+  await import("./check-r2-cors.mjs");
+}
+
 if (!specifications.some((name) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(name))) {
   await runStub({
     command: "e2e",
@@ -16,5 +20,6 @@ if (!specifications.some((name) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(name))) {
 } else if (!process.env.MARQUEE_E2E_URL) {
   throw new Error("e2e requires MARQUEE_E2E_URL; local dev is not a substitute");
 } else {
+  await import("./check-r2-cors.mjs");
   await import("@playwright/test/cli");
 }

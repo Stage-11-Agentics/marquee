@@ -3,8 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Marquee — Pipeline v1.10 prototype</title>
-  <!-- v1.10 (2026-08-11): public-widget widening (collaborator note, rubric
+  <title>Marquee — Pipeline v1.12 prototype</title>
+  <!-- v1.12 (2026-08-12): the theme system (MRQ-103, operator directive
+       overriding DESIGN.md's no-dark-mode-by-Wednesday ruling). Every color
+       that was hardcoded in CSS/JS is now a token; a theme is one CSS block
+       on html[data-theme] plus a THEMES registry row. Day is unchanged and
+       remains the default (no prefers-color-scheme auto-switch — judges get
+       Day unless someone chooses otherwise; choice persists in localStorage).
+       Night is the quiet server room: strictly neutral greys, chroma held
+       for status and the restrained teal, the agenda canvas still darker
+       than the page so day's figure-ground survives. Adding a theme is one
+       CSS block + one registry row. Contrast-measured: every text pair
+       ≥ 4.5:1, most 6–16:1. Seeded tracks carry per-theme octaves (day hues
+       are tuned for white and go muddy on dark ground); custom tracks keep
+       their stored color. ?theme= overrides for one load without persisting.
+       v1.11 (2026-08-12): the cold start, from the true step zero. Initial
+       setup is run by the operator's own coding agent reading SKILL.md
+       (client ruling D4); the UI is the receipt. New: an unclaimed-instance
+       landing, the agent setup replay (two phases: deploy → claim link, then
+       token → conference provisioning), the human claim screen (identity
+       cannot ride on magic-link mail — mail is a setup output, so the deploy
+       terminal prints a one-time claim link), the token handoff with three
+       doors (agent continues · by hand · explore the demo), an Instance panel
+       (Mail/Uploads/Spam/Domain honestly configured-or-not; opening intake
+       without mail warns and requires acknowledgment, never blocks), the demo
+       conference side-by-side (DEMO-chipped in the switcher, explorable via
+       peek, removable without touching your data), organizer management with
+       mail-independent one-time invite links, and second-conference creation
+       through the switcher's ＋ (same checklist, conference-scoped, instance
+       rows already green). Decisions: prototypes/cold-start/DECISIONS.md.
+       v1.10 (2026-08-11): public-widget widening (collaborator note, rubric
        area "Public Widgets"). The embed dialog grows from two formats to four:
        Agenda, Sessions (flat filterable list), Speakers (cards or list layout),
        and Call for speakers (US-16 promoted into scope — live deadline/formats
@@ -65,7 +93,129 @@
       --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
       --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       --display: var(--mono);     /* the display face is the machine face  */
+
+      /* ── Theme extensions (v1.11 / MRQ-103): every hex that was hardcoded
+         below is now a token so themes can re-light the whole panel. Day
+         values are the shipped colors, verbatim. ─────────────────────────── */
+      --accent-hover: #095b62;
+      --on-accent: #fff;
+      --accent-line: #a9cdd0;
+      --success-ink: #0c6b41;
+      --success-line: #b6dcc7;
+      --danger-ink: #8f2118;
+      --danger-line: #e6b8b2;
+      --warning-line: #e3cda2;
+      --warning-ink: #6b4700;
+      --warning-edge: #d6b25c;    /* dashed attention border                */
+      --on-ink: #dff2f3;          /* text on inverse (--ink) chrome         */
+      --on-ink-plain: #eaf3f6;
+      --on-ink-line: #4a5a66;
+      --on-ink-hover: #6fd3da;
+      --backdrop: rgba(16,24,32,.46);
+      --veil: rgba(255,255,255,.72);        /* pipeline stage face over bg  */
+      --veil-strong: rgba(255,255,255,.82);
+      --veil-dim: rgba(255,255,255,.5);
+      --wave-tick: rgba(255,255,255,.85);   /* simulated bg through the bar */
+      --break-tint: #81838b;      /* neutral: break tiles, prior-year line  */
+      --break-stripe: #eaeff3;
+      --spectrum: linear-gradient(90deg,#635bff,#db4c3f,#0d9488,#d97706,#2563eb,#9333ea,#4d7c0f);
+      /* the dark-instrument sub-language: agenda canvas, status hero, logs */
+      --canvas-ink-soft: #a8bdc6;
+      --canvas-eyebrow: #7fb3b8;
+      --canvas-muted: #7d949f;
+      --canvas-link: #6fd3da;
+      --canvas-accent: #4fd6b0;
+      --canvas-code-ink: #cfe4e6;
+      --canvas-log-ink: #b9ccd4;
+      --canvas-chip-bg: rgba(255,255,255,.07);
+      --canvas-chip-line: #3a4d59;
+      --canvas-chip-ink: #cfe0e7;
+      --canvas-ok-bg: rgba(79,214,176,.12);
+      --canvas-ok-line: #2c6a58;
+      --canvas-ok-ink: #86e3c4;
+      --canvas-warn-bg: rgba(240,201,128,.14);
+      --canvas-warn-line: #7a5f22;
+      --canvas-warn-ink: #f0c980;
+      --canvas-grid: #1e2c36;
+      --canvas-band-line: #1c2a34;
+      --canvas-day-ink: #c3d6de;
+      --canvas-tile: #16242e;
+      --canvas-tile-line: #2f424e;
+      --canvas-tile-ink: #eaf3f6;
+      --canvas-tile-muted: #90a8b4;
+      --canvas-alarm: #ff8a80;
+      --canvas-alarm-ink: #2a0f0c;
+      --canvas-btn: #1d2f3a;
+      --canvas-btn-line: #35505e;
+      --canvas-drop: #35b3bd;
+      --canvas-drop-bg: rgba(53,179,189,.14);
     }
+
+
+
+    /* ════ NIGHT ══════════════════════════════════════════════════════════
+       The quiet server room: strictly neutral greys, chroma reserved for
+       status and the restrained teal. The agenda canvas stays DARKER than
+       the page — the day figure-ground relationship preserved as-is.
+       Measured: all text pairs 6.3–15.7:1. ─────────────────────────────── */
+    html[data-theme="night"] {
+      --bg: #121416;
+      --panel: #1a1d20;
+      --sunk: #15181b;
+      --graph: #21252a;
+      --ink: #e9edf0;
+      --ink-soft: #c0c8ce;
+      --muted: #93a0a9;
+      --line: #2a3036;
+      --line-strong: #3a4249;
+      --accent: #3fbac2;
+      --accent-soft: #0f3134;
+      --accent-dark: #7cd7dd;
+      --accent-hover: #5cc9d0;
+      --on-accent: #062629;
+      --accent-line: #2a565b;
+      --danger: #f5867c;
+      --danger-soft: #391715;
+      --danger-ink: #ffaba2;
+      --danger-line: #6e2d27;
+      --warning: #dcb75a;
+      --warning-soft: #2f260f;
+      --warning-line: #695620;
+      --warning-ink: #eeca8a;
+      --warning-edge: #83702c;
+      --success: #5ac98e;
+      --success-soft: #122d1e;
+      --success-ink: #92dcb6;
+      --success-line: #2b5c42;
+      --on-ink: #101315;
+      --on-ink-plain: #101315;
+      --on-ink-line: #a2adb5;
+      --on-ink-hover: #0b6a72;
+      --backdrop: rgba(0,0,0,.62);
+      --veil: rgba(255,255,255,.04);
+      --veil-strong: rgba(255,255,255,.06);
+      --veil-dim: rgba(255,255,255,.02);
+      --wave-tick: rgba(0,0,0,.45);
+      --break-tint: #939ea6;
+      --break-stripe: #1b2025;
+      --spectrum: linear-gradient(90deg,#8b85ff,#f2705f,#2ec4b6,#f59e0b,#5b8def,#b06ef5,#84cc16);
+      --canvas: #0d0f11;
+      --canvas-line: #262b30;
+      --canvas-ink: #dbe3e8;
+      --canvas-ink-soft: #a4b2ba;
+      --canvas-eyebrow: #84acb2;
+      --canvas-muted: #8d9ca5;
+      --canvas-grid: #1d2226;
+      --canvas-band-line: #1b2024;
+      --canvas-day-ink: #c6ced4;
+      --canvas-tile: #14181b;
+      --canvas-tile-line: #2c3338;
+      --canvas-btn: #1c2226;
+      --canvas-btn-line: #363e42;
+      --canvas-drop: #3fbac2;
+      --canvas-drop-bg: rgba(63,186,194,.14);
+    }
+
     * { box-sizing: border-box; }
     html { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
     body { margin: 0; min-width: 320px; }
@@ -82,7 +232,7 @@
 
     .prototype-badge {
       position: fixed; z-index: 1000; right: 12px; top: 12px;
-      background: var(--ink); color: #dff2f3; border: 1px solid var(--accent);
+      background: var(--ink); color: var(--on-ink); border: 1px solid var(--accent);
       box-shadow: none; border-radius: var(--radius);
       padding: 6px 10px; font: 600 10px/1 var(--mono); letter-spacing: .14em;
       text-transform: uppercase; pointer-events: none;
@@ -124,6 +274,12 @@
     .result-type { color: var(--accent-dark); font: 600 10px/1 var(--mono); text-transform: uppercase; letter-spacing: .1em; }
     .result-title { font-size: 12px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
     .top-user { width: 28px; height: 28px; border-radius: var(--radius); border: 1px solid var(--line-strong); background: var(--sunk); color: var(--ink-soft); display: grid; place-items: center; font: 600 10.5px/1 var(--mono); letter-spacing: .06em; flex: 0 0 auto; }
+    /* Theme switch: an instrument selector, fixed width so the topbar never
+       jumps when the label changes (elements never jump). */
+    .theme-switch { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+    .theme-switch .glyph { color: var(--muted); font-size: 12px; width: 14px; text-align: center; }
+    .theme-switch select { width: 124px; height: 30px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk); color: var(--ink); font: 600 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 0 6px; outline: none; }
+    .theme-switch select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
     .page { padding: 26px 30px 56px; max-width: 1500px; margin: 0 auto; }
     .page-head { min-height: 66px; display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 20px; }
     .page-head h1 { margin: 0 0 6px; letter-spacing: -.018em; font-size: 22px; line-height: 1.2; font-weight: 600; }
@@ -131,10 +287,10 @@
     .head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; min-height: 36px; }
     .button { min-height: 30px; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 7px 12px; background: var(--panel); color: var(--ink-soft); font: 600 11.5px/1 var(--mono); letter-spacing: .02em; display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; transition: background 110ms, color 110ms, border-color 110ms; }
     .button:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
-    .button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .button.primary:hover { background: #095b62; border-color: #095b62; color: #fff; }
+    .button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    .button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
     .button.danger { color: var(--danger); border-color: var(--line-strong); }
-    .button.danger:hover { background: var(--danger-soft); border-color: var(--danger); color: #8f2118; }
+    .button.danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger-ink); }
     .button.small { min-height: 26px; padding: 5px 9px; font-size: 10.5px; }
     .button.ghost { border-color: transparent; background: transparent; }
     .button:disabled { opacity: .45; cursor: not-allowed; }
@@ -159,14 +315,14 @@
     .segment button { border: 0; background: transparent; border-radius: 2px; padding: 6px 10px; color: var(--muted); font: 600 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; min-width: 56px; }
     .segment button.active { background: var(--panel); color: var(--accent-dark); box-shadow: inset 0 0 0 1px var(--accent); }
     .chip { display: inline-flex; align-items: center; gap: 5px; min-height: 20px; padding: 3px 7px; border-radius: 2px; border: 1px solid var(--line-strong); background: var(--sunk); color: var(--ink-soft); font: 400 10px/1.2 var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .chip.accepted, .chip.published, .chip.scheduled { color: #0c6b41; background: var(--success-soft); border-color: #b6dcc7; }
-    .chip.review, .chip.in-review { color: var(--warning); background: var(--warning-soft); border-color: #e3cda2; }
-    .chip.rejected, .chip.overdue { color: #8f2118; background: var(--danger-soft); border-color: #e6b8b2; font-weight: 600; }
-    .chip.session { color: var(--accent-dark); background: var(--accent-soft); border-color: #a9cdd0; }
+    .chip.accepted, .chip.published, .chip.scheduled { color: var(--success-ink); background: var(--success-soft); border-color: var(--success-line); }
+    .chip.review, .chip.in-review { color: var(--warning); background: var(--warning-soft); border-color: var(--warning-line); }
+    .chip.rejected, .chip.overdue { color: var(--danger-ink); background: var(--danger-soft); border-color: var(--danger-line); font-weight: 600; }
+    .chip.session { color: var(--accent-dark); background: var(--accent-soft); border-color: var(--accent-line); }
     .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-    .toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%,10px); z-index: 1200; background: var(--ink); color: #dff2f3; border: 1px solid var(--accent); border-radius: var(--radius); padding: 10px 13px; font: 400 11.5px/1.4 var(--mono); box-shadow: none; opacity: 0; pointer-events: none; transition: opacity 110ms, transform 110ms; max-width: min(500px,88vw); }
+    .toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%,10px); z-index: 1200; background: var(--ink); color: var(--on-ink); border: 1px solid var(--accent); border-radius: var(--radius); padding: 10px 13px; font: 400 11.5px/1.4 var(--mono); box-shadow: none; opacity: 0; pointer-events: none; transition: opacity 110ms, transform 110ms; max-width: min(500px,88vw); }
     .toast.show { opacity: 1; transform: translate(-50%,0); }
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(16,24,32,.46); z-index: 500; display: grid; place-items: center; padding: 18px; }
+    .modal-backdrop { position: fixed; inset: 0; background: var(--backdrop); z-index: 500; display: grid; place-items: center; padding: 18px; }
     .modal { width: min(540px,100%); background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: none; overflow: hidden; }
     .modal-head { padding: 18px 20px 12px; border-bottom: 1px solid var(--line); }
     .modal-head h2 { margin: 0 0 7px; font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
@@ -183,7 +339,49 @@
     .empty-state h2 { margin:0 0 9px; font-size:18px; font-weight:600; }
     .empty-state p { margin:0 auto 20px; color:var(--muted); font-size:12.5px; line-height:1.6; }
     .empty-preview { position:fixed; z-index:999; right:12px; bottom:12px; font:600 9px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); background:var(--panel); border:1px solid var(--line-strong); border-radius:var(--radius); padding:5px 9px; }
-    .empty-preview:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+    /* ── v1.11 · cold start ─────────────────────────────────────────────── */
+    .term { background:var(--canvas); border:1px solid var(--canvas-line); border-radius:var(--radius); padding:16px 18px; font:11px/1.7 var(--mono); color:#cfe4e6; overflow-x:auto; }
+    .term-line { display:grid; grid-template-columns:52px 1fr; gap:10px; margin-bottom:7px; }
+    .term-who { color:#7fb3b8; font-weight:600; text-align:right; white-space:nowrap; }
+    .term-line.op .term-who { color:#e8d48b; }
+    .term-body { white-space:pre-wrap; word-break:break-word; }
+    .term-ok { color:#8fd0a0; }
+    .term-note { color:#8b9aa3; }
+    .term-claim { display:block; margin-top:4px; padding:8px 10px; border:1px dashed #3a4d59; border-radius:2px; color:#cfe4e6; background:rgba(255,255,255,.04); word-break:break-all; }
+    .setup-doors { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .door-card { display:flex; flex-direction:column; gap:6px; text-align:left; padding:14px; min-height:118px; border:1px solid var(--line-strong); border-radius:var(--radius); background:var(--panel); cursor:pointer; transition:border-color 110ms, background 110ms; }
+    .door-card:hover { border-color:var(--accent); background:var(--accent-soft); }
+    .door-card.primary-door { border-color:var(--accent); }
+    .door-card strong { font-size:12px; }
+    .door-card span { font-size:11px; color:var(--muted); line-height:1.5; }
+    .door-card .door-go { margin-top:auto; font:600 9px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--accent-dark); }
+    .instance-rows { display:flex; flex-direction:column; }
+    .inst-row { display:grid; grid-template-columns:150px 112px 1fr auto; gap:12px; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); min-height:40px; }
+    .inst-row:last-child { border-bottom:0; }
+    .inst-row .inst-name { font-weight:600; font-size:11px; }
+    .chip.inst-ok { color:var(--ok, #1e7a46); border-color:var(--line-strong); width:104px; justify-content:center; }
+    .chip.inst-off { color:var(--danger, #a3341f); border-color:var(--danger, #a3341f); width:104px; justify-content:center; }
+    .inst-note { font-size:10.5px; color:var(--muted); line-height:1.5; }
+    .switcher-alt { display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center; margin:-12px 4px 18px; padding:6px 8px; border:1px solid var(--line); border-radius:var(--radius); background:var(--sunk); font-size:10.5px; color:var(--ink-soft); cursor:pointer; text-align:left; min-height:32px; }
+    .switcher-alt:hover { border-color:var(--accent); }
+    .switcher-alt.removed { color:var(--muted); cursor:default; border-style:dashed; }
+    .switcher-alt.removed:hover { border-color:var(--line); }
+    .switcher-alt .demo-chip { font:600 8px/1 var(--mono); letter-spacing:.12em; padding:3px 5px; border:1px solid var(--line-strong); border-radius:2px; color:var(--accent-dark); background:var(--panel); }
+    .peek-bar { position:sticky; top:0; z-index:60; display:flex; align-items:center; gap:12px; padding:8px 26px; background:var(--canvas); color:#cfe4e6; font:600 10px/1.4 var(--mono); letter-spacing:.06em; }
+    .peek-bar .button { background:transparent; color:#cfe4e6; border-color:#3a4d59; }
+    .peek-bar .button:hover { border-color:#7fb3b8; }
+    .peek-bar-spacer { margin-left:auto; }
+    .claim-note { border:1px solid var(--line-strong); border-left:3px solid var(--accent); border-radius:var(--radius); background:var(--sunk); padding:10px 12px; font-size:11px; color:var(--ink-soft); line-height:1.6; }
+    .token-line { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; }
+    .org-row { display:grid; grid-template-columns:1fr 210px 92px 84px; gap:12px; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); min-height:44px; }
+    .org-row:last-child { border-bottom:0; }
+    .org-row .org-name { font-weight:600; font-size:11.5px; }
+    .org-row .org-note { display:block; font-weight:400; font-size:10px; color:var(--muted); }
+    .org-row .org-email { font:400 10.5px/1.4 var(--mono); color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .org-row .chip { width:84px; justify-content:center; }
+    @media (max-width:1100px) { .setup-doors { grid-template-columns:1fr; } .org-row { grid-template-columns:1fr 92px 84px; } .org-row .org-email { display:none; } .inst-row { grid-template-columns:118px 112px 1fr; } .inst-row .inst-fix { grid-column:3; justify-self:end; } }
+    .empty-preview:hover { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
     .detail-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr); gap:14px; align-items:start; }
     .definition-list { display:grid; grid-template-columns:150px 1fr; gap:0; }
     .definition-list dt, .definition-list dd { margin:0; padding:10px 0; border-bottom:1px solid var(--line); font-size:11px; }
@@ -218,9 +416,9 @@
     .import-step { padding:10px; background:var(--sunk); color:var(--muted); border-right:1px solid var(--line); font:600 9.5px/1.3 var(--mono); letter-spacing:.06em; text-transform:uppercase; text-align:center; }
     .import-step:last-child { border-right:0; }
     .import-step.active { background:var(--accent-soft); color:var(--accent-dark); }
-    .code-block { background:var(--canvas); color:#cfe4e6; border:1px solid var(--canvas-line); border-radius:var(--radius); padding:14px; overflow:auto; font:11px/1.65 var(--mono); white-space:pre; }
-    .live-log { background:var(--canvas); color:#b9ccd4; border:1px solid var(--canvas-line); border-radius:var(--radius); padding:12px; min-height:150px; font:10px/1.75 var(--mono); }
-    .live-log strong { color:#4fd6b0; font-weight:600; }
+    .code-block { background:var(--canvas); color:var(--canvas-code-ink); border:1px solid var(--canvas-line); border-radius:var(--radius); padding:14px; overflow:auto; font:11px/1.65 var(--mono); white-space:pre; }
+    .live-log { background:var(--canvas); color:var(--canvas-log-ink); border:1px solid var(--canvas-line); border-radius:var(--radius); padding:12px; min-height:150px; font:10px/1.75 var(--mono); }
+    .live-log strong { color:var(--canvas-accent); font-weight:600; }
     .agenda-list-head, .agenda-list-row { display:grid; grid-template-columns:110px 72px minmax(220px,1fr) minmax(150px,.7fr) 130px 150px 90px; gap:10px; align-items:center; padding:0 14px; }
     .agenda-list-head { min-height:36px; position:sticky; top:0; z-index:2; background:var(--sunk); border-bottom:1px solid var(--line-strong); color:var(--muted); font-size:9px; text-transform:uppercase; letter-spacing:.12em; font-weight:600; }
     .agenda-list-head button { border:0; background:transparent; color:inherit; text-align:left; padding:0; font:inherit; text-transform:inherit; letter-spacing:inherit; }
@@ -235,7 +433,7 @@
     .session-tile .tile-actions, .track-tile .tile-actions { display:flex; gap:3px; margin-top:4px; }
     .tile-actions button { width:19px; height:18px; border:1px solid var(--line-strong); border-radius:2px; background:var(--panel); font-size:9px; padding:0; }
     .tile-actions button:hover { background:var(--accent-soft); border-color:var(--accent); }
-    .break-tile { border-left-color:var(--muted) !important; background:repeating-linear-gradient(135deg,var(--sunk),var(--sunk) 6px,#eaeff3 6px,#eaeff3 12px) !important; }
+    .break-tile { border-left-color:var(--muted) !important; background:repeating-linear-gradient(135deg,var(--sunk),var(--sunk) 6px,var(--break-stripe) 6px,var(--break-stripe) 12px) !important; }
     .api-route { display:grid; grid-template-columns:62px 210px 1fr; gap:12px; align-items:center; padding:11px 0; border-bottom:1px solid var(--line); font:400 11px/1.4 var(--mono); }
     .method { font-weight:700; color:var(--accent-dark); letter-spacing:.08em; }
     .outcome-table { width:100%; min-width:620px; }
@@ -261,16 +459,16 @@
     .hero-pipeline { background: var(--panel); border: 1px solid var(--line-strong); border-top: 3px solid var(--accent); border-radius: var(--radius); box-shadow: none; padding: 20px;
       background-image: linear-gradient(var(--graph) 1px, transparent 1px), linear-gradient(90deg, var(--graph) 1px, transparent 1px); background-size: 8px 8px, 8px 8px; }
     .mini-pipeline { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 17px 0; }
-    .mini-stage { border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 12px; min-height: 72px; background: rgba(255,255,255,.82); }
+    .mini-stage { border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 12px; min-height: 72px; background: var(--veil-strong); }
     .mini-stage strong { display: block; font-size: 21px; margin-top: 9px; font-variant-numeric: tabular-nums; }
-    .mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid #e3cda2; color: #6b4700; border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
+    .mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning-ink); border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
     .landing-foot { border-top: 1px solid var(--line); padding: 18px clamp(20px,5vw,70px); color: var(--muted); font: 400 11px/1 var(--mono); display: flex; justify-content: space-between; }
 
     /* Pipeline dashboard — the instrument strip */
     .pipeline-card { overflow: hidden;
       background-image: linear-gradient(var(--graph) 1px, transparent 1px), linear-gradient(90deg, var(--graph) 1px, transparent 1px); background-size: 8px 8px, 8px 8px; }
-    .pipeline { display: grid; grid-template-columns: repeat(7,minmax(120px,1fr)); overflow-x: auto; border-top: 3px solid transparent; border-image: linear-gradient(90deg,#635bff,#db4c3f,#0d9488,#d97706,#2563eb,#9333ea,#4d7c0f) 1; }
-    .pipeline-stage { position: relative; min-width: 130px; border: 0; border-right: 1px solid var(--line); background: rgba(255,255,255,.72); text-align: left; padding: 18px 16px 16px; min-height: 120px; display: grid; align-content: start; transition: background 110ms; }
+    .pipeline { display: grid; grid-template-columns: repeat(7,minmax(120px,1fr)); overflow-x: auto; border-top: 3px solid transparent; border-image: var(--spectrum) 1; }
+    .pipeline-stage { position: relative; min-width: 130px; border: 0; border-right: 1px solid var(--line); background: var(--veil); text-align: left; padding: 18px 16px 16px; min-height: 120px; display: grid; align-content: start; transition: background 110ms; }
     .pipeline-stage:last-child { border-right: 0; }
     .pipeline-stage:hover { background: var(--accent-soft); }
     .pipeline-stage::after { display: none; }
@@ -279,8 +477,8 @@
     .pipeline-count { display: block; font: 400 30px/1 var(--mono); letter-spacing: -.05em; margin: 9px 0 8px; }
     .pipeline-delta { color: var(--accent-dark); font: 400 10.5px/1.4 var(--mono); }
     .pipeline-meaning { display:block; min-height:22px; margin-top:7px; color:var(--muted); font-size:9.5px; line-height:1.4; }
-    .pipeline-stage.at-zero { background: rgba(255,255,255,.5); }
-    .pipeline-stage.at-zero:hover { background: rgba(255,255,255,.5); }
+    .pipeline-stage.at-zero { background: var(--veil-dim); }
+    .pipeline-stage.at-zero:hover { background: var(--veil-dim); }
     .pipeline-stage.at-zero .pipeline-count { color: var(--line-strong); }
 
     /* Fresh-install walk --------------------------------------------------- */
@@ -295,7 +493,7 @@
     .choice-card.active { border-color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
     .choice-card strong { font: 600 12px/1.2 var(--mono); }
     .choice-card span { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
-    .setup-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+    .setup-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
     .setup-actions .subtle { margin-right: auto; font-size: 11.5px; }
     .setup-card { margin-bottom: 14px; }
     .setup-card .setup-progress { color: var(--muted); font: 600 10px/1 var(--mono); letter-spacing: .1em; }
@@ -324,15 +522,15 @@
     .wave-row:last-child { border-bottom: 0; }
     .wave-date { color: var(--muted); font-size: 10.5px; margin-top: 3px; font-variant-numeric: tabular-nums; }
     .wave-bar { height: 8px; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: 0; overflow: hidden; position: relative; }
-    .wave-bar::after { content:""; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(90deg, rgba(255,255,255,.85) 1px, transparent 1px); background-size:10% 100%; }
+    .wave-bar::after { content:""; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(90deg, var(--wave-tick) 1px, transparent 1px); background-size:10% 100%; }
     .wave-bar i { display: block; height: 100%; background: var(--accent); border-radius: 0; }
 
     /* Program board + scheduled-session legibility */
     .slot-meta { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:6px; }
-    .slot-chip { display:inline-flex; align-items:center; max-width:100%; border:1px solid #b6dcc7; border-radius:2px; background:var(--success-soft); color:#0c6b41; padding:3px 6px; font:600 8px/1.25 var(--mono); letter-spacing:.04em; white-space:normal; }
+    .slot-chip { display:inline-flex; align-items:center; max-width:100%; border:1px solid var(--success-line); border-radius:2px; background:var(--success-soft); color:var(--success-ink); padding:3px 6px; font:600 8px/1.25 var(--mono); letter-spacing:.04em; white-space:normal; }
     .slot-meta.compact { gap:3px; margin-top:4px; }
     .slot-meta.compact .slot-chip { padding:2px 5px; font-size:7px; }
-    .not-public { display:inline-flex; align-items:center; border-radius:2px; background:var(--warning-soft); border:1px solid #e3cda2; color:#6b4700; padding:2px 6px; font:600 8px/1.3 var(--mono); letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
+    .not-public { display:inline-flex; align-items:center; border-radius:2px; background:var(--warning-soft); border:1px solid var(--warning-line); color:var(--warning-ink); padding:2px 6px; font:600 8px/1.3 var(--mono); letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
     .publish-link { border:0; border-bottom:1px solid currentColor; background:transparent; color:var(--accent-dark); padding:2px 1px; font:600 8px/1 var(--mono); letter-spacing:.04em; cursor:pointer; }
     .track-chip-row { display:flex; gap:4px; flex-wrap:wrap; min-width:0; }
     .program-board-shell { overflow-x:auto; padding-bottom:10px; }
@@ -341,7 +539,7 @@
     .board-column-head { position:sticky; top:0; z-index:3; display:flex; justify-content:space-between; align-items:flex-start; gap:8px; min-height:67px; padding:11px 12px; border-bottom:1px solid var(--line-strong); background:var(--panel); }
     .board-column-head strong { display:block; font:600 10.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; }
     .board-column-head small { display:block; margin-top:5px; color:var(--muted); font-size:8.5px; line-height:1.35; }
-    .board-derived-note { margin:8px; padding:8px; border:1px dashed #d6b25c; border-radius:2px; background:var(--warning-soft); color:#6b4700; font-size:8.5px; line-height:1.45; }
+    .board-derived-note { margin:8px; padding:8px; border:1px dashed var(--warning-edge); border-radius:2px; background:var(--warning-soft); color:var(--warning-ink); font-size:8.5px; line-height:1.45; }
     .board-card-list { height:calc(100vh - 275px); min-height:520px; overflow-y:auto; padding:8px; }
     .board-card { content-visibility:auto; contain:layout paint style; contain-intrinsic-size:148px; border:1px solid var(--line-strong); border-left:3px solid var(--track-color,var(--accent)); border-radius:2px; background:var(--panel); padding:9px; margin-bottom:6px; box-shadow:none; cursor:pointer; transition:border-color 110ms, background 110ms; }
     .board-card:hover, .board-card:focus { border-color:var(--accent); background:var(--accent-soft); outline:none; }
@@ -451,20 +649,20 @@
     .progress-track { height: 8px; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: 0; overflow: hidden; margin-top: 7px; }
     .progress-track i { display: block; height: 100%; background: var(--success); transition: width 110ms; }
     .status-hero { background: var(--canvas); color: var(--canvas-ink); border: 1px solid var(--canvas-line); border-radius: var(--radius); padding: 20px; display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; margin-bottom: 14px; }
-    .status-hero .eyebrow { color: #7fb3b8; }
+    .status-hero .eyebrow { color: var(--canvas-eyebrow); }
     .status-hero h2 { margin: 7px 0 5px; font-size: 17px; font-weight: 600; }
-    .status-hero p { margin: 0; color: #a8bdc6; font-size: 11.5px; }
+    .status-hero p { margin: 0; color: var(--canvas-ink-soft); font-size: 11.5px; }
     /* Dark-hero overrides: light-mode text tokens land on the dark status hero
        (measured 1.9-2.9:1). Inherited from v1.4; fixed here. */
-    .status-hero .field-note, .status-hero .subtle, .status-hero .save-status { color: #a8bdc6; }
-    .status-hero .publish-link { color: #6fd3da; }
-    .status-hero .chip { background: rgba(255,255,255,.07); border-color: #3a4d59; color: #cfe0e7; }
-    .status-hero .slot-chip { background: rgba(79,214,176,.12); border-color: #2c6a58; color: #86e3c4; }
-    .status-hero .not-public { background: rgba(240,201,128,.14); border-color: #7a5f22; color: #f0c980; }
+    .status-hero .field-note, .status-hero .subtle, .status-hero .save-status { color: var(--canvas-ink-soft); }
+    .status-hero .publish-link { color: var(--canvas-link); }
+    .status-hero .chip { background: var(--canvas-chip-bg); border-color: var(--canvas-chip-line); color: var(--canvas-chip-ink); }
+    .status-hero .slot-chip { background: var(--canvas-ok-bg); border-color: var(--canvas-ok-line); color: var(--canvas-ok-ink); }
+    .status-hero .not-public { background: var(--canvas-warn-bg); border-color: var(--canvas-warn-line); color: var(--canvas-warn-ink); }
     .portal-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 14px; }
     .task-row { min-height: 64px; padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 28px minmax(0,1fr) auto; gap: 10px; align-items: center; }
     .task-row:last-child { border-bottom: 0; }
-    .task-toggle { width: 24px; height: 24px; border-radius: 2px; border: 1px solid var(--line-strong); background: var(--panel); color: white; }
+    .task-toggle { width: 24px; height: 24px; border-radius: 2px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--on-accent); }
     .task-row.done .task-toggle { background: var(--success); border-color: var(--success); }
     .task-row.done .task-title { text-decoration: line-through; color: var(--muted); }
     /* Cancelled is a third outcome, not a variant of done: the work stopped
@@ -578,12 +776,12 @@
     .speaker-cell small { display: block; margin-top: 3px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
     .task-state-cell { text-align: center; }
     .task-state { width: 21px; height: 21px; display: inline-grid; place-items: center; border-radius: 2px; border: 1px solid transparent; font: 600 10px/1 var(--mono); }
-    .task-state.done { background: var(--success-soft); border-color: #b6dcc7; color: #0c6b41; }
-    .task-state.overdue { background: var(--warning-soft); border-color: #e3cda2; color: var(--warning); }
-    .task-state.risk { background: var(--danger-soft); border-color: #e6b8b2; color: #8f2118; }
+    .task-state.done { background: var(--success-soft); border-color: var(--success-line); color: var(--success-ink); }
+    .task-state.overdue { background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning); }
+    .task-state.risk { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger-ink); }
     .task-state.upcoming { background: var(--sunk); border-color: var(--line-strong); color: var(--muted); }
     .task-state.cancelled { background: transparent; border-color: var(--line-strong); border-style: dashed; color: var(--muted); }
-    .drawer-backdrop { position: fixed; inset: 0; z-index: 500; background: rgba(16,24,32,.46); }
+    .drawer-backdrop { position: fixed; inset: 0; z-index: 500; background: var(--backdrop); }
     .drawer { position: fixed; z-index: 510; top: 0; right: 0; width: min(500px,96vw); height: 100vh; overflow: auto; background: var(--panel); border-left: 1px solid var(--line-strong); box-shadow: none; }
     .drawer-head { position: sticky; top: 0; z-index: 2; min-height: 68px; padding: 14px 18px; border-bottom: 1px solid var(--line-strong); background: var(--sunk); display: flex; justify-content: space-between; align-items: center; gap: 14px; }
     .drawer-head h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
@@ -605,25 +803,25 @@
     .agenda-view-toggle { flex: 0 0 302px; width: 302px; }
     .agenda-view-toggle button { width: 60px; min-width: 60px; }
     .track-board { min-width: 980px; padding: 14px; background: var(--canvas); color: var(--canvas-ink); }
-    .track-time-axis { margin-left: 218px; display: grid; grid-template-columns: repeat(7,minmax(105px,1fr)); color: #7d949f; font: 400 9px/1 var(--mono); padding: 0 8px 8px; }
+    .track-time-axis { margin-left: 218px; display: grid; grid-template-columns: repeat(7,minmax(105px,1fr)); color: var(--canvas-muted); font: 400 9px/1 var(--mono); padding: 0 8px 8px; }
     .track-lane { display: grid; grid-template-columns: 150px minmax(0,1fr); min-height: 102px; border-top: 1px solid var(--canvas-line); }
     .track-lane-label { position: sticky; left: 0; z-index: 3; padding: 14px 12px; background: var(--canvas); border-right: 1px solid var(--canvas-line); }
     .track-lane-label i { display: block; width: 26px; height: 3px; margin-bottom: 9px; background: var(--track-color); }
     .track-lane-label strong { display: block; font: 500 13px/1.15 var(--mono); letter-spacing: -.02em; }
-    .track-lane-label span { display: block; margin-top: 6px; color: #7d949f; font: 400 9px/1.3 var(--mono); }
+    .track-lane-label span { display: block; margin-top: 6px; color: var(--canvas-muted); font: 400 9px/1.3 var(--mono); }
     .track-lane-days { min-width: 0; }
-    .track-day-band { display: grid; grid-template-columns: 58px minmax(0,1fr); min-height: 94px; border-bottom: 1px solid #1c2a34; }
-    .track-day-label { padding: 11px 7px; border-right: 1px solid var(--canvas-line); color: #7d949f; font: 400 8px/1.35 var(--mono); text-transform: uppercase; }
-    .track-day-label b { display: block; margin-bottom: 4px; color: #c3d6de; font: 500 13px/1 var(--mono); }
-    .track-day-slots { display: grid; grid-template-columns: repeat(7,minmax(105px,1fr)); gap: 6px; padding: 8px; background: repeating-linear-gradient(90deg,transparent 0 calc(14.285% - 1px),#1e2c36 calc(14.285% - 1px) 14.285%); }
+    .track-day-band { display: grid; grid-template-columns: 58px minmax(0,1fr); min-height: 94px; border-bottom: 1px solid var(--canvas-band-line); }
+    .track-day-label { padding: 11px 7px; border-right: 1px solid var(--canvas-line); color: var(--canvas-muted); font: 400 8px/1.35 var(--mono); text-transform: uppercase; }
+    .track-day-label b { display: block; margin-bottom: 4px; color: var(--canvas-day-ink); font: 500 13px/1 var(--mono); }
+    .track-day-slots { display: grid; grid-template-columns: repeat(7,minmax(105px,1fr)); gap: 6px; padding: 8px; background: repeating-linear-gradient(90deg,transparent 0 calc(14.285% - 1px),var(--canvas-grid) calc(14.285% - 1px) 14.285%); }
     .track-slot { min-height: 78px; border: 1px dashed transparent; position: relative; }
-    .track-slot.drag-over { border-color: #35b3bd; background: rgba(53,179,189,.14); }
-    .track-tile { position: relative; min-height: 74px; padding: 8px; border: 1px solid #2f424e; border-top: 3px solid var(--track-color); border-radius: 2px; background: #16242e; box-shadow: none; cursor: grab; overflow: hidden; }
+    .track-slot.drag-over { border-color: var(--canvas-drop); background: var(--canvas-drop-bg); }
+    .track-tile { position: relative; min-height: 74px; padding: 8px; border: 1px solid var(--canvas-tile-line); border-top: 3px solid var(--track-color); border-radius: 2px; background: var(--canvas-tile); box-shadow: none; cursor: grab; overflow: hidden; }
     .track-tile + .track-tile { margin-top: 5px; }
-    .track-tile strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: #eaf3f6; font-size: 9px; line-height: 1.3; font-weight: 600; }
-    .track-tile span { display: block; margin-top: 5px; color: #90a8b4; font: 400 8px/1.3 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .track-tile.conflict { border-color: #ff8a80; box-shadow: inset 0 0 0 1px #ff8a80; }
-    .track-conflict { position: absolute; right: 5px; top: 4px; width: 16px; height: 16px; border-radius: 2px; display: grid; place-items: center; background: #ff8a80; color: #2a0f0c; font: 700 9px/1 var(--mono); }
+    .track-tile strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--canvas-tile-ink); font-size: 9px; line-height: 1.3; font-weight: 600; }
+    .track-tile span { display: block; margin-top: 5px; color: var(--canvas-tile-muted); font: 400 8px/1.3 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .track-tile.conflict { border-color: var(--canvas-alarm); box-shadow: inset 0 0 0 1px var(--canvas-alarm); }
+    .track-conflict { position: absolute; right: 5px; top: 4px; width: 16px; height: 16px; border-radius: 2px; display: grid; place-items: center; background: var(--canvas-alarm); color: var(--canvas-alarm-ink); font: 700 9px/1 var(--mono); }
     /* ── v1.6: buildings, room AV metadata, room detail panel ───────────── */
     .building-row { display:grid; grid-template-columns:18px minmax(0,1fr) minmax(0,1.6fr) 124px auto; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid var(--line); }
     .building-row:last-child { border-bottom:0; }
@@ -744,12 +942,12 @@
     /* Dark-canvas overrides: `.track-tile span` out-specifies `.chip`, so light
        chips inherited the canvas's muted text colour (measured 2.2-2.3:1).
        Inherited from v1.4; fixed here rather than carried into the contract. */
-    .track-tile .chip { background: rgba(255,255,255,.07); border-color: #3a4d59; color: #cfe0e7; }
-    .track-tile .slot-chip { background: rgba(79,214,176,.12); border-color: #2c6a58; color: #86e3c4; }
-    .track-tile .not-public { background: rgba(240,201,128,.14); border-color: #7a5f22; color: #f0c980; }
-    .track-tile .publish-link { color: #6fd3da; }
-    .track-tile .tile-actions button { background: #1d2f3a; border-color: #35505e; color: #cfe0e7; }
-    .track-tile .tile-actions button:hover { background: #26414f; border-color: #4fd6b0; color: #eaf3f6; }
+    .track-tile .chip { background: var(--canvas-chip-bg); border-color: var(--canvas-chip-line); color: var(--canvas-chip-ink); }
+    .track-tile .slot-chip { background: var(--canvas-ok-bg); border-color: var(--canvas-ok-line); color: var(--canvas-ok-ink); }
+    .track-tile .not-public { background: var(--canvas-warn-bg); border-color: var(--canvas-warn-line); color: var(--canvas-warn-ink); }
+    .track-tile .publish-link { color: var(--canvas-link); }
+    .track-tile .tile-actions button { background: var(--canvas-btn); border-color: var(--canvas-btn-line); color: var(--canvas-chip-ink); }
+    .track-tile .tile-actions button:hover { background: var(--canvas-btn-line); border-color: var(--canvas-accent); color: var(--canvas-tile-ink); }
 
     .unscheduled { max-height: 700px; }
 
@@ -769,9 +967,9 @@
     .pacing-readout { font:400 11px var(--mono); color:var(--muted); min-height:18px; display:flex; gap:14px; align-items:center; }
     .pacing-readout strong { color:var(--ink); font-weight:600; }
     .axis-toggle button { width:118px; }
-    .impersonation-bar { display:flex; align-items:center; gap:9px; background:var(--ink); color:#eaf3f6; padding:6px 14px; font:500 11px var(--sans); position:sticky; top:0; z-index:250; }
-    .impersonation-bar .button { background:transparent; border-color:#4a5a66; color:#eaf3f6; }
-    .impersonation-bar .button:hover { border-color:#6fd3da; color:#6fd3da; }
+    .impersonation-bar { display:flex; align-items:center; gap:9px; background:var(--ink); color:var(--on-ink-plain); padding:6px 14px; font:500 11px var(--sans); position:sticky; top:0; z-index:250; }
+    .impersonation-bar .button { background:transparent; border-color:var(--on-ink-line); color:var(--on-ink-plain); }
+    .impersonation-bar .button:hover { border-color:var(--on-ink-hover); color:var(--on-ink-hover); }
     .notified-cell { font:400 10px var(--mono); color:var(--muted); white-space:nowrap; }
     .notified-cell.sent { color:var(--ink); }
     .notified-cell.gap { color:var(--warning); font-weight:600; }
@@ -779,7 +977,7 @@
     @media (max-width: 1000px) {
       .app-shell { grid-template-columns: 68px minmax(0,1fr); }
       .sidebar { padding: 16px 9px; }
-      .brand-name, .event-switcher-row, .nav-label, .nav a span:not(.nav-icon), .sidebar-foot { display: none; }
+      .brand-name, .event-switcher-row, .switcher-alt, .nav-label, .nav a span:not(.nav-icon), .sidebar-foot { display: none; }
       .brand { padding: 0 10px 18px; }
       .nav a { justify-content: center; }
       .nav-icon { font-size: 14px; }
@@ -790,7 +988,7 @@
     @media (max-width: 760px) {
       .app-shell { display: block; }
       .sidebar { height: 54px; position: fixed; top: auto; bottom: 0; left: 0; right: 0; z-index: 300; border-right: 0; border-top: 1px solid var(--line-strong); flex-direction: row; padding: 6px; overflow-x: auto; }
-      .sidebar .brand, .event-switcher-row, .nav-label, .sidebar-foot { display: none; }
+      .sidebar .brand, .event-switcher-row, .switcher-alt, .nav-label, .sidebar-foot { display: none; }
       .nav { display: flex; min-width: max-content; width: 100%; justify-content: space-around; }
       .nav a { min-width: 47px; min-height: 40px; border-left: 0; border-bottom: 2px solid transparent; border-radius: var(--radius); }
       .nav a.active { border-left-color: transparent; border-bottom-color: var(--accent); }
@@ -847,6 +1045,27 @@
         { name: "Security", color: "#be185d" },
         { name: "Leadership", color: "#4d7c0f" }
       ];
+      // ── Themes (v1.11 / MRQ-103). A theme is one CSS block on
+      // html[data-theme] plus this registry row; Day is the default and
+      // carries no attribute. Seeded tracks get a per-theme octave (their
+      // day hues are tuned for white and go muddy on dark ground); custom
+      // tracks keep their stored color in every theme.
+      const NIGHT_TRACKS = { "AI in Financial Services":"#8b85ff", "Agents":"#f2705f", "Evals":"#2ec4b6", "Infra":"#f59e0b", "Open Models":"#5b8def", "RAG / Retrieval":"#b06ef5", "Security":"#ef5da8", "Leadership":"#84cc16" };
+      const THEMES = [
+        { id: "day", label: "Day" },
+        { id: "night", label: "Night", tracks: NIGHT_TRACKS }
+      ];
+      function currentTheme() { return THEMES.find(t=>t.id===state.theme) || THEMES[0]; }
+      function applyTheme() {
+        if (state.theme && state.theme !== "day") document.documentElement.dataset.theme = state.theme;
+        else delete document.documentElement.dataset.theme;
+      }
+      function setTheme(id) {
+        state.theme = THEMES.some(t=>t.id===id) ? id : "day";
+        try { localStorage.setItem("marquee-prototype-theme", state.theme); } catch (_) { }
+        applyTheme();
+        render(); // inline track colors re-resolve through trackColor()
+      }
       const formats = ["Workshop", "Stage Talk", "Lightning", "Online"];
       const formatDurations = { Workshop: 90, "Stage Talk": 20, Lightning: 10, Online: 35 };
       // Tags and Levels are event-level taxonomy exactly like tracks — authored in
@@ -906,13 +1125,32 @@
 
       const state = {
         route: "landing",
+        // ?theme= wins for this load only (side-by-side comparison links);
+        // the select still persists choices to localStorage.
+        theme: (v => THEMES.some(t=>t.id===v) ? v : "day")(new URLSearchParams(location.search).get("theme") || localStorage.getItem("marquee-prototype-theme")),
         // The fresh-install walk: what an organizer meets on a brand-new install,
         // from "no conferences yet" through to an open call for speakers. Entered with
         // ?empty=1 and sticky once entered, so ordinary in-app links stay inside
         // it. The seeded AIE demo is held in setupSnapshot and restored on exit.
-        setup: { active:false, steps:{ details:false, taxonomy:false, form:false, evaluation:false, intake:false } },
+        setup: { active:false, mode:"first", claimed:false, agentRan:false, intakeAck:false, steps:{ details:false, taxonomy:false, form:false, evaluation:false, intake:false }, stepBy:{} },
         setupSnapshot: null,
         setupSource: "scratch",
+        // Peeking swaps the demo conference back in without leaving the walk —
+        // the side-by-side ruling (D3): demo alongside, labeled, removable.
+        demoPeek: false,
+        peekStash: null,
+        demoRemoved: false,
+        // The machine under the conference. The seeded demo instance is fully
+        // configured; a fresh install starts with honest gaps (no mail).
+        instance: {
+          domain: "marquee.stage11.dev", mail: true, uploads: true, spam: true,
+          owner: { name:"Maya Chen", email:"maya.chen@example.com" }, agentToken: null,
+          organizers: [
+            { name:"Maya Chen", note:"Program lead", email:"maya.chen@example.com", role:"Owner", you:true },
+            { name:"Tomás Herrera-Lindqvist", note:"Speaker ops", email:"tomas.herrera-lindqvist@example.com", role:"Organizer" },
+            { name:"Ruthie Adeyemi-O'Connor", note:"Review coordination", email:"ruthie.adeyemi-oconnor@example.com", role:"Organizer" }
+          ]
+        },
         submissions: [],
         submissionFilter: "All",
         submissionType: "All",
@@ -1262,7 +1500,8 @@
         submissions: "Abstracts", submissionDetail:"Submission record", submissionNew:"Create submission", eventNew:"Create conference",
         onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Conference site", comms:"Communications",
         venues:"Venues", taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", apiTokens:"API tokens", webhooks:"Webhooks",
-        apiDocs:"API documentation", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker"
+        apiDocs:"API documentation", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker",
+        setupAgent:"Agent setup", claim:"Claim this instance", handoff:"Instance handoff"
       };
 
       function esc(value) {
@@ -1403,53 +1642,126 @@
         if (/^submissions\/[^/]+$/.test(path)) { state.submissionRecordId = decodeURIComponent(path.split("/")[1]); return "submissionDetail"; }
         if (/^s\/[^/]+$/.test(path)) { state.publicRecordId = decodeURIComponent(path.split("/")[1]); return "publicSession"; }
         if (/^p\/[^/]+$/.test(path)) { state.publicPersonName = decodeURIComponent(path.slice(2)); return "publicSpeaker"; }
-        return ({"settings/venues":"venues","settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"apiTokens","settings/webhooks":"webhooks","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer"})[path] || path;
+        return ({"settings/venues":"venues","settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"apiTokens","settings/webhooks":"webhooks","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer","setup/agent":"setupAgent"})[path] || path;
       }
 
       function currentRoute() {
         const raw = location.hash.replace(/^#\/?/, "") || "landing";
         const [path,query=""] = raw.split("?");
         if (new URLSearchParams(query).get("empty") === "1") enterFreshInstall();
-        state.emptyInstall = state.setup.active;
+        // The cold-start screens only make sense inside the walk; reaching one
+        // from the demo enters the walk the same way ?empty=1 does.
+        if (["setup/agent","claim","handoff"].includes(path) && !state.setup.active) enterFreshInstall();
+        state.emptyInstall = state.setup.active && !state.demoPeek;
         const route = routeKey(path);
         return routeNames[route] ? route : "landing";
       }
 
-      // Swap the seeded AIE demo out for a genuinely empty install, keeping the
-      // seed whole in a snapshot. Nothing is destroyed: an operator can walk the
-      // cold start and return to the demo exactly as they left it.
-      function enterFreshInstall() {
-        if (state.setup.active) return;
-        state.setupSnapshot = {
+      // One shape for everything the fresh-install walk swaps. `instance` rides
+      // along only for the meta-level demo↔walk fork; the in-walk demo peek
+      // deliberately leaves it out — exploring the demo conference happens on
+      // YOUR instance, so mail status and organizers stay yours.
+      function snapshotLive(withInstance) {
+        const snap = {
           event: { ...state.event }, tracks: tracks.slice(), formats: formats.slice(),
           rooms: rooms.slice(), buildings: buildings.slice(), forms: state.forms.slice(),
           submissions: state.submissions.slice(), activeFormId: state.activeFormId,
           roomCapacities: state.roomCapacities.slice(), roomBuildings: state.roomBuildings.slice(),
           roomAV: state.roomAV.slice(), roomNotes: state.roomNotes.slice()
         };
+        if (withInstance) snap.instance = state.instance;
+        return snap;
+      }
+      function restoreFrom(snap) {
+        state.event = snap.event; state.forms = snap.forms; state.submissions = snap.submissions;
+        state.activeFormId = snap.activeFormId;
+        tracks.length = 0; tracks.push(...snap.tracks);
+        formats.length = 0; formats.push(...snap.formats);
+        rooms.length = 0; rooms.push(...snap.rooms);
+        buildings.length = 0; buildings.push(...snap.buildings);
+        state.roomCapacities = snap.roomCapacities; state.roomBuildings = snap.roomBuildings;
+        state.roomAV = snap.roomAV; state.roomNotes = snap.roomNotes;
+        if (snap.instance) state.instance = snap.instance;
+      }
+
+      // Swap the seeded AIE demo out for a genuinely empty install, keeping the
+      // seed whole in a snapshot. Nothing is destroyed: an operator can walk the
+      // cold start and return to the demo exactly as they left it.
+      // mode "first": brand-new install — unclaimed, no mail, no organizers.
+      // mode "second": a new conference on the SAME configured instance (the
+      // switcher's ＋) — claimed, instance rows green, checklist conference-scoped.
+      function enterFreshInstall(mode = "first") {
+        if (state.setup.active) return;
+        state.setupSnapshot = snapshotLive(true);
         state.event = { name:"", tagline:"", start:"", end:"", venue:"", timezone:"America/New_York" };
         [tracks, formats, rooms, buildings].forEach(list => { list.length = 0; });
         state.forms = []; state.submissions = [];
         state.roomCapacities = []; state.roomBuildings = []; state.roomAV = []; state.roomNotes = [];
-        state.setup = { active:true, steps:{ details:false, taxonomy:false, form:false, evaluation:false, intake:false } };
+        state.setup = { active:true, mode, claimed: mode === "second", agentRan:false, intakeAck:false,
+          steps:{ details:false, taxonomy:false, form:false, evaluation:false, intake:false }, stepBy:{} };
         state.setupSource = "scratch";
+        state.demoPeek = false; state.peekStash = null; state.demoRemoved = false;
+        if (mode === "first") {
+          state.instance = { domain:"marquee.gl-infra.dev", mail:false, uploads:true, spam:true,
+            owner:null, agentToken:null, organizers:[] };
+        }
       }
 
       function exitFreshInstall() {
+        if (state.demoPeek) endDemoPeek();
         const snap = state.setupSnapshot;
-        if (snap) {
-          state.event = snap.event; state.forms = snap.forms; state.submissions = snap.submissions;
-          state.activeFormId = snap.activeFormId;
-          tracks.length = 0; tracks.push(...snap.tracks);
-          formats.length = 0; formats.push(...snap.formats);
-          rooms.length = 0; rooms.push(...snap.rooms);
-          buildings.length = 0; buildings.push(...snap.buildings);
-          state.roomCapacities = snap.roomCapacities; state.roomBuildings = snap.roomBuildings;
-          state.roomAV = snap.roomAV; state.roomNotes = snap.roomNotes;
-        }
+        if (snap) restoreFrom(snap);
         state.setupSnapshot = null;
         state.setup.active = false;
         state.emptyInstall = false;
+        state.demoPeek = false; state.peekStash = null; state.demoRemoved = false;
+      }
+
+      // The in-walk fork: look at the demo conference without leaving the walk.
+      // Your fresh setup is stashed and restored exactly as you left it.
+      function startDemoPeek() {
+        if (state.demoPeek || !state.setupSnapshot) return;
+        state.peekStash = snapshotLive(false);
+        // The snapshot carries `instance` for the meta-level exit; the peek must
+        // NOT apply it — the demo conference is being viewed on YOUR instance.
+        const { instance, ...demoData } = state.setupSnapshot;
+        restoreFrom(demoData);
+        state.demoPeek = true;
+      }
+      function endDemoPeek() {
+        if (!state.demoPeek) return;
+        // Re-snapshot the demo first, so edits made while peeking survive the
+        // eventual exit — the fork stays non-destructive in both directions.
+        const inst = state.setupSnapshot.instance;
+        state.setupSnapshot = snapshotLive(false);
+        state.setupSnapshot.instance = inst;
+        restoreFrom(state.peekStash);
+        state.peekStash = null;
+        state.demoPeek = false;
+      }
+
+      // What the setup agent does with its token: creates the conference and
+      // everything conference-scoped through the same API a human's screens
+      // use, then stops. Opening intake stays a human decision (ruling D6).
+      function agentProvision() {
+        if (state.setup.agentRan) return;
+        state.event = { name:"Great Lakes Infra Days 2027", tagline:"", start:"2027-04-14", end:"2027-04-15",
+          venue:"Buffalo Marriott HARBORCENTER", timezone:"America/New_York" };
+        tracks.push({name:"Platform Engineering",color:"#0b6a72"},{name:"Reliability",color:"#8a4f18"},
+          {name:"Data Infrastructure",color:"#2f5f9e"},{name:"Security",color:"#743a5e"});
+        ["Talk","Workshop","Lightning"].forEach(f=>formats.push(f));
+        formatRanges["Talk"]="25–40"; formatDurations["Talk"]=30;
+        formatRanges["Workshop"]="90–180"; formatDurations["Workshop"]=120;
+        formatRanges["Lightning"]="5–10"; formatDurations["Lightning"]=10;
+        buildings.push({ id:"glb1", name:"Buffalo Marriott HARBORCENTER", address:"95 Main St, Buffalo, NY 14203",
+          lat:42.8802, lng:-78.8752, accessMinutes:0, accessNote:"Enter from Main St; badges at the second-floor desk." });
+        ["Harborview Ballroom","Lakeside A","Lakeside B"].forEach(r=>rooms.push(r));
+        state.roomCapacities=[420,140,140]; state.roomBuildings=["glb1","glb1","glb1"];
+        state.roomAV=[[],[],[]]; state.roomNotes=["","",""];
+        state.forms=[{id:"cfp-gl",name:"Call for speakers",status:"Draft",target:"Abstract",responses:0,detail:"Draft · not published"}];
+        state.activeFormId="cfp-gl";
+        ["details","taxonomy","form","evaluation"].forEach(k=>{ state.setup.steps[k]=true; state.setup.stepBy[k]="agent"; });
+        state.setup.agentRan = true;
       }
 
       // The cold start, as one ordered list. Each step names the screen that
@@ -1465,17 +1777,18 @@
         ];
       }
 
-      function completeSetupStep(key, message) {
+      function completeSetupStep(key, message, by = "you") {
         if (!state.setup.active || state.setup.steps[key]) return;
         state.setup.steps[key] = true;
+        state.setup.stepBy[key] = by;
         if (message) toast(message);
       }
 
       // A fresh install genuinely has nothing on most screens. These are the ones
       // that become real the moment the step before them is done.
       function showsEmptyState(route) {
-        if (!state.setup.active) return false;
-        if (route === "eventNew") return false;
+        if (!state.setup.active || state.demoPeek) return false;
+        if (["eventNew","setupAgent","claim","handoff","landing"].includes(route)) return false;
         if (route === "dashboard" || route === "settings") return !state.setup.steps.details;
         if (route === "forms") return state.forms.length === 0;
         if (route === "importer") return !state.setup.steps.details;
@@ -1496,16 +1809,17 @@
           <aside class="sidebar">
             <a class="brand" href="#dashboard"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
             <div class="event-switcher-row">
-              <a class="event-switcher" href="#settings"><small>Conference</small><strong>${esc(state.event.name || "No conference yet")}</strong></a>
-              <a class="event-add" href="#conferences/new" title="Create conference" aria-label="Create conference">＋</a>
+              <a class="event-switcher" href="#settings"><small>Conference${state.setup.active && state.demoPeek ? " · demo" : ""}</small><strong>${esc(state.event.name || "No conference yet")}</strong></a>
+              <a class="event-add" href="#conferences/new" id="event-add" title="Create conference" aria-label="Create conference">＋</a>
             </div>
+            ${switcherAltRow()}
             <nav class="nav" aria-label="Program home">${navItem("dashboard","⌂","Program home")}${navItem("board","▥","Program board")}</nav>
             <div class="nav-label">Pipeline</div>
             <nav class="nav" aria-label="Program lifecycle">
               ${pipelineNavItem("Submitted","1","Submitted")}
               ${pipelineNavItem("In review","2","In Review")}
               ${pipelineNavItem("Waved","3","Waved")}
-              ${pipelineNavItem("Accepted","4","Accepted")}
+              ${pipelineNavItem("Ready to place","4","Accepted")}
               ${pipelineNavItem("Onboarding","5","Onboarding","onboarding")}
               ${pipelineNavItem("Scheduled","6","Scheduled")}
               ${pipelineNavItem("Published","7","Published")}
@@ -1527,6 +1841,7 @@
             </div>
           </aside>
           <main class="main">
+            ${peekBar()}
             <header class="topbar">
               <div class="breadcrumbs">${esc(state.event.name || "New install")}&nbsp; / &nbsp;<strong>${esc(routeNames[state.route])}</strong></div>
               <div class="global-search">
@@ -1534,18 +1849,48 @@
                 <input id="global-search" aria-label="Search everything" autocomplete="off" placeholder="Search abstracts, speakers, sessions…" readonly>
                 <span class="shortcut">⌘K</span>
               </div>
+              <label class="theme-switch" title="Theme"><span class="glyph">◐</span><select id="theme-select" aria-label="Theme">${THEMES.map(t=>`<option value="${t.id}"${t.id===state.theme?" selected":""}>${t.label}</option>`).join("")}</select></label>
               <button class="button small" id="view-portal" title="See exactly what a speaker sees, without logging out">View portal ↗</button>
               <div class="top-user" title="Maya Chen · Program lead">MC</div>
             </header>
             ${content}
           </main>
         </div>${state.setup.active
-          ? `<button class="empty-preview" id="exit-fresh-install">Exit fresh install → seeded demo</button>`
+          ? `<button class="empty-preview" id="exit-fresh-install">${state.setup.mode === "second" ? "Discard new conference → seeded demo" : "Exit fresh install → seeded demo"}</button>`
           : `<a class="empty-preview" href="#landing?empty=1">Preview a fresh install</a>`}`;
       }
 
+      // The second conference in the sidebar, only during the walk. Two rows are
+      // always rendered in the walk (switcher + this one) so toggling the peek
+      // never shifts the nav below. Outside the walk the row does not exist.
+      function switcherAltRow() {
+        if (!state.setup.active) return "";
+        if (state.demoPeek) {
+          return `<button class="switcher-alt" id="switcher-swap" title="Back to your conference setup">
+            <span>${esc(state.peekStash?.event.name || "Your new conference")}</span><span class="demo-chip">SETUP</span>
+          </button>`;
+        }
+        const demoName = state.setupSnapshot?.event.name || "AIE NYC 2026";
+        if (state.demoRemoved) {
+          return `<button class="switcher-alt removed" id="switcher-swap-removed"><span>Demo removed</span><span class="demo-chip" style="color:var(--muted)">—</span></button>`;
+        }
+        return `<button class="switcher-alt" id="switcher-swap" title="${state.setup.mode === "second" ? "View the live conference" : "Explore the seeded demo conference"}">
+          <span>${esc(demoName)}</span><span class="demo-chip">${state.setup.mode === "second" ? "LIVE" : "DEMO"}</span>
+        </button>`;
+      }
+
+      function peekBar() {
+        if (!state.demoPeek) return "";
+        if (state.setup.mode === "second") {
+          return `<div class="peek-bar"><span>VIEWING ${esc(state.event.name || "the live conference").toUpperCase()} · your new conference's setup is waiting</span>
+            <span class="peek-bar-spacer"></span><button class="button small" id="peek-return">Back to conference setup</button></div>`;
+        }
+        return `<div class="peek-bar"><span>EXPLORING THE DEMO CONFERENCE · seeded for orientation, never mixed with your data</span>
+          <span class="peek-bar-spacer"></span><button class="button small" id="peek-return">Back to your setup</button><button class="button small" id="remove-demo">Remove demo data</button></div>`;
+      }
+
       function routePath(route) {
-        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"conferences/new",venues:"settings/venues",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
+        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"conferences/new",venues:"settings/venues",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",setupAgent:"setup/agent",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
       }
 
       function pageHead(title, copy, actions = "") {
@@ -1589,9 +1934,176 @@
         </div>`);
       }
 
+      // Public-shell wrapper for the pre-auth cold-start screens. Same chrome as
+      // the empty public states: brand, exit button, nothing else to get lost in.
+      function setupShell(content) {
+        return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#landing"><span class="brand-mark">M</span>Marquee</a><button class="button small" id="exit-fresh-install">Exit fresh install</button></header><main class="public-body wide">${content}</main></div>`;
+      }
+
+      function termLine(who, body, cls = "") {
+        return `<div class="term-line ${who === "you" ? "op" : ""}"><span class="term-who">${who} ›</span><span class="term-body ${cls}">${body}</span></div>`;
+      }
+
+      // What a fresh deploy shows at its root URL before anyone owns it. Says
+      // who the first user is meant to be and how the software learns it's them
+      // — without leaking anything a stranger at the URL could use.
+      function freshLandingView() {
+        if (state.setup.claimed) {
+          return setupShell(`<div class="page narrow" style="margin:48px auto 0">
+            <section class="card"><div class="card-body stack" style="padding:26px">
+              <div class="eyebrow">This instance · ${esc(state.instance.domain)}</div>
+              <h1 style="margin:2px 0 6px">Claimed and in setup.</h1>
+              <p class="subtle" style="max-width:60ch">${esc(state.instance.owner?.name || "The owner")} owns this instance. The public conference site appears here once intake opens.</p>
+              <div style="display:flex;gap:8px"><a class="button primary" href="#dashboard">Open the program dashboard</a></div>
+            </div></section>
+          </div>`);
+        }
+        return setupShell(`<div class="page narrow" style="margin:48px auto 0">
+          <section class="card"><div class="card-body stack" style="padding:26px">
+            <div class="eyebrow">Fresh install · unclaimed · ${esc(state.instance.domain)}</div>
+            <h1 style="margin:2px 0 6px">Nobody owns this instance yet.</h1>
+            <p class="subtle" style="max-width:62ch;line-height:1.7">Initial setup is run by an agent: point your coding agent at the repository and <strong>SKILL.md</strong> walks it from clone to a one-time claim link. The link is printed in the deploy terminal because on day zero that terminal is the only proof of ownership there is — identity here never depends on mail, which is itself a thing setup configures.</p>
+            <p class="subtle" style="max-width:62ch">Ownership lands on a person, not on an agent: a human opens the claim link.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <a class="button primary" href="#setup/agent">Replay the agent setup →</a>
+              <a class="button" href="#claim">I have a claim link</a>
+            </div>
+          </div></section>
+        </div>`);
+      }
+
+      // The setup conversation, replayed. Phase 1 ends at the claim link; phase 2
+      // (after the human claims and hands over a token) ends at the dashboard.
+      function agentSetupView() {
+        const phase2 = state.setup.agentRan;
+        const transcript = phase2
+          ? [
+              termLine("you","Here's a scoped token — finish setting up Great Lakes Infra Days. Stop before anything goes public."),
+              termLine("agent",`Token accepted · scopes <span class="term-note">program:write · agenda:write · comms:send · speaker:write</span>`),
+              termLine("agent",`POST /api/v1/events → <span class="term-ok">Great Lakes Infra Days 2027</span> · Apr 14–15 · America/New_York · Buffalo Marriott HARBORCENTER`),
+              termLine("agent",`Tracks: Platform Engineering · Reliability · Data Infrastructure · Security`),
+              termLine("agent",`Formats: Talk 30m · Workshop 120m · Lightning 10m — durations flow into forms and the agenda`),
+              termLine("agent",`Rooms: Harborview Ballroom (420) · Lakeside A · Lakeside B — one building, so venue screens stay folded`),
+              termLine("agent",`Call for speakers drafted — one speaker minimum, closes Feb 20 2027. <span class="term-note">It is not published.</span>`),
+              termLine("agent",`Evaluation plan: Approve · Maybe · Deny, one round, you as the first committee member.`),
+              termLine("agent",`<span class="term-ok">Stopping here, as agreed.</span> Opening intake publishes the CFP to the world, and this instance cannot send mail yet — that click is yours, from the dashboard.`)
+            ]
+          : [
+              termLine("you","Set up Marquee for our conference — Great Lakes Infra Days, April 14–15 2027, Buffalo. Keep the demo data so I can poke around first."),
+              termLine("agent",`Reading SKILL.md — setup chapter. Creating Cloudflare resources on your account:<br><span class="term-ok">✓</span> D1 marquee-db · R2 marquee-media · KV CACHE · 4 queues`),
+              termLine("agent",`Secrets: Turnstile pair and R2 signing keys are set. I need a Resend API key for outbound mail — do you have one?`),
+              termLine("you","not yet — we'll sort mail out later"),
+              termLine("agent",`Skipping mail. The instance will report <span class="term-note">mail · not configured</span> honestly, and warn before you open intake — a CFP that can't send confirmations is a trap.`),
+              termLine("agent",`<span class="term-ok">✓</span> 14 migrations applied · demo conference seeded alongside (you asked to keep it)`),
+              termLine("agent",`<span class="term-ok">✓</span> Deployed → https://${esc(state.instance.domain)} · health ok · build 4c9f21ab`),
+              termLine("agent",`The instance is unclaimed. Ownership must land on a person, not on me — open this one-time claim link in your browser:<span class="term-claim">https://${esc(state.instance.domain)}/claim/mq_claim_9f3ab2<wbr>?name=Sam+Okonkwo-Barnes&amp;email=sam%40gl-infra.dev</span>`)
+            ];
+        return setupShell(`<div class="page narrow" style="margin:34px auto 0">
+          ${pageHead(phase2 ? "Your agent finishes setup" : "Your agent runs the deploy",
+            phase2 ? "The conversation continues with the token you issued. Every step lands on the same API the screens use — verify any of it on the dashboard."
+                   : "A replay of the setup conversation in your own terminal. SKILL.md carries the steps; the agent carries them out.")}
+          <section class="card"><div class="card-body" style="padding:14px">
+            <div class="term">${transcript.join("")}</div>
+          </div></section>
+          <div class="setup-actions">
+            <span class="subtle">${phase2 ? "Four of five steps are done and attributed. The last one is yours." : "Re-running the CLI prints a fresh claim link — that is the recovery path, forever."}</span>
+            ${phase2
+              ? `<a class="button primary" href="#dashboard">Open the dashboard →</a>`
+              : state.setup.claimed
+                ? `<a class="button primary" href="#handoff">Continue → instance handoff</a>`
+                : `<a class="button primary" href="#claim">Open the claim link →</a>`}
+          </div>
+        </div>`);
+      }
+
+      // The one human-only moment: identity. Prefilled by the agent from the
+      // claim link's query string; no password exists in this product.
+      function claimView() {
+        if (state.setup.claimed) {
+          return setupShell(`<div class="page narrow" style="margin:48px auto 0">
+            <section class="card"><div class="card-body stack" style="padding:26px">
+              <div class="eyebrow">Claim link · already used</div>
+              <h1 style="margin:2px 0 6px">This instance is claimed.</h1>
+              <p class="subtle">${esc(state.instance.owner?.name)} (${esc(state.instance.owner?.email)}) owns it. A used claim link is inert — to recover a locked-out instance, re-run the CLI for a fresh one.</p>
+              <div style="display:flex;gap:8px"><a class="button primary" href="#handoff">Continue → instance handoff</a><a class="button" href="#dashboard">Open the dashboard</a></div>
+            </div></section>
+          </div>`);
+        }
+        return setupShell(`<div class="page narrow" style="margin:34px auto 0">
+          ${pageHead("Claim this instance", "The first owner is created here, once. Everything else — organizers, tokens, conferences — flows from this person.")}
+          <section class="card"><div class="card-head"><h2>You</h2><span class="subtle">Prefilled by your agent from the claim link · edit freely</span></div>
+            <div class="card-body stack">
+              <div class="field"><label for="claim-name">Your name</label><input id="claim-name" value="Sam Okonkwo-Barnes" autocomplete="off"></div>
+              <div class="field"><label for="claim-email">Email</label><input id="claim-email" value="sam@gl-infra.dev" autocomplete="off"><span class="field-note">Unverified for now — this instance can't send mail yet, and claiming must not depend on it.</span></div>
+              <div class="claim-note"><strong>No password, ever.</strong> Once mail is configured, sign-in links arrive by email. Locked out before then? Re-run the CLI — it prints a fresh claim link. The deploy terminal is the recovery path.</div>
+            </div>
+          </section>
+          <div class="setup-actions">
+            <span class="subtle">One click, one owner. The organization record is created silently behind it.</span>
+            <button class="button primary" id="claim-instance">Claim instance · become owner</button>
+          </div>
+        </div>`);
+      }
+
+      // Authority flows from the human to their agent, visibly: a scoped token,
+      // shown once — then three honest doors.
+      function handoffView() {
+        if (!state.setup.claimed) return claimView();
+        const token = state.instance.agentToken || "mq_live_7c41d9k2a9f3q0x8";
+        return setupShell(`<div class="page narrow" style="margin:34px auto 0">
+          ${pageHead("You own this instance", `${esc(state.instance.owner?.name)} · ${esc(state.instance.owner?.email)} · ${esc(state.instance.domain)}`)}
+          <section class="card"><div class="card-head"><div><h2>Hand your agent its keys</h2><span class="subtle">Shown once · revoke or reissue any time in Settings → API tokens</span></div></div>
+            <div class="card-body stack">
+              <div class="token-line"><div class="code-block" style="padding:10px 12px">${token}</div><button class="button" id="copy-token">Copy token</button></div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip">program:write</span><span class="chip">agenda:write</span><span class="chip">comms:send</span><span class="chip">speaker:write</span></div>
+              <span class="subtle">Scoped, named, and yours to revoke. The agent drives the same API every screen here is built on — nothing it does is invisible to you.</span>
+            </div>
+          </section>
+          <div class="setup-doors">
+            <button class="door-card primary-door" id="door-agent">
+              <strong>Let your agent finish setup</strong>
+              <span>Conference, tracks, formats, rooms, the call for speakers, the evaluation plan — watch it happen, verify it on the dashboard.</span>
+              <span class="door-go">Continue the conversation →</span>
+            </button>
+            <button class="door-card" id="door-hand">
+              <strong>Set up by hand</strong>
+              <span>The same five steps, through the screens. Nothing here requires an agent — it's just slower.</span>
+              <span class="door-go">Create the conference →</span>
+            </button>
+            <button class="door-card" id="door-demo">
+              <strong>Explore the demo first</strong>
+              <span>AIE NYC 2026, seeded alongside for orientation. Labeled, never mixed with your data, removable in one action.</span>
+              <span class="door-go">Open the demo →</span>
+            </button>
+          </div>
+        </div>`);
+      }
+
+      // The machine under the conference: what is configured, what honestly
+      // isn't, and the exact command that fixes it. Rows never appear or
+      // disappear — only their status chips change.
+      function instancePanel() {
+        const inst = state.instance;
+        const chip = ok => ok ? `<span class="chip inst-ok">configured</span>` : `<span class="chip inst-off">not configured</span>`;
+        const fixSlot = `<span class="subtle" style="display:inline-block;width:110px;text-align:center">—</span>`;
+        return `<section class="card">
+          <div class="card-head">
+            <div><h2>Instance</h2><span class="subtle">The machine under the conference · ${esc(inst.domain)}</span></div>
+            <span class="chip">${inst.owner ? `Owned by ${esc(inst.owner.name)}` : "Unclaimed"}</span>
+          </div>
+          <div class="card-body instance-rows">
+            <div class="inst-row"><span class="inst-name">Mail · Resend</span>${chip(inst.mail)}<span class="inst-note">${inst.mail ? "Sender verified · confirmations, decisions, and invites deliver" : "No confirmations, no decision mail, no sign-in links until this exists"}</span><span class="inst-fix">${inst.mail ? fixSlot : `<button class="button small" id="inst-mail-fix" style="width:110px">How to configure</button>`}</span></div>
+            <div class="inst-row"><span class="inst-name">Uploads · R2</span>${chip(inst.uploads)}<span class="inst-note">marquee-media bucket · headshots and slides upload via presigned PUTs</span><span class="inst-fix">${fixSlot}</span></div>
+            <div class="inst-row"><span class="inst-name">Spam · Turnstile</span>${chip(inst.spam)}<span class="inst-note">Site key set · the public call for speakers is protected</span><span class="inst-fix">${fixSlot}</span></div>
+            <div class="inst-row"><span class="inst-name">Domain</span>${chip(true)}<span class="inst-note">${esc(inst.domain)} · TLS active · non-loopback HTTP redirects to HTTPS</span><span class="inst-fix">${fixSlot}</span></div>
+          </div>
+        </section>`;
+      }
+
       function setupChecklistCard() {
         const steps = setupStepList(), done = steps.filter(s=>s.done).length;
         const next = steps.findIndex(s=>!s.done);
+        const by = key => state.setup.stepBy[key] === "agent" ? " · done by your agent" : " · done by you";
         return `<section class="card setup-card">
           <div class="card-head">
             <div><h2>Set up your conference</h2><span class="subtle">From a fresh install to an open call for speakers.</span></div>
@@ -1600,7 +2112,7 @@
           <div class="card-body setup-steps">
             ${steps.map((s,i)=>`<div class="setup-step ${s.done?"done":i===next?"next":"later"}">
               <span class="setup-mark">${s.done?"✓":i+1}</span>
-              <div class="setup-copy"><strong>${esc(s.label)}</strong><span>${esc(s.note)}</span></div>
+              <div class="setup-copy"><strong>${esc(s.label)}</strong><span>${esc(s.note)}${s.done?esc(by(s.key)):""}</span></div>
               <a class="button small ${i===next?"primary":""}" href="#${s.route}">${s.done?"Review":s.action}</a>
             </div>`).join("")}
           </div>
@@ -1623,9 +2135,10 @@
               : `<button class="button" data-route="settings">Conference settings</button>`
           )}
           ${setupChecklistCard()}
+          ${instancePanel()}
           <section class="card pipeline-card">
             <div class="pipeline">
-              ${["Submitted","In Review","Waved","Accepted","Onboarding","Scheduled","Published"].map(name=>
+              ${["Submitted","In Review","Waved","Ready to place","Onboarding","Scheduled","Published"].map(name=>
                 `<div class="pipeline-stage at-zero"><span class="pipeline-name">${name}</span><strong class="pipeline-count">0</strong><span class="pipeline-delta">${complete?"awaiting submissions":"not started"}</span></div>`
               ).join("")}
             </div>
@@ -1656,7 +2169,7 @@
               <div class="mini-pipeline">
                 <div class="mini-stage"><span class="subtle">Submitted</span><strong>350</strong></div>
                 <div class="mini-stage"><span class="subtle">In review</span><strong>90</strong></div>
-                <div class="mini-stage"><span class="subtle">Accepted</span><strong>190</strong></div>
+                <div class="mini-stage"><span class="subtle">Ready to place</span><strong>190</strong></div>
                 <div class="mini-stage"><span class="subtle">Onboarding</span><strong>${onboardingCounts().incomplete}</strong></div>
                 <div class="mini-stage"><span class="subtle">Scheduled</span><strong>32</strong></div>
                 <div class="mini-stage"><span class="subtle">Published</span><strong>26</strong></div>
@@ -1705,11 +2218,11 @@
             ${ticks.map(t => `<text x="${x(t)}" y="${H - 8}" text-anchor="middle" style="font:400 9px var(--mono);fill:var(--muted)">${tickLabel(t)}</text>`).join("")}
             <line x1="${x(PACING.closeT)}" y1="${T}" x2="${x(PACING.closeT)}" y2="${H - B}" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="2 3"></line>
             <text x="${x(PACING.closeT)}" y="${T - 3}" text-anchor="middle" style="font:600 8px var(--mono);letter-spacing:.1em;fill:var(--muted)">CFP CLOSES</text>
-            <path d="${path(PACING.prior)}" fill="none" stroke="#81838b" stroke-width="2" stroke-dasharray="5 4"></path>
+            <path d="${path(PACING.prior)}" fill="none" stroke="var(--break-tint)" stroke-width="2" stroke-dasharray="5 4"></path>
             <path d="${path(PACING.curr)}" fill="none" stroke="var(--accent)" stroke-width="2"></path>
             <circle cx="${x(currEnd.t)}" cy="${y(currEnd.n)}" r="3.5" fill="var(--accent)"></circle>
             <text x="${x(currEnd.t) + 8}" y="${y(currEnd.n) - 6}" style="font:600 10px var(--mono);fill:var(--accent)">2026 · 1,040 today</text>
-            <text x="${x(priorEnd.t) + 8}" y="${y(priorEnd.n) + 3}" style="font:600 10px var(--mono);fill:#666a72">2025 · ${priorEnd.n.toLocaleString()} final</text>
+            <text x="${x(priorEnd.t) + 8}" y="${y(priorEnd.n) + 3}" style="font:600 10px var(--mono);fill:var(--muted)">2025 · ${priorEnd.n.toLocaleString()} final</text>
             <line id="pacing-cross" x1="0" y1="${T}" x2="0" y2="${H - B}" stroke="var(--ink)" stroke-width="1" visibility="hidden"></line>
             <rect id="pacing-hover" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"></rect>
           </svg>`;
@@ -1724,7 +2237,7 @@
               ${pipelineStage("Submitted", counts.Submitted, "+41 this week", "Submitted")}
               ${pipelineStage("In Review", counts["In Review"], "62% assigned", "In Review")}
               ${pipelineStage("Waved", acceptedByWave(1) + acceptedByWave(2), "2 of 3 waves", "Waved")}
-              ${pipelineStage("Accepted", counts.AcceptedTotal, `${(counts.AcceptedTotal / state.submissions.length * 100).toFixed(1)}% of all`, "Accepted")}
+              ${pipelineStage("Ready to place", counts.ReadyToPlace, `${(counts.ReadyToPlace / state.submissions.length * 100).toFixed(1)}% of all`, "Accepted")}
               ${pipelineStage("Onboarding", onboardingCounts().incomplete, `owe tasks · ${onboardingCounts().risk} at risk`, "Onboarding", "onboarding")}
               ${pipelineStage("Scheduled", counts.Scheduled, `${counts.AcceptedTotal - counts.Scheduled} still unplaced`, "Scheduled", "submissions", "placed on the working agenda")}
               ${pipelineStage("Published", counts.Published, `${getAgendaConflicts().length} live conflicts`, "Published", "submissions", "live on the public site")}
@@ -1738,7 +2251,7 @@
           </div>
           <div class="dashboard-grid">
             <section class="card" style="grid-column:1/-1">
-              <div class="card-head"><div><h2>Submission pacing</h2><span class="subtle">Cumulative intake vs the 2025 edition, aligned by days before the event · <span style="color:var(--accent)">—</span> 2026 live · <span style="color:#666a72">– –</span> 2025 edition${state.pacingAxis==="calendar"?" (aligned by T−days)":""}</span></div><div class="segment axis-toggle"><button data-pacing-axis="days" class="${state.pacingAxis==="days"?"active":""}">Days before event</button><button data-pacing-axis="calendar" class="${state.pacingAxis==="calendar"?"active":""}">Calendar date</button></div></div>
+              <div class="card-head"><div><h2>Submission pacing</h2><span class="subtle">Cumulative intake vs the 2025 edition, aligned by days before the event · <span style="color:var(--accent)">—</span> 2026 live · <span style="color:var(--break-tint)">– –</span> 2025 edition${state.pacingAxis==="calendar"?" (aligned by T−days)":""}</span></div><div class="segment axis-toggle"><button data-pacing-axis="days" class="${state.pacingAxis==="days"?"active":""}">Days before event</button><button data-pacing-axis="calendar" class="${state.pacingAxis==="calendar"?"active":""}">Calendar date</button></div></div>
               <div class="card-body">${pacingChart()}</div>
             </section>
             <section class="card" id="wave-planner">
@@ -1755,7 +2268,7 @@
                 <div class="metric-grid">
                   <button class="metric-box" style="border:0;text-align:left" data-attention-filter="In Review"><span class="eyebrow">Reviews done</span><div class="metric">1,842</div><span class="subtle">of 2,130</span></button>
                   <button class="metric-box" style="border:0;text-align:left" data-route="onboarding"><span class="eyebrow">Tasks overdue</span><div class="metric">${onboardingCounts().overdueTasks}</div><span class="subtle">across ${onboardingCounts().overdue} speakers</span></button>
-                  <button class="metric-box" style="border:0;text-align:left" data-route="agenda"><span class="eyebrow">Unscheduled</span><div class="metric">${counts.AcceptedTotal - counts.Scheduled}</div><span class="subtle">accepted sessions</span></button>
+                  <button class="metric-box" style="border:0;text-align:left" data-route="agenda"><span class="eyebrow">Unscheduled</span><div class="metric">${counts.AcceptedTotal - counts.Scheduled}</div><span class="subtle">accepted Sessions not yet placed</span></button>
                   <button class="metric-box" style="border:0;text-align:left" data-route="agenda"><span class="eyebrow">Conflicts</span><div class="metric" style="color:var(--danger)">${getAgendaConflicts().length}</div><span class="subtle">${agendaConflictIds().size} affected Sessions · live</span></button>
                 </div>
                 <div class="divider"></div>
@@ -1782,7 +2295,7 @@
         {name:"Submitted",hint:"Received and waiting"},
         {name:"In Review",hint:"Committee work underway"},
         {name:"Waved",hint:"Decision wave prepared"},
-        {name:"Accepted",hint:"Decision confirmed"},
+        {name:"Accepted",label:"Ready to place",hint:"Accepted and ready for scheduling"},
         {name:"Onboarding",hint:"Speaker work underway",derived:true,entry:"Open an accepted record to manage speaker tasks and onboarding."},
         {name:"Scheduled",hint:"Placed on working agenda",derived:true,entry:"Open an accepted record, then choose Place on agenda."},
         {name:"Published",hint:"Live on public site",derived:true,entry:"Open a scheduled record, then choose Publish Session."}
@@ -1809,7 +2322,7 @@
         return shell(`<div class="page">
           ${pageHead("Program board", `${matching.length.toLocaleString()} matching submissions across seven lifecycle stages · click any card to open its record and take action.`, `<button class="button" data-route="dashboard">Pipeline dashboard</button><button class="button primary" data-route="submissions">Open list</button>`)}
           <section class="card"><div class="toolbar" aria-label="Program board filters"><input id="board-search" value="${esc(state.boardSearch)}" aria-label="Search board" placeholder="Search title, speaker, ID, or company"><select id="board-type-filter" aria-label="Filter by type">${["All types","Abstracts","Sessions"].map(value=>`<option ${state.boardType===value?"selected":""}>${value}</option>`).join("")}</select><select id="board-track-filter" aria-label="Filter by track"><option>All tracks</option>${tracks.map(t=>`<option ${state.boardTrack===t.name?"selected":""}>${esc(t.name)}</option>`).join("")}</select><select id="board-format-filter" aria-label="Filter by format"><option>All formats</option>${formats.map(f=>`<option ${state.boardFormat===f?"selected":""}>${esc(f)}</option>`).join("")}</select><select id="board-wave-filter" aria-label="Filter by wave">${["All waves","Wave 1","Wave 2","Wave 3","Unwaved"].map(w=>`<option ${state.boardWave===w?"selected":""}>${w}</option>`).join("")}</select><span class="toolbar-spacer"></span><div class="board-filter-summary"><strong>${matching.length.toLocaleString()}</strong> of ${state.submissions.length.toLocaleString()}<button class="button small" id="clear-board-filters">Clear filters</button></div></div><div class="card-body" style="padding:10px"><div class="program-board-shell"><div class="program-board">
-            ${programBoardStages.map(stage=>{const cards=matching.filter(s=>boardStageFor(s)===stage.name);return `<section class="board-column ${stage.derived?"derived":""}" data-board-column="${stage.name}" data-derived="${stage.derived?"true":"false"}"><header class="board-column-head"><div><strong>${stage.name}</strong><small>${stage.hint}</small></div><span class="board-count">${cards.length}</span></header>${stage.derived?`<div class="board-derived-note">${stage.entry}</div>`:""}<div class="board-card-list">${cards.map(boardCard).join("")||`<div class="subtle" style="padding:24px;text-align:center">No matching submissions</div>`}</div></section>`}).join("")}
+            ${programBoardStages.map(stage=>{const cards=matching.filter(s=>boardStageFor(s)===stage.name);return `<section class="board-column ${stage.derived?"derived":""}" data-board-column="${stage.name}" data-derived="${stage.derived?"true":"false"}"><header class="board-column-head"><div><strong>${stage.label||stage.name}</strong><small>${stage.hint}</small></div><span class="board-count">${cards.length}</span></header>${stage.derived?`<div class="board-derived-note">${stage.entry}</div>`:""}<div class="board-card-list">${cards.map(boardCard).join("")||`<div class="subtle" style="padding:24px;text-align:center">No matching submissions</div>`}</div></section>`}).join("")}
           </div></div></div></section>
         </div>`);
       }
@@ -1845,8 +2358,8 @@
       }
 
       function pipelineCounts() {
-        const result = { Submitted: 0, "In Review": 0, Accepted: 0, Scheduled: 0, Published: 0, AcceptedTotal: 0 };
-        state.submissions.forEach(s => { if (result[s.status] !== undefined) result[s.status]++; if (s.accepted) result.AcceptedTotal++; });
+        const result = { Submitted: 0, "In Review": 0, Accepted: 0, Scheduled: 0, Published: 0, AcceptedTotal: 0, ReadyToPlace: 0 };
+        state.submissions.forEach(s => { if (result[s.status] !== undefined) result[s.status]++; if (s.accepted) { result.AcceptedTotal++; if (boardStageFor(s) === "Accepted") result.ReadyToPlace++; } });
         result.Scheduled += result.Published;
         return result;
       }
@@ -1904,6 +2417,22 @@
       function buildingsCard() { return `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Coordinates drive walking times, transit conflicts, and the map above</span></div><button class="button small" id="add-building">+ Add building</button></div><div class="card-body">${buildings.map((b,i) => `<div class="building-block"><div class="building-row"><span class="drag-handle">${i+1}</span><input aria-label="Building name" data-building-name="${b.id}" value="${esc(b.name)}"><input aria-label="Building address" data-building-address="${b.id}" value="${esc(b.address)}" placeholder="Street address, floor, entrance notes"><span class="building-rooms tabular">${roomsInBuilding(b.id)} ${roomsInBuilding(b.id)===1?"room":"rooms"}${sessionsToday(b)?` · ${sessionsToday(b)} today`:""}</span><button class="button small" data-remove-building="${b.id}" ${buildings.length<=1?"disabled":""}>Remove</button></div><div class="building-geo"><span></span><div><label for="lat-${b.id}">Latitude</label><input id="lat-${b.id}" data-building-lat="${b.id}" value="${b.lat==null?"":b.lat}" placeholder="40.75600"></div><div><label for="lng-${b.id}">Longitude</label><input id="lng-${b.id}" data-building-lng="${b.id}" value="${b.lng==null?"":b.lng}" placeholder="-73.98923"></div><div><label for="acc-${b.id}">Minutes to get in</label><input id="acc-${b.id}" data-building-access="${b.id}" type="number" min="0" step="1" value="${b.accessMinutes||0}"></div><div><label for="note-${b.id}">Entrance note</label><input id="note-${b.id}" data-building-note="${b.id}" value="${esc(b.accessNote||"")}" placeholder="Doors, ID, lifts — shown to speakers"></div></div></div>`).join("")}</div></section>`; }
       function roomsCard() { return `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Rooms</h2><span class="subtle">Capacity, building, AV capability, and the notes an ops lead needs on the day</span></div><button class="button small" id="add-room">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="room-row"><div class="room-row-main"><span class="drag-handle">${i+1}</span><input aria-label="Room name" data-room-name="${i}" value="${esc(r)}"><input aria-label="Room capacity" data-room-capacity="${i}" type="number" min="1" step="1" value="${state.roomCapacities[i]}"><select aria-label="Building" data-room-building="${i}"><option value="">Unassigned</option>${buildings.map(b=>`<option value="${b.id}" ${state.roomBuildings[i]===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}</select><button class="button small" data-remove-room="${i}" ${rooms.length<=1?"disabled":""}>Remove</button></div><div class="room-row-meta"><span class="room-meta-label">AV</span><div class="av-tags">${AV_TAGS.map(tag=>`<button class="av-tag ${(state.roomAV[i]||[]).includes(tag)?"on":""}" data-room-av="${i}" data-av-tag="${esc(tag)}" aria-pressed="${(state.roomAV[i]||[]).includes(tag)?"true":"false"}">${esc(tag)}</button>`).join("")}</div></div><div class="room-row-meta"><span class="room-meta-label">Notes</span><input aria-label="Room notes" data-room-notes="${i}" value="${esc(state.roomNotes[i]||"")}" placeholder="Access, load-in, quirks — shown on the agenda and to speakers"></div></div>`).join("")}</div></section>`; }
 
+      // Organizers are instance-level people, surfaced inside Conference
+      // settings because that is where an organizer already looks. Invites are
+      // one-time links the owner hands over on any channel — the same trick as
+      // the claim link, so a co-organizer can join before mail exists.
+      function organizersCard() {
+        const orgs = state.instance.organizers;
+        const dash = w => `<span class="subtle" style="display:inline-block;width:${w}px;text-align:center">—</span>`;
+        return `<section class="card"><div class="card-head"><div><h2>Organizers</h2><span class="subtle">Everyone who can run this instance · invites are links, never dependent on mail</span></div><button class="button small" id="invite-organizer">+ Invite additional organizer</button></div>
+          <div class="card-body" style="padding-top:2px;padding-bottom:2px">
+            ${orgs.length ? orgs.map((o,i)=> o.pending
+              ? `<div class="org-row"><span class="org-name">Invite link minted<span class="org-note">${esc(o.minted)} · single use · expires in 7 days</span></span><span class="org-email">—</span><span class="chip">Pending</span><button class="button small" data-revoke-invite="${i}" style="width:76px">Revoke</button></div>`
+              : `<div class="org-row"><span class="org-name">${esc(o.name)}${o.you?` <span class="chip" style="width:auto;margin-left:4px">you</span>`:""}<span class="org-note">${esc(o.note||"")}</span></span><span class="org-email">${esc(o.email)}</span><span class="chip ${o.role==="Owner"?"published":""}">${esc(o.role)}</span>${o.role==="Owner"?dash(76):`<button class="button small" data-remove-organizer="${i}" style="width:76px">Remove</button>`}</div>`).join("")
+            : `<div class="org-row"><span class="org-name">No organizers yet<span class="org-note">Claiming the instance creates the first owner</span></span><span class="org-email">—</span><span class="chip">—</span>${dash(76)}</div>`}
+          </div></section>`;
+      }
+
       function settingsView() {
         return shell(`<div class="page">
           ${pageHead("Conference settings", "The conference record is inherited by forms, portals, agenda times, and calendar invites.", `<button class="button" id="preview-branding">Preview branding</button><button class="button primary" id="save-settings">Save conference settings</button>`)}
@@ -1917,6 +2446,7 @@
               <div class="field"><label for="event-timezone">Timezone</label><select id="event-timezone"><option selected>America/New_York</option><option>America/Los_Angeles</option><option>Europe/London</option></select><span class="field-note">Agenda and calendar invites inherit this timezone.</span></div>
               <div class="field"><label for="event-submission-limit">Submissions per person · conference default</label><input id="event-submission-limit" type="number" min="1" max="10" value="${state.event.submissionLimit||3}" style="width:80px"><span class="field-note">Applies when a form sets no limit of its own. Saved drafts count toward it.</span></div>
             </div></section>
+            ${organizersCard()}
             <section class="card"><div class="card-head"><h2>Formats</h2><button class="button small" id="add-format">+ Add format</button></div><div class="card-body" id="format-settings">
               ${formats.map((f,i) => `<div class="settings-row" data-format-index="${i}"><span class="drag-handle">⋮</span><input aria-label="Format name" data-format-name="${i}" value="${esc(f)}"><input aria-label="Allowed range" data-format-range="${i}" value="${esc(formatRanges[f]||"15–30")}"><label class="field" style="display:flex;align-items:center;gap:4px"><input aria-label="Default duration" data-format-duration="${i}" type="number" min="5" max="180" value="${formatDurations[f]}"><span class="subtle">min</span></label></div>`).join("")}
             </div></section>
@@ -1931,7 +2461,7 @@
       function formsView() {
         const activeForm=state.forms.find(form=>form.id===state.activeFormId)||state.forms[0];
         return shell(`<div class="page">
-          ${pageHead("Forms", `${state.forms.length} conference forms · each has its own audience, fields, rules, response state, and public or private link.`, `<button class="button" id="duplicate-form">Duplicate</button><button class="button" id="new-form">+ New form</button><button class="button primary" id="publish-form">Publish changes</button>`)}
+          ${pageHead("Forms", `${state.forms.length} conference ${state.forms.length===1?"form":"forms"} · each has its own audience, fields, rules, response state, and public or private link.`, `<button class="button" id="duplicate-form">Duplicate</button><button class="button" id="new-form">+ New form</button><button class="button primary" id="publish-form">Publish changes</button>`)}
           <section class="form-catalog" aria-label="Conference forms">${state.forms.map(form=>`<button class="form-catalog-card ${form.id===state.activeFormId?"active":""}" data-form-id="${form.id}"><span class="chip ${form.status==="Open"?"published":""}">${form.status}</span><strong>${esc(form.name)}</strong><small>${esc(form.detail)}<br>${form.responses.toLocaleString()} ${form.responses===1?"response":"responses"} · collects ${form.target}s</small></button>`).join("")}</section>
           <div class="message-preview" style="margin-bottom:14px"><strong>Editing · ${esc(activeForm.name)}</strong><br><span class="subtle">${esc(activeForm.detail)} · changes and publication are isolated to this form.</span></div>
           <div class="builder">
@@ -1944,7 +2474,7 @@
               <div class="field"><label>Submissions per person</label><input id="form-limit" type="number" placeholder="${state.event.submissionLimit||3}" min="1" max="10"><span class="field-note">Conference default: ${state.event.submissionLimit||3} · applies when this form sets none. Saved drafts count.</span></div>
             </section>
             ${builderCenterView()}
-              <section class="card preview-card"><div class="card-head"><h2>Live preview</h2><span class="chip">Public</span></div><div class="preview-window"><div class="preview-top"><i></i><i></i><i></i></div><div class="preview-form"><div class="eyebrow">AIE NYC 2026</div><h3>Call for speakers</h3><p>${state.formTarget === "Abstract" ? "Share an idea for the program." : "Add a guaranteed session to the program."}</p>${state.builderFields.slice(0,6).map(f => f.kind==="Divider" ? `<div style="border-top:1px solid var(--line-strong);margin:11px 0"></div>` : f.element ? `<div style="margin:11px 0 8px;font:600 8px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)">${esc(f.label)}</div>` : `<div style="margin-bottom:13px"><strong style="font-size:9px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="preview-input"></div></div>`).join("")}<button class="button primary small" data-route="cfp">Open complete form</button></div></div></section>
+              <section class="card preview-card"><div class="card-head"><h2>Live preview</h2><span class="chip">Public</span></div><div class="preview-window"><div class="preview-top"><i></i><i></i><i></i></div><div class="preview-form"><div class="eyebrow">${esc(state.event.name || "Your conference")}</div><h3>Call for speakers</h3><p>${state.formTarget === "Abstract" ? "Share an idea for the program." : "Add a guaranteed session to the program."}</p>${state.builderFields.slice(0,6).map(f => f.kind==="Divider" ? `<div style="border-top:1px solid var(--line-strong);margin:11px 0"></div>` : f.element ? `<div style="margin:11px 0 8px;font:600 8px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)">${esc(f.label)}</div>` : `<div style="margin-bottom:13px"><strong style="font-size:9px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="preview-input"></div></div>`).join("")}<button class="button primary small" data-route="cfp">Open complete form</button></div></div></section>
           </div>
         </div>`);
       }
@@ -2155,7 +2685,9 @@
         const q = state.submissionSearch.trim().toLowerCase();
         let list = state.submissions.filter(s =>
           (state.submissionFilter === "All" ||
-            (state.submissionFilter === "Accepted" && s.accepted) ||
+            (state.submissionFilter === "AcceptedAny" && s.accepted) ||
+            (state.submissionFilter === "Accepted" && boardStageFor(s) === "Accepted") ||
+            (state.submissionFilter === "Onboarding" && boardStageFor(s) === "Onboarding") ||
             (state.submissionFilter === "Waved" && s.accepted && s.wave <= 2) ||
             (state.submissionFilter === "Scheduled" && ["Scheduled","Published"].includes(s.status)) ||
             (state.submissionFilter === "Unreviewed" && ["Submitted","In Review"].includes(s.status)) ||
@@ -2248,7 +2780,7 @@
             <div class="toolbar">
               <select id="search-op" aria-label="Search operator" style="flex:none;width:132px">${["contains","does not contain","starts with"].map(op=>`<option ${state.submissionSearchOp===op?"selected":""}>${op}</option>`).join("")}</select>
               <input id="submission-search" value="${esc(state.submissionSearch)}" placeholder="Search 1,000 submissions…">
-              <select id="status-filter"><option>All</option>${["Draft","Submitted","In Review","Unreviewed","Waved","Accepted","Scheduled","Published","Waitlisted","Rejected","Withdrawn"].map(x=>`<option ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}</select>
+              <select id="status-filter"><option value="All">All statuses</option><optgroup label="Stored decision facts">${["Draft","Submitted","In Review"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}<option value="AcceptedAny" ${state.submissionFilter==="AcceptedAny"?"selected":""}>Accepted (any stage)</option>${["Waitlisted","Rejected","Withdrawn"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x==="Waitlisted"?"Maybe":x}</option>`).join("")}</optgroup><optgroup label="Pipeline stages">${["Unreviewed","Waved","Onboarding"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}<option value="Accepted" ${state.submissionFilter==="Accepted"?"selected":""}>Ready to place</option>${["Scheduled","Published"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}</optgroup><optgroup label="Attention queue"><option value="NotNotified" ${state.submissionFilter==="NotNotified"?"selected":""}>Decided · not notified</option></optgroup></select>
               <select id="type-filter"><option>All</option><option ${state.submissionType==="Abstract"?"selected":""}>Abstract</option><option ${state.submissionType==="Session"?"selected":""}>Session</option></select>
               <select id="track-filter"><option>All</option>${tracks.map(t=>`<option ${state.submissionTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select>
               <span class="toolbar-spacer"></span>
@@ -2548,7 +3080,7 @@
         </div>`);
       }
 
-      function trackColor(name) { return tracks.find(t=>t.name===name)?.color || "#635bff"; }
+      function trackColor(name) { const octave = currentTheme().tracks?.[name]; return octave || tracks.find(t=>t.name===name)?.color || "#635bff"; }
       function visibleAgendaSessions() {
         return state.scheduled.filter(s=>(state.agendaTrack==="All tracks"||(s.tracks||[s.track]).includes(state.agendaTrack))&&(state.agendaBuilderDay==="All days"||s.day===state.agendaBuilderDay));
       }
@@ -2566,7 +3098,7 @@
 
       function renderWeekAgenda(items) {
         const times=["09:00","10:00","11:00","13:30","14:30","15:30","16:30"],days=["Mon · Oct 12","Tue · Oct 13","Wed · Oct 14"];
-        return `<div class="week-grid"><div class="week-cell head time"></div>${days.map(d=>`<div class="week-cell head">${d}</div>`).join("")}${times.map(time=>`<div class="week-cell time">${time}</div>${days.map(day=>`<div class="week-cell drop-target" data-drop-day="${day}" data-drop-time="${time}" data-drop-room="${rooms[(times.indexOf(time)+days.indexOf(day))%rooms.length]}">${items.filter(s=>s.day===day&&s.time===time).map(s=>`<div class="week-session ${s.kind==="break"?"break-tile":""}" style="border-left-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.room)} · ${s.kind==="break"?`${s.duration}m Break`:esc(s.speaker)}</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}</div>`).join("")}</div>`).join("")}`).join("")}</div>`;
+        return `<div class="week-grid"><div class="week-cell head time"></div>${days.map(d=>`<div class="week-cell head">${d}</div>`).join("")}${times.map(time=>`<div class="week-cell time">${time}</div>${days.map(day=>`<div class="week-cell drop-target" data-drop-day="${day}" data-drop-time="${time}" data-drop-room="${rooms[(times.indexOf(time)+days.indexOf(day))%rooms.length]}">${items.filter(s=>s.day===day&&s.time===time).map(s=>`<div class="week-session ${s.kind==="break"?"break-tile":""}" style="border-left-color:${s.kind==="break"?"var(--break-tint)":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.room)} · ${s.kind==="break"?`${s.duration}m Break`:esc(s.speaker)}</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}</div>`).join("")}</div>`).join("")}`).join("")}</div>`;
       }
 
       function renderRoomAgenda(items) {
@@ -2721,9 +3253,9 @@
         return conflicts;
       }
       function agendaConflictIds() { return new Set(getAgendaConflicts().flatMap(c=>[c.a.id,c.b.id])); }
-      function swimlaneSession(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="swimlane-session ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" style="border-left:3px solid ${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span class="subtle">${esc(s.kind==="break"?`${s.duration} minute reservation`:s.speaker)}</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
-      function sessionTile(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="session-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?`${s.duration} minute Break`:s.speaker)}</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}" aria-label="Shorten">−</button><button data-resize="5" data-resize-id="${s.id}" aria-label="Lengthen">+</button></span>`:""}${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
-      function trackAgendaTile(s,conflict) { return `<article class="track-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"#81838b":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?"Break":s.speaker)} · ${s.duration}m</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}">−</button><button data-resize="5" data-resize-id="${s.id}">+</button></span>`:""}${conflict?'<i class="track-conflict" title="Conflict">!</i>':""}</article>`; }
+      function swimlaneSession(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="swimlane-session ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" style="border-left:3px solid ${s.kind==="break"?"var(--break-tint)":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span class="subtle">${esc(s.kind==="break"?`${s.duration} minute reservation`:s.speaker)}</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
+      function sessionTile(s) { const conflict=agendaConflictIds().has(s.id); return `<div class="session-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"var(--break-tint)":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?`${s.duration} minute Break`:s.speaker)}</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}" aria-label="Shorten">−</button><button data-resize="5" data-resize-id="${s.id}" aria-label="Lengthen">+</button></span>`:""}${conflict?`<span class="conflict-flag">⚠ Live conflict</span>`:""}</div>`; }
+      function trackAgendaTile(s,conflict) { return `<article class="track-tile ${conflict?"conflict":""} ${s.kind==="break"?"break-tile":""}" draggable="${s.kind!=="break"}" data-drag-id="${s.id}" data-session-id="${s.id}" style="--track-color:${s.kind==="break"?"var(--break-tint)":trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.kind==="break"?"Break":s.speaker)} · ${s.duration}m</span>${s.kind==="break"?"":trackChips(s,true)+scheduleMeta(s,true)}${s.kind!=="break"?`<span class="tile-actions"><button data-resize="-5" data-resize-id="${s.id}">−</button><button data-resize="5" data-resize-id="${s.id}">+</button></span>`:""}${conflict?'<i class="track-conflict" title="Conflict">!</i>':""}</article>`; }
 
       function publicAgendaView() {
         const q = state.publicSearch.trim().toLowerCase();
@@ -2871,8 +3403,42 @@
         gs?.addEventListener("click",openGlobalSearch);
         document.getElementById("reset-demo")?.addEventListener("click",resetDemo);
         document.getElementById("view-portal")?.addEventListener("click",()=>{state.impersonating=true;navigate("portal");});
+        document.getElementById("theme-select")?.addEventListener("change",e=>setTheme(e.target.value));
         document.getElementById("exit-fresh-install")?.addEventListener("click",()=>{
           exitFreshInstall(); toast("Back in the seeded AIE NYC 2026 demo"); navigate("dashboard");
+        });
+        // ── v1.11 cold-start wiring, all null-safe ──
+        // The ＋: outside the walk it starts a SECOND conference on this same,
+        // already-configured instance — no claim, no agent replay, instance
+        // rows already green. Inside the walk it stays a plain link.
+        document.getElementById("event-add")?.addEventListener("click",e=>{
+          if (!state.setup.active) { e.preventDefault(); enterFreshInstall("second"); toast("New conference on this instance · the checklist is conference-scoped"); navigate("conferences/new"); }
+          else if (state.demoPeek) { e.preventDefault(); toast("Finish or resume the current setup first — one new conference at a time"); }
+        });
+        document.getElementById("switcher-swap")?.addEventListener("click",()=>{
+          if (state.demoPeek) { endDemoPeek(); toast("Back in your setup · the demo is exactly as you left it"); }
+          else { startDemoPeek(); toast(state.setup.mode==="second" ? "Viewing the live conference" : "Exploring the demo conference · your setup is waiting in the sidebar"); }
+          navigate("dashboard");
+        });
+        document.getElementById("switcher-swap-removed")?.addEventListener("click",()=>toast("The demo conference was removed from this walk · Exit fresh install restores the seeded artifact"));
+        document.getElementById("peek-return")?.addEventListener("click",()=>{
+          endDemoPeek(); toast("Back in your setup"); navigate("dashboard");
+        });
+        document.getElementById("remove-demo")?.addEventListener("click",()=>{
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Demo conference</div><h2>Remove the demo conference?</h2><p>AIE NYC 2026 and its 1,040 submissions were seeded for orientation. Removing them touches nothing of yours — your conference, organizers, and tokens stay exactly as they are.</p></div><div class="modal-actions"><button class="button" id="cancel-remove-demo">Keep the demo</button><button class="button primary" id="confirm-remove-demo">Remove demo data</button></div></section></div>`;
+          document.getElementById("cancel-remove-demo").onclick=()=>modalRoot.innerHTML="";
+          document.getElementById("confirm-remove-demo").onclick=()=>{
+            modalRoot.innerHTML=""; endDemoPeek(); state.demoRemoved=true;
+            toast("Demo conference removed · your data was never mixed with it"); navigate("dashboard");
+          };
+        });
+        document.getElementById("inst-mail-fix")?.addEventListener("click",()=>{
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Instance · Mail</div><h2>Configure outbound mail</h2><p>Marquee sends through Resend. One secret on the deployed Worker turns every queued send live — submission confirmations, decision mail, sign-in links, calendar invites.</p></div><div class="modal-body stack"><div class="code-block">npx wrangler secret put RESEND_API_KEY</div><span class="subtle">Or tell your agent "configure mail" — SKILL.md carries this step. Until then, everything composable still queues honestly in the outbox; nothing silently pretends to send.</span></div><div class="modal-actions"><button class="button" id="close-mail-fix">Close</button><button class="button primary" id="simulate-mail">Prototype · mark configured</button></div></section></div>`;
+          document.getElementById("close-mail-fix").onclick=()=>modalRoot.innerHTML="";
+          document.getElementById("simulate-mail").onclick=()=>{
+            state.instance.mail=true; modalRoot.innerHTML="";
+            toast("Mail configured · confirmations and invites now deliver"); render();
+          };
         });
         document.getElementById("setup-create-form")?.addEventListener("click",()=>{
           const id=`form-${Date.now()}`;
@@ -2910,6 +3476,33 @@
         });
       }
 
+      function copyText(text, message) {
+        try { navigator.clipboard?.writeText(text); } catch (_) { }
+        toast(message || "Copied");
+      }
+
+      function bindClaim() {
+        document.getElementById("claim-instance")?.addEventListener("click",()=>{
+          const name=document.getElementById("claim-name").value.trim()||"Sam Okonkwo-Barnes";
+          const email=document.getElementById("claim-email").value.trim()||"sam@gl-infra.dev";
+          state.instance.owner={name,email};
+          state.instance.organizers=[{name,note:"Instance owner",email,role:"Owner",you:true}];
+          state.instance.agentToken="mq_live_7c41d9k2a9f3q0x8";
+          state.setup.claimed=true;
+          toast(`You own this instance, ${name.split(" ")[0]} \u00b7 the claim link is now inert`);
+          navigate("handoff");
+        });
+      }
+
+      function bindHandoff() {
+        document.getElementById("copy-token")?.addEventListener("click",()=>copyText(state.instance.agentToken||"","Token copied \u00b7 it will not be shown again"));
+        document.getElementById("door-agent")?.addEventListener("click",()=>{ agentProvision(); navigate("setup/agent"); });
+        document.getElementById("door-hand")?.addEventListener("click",()=>navigate("conferences/new"));
+        document.getElementById("door-demo")?.addEventListener("click",()=>{
+          startDemoPeek(); toast("Exploring the demo conference \u00b7 your setup is waiting in the sidebar"); navigate("dashboard");
+        });
+      }
+
       function normalizeSearch(value) { return String(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,""); }
       function fuzzyMatch(value,query) {
         const hay=normalizeSearch(value),needle=normalizeSearch(query); if(!needle)return true; if(hay.includes(needle))return true;
@@ -2938,7 +3531,7 @@
       }
 
       function bindLanding() {
-        document.getElementById("open-self-host")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div class="eyebrow">Public open-source project</div><h2>Self-host Marquee</h2><p>The competition repository is prepared for Apache-2.0 publication. This prototype stays self-contained and does not link to a placeholder remote.</p></div><div class="modal-body"><div class="code-block">git clone https://github.com/stage11/marquee.git\ncd marquee\nnpm install\nnpm run db:migrate\nnpm run seed\nnpm run dev</div></div><div class="modal-actions"><button class="button" id="download-guide">Download setup guide</button><button class="button primary" id="close-self-host">Done</button></div></section></div>`;document.getElementById("close-self-host").onclick=()=>modalRoot.innerHTML="";document.getElementById("download-guide").onclick=()=>downloadText("MARQUEE-SELF-HOST.txt","Marquee self-host setup\n1. Clone the public repository.\n2. Install dependencies.\n3. Configure Cloudflare bindings.\n4. Run migrations and seed.\n5. Start the development server.\n");});
+        document.getElementById("open-self-host")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div class="eyebrow">Public open-source project</div><h2>Self-host Marquee</h2><p><strong>Initial setup is run by an agent.</strong> Point your coding agent at the repository — SKILL.md's setup chapter walks it from clone to a claimed instance: Cloudflare resources, secrets, migrations, an optional demo seed, and a one-time claim link that makes you the owner.</p></div><div class="modal-body stack"><div class="code-block">git clone https://github.com/stage11/marquee.git\ncd marquee\n# tell your agent: “set up Marquee” — SKILL.md carries the steps\n# … resources · secrets · migrations · deploy\n# → prints a one-time claim link; opening it makes you the owner</div><span class="subtle">No agent? The same steps run by hand — the README's deploy sequence is the contract. Administration afterward is agent and web UI, both first-class.</span></div><div class="modal-actions"><button class="button" id="download-guide">Download setup guide</button><a class="button" href="#landing?empty=1" id="preview-setup-link">Preview a fresh install →</a><button class="button primary" id="close-self-host">Done</button></div></section></div>`;document.getElementById("close-self-host").onclick=()=>modalRoot.innerHTML="";document.getElementById("preview-setup-link").onclick=()=>{modalRoot.innerHTML="";};document.getElementById("download-guide").onclick=()=>downloadText("MARQUEE-SELF-HOST.txt","Marquee self-host setup\n1. Clone the public repository.\n2. Tell your coding agent to set up Marquee; SKILL.md carries the steps.\n3. The agent creates Cloudflare resources, sets secrets, applies migrations, deploys.\n4. It prints a one-time claim link; opening it makes you the owner.\n5. Hand the agent a scoped token to finish setup, or continue by hand.\n");});
       }
 
       function bindDashboard() {
@@ -2972,6 +3565,27 @@
       }
 
       function bindSettings() {
+        document.getElementById("invite-organizer")?.addEventListener("click",()=>{
+          const link=`https://${state.instance.domain}/join/mq_inv_k2v0d4x9`;
+          const mailReady=state.instance.mail;
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Organizers</div><h2>Invite additional organizer</h2><p>One link, one person, one use. They open it, confirm their name and email, and have a session — the same pattern that claimed this instance, so it works before mail does.</p></div><div class="modal-body stack"><div class="token-line"><div class="code-block" style="padding:10px 12px;word-break:break-all;white-space:normal">${link}</div><button class="button" id="copy-invite">Copy link</button></div><span class="subtle">${mailReady?"Send it on any channel you share — or have Marquee email it.":"Send it on any channel you already share. Once mail is configured, Marquee can send it for you."}</span></div><div class="modal-actions">${mailReady?`<button class="button" id="email-invite">Email the invite</button>`:`<button class="button" id="email-invite-off">Email the invite</button>`}<button class="button primary" id="close-invite">Done</button></div></section></div>`;
+          let minted=false;
+          const mint=note=>{ if(minted)return; minted=true; state.instance.organizers.push({pending:true,minted:`Today · ${note}`}); };
+          document.getElementById("copy-invite").onclick=()=>{ mint("link copied"); copyText(link,"Invite link copied · valid once, expires in 7 days"); };
+          document.getElementById("email-invite")?.addEventListener("click",()=>{ mint("emailed"); toast("Invite emailed · the link stays single-use"); });
+          document.getElementById("email-invite-off")?.addEventListener("click",()=>toast("Mail isn’t configured on this instance — copy the link instead"));
+          document.getElementById("close-invite").onclick=()=>{ modalRoot.innerHTML=""; render(); };
+        });
+        document.querySelectorAll("[data-remove-organizer]").forEach(b=>b.onclick=()=>{
+          const i=Number(b.dataset.removeOrganizer), person=state.instance.organizers[i]; if(!person)return;
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Organizers</div><h2>Remove ${esc(person.name)}?</h2><p>Their reviews, decisions, and sent mail stay on the record. Their access ends now, and any sign-in link already in their inbox stops working.</p></div><div class="modal-actions"><button class="button" id="cancel-remove-org">Keep access</button><button class="button primary" id="confirm-remove-org">Remove organizer</button></div></section></div>`;
+          document.getElementById("cancel-remove-org").onclick=()=>modalRoot.innerHTML="";
+          document.getElementById("confirm-remove-org").onclick=()=>{ state.instance.organizers.splice(i,1); modalRoot.innerHTML=""; toast(`${person.name} removed · their work stays on the record`); render(); };
+        });
+        document.querySelectorAll("[data-revoke-invite]").forEach(b=>b.onclick=()=>{
+          state.instance.organizers.splice(Number(b.dataset.revokeInvite),1);
+          toast("Invite link revoked · it can no longer be used"); render();
+        });
         document.getElementById("save-venues")?.addEventListener("click",()=>{
           persistVenueEdits();
           toast(`Venues saved · ${pinnedBuildings().length} pinned, ${rooms.length} rooms`);
@@ -3044,13 +3658,28 @@
           document.getElementById("cancel-section-el").onclick=()=>modalRoot.innerHTML="";
           document.getElementById("confirm-section-el").onclick=()=>{const kind=document.getElementById("section-el-kind").value;state.builderFields.push({id,label:kind==="Divider"?"":document.getElementById("section-el-label").value.trim()||"Section",kind,element:true});modalRoot.innerHTML="";toast(`${kind} added · drag it into place`);render();};
         });
-        document.getElementById("publish-form")?.addEventListener("click",()=>{const form=state.forms.find(item=>item.id===state.activeFormId);if(form){form.status="Open";form.detail=form.id==="cfp"?"Public · closes Sep 12":"Private link · published";}toast("Form published · only this form’s public surface updated");render();});
-        document.getElementById("new-form")?.addEventListener("click",()=>completeSetupStep("form"));
-        // Publishing the form is what opens intake — the last step of the walk.
-        document.getElementById("publish-form")?.addEventListener("click",()=>{
+        // Publishing the form is what opens intake — the last step of the walk,
+        // and deliberately a human one (the agent stops before it). With mail
+        // unconfigured this is the moment the trap would spring, so it warns and
+        // requires explicit acknowledgment. It never hard-blocks: the operator
+        // may genuinely handle mail elsewhere.
+        const doPublishForm=()=>{
+          const form=state.forms.find(item=>item.id===state.activeFormId);
+          if(form){form.status="Open";form.detail=form.id==="cfp"?"Public · closes Sep 12":"Private link · published";}
           completeSetupStep("form");
           if(state.forms.some(f=>f.status==="Open")) completeSetupStep("intake","Intake is open · the public CFP is live");
+          toast("Form published · only this form’s public surface updated");render();
+        };
+        document.getElementById("publish-form")?.addEventListener("click",()=>{
+          if(state.setup.active && !state.demoPeek && !state.instance.mail && !state.setup.intakeAck){
+            modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Open intake</div><h2>This instance can’t send mail yet</h2><p>The call for speakers will be live to the world, but until mail is configured: submitters get no confirmation, accepted speakers get no decision mail and no calendar invites. Everything queues honestly in the outbox — nothing pretends to send.</p></div><div class="modal-actions"><button class="button" id="intake-anyway">Open intake anyway</button><button class="button primary" id="intake-fix-mail">Configure mail first</button></div></section></div>`;
+            document.getElementById("intake-fix-mail").onclick=()=>{modalRoot.innerHTML="";navigate("dashboard");toast("Mail lives on the Instance panel · one secret turns every queued send live");};
+            document.getElementById("intake-anyway").onclick=()=>{state.setup.intakeAck=true;modalRoot.innerHTML="";doPublishForm();};
+            return;
+          }
+          doPublishForm();
         });
+        document.getElementById("new-form")?.addEventListener("click",()=>completeSetupStep("form"));
         document.getElementById("save-builder-step")?.addEventListener("click",()=>toast("Form step saved · public preview updated"));
         document.getElementById("form-closes")?.addEventListener("change",()=>toast("Close date updated in public form"));
         document.getElementById("form-limit")?.addEventListener("change",e=>toast(`Submission limit set to ${e.target.value}`));
@@ -3424,24 +4053,31 @@
 
       function render() {
         state.route = currentRoute();
-        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,webhooks:webhooksView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView };
-        // During the fresh-install walk the dashboard is the setup checklist, and
-        // screens with genuinely no data render their empty state; everything else
-        // renders for real against the new event.
+        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,webhooks:webhooksView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView,setupAgent:agentSetupView,claim:claimView,handoff:handoffView };
+        // During the fresh-install walk the dashboard is the setup checklist, the
+        // landing is the unclaimed-instance page, and screens with genuinely no
+        // data render their empty state; everything else renders for real. While
+        // peeking at the demo conference, the walk's overrides stand down.
+        const inWalk = state.setup.active && !state.demoPeek;
         const showEmpty = showsEmptyState(state.route);
-        const view = showEmpty ? null : (state.setup.active && state.route === "dashboard" ? setupDashboardView : views[state.route]);
+        const view = showEmpty ? null
+          : inWalk && state.route === "dashboard" ? setupDashboardView
+          : inWalk && state.route === "landing" ? freshLandingView
+          : views[state.route];
         app.innerHTML = showEmpty ? emptyStateView(state.route) : view();
         modalRoot.innerHTML = "";
         hideRoomPanel(true); roomPanelPinned = false;
         bindCommon();
         bindRoomHeads();
         bindMdToolbars();
-        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,webhooks:bindWebhooks,apiDocs:bindApiDocs,aiAssist:bindAiAssist}[state.route];
-        // The setup dashboard has no binder of its own — bindCommon carries its links.
-        if(!showEmpty && binder && !(state.setup.active && state.route === "dashboard")) binder();
+        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,webhooks:bindWebhooks,apiDocs:bindApiDocs,aiAssist:bindAiAssist,claim:bindClaim,handoff:bindHandoff}[state.route];
+        // The setup dashboard and fresh landing have no binder of their own —
+        // bindCommon carries their links.
+        if(!showEmpty && binder && !(inWalk && (state.route === "dashboard" || state.route === "landing"))) binder();
         window.scrollTo(0,0);
       }
 
+      applyTheme();
       addEventListener("hashchange",render);
       addEventListener("keydown",e=>{
         if ((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k") { e.preventDefault(); openGlobalSearch(); }

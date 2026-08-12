@@ -30,6 +30,9 @@
 .health-summary-body { display: grid; gap: 5px; min-height: 58px; }
 .health-summary-body strong { font: 600 16px/1.25 var(--sans); letter-spacing: -.01em; }
 .health-summary-body span { color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
+.health-summary-link { color: inherit; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.health-summary-link:hover { color: var(--accent-dark); }
+.health-summary-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .health-checked { color: var(--muted); font: 400 10px/1.3 var(--mono); text-align: right; }
 
 /* --- capability panel: eight rows, always --- */
@@ -54,8 +57,9 @@
 .health-quota-claimed { background: repeating-linear-gradient(135deg, var(--line-strong) 0 3px, transparent 3px 6px); display: block; height: 100%; }
 .health-quota.level-warn .health-quota-used { background: var(--warn); }
 .health-quota.level-alarm .health-quota-used { background: var(--alarm); }
-.health-quota-line { font-size: 12px; line-height: 1.55; margin: 0; min-height: 38px; }
+.health-quota-line { font-size: 12px; line-height: 1.55; margin: 0; min-height: 76px; }
 .health-quota-line strong { display: inline; }
+.health-loading-fill { background: var(--line-strong); display: block; height: 100%; opacity: .55; width: 38%; }
 
 /* --- totals strip --- */
 .health-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; }
@@ -87,6 +91,13 @@
 .health-owed-age { color: var(--ink-soft); font: 400 12px/1 var(--mono); font-variant-numeric: tabular-nums; }
 .health-ledger-clear { color: var(--ink-soft); font-size: 12px; line-height: 1.55; margin: 0; min-height: 40px; padding: 18px; }
 .health-ledger-foot { border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; margin: 0; min-height: 38px; padding: 12px 18px; }
+.health-loading-reasons { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 8px; min-height: 46px; padding: 12px 18px; }
+.health-loading-reasons span { background: var(--sunk); border: 1px solid var(--line-strong); display: block; height: 22px; width: 118px; }
+.health-loading-ledger { display: grid; }
+.health-loading-row { align-items: center; border-bottom: 1px solid var(--line); display: grid; gap: 14px; grid-template-columns: 86px 200px minmax(0, 1fr) 92px 62px; min-height: 62px; padding: 11px 18px; }
+.health-loading-row:last-child { border-bottom: 0; }
+.health-loading-row i, .health-loading-row span { background: var(--sunk); border: 1px solid var(--line); display: block; height: 10px; }
+.health-loading-row i { border-radius: 50%; height: 9px; width: 9px; }
 
 @media (max-width: 1000px) {
   /* The wide table scrolls inside its own card. The min-width belongs to the

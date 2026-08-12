@@ -58,7 +58,8 @@ async function seedPublicForm(): Promise<void> {
       ('field_tracks', ?, 'tracks', 'Tracks', NULL, 'multi_select', 1, 3, ?, NULL, ?, ?),
       ('field_vendor', ?, 'vendor_content', 'Product discussion', NULL, 'single_select', 1, 4, ?, NULL, ?, ?),
       ('field_product', ?, 'vendor_product', 'Product or service', NULL, 'short_text', 1, 5, ?, ?, ?, ?),
-      ('field_file', ?, 'supporting_file', 'Supporting material', NULL, 'file', 0, 6, ?, NULL, ?, ?)`)
+      ('field_file', ?, 'supporting_file', 'Supporting material', NULL, 'file', 0, 6, ?, NULL, ?, ?),
+      ('field_arrival', ?, 'arrival_date', 'Arrival date', NULL, 'date', 0, 7, '{}', NULL, ?, ?)`)
       .bind(
         FORM_ID, NOW, NOW,
         FORM_ID, NOW, NOW,
@@ -67,6 +68,7 @@ async function seedPublicForm(): Promise<void> {
         FORM_ID, JSON.stringify({ options: ["No", "Yes"] }), NOW, NOW,
         FORM_ID, JSON.stringify({ minLength: 2 }), JSON.stringify({ all: [{ fieldKey: "vendor_content", op: "equals", value: "Yes" }] }), NOW, NOW,
         FORM_ID, JSON.stringify({ accept: ["application/pdf"], maxBytes: 100_000 }), NOW, NOW,
+        FORM_ID, NOW, NOW,
       ),
   ]);
 }
@@ -85,13 +87,28 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(body.conference.name).toBe("Walkthrough Conference");
     expect(body.form.min_speakers).toBe(1);
     expect(body.form.per_submitter_limit).toBe(3);
-    expect(body.fields.map((field) => field.key)).toEqual(["title", "speaker_name", "speaker_email", "tracks", "vendor_content", "vendor_product", "supporting_file"]);
+    expect(body.fields.map((field) => field.key)).toEqual(["title", "speaker_name", "speaker_email", "tracks", "vendor_content", "vendor_product", "supporting_file", "arrival_date"]);
 
     const html = await (await request("/f/public-cfp")).text();
     expect(html).toContain("Tell the conference what you are building.");
     expect(html).toContain("Submit abstract");
     expect(html).toContain("0/80 characters");
     expect(html.indexOf("Session title")).toBeLessThan(html.indexOf("Product or service"));
+  });
+
+  test("AC-231 · a demo conference withholds the Turnstile site key, so no widget mounts to block the client", async () => {
+    // Exempting the SERVER is not enough. The client mounts the widget whenever
+    // it is handed a site key, and then refuses to issue any public write until
+    // that widget returns a token — so an exempted server simply never gets
+    // called. Withholding the key is what actually opens the path.
+    const rendered = await request("/f/public-cfp", { method: "GET" });
+    expect(rendered.status).toBe(200);
+    // The site key vitest.worker.config.ts hands the Worker.
+    expect(await rendered.text()).not.toContain("1x00000000000000000000AA");
+
+    const asJson = await request("/api/v1/public/forms/public-cfp", { method: "GET" });
+    const state = await json<{ turnstile_site_key: string | null }>(asJson);
+    expect(state.turnstile_site_key).toBeNull();
   });
 
   test("AC-231 · a demo conference takes a draft and a submission with no Turnstile token at all", async () => {
@@ -241,6 +258,28 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(body.error.details.issues[0]?.message).toContain("Add an answer");
     expect(await rowCount("submissions")).toBe(0);
     expect(await rowCount("people")).toBe(0);
+  });
+
+  test("CONTRACT · MRQ-95 rejects a malformed date submitted directly to the public API", async () => {
+    const response = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        turnstileToken: nextTurnstileToken(),
+        answers: {
+          title: "A valid travel date test",
+          speaker_name: "Date Speaker",
+          speaker_email: "date@example.com",
+          tracks: ["Agents"],
+          vendor_content: "No",
+          arrival_date: "2026-02-30",
+        },
+      }),
+    });
+    expect(response.status).toBe(422);
+    const body = await json<{ error: { details: { issues: Array<{ fieldKey: string; message: string }> } } }>(response);
+    expect(body.error.details.issues).toContainEqual({ fieldKey: "arrival_date", message: "Choose a valid date, then try again." });
+    expect(await rowCount("submissions")).toBe(0);
+    expect(await rowCount("submission_answers")).toBe(0);
   });
 
   test("AC-40 · a resume link that resolves to nothing says so instead of rendering a blank form", async () => {

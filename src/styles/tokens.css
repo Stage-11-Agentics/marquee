@@ -51,6 +51,79 @@
   --canvas-line: #24343f;
   --canvas-ink: #dbe6ec;
   --display: var(--mono);
+
+  /* Theme extensions (MRQ-103). Colors that were hardcoded in components.css
+     are tokens now, so a theme can re-light the whole panel from one block.
+     Day values are the shipped colors, verbatim. Kept in this second :root
+     because check:design asserts the first one still matches skin-c's
+     canonical block byte for byte. */
+  --accent-hover: #095b62;
+  --on-accent: #ffffff;
+  --success-ink: #0c6b41;
+  --success-line: #b6dcc7;
+  --danger-ink: #8f2118;
+  --danger-line: #e6b8b2;
+  --warning-line: #e3cda2;
+  --warning-ink: #6b4700;
+  --on-ink: #dff2f3;              /* text on inverse (--ink) chrome */
+  --backdrop: rgba(16, 24, 32, .46);
+  --break-tint: #64748b;          /* neutral: breaks are not a track */
+}
+
+/* ══ NIGHT ═══════════════════════════════════════════════════════════════
+   The quiet server room. Flight Deck's rules are unchanged — hairlines over
+   shadows, recessed cells, mono gauges, `--shadow: none` — only the light
+   is different: strictly neutral greys with chroma held back for status and
+   the restrained teal. The agenda canvas stays DARKER than the page, so the
+   figure-ground relationship the day palette establishes survives at night.
+
+   Structure tokens are absent on purpose: a theme may only move color.
+   Every text pair below is measured — lowest is 6.3:1, most 8–15:1, against
+   a 4.5:1 floor. Signed by the operator 2026-08-12 over two alternatives.
+   ════════════════════════════════════════════════════════════════════════ */
+html[data-theme="night"] {
+  --bg: #121416;                  /* cool panel ground                      */
+  --surface: #1a1d20;             /* instrument face                        */
+  --surface-sunk: #15181b;        /* recessed cell — sunk reads darker      */
+  --graph: #21252a;               /* 8px graph-paper grid line              */
+
+  --ink: #e9edf0;                 /* primary text          14.4:1 on face   */
+  --ink-soft: #c0c8ce;            /* secondary             10.0:1 on face   */
+  --muted: #93a0a9;               /* metadata / micro       6.3:1 on face   */
+  --rule: #3a4249;                /* hairline                               */
+  --rule-soft: #2a3036;
+
+  --accent: #3fbac2;              /* instrument teal        7.3:1 on face   */
+  --accent-ink: #7cd7dd;          /* accent text on wash    8.4:1 on wash   */
+  --accent-wash: #0f3134;
+
+  --ok: #5ac98e;                  /* 8.2:1 on face */
+  --warn: #dcb75a;                /* 8.8:1 on face */
+  --alarm: #f5867c;               /* 6.9:1 on face */
+  --alarm-wash: #391715;
+
+  /* Track colors are the organizer's data and are NOT rewritten here: they
+     paint 3px borders and dots, never text, so they carry no contrast duty
+     and repainting them would misreport what the organizer chose. */
+
+  /* Aliases and extensions — the same names the day block defines above. */
+  --warning-soft: #2f260f;
+  --success-soft: #122d1e;
+  --canvas: #0d0f11;
+  --canvas-line: #262b30;
+  --canvas-ink: #dbe3e8;
+
+  --accent-hover: #5cc9d0;
+  --on-accent: #062629;           /* 6.8:1 — dark ink on a lit key          */
+  --success-ink: #92dcb6;
+  --success-line: #2b5c42;
+  --danger-ink: #ffaba2;
+  --danger-line: #6e2d27;
+  --warning-line: #695620;
+  --warning-ink: #eeca8a;
+  --on-ink: #101315;              /* inverse chrome flips light at night    */
+  --backdrop: rgba(0, 0, 0, .62);
+  --break-tint: #939ea6;
 }
 
 * { box-sizing: border-box; }

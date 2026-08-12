@@ -16,7 +16,7 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "submitted", path: "/submissions?status=submitted", label: "Submitted", icon: "1", group: "pipeline", sidebar: true },
   { id: "in-review", path: "/submissions?status=in_review", label: "In review", icon: "2", group: "pipeline", sidebar: true },
   { id: "waved", path: "/submissions?status=waved", label: "Waved", icon: "3", group: "pipeline", sidebar: true },
-  { id: "accepted", path: "/submissions?status=accepted", label: "Accepted", icon: "4", group: "pipeline", sidebar: true },
+  { id: "accepted", path: "/submissions?status=accepted", label: "Ready to place", icon: "4", group: "pipeline", sidebar: true },
   { id: "onboarding", path: "/onboarding", label: "Onboarding", icon: "5", group: "pipeline", sidebar: true },
   { id: "scheduled", path: "/submissions?status=scheduled", label: "Scheduled", icon: "6", group: "pipeline", sidebar: true },
   { id: "published", path: "/submissions?status=published", label: "Published", icon: "7", group: "pipeline", sidebar: true },
@@ -29,9 +29,12 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "○", group: "modules", sidebar: true, external: true },
   { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "modules", sidebar: true, external: true },
   { id: "settings", path: "/settings", label: "Conference settings", icon: "⚙", group: "modules", sidebar: true },
-  // Delivery health carries its own chrome, so the sidebar hands it a real
-  // browser navigation rather than a client-side push.
-  { id: "delivery-health", path: "/delivery-health", label: "Delivery health", icon: "◎", group: "modules", sidebar: true, external: true },
+  // The people-facing page carries its own chrome, so the sidebar hands it a
+  // real browser navigation rather than a client-side push.
+  { id: "delivery-health", path: "/delivery-health", label: "Speaker follow-ups", icon: "◎", group: "modules", sidebar: true, external: true },
+  // The query variant shares the health document entrypoint without adding an
+  // unowned app bootstrap branch. It is deliberately outside the main flow.
+  { id: "system-health", path: "/delivery-health?view=system", label: "System health", icon: "◌", group: "utility", sidebar: true, external: true },
   { id: "venues", path: "/settings/venues", label: "Venues", icon: "⌖", group: "utility" },
   { id: "submission-detail", path: "/submissions/:id", label: "Submission record", icon: "", group: "utility" },
   { id: "submission-new", path: "/submissions/new", label: "Create submission", icon: "", group: "utility" },

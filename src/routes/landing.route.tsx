@@ -3,6 +3,7 @@ import type { JSX } from "preact";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { ICON_LINKS } from "../lib/head-icons";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
 import { hasSpeakerTaskCancellationColumn, submissionStatusPredicate } from "./submissions.queries";
 
@@ -186,7 +187,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
           <div class="mini-pipeline">
             <PreviewStage label="Submitted" value={counts.submitted} />
             <PreviewStage label="In review" value={counts.inReview} />
-            <PreviewStage label="Accepted" value={counts.accepted} />
+            <PreviewStage label="Ready to place" value={counts.accepted} />
             <PreviewStage label="Onboarding" value={counts.onboarding} />
             <PreviewStage label="Scheduled" value={counts.scheduled} />
             <PreviewStage label="Published" value={counts.published} />
@@ -223,7 +224,7 @@ const LANDING_STYLES = `
 .mini-pipeline { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 17px 0; }
 .mini-stage { border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 12px; min-height: 72px; background: rgba(255,255,255,.82); }
 .mini-stage strong { display: block; font-size: 21px; margin-top: 9px; font-family: var(--mono); font-variant-numeric: tabular-nums lining-nums; }
-.mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid #e3cda2; color: #6b4700; border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
+.mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning-ink); border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
 .preview-notice { display: block; margin-top: 6px; }
 .landing-foot { border-top: 1px solid var(--line); padding: 18px clamp(20px,5vw,70px); color: var(--muted); font: 400 11px/1 var(--mono); display: flex; justify-content: space-between; }
 @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 34px; padding: 42px 0 52px; } .landing-links .button:first-child { display: none; } }
@@ -259,7 +260,7 @@ const LANDING_SCRIPT = `
 })();
 `;
 
-const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Program operations</title></head><body><div id="app"></div></body></html>`;
+const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Program operations</title>${ICON_LINKS}</head><body><div id="app"></div></body></html>`;
 
 export function renderLandingDocument(shell: string, data: LandingData): string {
   const markup = renderToString(<LandingPage data={data} />);

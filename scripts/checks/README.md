@@ -31,7 +31,7 @@ path history.
 
 ## Stable command surface
 
-These thirteen package-script names are immutable: `test`, `e2e`, `check:speed`, `check:seed`, `check:api`, `check:repo`, `check:readme`, `trace:ac`, `check:mirror`, `reset:demo`, `smoke:mail`, `smoke:ics`, and `check:skill-agent`. Later owners replace the file behind a stub; they do not rename or re-register its package script.
+These fourteen package-script names are immutable: `test`, `e2e`, `check:r2-cors`, `check:speed`, `check:seed`, `check:api`, `check:repo`, `check:readme`, `trace:ac`, `check:mirror`, `reset:demo`, `smoke:mail`, `smoke:ics`, and `check:skill-agent`. Later owners replace the file behind a stub; they do not rename or re-register its package script.
 
 Scaffold stubs write `status: "stub"` reports and exit zero for ordinary development. With `MARQUEE_GATE=1`, every stub exits non-zero so a terminal gate cannot confuse registration with proof. Stubs never contact a service or imply that a missing capability passed.
 
@@ -39,7 +39,7 @@ Scaffold stubs write `status: "stub"` reports and exit zero for ordinary develop
 
 `npm test` is hermetic, parallel, and hard-stopped before 30 seconds. It uses small deterministic fixtures and local Workers bindings. Outbound `fetch` is denied. It never uses a deployed URL, real Resend/Airtable/R2, the 1,000-row seed, Playwright, a container/history scan, inbox/calendar clients, or an agent runner.
 
-Those responsibilities stay in separately invoked commands: deployed journeys in `e2e`; performance in `check:speed`; scale in `check:seed`; external mirrors and oracles in their named checks. A slow default suite is a harness defect, not a reason to raise the ceiling.
+Those responsibilities stay in separately invoked commands: deployed journeys in `e2e`; the real R2 preflight in `check:r2-cors`; performance in `check:speed`; scale in `check:seed`; external mirrors and oracles in their named checks. A slow default suite is a harness defect, not a reason to raise the ceiling.
 
 ## Test titles and AC claims
 

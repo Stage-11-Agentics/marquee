@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import type { SubmissionListItem, SubmissionTrackListItem } from "../../api/submissions";
 import {
@@ -11,6 +11,13 @@ import {
 } from "../../lib/submission-columns";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, PageHeader } from "../shell/components";
+import type { NavigationOptions } from "../shell/router";
+import {
+  buildSubmissionsQuery,
+  isCurrentSubmissionsRequest,
+  submissionsRequestKey,
+  SUBMISSIONS_PAGE_SIZE,
+} from "./list-request";
 import { selectionCount } from "./selection";
 import "./submissions.css";
 
@@ -25,7 +32,7 @@ export interface ListEnvelope {
 interface Props {
   eventId?: string;
   search: string;
-  navigate: (target: string) => void;
+  navigate: (target: string, options?: NavigationOptions) => void;
   /** Deterministic SSR/test seam; production always loads through the API. */
   initialEnvelope?: ListEnvelope;
 }
@@ -52,20 +59,33 @@ interface SavedView {
 }
 
 const STATUS_OPTIONS = [
-  ["", "All statuses"],
-  ["draft", "Draft"],
-  ["submitted", "Submitted"],
-  ["in_review", "In review"],
-  ["unreviewed", "Unreviewed"],
-  ["waved", "Waved"],
-  ["onboarding", "Onboarding"],
-  ["accepted", "Accepted"],
-  ["waitlisted", "Maybe"],
-  ["rejected", "Rejected"],
-  ["withdrawn", "Withdrawn"],
-  ["scheduled", "Scheduled"],
-  ["published", "Published"],
-  ["not_notified", "Decided · not notified"],
+  {
+    label: "Stored decision facts",
+    options: [
+      ["draft", "Draft"],
+      ["submitted", "Submitted"],
+      ["in_review", "In review"],
+      ["accepted_any", "Accepted (any stage)"],
+      ["waitlisted", "Maybe"],
+      ["rejected", "Rejected"],
+      ["withdrawn", "Withdrawn"],
+    ],
+  },
+  {
+    label: "Pipeline stages",
+    options: [
+      ["unreviewed", "Unreviewed"],
+      ["waved", "Waved"],
+      ["onboarding", "Onboarding"],
+      ["accepted", "Ready to place"],
+      ["scheduled", "Scheduled"],
+      ["published", "Published"],
+    ],
+  },
+  {
+    label: "Attention queue",
+    options: [["not_notified", "Decided · not notified"]],
+  },
 ] as const;
 
 /**
@@ -87,6 +107,8 @@ const SORT_OPTIONS = [
   ["score", "Score high → low"],
   ["title", "Title A → Z"],
 ] as const;
+
+const COLD_SKELETON_ROWS = 9;
 
 function statusLabel(status: SubmissionListItem["status"]): string {
   if (status === "waitlisted") return "Maybe";
@@ -191,6 +213,17 @@ function csvCell(value: string | number | null): string {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
+function SkeletonRow({ columns }: { columns: readonly SubmissionColumnId[] }): JSX.Element {
+  return <tr class="submission-skeleton-row" aria-hidden="true">
+    <td class="check-col"><span class="skeleton-checkbox" /></td>
+    {columns.map((column) => <td class={`${column}-col`} key={column}>
+      {column === "title"
+        ? <span class="skeleton-title"><span class="skeleton-line wide" /><span class="skeleton-line medium" /><span class="skeleton-line short" /></span>
+        : <span class="skeleton-line" />}
+    </td>)}
+  </tr>;
+}
+
 export function SubmissionsPage({
   eventId = "evt_aie-ny-2026",
   search,
@@ -211,6 +244,7 @@ export function SubmissionsPage({
   const [activeViewId, setActiveViewId] = useState("all-submissions");
   const [viewsLoading, setViewsLoading] = useState(true);
   const [viewsError, setViewsError] = useState("");
+  const [viewMessage, setViewMessage] = useState("");
   const [viewBusy, setViewBusy] = useState(false);
   const [columnPanelOpen, setColumnPanelOpen] = useState(false);
   const [notifiedSummary, setNotifiedSummary] = useState<{ total: number; sendable: number; no_valid_address: number } | null>(null);
@@ -222,6 +256,14 @@ export function SubmissionsPage({
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMessage, setBulkMessage] = useState("");
   const [bulkError, setBulkError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+  const [tableFrameMinHeight, setTableFrameMinHeight] = useState<number | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const tableWrapRef = useRef<HTMLDivElement>(null);
+  const savedViewChipRefs = useRef(new Map<string, HTMLSpanElement>());
+  const requestSequenceRef = useRef(0);
+  const localSearchNavigationRef = useRef<string | null>(null);
 
   const page = Number(queryValue(params, "page", "1"));
   const status = queryValue(params, "status");
@@ -233,6 +275,9 @@ export function SubmissionsPage({
   const placement = queryValue(params, "placement");
   const sort = queryValue(params, "sort", "newest");
   const q = queryValue(params, "q");
+  const requestKey = useMemo(() => submissionsRequestKey(eventId, params), [eventId, search]);
+  const lastCommittedRequestKeyRef = useRef<string | null>(initialEnvelope ? requestKey : null);
+  const lastReloadKeyRef = useRef(reloadKey);
   const queryIdentity = `${q}\u0000${status}\u0000${kind}\u0000${track}\u0000${format}\u0000${wave}\u0000${task}\u0000${placement}\u0000${sort}`;
   const draftQueue = status === "draft";
   const notifiedQueue = status === "not_notified";
@@ -291,13 +336,13 @@ export function SubmissionsPage({
     return () => controller.abort();
   }, [eventId, notifiedQueue, reloadKey]);
 
-  const updateQuery = (updates: Record<string, string | number | undefined>) => {
+  const updateQuery = (updates: Record<string, string | number | undefined>, options?: NavigationOptions) => {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(updates)) {
       if (value === undefined || value === "" || value === 1 && key === "page") next.delete(key);
       else next.set(key, String(value));
     }
-    navigate(`/submissions${next.size ? `?${next.toString()}` : ""}`);
+    navigate(`/submissions${next.size ? `?${next.toString()}` : ""}`, options);
   };
 
   const persistColumns = (next: SubmissionColumnId[]) => {
@@ -322,6 +367,7 @@ export function SubmissionsPage({
     if (!name?.trim()) return;
     setViewBusy(true);
     setViewsError("");
+    setViewMessage("");
     try {
       const viewUrl = existing
         ? `/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(existing.id)}`
@@ -334,6 +380,8 @@ export function SubmissionsPage({
       });
       setViews((current) => [...current.filter((item) => item.id !== view.id), view]);
       setActiveViewId(view.id);
+      setViewMessage(`Saved view “${view.name}” is ready above the filters.`);
+      window.requestAnimationFrame(() => savedViewChipRefs.current.get(view.id)?.scrollIntoView({ block: "nearest", inline: "nearest" }));
     } catch (error: unknown) {
       setViewsError(errorSummary(error));
     } finally { setViewBusy(false); }
@@ -343,6 +391,8 @@ export function SubmissionsPage({
     const name = window.prompt("Rename this conference view", view.name);
     if (!name?.trim() || name.trim() === view.name) return;
     setViewBusy(true);
+    setViewsError("");
+    setViewMessage("");
     try {
       const updated = await apiFetch<SavedView>(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, {
         method: "PATCH",
@@ -359,6 +409,8 @@ export function SubmissionsPage({
   const deleteView = async (view: SavedView) => {
     if (!window.confirm(`Delete “${view.name}”?`)) return;
     setViewBusy(true);
+    setViewsError("");
+    setViewMessage("");
     try {
       await apiFetch(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, {
         method: "DELETE",
@@ -366,6 +418,7 @@ export function SubmissionsPage({
       });
       setViews((current) => current.filter((item) => item.id !== view.id));
       if (activeViewId === view.id) setActiveViewId("all-submissions");
+      setViewMessage(`Deleted saved view “${view.name}”.`);
     } catch (error: unknown) {
       setViewsError(errorSummary(error));
     } finally { setViewBusy(false); }
@@ -385,7 +438,21 @@ export function SubmissionsPage({
     persistColumns(next);
   };
 
-  useEffect(() => setSearchDraft(q), [q]);
+  useEffect(() => {
+    if (localSearchNavigationRef.current === q) {
+      localSearchNavigationRef.current = null;
+      return;
+    }
+    setSearchDraft(q);
+  }, [q]);
+  useEffect(() => {
+    if (searchDraft.trim() === q) return;
+    const timer = window.setTimeout(() => {
+      localSearchNavigationRef.current = searchDraft.trim();
+      updateQuery({ q: searchDraft.trim(), page: 1 }, { replace: true });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [searchDraft, q]);
   useEffect(() => {
     setSelectedIds(new Set());
     setAllMatching(false);
@@ -395,29 +462,57 @@ export function SubmissionsPage({
   }, [queryIdentity]);
 
   useEffect(() => {
-    if (initialEnvelope) return;
+    if (initialEnvelope) {
+      lastCommittedRequestKeyRef.current = requestKey;
+      return;
+    }
+    const forceReload = lastReloadKeyRef.current !== reloadKey;
+    lastReloadKeyRef.current = reloadKey;
+    if (!forceReload && lastCommittedRequestKeyRef.current === requestKey) return;
     const controller = new AbortController();
-    const apiQuery = new URLSearchParams(params);
-    apiQuery.set("per_page", "50");
-    setState({ kind: "loading" });
+    const requestId = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestId;
+    const hadEnvelope = state.kind === "ready";
+    if (hadEnvelope) {
+      const currentHeight = tableWrapRef.current?.getBoundingClientRect().height ?? 0;
+      if (currentHeight > 0) setTableFrameMinHeight(Math.ceil(currentHeight));
+      setRefreshing(true);
+      setRefreshError("");
+    } else {
+      setState({ kind: "loading" });
+      setRefreshing(false);
+      setRefreshError("");
+    }
+    const apiQuery = buildSubmissionsQuery(params);
     apiFetch<ListEnvelope>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions?${apiQuery.toString()}`, {
       signal: controller.signal,
       route: "/api/v1/events/{eventId}/submissions",
     })
       .then((envelope) => {
+        if (!isCurrentSubmissionsRequest(requestId, requestSequenceRef.current, controller.signal)) return;
         setKnownTracks((current) => {
           const next = new Map(current);
           for (const item of envelope.data) for (const itemTrack of item.tracks) next.set(itemTrack.id, itemTrack);
           return next;
         });
+        lastCommittedRequestKeyRef.current = requestKey;
         setState({ kind: "ready", envelope });
+        setRefreshing(false);
+        setRefreshError("");
+        setTableFrameMinHeight(null);
       })
       .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setState({ kind: "error", message: errorSummary(error) });
+        if (!isCurrentSubmissionsRequest(requestId, requestSequenceRef.current, controller.signal)) return;
+        const message = errorSummary(error);
+        if (hadEnvelope) {
+          setRefreshing(false);
+          setRefreshError(message);
+        } else {
+          setState({ kind: "error", message });
+        }
       });
     return () => controller.abort();
-  }, [eventId, search, reloadKey, initialEnvelope]);
+  }, [eventId, requestKey, reloadKey, initialEnvelope]);
 
   const envelope = state.kind === "ready" ? state.envelope : null;
   const rows = envelope?.data ?? [];
@@ -528,11 +623,27 @@ export function SubmissionsPage({
     setNotifyMessage("");
     setNotifyError("");
     try {
-      const result = await apiFetch<{ queued: number; skipped_no_address: number }>(
-        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify`,
-        { method: "POST", route: "/api/v1/events/{eventId}/submissions/not-notified/notify" },
-      );
-      setNotifyMessage(`${result.queued.toLocaleString()} notification${result.queued === 1 ? "" : "s"} queued${result.skipped_no_address ? ` · ${result.skipped_no_address.toLocaleString()} need an address first` : ""}.`);
+      let cursor: string | null = null;
+      let queued = 0;
+      let skippedNoAddress = 0;
+      let remaining = 0;
+      do {
+        const cursorQuery: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+        const result: { queued: number; skipped_no_address: number; remaining: number; next_cursor: string | null } = await apiFetch<{
+          queued: number;
+          skipped_no_address: number;
+          remaining: number;
+          next_cursor: string | null;
+        }>(
+          `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify${cursorQuery}`,
+          { method: "POST", route: "/api/v1/events/{eventId}/submissions/not-notified/notify" },
+        );
+        queued += result.queued;
+        skippedNoAddress += result.skipped_no_address;
+        remaining = result.remaining;
+        cursor = result.next_cursor;
+      } while (cursor !== null && remaining > 0);
+      setNotifyMessage(`${queued.toLocaleString()} notification${queued === 1 ? "" : "s"} queued${skippedNoAddress ? ` · ${skippedNoAddress.toLocaleString()} need an address first` : ""}${remaining ? ` · ${remaining.toLocaleString()} remain; run Notify again` : ""}.`);
       setReloadKey((value) => value + 1);
     } catch (error: unknown) {
       setNotifyError(errorSummary(error));
@@ -549,17 +660,20 @@ export function SubmissionsPage({
       title={notifiedQueue ? "Decided · not notified" : draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
       copy={envelope ? notifiedQueue
         ? `${envelope.total.toLocaleString()} decisions need attention · ${notifiedSummary?.sendable.toLocaleString() ?? "—"} can be notified now · ${notifiedSummary?.no_valid_address.toLocaleString() ?? "—"} need an address first.`
-        : `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered 50 at a time for an instant response at full scale.`
+        : `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered ${SUBMISSIONS_PAGE_SIZE} at a time for an instant response at full scale.`
         : "Loading the conference submission register…"}
       actions={<><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
     />
     <div class={`export-message ${exportError ? "visible" : ""}`} role="status">{exportError || "Export status space reserved"}</div>
     {notifiedQueue && <div class={`notify-message ${notifyError || notifyMessage ? "visible" : ""}`} role="status">{notifyError || notifyMessage || "Notification status space reserved"}</div>}
-    <section class="card table-card" aria-busy={state.kind === "loading"}>
+    <section class="card table-card" aria-busy={state.kind === "loading" || refreshing}>
       <div class="saved-view-strip" aria-label="Saved conference views">
         <span class="eyebrow">Views</span>
         <div class="saved-view-chips">
-          {views.map((view) => <span class={`saved-view-chip ${activeViewId === view.id ? "active" : ""}`} key={view.id}>
+          {views.map((view) => <span class={`saved-view-chip ${activeViewId === view.id ? "active" : ""}`} key={view.id} ref={(element) => {
+            if (element) savedViewChipRefs.current.set(view.id, element);
+            else savedViewChipRefs.current.delete(view.id);
+          }}>
             <button type="button" onClick={() => applyView(view)} disabled={viewBusy}>{view.name}{view.count !== null && <span class="tabular view-count">{view.count.toLocaleString()}</span>}</button>
             {!view.built_in && <><button type="button" class="view-icon-button" aria-label={`Rename ${view.name}`} onClick={() => void renameView(view)} disabled={viewBusy}>✎</button><button type="button" class="view-icon-button" aria-label={`Delete ${view.name}`} onClick={() => void deleteView(view)} disabled={viewBusy}>×</button></>}
           </span>)}
@@ -569,7 +683,7 @@ export function SubmissionsPage({
         <Button small onClick={() => void saveCurrentView()} disabled={viewBusy}>Save current view</Button>
         <Button small onClick={() => setColumnPanelOpen((open) => !open)} aria-expanded={columnPanelOpen}>{columnPanelOpen ? "Hide columns" : "Columns"}</Button>
       </div>
-      <div class={`saved-view-message ${viewsError ? "visible" : ""}`} role="status">{viewsError || "Saved view status space reserved"}</div>
+      <div class={`saved-view-message ${viewsError ? "visible error" : viewMessage ? "visible success" : ""}`} role="status" aria-live="polite">{viewsError || viewMessage || "Saved view status space reserved"}</div>
       {columnPanelOpen && <div class="column-panel" aria-label="Configure submission columns">
         <div class="column-panel-heading"><div><strong>Columns</strong><span>Title is always visible. Changes stay reserved in this frame and persist for this conference.</span></div><span class="tabular">{columns.length} / {SUBMISSION_COLUMN_REGISTRY.length}</span></div>
         <div class="column-list">{orderedColumns.map((column) => {
@@ -583,8 +697,8 @@ export function SubmissionsPage({
         {activeView && !activeView.built_in && <span class="column-panel-note">Save current view again to capture this column order in “{activeView.name}”.</span>}
       </div>}
       <form class="submissions-toolbar" onSubmit={(event) => { event.preventDefault(); updateQuery({ q: searchDraft.trim(), page: 1 }); }}>
-        <label class="search-field"><span class="sr-only">Search submissions</span><input value={searchDraft} onInput={(event) => setSearchDraft(event.currentTarget.value)} placeholder="Search 1,000 submissions…" /><button class="button small" type="submit">Search</button></label>
-        <label><span class="sr-only">Status</span><select value={status} onChange={(event) => updateQuery({ status: event.currentTarget.value, page: 1 })}>{STATUS_OPTIONS.map(([value, label]) => <option value={value}>{label}</option>)}</select></label>
+        <label class="search-field"><span class="sr-only">Search submissions</span><input ref={searchInputRef} value={searchDraft} onInput={(event) => setSearchDraft(event.currentTarget.value)} placeholder={envelope ? `Search ${envelope.total.toLocaleString()} submissions…` : "Search submissions…"} /><button class="button small" type="submit">Search</button></label>
+        <label><span class="sr-only">Status</span><select class={`status-filter ${status ? "has-selection" : "is-default"}`} value={status} onChange={(event) => updateQuery({ status: event.currentTarget.value, page: 1 })}><option value="">All statuses</option>{STATUS_OPTIONS.map((group) => <optgroup label={group.label}>{group.options.map(([value, label]) => <option value={value}>{label}</option>)}</optgroup>)}</select></label>
         <label><span class="sr-only">Type</span><select value={kind} onChange={(event) => updateQuery({ kind: event.currentTarget.value, page: 1 })}><option value="">All types</option><option value="abstract">Abstract</option><option value="session">Session</option></select></label>
         <label><span class="sr-only">Track</span><select value={track} onChange={(event) => updateQuery({ track: event.currentTarget.value, page: 1 })}><option value="">All tracks</option>{[...knownTracks.values()].sort((left, right) => left.name.localeCompare(right.name)).map((itemTrack) => <option value={itemTrack.id}>{itemTrack.name}</option>)}</select></label>
         <span class="toolbar-spacer" />
@@ -603,8 +717,8 @@ export function SubmissionsPage({
             <div><span class="eyebrow">Confirm bulk action</span><h2 id="bulk-decision-heading">{option.question} {selectedCount.toLocaleString()} {scope}?</h2></div>
             <button type="button" aria-label="Close bulk decision dialog" onClick={() => setBulkRequest(null)}>×</button>
           </div>
-          <p>The decision is written on every selected record. {option.notifies ? "The same normalized feedback is saved on each decision row and rendered through the standard conference email." : "A waitlist is not announced: the feedback is saved on each decision row, and no message is queued."}</p>
-          <label class="field"><span>Feedback for the speakers · optional</span><textarea rows={5} value={bulkFeedback} onInput={(event) => setBulkFeedback(event.currentTarget.value)} placeholder="Share context every one of these speakers can act on." /></label>
+          <p>{option.notifies ? "Each selected speaker will receive the feedback you add in the decision email." : "A waitlist does not send a message. Any feedback you add is saved with each decision."}</p>
+          <label class="field"><span>Feedback for the speakers (optional)</span><textarea rows={5} value={bulkFeedback} onInput={(event) => setBulkFeedback(event.currentTarget.value)} placeholder="Share context every one of these speakers can act on." /></label>
           <div class="bulk-decision-actions">
             <Button type="button" onClick={() => setBulkRequest(null)} disabled={bulkBusy}>Cancel</Button>
             <Button type="button" variant={option.variant} disabled={bulkBusy} onClick={() => void runBulk(option.action)}>{bulkBusy ? "Saving…" : `${option.confirm} ${selectedCount.toLocaleString()}`}</Button>
@@ -612,11 +726,15 @@ export function SubmissionsPage({
         </div>;
       })()}
 
-      <div class="submissions-table-wrap">
+      <div class={`submissions-refresh-message ${refreshError || refreshing ? "visible" : ""}`} role="status" aria-live="polite">
+        <span>{refreshError || refreshing ? refreshError || "Refreshing submissions…" : "Refresh status space reserved"}</span>
+        {refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}
+      </div>
+      <div class="submissions-table-wrap" ref={tableWrapRef} style={tableFrameMinHeight ? { minHeight: `${tableFrameMinHeight}px` } : undefined}>
         <table class="submissions-table">
           <thead><tr><th class="check-col"><input type="checkbox" aria-label="Select visible rows" checked={rows.length > 0 && rows.every((item) => allMatching || selectedIds.has(item.id))} onChange={(event) => togglePage(event.currentTarget.checked)} /></th>{columns.map((column) => <th class={`${column}-col`}>{submissionColumn(column).label}</th>)}</tr></thead>
           <tbody>
-            {state.kind === "loading" && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Loading notification gaps…" : draftQueue ? "Loading drafts…" : "Loading submissions…"}</strong><span>Reading the exact filtered slice from D1.</span></td></tr>}
+            {state.kind === "loading" && Array.from({ length: COLD_SKELETON_ROWS }, (_, index) => <SkeletonRow columns={columns} key={`skeleton-${index}`} />)}
             {state.kind === "error" && <tr class="state-row error"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Notification gaps did not load" : draftQueue ? "Drafts did not load" : "Submissions did not load"}</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></td></tr>}
             {envelope && rows.length === 0 && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Every decision has reached its speaker" : draftQueue ? "No drafts need attention" : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{notifiedQueue ? "The notification gap is clear." : draftQueue ? "Every draft is complete for the fields its submitter can see." : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{notifiedQueue || draftQueue ? <Button small onClick={() => navigate("/submissions")}>View all submissions</Button> : q || status || kind || track || format || wave || task || placement ? <Button small onClick={() => navigate("/submissions")}>Clear filters</Button> : <Button small onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</td></tr>}
             {rows.map((item) => <tr class="submission-row" key={item.id} onClick={(event) => { const target = event.target as HTMLElement; if (!target.closest("a,input,button,select")) navigate(`/submissions/${item.id}`); }}>

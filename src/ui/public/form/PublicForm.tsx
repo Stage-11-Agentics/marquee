@@ -75,6 +75,7 @@ function publicIssueMessage(issue: { message: string }): string {
   if (message.includes("email")) return "Enter an address where the conference team can reach you, then try again.";
   if (message.includes("url")) return "Add a web address beginning with https://, then try again.";
   if (message.includes("number")) return "Enter a number in the range shown, then try again.";
+  if (message.includes("date")) return "Choose a valid date, then try again.";
   if (message.includes("option")) return "Choose an option from the list, then try again.";
   if (message.includes("file")) return "Choose a file of the accepted size and format, then try again.";
   if (message.includes("characters")) return `${issue.message} Then try again.`;
@@ -452,7 +453,7 @@ export function PublicForm({ initial }: PublicFormProps) {
       // not, so choosing a file never shifts the rows underneath it.
       control = <div class="public-file"><input id={`public-${field.key}`} ref={ref as never} type="file" accept={accept} onChange={(event) => { void handleFile(field, (event.currentTarget as HTMLInputElement).files?.[0]); }} />{takesImage && <div class="public-file-preview"><div class="public-file-crop">{preview ? <img src={preview} alt={`${field.label} crop preview`} /> : null}</div><span class="public-file-crop-note">{preview ? "Crop preview · the square the conference programme shows." : "Choose an image to see its crop preview here."}</span></div>}<span class={`public-file-existing${existing ? " has-file" : ""}`}>{existing ? `Saved file: ${existing}` : "No file attached yet."}</span></div>;
     } else {
-      const inputType = field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "number" ? "number" : "text";
+      const inputType = field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
       control = <input id={`public-${field.key}`} ref={ref as never} type={inputType} maxLength={maxLength} value={value === undefined || value === null ? "" : String(value)} onBlur={() => { if (dirty) validate(); }} onInput={(event) => { const text = (event.currentTarget as HTMLInputElement).value; setAnswer(field.key, field.type === "number" && text ? Number(text) : text); }} aria-invalid={Boolean(error)} />;
     }
     return <div class={`public-field${error ? " has-error" : ""}`} data-field-key={field.key} data-field-type={field.type} key={field.key}>{label}{note}{control}{counter}<div class={`public-field-error${error ? " has-message" : ""}`} role={error ? "alert" : undefined} aria-hidden={!error}>{error ?? " "}</div></div>;

@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-101",
+  "owns": [],
+  "exercises": [],
+  "notes": "This ticket is an operator-feedback UX repair to the submission record surface (breadcrumb, duplicate title, decision-state visibility, error legibility). Its acceptance criteria (AC-1..AC-8) are ticket-local, not pre-minted in EVALUATION.md; acceptance is demonstrated by the CONTRACT tests here plus local browser screenshots recorded in the PR."
+}

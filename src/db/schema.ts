@@ -45,6 +45,7 @@ export const FORM_FIELD_TYPES = [
   "email",
   "file",
   "number",
+  "date",
 ] as const;
 export const SUBMISSION_STATUSES = [
   "draft",

@@ -23,6 +23,7 @@ import {
   type ArrivalSession,
 } from "../lib/venue-geometry";
 import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
+import { readTaskFileConfig } from "../lib/task-template-config";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import { firstName } from "../jobs/mail/merge-data";
@@ -706,12 +707,13 @@ function taskPayload(
   if (task.kind === "file") {
     const config = parseUploadOwnerConfig(task.file_config);
     const policy = policyFor("task_upload", config);
-    const accept = policy?.rules.map((rule) => rule.extension) ?? [];
+    const editedConfig = readTaskFileConfig(task.file_config);
+    const accept = editedConfig?.accept ?? policy?.rules.map((rule) => rule.extension) ?? [];
     return {
       kind: task.kind,
       attachment_id: task.attachment_id,
       accept,
-      max_bytes: policy?.maxBytes ?? null,
+      max_bytes: editedConfig?.maxBytes ?? policy?.maxBytes ?? null,
     };
   }
   const projection = projectApplicableAnswers(fields, answers);
@@ -783,6 +785,7 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
       id: task.id,
       submission_id: task.submission_id,
       submission_title: task.submission_title,
+      template_id: task.template_id,
       title: task.title,
       kind: task.kind,
       description: task.description,
