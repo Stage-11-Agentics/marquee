@@ -77,6 +77,11 @@ function safeFilename(value: string | null | undefined): string {
 
 function sessionFolder(row: ExportTaskRow): string {
   const speaker = safeSegment(row.speaker_name, "Unknown_Speaker");
+  // Two different truths used to share one folder name. A file whose task was
+  // never attached to a session is not "unscheduled" — nothing about it is
+  // waiting on the agenda — and an organizer who opens the archive deserves to
+  // read which of the two they are looking at.
+  if (row.submission_id === null) return `No_Session_${speaker}`;
   if (row.starts_at === null) return `Unscheduled_${speaker}`;
   const parts = new Intl.DateTimeFormat("en-US", {
     weekday: "short",

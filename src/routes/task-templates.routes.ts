@@ -61,11 +61,24 @@ const assigneeSchema = z.object({
   email: z.string(),
   company: z.string().nullable(),
   accepted_session_count: z.number().int().nonnegative(),
+  sessions: z.array(z.object({ id: z.string(), title: z.string() })),
 });
 const assigneesResponse = z.object({ data: z.array(assigneeSchema) });
 
 const MAX_ASSIGNEES = 200;
 const personIdList = z.array(z.string().min(1)).min(1).max(MAX_ASSIGNEES);
+
+/**
+ * Which session each person's copy of the task belongs to.
+ *
+ * A batch-wide `submission_id` is only ever right for co-speakers of one
+ * session; the picker assigns to many speakers at once, so the session has to
+ * be resolved per person or the whole deliverables board files under the wrong
+ * talk.
+ */
+const sessionAssignmentList = z
+  .array(z.object({ person_id: z.string().min(1), submission_id: z.string().min(1).nullable() }))
+  .max(MAX_ASSIGNEES);
 
 const createTemplateBody = z.object({
   name: z.string().trim().min(1).max(200),
@@ -77,6 +90,7 @@ const createTemplateBody = z.object({
   file_config: fileConfigSchema.nullable().optional(),
   auto_assign: z.boolean().default(false),
   assign_to: z.array(z.string().min(1)).max(MAX_ASSIGNEES).default([]),
+  session_assignments: sessionAssignmentList.optional(),
 });
 const patchTemplateBody = z.object({
   name: z.string().trim().min(1).max(200).optional(),
@@ -93,6 +107,7 @@ const assignBody = z.object({
   person_ids: personIdList,
   due_at: z.number().int().nullable().optional(),
   submission_id: z.string().min(1).nullable().optional(),
+  session_assignments: sessionAssignmentList.optional(),
 });
 
 type TaskTemplateView = Pick<TaskTemplateRow, "id" | "event_id" | "name" | "kind" | "description" | "position" | "updated_at"> & {
@@ -137,6 +152,60 @@ interface AssigneeQueryRow {
   email: string;
   company: string | null;
   accepted_session_count: number;
+}
+
+interface PersonSessionRow {
+  person_id: string;
+  submission_id: string;
+  title: string;
+}
+
+/** A session as the assignment flow offers it: enough to pick one, nothing more. */
+interface SessionOption {
+  id: string;
+  title: string;
+}
+
+/** The body's per-person session choices, keyed for lookup. Last entry wins. */
+function sessionChoicesFrom(
+  entries: ReadonlyArray<{ person_id: string; submission_id: string | null }> | undefined,
+): Map<string, string | null> | undefined {
+  if (entries === undefined) return undefined;
+  return new Map(entries.map((entry) => [entry.person_id, entry.submission_id]));
+}
+
+/**
+ * Every session each of these people is on at this conference, in the order the
+ * picker shows them.
+ *
+ * Acceptance is not the gate: a speaker whose session is still in review is a
+ * speaker the organizer is already chasing deliverables from — the same reason
+ * the assignee list itself does not wait for acceptance. Rejected and withdrawn
+ * sessions are gone, so a deck can never be filed under one.
+ */
+async function sessionsByPerson(
+  db: D1Database,
+  eventId: string,
+  personIds: readonly string[],
+): Promise<Map<string, SessionOption[]>> {
+  const sessions = new Map<string, SessionOption[]>();
+  if (personIds.length === 0) return sessions;
+  const rows = await db.prepare(
+    `SELECT DISTINCT part.person_id AS person_id, submission.id AS submission_id, submission.title AS title
+     FROM participations part
+     JOIN submissions submission ON submission.id = part.submission_id
+     WHERE submission.event_id = ?
+       AND submission.status NOT IN ('rejected', 'withdrawn')
+       AND part.role IN ('speaker', 'co_speaker', 'submitter')
+       AND part.person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+     ORDER BY submission.title COLLATE NOCASE ASC, submission.id ASC`,
+  ).bind(eventId, JSON.stringify([...new Set(personIds)])).all<PersonSessionRow>();
+  for (const row of rows.results) {
+    const list = sessions.get(row.person_id);
+    const option = { id: row.submission_id, title: row.title };
+    if (list) list.push(option); else sessions.set(row.person_id, [option]);
+  }
+  return sessions;
 }
 
 async function eventExists(db: D1Database, eventId: string): Promise<void> {
@@ -260,12 +329,26 @@ async function taskCountsFor(db: D1Database, templateId: string): Promise<TaskCo
  * the duplicate rule are written once. A person who already holds an *open*
  * task for this template is skipped: pressing Assign twice must not mint a
  * second copy of the same obligation, and must not silently claim it did.
+ *
+ * The session each task belongs to is settled here too, in this order: the
+ * organizer's explicit per-person choice, then a batch-wide `submission_id`,
+ * then the person's own session when they have exactly one. That last step is
+ * the whole point — a speaker with one talk should never need a human to say
+ * which talk their slides are for, and a task born unattached cannot be placed
+ * by the deliverables board or by a session-grouped export.
  */
 async function assignmentStatements(
   db: D1Database,
   template: Pick<TaskTemplateRow, "id" | "event_id" | "name" | "kind" | "description" | "due_at" | "due_offset_days">,
   personIds: readonly string[],
-  options: { now: number; actor: AuditActor; requestId: string | null; dueAtOverride?: number | null; submissionId?: string | null },
+  options: {
+    now: number;
+    actor: AuditActor;
+    requestId: string | null;
+    dueAtOverride?: number | null;
+    submissionId?: string | null;
+    sessionChoices?: ReadonlyMap<string, string | null>;
+  },
 ): Promise<{ statements: D1PreparedStatement[]; assigned: string[]; skipped: string[] }> {
   const unique = [...new Set(personIds)];
   if (unique.length === 0) return { statements: [], assigned: [], skipped: [] };
@@ -293,8 +376,23 @@ async function assignmentStatements(
   const skipped = unique.filter((id) => alreadyOwed.has(id));
   const dueAt = options.dueAtOverride ?? resolveTaskDueAt(template, options.now);
 
+  const sessions = await sessionsByPerson(db, template.event_id, assigned);
+  const sessionFor = (personId: string): string | null => {
+    const chosen = options.sessionChoices?.get(personId);
+    if (chosen !== undefined) {
+      if (chosen !== null && !(sessions.get(personId) ?? []).some((session) => session.id === chosen)) {
+        throw ApiError.unprocessable("that speaker is not on the session you picked for them", "session_assignments");
+      }
+      return chosen;
+    }
+    if (options.submissionId) return options.submissionId;
+    const own = sessions.get(personId) ?? [];
+    return own.length === 1 ? (own[0] as SessionOption).id : null;
+  };
+
   const statements = assigned.flatMap((personId) => {
     const taskId = newUlid(options.now);
+    const submissionId = sessionFor(personId);
     return [
       db.prepare(
         `INSERT INTO speaker_tasks
@@ -305,7 +403,7 @@ async function assignmentStatements(
         taskId,
         template.event_id,
         personId,
-        options.submissionId ?? null,
+        submissionId,
         template.id,
         template.name,
         template.kind,
@@ -321,7 +419,7 @@ async function assignmentStatements(
         action: "speaker_task.assigned",
         entityType: "speaker_task",
         entityId: taskId,
-        after: { template_id: template.id, person_id: personId, title: template.name, due_at: dueAt },
+        after: { template_id: template.id, person_id: personId, title: template.name, due_at: dueAt, submission_id: submissionId },
         now: options.now,
         requestId: options.requestId,
       }),
@@ -408,7 +506,12 @@ const createTaskTemplate = defineApiRoute(
       due_at: dueAt,
       due_offset_days: dueOffsetDays,
     };
-    const assignment = await assignmentStatements(context.env.DB, template, body.assign_to, { now, actor, requestId });
+    const assignment = await assignmentStatements(context.env.DB, template, body.assign_to, {
+      now,
+      actor,
+      requestId,
+      sessionChoices: sessionChoicesFrom(body.session_assignments),
+    });
 
     await context.env.DB.batch([
       context.env.DB.prepare(
@@ -616,7 +719,7 @@ const assignSpeakerTasks = defineApiRoute(
     operationId: "assignSpeakerTasks",
     summary: "Assign a task to one or more speakers",
     description:
-      "Direct assignment, independent of `auto_assign` and of the acceptance cascade. People who already owe this task are reported as skipped rather than handed a duplicate.",
+      "Direct assignment, independent of `auto_assign` and of the acceptance cascade. People who already owe this task are reported as skipped rather than handed a duplicate. Each task is attached to a session: `session_assignments` names one per person, `submission_id` sets one for the whole batch, and a speaker with exactly one session of their own needs neither.",
     tags: ["Task templates"],
     request: { params: eventParams, body: { content: { "application/json": { schema: assignBody } } } },
     policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
@@ -645,6 +748,7 @@ const assignSpeakerTasks = defineApiRoute(
       requestId: context.get("requestId") ?? null,
       dueAtOverride: body.due_at ?? undefined,
       submissionId: body.submission_id ?? null,
+      sessionChoices: sessionChoicesFrom(body.session_assignments),
     });
     if (assignment.statements.length > 0) await context.env.DB.batch(assignment.statements);
     return context.json({ assigned: assignment.assigned.length, skipped: assignment.skipped.length }, 201);
@@ -730,6 +834,10 @@ const listTaskAssignees = defineApiRoute(
        JOIN people person ON person.id = candidate.person_id
        ORDER BY person.name COLLATE NOCASE ASC, person.id ASC`,
     ).bind(eventId, eventId, eventId).all<AssigneeQueryRow>();
+    // The sessions ride along because the assignment flow's second question,
+    // right after "who", is "for which talk" — and a picker that has to fetch
+    // per speaker to answer it is a picker nobody waits for.
+    const sessions = await sessionsByPerson(context.env.DB, eventId, rows.results.map((row) => row.id));
     return context.json({
       data: rows.results.map((row) => ({
         id: row.id,
@@ -737,6 +845,7 @@ const listTaskAssignees = defineApiRoute(
         email: row.email,
         company: row.company,
         accepted_session_count: Number(row.accepted_session_count ?? 0),
+        sessions: sessions.get(row.id) ?? [],
       })),
     }, 200);
   },

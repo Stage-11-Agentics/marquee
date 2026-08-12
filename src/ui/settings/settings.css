@@ -110,6 +110,18 @@
 .task-assignee-option strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-assignee-option small { color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* One row per selected speaker who has a session to file under. The row height
+   is fixed so swapping a one-session caption for a two-session one cannot shift
+   the rows beneath it. */
+.task-session-picker { border: 1px solid var(--line); border-radius: 7px; display: grid; gap: 10px; padding: 12px; }
+.task-session-picker .subtle { font-size: 11px; }
+.task-session-list { display: grid; gap: 6px; max-height: 200px; overflow-y: auto; }
+.task-session-row { align-items: center; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; display: flex; gap: 10px; min-height: 44px; padding: 7px 9px; }
+.task-session-person { display: grid; gap: 2px; min-width: 0; width: 40%; }
+.task-session-person strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-session-person small { color: var(--muted); font-size: 10.5px; }
+.task-session-select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); flex: 1; font: inherit; font-size: 12px; min-height: 30px; min-width: 0; padding: 5px 7px; }
+
 /* The name owns its own row. `.settings-row-heading` is a flex line built for
    two items, and `strong` carries `overflow: hidden` — which zeroes a flex
    item's automatic minimum size, so adding the kind badge collapsed the task
