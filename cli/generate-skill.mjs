@@ -42,10 +42,10 @@ npx vite build
 CI=1 npx wrangler d1 migrations apply DB --remote
 npm run seed -- --remote        # only if the operator wants the demo alongside
 npx wrangler deploy
-curl -fsS https://<domain>/health
+node cli/marquee.mjs setup health --url "$MARQUEE_URL" --json
 \`\`\`
 
-\`health\` names the build SHA it serves; confirm it matches what you shipped.
+\`setup health\` names the build SHA the deployment is serving; confirm it matches what you shipped. It needs no credential, which is what makes it the first thing you can ask a fresh instance.
 
 4. Print the claim link and hand it to the human:
 

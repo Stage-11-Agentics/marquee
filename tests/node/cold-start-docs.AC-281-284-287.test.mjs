@@ -52,6 +52,7 @@ test("AC-281 · every setup verb drives the route its screen drives, and the man
       "organizers invite",
       "organizers list",
       "setup claim-link",
+      "setup health",
       "setup instance",
     ],
     "the setup chapter's verb set is fixed; adding one means teaching the chapter too",
@@ -60,7 +61,16 @@ test("AC-281 · every setup verb drives the route its screen drives, and the man
   const manifest = await routeManifest();
   const cli = await read("cli/marquee.mjs");
   for (const command of setupCommands) {
-    assert.ok(command.operations?.length, `${command.path.join(" ")} names no operation`);
+    // `setup health` is the one verb with no API operation, for the reason its
+    // registry entry gives: `/health` is the deployment's liveness stamp, not
+    // something this conference serves. Every other verb must name one.
+    assert.ok(
+      Array.isArray(command.operations),
+      `${command.path.join(" ")} declares no operations array`,
+    );
+    if (command.path.join(" ") !== "setup health") {
+      assert.ok(command.operations.length, `${command.path.join(" ")} names no operation`);
+    }
     for (const operationId of command.operations) {
       const route = manifest.get(operationId);
       assert.ok(route, `${operationId} is not an operation the API serves`);

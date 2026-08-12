@@ -239,6 +239,9 @@ async function execute(command, arguments_, options, flags, client) {
   if (root === "setup" && verb === "claim-link") {
     return client.post("/api/v1/setup/claim-link");
   }
+  if (root === "setup" && verb === "health") {
+    return client.get("/health");
+  }
   if (root === "setup" && verb === "instance") {
     return client.get("/api/v1/instance/status");
   }

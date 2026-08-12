@@ -38,6 +38,19 @@ export const COMMAND_REGISTRY = [
     options: [],
   },
   {
+    path: ["setup", "health"],
+    usage: "marquee setup health",
+    summary: "Confirm the deployment answers, and name the build it is serving.",
+    // No API operation, for the same reason `logs` has none: `/health` is the
+    // deployment's own liveness stamp, not something this conference serves.
+    // It is a command rather than a raw request because the skill teaches one
+    // surface — an agent that drops to curl mid-loop has found a gap (AC-143).
+    operations: [],
+    skill: "setup",
+    unauthenticated: true,
+    options: [],
+  },
+  {
     path: ["setup", "instance"],
     usage: "marquee setup instance",
     summary: "Read what is configured on this deployment, and what is not.",
