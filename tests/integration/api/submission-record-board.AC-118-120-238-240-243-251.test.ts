@@ -220,4 +220,101 @@ describe.sequential("MRQ-33 admin record and program board", () => {
     const remaining = await env.DB.prepare("SELECT COUNT(*) AS count FROM round_assignments WHERE id = ?").bind(acceptedBody.id).first<{ count: number }>();
     expect(Number(remaining?.count ?? 0)).toBe(0);
   });
+
+  test("CONTRACT · CNT-12 · one Session can leave and return to the public agenda with audited dual-flag transitions", async () => {
+    const title = "CNT-12 reversible publication control";
+    const session = await createSubmission({
+      kind: "session",
+      title,
+      abstract: "A Session used to prove publication reversal.",
+      submitter_person_id: SPEAKER_ID,
+      participants: [{ person_id: SPEAKER_ID, role: "speaker" }],
+      track_ids: [TRACK_IN],
+      format_id: FORMAT_ID,
+    });
+    const scheduled = await request(`/api/v1/events/${EVENT_ID}/submissions/${session.id}/schedule`, {
+      method: "POST",
+      body: JSON.stringify({ starts_at: Date.UTC(2026, 9, 22, 16, 0), duration_min: 30, room_id: ROOM_ID, track_id: TRACK_IN }),
+    });
+    expect(scheduled.status).toBe(200);
+
+    const event = await env.DB.prepare("SELECT slug FROM events WHERE id = ?").bind(EVENT_ID).first<{ slug: string }>();
+    expect(event?.slug).toBeTruthy();
+    const before = await env.DB.prepare(`
+      SELECT s.is_published AS submission_is_published, s.updated_at AS submission_updated_at,
+        item.is_published AS agenda_is_published, item.updated_at AS agenda_updated_at
+      FROM submissions s
+      JOIN agenda_items item ON item.submission_id = s.id AND item.event_id = s.event_id AND item.kind = 'session'
+      WHERE s.id = ? AND s.event_id = ?
+    `).bind(session.id, EVENT_ID).first<{ submission_is_published: number; submission_updated_at: number; agenda_is_published: number; agenda_updated_at: number }>();
+    expect(before).toMatchObject({ submission_is_published: 0, agenda_is_published: 0 });
+
+    const published = await request(`/api/v1/events/${EVENT_ID}/submissions/${session.id}/publish`, { method: "POST" });
+    expect(published.status).toBe(200);
+    const publishedRecord = await body<{ is_published: boolean; slot: { is_published: boolean }; actions: { can_publish: boolean; can_unpublish: boolean } }>(published);
+    expect(publishedRecord).toMatchObject({ is_published: true, slot: { is_published: true }, actions: { can_publish: false, can_unpublish: true } });
+
+    const publishedFlags = await env.DB.prepare(`
+      SELECT s.is_published AS submission_is_published, s.updated_at AS submission_updated_at,
+        item.is_published AS agenda_is_published, item.updated_at AS agenda_updated_at
+      FROM submissions s
+      JOIN agenda_items item ON item.submission_id = s.id AND item.event_id = s.event_id AND item.kind = 'session'
+      WHERE s.id = ? AND s.event_id = ?
+    `).bind(session.id, EVENT_ID).first<{ submission_is_published: number; submission_updated_at: number; agenda_is_published: number; agenda_updated_at: number }>();
+    expect(publishedFlags).toMatchObject({ submission_is_published: 1, agenda_is_published: 1 });
+    expect(publishedFlags!.submission_updated_at).toBeGreaterThan(before!.submission_updated_at);
+    expect(publishedFlags!.agenda_updated_at).toBeGreaterThan(before!.agenda_updated_at);
+
+    const publicAgenda = await request(`/agenda?event=${encodeURIComponent(event!.slug)}`);
+    expect(publicAgenda.status).toBe(200);
+    const publicAgendaHtml = await publicAgenda.text();
+    expect(publicAgendaHtml).toContain(title);
+    const publicData = await request(`/api/v1/public/agenda?event=${encodeURIComponent(event!.slug)}`);
+    expect(publicData.status).toBe(200);
+    const publicPayload = await body<{ sessions: Array<{ title: string; slug: string }> }>(publicData);
+    const publicSession = publicPayload.sessions.find((item) => item.title === title);
+    expect(publicSession).toBeTruthy();
+    const publicSessionPage = await request(`/s/${encodeURIComponent(publicSession!.slug)}?event=${encodeURIComponent(event!.slug)}`);
+    expect(publicSessionPage.status).toBe(200);
+    expect(await publicSessionPage.text()).toContain(title);
+
+    const unpublished = await request(`/api/v1/events/${EVENT_ID}/submissions/${session.id}/unpublish`, { method: "POST" });
+    expect(unpublished.status).toBe(200);
+    const unpublishedRecord = await body<{ is_published: boolean; slot: { is_published: boolean }; actions: { can_publish: boolean; can_unpublish: boolean } }>(unpublished);
+    expect(unpublishedRecord).toMatchObject({ is_published: false, slot: { is_published: false }, actions: { can_publish: true, can_unpublish: false } });
+
+    const unpublishedFlags = await env.DB.prepare(`
+      SELECT s.is_published AS submission_is_published, s.updated_at AS submission_updated_at,
+        item.is_published AS agenda_is_published, item.updated_at AS agenda_updated_at
+      FROM submissions s
+      JOIN agenda_items item ON item.submission_id = s.id AND item.event_id = s.event_id AND item.kind = 'session'
+      WHERE s.id = ? AND s.event_id = ?
+    `).bind(session.id, EVENT_ID).first<{ submission_is_published: number; submission_updated_at: number; agenda_is_published: number; agenda_updated_at: number }>();
+    expect(unpublishedFlags).toMatchObject({ submission_is_published: 0, agenda_is_published: 0 });
+    expect(unpublishedFlags!.submission_updated_at).toBeGreaterThan(publishedFlags!.submission_updated_at);
+    expect(unpublishedFlags!.agenda_updated_at).toBeGreaterThan(publishedFlags!.agenda_updated_at);
+
+    const hiddenAgenda = await request(`/agenda?event=${encodeURIComponent(event!.slug)}`);
+    expect(hiddenAgenda.status).toBe(200);
+    expect(await hiddenAgenda.text()).not.toContain(title);
+    const hiddenSessionPage = await request(`/s/${encodeURIComponent(publicSession!.slug)}?event=${encodeURIComponent(event!.slug)}`);
+    expect(hiddenSessionPage.status).toBe(404);
+
+    const republished = await request(`/api/v1/events/${EVENT_ID}/submissions/${session.id}/publish`, { method: "POST" });
+    expect(republished.status).toBe(200);
+    expect(await body<{ is_published: boolean; slot: { is_published: boolean } }>(republished)).toMatchObject({ is_published: true, slot: { is_published: true } });
+    const restoredAgenda = await request(`/agenda?event=${encodeURIComponent(event!.slug)}`);
+    expect(await restoredAgenda.text()).toContain(title);
+
+    const auditRows = await env.DB.prepare(`
+      SELECT action, before_json, after_json
+      FROM audit_log
+      WHERE event_id = ? AND entity_type = 'submission' AND entity_id = ?
+        AND action IN ('published', 'unpublished')
+      ORDER BY created_at ASC, id ASC
+    `).bind(EVENT_ID, session.id).all<{ action: string; before_json: string; after_json: string }>();
+    expect(auditRows.results.map((row) => row.action)).toEqual(["published", "unpublished", "published"]);
+    expect(JSON.parse(auditRows.results[1]!.before_json)).toMatchObject({ agenda_is_published: true, submission_is_published: true });
+    expect(JSON.parse(auditRows.results[1]!.after_json)).toMatchObject({ agenda_is_published: false, submission_is_published: false });
+  });
 });

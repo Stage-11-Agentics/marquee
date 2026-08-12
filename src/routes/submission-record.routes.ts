@@ -22,7 +22,7 @@ import {
 import { projectApplicableAnswers, type FormAnswerValue } from "../lib/form-conditions";
 import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
-import { auditStatement, writeAudit } from "../lib/audit";
+import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/audit";
 import { contentOf, isContentAction, isRestorable, recordHistoryFor } from "../lib/history";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -777,7 +777,8 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       // reversal leaves the agenda row in place, so a withdrawn record still
       // derives to `scheduled` and a stage test would happily publish it to
       // the public site.
-      can_publish: slot !== null && !slot.is_published && row.status === "accepted",
+      can_publish: slot !== null && !slot.is_published && row.status === "accepted" && canWriteProgram,
+      can_unpublish: slot !== null && slot.is_published && canWriteProgram,
       // The UI renders the content editor and the restore control from this one
       // field, so it must answer exactly what the write routes enforce — which
       // is not one policy but two. Drafts go to `patchDraft`, gated on
@@ -1233,6 +1234,144 @@ const scheduleSubmission = defineApiRoute(
   },
 );
 
+interface PublicationSnapshot {
+  status: string;
+  submission_is_published: number;
+  submission_updated_at: number;
+  agenda_item_id: string | null;
+  agenda_is_published: number | null;
+  agenda_updated_at: number | null;
+}
+
+/**
+ * Change the two publication flags as one audited state transition.
+ *
+ * The agenda row is the public site's gate, while the submission flag is the
+ * record's durable projection. Keeping both in this conditional batch means a
+ * reversal cannot leave the organizer looking at one truth and attendees at
+ * another. The updated_at predicates are the record's lightweight CAS: a
+ * stale screen gets a conflict instead of overwriting a newer schedule or
+ * publication change.
+ */
+async function setPublication(
+  db: D1Database,
+  eventId: string,
+  submissionId: string,
+  published: boolean,
+  actor: DecisionActor,
+): Promise<void> {
+  const current = await db.prepare(`
+    SELECT
+      s.status,
+      s.is_published AS submission_is_published,
+      s.updated_at AS submission_updated_at,
+      ai.id AS agenda_item_id,
+      ai.is_published AS agenda_is_published,
+      ai.updated_at AS agenda_updated_at
+    FROM submissions s
+    LEFT JOIN agenda_items ai
+      ON ai.submission_id = s.id AND ai.event_id = s.event_id AND ai.kind = 'session'
+    WHERE s.id = ? AND s.event_id = ?
+  `).bind(submissionId, eventId).first<PublicationSnapshot>();
+  if (!current) throw ApiError.notFound("submission not found");
+  if (!current.agenda_item_id || current.agenda_is_published === null || current.agenda_updated_at === null) {
+    throw ApiError.conflict("schedule the Session before changing its public status");
+  }
+  if (published && current.status !== "accepted") {
+    throw ApiError.conflict("this Session is not accepted, so it cannot be published");
+  }
+
+  const target = published ? 1 : 0;
+  if (current.agenda_is_published === target && current.submission_is_published === target) return;
+
+  const now = Date.now();
+  const agendaUpdatedAt = Math.max(now, current.agenda_updated_at + 1);
+  const submissionUpdatedAt = Math.max(now, current.submission_updated_at + 1);
+  const before = {
+    agenda_item_id: current.agenda_item_id,
+    agenda_is_published: current.agenda_is_published === 1,
+    submission_is_published: current.submission_is_published === 1,
+  };
+  const after = {
+    agenda_item_id: current.agenda_item_id,
+    agenda_is_published: published,
+    submission_is_published: published,
+  };
+  const action = published ? "published" : "unpublished";
+
+  const agendaUpdate = db.prepare(`
+    UPDATE agenda_items
+    SET is_published = ?, updated_at = ?
+    WHERE id = ? AND event_id = ? AND kind = 'session'
+      AND is_published = ? AND updated_at = ?
+      AND EXISTS (
+        SELECT 1 FROM submissions
+        WHERE id = ? AND event_id = ? AND is_published = ? AND updated_at = ?
+          AND (? = 0 OR status = 'accepted')
+      )
+  `).bind(
+    target,
+    agendaUpdatedAt,
+    current.agenda_item_id,
+    eventId,
+    current.agenda_is_published,
+    current.agenda_updated_at,
+    submissionId,
+    eventId,
+    current.submission_is_published,
+    current.submission_updated_at,
+    published ? 1 : 0,
+  );
+  const submissionUpdate = db.prepare(`
+    UPDATE submissions
+    SET is_published = ?, updated_at = ?
+    WHERE id = ? AND event_id = ?
+      AND is_published = ? AND updated_at = ?
+      AND EXISTS (
+        SELECT 1 FROM agenda_items
+        WHERE id = ? AND event_id = ? AND kind = 'session'
+          AND is_published = ? AND updated_at = ?
+      )
+  `).bind(
+    target,
+    submissionUpdatedAt,
+    submissionId,
+    eventId,
+    current.submission_is_published,
+    current.submission_updated_at,
+    current.agenda_item_id,
+    eventId,
+    target,
+    agendaUpdatedAt,
+  );
+  const audit = auditStatementFromSelect(db, {
+    eventId,
+    actorKind: actor.kind,
+    actorPersonId: actor.personId,
+    action,
+    entityType: "submission",
+    entityId: submissionId,
+    before,
+    after,
+    now,
+    requestId: actor.requestId,
+  }, `
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    FROM agenda_items item
+    JOIN submissions submission
+      ON submission.id = item.submission_id AND submission.event_id = item.event_id
+    WHERE item.id = ? AND item.event_id = ? AND item.kind = 'session'
+      AND item.is_published = ? AND item.updated_at = ?
+      AND submission.id = ? AND submission.event_id = ?
+      AND submission.is_published = ? AND submission.updated_at = ?
+  `, current.agenda_item_id, eventId, target, agendaUpdatedAt, submissionId, eventId, target, submissionUpdatedAt);
+
+  const results = await db.batch([agendaUpdate, submissionUpdate, audit]);
+  if (Number(results[0]?.meta?.changes ?? 0) !== 1 || Number(results[1]?.meta?.changes ?? 0) !== 1 || Number(results[2]?.meta?.changes ?? 0) !== 1) {
+    throw ApiError.conflict(`this Session changed while ${published ? "publishing" : "removing it from the public site"}; refresh and try again`);
+  }
+}
+
 const publishSubmission = defineApiRoute(
   {
     method: "post",
@@ -1247,22 +1386,27 @@ const publishSubmission = defineApiRoute(
   async (context) => {
     const { eventId, submissionId } = context.req.valid("param");
     await eventFor(context.env.DB, eventId);
-    const slot = await context.env.DB.prepare("SELECT id FROM agenda_items WHERE submission_id = ? AND event_id = ? AND kind = 'session'").bind(submissionId, eventId).first<{ id: string }>();
-    if (!slot) throw ApiError.conflict("schedule the Session before publishing it");
-    // A reversal leaves the agenda row behind, so the presence of a slot does
-    // not mean the talk is still accepted. Without this the public site can be
-    // handed a withdrawn or rejected speaker's name, title, time, and room.
-    const current = await context.env.DB.prepare("SELECT status FROM submissions WHERE id = ? AND event_id = ?").bind(submissionId, eventId).first<{ status: string }>();
-    if (current?.status !== "accepted") {
-      throw ApiError.conflict("this Session is not accepted, so it cannot be published");
-    }
-    const actor = await actorFor(context);
-    const now = Date.now();
-    await context.env.DB.batch([
-      context.env.DB.prepare("UPDATE agenda_items SET is_published = 1, updated_at = ? WHERE id = ?").bind(now, slot.id),
-      context.env.DB.prepare("UPDATE submissions SET is_published = 1, updated_at = ? WHERE id = ? AND event_id = ?").bind(now, submissionId, eventId),
-    ]);
-    await audit(context.env.DB, eventId, submissionId, "published", actor, { agenda_item_id: slot.id, is_published: true });
+    await setPublication(context.env.DB, eventId, submissionId, true, await actorFor(context));
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+  },
+);
+
+const unpublishSubmission = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}/unpublish",
+    operationId: "unpublishSubmission",
+    summary: "Remove a Session from the public agenda",
+    description: "Sets agenda_items.is_published = 0 and submissions.is_published = 0 so the Session disappears from the public agenda and embeds immediately.",
+    tags: ["Submissions"],
+    request: { params: submissionParams },
+    policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: recordResponse, ...errors },
+  },
+  async (context) => {
+    const { eventId, submissionId } = context.req.valid("param");
+    await eventFor(context.env.DB, eventId);
+    await setPublication(context.env.DB, eventId, submissionId, false, await actorFor(context));
     return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
   },
 );
@@ -1384,4 +1528,4 @@ const removeParticipant = defineApiRoute(
   },
 );
 
-export const apiRoutes = [createSubmission, getSubmissionRecord, patchDraft, updateSubmissionContent, restoreSubmissionContent, scheduleSubmission, publishSubmission, addParticipant, removeParticipant];
+export const apiRoutes = [createSubmission, getSubmissionRecord, patchDraft, updateSubmissionContent, restoreSubmissionContent, scheduleSubmission, publishSubmission, unpublishSubmission, addParticipant, removeParticipant];
