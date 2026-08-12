@@ -46,3 +46,19 @@ test("AC-158 + AC-159 · the mobile reviewer keeps thumb controls and a stable b
   expect(reviewerStyles).toMatch(/\.score-buttons button \{ min-height: 44px; \}/);
   expect(reviewerStyles).toMatch(/\.reviewer-detail \{ border-left: 0;.*height: 100dvh;/);
 });
+
+test("MRQ-108 · the reviewer renders the round's own scorecard and keeps completed reviews reopenable", () => {
+  // All three criterion kinds have a control on the reviewer side (ABS-03).
+  expect(reviewerPageSource).toContain('criterion.kind === "numeric"');
+  expect(reviewerPageSource).toContain('criterion.kind === "select"');
+  expect(reviewerPageSource).toContain('criterion.kind === "text"');
+  // The rating strip follows the organizer's configured scale, not a fixed 1-5.
+  expect(reviewerPageSource).toContain("scaleSteps(criterion)");
+  // A recommendation alone still saves: criteria are additive, never a gate.
+  expect(reviewerPageSource).toContain("disabled={!currentReview.recommendation || saving}");
+  // Submitted reviews stay reachable, and reopening shows the stored values.
+  expect(reviewerPageSource).toContain("reviewer-completed");
+  expect(reviewerPageSource).toContain("Reopen");
+  expect(reviewerPageSource).toContain("data-saved-criteria");
+  expect(reviewerStyles).toContain(".reviewer-completed-row");
+});
