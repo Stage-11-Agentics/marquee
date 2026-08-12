@@ -6,6 +6,7 @@ import { renderToString } from "preact-render-to-string";
 import type { Env } from "../index";
 import type { PersonRow } from "../db/schema";
 import { resolveAuth } from "../lib/auth/auth-middleware";
+import { DEMO_SIGNIN_EMAIL_LIST } from "../lib/auth/demo-seat";
 import { roleHome, rolesOf, safeNext } from "../lib/auth/signin-destination";
 import { findDemoEvent } from "../lib/demo-event";
 import { ICON_LINKS } from "../lib/head-icons";
@@ -99,11 +100,13 @@ function MailCallout({ demo }: { demo: boolean }): JSX.Element {
   );
 }
 
-function SigninForm({ state }: { state: SigninPageState }): JSX.Element {
+function SigninForm({ state, lead }: { state: SigninPageState; lead: boolean }): JSX.Element {
   return (
     <div class="signin-body">
       <div class="eyebrow">Sign in</div>
-      <h1>Sign in to Marquee</h1>
+      {lead
+        ? <h1>Sign in to Marquee</h1>
+        : <h2 class="signin-heading">Sign in with your own address</h2>}
       <p class="signin-lede">
         No password, ever. Give the address your conference knows you by and a one-time link
         arrives by email. It works once and expires in fifteen minutes.
@@ -144,12 +147,13 @@ function DemoDoors(): JSX.Element {
   return (
     <div class="signin-demo">
       <div class="eyebrow">Demo conference</div>
+      <h1>Open the demo conference</h1>
       <p class="signin-demo-lede">
         This deployment runs a populated demo. Open it in any seat — each one is a real session,
         not a preview.
       </p>
       <div class="signin-demo-doors">
-        <button class="button" type="button" data-signin-demo="organizer" data-signin-to="/dashboard">
+        <button class="button primary" type="button" data-signin-demo="organizer" data-signin-to="/dashboard">
           Enter as organizer
         </button>
         <button class="button" type="button" data-signin-demo="reviewer" data-signin-to="/reviewer">
@@ -160,6 +164,19 @@ function DemoDoors(): JSX.Element {
         </button>
       </div>
       <span class="signin-status" id="signin-demo-status" role="status" aria-live="polite"></span>
+      {/* The form below is the affordance most people reach for first, so the
+          page says plainly which addresses it answers to rather than letting a
+          visitor guess and land on an acknowledgement. */}
+      <p class="signin-demo-emails" data-signin-demo-emails>
+        Or sign in by email:{" "}
+        {DEMO_SIGNIN_EMAIL_LIST.map((address, index) => (
+          <>
+            {index > 0 && ", "}
+            <code key={address}>{address}</code>
+          </>
+        ))}{" "}
+        enter their seats directly, no link to wait for.
+      </p>
     </div>
   );
 }
@@ -188,7 +205,16 @@ function SignedInPanel({ state, person }: { state: SigninPageState; person: Sign
   );
 }
 
+/**
+ * The demo leads when there is one.
+ *
+ * Whoever arrives at a demo deployment came to see the conference, not to prove
+ * they own an address it has never heard of — so the three seats are the first
+ * thing on the page and the form is second. A real instance has no demo and is
+ * unchanged: the form is the page, exactly as before.
+ */
 export function SigninPage({ state }: { state: SigninPageState }): JSX.Element {
+  const demoLeads = !state.signedIn && state.demo;
   return (
     <div class="signin-shell">
       <header class="signin-top">
@@ -198,16 +224,16 @@ export function SigninPage({ state }: { state: SigninPageState }): JSX.Element {
         </a>
       </header>
       <main class="signin-main">
-        <section class="signin-card">
-          {state.signedIn
-            ? <SignedInPanel state={state} person={state.signedIn} />
-            : <SigninForm state={state} />}
-        </section>
-        {!state.signedIn && state.demo && (
-          <section class="signin-card secondary">
+        {demoLeads && (
+          <section class="signin-card">
             <DemoDoors />
           </section>
         )}
+        <section class={demoLeads ? "signin-card secondary" : "signin-card"}>
+          {state.signedIn
+            ? <SignedInPanel state={state} person={state.signedIn} />
+            : <SigninForm state={state} lead={!demoLeads} />}
+        </section>
       </main>
     </div>
   );
@@ -220,7 +246,8 @@ const SIGNIN_STYLES = `
 .signin-main { display: grid; place-items: start center; align-content: start; gap: 16px; padding: clamp(28px,6vw,64px) 20px; }
 .signin-card { width: min(620px,100%); background: var(--panel); border: 1px solid var(--line-strong); border-top: 3px solid var(--accent); border-radius: var(--radius); padding: clamp(20px,4vw,30px); }
 .signin-card.secondary { border-top-color: var(--line-strong); }
-.signin-body h1 { font: 500 clamp(24px,3.4vw,34px)/1.1 var(--mono); letter-spacing: -.04em; margin: 6px 0 12px; }
+.signin-body h1, .signin-demo h1 { font: 500 clamp(24px,3.4vw,34px)/1.1 var(--mono); letter-spacing: -.04em; margin: 6px 0 12px; }
+.signin-heading { font: 500 clamp(18px,2.2vw,22px)/1.2 var(--mono); letter-spacing: -.03em; margin: 6px 0 12px; }
 .signin-lede { color: var(--ink-soft); font-size: 14px; line-height: 1.65; margin: 0 0 22px; }
 .signin-reason { border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--sunk); padding: 10px 12px; font-size: 12px; color: var(--ink-soft); line-height: 1.6; margin: 0 0 18px; }
 .signin-callout { border: 1px solid var(--warning-line); border-left: 3px solid var(--warning-line); border-radius: var(--radius); background: var(--warning-soft); color: var(--warning-ink); padding: 10px 12px; font-size: 11.5px; line-height: 1.6; margin: 0 0 18px; display: grid; gap: 6px; }
@@ -242,6 +269,8 @@ const SIGNIN_STYLES = `
 .signin-demo .eyebrow { color: var(--accent-dark); }
 .signin-demo-lede { color: var(--ink-soft); font-size: 13px; line-height: 1.6; margin: 8px 0 16px; }
 .signin-demo-doors { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.signin-demo-emails { margin: 4px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.signin-demo-emails code { font-family: var(--mono); color: var(--accent-dark); }
 @media (max-width: 520px) { .signin-actions { flex-direction: column; align-items: stretch; } .signin-actions-pair { flex-direction: column; } .signin-actions .button { width: 100%; } .signin-demo-doors .button { width: 100%; } }
 `;
 
@@ -286,6 +315,13 @@ const SIGNIN_SCRIPT = `
         const body = await response.json().catch(() => null);
         if (!response.ok) throw new Error((body && body.error && body.error.message) || "That request could not be completed.");
         setStatus(status, (body && body.message) || "", false);
+        // A demo address is already signed in by the time this lands — the seat
+        // is a cookie, not a link — so the only thing left is to walk through
+        // the door.
+        if (body && body.demo_seat && body.demo_seat.redirect_to) {
+          window.location.assign(body.demo_seat.redirect_to);
+          return;
+        }
         if (body && body.magic_link && linkBlock && linkAnchor) {
           linkAnchor.setAttribute("href", body.magic_link);
           linkBlock.hidden = false;

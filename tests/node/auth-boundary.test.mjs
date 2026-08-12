@@ -50,14 +50,24 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
   // an organizer invite mints a session from a token that predates its person —
   // and `instance-claim.ts` is the ONE implementation of that, which is what
   // AC-282's "the exchange path is the claim exchange path" asserts.
-  assert.equal(sessionCalls.length, 3, JSON.stringify(sessionCalls));
+  // The fourth is the typed demo address (`organizer@demo.com` and siblings) on
+  // the sign-in form. It is enumerated rather than excused for the same reason
+  // as the others: it mints no new kind of credential and opens no seat the
+  // one-click demo door does not already open — same `findDemoPersona`, same
+  // `demo_mode = 1` gate, and it resolves to null on any instance without a
+  // seeded demo, where the address is answered exactly like an address nobody
+  // registered. A demo-only alias of an existing issuer is what A-5 permits; a
+  // second way to become somebody is what it forbids.
+  assert.equal(sessionCalls.length, 4, JSON.stringify(sessionCalls));
   assert.deepEqual(sessionCalls.map(({ file }) => file), [
     "src/lib/auth/instance-claim.ts",
+    "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
   ]);
   assert.deepEqual(cookieCalls.map(({ file }) => file).sort(), [
     "src/index.ts",
+    "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
     "src/routes/claim.routes.ts",
