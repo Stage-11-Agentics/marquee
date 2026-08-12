@@ -1,17 +1,48 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
-import { apiFetch, errorSummary } from "../shell/api-client";
+import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "../shell/components";
 import "./evaluation.css";
 
 const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 
+type CriterionKind = "numeric" | "select" | "text";
+
 interface Criterion {
   id: string;
+  kind: CriterionKind;
   name: string;
+  options: string[] | null;
   position: number;
+  scale_max: number | null;
+  scale_min: number | null;
   weight_pct: number;
+}
+
+const KIND_LABEL: Record<CriterionKind, string> = {
+  numeric: "Rating",
+  select: "Dropdown",
+  text: "Free text",
+};
+
+/**
+ * Round dates are epoch milliseconds and `<input type="date">` speaks calendar
+ * days, so both directions go through UTC. Reading a stored date in the browser's
+ * local zone and writing it back shifts it a day for anyone west of Greenwich —
+ * and a review round that opens a day early is a wrong answer, not a rounding one.
+ */
+function toDateInput(value: number | null): string {
+  if (value === null) return "";
+  const date = new Date(value);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function fromDateInput(value: string): number | null {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return Date.UTC(year, month - 1, day);
 }
 
 interface Round {
@@ -95,6 +126,9 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const [planName, setPlanName] = useState("2026 Program Review");
   const [instructions, setInstructions] = useState("Recommend Approve, Maybe, or Deny. Numeric scoring is optional.");
   const [criteria, setCriteria] = useState<Criterion[]>([]);
+  const [scorecardRoundId, setScorecardRoundId] = useState<string | null>(null);
+  const [roundErrors, setRoundErrors] = useState<Record<string, string>>({});
+  const [roundDrafts, setRoundDrafts] = useState<Record<string, string>>({});
   const [committeeName, setCommitteeName] = useState("Program reviewers");
   const [assignmentMode, setAssignmentMode] = useState<"everyone" | "n_per_submission">("n_per_submission");
   const [assignmentRoundId, setAssignmentRoundId] = useState<string | null>(null);
@@ -123,7 +157,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       setPlan(detail);
       setPlanName(detail.name);
       setInstructions(detail.instructions);
-      setCriteria(detail.rounds[0]?.criteria ?? []);
+      setRoundDrafts(Object.fromEntries(detail.rounds.map((round) => [round.id, round.name])));
       setReviewerTarget(detail.rounds[0]?.target_reviews_per_submission ?? 3);
     } catch (reason: unknown) {
       setError(errorSummary(reason));
@@ -146,13 +180,22 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
           scale_max: 5,
           status: "open",
           rounds: [
-            { name: "Initial screen", position: 0, mode: "scorecard", anonymized: true, target_reviews_per_submission: reviewerTarget, criteria: [{ name: "Impact", position: 0, weight_pct: 40 }, { name: "Specificity", position: 1, weight_pct: 35 }, { name: "Novelty", position: 2, weight_pct: 25 }] },
-            { name: "Committee decision", position: 1, mode: "comparison", anonymized: false, target_reviews_per_submission: reviewerTarget },
+            { name: "Initial review", position: 0, mode: "scorecard", anonymized: true, target_reviews_per_submission: reviewerTarget, criteria: [
+              { name: "Impact", kind: "numeric", position: 0, weight_pct: 40, scale_min: 1, scale_max: 5 },
+              { name: "Specificity", kind: "numeric", position: 1, weight_pct: 35, scale_min: 1, scale_max: 5 },
+              { name: "Novelty", kind: "numeric", position: 2, weight_pct: 25, scale_min: 1, scale_max: 5 },
+              { name: "Recommendation", kind: "select", position: 3, weight_pct: 0, options: ["Accept", "Maybe", "Reject"] },
+              { name: "Comments", kind: "text", position: 4, weight_pct: 0 },
+            ] },
+            { name: "Final review", position: 1, mode: "scorecard", anonymized: false, target_reviews_per_submission: reviewerTarget, criteria: [
+              { name: "Final score", kind: "numeric", position: 0, weight_pct: 100, scale_min: 1, scale_max: 10 },
+              { name: "Comments", kind: "text", position: 1, weight_pct: 0 },
+            ] },
           ],
         }),
       });
       setPlan(detail);
-      setCriteria(detail.rounds[0]?.criteria ?? []);
+      setRoundDrafts(Object.fromEntries(detail.rounds.map((round) => [round.id, round.name])));
       setDialog(null);
       setNotice("Evaluation plan created · two rounds ready");
     } catch (reason: unknown) {
@@ -160,17 +203,69 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     }
   };
 
+  const scorecardRound = plan?.rounds.find((round) => round.id === scorecardRoundId) ?? null;
+
+  const openScorecard = (round: Round): void => {
+    setScorecardRoundId(round.id);
+    setCriteria(round.criteria.map((criterion) => ({ ...criterion, options: criterion.options ? [...criterion.options] : null })));
+    setDialog("scorecard");
+  };
+
   const saveScorecard = async (event: Event): Promise<void> => {
     event.preventDefault();
-    if (!firstRound) return;
+    if (!scorecardRoundId) return;
     try {
-      await api(`/api/v1/events/${eventId}/rounds/${firstRound.id}/criteria`, "/api/v1/events/{eventId}/rounds/{roundId}/criteria", { method: "PUT", body: JSON.stringify({ criteria }) });
+      // Positions are renumbered on write: the round/position pair is unique, and
+      // a gap left by a removed row would collide with the next criterion added.
+      const payload = criteria.map((criterion, index) => ({
+        id: criterion.id.startsWith("new-") ? undefined : criterion.id,
+        kind: criterion.kind,
+        name: criterion.name,
+        options: criterion.kind === "select" ? criterion.options ?? [] : undefined,
+        position: index,
+        scale_max: criterion.kind === "numeric" ? criterion.scale_max : undefined,
+        scale_min: criterion.kind === "numeric" ? criterion.scale_min : undefined,
+        weight_pct: criterion.kind === "numeric" ? criterion.weight_pct : 0,
+      }));
+      await api(`/api/v1/events/${eventId}/rounds/${scorecardRoundId}/criteria`, "/api/v1/events/{eventId}/rounds/{roundId}/criteria", { method: "PUT", body: JSON.stringify({ criteria: payload }) });
       setDialog(null);
-      setNotice("Scorecard saved · criteria total 100%");
+      setScorecardRoundId(null);
+      setNotice(`${scorecardRound?.name ?? "Round"} scorecard saved · ${payload.length} criteri${payload.length === 1 ? "on" : "a"}`);
       await load();
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     }
+  };
+
+  const updateCriterion = (id: string, patch: Partial<Criterion>): void => {
+    setCriteria((previous) => previous.map((item) => item.id === id ? { ...item, ...patch } : item));
+  };
+
+  const changeKind = (criterion: Criterion, kind: CriterionKind): void => {
+    updateCriterion(criterion.id, {
+      kind,
+      options: kind === "select" ? criterion.options ?? ["Accept", "Maybe", "Reject"] : null,
+      scale_max: kind === "numeric" ? criterion.scale_max ?? 5 : null,
+      scale_min: kind === "numeric" ? criterion.scale_min ?? 1 : null,
+      weight_pct: kind === "numeric" ? criterion.weight_pct : 0,
+    });
+  };
+
+  const addCriterion = (): void => {
+    setCriteria((previous) => [...previous, {
+      id: `new-${previous.length}-${previous.reduce((max, item) => Math.max(max, item.position), -1) + 1}`,
+      kind: "numeric",
+      name: "",
+      options: null,
+      position: previous.length,
+      scale_max: 5,
+      scale_min: 1,
+      weight_pct: 0,
+    }]);
+  };
+
+  const removeCriterion = (id: string): void => {
+    setCriteria((previous) => previous.filter((item) => item.id !== id).map((item, index) => ({ ...item, position: index })));
   };
 
   const createCommittee = async (event: Event): Promise<void> => {
@@ -202,12 +297,23 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     }
   };
 
+  /**
+   * A rejected round edit belongs on the field that caused it, not in the alert
+   * at the top of the page: the operator is looking at the date picker they just
+   * changed, and the server already told us which field it objected to.
+   */
   const updateRound = async (round: Round, patch: Record<string, unknown>): Promise<void> => {
+    setRoundErrors((previous) => ({ ...previous, [round.id]: "" }));
     try {
       await api(`/api/v1/events/${eventId}/rounds/${round.id}`, "/api/v1/events/{eventId}/rounds/{roundId}", { method: "PATCH", body: JSON.stringify(patch) });
       setNotice(`${round.name} settings saved · recorded evidence preserved`);
       await load();
     } catch (reason: unknown) {
+      if (reason instanceof MarqueeApiError && reason.status === 422) {
+        setRoundErrors((previous) => ({ ...previous, [round.id]: reason.message }));
+        setRoundDrafts((previous) => ({ ...previous, [round.id]: round.name }));
+        return;
+      }
       setError(errorSummary(reason));
     }
   };
@@ -232,16 +338,35 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     }
   };
 
-  const criteriaTotal = useMemo(() => criteria.reduce((sum, item) => sum + Number(item.weight_pct || 0), 0), [criteria]);
+  const numericCriteria = useMemo(() => criteria.filter((item) => item.kind === "numeric"), [criteria]);
+  const criteriaTotal = useMemo(() => numericCriteria.reduce((sum, item) => sum + Number(item.weight_pct || 0), 0), [numericCriteria]);
+  const weightsValid = numericCriteria.length === 0 || Math.abs(criteriaTotal - 100) < 0.0001;
+
+  const commitRoundName = (round: Round): void => {
+    const next = (roundDrafts[round.id] ?? round.name).trim();
+    if (!next || next === round.name) {
+      setRoundDrafts((previous) => ({ ...previous, [round.id]: round.name }));
+      return;
+    }
+    void updateRound(round, { name: next });
+  };
 
   const renderRoundCard = (round: Round | undefined, index: number): JSX.Element => round ? (
     <div class="round-card" key={round.id}>
-      <span class="eyebrow">Round {index + 1}</span><strong>{round.name}</strong>
+      <span class="eyebrow">Round {index + 1}</span>
+      <label class="round-setting round-name"><span>Name</span><input aria-label={`Round ${index + 1} name`} value={roundDrafts[round.id] ?? round.name} onInput={(event) => setRoundDrafts({ ...roundDrafts, [round.id]: (event.currentTarget as HTMLInputElement).value })} onBlur={() => commitRoundName(round)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); (event.currentTarget as HTMLInputElement).blur(); } }} /></label>
+      <div class="round-dates">
+        <label class="round-setting"><span>Opens</span><input class="tabular" type="date" aria-label={`Round ${index + 1} opens`} value={toDateInput(round.opens_at)} onChange={(event) => void updateRound(round, { opens_at: fromDateInput((event.currentTarget as HTMLInputElement).value) })} /></label>
+        <label class="round-setting"><span>Closes</span><input class="tabular" type="date" aria-label={`Round ${index + 1} closes`} value={toDateInput(round.closes_at)} onChange={(event) => void updateRound(round, { closes_at: fromDateInput((event.currentTarget as HTMLInputElement).value) })} /></label>
+      </div>
+      <div class="round-field-error" role={roundErrors[round.id] ? "alert" : undefined}>{roundErrors[round.id] ?? ""}</div>
       <label class="round-setting"><span>Mode</span><select aria-label={`Round ${index + 1} mode`} value={round.mode} onChange={(event) => void updateRound(round, { mode: (event.currentTarget as HTMLSelectElement).value })}><option value="scorecard">Scorecard</option><option value="comparison">Comparison</option></select></label>
+      <label class="round-toggle"><input type="checkbox" aria-label={`Round ${index + 1} anonymized`} checked={round.anonymized} onChange={(event) => void updateRound(round, { anonymized: (event.currentTarget as HTMLInputElement).checked })} /><span>Anonymous review · hide speaker identity from reviewers</span></label>
+      <div class="round-scorecard-line"><span class="subtle">{round.criteria.length ? round.criteria.map((item) => item.name).join(" · ") : "No scorecard yet"}</span><Button small onClick={() => openScorecard(round)}>Edit scorecard</Button></div>
       <span class="subtle">{round.target_reviews_per_submission} reviews per submission · {round.mode === "comparison" ? `${round.progress.comparisons} comparisons` : `${round.progress.evaluations} scorecards`}</span>
       <div class="progress-track"><i style={{ width: `${percent(round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations, Math.max(1, round.progress.assigned_submissions * round.target_reviews_per_submission))}%` }} /></div>
       <div class="wave-date"><span class="tabular">{round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations}</span> complete · <span class="tabular">{Math.max(0, round.progress.assigned_submissions * round.target_reviews_per_submission - (round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations))}</span> remaining</div>
-      <div class="round-meta"><span>{round.anonymized ? "Anonymous review" : "Identity visible"}</span><span>{formatDate(round.closes_at)}</span></div>
+      <div class="round-meta"><span>{round.anonymized ? "Anonymous review" : "Identity visible"}</span><span class="tabular">{formatDate(round.opens_at)} → {formatDate(round.closes_at)}</span></div>
     </div>
   ) : (
     <div class="round-card round-empty" key={`empty-${index}`}><span class="eyebrow">Round {index + 1}</span><strong>Not configured</strong><span class="subtle">Add the next ordered round from the plan controls.</span></div>
@@ -265,14 +390,14 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
           <Chip tone={plan.status === "open" ? "success" : "warning"}>{plan.status}</Chip>
         </CardHeader>
         <CardBody>
-          <div class="evaluation-plan-heading"><div><span class="eyebrow">{plan.name}</span><h2>{plan.instructions}</h2></div><Button small onClick={() => setDialog("scorecard")}>Edit scorecard</Button></div>
+          <div class="evaluation-plan-heading"><div><span class="eyebrow">{plan.name}</span><h2>{plan.instructions}</h2></div><Button small disabled={!firstRound} onClick={() => firstRound && openScorecard(firstRound)}>Edit round 1 scorecard</Button></div>
           <div class="round-flow">
             {renderRoundCard(firstRound, 0)}
             <div class="round-arrow" aria-hidden="true">→</div>
             {renderRoundCard(secondRound, 1)}
           </div>
           <div class="divider" />
-          <div class="scorecard-line"><div><strong>Scorecard</strong><span>{(firstRound?.criteria ?? []).map((item) => `${item.name} ${item.weight_pct}%`).join(" · ") || "No numeric criteria · recommendation only"}</span></div><Button small onClick={() => setDialog("scorecard")}>Edit scorecard</Button></div>
+          <div class="scorecard-line"><div><strong>{firstRound?.name ?? "Round 1"} scorecard</strong><span>{(firstRound?.criteria ?? []).map((item) => item.kind === "numeric" ? `${item.name} ${item.weight_pct}%` : `${item.name} · ${KIND_LABEL[item.kind].toLowerCase()}`).join(" · ") || "No criteria · recommendation only"}</span></div><Button small disabled={!firstRound} onClick={() => firstRound && openScorecard(firstRound)}>Edit scorecard</Button></div>
         </CardBody>
       </Card>
       <Card>
@@ -294,7 +419,34 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       </Card>
     </div>
     {dialog === "plan" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={plan ? async (event) => { event.preventDefault(); try { const updated = await api<Plan>(`/api/v1/events/${eventId}/plans/${plan.id}`, "/api/v1/events/{eventId}/plans/{planId}", { method: "PATCH", body: JSON.stringify({ name: planName, instructions }) }); setPlan(updated); setDialog(null); setNotice("Evaluation plan updated"); } catch (reason: unknown) { setError(errorSummary(reason)); } } : savePlan}><header><span class="eyebrow">Evaluation plan</span><h2>{plan ? "Edit plan" : "New evaluation plan"}</h2></header><div class="eval-dialog-body"><label class="field">Name<input value={planName} onInput={(event) => setPlanName((event.currentTarget as HTMLInputElement).value)} /></label><label class="field">Instructions<textarea rows={4} value={instructions} onInput={(event) => setInstructions((event.currentTarget as HTMLTextAreaElement).value)} /></label><div class="message-preview">Two ordered rounds ship together: Initial screen → Committee decision. Numeric scoring remains optional for reviewers.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save plan</Button></footer></form></div>}
-    {dialog === "scorecard" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={saveScorecard}><header><span class="eyebrow">Round 1 · Initial screen</span><h2>Edit optional scorecard</h2></header><div class="eval-dialog-body"><div class="criterion-editor">{criteria.map((criterion, index) => <div class="criterion-row" key={criterion.id}><span class="tabular">{index + 1}</span><input aria-label={`Criterion ${index + 1} name`} value={criterion.name} onInput={(event) => setCriteria(criteria.map((item) => item.id === criterion.id ? { ...item, name: (event.currentTarget as HTMLInputElement).value } : item))} /><input aria-label={`Criterion ${index + 1} weight`} type="number" min="0" max="100" value={criterion.weight_pct} onInput={(event) => setCriteria(criteria.map((item) => item.id === criterion.id ? { ...item, weight_pct: Number((event.currentTarget as HTMLInputElement).value) } : item))} /><span>%</span></div>)}</div><div class={`criterion-total ${criteriaTotal === 100 ? "valid" : "invalid"}`}><span>Total</span><strong>{criteriaTotal}%</strong><small>{criteriaTotal === 100 ? "Valid weighted rubric" : "Criteria must total exactly 100%"}</small></div><div class="message-preview">Approve, Maybe, and Deny remain available without numeric scores. Comments are always free text.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={criteriaTotal !== 100}>Save scorecard</Button></footer></form></div>}
+    {dialog === "scorecard" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog eval-dialog-wide" onSubmit={saveScorecard}>
+      <header><span class="eyebrow">{scorecardRound ? `Round ${scorecardRound.position + 1} · ${scorecardRound.name}` : "Scorecard"}</span><h2>Edit scorecard</h2></header>
+      <div class="eval-dialog-body">
+        <div class="criterion-editor">
+          {criteria.map((criterion, index) => <div class="criterion-row-group" key={criterion.id}>
+            <div class="criterion-row">
+              <span class="tabular">{index + 1}</span>
+              <input aria-label={`Criterion ${index + 1} name`} placeholder="Criterion name" value={criterion.name} onInput={(event) => updateCriterion(criterion.id, { name: (event.currentTarget as HTMLInputElement).value })} />
+              <select aria-label={`Criterion ${index + 1} type`} value={criterion.kind} onChange={(event) => changeKind(criterion, (event.currentTarget as HTMLSelectElement).value as CriterionKind)}>
+                {(["numeric", "select", "text"] as const).map((kind) => <option key={kind} value={kind}>{KIND_LABEL[kind]}</option>)}
+              </select>
+              <input class="criterion-weight" aria-label={`Criterion ${index + 1} weight`} type="number" min="0" max="100" value={criterion.kind === "numeric" ? criterion.weight_pct : 0} disabled={criterion.kind !== "numeric"} onInput={(event) => updateCriterion(criterion.id, { weight_pct: Number((event.currentTarget as HTMLInputElement).value) })} />
+              <span>%</span>
+              <button type="button" class="criterion-remove" aria-label={`Remove criterion ${index + 1}`} onClick={() => removeCriterion(criterion.id)}>×</button>
+            </div>
+            <div class="criterion-detail">
+              {criterion.kind === "numeric" && <><label class="field inline"><span>Scale from</span><input class="tabular" aria-label={`Criterion ${index + 1} scale minimum`} type="number" value={criterion.scale_min ?? 1} onInput={(event) => updateCriterion(criterion.id, { scale_min: Number((event.currentTarget as HTMLInputElement).value) })} /></label><label class="field inline"><span>to</span><input class="tabular" aria-label={`Criterion ${index + 1} scale maximum`} type="number" value={criterion.scale_max ?? 5} onInput={(event) => updateCriterion(criterion.id, { scale_max: Number((event.currentTarget as HTMLInputElement).value) })} /></label></>}
+              {criterion.kind === "select" && <label class="field inline criterion-options"><span>Options</span><input aria-label={`Criterion ${index + 1} options`} placeholder="Accept, Maybe, Reject" value={(criterion.options ?? []).join(", ")} onInput={(event) => updateCriterion(criterion.id, { options: (event.currentTarget as HTMLInputElement).value.split(",").map((option) => option.trim()).filter(Boolean) })} /></label>}
+              {criterion.kind === "text" && <span class="subtle">Reviewers answer this in their own words. Free text carries no weight.</span>}
+            </div>
+          </div>)}
+        </div>
+        <Button type="button" small onClick={addCriterion}>+ Add criterion</Button>
+        <div class={`criterion-total ${weightsValid ? "valid" : "invalid"}`}><span>Total</span><strong class="tabular">{numericCriteria.length ? `${criteriaTotal}%` : "—"}</strong><small>{numericCriteria.length === 0 ? "No rating criteria · weights are not required" : weightsValid ? "Valid weighted rubric" : "Rating criteria must total exactly 100%"}</small></div>
+        <div class="message-preview">Approve, Maybe, and Deny remain available without a scorecard. Rating criteria carry the weights; dropdown and free-text criteria carry none.</div>
+      </div>
+      <footer><Button type="button" onClick={() => { setDialog(null); setScorecardRoundId(null); }}>Cancel</Button><Button type="submit" variant="primary" disabled={!weightsValid || criteria.some((item) => !item.name.trim())}>Save scorecard</Button></footer>
+    </form></div>}
     {dialog === "committee" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={createCommittee}><header><span class="eyebrow">Program committee</span><h2>Manage committee</h2></header><div class="eval-dialog-body"><label class="field">Committee name<input value={committeeName} onInput={(event) => setCommitteeName((event.currentTarget as HTMLInputElement).value)} /></label><div class="message-preview">Reviewer rows carry explicit track responsibilities. Scope changes recalculate queue membership without replacing completed reviews.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save committee</Button></footer></form></div>}
     {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round assignments</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Round<select value={assignmentRoundId ?? firstRound?.id ?? ""} onChange={(event) => setAssignmentRoundId((event.currentTarget as HTMLSelectElement).value)}>{plan.rounds.map((round) => <option key={round.id} value={round.id}>{round.position + 1} · {round.name}</option>)}</select></label><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label><div class="message-preview">Assignments belong to the selected round. Re-running distribution is idempotent and never replaces completed review or comparison evidence.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!committee}>Distribute</Button></footer></form></div>}
     {dialog === "promotion" && <div class="eval-dialog-backdrop" role="presentation"><div class="eval-dialog"><header><span class="eyebrow">Round promotion</span><h2>Preview the next funnel</h2></header><div class="eval-dialog-body"><div class="promotion-preview"><strong>Filtered promotion set</strong><span>Use the same typed filter as the conference submission list. Empty legacy selections never promote records.</span><label class="field">Status<select value={promotionStatus} onChange={(event) => { setPromotionStatus((event.currentTarget as HTMLSelectElement).value); setPromotionResult(null); }}><option value="in_review">In review</option><option value="submitted">Submitted</option><option value="accepted">Accepted</option><option value="waitlisted">Waitlisted</option></select></label><label class="field">Search<input value={promotionQuery} placeholder="Title, track, or speaker" onInput={(event) => { setPromotionQuery((event.currentTarget as HTMLInputElement).value); setPromotionResult(null); }} /></label>{promotionResult && <div class="promotion-result"><span><strong>{promotionResult.selected}</strong> selected</span><span><strong>{promotionResult.promoted}</strong> ready to promote</span><span><strong>{promotionResult.already_promoted}</strong> already in Round 2</span></div>}</div></div><footer><Button type="button" onClick={() => { setDialog(null); setPromotionResult(null); }}>Done</Button><Button type="button" onClick={() => void runPromotion(true)} disabled={promotionApplying}>Refresh preview</Button><Button type="button" variant="primary" onClick={() => void runPromotion(false)} disabled={promotionApplying || !promotionResult?.promoted}>{promotionApplying ? "Applying…" : "Promote selected"}</Button></footer></div></div>}

@@ -8,6 +8,7 @@ import taskCancellationWebhooksMigrationSql from "../../migrations/0005_task_can
 import auditRequestIdMigrationSql from "../../migrations/0006_audit_log_request_id.sql?raw";
 import embedWidgetKindsMigrationSql from "../../migrations/0007_embed_widget_kinds.sql?raw";
 import formFieldDatesMigrationSql from "../../migrations/0008_form_field_dates.sql?raw";
+import criterionKindsMigrationSql from "../../migrations/0009_criterion_kinds.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -74,6 +75,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(auditRequestIdMigrationSql),
     ...splitStatements(embedWidgetKindsMigrationSql),
     ...splitStatements(formFieldDatesMigrationSql),
+    ...splitStatements(criterionKindsMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }
