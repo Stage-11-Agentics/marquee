@@ -5,6 +5,7 @@
 .results-export-slot { align-items: center; display: inline-flex; justify-content: flex-end; min-width: 150px; }
 .export-message { color: transparent; font: 400 10.5px/1.3 var(--mono); min-height: 18px; margin: -12px 0 8px; }
 .export-message.visible { color: var(--danger); }
+.export-message.success { color: var(--accent-dark); }
 /*
   Holds a fixed 30px and reserves its control's space from the moment the
   Ready-to-place filter is on, so nothing below it moves when the accepted count
