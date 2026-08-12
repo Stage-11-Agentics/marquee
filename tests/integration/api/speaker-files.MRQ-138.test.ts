@@ -37,13 +37,35 @@ const HEADSHOT_ATTACHMENT = "att_mrq138_headshot";
 const SLIDES_ATTACHMENT = "att_mrq138_slides";
 
 function runtimeEnv(): Env {
-  return { ...env, MEDIA_PUBLIC_ORIGIN: MEDIA_ORIGIN } as unknown as Env;
+  return {
+    ...env,
+    MEDIA_PUBLIC_ORIGIN: MEDIA_ORIGIN,
+    LOCAL_UPLOAD_SHIM: "1",
+    UPLOAD_TOKEN_SECRET: "mrq153-upload-token-secret",
+    UPLOAD_RATE_LIMIT_SECRET: "mrq153-upload-rate-secret",
+  } as unknown as Env;
 }
 
 async function speakerFiles(personId: string, sessionId = ORGANIZER_SESSION): Promise<Response> {
   const headers = new Headers();
   if (sessionId) headers.set("cookie", `mq_session=${sessionId}`);
   return app.request(`${ORIGIN}/api/v1/events/${EVENT_ID}/speakers/${personId}/files`, { headers }, runtimeEnv());
+}
+
+async function organizerHeadshotSign(personId: string, sessionId = ORGANIZER_SESSION): Promise<Response> {
+  const headers = new Headers({ "content-type": "application/json" });
+  if (sessionId) headers.set("cookie", `mq_session=${sessionId}`);
+  return app.request(`${ORIGIN}/api/v1/events/${EVENT_ID}/people/${personId}/headshot/sign`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ filename: "replacement.png", contentType: "image/png", sizeBytes: 2_097_152 }),
+  }, runtimeEnv());
+}
+
+async function speakerRecord(personId: string, init: RequestInit = {}, sessionId = ORGANIZER_SESSION): Promise<Response> {
+  const headers = new Headers(init.headers ?? {});
+  headers.set("cookie", `mq_session=${sessionId}`);
+  return app.request(`${ORIGIN}/api/v1/events/${EVENT_ID}/speakers/${personId}`, { ...init, headers }, runtimeEnv());
 }
 
 async function snapshotFor(personId: string): Promise<SpeakerFilesSnapshot> {
@@ -146,4 +168,48 @@ test("CONTRACT · MRQ-138 — a speaker cannot read another speaker's files", as
   // Not even their own — this is the organizer's view of a person, and the
   // speaker's own files live on the portal behind /api/v1/me.
   expect((await speakerFiles(PRIYA, PRIYA_SESSION)).status).toBe(403);
+});
+
+test("CONTRACT · MRQ-153 — only an organizer can presign a person-owned replacement headshot", async () => {
+  const denied = await organizerHeadshotSign(PRIYA, PRIYA_SESSION);
+  expect(denied.status).toBe(403);
+  expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM attachments WHERE owner_type = 'person_headshot' AND owner_id = ?").bind(PRIYA).first<{ count: number }>())?.count).toBe(1);
+
+  const signed = await organizerHeadshotSign(PRIYA);
+  expect(signed.status).toBe(200);
+  const body = await signed.json<{ attachmentId: string; putUrl: string; completionToken: string }>();
+  expect(body.putUrl).toContain(`/api/v1/uploads/local/${body.attachmentId}`);
+  expect(body.completionToken).toBeTruthy();
+  const pending = await env.DB.prepare("SELECT owner_type, owner_id, status FROM attachments WHERE id = ?").bind(body.attachmentId).first();
+  expect(pending).toEqual({ owner_type: "person_headshot", owner_id: PRIYA, status: "pending" });
+});
+
+test("CONTRACT · MRQ-153 — an organizer attaches a ready replacement and the people pointer survives a reread", async () => {
+  const replacement = "att_mrq153_replacement";
+  await storeUpload(replacement, "person_headshot", PRIYA, "replacement.png", "image/png", NOW);
+  const response = await speakerRecord(PRIYA, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ headshot_attachment_id: replacement }),
+  });
+  expect(response.status).toBe(200);
+  const body = await response.json<{ speaker: { headshot_attachment_id: string } }>();
+  expect(body.speaker.headshot_attachment_id).toBe(replacement);
+  const reread = await speakerRecord(PRIYA);
+  expect((await reread.json<{ speaker: { headshot_attachment_id: string } }>()).speaker.headshot_attachment_id).toBe(replacement);
+  expect((await env.DB.prepare("SELECT headshot_attachment_id FROM people WHERE id = ?").bind(PRIYA).first<{ headshot_attachment_id: string }>())?.headshot_attachment_id).toBe(replacement);
+});
+
+test("CONTRACT · MRQ-153 — the organizer preview mints a one-use speaker portal link without inviting", async () => {
+  const before = await env.DB.prepare("SELECT invited_at FROM participations WHERE person_id = ?").bind(PRIYA).first<{ invited_at: number | null }>();
+  const headers = new Headers({ "content-type": "application/json", cookie: `mq_session=${ORGANIZER_SESSION}` });
+  const response = await app.request(`${ORIGIN}/api/v1/events/${EVENT_ID}/speakers/${PRIYA}/portal-preview`, { method: "POST", headers, body: "{}" }, runtimeEnv());
+  const body = await response.json<{ url?: string; person_id?: string; error?: unknown }>();
+  expect(response.status, JSON.stringify(body)).toBe(200);
+  expect(body.person_id).toBe(PRIYA);
+  expect(body.url).toContain("/api/v1/auth/exchange?token=");
+  const link = await env.DB.prepare("SELECT person_id, purpose, redirect_to, used_at FROM magic_links ORDER BY created_at DESC LIMIT 1").first<{ person_id: string; purpose: string; redirect_to: string; used_at: number | null }>();
+  expect(link).toMatchObject({ person_id: PRIYA, purpose: "login", redirect_to: "/portal?viewing_as=speaker", used_at: null });
+  const after = await env.DB.prepare("SELECT invited_at FROM participations WHERE person_id = ?").bind(PRIYA).first<{ invited_at: number | null }>();
+  expect(after).toEqual(before);
 });
