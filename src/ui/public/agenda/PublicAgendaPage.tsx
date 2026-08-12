@@ -144,7 +144,7 @@ export function PublicShell({
         </a>
         <div class="public-top-actions">
           {actions}
-          <a class="public-button" href="/submissions?demo=organizer">Organizer demo</a>
+          <a class="public-button" href="/">Organizer demo</a>
         </div>
       </header>
       {children}
