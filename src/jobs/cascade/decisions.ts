@@ -449,6 +449,38 @@ async function enqueueDecisionMail(
   return { id: result?.id ?? null, inserted: result?.inserted ?? false };
 }
 
+/**
+ * A deliberate retry is a new send attempt for the same recorded decision.
+ * Its business entity stays the decision id, while the fresh key keeps this
+ * attempt distinct from both the original decision mail and earlier retries.
+ */
+async function enqueueDecisionRetry(input: {
+  db: D1Database;
+  queue: Queue<unknown>;
+  eventId: Id;
+  submission: SubmissionContext;
+  decisionId: Id;
+  decision: Decision;
+  resultingStatus: "accepted" | "rejected";
+  feedbackMd: string | null;
+  now: number;
+}): Promise<{ id: Id | null; inserted: boolean }> {
+  const templateKey = input.resultingStatus === "accepted" ? "acceptance" : "rejection";
+  const retryKey = await sha256Hex(`${templateKey}:${input.decisionId}:${newUlid(input.now)}`);
+  return enqueueDecisionMail({
+    db: input.db,
+    queue: input.queue,
+    eventId: input.eventId,
+    submission: input.submission,
+    status: input.resultingStatus,
+    decision: input.decision,
+    feedbackMd: input.feedbackMd,
+    entityId: input.decisionId,
+    idempotencyKey: retryKey,
+    now: input.now,
+  });
+}
+
 export interface NotifyNotifiedResult {
   selected: number;
   queued: number;
@@ -473,6 +505,110 @@ interface ExistingDecisionCandidate {
  * callers use the cursor in the response to drain the rest.
  */
 export const NOTIFY_DECISIONS_BATCH_SIZE = 200;
+
+export interface ResendDecisionInput {
+  db: D1Database;
+  queue: Queue<unknown>;
+  eventId: Id;
+  submissionId: Id;
+  actor: DecisionActor;
+  now?: number;
+}
+
+export interface ResendDecisionResult {
+  id: Id;
+  outcome: "succeeded" | "failed";
+  decisionId?: Id;
+  resultingStatus?: "accepted" | "rejected";
+  outboxId?: Id | null;
+  outboxInserted: boolean;
+  error?: string;
+}
+
+interface ResendDecisionCandidate {
+  id: Id;
+  decision: Decision;
+  resulting_status: "accepted" | "rejected";
+  feedback_md: string | null;
+}
+
+/**
+ * Queue one named decision resend. This deliberately does not consult the
+ * bulk-notify eligibility query: a person asked for this record by name, so a
+ * prior provider acceptance must not prevent the new attempt.
+ */
+export async function resendSubmissionDecision(input: ResendDecisionInput): Promise<ResendDecisionResult> {
+  const now = input.now ?? Date.now();
+  const failed = (error: string): ResendDecisionResult => ({
+    id: input.submissionId,
+    outcome: "failed",
+    outboxInserted: false,
+    error,
+  });
+  const submission = await loadSubmission(input.db, input.eventId, input.submissionId);
+  if (!submission) return failed("submission not found");
+  if (submission.status !== "accepted" && submission.status !== "rejected") {
+    return failed("only accepted or rejected decisions can be resent");
+  }
+
+  const decision = await input.db
+    .prepare(
+      `SELECT id, decision, resulting_status, feedback_md
+       FROM submission_decisions
+       WHERE event_id = ? AND submission_id = ? AND resulting_status = ?
+       ORDER BY decided_at DESC, id DESC
+       LIMIT 1`,
+    )
+    .bind(input.eventId, input.submissionId, submission.status)
+    .first<ResendDecisionCandidate>();
+  if (!decision) return failed("no accepted or rejected decision exists to resend");
+  if (!isValidEmail(submission.person_email)) {
+    return failed("speaker has no valid email address; correct the address before resending");
+  }
+
+  const outbox = await enqueueDecisionRetry({
+    db: input.db,
+    queue: input.queue,
+    eventId: input.eventId,
+    submission,
+    decisionId: decision.id,
+    decision: decision.decision,
+    resultingStatus: decision.resulting_status,
+    feedbackMd: decision.feedback_md,
+    now,
+  });
+  if (!outbox.id) return failed("the decision email template is disabled");
+
+  await writeAudit(input.db, {
+    eventId: input.eventId,
+    actor: input.actor,
+    action: "submission.decision_resent",
+    entityType: "submission",
+    entityId: submission.id,
+    before: {
+      decision_id: decision.id,
+      resulting_status: decision.resulting_status,
+      to_email: submission.person_email,
+    },
+    after: {
+      decision_id: decision.id,
+      outbox_id: outbox.id,
+      outbox_inserted: outbox.inserted,
+      resulting_status: decision.resulting_status,
+      to_email: submission.person_email,
+    },
+    now,
+  });
+
+  return {
+    id: submission.id,
+    outcome: "succeeded",
+    decisionId: decision.id,
+    resultingStatus: decision.resulting_status,
+    outboxId: outbox.id,
+    outboxInserted: outbox.inserted,
+  };
+}
 
 /**
  * Re-send a decision without touching the decision record. The decision id is

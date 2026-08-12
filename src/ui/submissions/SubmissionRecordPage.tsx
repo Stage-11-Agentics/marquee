@@ -11,6 +11,7 @@ import "./record.css";
 
 const SUBMISSION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}";
 const DECISION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/decision";
+const RESEND_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/decision/resend";
 const SCHEDULE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/schedule";
 const PUBLISH_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/publish";
 const ASSIGNMENT_ROUTE = "/api/v1/events/{eventId}/rounds/{roundId}/assignments";
@@ -38,7 +39,7 @@ interface RecordData {
   comparisons: Array<{ round_id: string; round_name: string; reviewer_name: string; reviewer_kind: "human" | "agent"; ranking: unknown; submission_ids: string[] }>;
   evaluation: { rounds: Round[]; reviewer_options: Reviewer[] };
   history: Array<{ id: string; action: string; actor_kind: string | null; actor_name: string | null; created_at: number; before: unknown; after: unknown; restorable: boolean }>;
-  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_edit_content: boolean; can_restore_content: boolean };
+  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean };
 }
 
 interface Props { eventId: string; submissionId: string; navigate: (target: string) => void; }
@@ -102,6 +103,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [messageBody, setMessageBody] = useState("");
   const [messageError, setMessageError] = useState("");
   const [messageNotice, setMessageNotice] = useState("");
+  const [resendNotice, setResendNotice] = useState("");
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
   useEffect(() => {
@@ -152,6 +154,23 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     } finally { setBusy(""); }
   };
 
+  const resendDecision = async () => {
+    setBusy("resend");
+    setResendNotice("");
+    try {
+      const result = await apiFetch<{ outbox_inserted?: boolean }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/decision/resend`,
+        { method: "POST", headers: { "content-type": "application/json" }, route: RESEND_ROUTE },
+      );
+      setResendNotice(result.outbox_inserted === false
+        ? "That decision was already queued."
+        : "Decision queued in the conference outbox.");
+      reload();
+    } catch (error: unknown) {
+      setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
+    } finally { setBusy(""); }
+  };
+
   const assign = async (roundId: string) => {
     const reviewerPersonId = selectedReviewers[roundId];
     if (!reviewerPersonId) return;
@@ -199,6 +218,10 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   if (state.kind === "loading") return <div class="submission-record-page"><PageHeader title="Submission record" copy="Reading the complete conference record…" /><Card><CardBody><div class="record-state">Loading record…</div></CardBody></Card></div>;
   if (state.kind === "error") return <div class="submission-record-page"><PageHeader title="Submission record" copy={state.notFound ? "This record could not be found." : "This record could not be reached right now."} /><Card><CardBody><div class="record-state error"><strong>{state.notFound ? "Record not found" : "Record unavailable"}</strong><span>{state.message}</span><div class="record-action-row"><Button onClick={() => navigate("/submissions")}>Back to submissions</Button><Button variant="primary" onClick={reload}>Retry</Button></div></div></CardBody></Card></div>;
   const record = state.record;
+  const speakerParticipant = record.participants.find((participant) => participant.role === "speaker")
+    ?? record.participants.find((participant) => participant.role === "co_speaker")
+    ?? record.participants.find((participant) => participant.role !== "submitter");
+  const speakerRecordHref = speakerParticipant ? `/roster?person=${encodeURIComponent(speakerParticipant.person_id)}` : "/roster";
   // Publication lives on the agenda row, not the status: a scheduled Session
   // is still `accepted`. This is the only thing that decides whether saving
   // changes what attendees see, so it is what gates the confirm.
@@ -225,6 +248,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("approve"); setFeedbackDraft(""); }}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy)} onClick={() => { setDecisionRequest("maybe"); setFeedbackDraft(""); }}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("deny"); setFeedbackDraft(""); }}>Reject</Button>}<span class="subtle">Feedback (optional) is saved with the decision; accepted and rejected decisions also include it in the speaker email.</span></div></CardBody></Card>}
         {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>{decisionRequest === "maybe" ? "A waitlist does not send a message. Any feedback you add is saved with the decision." : "Feedback is optional. If you add it, the speaker will see the same words in the decision email."}</p><label class="field"><span>Feedback for the speaker (optional)</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist" : "Reject and notify"}</Button></div></div>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{decision.kind === "reversal" ? `Acceptance reversed · ${statusLabel(decision.resulting_status)}` : statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.note || decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
+        {record.actions.can_resend_decision && <Card><CardHeader title="Decision delivery"><span class="subtle">The decision is already recorded.</span></CardHeader><CardBody><p class="record-delivery-copy">If the speaker did not receive this decision, correct the address on their speaker record, then send the decision again.</p><div class="record-action-row"><Button onClick={() => navigate(speakerRecordHref)}>Edit speaker address</Button><Button variant="primary" disabled={Boolean(busy)} onClick={() => void resendDecision()}>{busy === "resend" ? "Queueing…" : "Send decision again"}</Button></div>{resendNotice && <p class="record-inline-message notice" role="status">{resendNotice}</p>}</CardBody></Card>}
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }, SCHEDULE_ROUTE); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}
         {record.actions.can_publish && <Card><CardHeader title="Public site"><span class="subtle">The working slot is private until this action is confirmed.</span></CardHeader><CardBody><div class="record-action-row"><Button variant="primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm("Make this scheduled Session public?")) void act("publish", "/publish", { method: "POST" }, PUBLISH_ROUTE); }}>Publish Session</Button><span class="subtle">The scheduled day, time, room, speakers, title, and description become public together.</span></div></CardBody></Card>}

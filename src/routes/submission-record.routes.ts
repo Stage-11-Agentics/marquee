@@ -720,6 +720,12 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       // button on a draft they may edit but may not restore, which is the same
       // dead end this pair exists to prevent, merely pointed the other way.
       can_restore_content: (EDITABLE_CONTENT_STATUSES as readonly string[]).includes(row.status) && canWriteProgram,
+      // A resend is a deliberate write against an existing accepted/rejected
+      // decision. The projection must not offer it to read-only operators or
+      // to records whose status no longer matches a durable decision row.
+      can_resend_decision: ["accepted", "rejected"].includes(row.status)
+        && decisions.results.some((decision) => decision.resulting_status === row.status)
+        && canWriteProgram,
     },
   };
 }
