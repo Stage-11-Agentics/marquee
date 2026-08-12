@@ -212,7 +212,7 @@ test("CONTRACT · the thumbnail refuses anything that is not a ready raster imag
   expect(svg.status).toBe(404);
 });
 
-test("SPK-08 · a speaker headshot serves through the person pointer for the organizer", async () => {
+test("CONTRACT · SPK-08 · a speaker headshot serves through the person pointer for the organizer", async () => {
   const response = await request(`/api/v1/events/${EVENT_ID}/people/${SPEAKER}/headshot`, ORGANIZER_SESSION);
   expect(response.status).toBe(200);
   expect(response.headers.get("content-type")).toBe("image/png");
@@ -220,7 +220,7 @@ test("SPK-08 · a speaker headshot serves through the person pointer for the org
   expect(new Uint8Array(await response.arrayBuffer())).toEqual(PNG_BYTES);
 });
 
-test("SPK-08 · a person headshot does not become a cross-speaker object oracle", async () => {
+test("CONTRACT · SPK-08 · a person headshot does not become a cross-speaker object oracle", async () => {
   const anonymous = await request(`/api/v1/events/${EVENT_ID}/people/${SPEAKER}/headshot`);
   expect(anonymous.status).toBe(401);
   const otherSpeaker = await request(`/api/v1/events/${EVENT_ID}/people/${SPEAKER}/headshot`, OUTSIDER_SESSION);

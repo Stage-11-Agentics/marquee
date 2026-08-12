@@ -227,7 +227,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(body.tasks.filter((task: { id: string }) => task.id.startsWith("task-portal-") && task.id !== "task-portal-other").every((task: { status: string }) => task.status === "done")).toBe(true);
   });
 
-  test("SPK-10 · the speaker record returns pointer-based profile and task file histories", async () => {
+  test("CONTRACT · SPK-10 · the speaker record returns pointer-based profile and task file histories", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/onboarding/speakers/${SPEAKER_ID}`, {}, ownerCookie);
     expect(response.status).toBe(200);
     const body = await response.json<{ files: { profile: { latest: { filename: string; is_latest: boolean } | null; version_count: number }; tasks: Array<{ task_id: string; list: { latest: { filename: string; is_latest: boolean } | null } }> } }>();
