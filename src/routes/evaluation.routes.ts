@@ -257,6 +257,11 @@ function localDayKey(timestamp: number, timezone: string): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+function publicRound(round: RoundRow): Omit<RoundRow, "timezone"> {
+  const { timezone: _timezone, ...publicFields } = round;
+  return publicFields;
+}
+
 /**
  * Weighting is a claim about ratings, so only rating criteria are counted. A
  * scorecard of one dropdown and one comment box is a real scorecard and saves
@@ -597,7 +602,7 @@ const updateRound = defineApiRoute(
         SELECT plan.id FROM evaluation_plans plan WHERE plan.id = evaluation_rounds.plan_id AND plan.event_id = ?
       )
     `).bind(...values).run();
-    return context.json({ round: await roundForEvent(context.env.DB, eventId, roundId), evidence_preserved: true }, 200);
+    return context.json({ round: publicRound(await roundForEvent(context.env.DB, eventId, roundId)), evidence_preserved: true }, 200);
   },
 );
 
@@ -624,7 +629,7 @@ const replaceCriteria = defineApiRoute(
       "INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(criterion.id ?? crypto.randomUUID(), roundId, criterion.name, criterion.kind, criterion.options, criterion.scale_min, criterion.scale_max, criterion.weight_pct, criterion.position, now, now));
     await context.env.DB.batch(statements);
-    return context.json({ round, criteria: await criteriaForRound(context.env.DB, roundId) }, 200);
+    return context.json({ round: publicRound(round), criteria: await criteriaForRound(context.env.DB, roundId) }, 200);
   },
 );
 

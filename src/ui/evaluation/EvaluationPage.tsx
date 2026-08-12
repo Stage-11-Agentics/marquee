@@ -99,6 +99,13 @@ interface PlanSummary {
   status: string;
 }
 
+interface ReviewerProgress {
+  assigned_count: number;
+  outstanding_count: number;
+  recusal_count: number;
+  reviewed_count: number;
+}
+
 interface EvaluationPageProps {
   eventId?: string;
 }
@@ -146,7 +153,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const [promotionQuery, setPromotionQuery] = useState("");
   const [promotionResult, setPromotionResult] = useState<{ already_promoted: number; assignments: number; promoted: number; selected: number } | null>(null);
   const [promotionApplying, setPromotionApplying] = useState(false);
-  const [reviewerProgress, setReviewerProgress] = useState<Record<string, Record<string, { assigned_count: number; outstanding_count: number; recusal_count: number; reviewed_count: number }>>>({});
+  const [reviewerProgress, setReviewerProgress] = useState<Record<string, Record<string, ReviewerProgress> | null>>({});
 
   const firstRound = plan?.rounds[0];
   const secondRound = plan?.rounds[1];
@@ -180,7 +187,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
             `/api/v1/events/${eventId}/rounds/${round.id}/assignments?summary=1`,
             "/api/v1/events/{eventId}/rounds/{roundId}/assignments",
           );
-          const byReviewer: Record<string, { assigned_count: number; outstanding_count: number; recusal_count: number; reviewed_count: number }> = {};
+          const byReviewer: Record<string, ReviewerProgress> = {};
           for (const assignment of result.data) {
             if (!assignment.reviewer_person_id) continue;
             byReviewer[assignment.reviewer_person_id] = {
@@ -194,7 +201,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         } catch {
           // Coverage is a secondary affordance; one unavailable round must not
           // hide the plan or turn a healthy chair surface into an alarm.
-          return [round.id, {}] as const;
+          return [round.id, null] as const;
         }
       }));
       setReviewerProgress(Object.fromEntries(progressEntries));
@@ -431,8 +438,17 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     return <section class="committee-round" key={round.id}>
       <div class="committee-intro"><span><strong>{round.name}</strong> · {roundCommittee?.name ?? "No reviewer pool selected"}</span><span>{round.target_reviews_per_submission} reviews per abstract</span></div>
       {roundCommittee ? <><div class="committee-list">{roundCommittee.members.map((member) => {
-        const progress = reviewerProgress[round.id]?.[member.id];
-        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{progress ? `${progress.reviewed_count} / ${progress.assigned_count} reviewed` : "No assignments yet"}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{progress?.outstanding_count ? <Button small variant="ghost" onClick={() => void remindReviewer(round, member.id)}>Remind</Button> : progress ? <span class="tabular subtle">{progress.reviewed_count} complete</span> : <span class="tabular subtle">Coverage unavailable</span>}</span></div>;
+        const roundProgress = reviewerProgress[round.id];
+        const progress = roundProgress?.[member.id];
+        const coverageLabel = progress
+          ? `${progress.reviewed_count} / ${progress.assigned_count} reviewed`
+          : roundProgress === null ? "Coverage unavailable" : "No assignments yet";
+        const action = progress?.outstanding_count
+          ? <Button small variant="ghost" onClick={() => void remindReviewer(round, member.id)}>Remind</Button>
+          : progress
+            ? <span class="tabular subtle">{progress.reviewed_count} complete</span>
+            : <span class="tabular subtle">{roundProgress === null ? "Coverage unavailable" : "No assignments yet"}</span>;
+        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
       })}</div><Button class="full-width ghost" onClick={() => setDialog("committee")}>View all {roundCommittee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>Choose a reviewer pool on this round card before distributing assignments.</span><Button small variant="primary" onClick={() => setDialog("committee")}>Manage committee</Button></div>}
     </section>;
   };

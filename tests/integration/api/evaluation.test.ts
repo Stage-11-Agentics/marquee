@@ -526,6 +526,8 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
       body: JSON.stringify({ name: "Initial Review", opens_at: Date.UTC(2026, 7, 1), closes_at: Date.UTC(2026, 9, 15), anonymized: true }),
     });
     expect(patched.status).toBe(200);
+    const patchedBody = await json<{ round: { timezone?: string } }>(patched);
+    expect(patchedBody.round).not.toHaveProperty("timezone");
 
     const backwards = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ONE_ID}`, {
       method: "PATCH",
