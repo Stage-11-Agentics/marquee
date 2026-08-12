@@ -34,6 +34,8 @@
 .agenda-filter { display: grid; gap: 4px; min-width: 140px; }
 .agenda-filter select { min-height: 34px; }
 .agenda-status-note { align-self: center; white-space: nowrap; }
+/* Fixed width so swapping to the busy label cannot shift the toolbar. */
+.agenda-auto-place { align-self: center; min-width: 104px; }
 .agenda-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 12px; min-width: 0; }
 .agenda-pool { min-width: 0; align-self: start; overflow: hidden; }
 .agenda-pool .card-head { gap: 8px; align-items: start; }
