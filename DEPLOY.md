@@ -129,6 +129,14 @@ The dev-only flags must both read `"0"` in the deploy output: `INSECURE_LOCAL_CO
 `LOCAL_UPLOAD_SHIM`. Either one at `"1"` on a deployed Worker is a defect —
 they exist because a Worker cannot detect that it is running locally.
 
+**Driving a local browser needs `INSECURE_LOCAL_COOKIES=1`, and `.dev.vars` is the
+wrong place to keep it.** WKWebView (and Safari) drop a `Secure` cookie on an
+`http://localhost` origin, so the demo login returns 200 and every later request
+401s — in the browser only; curl never sees it. A `.dev.vars` file supplying the
+flag is read by `npm test` too, and `auth-demo.test.ts` then fails on a cookie
+that is correct in production. Pass the var on the dev command instead, and
+delete `.dev.vars` before running the gate.
+
 Anything that changed a screen deserves one look at that screen, not just a 200.
 
 ---

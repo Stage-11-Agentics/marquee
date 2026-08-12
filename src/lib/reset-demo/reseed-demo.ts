@@ -55,6 +55,9 @@ export const WIPE_ORDER = [
   "auth_sessions",
   "api_tokens",
   "memberships",
+  "person_list_members",
+  "person_lists",
+  "person_events",
   "people",
   "attachments",
   "event_settings",
@@ -244,6 +247,22 @@ const DELETE_PLANS: Partial<Record<WipeTable, DeletePlan>> = {
   memberships: {
     sql: "DELETE FROM memberships WHERE org_id = ? OR event_id = ?",
     bindings: [DEMO_ORGANIZATION_ID, DEMO_EVENT_ID],
+  },
+  // People annotations and Lists are org-scoped, so a reset that wipes the demo
+  // organization's people has to take their notes, tags, stages, and saved lists
+  // with them — a surviving `person_events` row would reference a person the
+  // reset just deleted.
+  person_list_members: {
+    sql: "DELETE FROM person_list_members WHERE list_id IN (SELECT id FROM person_lists WHERE org_id = ?)",
+    bindings: [DEMO_ORGANIZATION_ID],
+  },
+  person_lists: {
+    sql: "DELETE FROM person_lists WHERE org_id = ?",
+    bindings: [DEMO_ORGANIZATION_ID],
+  },
+  person_events: {
+    sql: "DELETE FROM person_events WHERE org_id = ?",
+    bindings: [DEMO_ORGANIZATION_ID],
   },
   people: {
     sql: "DELETE FROM people WHERE org_id = ?",

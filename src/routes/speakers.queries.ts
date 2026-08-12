@@ -21,6 +21,8 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import { parseCustomFields, parseSocialLinks } from "../lib/person-profile";
+import { ONBOARDING_PERSON_SOURCE, ROSTER_SUBMISSION_STATUSES, SPEAKER_ROSTER_PERSON_SOURCE } from "../lib/roster-source";
+import { buildPeopleQuery } from "./people.queries";
 
 export const SPEAKER_STATUSES = ["pending", "invited", "confirmed", "declined"] as const;
 export type SpeakerStatus = (typeof SPEAKER_STATUSES)[number];
@@ -32,34 +34,12 @@ export const SPEAKER_STATUS_LABELS: Record<SpeakerStatus, string> = {
   declined: "Declined",
 };
 
-/**
- * The submission states that make someone a speaker of this conference.
- *
- * `draft` is a half-typed public form nobody has submitted; `rejected` and
- * `withdrawn` are people the conference is explicitly not hosting. Listing any
- * of them on a speaker roster — and, through the board source below, chasing
- * them for onboarding tasks — would make the roster a CFP funnel wearing the
- * wrong noun.
- */
-export const ROSTER_SUBMISSION_STATUSES = ["submitted", "in_review", "accepted", "waitlisted"] as const;
+// The population itself is defined in lib/roster-source.ts, because the one
+// people query needs the same definition when it is narrowed by event_id.
+// Re-exported here so this module stays the roster's single import surface.
+export { ONBOARDING_PERSON_SOURCE, ROSTER_SUBMISSION_STATUSES, SPEAKER_ROSTER_PERSON_SOURCE };
 
 const ROSTER_STATUS_LIST = ROSTER_SUBMISSION_STATUSES.map((status) => `'${status}'`).join(", ");
-
-/** Both bindings are the event id. */
-export const SPEAKER_ROSTER_PERSON_SOURCE = `
-  SELECT person_id FROM memberships
-   WHERE event_id = ? AND role = 'speaker'
-  UNION
-  SELECT part.person_id FROM participations part
-    JOIN submissions rostered ON rostered.id = part.submission_id
-   WHERE rostered.event_id = ? AND part.role IN ('speaker', 'co_speaker')
-     AND rostered.status IN (${ROSTER_STATUS_LIST})`;
-
-/** Three bindings: the event id, three times. */
-export const ONBOARDING_PERSON_SOURCE = `
-  ${SPEAKER_ROSTER_PERSON_SOURCE}
-  UNION
-  SELECT owed.person_id FROM speaker_tasks owed WHERE owed.event_id = ?`;
 
 export interface SpeakerParticipationRow {
   id: string;
@@ -191,20 +171,36 @@ interface TaskCountRow {
   done: number;
 }
 
-const PERSON_COLUMNS = `person.id, person.name, person.email, person.title, person.company, person.bio,
-       person.headshot_attachment_id, person.social_links, person.custom_fields,
-       person.created_at, person.updated_at,
+/**
+ * The roster's person rows come from the ONE people query, narrowed by
+ * `event_id` — `buildPeopleQuery` in `people.queries.ts`. The roster is not a
+ * second list implementation; it is that query with the conference filter
+ * applied, plus the three membership columns only a conference has. The
+ * projection extension is what keeps it one query instead of two.
+ */
+const ROSTER_COLUMNS = `person.social_links, person.custom_fields,
        membership.confirmation_status AS membership_status,
        membership.confirmed_at AS membership_confirmed_at,
        membership.invited_at AS membership_invited_at`;
 
-function personQuery(extraClause: string): string {
-  return `SELECT ${PERSON_COLUMNS}
-     FROM people person
-     LEFT JOIN memberships membership
-       ON membership.person_id = person.id AND membership.event_id = ? AND membership.role = 'speaker'
-     WHERE person.id IN (${SPEAKER_ROSTER_PERSON_SOURCE})${extraClause}
-     ORDER BY person.name COLLATE NOCASE ASC, person.id ASC`;
+const ROSTER_JOIN = `LEFT JOIN memberships membership
+       ON membership.person_id = person.id AND membership.event_id = ? AND membership.role = 'speaker'`;
+
+async function rosterRows(db: D1Database, eventId: string): Promise<PersonQueryRow[]> {
+  const built = rosterQuery(eventId);
+  const result = await db.prepare(built.sql).bind(...built.bindings).all<PersonQueryRow>();
+  return result.results;
+}
+
+function rosterQuery(eventId: string, personId?: string): { sql: string; bindings: (string | number)[] } {
+  const built = buildPeopleQuery({
+    eventId,
+    ...(personId === undefined ? {} : { personId }),
+    columns: ROSTER_COLUMNS,
+    joins: ROSTER_JOIN,
+    joinBindings: [eventId],
+  });
+  return { sql: built.dataSql, bindings: built.dataBindings };
 }
 
 /** One person or the whole event: the detail view must not scan the roster to draw one row. */
@@ -340,7 +336,7 @@ export async function listSpeakers(
   now = Date.now(),
 ): Promise<SpeakerRosterSnapshot> {
   const [people, participations, tracks, tasks] = await Promise.all([
-    db.prepare(personQuery("")).bind(eventId, eventId, eventId).all<PersonQueryRow>(),
+    rosterRows(db, eventId),
     listParticipations(db, eventId),
     listTracks(db, eventId),
     listTaskCounts(db, eventId),
@@ -348,7 +344,7 @@ export async function listSpeakers(
   const participationsByPerson = groupBy(participations, (row) => row.person_id);
   const tracksByPerson = groupBy(tracks, (row) => row.person_id);
   const tasksByPerson = new Map(tasks.map((row) => [row.person_id, row]));
-  const rows = people.results.map((person) =>
+  const rows = people.map((person) =>
     buildRow(
       person,
       participationsByPerson.get(person.id) ?? [],
@@ -375,10 +371,8 @@ export async function listSpeakers(
 }
 
 export async function getSpeaker(db: D1Database, eventId: string, personId: string): Promise<SpeakerRow | null> {
-  const person = await db
-    .prepare(personQuery(" AND person.id = ?"))
-    .bind(eventId, eventId, eventId, personId)
-    .first<PersonQueryRow>();
+  const scoped = rosterQuery(eventId, personId);
+  const person = await db.prepare(scoped.sql).bind(...scoped.bindings).first<PersonQueryRow>();
   if (!person) return null;
   const [participations, tracks, tasks] = await Promise.all([
     listParticipations(db, eventId, personId),

@@ -9,6 +9,15 @@ export function Sidebar({ activeId, eventName, navigate, resetting, onReset }: {
   return <aside class="sidebar">
     <a class="brand" href="/dashboard" onClick={(event) => { event.preventDefault(); navigate("/dashboard"); }}><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
     {/*
+      Organization sits ABOVE the conference caption on purpose. The sidebar
+      reads brand → what this organization owns → which conference you are in →
+      that conference's work, so the caption is a visible scope boundary rather
+      than a label. People nested under one conference would be a different,
+      smaller product.
+    */}
+    <div class="nav-label">Organization</div>
+    <Nav label="Organization" routes={routesFor("organization")} activeId={activeId} navigate={navigate} />
+    {/*
       The name is a caption, not a picker. It was dressed as a control —
       bordered, hover-lit, two lines — wrapped around a link back to the page
       you were already on, so it promised a conference switch this build cannot
