@@ -112,9 +112,15 @@ function percent(done: number, total: number): number {
   return total === 0 ? 0 : Math.min(100, Math.max(0, Math.round((done / total) * 100)));
 }
 
+/**
+ * Round boundaries are calendar days, stored as UTC midnight — so they are read
+ * back in UTC, matching the date pickers beside them. Rendering the same value
+ * in a western zone shows the day before, and a round the organizer set to open
+ * on the 1st that reads "Jul 31" looks like the product losing their edit.
+ */
 function formatDate(value: number | null): string {
   if (value === null) return "Not scheduled";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" }).format(value);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(value);
 }
 
 export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPageProps): JSX.Element {

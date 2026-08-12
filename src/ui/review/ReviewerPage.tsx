@@ -325,7 +325,20 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
       const nextQueue = queue.filter((item) => item.id !== current.id);
       const saved = current;
       setQueue(nextQueue);
-      setCompleted((previous) => [{ ...saved, review: null }, ...previous.filter((item) => item.id !== saved.id)]);
+      const savedAt = Date.now();
+      setCompleted((previous) => [{
+        ...saved,
+        review: {
+          actor_id: "",
+          comment: currentReview.comment,
+          created_at: savedAt,
+          criteria_scores: Object.keys(currentReview.criteria).length ? currentReview.criteria : null,
+          decision_proposal: null,
+          recommendation: currentReview.recommendation,
+          score: currentReview.score,
+          updated_at: savedAt,
+        },
+      }, ...previous.filter((item) => item.id !== saved.id)]);
       setCurrentId(nextQueue[oldIndex]?.id ?? nextQueue[oldIndex - 1]?.id ?? null);
       setNotice(`${recommendationLabel(currentReview.recommendation)} saved · reopen it any time from Completed`);
     } catch (reason: unknown) {
@@ -451,7 +464,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
             </div>
             <div class="review-choice"><strong>{recommendationLabel(currentReview.recommendation)}</strong><span>{currentReview.recommendation ? `${recommendationLabel(currentReview.recommendation)} saves a proposal; only a program lead changes lifecycle status.` : "Approve, Maybe, and Deny do not require a scorecard."}</span></div>
             <div class="divider" />
-            <div class="score-heading"><span class="subtle">Scorecard (optional) · keys 1–5</span><button type="button" class="clear-score" onClick={() => updateReview({ score: null })} disabled={currentReview.score === null}>Clear</button></div>
+            <div class="score-heading"><span class="subtle">Overall score (optional) · keys 1–5</span><button type="button" class="clear-score" onClick={() => updateReview({ score: null })} disabled={currentReview.score === null}>Clear</button></div>
             <div class="score-buttons" data-reviewer-controls="score" role="group" aria-label="Numeric score (optional)">{[1, 2, 3, 4, 5].map((score) => <button type="button" class={currentReview.score === score ? "active" : ""} aria-pressed={currentReview.score === score} onClick={() => updateReview({ score })}>{score}</button>)}</div>
             {criteria.length > 0 && <div class="review-criteria" data-reviewer-controls="criteria">
               <div class="divider" />
