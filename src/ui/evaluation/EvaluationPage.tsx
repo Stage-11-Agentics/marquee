@@ -376,38 +376,44 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     {dialog === "invite" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={inviteReviewer}>
       <header><span class="eyebrow">{committee?.name ?? "Program committee"}</span><h2>Invite reviewer</h2></header>
       <div class="eval-dialog-body">
-        <label class="field">Name<input aria-label="Reviewer name" value={inviteName} placeholder="Nora Vale" onInput={(event) => setInviteName((event.currentTarget as HTMLInputElement).value)} /></label>
-        <label class="field">Email<input aria-label="Reviewer email" type="email" value={inviteEmail} placeholder="nora@example.org" onInput={(event) => setInviteEmail((event.currentTarget as HTMLInputElement).value)} /></label>
-        <fieldset class="field invite-tracks">
-          <legend>Track responsibilities</legend>
-          <div class="scope-checks">{tracks.map((track) => <label class="scope-check" key={track.id}>
-            <input
-              type="checkbox"
-              checked={inviteTrackIds.includes(track.id)}
-              onChange={(event) => setInviteTrackIds((event.currentTarget as HTMLInputElement).checked
-                ? [...inviteTrackIds, track.id]
-                : inviteTrackIds.filter((id) => id !== track.id))}
-            />
-            <span>{track.name}</span>
-          </label>)}</div>
-          <small class="subtle">A reviewer only sees abstracts in the tracks they are responsible for, so at least one is required. For a reviewer who already has responsibilities here, this list replaces them.</small>
-        </fieldset>
-        <div class="invite-result" aria-live="polite">
-          {inviteResult ? <>
-            <strong>{inviteResult.person.name} is on the committee.</strong>
-            <span class="subtle">{inviteResult.invite_sent
-              ? `A sign-in link was emailed to ${inviteResult.person.email}.`
-              : `The invitation to ${inviteResult.person.email} was logged rather than sent — this conference only emails addresses on its allowlist. Send them the link below.`}</span>
-            {inviteResult.magic_link ? <div class="invite-link">
-              <input readOnly aria-label="Reviewer sign-in link" value={inviteResult.magic_link} onFocus={(event) => (event.currentTarget as HTMLInputElement).select()} />
-              <Button type="button" small onClick={() => void copyInviteLink()}>{linkCopied ? "Copied" : "Copy link"}</Button>
-            </div> : null}
-          </> : <span class="subtle">The reviewer is created, given this conference’s reviewer role, seated on the committee, and scoped to the tracks above — in one step. On a demo conference their sign-in link also appears here.</span>}
-        </div>
+        {inviteResult ? <div class="invite-result" aria-live="polite">
+          <strong>{inviteResult.person.name} is on the committee.</strong>
+          <span class="subtle">Reviewing {inviteResult.track_ids.length === tracks.length ? "every track" : tracks.filter((track) => inviteResult.track_ids.includes(track.id)).map((track) => track.name).join(", ")}.</span>
+          <span class="subtle">{inviteResult.invite_sent
+            ? `A sign-in link was emailed to ${inviteResult.person.email}.`
+            : `The invitation to ${inviteResult.person.email} was logged rather than sent — this conference only emails addresses on its allowlist. Send them the link below.`}</span>
+          {inviteResult.magic_link ? <div class="invite-link">
+            <input readOnly aria-label="Reviewer sign-in link" value={inviteResult.magic_link} onFocus={(event) => (event.currentTarget as HTMLInputElement).select()} />
+            <Button type="button" small onClick={() => void copyInviteLink()}>{linkCopied ? "Copied" : "Copy link"}</Button>
+          </div> : null}
+        </div> : <>
+          <label class="field">Name<input aria-label="Reviewer name" value={inviteName} placeholder="Nora Vale" onInput={(event) => setInviteName((event.currentTarget as HTMLInputElement).value)} /></label>
+          <label class="field">Email<input aria-label="Reviewer email" type="email" value={inviteEmail} placeholder="nora@example.org" onInput={(event) => setInviteEmail((event.currentTarget as HTMLInputElement).value)} /></label>
+          <fieldset class="field invite-tracks">
+            <legend>Track responsibilities</legend>
+            <div class="scope-checks">{tracks.map((track) => <label class="scope-check" key={track.id}>
+              <input
+                type="checkbox"
+                aria-label={track.name}
+                checked={inviteTrackIds.includes(track.id)}
+                onChange={(event) => setInviteTrackIds((event.currentTarget as HTMLInputElement).checked
+                  ? [...inviteTrackIds, track.id]
+                  : inviteTrackIds.filter((id) => id !== track.id))}
+              />
+              <span>{track.name}</span>
+            </label>)}</div>
+            <small class="subtle">A reviewer only sees abstracts in the tracks they are responsible for, so at least one is required. For a reviewer who already has responsibilities here, this list replaces them.</small>
+          </fieldset>
+          <div class="message-preview">One step creates the person, gives them this conference’s reviewer role, seats them on the committee, and scopes them to the tracks above. On a demo conference their sign-in link is shown here afterwards.</div>
+        </>}
       </div>
       <footer>
+        {/* The confirmation replaces the form rather than growing beneath it, so
+            no control shifts under the pointer when the invitation lands. */}
         <Button type="button" onClick={() => setDialog(null)}>{inviteResult ? "Done" : "Cancel"}</Button>
-        <Button type="submit" variant="primary" disabled={inviteSaving || !committee || inviteName.trim() === "" || inviteEmail.trim() === "" || inviteTrackIds.length === 0}>{inviteSaving ? "Inviting…" : "Send invitation"}</Button>
+        {inviteResult
+          ? <Button type="button" variant="primary" onClick={openInvite}>Invite another</Button>
+          : <Button type="submit" variant="primary" disabled={inviteSaving || !committee || inviteName.trim() === "" || inviteEmail.trim() === "" || inviteTrackIds.length === 0}>{inviteSaving ? "Inviting…" : "Send invitation"}</Button>}
       </footer>
     </form></div>}
     {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round assignments</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Round<select value={assignmentRoundId ?? firstRound?.id ?? ""} onChange={(event) => setAssignmentRoundId((event.currentTarget as HTMLSelectElement).value)}>{plan.rounds.map((round) => <option key={round.id} value={round.id}>{round.position + 1} · {round.name}</option>)}</select></label><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label><div class="message-preview">Assignments belong to the selected round. Re-running distribution is idempotent and never replaces completed review or comparison evidence.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!committee}>Distribute</Button></footer></form></div>}
