@@ -10,10 +10,15 @@ import { matchRoute, routesFor } from "../../src/ui/shell/route-table";
  * anticipated a discoverability finding; the order it does specify is intact.
  */
 test("CONTRACT · the sidebar reproduces the binding prototype navigation order", () => {
+  // "Tasks" is the one row the binding prototype does not carry. Task authoring
+  // did not exist when the prototype was drawn, and an area reachable only from
+  // a settings sub-page is an area an organizer has to already know about. The
+  // prototype's order is otherwise untouched, and the new row sits with the
+  // other program modules where its siblings are.
   expect([...routesFor("home"), ...routesFor("pipeline"), ...routesFor("modules")].map((route) => route.label)).toEqual([
     "Program home", "Program board", "Abstracts & sessions", "Add a session",
     "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published",
-    "Speakers", "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Files", "Communications", "Speaker portal", "Conference site",
+    "Speakers", "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Files", "Communications", "Tasks", "Speaker portal", "Conference site",
     "Embeds", "Conference settings",
     "Speaker follow-ups",
   ]);
