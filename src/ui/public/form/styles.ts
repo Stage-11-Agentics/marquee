@@ -50,6 +50,8 @@ export const PUBLIC_FORM_STYLES = `
 .public-confirmation h2 { font: 500 clamp(25px, 4vw, 38px)/1.1 var(--mono); letter-spacing: -.04em; margin: 0 0 12px; }
 .public-confirmation p { color: var(--ink-soft); font-size: 14px; line-height: 1.6; margin: 7px 0; }
 .public-confirmation a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.public-confirmation .public-resume { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
+.public-resume-link { display: block; font: 400 12px/1.5 var(--mono); margin-top: 6px; overflow-wrap: anywhere; }
 .public-footer { border-top: 1px solid var(--line); color: var(--muted); display: flex; font: 400 10px/1.4 var(--mono); justify-content: space-between; padding: 18px clamp(16px, 5vw, 72px); }
 @media (max-width: 560px) {
   .public-form-header { padding: 14px 16px; }
