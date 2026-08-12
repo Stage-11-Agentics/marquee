@@ -95,7 +95,7 @@ html[data-theme="ai-engineer"] .global-search button {
   font-size: 12px;
 }
 
-html[data-theme="ai-engineer"] .theme-switch select { text-transform: none; }
+html[data-theme="ai-engineer"] .theme-switch select { text-transform: none; width: 118px; }
 
 html[data-theme="ai-engineer"] .top-user {
   background: var(--surface);
@@ -197,6 +197,7 @@ html[data-theme="ai-engineer"] .register-term-flag { color: var(--muted); font-s
 html[data-theme="ai-engineer"] .dashboard-wave-row { grid-template-columns: 150px 1fr; }
 html[data-theme="ai-engineer"] .register-wave-ascii {
   color: var(--ink);
+  display: block;
   font: 400 12px/1.4 var(--mono);
   letter-spacing: .05em;
   white-space: pre;
@@ -204,6 +205,7 @@ html[data-theme="ai-engineer"] .register-wave-ascii {
 html[data-theme="ai-engineer"] .register-wave-ascii .dim { color: #c4c4c4; } /* decorative track, no text duty */
 html[data-theme="ai-engineer"] .register-wave-meta {
   color: var(--muted);
+  display: block;
   font: 400 10.5px/1.4 var(--mono);
   margin-top: 3px;
 }

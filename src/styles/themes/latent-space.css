@@ -121,8 +121,10 @@ html[data-theme="latent-space"] .top-user {
 }
 
 /* The theme select keeps its own casing contract: the register's label is
-   lowercase, so the uppercase transform lifts while it is active. */
-html[data-theme="latent-space"] .theme-switch select { text-transform: none; }
+   lowercase, so the uppercase transform lifts while it is active. Register
+   labels run longer than Day/Night, so the fixed-width slot widens while a
+   register is active — the width is still fixed per theme, never content-sized. */
+html[data-theme="latent-space"] .theme-switch select { text-transform: none; width: 118px; }
 
 html[data-theme="latent-space"] .global-search button { font-style: italic; }
 

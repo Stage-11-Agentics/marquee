@@ -134,10 +134,20 @@ html[data-theme="swyxy"] .nav-label { border-bottom: 0; letter-spacing: .02em; t
 html[data-theme="swyxy"] .event-switcher small,
 html[data-theme="swyxy"] .card-head h2,
 html[data-theme="swyxy"] .card-head h3,
+html[data-theme="swyxy"] .card-head .subtle,
 html[data-theme="swyxy"] .eyebrow,
 html[data-theme="swyxy"] .breadcrumbs,
 html[data-theme="swyxy"] .top-identity span,
 html[data-theme="swyxy"] .theme-switch select {
+  text-transform: lowercase;
+}
+
+/* His index is all-lowercase, data included — the casing is a render
+   transform, the stored records keep their case. */
+html[data-theme="swyxy"] .register-feed-what,
+html[data-theme="swyxy"] .register-feed-stat,
+html[data-theme="swyxy"] .register-kv .k,
+html[data-theme="swyxy"] .button {
   text-transform: lowercase;
 }
 
