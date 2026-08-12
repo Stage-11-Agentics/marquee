@@ -48,6 +48,8 @@
 .onboarding-muted { color: var(--muted); font: 10px/1.25 var(--mono); }
 .onboarding-speaker-link { align-items: center; background: transparent; border: 0; color: inherit; display: flex; gap: 9px; min-width: 180px; padding: 0; text-align: left; width: 100%; }
 .onboarding-row-avatar, .onboarding-avatar { align-items: center; background: var(--accent-wash); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; flex: 0 0 30px; font: 600 9px/1 var(--mono); height: 30px; justify-content: center; width: 30px; }
+.onboarding-row-avatar, .onboarding-avatar { overflow: hidden; }
+.onboarding-row-avatar img, .onboarding-avatar img { display: block; height: 100%; object-fit: cover; width: 100%; }
 .onboarding-speaker-link > span:last-child { display: grid; gap: 3px; min-width: 0; }
 .onboarding-speaker-link strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .onboarding-speaker-link small, .onboarding-speaker-link em { color: var(--muted); display: block; font: 10px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
