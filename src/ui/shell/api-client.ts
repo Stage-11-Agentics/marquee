@@ -299,19 +299,28 @@ export function onForbidden(listener: () => void): () => void {
  * So the switch says so out loud, and every caller's own AbortController still
  * composes on top of this one.
  */
-let requestGeneration = new AbortController();
+// Created on first use, never at module scope: this module is reachable from
+// the Worker bundle, and workerd refuses constructor work in global scope —
+// the whole deployment fails to start rather than one request failing.
+let requestGeneration: AbortController | null = null;
+
+function currentGeneration(): AbortController {
+  requestGeneration ??= new AbortController();
+  return requestGeneration;
+}
 
 export function abortInFlightRequests(): void {
-  requestGeneration.abort(new DOMException("the conference on screen changed", "AbortError"));
-  requestGeneration = new AbortController();
+  requestGeneration?.abort(new DOMException("the conference on screen changed", "AbortError"));
+  requestGeneration = null;
 }
 
 function scopedSignal(callerSignal: AbortSignal | null | undefined): AbortSignal {
-  if (!callerSignal) return requestGeneration.signal;
+  const generation = currentGeneration().signal;
+  if (!callerSignal) return generation;
   // `AbortSignal.any` is the composition primitive; a runtime without it keeps
   // the caller's own signal rather than losing it.
   return typeof AbortSignal.any === "function"
-    ? AbortSignal.any([callerSignal, requestGeneration.signal])
+    ? AbortSignal.any([callerSignal, generation])
     : callerSignal;
 }
 
