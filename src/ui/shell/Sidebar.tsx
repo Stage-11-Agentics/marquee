@@ -29,6 +29,15 @@ export function Sidebar({ activeId, eventName, navigate, resetting, onReset }: {
   const slug = event?.slug ?? null;
   return <aside class="sidebar">
     <a class="brand" href="/dashboard" onClick={(event) => { event.preventDefault(); navigate("/dashboard"); }}><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
+{/*
+      Organization sits ABOVE the conference switcher on purpose. The sidebar
+      reads brand → what this organization owns → which conference you are in →
+      that conference's work, so the switcher is a visible scope boundary rather
+      than a label. People nested under one conference would be a different,
+      smaller product.
+    */}
+    <div class="nav-label">Organization</div>
+    <Nav label="Organization" routes={routesFor("organization")} activeId={activeId} navigate={navigate} slug={slug} />
     <EventSwitcher eventName={eventName} navigate={navigate} />
     <Nav label="Program home" routes={routesFor("home")} activeId={activeId} navigate={navigate} slug={slug} />
     <div class="nav-label">Pipeline</div>

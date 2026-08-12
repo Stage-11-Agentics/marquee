@@ -35,6 +35,9 @@ import { SessionizeImportPage } from "../import/SessionizeImportPage";
 import { FilesPage } from "../files/FilesPage";
 import { CreateConferencePage } from "../setup/CreateConferencePage";
 import { HandoffPage } from "../setup/HandoffPage";
+import { PeoplePage } from "../people/PeoplePage";
+import { ListsPage } from "../people/ListsPage";
+import { SourcingPipelinePage } from "../people/SourcingPipelinePage";
 
 type ResetResponse = {
   job_id?: unknown;
@@ -140,6 +143,8 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const isSpeakers = location.pathname === "/roster";
   const isImport = location.pathname === "/import";
   const isApiTokens = location.pathname === "/settings/api";
+  // Four paths, one page: agents guess URLs and each 404 costs turns.
+  const isPeople = ["/people", "/crm", "/directory", "/contacts"].includes(location.pathname);
   // The handoff is the second half of the claim, not an admin screen: it is
   // reached seconds after a session first exists, before there is a conference
   // to draw navigation around.
@@ -178,7 +183,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
           {/* The shell's own boundary. Panels inside a screen carry their own,
               but a route module that throws on its first render has none — and
               without this the whole shell, navigation included, goes white. */}
-          {/*
+{/*
               `key={eventId}` is the whole cache-invalidation strategy for a
               switch: every screen below re-mounts and re-reads rather than
               each one growing its own "the conference changed" branch. The
@@ -187,10 +192,16 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
               cancel it.
           */}
           <ErrorBoundary label={routeName} key={eventId ?? "no-conference"}>
-          {/* The create screen exists precisely for the case where there is no
-              conference yet, so it renders before the scoped-page guard. */}
+          {/* Three screens answer before the conference guard, for the same
+              reason the sidebar draws Organization above the switcher: the
+              create screen exists precisely when there is no conference yet,
+              and People, Lists and the sourcing pipeline are organization-level
+              — a person belongs to the organization, not to one conference. */}
           {route?.id === "conference-new"
             ? <CreateConferencePage navigate={navigate} />
+            : isPeople ? <PeoplePage search={location.search} navigate={navigate} />
+            : route?.id === "lists" ? <ListsPage navigate={navigate} />
+            : route?.id === "sourcing" ? <SourcingPipelinePage search={location.search} navigate={navigate} />
             : eventId === null ? <NoConference navigate={navigate} />
             : isSubmissionsList
             ? <SubmissionsPage eventId={eventId} search={location.search} navigate={navigate} />

@@ -1,5 +1,6 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
+import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import "./comms.css";
 
@@ -304,6 +305,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
       <span class="status-dot" aria-hidden="true" />
       <div><strong>Demo-safe outbox</strong><span>Messages render and log here. Non-allowlisted addresses are never delivered.</span></div>
       <span class="comms-policy">default: demo_safe</span>
+      <AgentBriefLauncher surface="chase" eventId={eventId} small />
     </div>
     {error && <div class="inline-error" role="alert"><span>{error}</span><button class="button small" type="button" onClick={() => { setError(null); setReloadKey((value) => value + 1); }}>Retry communications</button></div>}
 

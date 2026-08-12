@@ -1,4 +1,11 @@
-export type RouteGroup = "home" | "pipeline" | "modules" | "utility";
+/**
+ * `organization` is the group that sits ABOVE the conference caption in the
+ * sidebar. That placement is the scope boundary made visible: everything below
+ * the caption belongs to one conference, everything above it outlives all of
+ * them. People, Lists, and the sourcing pipeline are org-level, so a nav that
+ * nests them inside a conference's menu would be describing them wrongly.
+ */
+export type RouteGroup = "organization" | "home" | "pipeline" | "modules" | "utility";
 
 export interface RouteDefinition {
   id: string;
@@ -11,6 +18,18 @@ export interface RouteDefinition {
 }
 
 export const routeTable: readonly RouteDefinition[] = [
+  // "People" is the word organizers and the conference world use. Not "CRM",
+  // which is software's word for it; not "Directory" or "Contacts", which are
+  // address-book register for a record that carries a decade of history.
+  { id: "people", path: "/people", label: "People", icon: "◉", group: "organization", sidebar: true },
+  { id: "lists", path: "/lists", label: "Lists", icon: "◈", group: "organization", sidebar: true },
+  { id: "sourcing", path: "/pipeline", label: "Sourcing pipeline", icon: "▤", group: "organization", sidebar: true },
+  // Agents guess URLs, and every 404 costs turns. These three resolve to People
+  // rather than to the SPA's not-found state; they are not shown in the sidebar
+  // because the area has one name and one entry.
+  { id: "people-crm", path: "/crm", label: "People", icon: "", group: "utility" },
+  { id: "people-directory", path: "/directory", label: "People", icon: "", group: "utility" },
+  { id: "people-contacts", path: "/contacts", label: "People", icon: "", group: "utility" },
   { id: "dashboard", path: "/dashboard", label: "Program home", icon: "⌂", group: "home", sidebar: true },
   { id: "board", path: "/board", label: "Program board", icon: "▥", group: "home", sidebar: true },
   // The whole list and its create action are entrances, not lifecycle stages —

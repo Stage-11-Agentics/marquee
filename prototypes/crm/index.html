@@ -1,0 +1,1208 @@
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  MARQUEE — PEOPLE (the org-level speaker record) · SCOPING PROTOTYPE
+  Skin: Flight Deck (tokens lifted verbatim from prototypes/skins/skin-c.html)
+
+  Purpose: make the CRM scope legible before anything is built. Every screen the
+  eval kit's area-07 scenarios drive is here, clickable, on mock data.
+
+  Press S (or the toolbar button) for the SCOPE OVERLAY — it tints every element
+  by what it would actually cost:
+    FREE    already on main, or falls out of the MRQ-D roster if shaped right
+    RIDER   small delta on top of the roster
+    NEW     a genuinely new module
+    DEPENDS needs multi-event (ratified 2026-08-12) — a dependency, not a blocker
+
+  Scoping memo: sequence/research/speaker-crm-scope.md
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marquee — People · Scoping prototype</title>
+<style>
+  :root {
+    --bg:#eaeef2; --surface:#ffffff; --surface-sunk:#f4f7f9; --graph:#e3e9ee;
+    --ink:#101820; --ink-soft:#2c3a46; --muted:#57646f;
+    --rule:#c8d2da; --rule-soft:#dde4ea;
+    --accent:#0b6a72; --accent-ink:#084f55; --accent-wash:#e2f0f1;
+    --ok:#0f7a4a; --warn:#8a5c00; --alarm:#b02a1f; --alarm-wash:#fbe9e7;
+    --track-fin:#635bff; --track-agents:#db4c3f; --track-evals:#0d9488;
+    --track-infra:#d97706; --track-open:#2563eb; --track-rag:#9333ea; --track-sec:#0f766e;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --radius:3px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; }
+  body { margin:0; min-width:320px; }
+  button,input,select,textarea { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  a { color:inherit; text-decoration:none; cursor:pointer; }
+  .num { font-family:var(--mono); font-variant-numeric:tabular-nums lining-nums; font-feature-settings:"tnum" 1; }
+  .microlabel { font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); }
+  .eyebrow { font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); }
+
+  .prototype-badge {
+    position:fixed; z-index:1200; right:12px; top:12px;
+    background:var(--ink); color:#dff2f3; border:1px solid var(--accent);
+    padding:6px 10px; border-radius:var(--radius);
+    font:600 10px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; pointer-events:none;
+  }
+
+  /* ── Shell ───────────────────────────────────────────────────────────── */
+  .app { display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh; }
+  .sidebar { background:var(--surface); border-right:1px solid var(--rule); padding:var(--s4) var(--s3) var(--s3);
+    display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; }
+  .brand { display:flex; align-items:center; gap:10px; padding:var(--s1) var(--s2) var(--s4);
+    border-bottom:1px solid var(--rule-soft); margin-bottom:var(--s2); }
+  .brand-mark { width:26px; height:26px; flex:0 0 26px; display:grid; place-items:center;
+    border:1px solid var(--accent); border-radius:var(--radius);
+    background:var(--accent-wash); color:var(--accent-ink); font:600 13px/1 var(--mono); }
+  .brand-name { font:600 13px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase; }
+
+  /* Switcher geometry is v1.11's ratified pattern: current-conference block + ＋. */
+  .switcher-row { display:grid; grid-template-columns:1fr auto; gap:4px; align-items:stretch; margin:0 var(--s1); }
+  .event-switcher { display:flex; align-items:center; justify-content:space-between; gap:var(--s2);
+    padding:var(--s2) 10px; text-align:left;
+    border:1px solid var(--rule); border-radius:var(--radius); background:var(--surface-sunk);
+    transition:border-color 110ms, background 110ms; }
+  .event-switcher:hover, .event-switcher[aria-expanded="true"] { border-color:var(--accent); background:var(--accent-wash); }
+  .event-switcher small { display:block; font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  .event-switcher strong { display:block; font:600 12px/1.2 var(--mono); letter-spacing:-.01em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .event-switcher .caret { color:var(--muted); font-size:9px; }
+  .event-add { display:grid; place-items:center; width:30px; border:1px solid var(--rule);
+    border-radius:var(--radius); background:var(--surface-sunk); color:var(--muted); font:400 14px/1 var(--mono);
+    transition:border-color 110ms, background 110ms, color 110ms; }
+  .event-add:hover { border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
+  .switcher-anchor { position:relative; margin-top:var(--s4); }
+  .switcher-pop { position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:40; background:var(--surface);
+    border:1px solid var(--accent); border-radius:var(--radius); padding:var(--s2); }
+  .pop-label { margin:var(--s1) 6px var(--s1); }
+  .pop-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; width:100%;
+    text-align:left; background:none; border:0; border-radius:var(--radius); padding:6px 7px; }
+  .pop-row:hover { background:var(--surface-sunk); }
+  .pop-row.cur { background:var(--accent-wash); }
+  .pop-row .nm { display:block; font:600 11.5px/1.3 var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pop-row .dt { display:block; font:400 9.5px/1.3 var(--mono); color:var(--muted); margin-top:3px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pop-row .st { font:600 8px/1.6 var(--mono); letter-spacing:.1em; border:1px solid var(--rule);
+    border-radius:2px; padding:0 5px; color:var(--muted); background:var(--surface-sunk); }
+  .pop-row .st.live { border-color:var(--ok); color:var(--ok); }
+  .pop-row .st.demo { border-color:var(--accent); color:var(--accent-ink); }
+  .pop-rule { border:0; border-top:1px solid var(--rule-soft); margin:var(--s2) 0; }
+  .pop-create { width:100%; text-align:left; background:none; border:0; padding:7px; border-radius:var(--radius);
+    font:600 10.5px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink); }
+  .pop-create:hover { background:var(--accent-wash); }
+  .pop-hint { font:400 9px/1.4 var(--mono); color:var(--muted); padding:5px 7px 2px; }
+  .nav .count { justify-self:end; font:400 10.5px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--muted); }
+  .nav a.has-count { grid-template-columns:18px 1fr auto; }
+
+  .nav-label { font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); margin:var(--s3) 10px var(--s2);
+    padding-bottom:var(--s1); border-bottom:1px solid var(--rule-soft); }
+  .nav { display:grid; }
+  .nav a { min-height:30px; padding:6px 10px 6px 8px; display:grid; grid-template-columns:18px 1fr;
+    align-items:center; gap:9px; font-size:12.5px; color:var(--ink-soft);
+    border-left:2px solid transparent; border-radius:0 var(--radius) var(--radius) 0;
+    transition:background 110ms, color 110ms, border-color 110ms; }
+  .nav a:hover { background:var(--surface-sunk); color:var(--ink); }
+  .nav a.active { background:var(--accent-wash); color:var(--accent-ink); border-left-color:var(--accent); font-weight:600; }
+  .nav-icon { font-family:var(--mono); font-size:11px; text-align:center; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .nav a.active .nav-icon { color:var(--accent); }
+  .nav a.dim { color:#8b98a3; }
+  .sidebar-foot { margin-top:auto; padding-top:var(--s4); border-top:1px solid var(--rule-soft); display:grid; gap:2px; }
+  .sidebar-foot button { text-align:left; padding:7px 10px; background:none; border:0; border-radius:var(--radius);
+    color:var(--muted); font:400 11.5px/1.2 var(--mono); transition:background 110ms, color 110ms; }
+  .sidebar-foot button:hover { background:var(--surface-sunk); color:var(--ink); }
+  .sidebar-foot button.on { background:var(--ink); color:#dff2f3; }
+
+  /* ── Topbar ──────────────────────────────────────────────────────────── */
+  .main { display:flex; flex-direction:column; min-width:0; }
+  .topbar { display:flex; align-items:center; gap:var(--s4);
+    padding:0 196px 0 var(--s5); height:52px; background:var(--surface);
+    border-bottom:1px solid var(--rule); position:sticky; top:0; z-index:20; }
+  .breadcrumbs { font:400 11.5px/1 var(--mono); color:var(--muted); white-space:nowrap; letter-spacing:.02em; }
+  .breadcrumbs strong { color:var(--ink); font-weight:600; }
+  .global-search { flex:1; max-width:540px; display:flex; align-items:center; gap:var(--s2);
+    border:1px solid var(--rule); border-radius:var(--radius); padding:0 10px; height:30px;
+    background:var(--surface-sunk); transition:border-color 110ms, background 110ms; }
+  .global-search:hover { border-color:var(--accent); background:var(--surface); }
+  .global-search input { flex:1; border:0; background:none; outline:none; font:400 12px/1 var(--mono); letter-spacing:-.01em; }
+  .search-glyph { color:var(--muted); font-size:13px; }
+  .shortcut { font:600 9.5px/1 var(--mono); color:var(--muted); letter-spacing:.06em;
+    border:1px solid var(--rule); border-radius:2px; padding:3px 5px; background:var(--surface); }
+  .top-user { width:28px; height:28px; flex:0 0 28px; display:grid; place-items:center; border-radius:var(--radius);
+    border:1px solid var(--rule); background:var(--surface-sunk); font:600 10.5px/1 var(--mono);
+    letter-spacing:.06em; color:var(--ink-soft); }
+
+  /* ── Page ────────────────────────────────────────────────────────────── */
+  .page { padding:var(--s5) var(--s5) var(--s7); max-width:1460px; width:100%; }
+  .page-head { display:flex; align-items:flex-end; justify-content:space-between; gap:var(--s5); margin-bottom:var(--s4); }
+  .page-head h1 { margin:0 0 6px; font:600 21px/1.2 var(--sans); letter-spacing:-.018em; }
+  .page-head p { margin:0; max-width:74ch; font-size:12.5px; line-height:1.55; color:var(--ink-soft);
+    font-variant-numeric:tabular-nums; }
+  .head-actions { display:flex; gap:var(--s2); flex:0 0 auto; }
+
+  .button { height:30px; min-width:130px; padding:0 var(--s3); border:1px solid var(--rule);
+    background:var(--surface); color:var(--ink-soft); border-radius:var(--radius);
+    font:600 10.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    transition:background 110ms, color 110ms, border-color 110ms; }
+  .button:hover { background:var(--accent-wash); border-color:var(--accent); color:var(--accent-ink); }
+  .button.primary { background:var(--accent); border-color:var(--accent); color:#ffffff; }
+  .button.primary:hover { background:#095b62; border-color:#095b62; }
+  .button.small { height:26px; min-width:0; padding:0 10px; font-size:9.5px; }
+  .button.wide { min-width:150px; }
+
+  /* ── KPI strip (the CRM "dashboard") ─────────────────────────────────── */
+  .instrument { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    margin-bottom:var(--s3); overflow-x:auto; overflow-y:hidden;
+    background-image:linear-gradient(var(--graph) 1px, transparent 1px),
+                     linear-gradient(90deg, var(--graph) 1px, transparent 1px);
+    background-size:8px 8px, 8px 8px; }
+  .instrument-inner { min-width:820px; display:grid; grid-template-columns:repeat(4,1fr) 1.5fr; }
+  .kpi { text-align:left; background:rgba(255,255,255,.72); border:0; border-right:1px solid var(--rule-soft);
+    padding:var(--s3) var(--s3) 10px; display:grid; align-content:start; gap:6px; min-height:112px;
+    transition:background 110ms; }
+  .kpi:hover { background:var(--accent-wash); }
+  .kpi-name { font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); }
+  .kpi-count { font:400 clamp(25px,2.2vw,31px)/1 var(--mono); letter-spacing:-.05em;
+    font-variant-numeric:tabular-nums lining-nums; }
+  .kpi-meaning { font-size:10px; line-height:1.4; color:var(--muted); }
+  .widget { padding:var(--s3); background:rgba(255,255,255,.72); border-right:0; display:grid;
+    align-content:start; gap:7px; }
+  .bar-row { display:grid; grid-template-columns:132px minmax(0,1fr) 30px; align-items:center; gap:9px; }
+  .bar-row .co { font:400 11px/1.2 var(--mono); color:var(--ink-soft);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-row .track { height:7px; background:var(--surface-sunk); border:1px solid var(--rule); overflow:hidden; }
+  .bar-row .track i { display:block; height:100%; background:var(--accent); }
+  .bar-row .n { text-align:right; font:400 10.5px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--muted); }
+  button.bar-row { background:none; border:0; padding:2px 0; text-align:left; width:100%; }
+  button.bar-row:hover .co { color:var(--accent-ink); font-weight:600; }
+
+  /* ── Toolbar: search + filter ────────────────────────────────────────── */
+  .toolbar { display:flex; align-items:center; gap:var(--s2); margin-bottom:var(--s2); flex-wrap:wrap; }
+  .dir-search { flex:1; min-width:260px; max-width:420px; display:flex; align-items:center; gap:var(--s2);
+    border:1px solid var(--rule); border-radius:var(--radius); padding:0 10px; height:30px; background:var(--surface); }
+  .dir-search:focus-within { border-color:var(--accent); }
+  .dir-search input { flex:1; border:0; background:none; outline:none; font:400 12px/1 var(--mono); }
+  .filter-panel { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    margin-bottom:var(--s2); display:grid; grid-template-columns:repeat(3,1fr); gap:0; }
+  .filter-group { padding:var(--s3) var(--s4); border-right:1px solid var(--rule-soft); }
+  .filter-group:last-child { border-right:0; }
+  .filter-group h3 { margin:0 0 var(--s2); font:600 9.5px/1 var(--mono); letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); }
+  .filter-opt { display:flex; align-items:center; gap:7px; padding:3px 0; font-size:12px; color:var(--ink-soft); cursor:pointer; }
+  .filter-opt input { accent-color:var(--accent); }
+  .filter-opt .n { margin-left:auto; font:400 10.5px/1 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  /* Active-criteria + selection bar share ONE reserved row — elements never jump. */
+  .statusbar { min-height:34px; display:flex; align-items:center; gap:var(--s2); flex-wrap:wrap;
+    margin-bottom:var(--s2); }
+  .chip { display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 9px;
+    border:1px solid var(--rule); border-radius:2px; background:var(--surface-sunk);
+    font:400 11px/1 var(--mono); color:var(--ink-soft); font-variant-numeric:tabular-nums; letter-spacing:-.01em;
+    transition:background 110ms, border-color 110ms, color 110ms; }
+  button.chip:hover { background:var(--accent-wash); border-color:var(--accent); color:var(--accent-ink); }
+  .chip.on { background:var(--accent-wash); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .chip .x { font-family:var(--mono); font-size:12px; line-height:1; opacity:.7; }
+  .statusbar .spacer { flex:1; }
+  .selcount { font:600 11px/1 var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--accent-ink); }
+
+  /* ── Table ───────────────────────────────────────────────────────────── */
+  .table-wrap { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius); overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; min-width:920px; }
+  thead th { position:sticky; top:52px; background:var(--surface-sunk); border-bottom:1px solid var(--rule);
+    text-align:left; padding:8px 10px; font:600 9.5px/1 var(--mono); letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); white-space:nowrap; z-index:5; }
+  tbody td { border-bottom:1px solid var(--rule-soft); padding:9px 10px; font-size:12.5px;
+    color:var(--ink-soft); vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody tr:hover td { background:var(--surface-sunk); }
+  tbody tr.sel td { background:var(--accent-wash); }
+  td.c-check, th.c-check { width:34px; padding-right:0; }
+  td.c-check input { accent-color:var(--accent); }
+  .cell-name { font-weight:600; color:var(--ink); white-space:nowrap; }
+  .cell-mail { font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .cell-trunc { max-width:172px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
+  .cell-name { max-width:210px; overflow:hidden; text-overflow:ellipsis; }
+  .tagset { display:flex; gap:4px; flex-wrap:wrap; }
+  .tag { border:1px solid var(--rule); border-radius:2px; padding:1px 6px; background:var(--surface-sunk);
+    font:600 9px/1.6 var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .tag.accent { background:var(--accent-wash); border-color:var(--accent); color:var(--accent-ink); }
+  .rowlink { background:none; border:0; padding:0; text-align:left; color:inherit; font:inherit; }
+  .rowlink:hover .cell-name { color:var(--accent-ink); text-decoration:underline; }
+  .tablefoot { display:flex; align-items:center; justify-content:space-between; gap:var(--s4);
+    padding:9px var(--s3); border-top:1px solid var(--rule); background:var(--surface-sunk);
+    font:400 11px/1 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  /* ── Drawer (contact profile / card detail) ──────────────────────────── */
+  .scrim { position:fixed; inset:0; background:rgba(16,24,32,.34); z-index:900; }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(560px,100vw); background:var(--surface);
+    border-left:1px solid var(--rule); z-index:901; display:flex; flex-direction:column; }
+  .drawer-head { padding:var(--s4) var(--s5); border-bottom:1px solid var(--rule); background:var(--surface-sunk);
+    display:flex; align-items:flex-start; justify-content:space-between; gap:var(--s4); }
+  .drawer-head h2 { margin:0 0 4px; font:600 17px/1.25 var(--sans); letter-spacing:-.015em; }
+  .drawer-head .sub { font:400 11.5px/1.4 var(--mono); color:var(--muted); }
+  .drawer-body { overflow-y:auto; padding:0 var(--s5) var(--s6); }
+  .sec { padding:var(--s4) 0 0; }
+  .sec > h3 { margin:0 0 var(--s2); font:600 9.5px/1 var(--mono); letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); padding-bottom:var(--s1); border-bottom:1px solid var(--rule-soft); }
+  .kv { display:grid; grid-template-columns:112px minmax(0,1fr); gap:5px var(--s3); font-size:12.5px; }
+  .kv dt { font:400 10.5px/1.5 var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .kv dd { margin:0; color:var(--ink-soft); }
+  .bio { font-size:12.5px; line-height:1.6; color:var(--ink-soft); margin:var(--s2) 0 0; }
+  .notebox { display:grid; gap:var(--s2); margin-top:var(--s2); }
+  .notebox textarea { width:100%; min-height:62px; resize:vertical; border:1px solid var(--rule);
+    border-radius:var(--radius); padding:8px 10px; font:400 12.5px/1.5 var(--sans); background:var(--surface); outline:none; }
+  .notebox textarea:focus { border-color:var(--accent); }
+  .note { border:1px solid var(--rule-soft); border-left:2px solid var(--accent); border-radius:var(--radius);
+    background:var(--surface-sunk); padding:8px 10px; }
+  .note p { margin:0 0 5px; font-size:12.5px; line-height:1.5; color:var(--ink); }
+  .note .meta { font:400 10px/1 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums; }
+  .conn { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--s3); align-items:center;
+    padding:8px 0; border-bottom:1px solid var(--rule-soft); }
+  .conn:last-child { border-bottom:0; }
+  .conn .t { font-size:12.5px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .conn .e { font:400 10.5px/1.4 var(--mono); color:var(--muted); margin-top:3px; }
+  .feed { display:grid; }
+  .feed-row { display:grid; grid-template-columns:14px minmax(0,1fr); gap:10px; padding:7px 0;
+    border-bottom:1px solid var(--rule-soft); }
+  .feed-row:last-child { border-bottom:0; }
+  .feed-dot { width:7px; height:7px; border-radius:50%; background:var(--rule); margin-top:5px; justify-self:center; }
+  .feed-dot.accent { background:var(--accent); }
+  .feed .t { font-size:12px; color:var(--ink-soft); line-height:1.45; }
+  .feed .w { font:400 10px/1 var(--mono); color:var(--muted); margin-top:3px; font-variant-numeric:tabular-nums; }
+  .drawer-foot { margin-top:auto; padding:var(--s3) var(--s5); border-top:1px solid var(--rule);
+    background:var(--surface-sunk); display:flex; gap:var(--s2); }
+
+  /* ── Modal ───────────────────────────────────────────────────────────── */
+  .modal { position:fixed; z-index:901; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:min(680px,94vw); max-height:88vh; overflow-y:auto; background:var(--surface);
+    border:1px solid var(--rule); border-radius:var(--radius); }
+  .modal-head { padding:var(--s4) var(--s5); border-bottom:1px solid var(--rule); background:var(--surface-sunk); }
+  .modal-head h2 { margin:0 0 4px; font:600 15px/1.25 var(--sans); letter-spacing:-.012em; }
+  .modal-head p { margin:0; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .modal-body { padding:var(--s4) var(--s5); display:grid; gap:var(--s3); }
+  .modal-foot { padding:var(--s3) var(--s5); border-top:1px solid var(--rule); background:var(--surface-sunk);
+    display:flex; justify-content:flex-end; gap:var(--s2); }
+  .field { display:grid; gap:5px; }
+  .field label { font:600 9.5px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .field input, .field select, .field textarea { border:1px solid var(--rule); border-radius:var(--radius);
+    padding:7px 10px; background:var(--surface); outline:none; font:400 12.5px/1.4 var(--sans); }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--accent); }
+  .field textarea { min-height:112px; resize:vertical; }
+  .radio-row { display:flex; gap:var(--s4); }
+  .radio-row label { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-soft); cursor:pointer; }
+  .radio-row input { accent-color:var(--accent); }
+  .hint { font-size:11px; line-height:1.5; color:var(--muted); }
+  .preview { border:1px solid var(--rule); border-radius:var(--radius); background:var(--surface-sunk); padding:var(--s3) var(--s4); }
+  .preview .to { font:400 10.5px/1 var(--mono); color:var(--muted); margin-bottom:6px; }
+  .preview .subj { font-weight:600; font-size:13px; margin-bottom:6px; }
+  .preview .body { font-size:12.5px; line-height:1.6; color:var(--ink-soft); white-space:pre-wrap; }
+  mark { background:var(--accent-wash); color:var(--accent-ink); font-weight:600; padding:0 2px; border-radius:2px; }
+
+  /* Mapping table (import) */
+  .map { width:100%; border-collapse:collapse; min-width:0; }
+  .map th { text-align:left; padding:6px 8px; background:var(--surface-sunk); border-bottom:1px solid var(--rule);
+    font:600 9px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .map td { padding:6px 8px; border-bottom:1px solid var(--rule-soft); font-size:12px; }
+  .map .ok { color:var(--ok); font:600 10px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+  .map .warnflag { color:var(--warn); font:600 10px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+  .agentbrief { border:1px solid var(--rule); border-radius:var(--radius); background:var(--surface-sunk);
+    padding:var(--s3); display:grid; gap:var(--s3); }
+  .agentbrief pre { margin:0; white-space:pre-wrap; word-break:break-word;
+    font:400 11.5px/1.65 var(--mono); color:var(--ink-soft); }
+  .subtlecode { font:400 10.5px/1 var(--mono); color:var(--muted); }
+  .dropzone { border:1px dashed var(--rule); border-radius:var(--radius); background:var(--surface-sunk);
+    padding:var(--s5); text-align:center; }
+  .dropzone .microlabel { display:block; margin-bottom:6px; }
+
+  /* ── Kanban ──────────────────────────────────────────────────────────── */
+  .board { display:grid; grid-template-columns:repeat(6,minmax(190px,1fr)); gap:1px; background:var(--rule);
+    border:1px solid var(--rule); border-radius:var(--radius); overflow-x:auto; margin-bottom:var(--s4); }
+  .col { background:var(--surface); min-width:190px; display:flex; flex-direction:column; }
+  .col-head { padding:9px var(--s3); background:var(--surface-sunk); border-bottom:1px solid var(--rule); }
+  .col-head .n { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .col-head strong { font:600 9.5px/1.2 var(--mono); letter-spacing:.12em; text-transform:uppercase; }
+  .col-head .c { font:400 12px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--muted); }
+  .col-head .k { display:block; margin-top:4px; font:400 9px/1 var(--mono); letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); }
+  .col-head .k.won { color:var(--ok); } .col-head .k.lost { color:var(--alarm); } .col-head .k.nurture { color:var(--warn); }
+  .col-body { padding:var(--s2); display:grid; gap:var(--s2); align-content:start; min-height:230px; }
+  .pcard { text-align:left; background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    padding:9px 10px; display:grid; gap:5px; transition:border-color 110ms, background 110ms; }
+  .pcard:hover { border-color:var(--accent); background:var(--accent-wash); }
+  .pcard .nm { font-size:12.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pcard .co { font:400 10.5px/1.3 var(--mono); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pcard .sc { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .pcard .score { font:600 10.5px/1 var(--mono); color:var(--accent-ink); font-variant-numeric:tabular-nums; }
+  .moveto { height:24px; border:1px solid var(--rule); border-radius:2px; background:var(--surface);
+    font:400 10px/1 var(--mono); padding:0 4px; color:var(--ink-soft); }
+  .moveto:focus { border-color:var(--accent); outline:none; }
+
+  /* Lists */
+  .seg-list { display:grid; }
+  .seg-row { display:grid; grid-template-columns:minmax(0,1fr) 96px 116px 120px; align-items:center; gap:var(--s4);
+    padding:11px var(--s3); border-bottom:1px solid var(--rule-soft); background:none; border-left:0; border-right:0;
+    border-top:0; width:100%; text-align:left; transition:background 110ms; }
+  .seg-row:last-child { border-bottom:0; }
+  .seg-row:hover { background:var(--surface-sunk); }
+  .seg-row .nm { font-size:13px; font-weight:600; color:var(--ink); }
+  .seg-row .cr { font:400 10.5px/1.4 var(--mono); color:var(--muted); margin-top:3px; }
+  .seg-row .kind { font:600 9px/1.6 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    border:1px solid var(--rule); border-radius:2px; padding:1px 6px; background:var(--surface-sunk);
+    color:var(--muted); justify-self:start; }
+  .seg-row .kind.dyn { background:var(--accent-wash); border-color:var(--accent); color:var(--accent-ink); }
+  .seg-row .n { font:400 12px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--ink-soft); }
+
+  .empty { padding:var(--s6); text-align:center; }
+  .empty h3 { margin:0 0 6px; font:600 14px/1.3 var(--sans); }
+  .empty p { margin:0 0 var(--s3); font-size:12.5px; color:var(--muted); }
+
+  .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:1100;
+    background:var(--ink); color:#dff2f3; border:1px solid var(--accent); border-radius:var(--radius);
+    padding:9px 14px; font:400 12px/1 var(--mono); letter-spacing:-.01em; }
+
+  /* ── Scope overlay ───────────────────────────────────────────────────── */
+  .legend { display:none; position:fixed; left:12px; bottom:12px; z-index:1100; background:var(--surface);
+    border:1px solid var(--rule); border-radius:var(--radius); padding:10px 12px; width:246px; }
+  body.scope .legend { display:block; }
+  .legend h4 { margin:0 0 7px; font:600 9.5px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .legend .l { display:grid; grid-template-columns:11px 1fr; gap:8px; align-items:start; padding:3px 0; font-size:11px; color:var(--ink-soft); }
+  .legend .sw { width:11px; height:11px; border-radius:2px; margin-top:2px; }
+  .legend code { font:600 9.5px/1.4 var(--mono); letter-spacing:.06em; }
+  .sw.free { background:#0f7a4a; } .sw.rider { background:#0b6a72; }
+  .sw.new { background:#d97706; } .sw.dep { background:#8a5c00; }
+
+  body.scope [data-scope] { position:relative; outline:1px dashed currentColor; outline-offset:-1px; }
+  body.scope [data-scope="free"]  { outline-color:#0f7a4a; background-color:rgba(15,122,74,.055); }
+  body.scope [data-scope="rider"] { outline-color:#0b6a72; background-color:rgba(11,106,114,.06); }
+  body.scope [data-scope="new"]   { outline-color:#d97706; background-color:rgba(217,119,6,.07); }
+  body.scope [data-scope="dep"] { outline-color:#8a5c00; background-color:rgba(138,92,0,.07); }
+  body.scope [data-scope]::before {
+    content:attr(data-item); position:absolute; top:0; right:0; z-index:60;
+    font:600 8px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    padding:2px 4px; color:#fff; pointer-events:none; border-radius:0 0 0 2px;
+  }
+  body.scope [data-scope="free"]::before  { background:#0f7a4a; }
+  body.scope [data-scope="rider"]::before { background:#0b6a72; }
+  body.scope [data-scope="new"]::before   { background:#d97706; }
+  body.scope [data-scope="dep"]::before { background:#8a5c00; }
+
+  @media (max-width:1240px) { .filter-panel { grid-template-columns:1fr; } .filter-group { border-right:0; border-bottom:1px solid var(--rule-soft); } }
+</style>
+</head>
+<body>
+<div class="prototype-badge">Prototype · Mock data</div>
+
+<div class="legend">
+  <h4>Scope overlay — what it costs</h4>
+  <div class="l"><span class="sw free"></span><span><code>FREE</code> — on <code>main</code> today, or falls out of the MRQ-D roster if it is person-centric.</span></div>
+  <div class="l"><span class="sw rider"></span><span><code>RIDER</code> — small delta on top of the roster.</span></div>
+  <div class="l"><span class="sw new"></span><span><code>NEW</code> — a genuinely new module.</span></div>
+  <div class="l"><span class="sw dep"></span><span><code>DEPENDS</code> — needs multi-event (ratified 2026-08-12), not blocked.</span></div>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">M</div>
+      <div class="brand-name">Marquee</div>
+    </div>
+
+    <!-- The Organization group sits ABOVE the conference switcher: the sidebar
+         reads brand → org-level → "you are working in THIS conference" → this
+         conference's work. The switcher is the scope boundary, which is the whole
+         of CRM-01's "org-level, not nested inside one conference's menu". -->
+    <div class="nav-label">Organization</div>
+    <nav class="nav" aria-label="Organization">
+      <a data-view="directory" class="active"><span class="nav-icon">◉</span><span>People</span></a>
+      <a data-view="segments"><span class="nav-icon">◈</span><span>Lists</span></a>
+      <a data-view="pipeline"><span class="nav-icon">▤</span><span>Sourcing pipeline</span></a>
+    </nav>
+
+    <!-- Ratified v1.11 switcher geometry, extended to a list by the multi-event
+         design ratified 2026-08-12. Nothing here may move. -->
+    <div class="switcher-anchor">
+    <div class="switcher-row">
+      <button class="event-switcher" id="switcher" aria-expanded="false" aria-haspopup="listbox">
+        <span><small>Conference</small><strong>DevFlow Conf 2027</strong></span>
+        <span class="caret">▾</span>
+      </button>
+      <a class="event-add" title="Create conference" aria-label="Create conference">＋</a>
+    </div>
+    <div class="switcher-pop" id="pop" role="listbox" aria-label="Conferences" hidden>
+      <div class="pop-label microlabel">Upcoming</div>
+      <button class="pop-row cur"><span><span class="nm">DevFlow Conf 2027</span><span class="dt">12–14 May 2027 · Moscone West</span></span><span class="st demo">Demo</span></button>
+      <hr class="pop-rule">
+      <div class="pop-label microlabel">Past</div>
+      <button class="pop-row"><span><span class="nm">AIE NYC 2026</span><span class="dt">19–21 Oct 2026 · Javits Center</span></span><span class="st live">Live</span></button>
+      <button class="pop-row"><span><span class="nm">DevFlow Conf 2026</span><span class="dt">6–8 May 2026 · Moscone West</span></span><span class="st">Past</span></button>
+      <hr class="pop-rule">
+      <button class="pop-create">＋ Create conference</button>
+      <div class="pop-hint">↑↓ select · ⏎ switch · esc close · also in ⌘K</div>
+    </div>
+    </div>
+
+    <nav class="nav" aria-label="Program home">
+      <a class="dim"><span class="nav-icon">⌂</span><span>Program home</span></a>
+      <a class="dim"><span class="nav-icon">▥</span><span>Program board</span></a>
+    </nav>
+    <div class="nav-label">Pipeline</div>
+    <nav class="nav" aria-label="Program lifecycle">
+      <a class="dim has-count"><span class="nav-icon">1</span><span>Submitted</span><span class="count num">96</span></a>
+      <a class="dim has-count"><span class="nav-icon">2</span><span>In review</span><span class="count num">214</span></a>
+      <a class="dim has-count"><span class="nav-icon">3</span><span>Waved</span><span class="count num">38</span></a>
+      <a class="dim has-count"><span class="nav-icon">4</span><span>Ready to place</span><span class="count num">12</span></a>
+      <a class="dim has-count"><span class="nav-icon">5</span><span>Onboarding</span><span class="count num">41</span></a>
+      <a class="dim has-count"><span class="nav-icon">6</span><span>Scheduled</span><span class="count num">57</span></a>
+      <a class="dim has-count"><span class="nav-icon">7</span><span>Published</span><span class="count num">53</span></a>
+    </nav>
+    <div class="nav-label">Modules</div>
+    <nav class="nav" aria-label="Modules">
+      <a class="dim" data-view="roster"><span class="nav-icon">☺</span><span>Speakers</span></a>
+      <a class="dim"><span class="nav-icon">□</span><span>CFP forms</span></a>
+      <a class="dim"><span class="nav-icon">◇</span><span>Evaluation plan</span></a>
+      <a class="dim"><span class="nav-icon">✓</span><span>Review queue</span></a>
+      <a class="dim"><span class="nav-icon">▦</span><span>Agenda</span></a>
+      <a class="dim"><span class="nav-icon">✉</span><span>Communications</span></a>
+      <a class="dim"><span class="nav-icon">○</span><span>Speaker portal</span></a>
+      <a class="dim"><span class="nav-icon">↗</span><span>Conference site</span></a>
+      <a class="dim"><span class="nav-icon">⚙</span><span>Conference settings</span></a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button>⌘ API &amp; CLI</button>
+      <button id="scopeBtn">◧ Scope overlay — off</button>
+      <button id="resetBtn">↺ Reset prototype state</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="breadcrumbs" id="crumbs">AI Engineer · <strong>People</strong></div>
+      <div class="global-search">
+        <span class="search-glyph">⌕</span>
+        <input placeholder="Search everything — people, sessions, companies" aria-label="Global search">
+        <span class="shortcut">⌘K</span>
+      </div>
+      <div class="top-user">JA</div>
+    </header>
+    <div class="page" id="page"></div>
+  </div>
+</div>
+
+<div id="overlays"></div>
+<div id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   Mock data — deliberately ugly: diacritics, long hyphenated names, long
+   company names, a 1,147-row count behind a 14-row page.
+   ══════════════════════════════════════════════════════════════════════════ */
+const CONTACTS = [
+  { id:"per_1",  name:"Priya Raman", email:"priya.raman@latticework.example", title:"Principal Engineer", company:"Latticework Systems", tags:["AI","Platform"], events:3, last:"2027-01-09", bio:"Leads the build-tooling platform team at Latticework Systems. Ten years on CI at scale; writes the internal handbook nobody else wants to write.", role:"Speaker" },
+  { id:"per_2",  name:"Marcus Okafor", email:"marcus.okafor@northwind.example", title:"Staff Platform Engineer", company:"Northwind Data", tags:["Platform"], events:2, last:"2027-01-15", bio:"Runs developer platform for a 400-engineer org. Talks about the boring parts of platform engineering that actually move the needle.", role:"Speaker" },
+  { id:"per_3",  name:"Dana Kowalski", email:"dana.kowalski@corvidlabs.example", title:"Director of Developer Relations", company:"Corvid Labs", tags:["DevRel"], events:1, last:"2026-11-30", bio:"Built the Corvid Labs developer program from zero. Formerly community lead at two open-source foundations.", role:"Speaker" },
+  { id:"per_4",  name:"Ana Sofía Ruiz-Hernández", email:"ana.ruiz@meridianhealth.example", title:"VP Engineering", company:"Meridian Health Systems", tags:["AI","Keynote"], events:4, last:"2027-01-22", bio:"Runs 200 engineers across clinical data platforms. Keynoted DevFlow 2025 and 2026 on regulated-industry ML.", role:"Speaker" },
+  { id:"per_5",  name:"Þórunn Sigurðardóttir", email:"thorunn.s@reykjavikml.example", title:"Research Lead", company:"Reykjavík Applied ML", tags:["Research"], events:1, last:"2026-10-04", bio:"Publishes on retrieval evaluation. First conference talk was at DevFlow 2026.", role:"Submitter" },
+  { id:"per_6",  name:"Chen Wei-Lun", email:"weilun.chen@formosacompute.example", title:"CTO", company:"Formosa Compute", tags:["AI","CTO"], events:2, last:"2027-01-11", bio:"Co-founded Formosa Compute after eight years on inference infrastructure. Speaks on cost-per-token economics.", role:"Speaker" },
+  { id:"per_7",  name:"Olusegun Adebayo-Williams", email:"o.adebayo@saharacloud.example", title:"Head of Infrastructure", company:"Sahara Cloud Services", tags:["Platform"], events:3, last:"2026-12-18", bio:"Built multi-region infrastructure across four African markets. Track chair for Platform & Infra in 2026.", role:"Chairperson" },
+  { id:"per_8",  name:"Margarethe von Habsburg-Lothringen", email:"m.habsburg@ethz-systems.example", title:"Principal Researcher", company:"ETH Zürich Systems Group", tags:["Research","Keynote"], events:2, last:"2027-01-02", bio:"Systems researcher working on scheduling for heterogeneous accelerators. Keynote at DevFlow 2026.", role:"Speaker" },
+  { id:"per_9",  name:"Raj Patel", email:"raj.patel@bluewateranalytics.example", title:"Senior Engineer", company:"Bluewater Analytics", tags:[], events:1, last:"2026-09-27", bio:"Data pipelines for financial reporting. Submitted to the 2026 CFP; not accepted.", role:"Submitter" },
+  { id:"per_10", name:"Yuki Tanaka", email:"yuki.tanaka@kyotosystems.example", title:"Developer Advocate", company:"Kyoto Systems", tags:["DevRel"], events:2, last:"2027-01-19", bio:"Advocate for the Kyoto Systems SDK. Runs the Osaka meetup; reliably brings three new speakers a year.", role:"Speaker" },
+  { id:"per_11", name:"Fatima Al-Rashid", email:"fatima.alrashid@gulfdigital.example", title:"Director of AI Platform", company:"Gulf Digital", tags:["AI","CTO"], events:1, last:"2026-12-01", bio:"Leads the AI platform group. First-time DevFlow submitter for 2027.", role:"Submitter" },
+  { id:"per_12", name:"Bartholomew Fitzgerald-Montgomery III", email:"b.fitzgerald.montgomery@heritagefintech.example", title:"Distinguished Engineer", company:"Heritage Financial Technologies", tags:["Platform"], events:5, last:"2027-01-20", bio:"Five consecutive years on the DevFlow program. The reliable yes when a slot opens late.", role:"Speaker" },
+  { id:"per_13", name:"Nguyễn Thị Minh Anh", email:"minhanh.nguyen@saigonneural.example", title:"Staff ML Engineer", company:"Saigon Neural", tags:["AI","Research"], events:1, last:"2026-11-12", bio:"Works on multilingual evaluation sets. Recommended by Yuki Tanaka.", role:"Speaker" },
+  { id:"per_14", name:"Kwame Asante", email:"kwame.asante@accradevworks.example", title:"Engineering Manager", company:"Accra Devworks", tags:["Platform"], events:2, last:"2026-12-22", bio:"Manages the platform team; speaks on distributed teams and on-call design.", role:"Moderator" }
+];
+const TOTAL_ROWS = 1147;
+
+const SEED_NOTES = {
+  per_4:[{ body:"Confirmed for the 2027 keynote slot on a phone call — hold the Thursday morning room.", who:"Jordan Alvarez", when:"2027-01-22 09:14" }],
+  per_12:[{ body:"Always says yes to a late slot. Keep at the top of the standby list.", who:"Jordan Alvarez", when:"2026-12-02 16:40" }]
+};
+const SEED_CONN = {
+  per_1:[{ t:"Why your CI is slow and what to do about it", e:"DevFlow Conf 2026 · Platform & Infra · Accepted" },
+         { t:"Build caching at 400 engineers", e:"DevFlow Conf 2025 · Platform & Infra · Delivered" },
+         { t:"Lightning: the 40-second build", e:"DevFlow Conf 2024 · Lightning · Delivered" }],
+  per_4:[{ t:"Regulated ML: what the auditors actually ask", e:"DevFlow Conf 2026 · Keynote · Delivered" },
+         { t:"Clinical data platforms at Meridian", e:"DevFlow Conf 2025 · AI & Agents · Delivered" },
+         { t:"Panel: ML in healthcare", e:"DevFlow Conf 2024 · Panel · Delivered" },
+         { t:"Untitled keynote", e:"DevFlow Conf 2027 · Keynote · Invited" }]
+};
+const SEED_FEED = {
+  per_1:[{ t:"Bulk email sent — “Speak at DevFlow Conf 2027?”", w:"2027-01-09 11:02 · Jordan Alvarez", a:true },
+         { t:"Tag “Platform” added", w:"2026-12-14 15:20 · Jordan Alvarez" },
+         { t:"Imported from speakers.csv", w:"2026-12-14 15:18 · Smart import", a:true },
+         { t:"Session “Why your CI is slow…” accepted", w:"2026-08-30 10:07 · System" }],
+  per_4:[{ t:"Note added", w:"2027-01-22 09:14 · Jordan Alvarez", a:true },
+         { t:"Invited to DevFlow Conf 2027", w:"2027-01-20 08:55 · Jordan Alvarez", a:true },
+         { t:"Portal profile updated — bio, headshot", w:"2026-09-02 19:31 · Ana Sofía Ruiz-Hernández" }]
+};
+
+const STAGES = [
+  { id:"researching", name:"Researching", kind:"open" },
+  { id:"identified",  name:"Identified",  kind:"open" },
+  { id:"contacted",   name:"Contacted",   kind:"open" },
+  { id:"interested",  name:"Interested",  kind:"open" },
+  { id:"confirmed",   name:"Confirmed",   kind:"won" },
+  { id:"declined",    name:"Declined",    kind:"lost" }
+];
+const SEED_CARDS = [
+  { id:"c1", person:"per_6",  stage:"researching", score:72 },
+  { id:"c2", person:"per_11", stage:"identified",  score:68 },
+  { id:"c3", person:"per_13", stage:"identified",  score:74 },
+  { id:"c4", person:"per_8",  stage:"contacted",   score:91 },
+  { id:"c5", person:"per_10", stage:"interested",  score:80 },
+  { id:"c6", person:"per_4",  stage:"confirmed",   score:95 },
+  { id:"c7", person:"per_9",  stage:"declined",    score:41 }
+];
+const SEED_SEGMENTS = [
+  { id:"s1", name:"Returning keynoters", kind:"live", n:12, created:"2026-11-02 · Jordan Alvarez" },
+  { id:"s2", name:"2026 track chairs",   kind:"fixed", n:8,  created:"2026-10-14 · Jordan Alvarez" }
+];
+
+/* ══════════════════════════════════════════════════════════════════════════
+   State
+   ══════════════════════════════════════════════════════════════════════════ */
+const S = {
+  view:"directory", query:"", filters:{ company:[], title:[], tag:[] }, filterOpen:false,
+  selected:new Set(), drawer:null, modal:null, scope:false,
+  notes:JSON.parse(JSON.stringify(SEED_NOTES)),
+  tags:Object.fromEntries(CONTACTS.map(c=>[c.id,[...c.tags]])),
+  cards:JSON.parse(JSON.stringify(SEED_CARDS)),
+  cardNotes:{}, history:{ c5:[{ from:"identified", to:"contacted", w:"2027-01-12 10:31" },
+                              { from:"contacted", to:"interested", w:"2027-01-16 14:08" }] },
+  segments:JSON.parse(JSON.stringify(SEED_SEGMENTS)),
+  imported:false, openCard:null
+};
+
+const byId = id => CONTACTS.find(c=>c.id===id);
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const first = n => n.split(" ")[0];
+const uniq = k => [...new Set(CONTACTS.map(c=>c[k]))].sort();
+const allTags = () => [...new Set(CONTACTS.flatMap(c=>S.tags[c.id]))].sort();
+
+function visible(){
+  const q = S.query.trim().toLowerCase();
+  return CONTACTS.filter(c=>{
+    if (q && !(c.name+" "+c.email+" "+c.company+" "+c.title).toLowerCase().includes(q)) return false;
+    const f = S.filters;
+    if (f.company.length && !f.company.includes(c.company)) return false;
+    if (f.title.length && !f.title.includes(c.title)) return false;
+    if (f.tag.length && !f.tag.some(t=>S.tags[c.id].includes(t))) return false;
+    return true;
+  });
+}
+const filtered = () => S.query.trim()!=="" || S.filters.company.length || S.filters.title.length || S.filters.tag.length;
+
+function toast(msg){
+  const el=document.getElementById("toast");
+  el.innerHTML=`<div class="toast">${esc(msg)}</div>`;
+  clearTimeout(toast._t); toast._t=setTimeout(()=>el.innerHTML="",2600);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Views
+   ══════════════════════════════════════════════════════════════════════════ */
+function viewDirectory(){
+  const rows = visible();
+  const shown = filtered() ? rows.length : TOTAL_ROWS;
+  const companyCounts = {};
+  CONTACTS.forEach(c=>companyCounts[c.company]=(companyCounts[c.company]||0)+1);
+  const top = [["Heritage Financial Technologies",41],["Latticework Systems",34],["Northwind Data",29],["Meridian Health Systems",22],["Corvid Labs",18]];
+  const maxTop = top[0][1];
+
+  return `
+  <div class="page-head">
+    <div>
+      <h1>People</h1>
+      <p>Everyone this organization has worked with, across every conference — <span class="num">${TOTAL_ROWS.toLocaleString()}</span> speakers, submitters, chairs and sponsor contacts, carrying their bios, history, notes and tags. A returning speaker is already here; nobody re-keys anything.</p>
+    </div>
+    <div class="head-actions">
+      <button class="button" data-act="import">Import people</button>
+      <button class="button primary" data-act="newcontact">+ Add person</button>
+    </div>
+  </div>
+
+  <div class="instrument" data-scope="rider" data-item="CRM-12">
+    <div class="instrument-inner">
+      <div class="kpi"><div class="kpi-name">People</div><div class="kpi-count num">${TOTAL_ROWS.toLocaleString()}</div><div class="kpi-meaning">across all conferences</div></div>
+      <div class="kpi"><div class="kpi-name">Conferences</div><div class="kpi-count num">4</div><div class="kpi-meaning">2024 – 2027</div></div>
+      <div class="kpi"><div class="kpi-name">Returning speakers</div><div class="kpi-count num">137</div><div class="kpi-meaning">spoke at 2+ conferences</div></div>
+      <div class="kpi"><div class="kpi-name">In pipeline</div><div class="kpi-count num">${S.cards.length}</div><div class="kpi-meaning">being sourced for 2027</div></div>
+      <div class="widget">
+        <div class="kpi-name" style="margin-bottom:2px">Top companies</div>
+        ${top.map(([co,n])=>`<button class="bar-row" data-act="filter-company" data-value="${esc(co)}">
+          <span class="co">${esc(co)}</span>
+          <span class="track"><i style="width:${Math.round(n/maxTop*100)}%"></i></span>
+          <span class="n num">${n}</span></button>`).join("")}
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="dir-search" data-scope="free" data-item="CRM-01">
+      <span class="search-glyph">⌕</span>
+      <input id="dirq" placeholder="Search by name, email, company…" value="${esc(S.query)}" aria-label="Search people">
+    </div>
+    <button class="button small ${S.filterOpen?"primary":""}" data-act="togglefilter" data-scope="free" data-item="CRM-02" style="min-width:96px">Filter</button>
+    <div style="flex:1"></div>
+    <button class="button small" data-act="savesegment" data-scope="rider" data-item="CRM-09" style="min-width:168px">${S.selected.size ? "Save selected as list" : "Save filter as list"}</button>
+  </div>
+
+  ${S.filterOpen ? `
+  <div class="filter-panel" data-scope="free" data-item="CRM-02">
+    <div class="filter-group"><h3>Company</h3>
+      ${uniq("company").slice(0,6).map(v=>`<label class="filter-opt"><input type="checkbox" data-f="company" value="${esc(v)}" ${S.filters.company.includes(v)?"checked":""}><span>${esc(v)}</span><span class="n">${companyCounts[v]}</span></label>`).join("")}
+    </div>
+    <div class="filter-group"><h3>Job title</h3>
+      ${uniq("title").slice(0,6).map(v=>`<label class="filter-opt"><input type="checkbox" data-f="title" value="${esc(v)}" ${S.filters.title.includes(v)?"checked":""}><span>${esc(v)}</span><span class="n">1</span></label>`).join("")}
+    </div>
+    <div class="filter-group"><h3>Tag</h3>
+      ${allTags().map(v=>`<label class="filter-opt"><input type="checkbox" data-f="tag" value="${esc(v)}" ${S.filters.tag.includes(v)?"checked":""}><span>${esc(v)}</span><span class="n">${CONTACTS.filter(c=>S.tags[c.id].includes(v)).length}</span></label>`).join("")}
+    </div>
+  </div>` : ""}
+
+  <!-- One reserved row carries active criteria AND the selection bar. Elements never jump. -->
+  <div class="statusbar">
+    ${S.selected.size ? `
+      <span class="selcount num">${S.selected.size} selected</span>
+      <button class="button small" data-act="communicate" data-scope="free" data-item="CRM-11">Communicate</button>
+      <button class="button small" data-act="addtoevent" data-scope="dep" data-item="CRM-10">+ Add to conference</button>
+      <button class="button small" data-act="enroll" data-scope="new" data-item="CRM-07">Enroll in pipeline</button>
+      <button class="chip" data-act="clearsel"><span class="x">×</span> Clear</button>
+    ` : `
+      ${Object.entries(S.filters).flatMap(([k,vs])=>vs.map(v=>
+        `<button class="chip on" data-act="unfilter" data-f="${k}" data-value="${esc(v)}">${k}: ${esc(v)} <span class="x">×</span></button>`)).join("")}
+      ${S.query.trim() ? `<button class="chip on" data-act="clearq">search: “${esc(S.query)}” <span class="x">×</span></button>` : ""}
+      ${filtered() ? `<button class="chip" data-act="clearall">Clear all</button>` : `<span class="chip" style="opacity:.55">No filters — showing everyone</span>`}
+    `}
+  </div>
+
+  <div class="table-wrap" data-scope="free" data-item="CRM-01">
+    <table>
+      <thead><tr>
+        <th class="c-check"><input type="checkbox" id="selall" ${rows.length && rows.every(r=>S.selected.has(r.id))?"checked":""} aria-label="Select all"></th>
+        <th>Name</th><th>Email</th><th>Company</th><th>Job title</th><th>Tags</th><th>Confs</th><th>Last contact</th>
+      </tr></thead>
+      <tbody>
+        ${rows.length ? rows.map(c=>`
+        <tr class="${S.selected.has(c.id)?"sel":""}">
+          <td class="c-check"><input type="checkbox" data-sel="${c.id}" ${S.selected.has(c.id)?"checked":""} aria-label="Select ${esc(c.name)}"></td>
+          <td><button class="rowlink" data-act="open" data-id="${c.id}"><span class="cell-name">${esc(c.name)}</span></button></td>
+          <td><span class="cell-mail cell-trunc">${esc(c.email)}</span></td>
+          <td><span class="cell-trunc">${esc(c.company)}</span></td>
+          <td><span class="cell-trunc">${esc(c.title)}</span></td>
+          <td><span class="tagset">${S.tags[c.id].map(t=>`<span class="tag accent">${esc(t)}</span>`).join("")||'<span class="tag">—</span>'}</span></td>
+          <td class="num">${c.events}</td>
+          <td class="num" style="color:var(--muted)">${c.last}</td>
+        </tr>`).join("") : `
+        <tr><td colspan="8"><div class="empty">
+          <h3>Nobody matches these filters</h3>
+          <p>Clear a filter to bring everyone back into view.</p>
+          <button class="button" data-act="clearall">Clear filters</button>
+        </div></td></tr>`}
+      </tbody>
+    </table>
+    <div class="tablefoot">
+      <span>Showing ${rows.length} of ${shown.toLocaleString()}${filtered()?" matching":""} people</span>
+      <span>Server-side search · sorted by last contact</span>
+    </div>
+  </div>`;
+}
+
+function viewSegments(){
+  return `
+  <div class="page-head">
+    <div><h1>Lists</h1>
+      <p>A named group of people you address more than once — “the 2026 track chairs,” “keynote shortlist.” A <strong>live</strong> list is a saved search: anyone who newly matches joins it. A <strong>fixed</strong> list holds exactly who you put in it. Same idea as a saved view, for people instead of abstracts.</p></div>
+    <div class="head-actions"><button class="button" data-act="godirectory">Back to directory</button></div>
+  </div>
+  <div class="table-wrap" data-scope="rider" data-item="CRM-09">
+    <div class="seg-list">
+      ${S.segments.map(s=>`
+      <button class="seg-row" data-act="opensegment" data-id="${s.id}">
+        <div><div class="nm">${esc(s.name)}</div><div class="cr">Created ${esc(s.created)}</div></div>
+        <span class="kind ${s.kind==="live"?"dyn":""}">${s.kind}</span>
+        <span class="n">${s.n} people</span>
+        <span class="button small" style="pointer-events:none">Open →</span>
+      </button>`).join("")}
+    </div>
+    <div class="tablefoot"><span>${S.segments.length} lists</span><span>A list is reusable as an email audience and as a pipeline source</span></div>
+  </div>`;
+}
+
+function viewPipeline(){
+  return `
+  <div class="page-head">
+    <div><h1>Sourcing pipeline</h1>
+      <p>Prospects being worked toward a 2027 slot. Cards carry a score and rationale; every stage move is recorded with a timestamp.</p></div>
+    <div class="head-actions">
+      <button class="button" data-act="godirectory">Back to directory</button>
+      <button class="button primary" data-act="enrollpick">+ Enroll prospect</button>
+    </div>
+  </div>
+  <div class="board" data-scope="new" data-item="CRM-07">
+    ${STAGES.map(st=>{
+      const cards=S.cards.filter(c=>c.stage===st.id);
+      return `<div class="col">
+        <div class="col-head">
+          <div class="n"><strong>${st.name}</strong><span class="c num">${cards.length}</span></div>
+          <span class="k ${st.kind}">${st.kind}</span>
+        </div>
+        <div class="col-body">
+          ${cards.map(c=>{ const p=byId(c.person); return `
+          <div class="pcard">
+            <button class="rowlink" data-act="opencard" data-id="${c.id}"><span class="nm">${esc(p.name)}</span></button>
+            <div class="co">${esc(p.company)}</div>
+            <div class="sc">
+              <span class="score num">Score ${c.score}</span>
+              <select class="moveto" data-move="${c.id}" aria-label="Move ${esc(p.name)} to stage">
+                ${STAGES.map(s=>`<option value="${s.id}" ${s.id===c.stage?"selected":""}>${s.name}</option>`).join("")}
+              </select>
+            </div>
+          </div>`; }).join("") || `<div class="hint" style="padding:6px 2px">—</div>`}
+        </div>
+      </div>`;
+    }).join("")}
+  </div>
+  <p class="hint" style="margin-top:var(--s3)">Cards move by the <strong>Move to</strong> menu, not by drag — consequential actions live on the control, matching the program board's existing ruling. The rubric accepts either.</p>`;
+}
+
+function viewRoster(){
+  return `
+  <div class="page-head">
+    <div><h1>Speakers</h1>
+      <p>DevFlow Conf 2027 — the <strong>same component and the same query</strong> as org-level People, with <code>event_id</code> applied. Two nav entries, one implementation.</p></div>
+    <div class="head-actions"><button class="button" data-act="godirectory">Open org directory →</button></div>
+  </div>
+  <div class="table-wrap" data-scope="free" data-item="SPK-01">
+    <table><thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Workflow status</th><th>Sessions</th></tr></thead>
+    <tbody>
+      ${CONTACTS.filter(c=>c.role==="Speaker").slice(0,7).map((c,i)=>`
+      <tr><td><span class="cell-name">${esc(c.name)}</span></td>
+        <td><span class="cell-mail">${esc(c.email)}</span></td>
+        <td><span class="cell-trunc">${esc(c.company)}</span></td>
+        <td><span class="tag ${i<3?"accent":""}">${i<3?"Confirmed":"Invited"}</span></td>
+        <td class="num">1</td></tr>`).join("")}
+    </tbody></table>
+    <div class="tablefoot"><span>Showing 7 of 153 speakers on this conference</span><span>Workflow status lives on the participation, never on the person</span></div>
+  </div>
+  <p class="hint" style="margin-top:var(--s3)">This screen is what MRQ-D builds. The CRM is the same query with the conference filter dropped — which is why the org-level view is the <em>cheaper</em> of the two, not the more expensive one.</p>`;
+}
+
+/* ── Contact drawer ────────────────────────────────────────────────────── */
+function drawerContact(id){
+  const c = byId(id); if(!c) return "";
+  const notes = S.notes[id]||[]; const conn = SEED_CONN[id]||[]; const feed = SEED_FEED[id]||[];
+  return `
+  <div class="scrim" data-act="closeoverlay"></div>
+  <aside class="drawer" role="dialog" aria-label="${esc(c.name)}">
+    <div class="drawer-head">
+      <div><h2>${esc(c.name)}</h2><div class="sub">${esc(c.title)} · ${esc(c.company)}</div></div>
+      <button class="button small" data-act="closeoverlay" style="min-width:66px">Close</button>
+    </div>
+    <div class="drawer-body">
+      <div class="sec" data-scope="free" data-item="CRM-03">
+        <h3>Profile</h3>
+        <dl class="kv">
+          <dt>Email</dt><dd style="font-family:var(--mono);font-size:11.5px">${esc(c.email)}</dd>
+          <dt>Company</dt><dd>${esc(c.company)}</dd>
+          <dt>Job title</dt><dd>${esc(c.title)}</dd>
+          <dt>Conferences</dt><dd class="num">${c.events}</dd>
+          <dt>Last contact</dt><dd class="num">${c.last}</dd>
+        </dl>
+        <p class="bio">${esc(c.bio)}</p>
+      </div>
+
+      <div class="sec" data-scope="rider" data-item="CRM-04">
+        <h3>Tags</h3>
+        <div class="tagset" style="margin-bottom:var(--s2)">
+          ${S.tags[id].map(t=>`<button class="chip on" data-act="untag" data-id="${id}" data-value="${esc(t)}">${esc(t)} <span class="x">×</span></button>`).join("")||'<span class="hint">No tags yet.</span>'}
+        </div>
+        <div style="display:flex;gap:6px">
+          <input id="tagin" placeholder="Add a tag…" style="flex:1;border:1px solid var(--rule);border-radius:var(--radius);padding:5px 9px;font:400 12px/1.3 var(--sans);outline:none">
+          <button class="button small" data-act="addtag" data-id="${id}" style="min-width:64px">Add</button>
+        </div>
+      </div>
+
+      <div class="sec" data-scope="rider" data-item="CRM-03">
+        <h3>Internal notes</h3>
+        <div class="notebox">
+          <textarea id="notein" placeholder="Write an internal note — never visible to the contact."></textarea>
+          <div><button class="button small" data-act="addnote" data-id="${id}" style="min-width:92px">Save note</button></div>
+        </div>
+        <div style="display:grid;gap:var(--s2);margin-top:var(--s3)">
+          ${notes.length ? notes.map(n=>`<div class="note"><p>${esc(n.body)}</p><div class="meta">${esc(n.who)} · ${esc(n.when)}</div></div>`).join("")
+                         : '<p class="hint">No notes yet. Notes stay internal and persist across conferences.</p>'}
+        </div>
+      </div>
+
+      <div class="sec" data-scope="free" data-item="CRM-03">
+        <h3>Connections — conferences &amp; sessions</h3>
+        ${conn.length ? conn.map(x=>`<div class="conn"><div><div class="t">${esc(x.t)}</div><div class="e">${esc(x.e)}</div></div><span class="button small" style="pointer-events:none;min-width:56px">Open</span></div>`).join("")
+                      : '<p class="hint">No sessions yet — this contact has submitted but never been accepted.</p>'}
+      </div>
+
+      <div class="sec" data-scope="free" data-item="CRM-03">
+        <h3>Activity</h3>
+        <div class="feed">
+          ${feed.length ? feed.map(f=>`<div class="feed-row"><span class="feed-dot ${f.a?"accent":""}"></span><div><div class="t">${esc(f.t)}</div><div class="w">${esc(f.w)}</div></div></div>`).join("")
+                        : '<p class="hint">No recorded activity.</p>'}
+        </div>
+      </div>
+    </div>
+    <div class="drawer-foot">
+      <button class="button small" data-act="communicate-one" data-id="${id}" style="min-width:104px">Send email</button>
+      <button class="button small" data-act="addtoevent" data-scope="dep" data-item="CRM-10" style="min-width:132px">+ Add to conference</button>
+    </div>
+  </aside>`;
+}
+
+function drawerCard(cardId){
+  const card = S.cards.find(c=>c.id===cardId); if(!card) return "";
+  const p = byId(card.person);
+  const hist = S.history[cardId]||[]; const notes = S.cardNotes[cardId]||[];
+  const stageName = id => (STAGES.find(s=>s.id===id)||{}).name||id;
+  return `
+  <div class="scrim" data-act="closeoverlay"></div>
+  <aside class="drawer" role="dialog" aria-label="${esc(p.name)} pipeline card">
+    <div class="drawer-head">
+      <div><h2>${esc(p.name)}</h2><div class="sub">${esc(p.company)} · Stage: ${esc(stageName(card.stage))} · Score ${card.score}</div></div>
+      <button class="button small" data-act="closeoverlay" style="min-width:66px">Close</button>
+    </div>
+    <div class="drawer-body">
+      <div class="sec" data-scope="new" data-item="CRM-08">
+        <h3>Rationale</h3>
+        <p class="bio">Strong platform-engineering track record; ideal for the Platform &amp; Infra track.</p>
+      </div>
+      <div class="sec" data-scope="new" data-item="CRM-08">
+        <h3>Internal notes</h3>
+        <div class="notebox">
+          <textarea id="cardnotein" placeholder="Write a note on this prospect…"></textarea>
+          <div><button class="button small" data-act="addcardnote" data-id="${cardId}" style="min-width:92px">Save note</button></div>
+        </div>
+        <div style="display:grid;gap:var(--s2);margin-top:var(--s3)">
+          ${notes.length ? notes.map(n=>`<div class="note"><p>${esc(n.body)}</p><div class="meta">${esc(n.who)} · ${esc(n.when)}</div></div>`).join("")
+                         : '<p class="hint">No notes on this card yet.</p>'}
+        </div>
+      </div>
+      <div class="sec" data-scope="new" data-item="CRM-08">
+        <h3>Stage history</h3>
+        <div class="feed">
+          ${hist.length ? hist.map(h=>`<div class="feed-row"><span class="feed-dot accent"></span><div><div class="t">${esc(stageName(h.from))} → <strong>${esc(stageName(h.to))}</strong></div><div class="w">${esc(h.w)} · Jordan Alvarez</div></div></div>`).join("")
+                        : '<p class="hint">No stage moves recorded yet. Move the card and it appears here.</p>'}
+          <div class="feed-row"><span class="feed-dot"></span><div><div class="t">Enrolled at <strong>Identified</strong></div><div class="w">2027-01-08 09:00 · Jordan Alvarez</div></div></div>
+        </div>
+        <p class="hint" style="margin-top:var(--s2)">History is not a second table — the annotations table is append-only, so the stage log <em>is</em> the stage rows.</p>
+      </div>
+    </div>
+  </aside>`;
+}
+
+/* ── Modals ────────────────────────────────────────────────────────────── */
+function modalCompose(){
+  const ids=[...S.selected]; const people=ids.map(byId).filter(Boolean);
+  const sample=people[0]||CONTACTS[0];
+  const body=`Hi {{first_name}},\n\nWe're building the 2027 DevFlow program and your work at {{company}} is exactly the kind of thing our Platform & Infra track is looking for.\n\nWould you submit a talk? The call closes 14 February.\n\n— Jordan`;
+  const resolved=body.replace(/\{\{first_name\}\}/g,`<mark>${esc(first(sample.name))}</mark>`).replace(/\{\{company\}\}/g,`<mark>${esc(sample.company)}</mark>`);
+  return `
+  <div class="scrim" data-act="closeoverlay"></div>
+  <div class="modal" role="dialog" aria-label="Compose email" data-scope="free" data-item="CRM-11">
+    <div class="modal-head"><h2>Email these people</h2><p><span class="num">${people.length}</span> recipients selected · sends through the conference outbox and is logged</p></div>
+    <div class="modal-body">
+      <div class="field"><label>Recipients</label>
+        <div class="tagset">${people.slice(0,6).map(p=>`<span class="tag">${esc(first(p.name))} ${esc(p.name.split(" ").slice(-1)[0])}</span>`).join("")}${people.length>6?`<span class="tag accent">+${people.length-6} more</span>`:""}</div></div>
+      <div class="field"><label>Subject</label><input id="subj" value="Speak at DevFlow Conf 2027?"></div>
+      <div class="field"><label>Body — merge tags {{first_name}} {{company}}</label><textarea id="mbody">${esc(body)}</textarea></div>
+      <div class="field"><label>Preview — personalization resolved</label>
+        <div class="preview">
+          <div class="to">To: ${esc(sample.email)}</div>
+          <div class="subj">Speak at DevFlow Conf 2027?</div>
+          <div class="body">${resolved}</div>
+        </div>
+        <p class="hint">Merge tags resolve per recipient against the contact record — the preview shows recipient 1 of ${people.length}.</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="button" data-act="closeoverlay">Cancel</button>
+      <button class="button primary" data-act="send">Send ${people.length} emails</button>
+    </div>
+  </div>`;
+}
+
+function modalImport(){
+  const brief = `Import my speaker list into Marquee.
+
+Marquee is at https://marquee.stage11.dev. Read /api/openapi.json first \u2014 it describes every endpoint and field. You'll need an API token; I'll paste one in, or you can tell me to make one at Settings \u2192 API tokens.
+
+The people are in a CSV I'll point you at. Marquee matches on email address, so anyone already in there gets updated rather than duplicated \u2014 no need to de-dupe the file first.
+
+When you're done, tell me how many were created, updated and skipped, list any columns you couldn't map, and give me the import_id so I can undo it if it's wrong.`;
+  return `
+  <div class="scrim" data-act="closeoverlay"></div>
+  <div class="modal" role="dialog" aria-label="Import people" data-scope="rider" data-item="CRM-05">
+    <div class="modal-head"><h2>Import people</h2><p>Matched on email &mdash; an existing person is updated, never duplicated</p></div>
+    <div class="modal-body">
+      <div class="field" data-scope="free" data-item="agent-native">
+        <label>Hand this to your agent</label>
+        <p class="hint" style="margin:0 0 2px">Copy the text below and paste it into Claude, or whichever agent you
+          work with. It knows where Marquee is, how to read its API, and what to tell you when it's finished.</p>
+        <div class="agentbrief">
+          <pre id="brief">${esc(brief)}</pre>
+          <button class="button primary" data-act="copybrief" style="min-width:0;width:100%">Copy for your agent</button>
+        </div>
+        <p class="hint">Point it at your file when it asks. Everything the screen can do, it can do &mdash;
+          there is no capability here the API lacks. <span class="subtlecode">POST /api/v1/org/imports</span>,
+          if you'd rather drive it yourself.</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field"><label>Or just drop a file</label>
+        <div class="dropzone"><span class="microlabel">speakers.csv &middot; 3 rows</span>
+          <div class="hint">Drop a CSV here, or <a style="color:var(--accent-ink);text-decoration:underline">choose one</a>.
+            Same endpoint your agent would call.</div></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="button" data-act="closeoverlay">Cancel</button>
+      <button class="button primary" data-act="runimport">Import 3 people</button>
+    </div>
+  </div>`;
+}
+
+function modalSegment(){
+  const n = visible().length, sel = S.selected.size;
+  return `
+  <div class="scrim" data-act="closeoverlay"></div>
+  <div class="modal" role="dialog" aria-label="Save as a list" data-scope="rider" data-item="CRM-09">
+    <div class="modal-head"><h2>${sel ? "Save selected as a list" : "Save this filter as a list"}</h2><p>${sel ? `The <span class="num">${sel}</span> people you ticked` : `Everyone matching right now — <span class="num">${n}</span> people`}</p></div>
+    <div class="modal-body">
+      <div class="field"><label>Name it the way you'd say it</label><input id="segname" value="AI Experts" placeholder="e.g. Keynote shortlist"></div>
+      <div class="field"><label>Keep it up to date?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="segkind" value="dynamic" ${sel?"":"checked"}> Live — anyone who newly matches joins</label>
+          <label><input type="radio" name="segkind" value="curated" ${sel?"checked":""}> Fixed — just these ${sel||n}</label>
+        </div></div>
+      <p class="hint">A list is reusable as an email audience and as a pipeline source.
+        ${sel ? "You picked these by hand, so Fixed is the default." : "A saved filter is usually meant to stay current, so Live is the default."}</p>
+    </div>
+    <div class="modal-foot">
+      <button class="button" data-act="closeoverlay">Cancel</button>
+      <button class="button primary" data-act="savesegment2">Save list</button>
+    </div>
+  </div>`;
+}
+
+function modalAddToEvent(){
+  return `
+  <div class="scrim" data-act="closeoverlay"></div>
+  <div class="modal" role="dialog" aria-label="Add to conference" data-scope="dep" data-item="CRM-10">
+    <div class="modal-head"><h2>Add to conference</h2><p><span class="num">${Math.max(S.selected.size,1)}</span> selected · their profile carries over — no re-keying</p></div>
+    <div class="modal-body">
+      <div class="field"><label>Conference</label>
+        <select id="evpick">
+          <option>DevFlow Conf 2027 — 12–14 May 2027, Moscone West</option>
+          <option>AIE NYC 2026 — 19–21 Oct 2026, Javits Center</option>
+          <option>DevFlow Conf 2026 — 6–8 May 2026, Moscone West</option>
+        </select></div>
+      <div class="field"><label>Role on this conference</label>
+        <select><option>Speaker</option><option>Moderator</option><option>Chairperson</option><option>Sponsor contact</option></select></div>
+      <p class="hint" style="border-left:2px solid var(--warn);padding-left:10px">
+        <strong>Depends on multi-event.</strong> This picker needs more than one conference to exist —
+        <code>GET /api/v1/events</code> and a real switcher. That was <strong>ratified 2026-08-12</strong>
+        (<code>sequence/multi-event-design.md</code>), so this is a dependency, not a blocker. The write itself is
+        one <code>participations</code> row; nothing is re-keyed because
+        <em>people are org-scoped already</em> — the multi-event copy contract says so in its own words.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="button" data-act="closeoverlay">Cancel</button>
+      <button class="button primary" data-act="doadd">Add to DevFlow Conf 2027</button>
+    </div>
+  </div>`;
+}
+
+function modalEnroll(){
+  const ids=[...S.selected]; const p=ids.length?byId(ids[0]):CONTACTS[1];
+  return `
+  <div class="scrim" data-act="closeoverlay"></div>
+  <div class="modal" role="dialog" aria-label="Enroll prospect" data-scope="new" data-item="CRM-07">
+    <div class="modal-head"><h2>Enroll in pipeline</h2><p>${esc(p.name)} · ${esc(p.company)}</p></div>
+    <div class="modal-body">
+      <div class="field"><label>Starting stage</label>
+        <select id="startstage">${STAGES.filter(s=>s.kind==="open").map(s=>`<option value="${s.id}" ${s.id==="identified"?"selected":""}>${s.name}</option>`).join("")}</select></div>
+      <div class="field"><label>Score (0–100)</label><input id="score" value="85"></div>
+      <div class="field"><label>Rationale</label><textarea id="rationale" style="min-height:70px">Strong platform-engineering track record; ideal for Platform &amp; Infra track.</textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="button" data-act="closeoverlay">Cancel</button>
+      <button class="button primary" data-act="doenroll" data-id="${p.id}">Enroll prospect</button>
+    </div>
+  </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Render + events
+   ══════════════════════════════════════════════════════════════════════════ */
+const CRUMBS = { directory:"<strong>People</strong>", segments:"People · <strong>Lists</strong>",
+  pipeline:"People · <strong>Sourcing pipeline</strong>", roster:"DevFlow Conf 2027 · <strong>Speakers</strong>" };
+
+function render(){
+  const views = { directory:viewDirectory, segments:viewSegments, pipeline:viewPipeline, roster:viewRoster };
+  document.getElementById("page").innerHTML = views[S.view]();
+  document.getElementById("crumbs").innerHTML = "AI Engineer · " + CRUMBS[S.view];
+  document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("active", a.dataset.view===S.view));
+
+  let ov="";
+  if (S.drawer) ov = drawerContact(S.drawer);
+  else if (S.openCard) ov = drawerCard(S.openCard);
+  else if (S.modal==="compose") ov = modalCompose();
+  else if (S.modal==="import") ov = modalImport();
+  else if (S.modal==="segment") ov = modalSegment();
+  else if (S.modal==="addtoevent") ov = modalAddToEvent();
+  else if (S.modal==="enroll") ov = modalEnroll();
+  document.getElementById("overlays").innerHTML = ov;
+
+  const q=document.getElementById("dirq");
+  if(q && S.focusQ){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
+  S.focusQ=false;
+}
+
+function stamp(){ const d=new Date(); const p=n=>String(n).padStart(2,"0");
+  return `2027-01-24 ${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+document.addEventListener("click", e=>{
+  const nav=e.target.closest(".nav a[data-view]");
+  if(nav){ S.view=nav.dataset.view; S.selected.clear(); S.drawer=null; S.openCard=null; S.modal=null; render(); return; }
+
+  const t=e.target.closest("[data-act]"); if(!t) return;
+  const a=t.dataset.act, id=t.dataset.id;
+
+  if(a==="togglefilter"){ S.filterOpen=!S.filterOpen; }
+  else if(a==="open"){ S.drawer=id; }
+  else if(a==="opencard"){ S.openCard=id; }
+  else if(a==="closeoverlay"){ S.drawer=null; S.openCard=null; S.modal=null; }
+  else if(a==="clearsel"){ S.selected.clear(); }
+  else if(a==="clearq"){ S.query=""; }
+  else if(a==="clearall"){ S.query=""; S.filters={company:[],title:[],tag:[]}; }
+  else if(a==="unfilter"){ const f=t.dataset.f; S.filters[f]=S.filters[f].filter(v=>v!==t.dataset.value); }
+  else if(a==="filter-company"){ S.filters.company=[t.dataset.value]; S.view="directory"; toast(`Filtered to ${t.dataset.value}`); }
+  else if(a==="communicate"){ S.modal="compose"; }
+  else if(a==="communicate-one"){ S.selected=new Set([id]); S.drawer=null; S.modal="compose"; }
+  else if(a==="addtoevent"){ S.drawer=null; S.modal="addtoevent"; }
+  else if(a==="enroll"||a==="enrollpick"){ S.modal="enroll"; }
+  else if(a==="import"){ S.modal="import"; }
+  else if(a==="savesegment"){ S.modal="segment"; }
+  else if(a==="godirectory"){ S.view="directory"; }
+  else if(a==="opensegment"){ S.view="directory"; S.filters.tag=["AI"]; toast("Opened list — filter re-applied"); }
+  else if(a==="newcontact"){ toast("Add-person form — same fields as the profile drawer"); }
+
+  else if(a==="addnote"){
+    const el=document.getElementById("notein"); const v=(el&&el.value||"").trim();
+    if(!v){ toast("Write a note first"); return; }
+    (S.notes[id]=S.notes[id]||[]).unshift({ body:v, who:"Jordan Alvarez", when:stamp() });
+    toast("Note saved — it persists across conferences");
+  }
+  else if(a==="addcardnote"){
+    const el=document.getElementById("cardnotein"); const v=(el&&el.value||"").trim();
+    if(!v){ toast("Write a note first"); return; }
+    (S.cardNotes[id]=S.cardNotes[id]||[]).unshift({ body:v, who:"Jordan Alvarez", when:stamp() });
+    toast("Note saved on the card");
+  }
+  else if(a==="addtag"){
+    const el=document.getElementById("tagin"); const v=(el&&el.value||"").trim();
+    if(!v){ toast("Type a tag first"); return; }
+    if(!S.tags[id].includes(v)) S.tags[id].push(v);
+    toast(`Tag “${v}” added`);
+  }
+  else if(a==="untag"){ S.tags[id]=S.tags[id].filter(x=>x!==t.dataset.value); }
+  else if(a==="send"){ const n=S.selected.size; S.modal=null; S.selected.clear();
+    toast(`${n} emails queued — logged in the outbox with per-recipient status`); }
+  else if(a==="copybrief"){
+    const el=document.getElementById("brief");
+    if(navigator.clipboard) navigator.clipboard.writeText(el.textContent).catch(()=>{});
+    toast("Copied — paste it into your agent"); return;
+  }
+  else if(a==="runimport"){ S.modal=null; S.imported=true; toast("3 people imported · 0 duplicates created"); }
+  else if(a==="savesegment2"){
+    const nm=(document.getElementById("segname")||{}).value||"Untitled segment";
+    const kind=(document.querySelector('input[name="segkind"]:checked')||{}).value||"dynamic";
+    S.segments.unshift({ id:"s"+Date.now(), name:nm, kind:kind==="dynamic"?"live":"fixed", n:visible().length, created:stamp()+" · Jordan Alvarez" });
+    S.modal=null; S.view="segments"; toast(`List “${nm}” saved`);
+  }
+  else if(a==="doadd"){ S.modal=null; S.selected.clear(); toast("Added to DevFlow Conf 2027 — bio and company carried over"); }
+  else if(a==="doenroll"){
+    const st=(document.getElementById("startstage")||{}).value||"identified";
+    const sc=parseInt((document.getElementById("score")||{}).value,10)||80;
+    if(!S.cards.some(c=>c.person===id)) S.cards.push({ id:"c"+Date.now(), person:id, stage:st, score:sc });
+    S.modal=null; S.selected.clear(); S.view="pipeline"; toast("Prospect enrolled");
+  }
+  render();
+});
+
+document.addEventListener("change", e=>{
+  const sel=e.target.dataset.sel;
+  if(sel!==undefined){ e.target.checked?S.selected.add(sel):S.selected.delete(sel); render(); return; }
+  if(e.target.id==="selall"){ const rows=visible();
+    e.target.checked?rows.forEach(r=>S.selected.add(r.id)):rows.forEach(r=>S.selected.delete(r.id)); render(); return; }
+  const f=e.target.dataset.f;
+  if(f){ const v=e.target.value;
+    S.filters[f]= e.target.checked ? [...S.filters[f],v] : S.filters[f].filter(x=>x!==v);
+    render(); return; }
+  const mv=e.target.dataset.move;
+  if(mv){ const card=S.cards.find(c=>c.id===mv); const from=card.stage; card.stage=e.target.value;
+    (S.history[mv]=S.history[mv]||[]).push({ from, to:card.stage, w:stamp() });
+    toast("Stage move recorded — survives a reload"); render(); }
+});
+
+document.addEventListener("input", e=>{
+  if(e.target.id==="dirq"){ S.query=e.target.value; S.focusQ=true; render(); }
+});
+
+document.addEventListener("keydown", e=>{
+  if(e.key==="Escape"){ S.drawer=null; S.openCard=null; S.modal=null; render(); }
+  if((e.key==="s"||e.key==="S") && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) toggleScope();
+});
+
+function toggleScope(){
+  S.scope=!S.scope;
+  document.body.classList.toggle("scope", S.scope);
+  const b=document.getElementById("scopeBtn");
+  b.textContent = S.scope ? "◧ Scope overlay — on" : "◧ Scope overlay — off";
+  b.classList.toggle("on", S.scope);
+}
+document.getElementById("scopeBtn").addEventListener("click", toggleScope);
+const sw=document.getElementById("switcher"), pop=document.getElementById("pop");
+sw.addEventListener("click", ()=>{ const open=pop.hasAttribute("hidden");
+  open?pop.removeAttribute("hidden"):pop.setAttribute("hidden","");
+  sw.setAttribute("aria-expanded", String(open)); });
+document.addEventListener("click", e=>{ if(!pop.contains(e.target) && !sw.contains(e.target)){
+  pop.setAttribute("hidden",""); sw.setAttribute("aria-expanded","false"); } });
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  S.notes=JSON.parse(JSON.stringify(SEED_NOTES));
+  S.tags=Object.fromEntries(CONTACTS.map(c=>[c.id,[...c.tags]]));
+  S.cards=JSON.parse(JSON.stringify(SEED_CARDS));
+  S.cardNotes={}; S.history={ c5:[{from:"identified",to:"contacted",w:"2027-01-12 10:31"},{from:"contacted",to:"interested",w:"2027-01-16 14:08"}] };
+  S.segments=JSON.parse(JSON.stringify(SEED_SEGMENTS));
+  S.selected.clear(); S.query=""; S.filters={company:[],title:[],tag:[]}; S.filterOpen=false;
+  S.drawer=null; S.openCard=null; S.modal=null; S.view="directory";
+  render(); toast("Prototype state reset");
+});
+
+render();
+</script>
+</body>
+</html>

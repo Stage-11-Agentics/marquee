@@ -43,6 +43,16 @@ The command registry is:
 - `node cli/marquee.mjs agenda move <event-id> <item-id> --set starts_at=<ms>`
 - `node cli/marquee.mjs agenda remove <event-id> <item-id>`
 - `node cli/marquee.mjs search <event-id> --query <text>`
+- `node cli/marquee.mjs people list [--filter key=value]`
+- `node cli/marquee.mjs people show <person-id>`
+- `node cli/marquee.mjs people note <person-id> --set body=<text>`
+- `node cli/marquee.mjs people tag <person-id> --set tag=<tag>`
+- `node cli/marquee.mjs people import --file <path.csv>`
+- `node cli/marquee.mjs people email --filter person_ids=<a,b> --subject <text> --body <text>`
+- `node cli/marquee.mjs lists list`
+- `node cli/marquee.mjs lists save --set name=<name> --set kind=<live|fixed>`
+- `node cli/marquee.mjs pipeline board`
+- `node cli/marquee.mjs pipeline move <person-id> --set stage=<stage>`
 
 ## Set up a new instance
 
@@ -137,6 +147,40 @@ node cli/marquee.mjs remind "$EVENT_ID" --filter task_state=open --subject "One 
 ```
 
 An empty exact selection is a deliberate no-op. Keep recipient selectors narrow and verify the queued count in the response.
+
+## People
+
+People is the ORGANIZATION's record of everyone it has worked with, across every conference — so none of these commands takes an event ID. A returning speaker is already there, carrying their bio, history, notes and tags; nothing is re-keyed per conference.
+
+```sh
+node cli/marquee.mjs people list --filter company="Northwind Data" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs people show "$PERSON_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs people note "$PERSON_ID" --set body="Confirmed the keynote slot on a call." --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs people tag "$PERSON_ID" --set tag=Keynote --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
+
+Search, filters, sort, and paging all resolve on the server: pass `--filter q=…`, `company=`, `title=`, `tag=`, or `stage=` and read the returned page rather than filtering a page yourself. `--filter event_id=…` narrows the same query to one conference's roster — it is one query with two entrances, not two lists.
+
+Importing is matched on the email address, so re-importing an updated export updates people instead of duplicating them. Columns are mapped by their headers; anything unmapped comes back in `unmapped` rather than being guessed at.
+
+```sh
+node cli/marquee.mjs people import --file speakers.csv --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs people email --filter person_ids="$A,$B" --subject "Speak next year?" --body "Hi {{speaker.first_name}}, …" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
+
+A **List** is a named group addressed more than once. A **live** list is a saved filter and picks up anyone who newly matches; a **fixed** list holds exactly the people named in it. Both are reusable as an email audience.
+
+```sh
+node cli/marquee.mjs lists save --set name="Keynote shortlist" --set kind=live --set config='{"tag":"Keynote"}' --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs lists list --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
+
+The sourcing pipeline runs over the same people: six stages ending in the terminal `confirmed` and `declined`. One verb both enrolls and moves, and every move is recorded with a timestamp, so the card's history is the log rather than a second store.
+
+```sh
+node cli/marquee.mjs pipeline move "$PERSON_ID" --set stage=identified --set score=85 --set rationale="Strong platform track record." --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs pipeline board --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
 
 ## Configure
 
