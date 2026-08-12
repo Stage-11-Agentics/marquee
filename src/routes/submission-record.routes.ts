@@ -522,7 +522,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     db.prepare(`
       SELECT evaluation.id, evaluation.round_id, round.name AS round_name, round.position,
         evaluation.reviewer_person_id, person.name AS reviewer_name, evaluation.recommendation,
-        evaluation.score, evaluation.comment, evaluation.criteria_scores, evaluation.updated_at
+        evaluation.score, evaluation.comment, evaluation.criteria_scores, evaluation.abstained, evaluation.updated_at
       FROM evaluations evaluation
       JOIN evaluation_rounds round ON round.id = evaluation.round_id
       JOIN evaluation_plans plan ON plan.id = round.plan_id
@@ -559,7 +559,8 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
         (SELECT COUNT(*) FROM round_assignments covered
          WHERE covered.round_id = round.id AND covered.reviewer_person_id = assignment.reviewer_person_id) AS assigned_count,
         (SELECT COUNT(*) FROM evaluations reviewed
-         WHERE reviewed.round_id = round.id AND reviewed.reviewer_person_id = assignment.reviewer_person_id) AS reviewed_count
+         WHERE reviewed.round_id = round.id AND reviewed.reviewer_person_id = assignment.reviewer_person_id
+           AND reviewed.abstained = 0) AS reviewed_count
       FROM evaluation_rounds round
       JOIN evaluation_plans plan ON plan.id = round.plan_id
       LEFT JOIN round_assignments assignment
@@ -612,6 +613,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
 
   const evaluationEvidence: Array<Record<string, unknown>> = evaluations.results.map((evaluation) => ({
     ...evaluation,
+    abstained: Number(evaluation.abstained ?? 0) === 1,
     criteria_scores: evaluation.criteria_scores === null ? null : jsonValue(evaluation.criteria_scores as string, null),
   }));
   for (const evaluation of evaluationEvidence) {

@@ -19,12 +19,20 @@ const recommendation = z.enum(["approve", "maybe", "deny"]);
 const exportQuery = z.object({ format: z.literal("csv").default("csv") });
 
 const evaluationInput = z.object({
+  abstained: z.union([z.literal(0), z.literal(1)]).default(0),
   comment: z.string().max(20_000).default(""),
   criteria_scores: z.record(z.string(), z.union([z.number(), z.string().max(20_000)]))
     .refine((scores: Record<string, number | string>) => Object.keys(scores).length <= 40, "a scorecard carries at most 40 criteria")
     .nullable().optional(),
-  recommendation,
+  recommendation: recommendation.nullable().optional(),
   score: z.number().nullable().optional(),
+}).superRefine((value: { abstained: 0 | 1; recommendation?: "approve" | "maybe" | "deny" | null }, context: z.RefinementCtx) => {
+  if (value.abstained === 0 && !value.recommendation) {
+    context.addIssue({ code: "custom", path: ["recommendation"], message: "recommendation is required unless declaring a conflict" });
+  }
+  if (value.abstained === 1 && value.recommendation) {
+    context.addIssue({ code: "custom", path: ["recommendation"], message: "a conflicted review cannot include a recommendation" });
+  }
 });
 
 const comparisonInput = z.object({
@@ -37,6 +45,7 @@ const errors = errorResponses([400, 401, 403, 404, 409, 422, 500]);
 
 interface RoundRow {
   anonymized: 0 | 1;
+  committee_id: string | null;
   closes_at: number | null;
   id: string;
   mode: "scorecard" | "comparison";
@@ -83,6 +92,7 @@ interface CompletedRow extends ReviewRow {
 }
 
 interface ReviewRow {
+  abstained: 0 | 1;
   comment: string;
   created_at: number;
   criteria_scores: string | null;
@@ -131,7 +141,7 @@ function parseJsonArray(value: string | null | undefined): unknown[] {
 async function roundForEvent(db: D1Database, eventId: string, roundId: string): Promise<RoundRow> {
   const round = await db.prepare(`
     SELECT round.id, round.plan_id, plan.name AS plan_name, round.position, round.name, round.mode,
-      round.anonymized, round.target_reviews_per_submission, round.opens_at, round.closes_at
+      round.anonymized, round.committee_id, round.target_reviews_per_submission, round.opens_at, round.closes_at
     FROM evaluation_rounds round
     JOIN evaluation_plans plan ON plan.id = round.plan_id
     WHERE round.id = ? AND plan.event_id = ?
@@ -280,7 +290,7 @@ async function reviewsForSubmissions(
   for (let offset = 0; offset < uniqueIds.length; offset += 80) {
     const chunk = uniqueIds.slice(offset, offset + 80);
     const result = await db.prepare(`
-      SELECT submission_id, recommendation, score, criteria_scores, comment, reviewer_person_id, created_at, updated_at
+      SELECT submission_id, recommendation, score, criteria_scores, comment, abstained, reviewer_person_id, created_at, updated_at
       FROM evaluations
       WHERE round_id = ? AND reviewer_person_id = ? AND submission_id IN (${chunk.map(() => "?").join(",")})
     `).bind(roundId, reviewerPersonId, ...chunk).all<CompletedRow>();
@@ -314,7 +324,7 @@ async function reviewerTrackScopes(db: D1Database, eventId: string, personId: st
 async function activeRoundForEvent(db: D1Database, eventId: string, principal: Principal): Promise<RoundRow> {
   const rounds = await db.prepare(`
     SELECT round.id, round.plan_id, plan.name AS plan_name, round.position, round.name, round.mode,
-      round.anonymized, round.target_reviews_per_submission, round.opens_at, round.closes_at
+      round.anonymized, round.committee_id, round.target_reviews_per_submission, round.opens_at, round.closes_at
     FROM evaluation_rounds round
     JOIN evaluation_plans plan ON plan.id = round.plan_id
     WHERE plan.event_id = ? AND plan.status = 'open'
@@ -459,7 +469,7 @@ async function reviewForReviewer(
   reviewerPersonId: string,
 ): Promise<ReviewRow | null> {
   const row = await db.prepare(`
-    SELECT recommendation, score, criteria_scores, comment, reviewer_person_id, created_at, updated_at
+    SELECT recommendation, score, criteria_scores, comment, abstained, reviewer_person_id, created_at, updated_at
     FROM evaluations
     WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?
   `).bind(roundId, submissionId, reviewerPersonId).first<ReviewRow>();
@@ -497,6 +507,7 @@ function reviewPayload(review: ReviewRow | null): Record<string, unknown> | null
   if (!review) return null;
   const proposal = review.recommendation ? proposalFor(review.recommendation) : null;
   return {
+    abstained: review.abstained === 1,
     actor_id: review.reviewer_person_id,
     comment: review.comment,
     created_at: review.created_at,
@@ -866,34 +877,37 @@ const writeEvaluationRoute = defineApiRoute(
     const authorization = await authorizeReviewerScope({ db: context.env.DB, principal, eventId, roundId, submissionId, operation: "evaluation-write" });
     const body = context.req.valid("json");
     const now = Date.now();
-    const score = body.score ?? null;
-    const criteriaScores = body.criteria_scores === undefined || body.criteria_scores === null
+    const abstained = body.abstained === 1;
+    const recommendationValue = abstained ? null : body.recommendation;
+    const score = abstained ? null : body.score ?? null;
+    const criteriaScores = abstained || body.criteria_scores === undefined || body.criteria_scores === null
       ? null
       : JSON.stringify(body.criteria_scores);
     await context.env.DB.prepare(`
       INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(round_id, submission_id, reviewer_person_id) DO UPDATE SET
         recommendation = excluded.recommendation,
         score = excluded.score,
         criteria_scores = excluded.criteria_scores,
         comment = excluded.comment,
-        abstained = 0,
+        abstained = excluded.abstained,
         updated_at = excluded.updated_at
     `).bind(
-      crypto.randomUUID(), roundId, submissionId, authorization.personId, body.recommendation, score,
-      criteriaScores, body.comment, now, now,
+      crypto.randomUUID(), roundId, submissionId, authorization.personId, recommendationValue, score,
+      criteriaScores, body.comment, abstained ? 1 : 0, now, now,
     ).run();
     await context.env.DB.prepare(
       "UPDATE round_assignments SET status = 'complete', updated_at = ? WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?",
     ).bind(now, roundId, submissionId, authorization.personId).run();
-    const proposal = proposalFor(body.recommendation);
+    const proposal = recommendationValue ? proposalFor(recommendationValue) : null;
     return context.json({
+      abstained,
       actor_id: authorization.personId,
       criteria_scores: criteriaScores === null ? null : body.criteria_scores,
       decision_proposal: proposal,
       lifecycle_status_changed: false,
-      recommendation: body.recommendation,
+      recommendation: recommendationValue,
       saved_at: now,
       score,
     }, 200);

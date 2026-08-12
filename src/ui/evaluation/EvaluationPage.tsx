@@ -47,6 +47,7 @@ function fromDateInput(value: string): number | null {
 
 interface Round {
   anonymized: boolean;
+  committee_id: string | null;
   closes_at: number | null;
   criteria: Criterion[];
   id: string;
@@ -58,6 +59,7 @@ interface Round {
     assigned_submissions: number;
     comparisons: number;
     evaluations: number;
+    recusals: number;
     reviewed_submissions: number;
     submission_count: number;
   };
@@ -85,6 +87,7 @@ interface Plan {
   summary: {
     evaluations: number;
     highest_score: number | null;
+    recusals: number;
     submissions_with_reviews: number;
     wide_spread: number;
   };
@@ -94,6 +97,13 @@ interface PlanSummary {
   id: string;
   name: string;
   status: string;
+}
+
+interface ReviewerProgress {
+  assigned_count: number;
+  outstanding_count: number;
+  recusal_count: number;
+  reviewed_count: number;
 }
 
 interface Track {
@@ -158,13 +168,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const [promotionQuery, setPromotionQuery] = useState("");
   const [promotionResult, setPromotionResult] = useState<{ already_promoted: number; assignments: number; promoted: number; selected: number } | null>(null);
   const [promotionApplying, setPromotionApplying] = useState(false);
-  /**
-   * Per-reviewer round progress, rolled up from the assignments endpoint's
-   * already-correct assigned/reviewed counts. Null means "not loaded"; the card
-   * shows an em dash rather than falling back to the plan-wide count, which
-   * measured the wrong thing.
-   */
-  const [reviewerProgress, setReviewerProgress] = useState<Map<string, { assigned: number; reviewed: number }> | null>(null);
+  const [reviewerProgress, setReviewerProgress] = useState<Record<string, Record<string, ReviewerProgress> | null>>({});
   const [tracks, setTracks] = useState<Track[]>([]);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -175,10 +179,13 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
 
   const firstRound = plan?.rounds[0];
   const secondRound = plan?.rounds[1];
+
+  const committeeForRound = (round: Round): Plan["committees"][number] | undefined =>
+    plan?.committees.find((item) => item.id === round.committee_id);
   const committee = plan?.committees[0];
 
-  const load = async (): Promise<void> => {
-    setLoading(true);
+  const load = async ({ quiet = false }: { quiet?: boolean } = {}): Promise<void> => {
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const summaries = await api<{ data: PlanSummary[] }>(`/api/v1/events/${eventId}/plans`, "/api/v1/events/{eventId}/plans");
@@ -201,39 +208,35 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       setInstructions(detail.instructions);
       setRoundDrafts(Object.fromEntries(detail.rounds.map((round) => [round.id, round.name])));
       setReviewerTarget(detail.rounds[0]?.target_reviews_per_submission ?? 3);
-      await loadReviewerProgress(detail.rounds[0]?.id ?? null);
+      setLoading(false);
+      const progressEntries = await Promise.all(detail.rounds.map(async (round) => {
+        try {
+          const result = await api<{ data: Array<{ assigned_count: number; outstanding_count: number; recusal_count: number; reviewed_count: number; reviewer_person_id: string | null }> }>(
+            `/api/v1/events/${eventId}/rounds/${round.id}/assignments?summary=1`,
+            "/api/v1/events/{eventId}/rounds/{roundId}/assignments",
+          );
+          const byReviewer: Record<string, ReviewerProgress> = {};
+          for (const assignment of result.data) {
+            if (!assignment.reviewer_person_id) continue;
+            byReviewer[assignment.reviewer_person_id] = {
+              assigned_count: assignment.assigned_count,
+              outstanding_count: assignment.outstanding_count,
+              recusal_count: assignment.recusal_count,
+              reviewed_count: assignment.reviewed_count,
+            };
+          }
+          return [round.id, byReviewer] as const;
+        } catch {
+          // Coverage is a secondary affordance; one unavailable round must not
+          // hide the plan or turn a healthy chair surface into an alarm.
+          return [round.id, null] as const;
+        }
+      }));
+      setReviewerProgress(Object.fromEntries(progressEntries));
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     } finally {
       setLoading(false);
-    }
-  };
-
-  /**
-   * One row per (submission, reviewer), each repeating that reviewer's round
-   * totals; committee-assigned rows carry no reviewer and are skipped.
-   */
-  const loadReviewerProgress = async (roundId: string | null): Promise<void> => {
-    if (!roundId) {
-      setReviewerProgress(new Map());
-      return;
-    }
-    try {
-      const assignments = await api<{ data: Array<{ assigned_count: number; reviewed_count: number; reviewer_person_id: string | null }> }>(
-        `/api/v1/events/${eventId}/rounds/${roundId}/assignments`,
-        "/api/v1/events/{eventId}/rounds/{roundId}/assignments",
-      );
-      const rolled = new Map<string, { assigned: number; reviewed: number }>();
-      for (const row of assignments.data) {
-        if (!row.reviewer_person_id) continue;
-        rolled.set(row.reviewer_person_id, {
-          assigned: Number(row.assigned_count ?? 0),
-          reviewed: Number(row.reviewed_count ?? 0),
-        });
-      }
-      setReviewerProgress(rolled);
-    } catch {
-      setReviewerProgress(null);
     }
   };
 
@@ -406,15 +409,28 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const distribute = async (event: Event): Promise<void> => {
     event.preventDefault();
     const targetRound = plan?.rounds.find((round) => round.id === (assignmentRoundId ?? firstRound?.id));
-    if (!targetRound || !committee) return;
+    const committeeId = targetRound?.committee_id;
+    if (!targetRound || !committeeId) return;
     try {
       await api(`/api/v1/events/${eventId}/rounds/${targetRound.id}/assignments`, "/api/v1/events/{eventId}/rounds/{roundId}/assignments", {
         method: "POST",
-        body: JSON.stringify({ committee_id: committee.id, mode: assignmentMode, reviewers_per_submission: reviewerTarget }),
+        body: JSON.stringify({ committee_id: committeeId, mode: assignmentMode, reviewers_per_submission: reviewerTarget }),
       });
       setDialog(null);
       setNotice(`${targetRound.name} assignments recalculated · completed reviews were preserved`);
       await load();
+    } catch (reason: unknown) {
+      setError(errorSummary(reason));
+    }
+  };
+
+  const remindReviewer = async (round: Round, personId: string): Promise<void> => {
+    try {
+      const response = await api<{ queued: boolean; outstanding: number }>(`/api/v1/events/${eventId}/rounds/${round.id}/reviewers/${personId}/remind`, "/api/v1/events/{eventId}/rounds/{roundId}/reviewers/{personId}/remind", {
+        method: "POST",
+      });
+      setNotice(response.queued ? `Reviewer reminder queued · ${response.outstanding} outstanding` : "Reviewer reminder already queued today");
+      await load({ quiet: true });
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     }
@@ -489,11 +505,33 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       <span class="subtle">{round.target_reviews_per_submission} reviews per submission · {round.mode === "comparison" ? `${round.progress.comparisons} comparisons` : `${round.progress.evaluations} scorecards`}</span>
       <div class="progress-track"><i style={{ width: `${percent(round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations, Math.max(1, round.progress.assigned_submissions * round.target_reviews_per_submission))}%` }} /></div>
       <div class="wave-date"><span class="tabular">{round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations}</span> complete · <span class="tabular">{Math.max(0, round.progress.assigned_submissions * round.target_reviews_per_submission - (round.mode === "comparison" ? round.progress.comparisons : round.progress.evaluations))}</span> remaining</div>
+      <div class="round-recusal-status">{round.progress.recusals === 1 ? "1 recusal · needs reassignment" : round.progress.recusals > 1 ? `${round.progress.recusals} recusals · needs reassignment` : "\u00a0"}</div>
       <div class="round-meta"><span>{round.anonymized ? "Anonymous review" : "Identity visible"}</span><span class="tabular">{formatDate(round.opens_at)} → {formatDate(round.closes_at)}</span></div>
+      <label class="round-setting"><span>Reviewer pool</span><select aria-label={`Round ${index + 1} reviewer pool`} value={round.committee_id ?? ""} onChange={(event) => void updateRound(round, { committee_id: (event.currentTarget as HTMLSelectElement).value || null })}><option value="">No pool selected</option>{plan?.committees.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     </div>
   ) : (
     <div class="round-card round-empty" key={`empty-${index}`}><span class="eyebrow">Round {index + 1}</span><strong>Not configured</strong><span class="subtle">Add the next ordered round from the plan controls.</span></div>
   );
+
+  const renderCommitteeRound = (round: Round): JSX.Element => {
+    const roundCommittee = committeeForRound(round);
+    return <section class="committee-round" key={round.id}>
+      <div class="committee-intro"><span><strong>{round.name}</strong> · {roundCommittee?.name ?? "No reviewer pool selected"}</span><span>{round.target_reviews_per_submission} reviews per abstract</span></div>
+      {roundCommittee ? <><div class="committee-list">{roundCommittee.members.map((member) => {
+        const roundProgress = reviewerProgress[round.id];
+        const progress = roundProgress?.[member.id];
+        const coverageLabel = progress
+          ? `${progress.reviewed_count} / ${progress.assigned_count} reviewed`
+          : roundProgress === undefined ? "Reading coverage…" : roundProgress === null ? "Coverage unavailable" : "No assignments yet";
+        const action = progress?.outstanding_count
+          ? <Button small variant="ghost" onClick={() => void remindReviewer(round, member.id)}>Remind</Button>
+          : progress
+            ? <span class="tabular subtle">{progress.reviewed_count} complete</span>
+            : <span class="tabular subtle">—</span>;
+        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
+      })}</div><Button class="full-width ghost" onClick={() => setDialog("committee")}>View all {roundCommittee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>Choose a reviewer pool on this round card before distributing assignments.</span><Button small variant="primary" onClick={() => setDialog("committee")}>Manage committee</Button></div>}
+    </section>;
+  };
 
   if (loading) return <div class="evaluation-loading instrument"><span class="eyebrow">Evaluation plan</span><strong>Loading conference review machinery…</strong><span class="subtle">Reading rounds, committees, and reviewer coverage.</span></div>;
   if (error && !plan) return <EmptyState title="Evaluation data unavailable" copy={error} action={<Button variant="primary" onClick={() => void load()}>Try again</Button>} />;
@@ -532,15 +570,11 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
           <div class="metric-box"><span class="eyebrow">With ≥1 review</span><div class="metric">{plan.summary.submissions_with_reviews.toLocaleString()}</div></div>
           <div class="metric-box"><span class="eyebrow">Highest score</span><div class="metric">{plan.summary.highest_score?.toFixed(2) ?? "—"}</div></div>
           <div class="metric-box"><span class="eyebrow">Wide spread</span><div class="metric">{plan.summary.wide_spread.toLocaleString()}</div></div>
-        </div><div class="spark" aria-label="Score distribution"><i style="height:35%" /><i style="height:52%" /><i style="height:39%" /><i style="height:71%" /><i style="height:67%" /><i style="height:81%" /><i style="height:74%" /><i style="height:92%" /><i style="height:83%" /><i style="height:96%" /></div></CardBody>
+        </div><div class="evaluation-summary-note"><span>Recusals excluded from aggregates</span><strong class="tabular">{plan.summary.recusals.toLocaleString()}</strong></div><div class="spark" aria-label="Score distribution"><i style="height:35%" /><i style="height:52%" /><i style="height:39%" /><i style="height:71%" /><i style="height:67%" /><i style="height:81%" /><i style="height:74%" /><i style="height:92%" /><i style="height:83%" /><i style="height:96%" /></div></CardBody>
       </Card>
       <Card class="committee-card">
         <CardHeader title="Program committee"><div class="card-actions"><Button small variant="primary" onClick={openInvite} disabled={!committee}>Invite reviewer</Button><Button small onClick={() => setDialog("committee")}>Manage</Button><Button small onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Edit assignments</Button></div></CardHeader>
-        <CardBody>{committee ? <><div class="committee-intro"><span>{committee.members.length} reviewers · explicit track responsibility</span><span>{firstRound?.target_reviews_per_submission ?? 0} reviews per abstract</span></div><div class="committee-list">{committee.members.map((member) => <div class="committee-person" key={member.id}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div></div><span class="tabular subtle reviewer-progress" title="Reviews submitted of reviews assigned in this round">{(() => {
-  const rolled = reviewerProgress?.get(member.id);
-  if (!rolled) return "—/—";
-  return `${rolled.reviewed}/${rolled.assigned}`;
-})()} reviewed</span></div>)}</div><Button class="full-width ghost" onClick={openInvite}>+ Invite a reviewer to this committee</Button></> : <div class="inline-empty"><span>No committee yet. Create one before distributing reviews.</span><Button small variant="primary" onClick={() => setDialog("committee")}>Create committee</Button></div>}</CardBody>
+        <CardBody>{plan.rounds.length ? plan.rounds.map(renderCommitteeRound) : <div class="inline-empty"><span>No rounds yet. Create a round before assigning reviews.</span><Button small variant="primary" onClick={() => setDialog("plan")}>Configure plan</Button></div>}</CardBody>
       </Card>
       <Card class="promotion-card">
         <CardHeader title="Round promotion"><Chip>Funnel</Chip></CardHeader>
@@ -577,6 +611,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       <footer><Button type="button" onClick={() => { setDialog(null); setScorecardRoundId(null); }}>Cancel</Button><Button type="submit" variant="primary" disabled={!weightsValid || criteria.some((item) => !item.name.trim())}>Save scorecard</Button></footer>
     </form></div>}
     {dialog === "committee" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={createCommittee}><header><span class="eyebrow">Program committee</span><h2>Manage committee</h2></header><div class="eval-dialog-body"><label class="field">Committee name<input value={committeeName} onInput={(event) => setCommitteeName((event.currentTarget as HTMLInputElement).value)} /></label><div class="message-preview">Reviewer rows carry explicit track responsibilities. Scope changes recalculate queue membership without replacing completed reviews.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save committee</Button></footer></form></div>}
+    {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round assignments</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Round<select value={assignmentRoundId ?? firstRound?.id ?? ""} onChange={(event) => setAssignmentRoundId((event.currentTarget as HTMLSelectElement).value)}>{plan.rounds.map((round) => <option key={round.id} value={round.id}>{round.position + 1} · {round.name}</option>)}</select></label><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label><div class="message-preview">Assignments belong to the selected round. Re-running distribution is idempotent and never replaces completed review or comparison evidence.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!plan.rounds.some((round) => round.id === (assignmentRoundId ?? firstRound?.id) && Boolean(round.committee_id))}>Distribute</Button></footer></form></div>}
     {dialog === "invite" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={inviteReviewer}>
       <header><span class="eyebrow">{committee?.name ?? "Program committee"}</span><h2>Invite reviewer</h2></header>
       <div class="eval-dialog-body">
@@ -623,7 +658,6 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
           : <Button type="submit" variant="primary" disabled={inviteSaving || !committee || inviteName.trim() === "" || inviteEmail.trim() === "" || inviteTrackIds.length === 0}>{inviteSaving ? "Inviting…" : "Send invitation"}</Button>}
       </footer>
     </form></div>}
-    {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round assignments</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Round<select value={assignmentRoundId ?? firstRound?.id ?? ""} onChange={(event) => setAssignmentRoundId((event.currentTarget as HTMLSelectElement).value)}>{plan.rounds.map((round) => <option key={round.id} value={round.id}>{round.position + 1} · {round.name}</option>)}</select></label><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label><div class="message-preview">Assignments belong to the selected round. Re-running distribution is idempotent and never replaces completed review or comparison evidence.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!committee}>Distribute</Button></footer></form></div>}
     {dialog === "promotion" && <div class="eval-dialog-backdrop" role="presentation"><div class="eval-dialog"><header><span class="eyebrow">Round promotion</span><h2>Preview the next funnel</h2></header><div class="eval-dialog-body"><div class="promotion-preview"><strong>Filtered promotion set</strong><span>Use the same typed filter as the conference submission list. Empty legacy selections never promote records.</span><label class="field">Status<select value={promotionStatus} onChange={(event) => { setPromotionStatus((event.currentTarget as HTMLSelectElement).value); setPromotionResult(null); }}><option value="in_review">In review</option><option value="submitted">Submitted</option><option value="accepted">Accepted</option><option value="waitlisted">Waitlisted</option></select></label><label class="field">Search<input value={promotionQuery} placeholder="Title, track, or speaker" onInput={(event) => { setPromotionQuery((event.currentTarget as HTMLInputElement).value); setPromotionResult(null); }} /></label>{promotionResult && <div class="promotion-result"><span><strong>{promotionResult.selected}</strong> selected</span><span><strong>{promotionResult.promoted}</strong> ready to promote</span><span><strong>{promotionResult.already_promoted}</strong> already in Round 2</span></div>}</div></div><footer><Button type="button" onClick={() => { setDialog(null); setPromotionResult(null); }}>Done</Button><Button type="button" onClick={() => void runPromotion(true)} disabled={promotionApplying}>Refresh preview</Button><Button type="button" variant="primary" onClick={() => void runPromotion(false)} disabled={promotionApplying || !promotionResult?.promoted}>{promotionApplying ? "Applying…" : "Promote selected"}</Button></footer></div></div>}
   </>;
 }

@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-110",
+  "owns": [],
+  "exercises": ["AC-54", "AC-58", "AC-59", "AC-98"],
+  "notes": "MRQ-110 deepens the existing scorecard, evaluator-progress, reviewer-queue, and per-round criteria without minting a consolidated AC. Its reviewer reminder is a program-authorized outbox path deliberately outside AC-93's speaker audience engine."
+}
