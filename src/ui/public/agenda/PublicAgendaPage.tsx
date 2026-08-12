@@ -59,6 +59,7 @@ export const PUBLIC_SITE_STYLES = `
 .public-agenda-row { display: grid; grid-template-columns: 118px minmax(0, 1fr) minmax(145px, .55fr); align-items: start; gap: 15px; min-height: 104px; padding: 16px; border-bottom: 1px solid var(--public-rule-soft); }
 .public-agenda-row:last-child { border-bottom: 0; }
 .public-time { color: var(--public-muted); font: 650 11px/1.35 var(--public-mono); }
+.public-day { display: block; margin-bottom: 3px; color: var(--public-accent); font-size: 10px; }
 .public-time strong { display: block; margin-bottom: 3px; color: var(--public-ink); font-size: 15px; }
 .public-time span { display: block; line-height: 1.35; }
 .public-session-title { margin: 0; font: 650 17px/1.2 Georgia, serif; letter-spacing: -.01em; }
@@ -116,23 +117,36 @@ export const PUBLIC_AGENDA_SCRIPT = `
   if (!form) return;
   const submit = () => {
     const activeDay = form.querySelector('button[name="day"].active');
-    if (!(activeDay instanceof HTMLButtonElement)) {
-      const currentDay = new URLSearchParams(window.location.search).get('day');
-      if (currentDay && currentDay !== 'all') {
-        const preservedDay = document.createElement('input');
-        preservedDay.type = 'hidden';
-        preservedDay.name = 'day';
-        preservedDay.value = currentDay;
-        form.append(preservedDay);
-      }
-    }
+    if (!(activeDay instanceof HTMLButtonElement)) preserveCurrentDay();
     if (form.requestSubmit) form.requestSubmit(activeDay instanceof HTMLButtonElement ? activeDay : undefined);
     else form.submit();
   };
-  const activeDay = form.querySelector('button[name="day"].active');
-  activeDay?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  function preserveCurrentDay() {
+    const currentDay = new URLSearchParams(window.location.search).get('day');
+    if (!currentDay || currentDay === 'all') return;
+    let preservedDay = form.querySelector('input[data-preserved-day]');
+    if (!(preservedDay instanceof HTMLInputElement)) {
+      preservedDay = document.createElement('input');
+      preservedDay.type = 'hidden';
+      preservedDay.name = 'day';
+      preservedDay.dataset.preservedDay = 'true';
+      form.append(preservedDay);
+    }
+    preservedDay.value = currentDay;
+  }
+  const days = form.querySelector('.public-days');
+  const activeTab = form.querySelector('button[name="day"].active');
+  if (days instanceof HTMLElement && activeTab instanceof HTMLElement && days.scrollWidth > days.clientWidth) {
+    days.scrollLeft = Math.max(0, activeTab.offsetLeft - days.offsetLeft);
+  }
   form.querySelectorAll('select').forEach((control) => control.addEventListener('change', submit));
   const search = form.querySelector('[name="q"]');
+  search?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      submit();
+    }
+  });
   let timer;
   search?.addEventListener('input', () => {
     clearTimeout(timer);
@@ -231,7 +245,7 @@ export function PublicAgendaPage({ data }: { data: PublicAgendaData }): JSX.Elem
         <section class="public-agenda-list" aria-live="polite" aria-label="Published agenda sessions">
           {data.sessions.length > 0 ? data.sessions.map((session) => (
             <article class="public-agenda-row" data-public-session-id={session.id} key={session.id}>
-              <time class="public-time" dateTime={`${session.date}T${session.time}`}><strong>{session.time}</strong><span>{session.roomLabel}</span></time>
+              <time class="public-time" dateTime={`${session.date}T${session.time}`}>{data.filters.day === "all" ? <span class="public-day">{session.day}</span> : null}<strong>{session.time}</strong><span>{session.roomLabel}</span></time>
               <div>
                 <h2 class="public-session-title"><a href={sessionHref(session.slug)}>{session.title}</a></h2>
                 <p class="public-speakers">
