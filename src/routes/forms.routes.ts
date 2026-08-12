@@ -625,7 +625,7 @@ const updateFormField = defineApiRoute(
     tags: ["Forms"],
     request: { params: fieldParams, body: { content: { "application/json": { schema: patchFieldSchema } } } },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
-    responses: { 200: jsonResponse(formFieldSchema, "Updated field"), ...errorResponses([400, 401, 403, 404, 409, 500]) },
+    responses: { 200: jsonResponse(formFieldSchema, "Updated field"), ...errorResponses([400, 401, 403, 404, 409, 422, 500]) },
   },
   async (context) => {
     const { eventId, formId, fieldId } = context.req.valid("param");
