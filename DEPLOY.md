@@ -96,7 +96,15 @@ curl -s https://marquee.stage11.dev/ | grep 'View public CFP'      # → /f/cfp
 curl -s -o /dev/null -w '%{http_code}\n' https://marquee.stage11.dev/f/cfp
 curl -s -i -X POST https://marquee.stage11.dev/api/v1/auth/demo \
   -H 'content-type: application/json' -d '{"role":"organizer"}' | grep -i set-cookie
+# R2 browser-upload preflight (uses the account ID exported in the deploy shell)
+MARQUEE_R2_CORS_URL="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/marquee-media/mrq-92-preflight-probe" \
+  npm run check:r2-cors
 ```
+
+The R2 check is a real external preflight, not part of `npm test`. It verifies
+the production origin, the signed upload's `PUT` and headers, and a deliberately
+wrong origin. Run it after every deploy; it is the guard against the local
+`LOCAL_UPLOAD_SHIM` hiding a broken cross-origin path.
 
 **Guardrail G6: the session cookie must carry no `Domain` attribute.** `stage11.dev` is
 HSTS-preloaded and a parent-domain cookie would leak across it. Expect exactly

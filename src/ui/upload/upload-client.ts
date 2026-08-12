@@ -6,6 +6,18 @@
 
 import type { SignedUpload } from "../../lib/r2/protocol";
 
+export const UPLOAD_PUT_NETWORK_ERROR = "upload PUT network error";
+
+const SPEAKER_UPLOAD_FAILURE = "We couldn't upload that file. Check your connection and try again.";
+
+/** Convert transport failures into speaker copy without hiding the diagnostic Error. */
+export function speakerUploadFailureMessage(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : String(error);
+  return message === UPLOAD_PUT_NETWORK_ERROR || message === "upload PUT aborted" || /^upload PUT failed with status \d+$/.test(message)
+    ? SPEAKER_UPLOAD_FAILURE
+    : null;
+}
+
 export interface UploadProgressHandlers {
   onProgress?: (loaded: number, total: number) => void;
   onExpiredOrForbidden?: () => void;
@@ -33,7 +45,7 @@ export function putFileToR2(
       if (xhr.status === 403 || xhr.status === 412) handlers.onExpiredOrForbidden?.();
       reject(new Error(`upload PUT failed with status ${xhr.status}`));
     };
-    xhr.onerror = () => reject(new Error("upload PUT network error"));
+    xhr.onerror = () => reject(new Error(UPLOAD_PUT_NETWORK_ERROR));
     xhr.onabort = () => reject(new Error("upload PUT aborted"));
     xhr.send(file);
   });

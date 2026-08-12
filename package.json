@@ -7,6 +7,7 @@
     "test": "node scripts/checks/run-test.mjs",
     "seed": "node scripts/seed/index.ts",
     "e2e": "node scripts/checks/run-e2e.mjs",
+    "check:r2-cors": "node scripts/checks/check-r2-cors.mjs",
     "check:speed": "node scripts/checks/check-speed.mjs",
     "check:seed": "node scripts/checks/check-seed.mjs",
     "check:api": "node scripts/checks/check-api.mjs",

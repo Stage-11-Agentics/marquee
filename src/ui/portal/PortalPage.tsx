@@ -2,7 +2,7 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { apiFetch } from "../shell/api-client";
-import { putFileToR2, type UploadProgressHandlers } from "../upload/upload-client";
+import { putFileToR2, speakerUploadFailureMessage, type UploadProgressHandlers } from "../upload/upload-client";
 import { formatBytes, validateClientUpload } from "../upload/upload-policy";
 import type { SignedUpload } from "../../lib/r2/protocol";
 import { isFieldApplicable } from "../../lib/form-conditions";
@@ -262,7 +262,8 @@ function TaskSurface({ task, onComplete }: { task: PortalTask; onComplete: () =>
       });
       await onComplete();
     } catch (caught) {
-      setError(uploadLinkExpired.current ? "The upload link expired. Retry to request a fresh link." : (caught as Error).message);
+      if (task.kind === "file") console.error("Speaker upload failed", caught);
+      setError(uploadLinkExpired.current ? "The upload link expired. Retry to request a fresh link." : speakerUploadFailureMessage(caught) ?? (caught as Error).message);
       setCanRetry(task.kind === "file" && file !== null);
     } finally {
       setBusy(false);
