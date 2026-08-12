@@ -324,6 +324,19 @@ function scopedSignal(callerSignal: AbortSignal | null | undefined): AbortSignal
     : callerSignal;
 }
 
+const unauthenticatedListeners = new Set<() => void>();
+
+/**
+ * Fires when a route says this browser has no session left. The shell listens
+ * so it can raise one wall over the work already on screen rather than letting
+ * every panel fail on its own — the refusal is still thrown to the caller that
+ * asked, exactly as `onForbidden` leaves it.
+ */
+export function onUnauthenticated(listener: () => void): () => void {
+  unauthenticatedListeners.add(listener);
+  return () => { unauthenticatedListeners.delete(listener); };
+}
+
 export async function apiFetch<Result>(
   path: string,
   options: ApiFetchOptions = {},
@@ -349,6 +362,7 @@ export async function apiFetch<Result>(
     const envelope = (await response.json().catch(() => null)) as EnvelopeShape | null;
     const code = codeFromEnvelope(envelope?.error?.code, response.status);
     if (code === "forbidden") for (const listener of forbiddenListeners) listener();
+    if (code === "unauthenticated") for (const listener of unauthenticatedListeners) listener();
     throw noted(new MarqueeApiError({
       code,
       message: asString(envelope?.error?.message) ?? `the request failed with status ${response.status}`,

@@ -144,7 +144,7 @@ export function CoSpeakerPage(): JSX.Element {
   if (loading) return <CoSpeakerFrame><div class="portal-loading">Loading your conference invitation…</div></CoSpeakerFrame>;
   if (error || !state) {
     const expired = error?.status === 401;
-    return <CoSpeakerFrame><div class="portal-error"><div><strong>{expired ? "This invitation needs a fresh sign-in." : "We could not open this invitation."}</strong><p>{expired ? "Ask the conference team to send a new profile link, then open it once." : error?.message ?? "Ask the conference team to send the invitation again."}</p><a class="portal-signin" href="/">Return to conference</a></div></div></CoSpeakerFrame>;
+    return <CoSpeakerFrame><div class="portal-error"><div><strong>{expired ? "This invitation needs a fresh sign-in." : "We could not open this invitation."}</strong><p>{expired ? "Sign in and this invitation opens again — or ask the conference team to send a new profile link." : error?.message ?? "Ask the conference team to send the invitation again."}</p><a class="portal-signin" href={expired ? "/signin" : "/"}>{expired ? "Sign in" : "Return to conference"}</a></div></div></CoSpeakerFrame>;
   }
 
   const responseStatus = state.participation.confirmation_status;
