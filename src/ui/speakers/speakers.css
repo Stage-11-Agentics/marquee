@@ -64,7 +64,10 @@
 .speaker-board-state { align-items: center; color: var(--muted); display: grid; gap: 6px; min-height: 180px; padding: 24px; place-items: center; text-align: center; }
 .speaker-board-state.error { color: var(--alarm); }
 
-.speaker-record-layer { inset: 0; position: fixed; z-index: 40; }
+/* Above the sticky topbar (z-index 50), matching the drawer layer convention
+   in components.css and the onboarding board. At 40 the topbar painted over the
+   record's own title and close button. */
+.speaker-record-layer { inset: 0; position: fixed; z-index: 500; }
 .speaker-record-backdrop { background: rgba(12, 14, 18, .38); border: 0; inset: 0; position: absolute; width: 100%; }
 .speaker-record { background: var(--panel); border-left: 1px solid var(--line-strong); display: grid; grid-template-rows: auto 1fr auto; height: 100%; margin-left: auto; max-width: 620px; position: relative; width: min(620px, 100%); }
 .speaker-record-head { align-items: start; border-bottom: 1px solid var(--line-strong); display: flex; gap: 12px; justify-content: space-between; padding: 14px 16px; }
