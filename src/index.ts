@@ -18,6 +18,7 @@ import { errorFields, loggerForEnv } from "./lib/observability/log";
 import { correlateQueue, instrumentBindings } from "./lib/observability/request-instrumentation";
 import { claimRoutes } from "./routes/claim.route";
 import { landingRoutes } from "./routes/landing.route";
+import { signinRoutes } from "./routes/signin.route";
 import { publicFormRoutes } from "./routes/public-form.route";
 import { publicAgendaRoutes } from "./routes/public-agenda.route";
 import { embedRoutes } from "./routes/embed.route";
@@ -134,6 +135,7 @@ app.get("/__validation/session-cookie", (context) => {
 
 app.route("/", landingRoutes);
 app.route("/", claimRoutes);
+app.route("/", signinRoutes);
 app.route("/", publicFormRoutes);
 app.route("/", publicAgendaRoutes);
 app.route("/", embedRoutes);

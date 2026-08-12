@@ -23,6 +23,9 @@ installErrorReporting();
 // the admin shell. This also keeps an iframe independent of mq_session.
 const isPublicPage =
   window.location.pathname === "/" ||
+  window.location.pathname === "/signin" ||
+  window.location.pathname === "/login" ||
+  window.location.pathname === "/sign-in" ||
   window.location.pathname.startsWith("/f/") ||
   window.location.pathname === "/agenda" ||
   window.location.pathname === "/agenda/agents" ||
