@@ -5,6 +5,7 @@ import {
   AGENDA_GRID_OPTIONS,
   AGENDA_GRID_STORAGE_PREFIX,
   DEFAULT_AGENDA_GRID_GRANULARITY,
+  agendaGridPosition,
   agendaGridStorageKey,
   generateAgendaGridAxis,
   generateAgendaGridSlots,
@@ -81,6 +82,19 @@ describe("MRQ-157 · agenda grid logic", () => {
     expect(thirtyAxis.every((row) => row.microTicks.length === 1)).toBe(true);
     expect(fiveAxis.flatMap((row) => row.microTicks).map((tick) => tick.time)).toContain("10:05");
     expect(fiveAxis.flatMap((row) => row.microTicks).map((tick) => tick.time)).not.toContain("10:00");
+  });
+
+  test("CONTRACT · arbitrary stored starts stay visible inside their exact containing target", () => {
+    const fifteen = generateAgendaGridSlots(15);
+    const odd = agendaGridPosition("10:20", fifteen);
+    expect(odd).toMatchObject({ slot: { time: "10:15" }, offsetMinutes: 5 });
+    expect(odd?.offsetRatio).toBeCloseTo(1 / 3);
+    expect(agendaGridPosition("10:20", generateAgendaGridSlots(5))).toMatchObject({
+      slot: { time: "10:20" },
+      offsetMinutes: 0,
+      offsetRatio: 0,
+    });
+    expect(agendaGridPosition("21:00", fifteen)).toBeNull();
   });
 
   test("CONTRACT · the event-scoped builder setting round-trips through best-effort local storage", () => {

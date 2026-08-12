@@ -47,6 +47,15 @@ export interface AgendaGridAxisRow {
   microTicks: readonly AgendaGridMicroTick[];
 }
 
+export interface AgendaGridPosition {
+  /** The target row/column that contains the session's exact start. */
+  slot: AgendaGridSlot;
+  /** Minutes after the containing target, retained for a precise visual offset. */
+  offsetMinutes: number;
+  /** Fraction of the target interval after the containing target. */
+  offsetRatio: number;
+}
+
 function browserStorage(): Storage | undefined {
   if (typeof window === "undefined") return undefined;
   try {
@@ -104,6 +113,46 @@ function formatAgendaGridTime(minutes: number): string {
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function agendaGridMinutes(value: string): number | null {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+/**
+ * Locate an arbitrary stored start inside the selected target interval. The
+ * API is not snapped, so a 10:20 record belongs in the 10:15 cell at 15-minute
+ * resolution, with its five-minute offset retained for rendering.
+ */
+export function agendaGridPosition(
+  time: string,
+  slots: readonly AgendaGridSlot[] = generateAgendaGridSlots(),
+): AgendaGridPosition | null {
+  const minutes = agendaGridMinutes(time);
+  if (minutes === null || !slots.length) return null;
+
+  let index = -1;
+  for (let candidate = 0; candidate < slots.length; candidate += 1) {
+    if (slots[candidate]!.minutes > minutes) break;
+    index = candidate;
+  }
+  if (index < 0) return null;
+
+  const slot = slots[index]!;
+  const next = slots[index + 1];
+  const interval = next
+    ? next.minutes - slot.minutes
+    : index > 0
+      ? slot.minutes - slots[index - 1]!.minutes
+      : 60;
+  const offsetMinutes = minutes - slot.minutes;
+  if (offsetMinutes >= interval) return null;
+  return { slot, offsetMinutes, offsetRatio: offsetMinutes / interval };
 }
 
 /**
