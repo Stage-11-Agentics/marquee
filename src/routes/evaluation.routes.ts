@@ -2,13 +2,18 @@ import { z } from "@hono/zod-openapi";
 
 import { BULK_ID_LIMIT, bulkSelectorWireSchema, normalizeBulkSelector, runBulkByIds } from "../api/bulk";
 import { ApiError } from "../api/errors";
+import { newUlid } from "../api/ids";
 import { defineApiRoute, errorResponses, jsonResponse, type ApiRouteEntry } from "../api/route";
+import { demoMailWouldBeSuppressed, enqueueMailMessage } from "../jobs/mail/consumer";
+import { auditStatement } from "../lib/audit";
+import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { mintMagicLink } from "../lib/auth/magic-links";
 import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { comparisonWinCounts, validateComparisonRanking } from "../lib/evaluation-comparisons";
-import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueOutbox } from "../jobs/mail/outbox";
 import { mergeDataForReviewerReminder } from "../jobs/mail/merge-data";
+import { errorFields } from "../lib/observability/log";
 import { reviewerCanBeAssignedToSubmission } from "../lib/reviewer-scope";
 import { parseCriterionOptions } from "../lib/rubric-criteria";
 import { selectSubmissionIds, submissionFilterSchema } from "./submissions.queries";
@@ -132,6 +137,18 @@ const criteriaInput = z.object({ criteria: z.array(criterionInput).max(40) });
 const committeeInput = z.object({ name: z.string().trim().min(1).max(160) });
 const memberInput = z.object({ person_id: z.string().min(1), role: z.string().trim().min(1).max(80).default("reviewer") });
 const scopeInput = z.object({ track_ids: z.array(z.string().min(1)).min(1) });
+/**
+ * An invited reviewer arrives with responsibilities or not at all: a reviewer
+ * with no track scope passes every membership check and is still silently
+ * unassignable (`reviewer-scope.ts` requires track intersection AND assignment).
+ */
+const inviteInput = z.object({
+  name: z.string().trim().min(1).max(160),
+  email: z.string().trim().min(3).max(320),
+  title: z.string().trim().max(160).optional(),
+  company: z.string().trim().max(160).optional(),
+  track_ids: z.array(z.string().min(1)).min(1).max(50),
+});
 const distributionAssignmentsInput = z.object({
   committee_id: z.string().min(1).optional(),
   mode: assignmentMode,
@@ -289,6 +306,103 @@ async function criteriaForRound(db: D1Database, roundId: string): Promise<Array<
     "SELECT id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position FROM rubric_criteria WHERE round_id = ? ORDER BY position, id",
   ).bind(roundId).all<CriterionRow>();
   return result.results.map((criterion) => ({ ...criterion, options: parseCriterionOptions(criterion.options) }));
+}
+
+interface EventIdentityRow {
+  demo_mode: number;
+  id: string;
+  org_id: string;
+}
+
+async function eventIdentity(db: D1Database, eventId: string): Promise<EventIdentityRow> {
+  const event = await db.prepare("SELECT id, org_id, demo_mode FROM events WHERE id = ?")
+    .bind(eventId).first<EventIdentityRow>();
+  if (!event) throw ApiError.notFound("conference not found");
+  return event;
+}
+
+async function evaluationActor(
+  context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0],
+): Promise<{ kind: "user" | "api_token"; personId: string | null; requestId: string | null }> {
+  const auth = getAuth(context);
+  if (!auth) throw ApiError.unauthenticated();
+  const requestId = context.get("requestId") ?? null;
+  if (auth.kind === "session") return { kind: "user", personId: auth.personId, requestId };
+  const token = await context.env.DB.prepare("SELECT created_by FROM api_tokens WHERE id = ?")
+    .bind(auth.tokenId).first<{ created_by: string }>();
+  return { kind: "api_token", personId: token?.created_by ?? null, requestId };
+}
+
+/** Track responsibilities are proven to belong to this conference before any write. */
+async function ownedTrackIds(
+  db: D1Database,
+  eventId: string,
+  requested: readonly string[],
+): Promise<string[]> {
+  const trackIds = [...new Set(requested)];
+  if (trackIds.length !== requested.length) {
+    throw ApiError.unprocessable("reviewer responsibilities must be unique", "track_ids");
+  }
+  const placeholders = trackIds.map(() => "?").join(", ");
+  const tracks = await db.prepare(`SELECT id FROM tracks WHERE event_id = ? AND id IN (${placeholders})`)
+    .bind(eventId, ...trackIds).all<{ id: string }>();
+  if (tracks.results.length !== trackIds.length) {
+    throw ApiError.unprocessable("every reviewer responsibility must belong to this conference", "track_ids");
+  }
+  return trackIds;
+}
+
+/** Responsibilities are replaced, never unioned: the stated scope must be the true one. */
+function trackScopeStatements(
+  db: D1Database,
+  eventId: string,
+  personId: string,
+  trackIds: readonly string[],
+  now: number,
+): D1PreparedStatement[] {
+  return [
+    db.prepare("DELETE FROM reviewer_track_scopes WHERE event_id = ? AND person_id = ?").bind(eventId, personId),
+    ...trackIds.map((trackId) => db.prepare(
+      "INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).bind(crypto.randomUUID(), eventId, personId, trackId, now, now)),
+  ];
+}
+
+/**
+ * Both idempotent inserts are guarded in SQL rather than by a preceding SELECT:
+ * `uq_memberships_event` and `uq_committee_members_committee_person` would abort
+ * the whole provisioning batch if a concurrent invite won the race.
+ */
+function reviewerMembershipStatement(
+  db: D1Database,
+  orgId: string,
+  eventId: string,
+  personId: string,
+  now: number,
+): D1PreparedStatement {
+  return db.prepare(`
+    INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
+    SELECT ?, ?, ?, ?, 'reviewer', ?, ?
+    WHERE NOT EXISTS (
+      SELECT 1 FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'reviewer'
+    )
+  `).bind(newUlid(now), orgId, eventId, personId, now, now, eventId, personId);
+}
+
+function committeeMemberStatement(
+  db: D1Database,
+  committeeId: string,
+  personId: string,
+  role: string,
+  now: number,
+): D1PreparedStatement {
+  return db.prepare(`
+    INSERT INTO committee_members (id, committee_id, person_id, role, created_at, updated_at)
+    SELECT ?, ?, ?, ?, ?, ?
+    WHERE NOT EXISTS (
+      SELECT 1 FROM committee_members WHERE committee_id = ? AND person_id = ?
+    )
+  `).bind(newUlid(now), committeeId, personId, role, now, now, committeeId, personId);
 }
 
 async function committeeForEvent(db: D1Database, eventId: string, committeeId: string, field?: string): Promise<CommitteeRow> {
@@ -671,23 +785,178 @@ const addCommitteeReviewer = defineApiRoute(
   async (context) => {
     const { eventId, committeeId } = context.req.valid("param");
     requireProgram(context, eventId, true);
+    const event = await eventIdentity(context.env.DB, eventId);
     await committeeForEvent(context.env.DB, eventId, committeeId);
     const body = context.req.valid("json");
-    const person = await context.env.DB.prepare(`
-      SELECT person.id
-      FROM people person
-      JOIN memberships membership
-        ON membership.person_id = person.id
-       AND membership.event_id = ?
-       AND membership.role = 'reviewer'
-      WHERE person.id = ?
-    `).bind(eventId, body.person_id).first<{ id: string }>();
-    if (!person) throw ApiError.notFound("reviewer not found");
+    /**
+     * Membership is granted here rather than demanded. Requiring a reviewer
+     * membership the product had no runtime writer for made this route refuse
+     * every person an organizer could actually pick.
+     */
+    const person = await context.env.DB.prepare(
+      "SELECT person.id FROM people person WHERE person.id = ? AND person.org_id = ?",
+    ).bind(body.person_id, event.org_id).first<{ id: string }>();
+    if (!person) throw ApiError.notFound("person not found");
+    const alreadyOnCommittee = await context.env.DB.prepare(
+      "SELECT 1 AS present FROM committee_members WHERE committee_id = ? AND person_id = ?",
+    ).bind(committeeId, body.person_id).first<{ present: number }>();
+    if (alreadyOnCommittee) throw ApiError.conflict("reviewer is already on this committee");
     const now = Date.now();
-    try {
-      await context.env.DB.prepare("INSERT INTO committee_members (id, committee_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), committeeId, body.person_id, body.role, now, now).run();
-    } catch { throw ApiError.conflict("reviewer is already on this committee"); }
+    const actor = await evaluationActor(context);
+    await context.env.DB.batch([
+      reviewerMembershipStatement(context.env.DB, event.org_id, eventId, body.person_id, now),
+      committeeMemberStatement(context.env.DB, committeeId, body.person_id, body.role, now),
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "reviewer_added_to_committee",
+        entityType: "person",
+        entityId: body.person_id,
+        after: { committee_id: committeeId, role: body.role },
+        now,
+        requestId: actor.requestId,
+      }),
+    ]);
     return context.json({ committee_id: committeeId, person_id: body.person_id, role: body.role }, 201);
+  },
+);
+
+/**
+ * Reviewer provisioning in one transaction (MRQ-107, eval §T-A).
+ *
+ * Four rows have to exist before a reviewer can see a single abstract: the
+ * person, an event-scoped `reviewer` membership, a committee seat, and at least
+ * one track responsibility. Three of those had no runtime writer at all, so an
+ * organizer literally could not add a committee member without a database
+ * client. They are written together because any subset is a lie: a person with
+ * no scope holds a reviewer badge and an empty queue forever.
+ */
+const inviteCommitteeReviewer = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/committees/{committeeId}/invites",
+    operationId: "inviteCommitteeReviewer",
+    summary: "Invite a reviewer onto a committee with track responsibilities",
+    description:
+      "Creates the person, the reviewer membership, the committee seat, and the track responsibilities together, then sends a sign-in link. The responsibilities named here replace the reviewer's existing ones for this conference. Demo conferences also return that link on screen.",
+    tags: ["Evaluation"],
+    request: { params: committeeParams, body: { content: { "application/json": { schema: inviteInput } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 201: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, committeeId } = context.req.valid("param");
+    requireProgram(context, eventId, true);
+    const event = await eventIdentity(context.env.DB, eventId);
+    await committeeForEvent(context.env.DB, eventId, committeeId);
+    const body = context.req.valid("json");
+    const email = body.email.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      throw ApiError.unprocessable("a reviewer invitation needs an email address to send it to", "email");
+    }
+    const trackIds = await ownedTrackIds(context.env.DB, eventId, body.track_ids);
+    const actor = await evaluationActor(context);
+    const now = Date.now();
+
+    // Matched case-insensitively: `uq_people_org_email` is case-sensitive, so a
+    // case-sensitive match would invent a second identity for `Nora@` beside
+    // `nora@` and mint the sign-in link for the wrong one.
+    const existing = await context.env.DB.prepare(`
+      SELECT id, name FROM people
+      WHERE org_id = ? AND lower(email) = ?
+      ORDER BY CASE WHEN email = ? THEN 0 ELSE 1 END, created_at ASC, id ASC
+      LIMIT 1
+    `).bind(event.org_id, email, email).first<{ id: string; name: string }>();
+    /**
+     * A magic link is person-scoped: exchanging one opens a session carrying
+     * every membership its person holds, org-wide. So an invitation must never
+     * resolve to a program-team member — otherwise "invite a reviewer" is a
+     * program lead typing the owner's address and reading back an owner session.
+     * The guard spans the organization for the same reason the credential does:
+     * a staff role on a sibling event still opens that event through this link.
+     */
+    if (existing) {
+      const staff = await context.env.DB.prepare(`
+        SELECT 1 AS present FROM memberships
+        WHERE person_id = ? AND role IN ('owner', 'program_lead', 'ops')
+      `).bind(existing.id).first<{ present: number }>();
+      if (staff) {
+        throw ApiError.unprocessable(
+          "that address belongs to a program-team member, so it cannot be given a reviewer invitation",
+          "email",
+        );
+      }
+    }
+    const personId = existing?.id ?? newUlid(now);
+
+    // `is_demo = 0` like every other runtime person writer: the flag marks the
+    // shipped synthetic sample, not everyone who exists on a demo conference.
+    // Flagging invitees would also let the newest invitation capture the demo
+    // reviewer door, which is meant to open a seeded persona with real work.
+    const statements = existing ? [] : [context.env.DB.prepare(`
+      INSERT INTO people
+        (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, '[]', 0, 'marquee', ?, ?)
+    `).bind(personId, event.org_id, email, body.name, body.title ?? null, body.company ?? null, now, now)];
+    statements.push(
+      reviewerMembershipStatement(context.env.DB, event.org_id, eventId, personId, now),
+      committeeMemberStatement(context.env.DB, committeeId, personId, "reviewer", now),
+      ...trackScopeStatements(context.env.DB, eventId, personId, trackIds, now),
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "reviewer_invited",
+        entityType: "person",
+        entityId: personId,
+        after: { committee_id: committeeId, email, name: existing?.name ?? body.name, role: "reviewer", track_ids: trackIds },
+        now,
+        requestId: actor.requestId,
+      }),
+    );
+    await context.env.DB.batch(statements);
+
+    // The credential is minted after the provisioning transaction on purpose: a
+    // link that cannot be sent leaves a correctly provisioned reviewer, never a
+    // half-built person. `invite_sent` reports what actually happened.
+    const link = await mintMagicLink(context.env.DB, { personId, purpose: "login", redirectTo: "/reviewer", now });
+    const absoluteLink = `${new URL(context.req.url).origin}/api/v1/auth/exchange?token=${link.token}`;
+    // A demo conference logs mail to unlisted addresses instead of sending it,
+    // so "invitation sent" has to mean sent, not enqueued.
+    const inviteSuppressed = await demoMailWouldBeSuppressed(context.env.DB, eventId, email);
+    let inviteQueued = true;
+    try {
+      const mail = renderMagicLinkLoginMail(absoluteLink);
+      const outboxId = await enqueueAuthMail(context.env.DB, {
+        eventId,
+        personId,
+        entityId: link.id,
+        toEmail: email,
+        templateKey: "magic_link_login",
+        now,
+        ...mail,
+      });
+      await enqueueMailMessage(context.env.MAIL_QUEUE, outboxId);
+    } catch (error) {
+      inviteQueued = false;
+      context.get("logger")?.emit("worker_error", "error", {
+        source: "inviteCommitteeReviewer",
+        ...errorFields(error),
+      });
+    }
+
+    return context.json({
+      committee_id: committeeId,
+      /** Sent means sent: queued, and not swallowed by demo-mail suppression. */
+      invite_sent: inviteQueued && !inviteSuppressed,
+      /** Distinguishes "this conference does not email that address" from a failed enqueue. */
+      invite_suppressed: inviteSuppressed,
+      person: { id: personId, name: existing?.name ?? body.name, email },
+      person_created: !existing,
+      track_ids: trackIds,
+      ...(event.demo_mode === 1 ? { magic_link: absoluteLink } : {}),
+    }, 201);
   },
 );
 
@@ -735,15 +1004,9 @@ const replaceReviewerScopes = defineApiRoute(
     const body = context.req.valid("json");
     const membership = await context.env.DB.prepare("SELECT 1 AS present FROM committee_members WHERE committee_id = ? AND person_id = ?").bind(committeeId, personId).first<{ present: number }>();
     if (!membership) throw ApiError.notFound("reviewer is not on this committee");
-    const trackIds = [...new Set(body.track_ids)];
-    if (trackIds.length !== body.track_ids.length) throw ApiError.unprocessable("reviewer responsibilities must be unique", "track_ids");
-    const placeholders = trackIds.map(() => "?").join(", ");
-    const tracks = await context.env.DB.prepare(`SELECT id FROM tracks WHERE event_id = ? AND id IN (${placeholders})`).bind(eventId, ...trackIds).all<{ id: string }>();
-    if (tracks.results.length !== trackIds.length) throw ApiError.unprocessable("every reviewer responsibility must belong to this conference", "track_ids");
+    const trackIds = await ownedTrackIds(context.env.DB, eventId, body.track_ids);
     const now = Date.now();
-    const statements = [context.env.DB.prepare("DELETE FROM reviewer_track_scopes WHERE event_id = ? AND person_id = ?").bind(eventId, personId)];
-    for (const trackId of trackIds) statements.push(context.env.DB.prepare("INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), eventId, personId, trackId, now, now));
-    await context.env.DB.batch(statements);
+    await context.env.DB.batch(trackScopeStatements(context.env.DB, eventId, personId, trackIds, now));
     return context.json({ event_id: eventId, person_id: personId, track_ids: trackIds, completed_reviews_preserved: true }, 200);
   },
 );
@@ -1215,6 +1478,7 @@ export const apiRoutes = [
   replaceCriteria,
   createCommittee,
   addCommitteeReviewer,
+  inviteCommitteeReviewer,
   getReviewerScopes,
   replaceReviewerScopes,
   distributeAssignments,

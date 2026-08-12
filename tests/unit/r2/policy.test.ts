@@ -103,7 +103,7 @@ test("AC-91, AC-92 · chase task states retain their glyphs and cancelled work s
 test("AC-92 · chase filters match the selected task type, track, and speaker search", () => {
   const row: OnboardingRow = {
     id: "per_ada",
-    person: { id: "per_ada", name: "Ada Lovelace", email: "ada@example.com", title: "Engineer", company: "Analytical Engines", bio: null },
+    person: { id: "per_ada", name: "Ada Lovelace", email: "ada@example.com", title: "Engineer", company: "Analytical Engines", bio: null, headshot_attachment_id: null },
     wave: null,
     tracks: [{ id: "track-ai", name: "AI", color: "#0a6c73", is_primary: true }],
     sessions: [],
@@ -126,7 +126,7 @@ test("AC-92 · chase ordering puts the most overdue owed work first and ignores 
   const row = (id: string, name: string, severity: number, risk_task_count: number): Pick<OnboardingRow, "severity" | "risk_task_count" | "person"> => ({
     severity,
     risk_task_count,
-    person: { id, name, email: `${id}@example.com`, title: null, company: null, bio: null },
+    person: { id, name, email: `${id}@example.com`, title: null, company: null, bio: null, headshot_attachment_id: null },
   });
   expect(compareOnboardingRows(row("per-late", "Late", 30, 0), row("per-risk", "Risk", 1, 4))).toBeLessThan(0);
   expect(compareOnboardingRows(row("per-risk-more", "Risk More", 0, 2), row("per-risk-less", "Risk Less", 0, 1))).toBeLessThan(0);

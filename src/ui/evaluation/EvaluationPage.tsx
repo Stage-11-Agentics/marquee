@@ -106,6 +106,21 @@ interface ReviewerProgress {
   reviewed_count: number;
 }
 
+interface Track {
+  color: string;
+  id: string;
+  name: string;
+}
+
+interface InviteResult {
+  invite_sent: boolean;
+  invite_suppressed: boolean;
+  /** Present only on demo conferences, where the link is safe to show on screen. */
+  magic_link?: string;
+  person: { email: string; id: string; name: string };
+  track_ids: string[];
+}
+
 interface EvaluationPageProps {
   eventId?: string;
 }
@@ -137,7 +152,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<"plan" | "scorecard" | "committee" | "assignment" | "promotion" | null>(null);
+  const [dialog, setDialog] = useState<"plan" | "scorecard" | "committee" | "invite" | "assignment" | "promotion" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [planName, setPlanName] = useState("2026 Program Review");
   const [instructions, setInstructions] = useState("Recommend Approve, Maybe, or Deny. Numeric scoring is optional.");
@@ -154,12 +169,20 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const [promotionResult, setPromotionResult] = useState<{ already_promoted: number; assignments: number; promoted: number; selected: number } | null>(null);
   const [promotionApplying, setPromotionApplying] = useState(false);
   const [reviewerProgress, setReviewerProgress] = useState<Record<string, Record<string, ReviewerProgress> | null>>({});
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteTrackIds, setInviteTrackIds] = useState<string[]>([]);
+  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
+  const [inviteSaving, setInviteSaving] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const firstRound = plan?.rounds[0];
   const secondRound = plan?.rounds[1];
 
   const committeeForRound = (round: Round): Plan["committees"][number] | undefined =>
     plan?.committees.find((item) => item.id === round.committee_id);
+  const committee = plan?.committees[0];
 
   const load = async ({ quiet = false }: { quiet?: boolean } = {}): Promise<void> => {
     if (!quiet) setLoading(true);
@@ -172,9 +195,14 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         setLoading(false);
         return;
       }
-      const detail = await api<Plan>(`/api/v1/events/${eventId}/plans/${current.id}`, "/api/v1/events/{eventId}/plans/{planId}");
-      // The plan is useful even when reviewer coverage is temporarily unavailable;
-      // keep the primary render independent from the optional reminder affordance.
+      const [detail, trackList] = await Promise.all([
+        api<Plan>(`/api/v1/events/${eventId}/plans/${current.id}`, "/api/v1/events/{eventId}/plans/{planId}"),
+        // Loaded with the plan rather than on dialog open: the invite form's
+        // responsibilities are the reason the dialog exists, and a form that
+        // fills in a beat after it opens reads as broken.
+        api<{ data: Track[] }>(`/api/v1/events/${eventId}/tracks`, "/api/v1/events/{eventId}/tracks").catch(() => ({ data: [] as Track[] })),
+      ]);
+      setTracks(trackList.data);
       setPlan(detail);
       setPlanName(detail.name);
       setInstructions(detail.instructions);
@@ -323,6 +351,58 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       await load();
     } catch (reason: unknown) {
       setError(errorSummary(reason));
+    }
+  };
+
+  const openInvite = (): void => {
+    setInviteName("");
+    setInviteEmail("");
+    setInviteTrackIds([]);
+    setInviteResult(null);
+    setLinkCopied(false);
+    setDialog("invite");
+  };
+
+  const inviteReviewer = async (event: Event): Promise<void> => {
+    event.preventDefault();
+    // The confirmation state keeps the form mounted, so Enter in the link field
+    // would otherwise re-POST. Credentials are not idempotent the way the rows
+    // are: a second submit mints a second magic link and a second invitation.
+    if (!committee || inviteResult || inviteSaving) return;
+    setInviteSaving(true);
+    setError(null);
+    try {
+      const result = await api<InviteResult>(
+        `/api/v1/events/${eventId}/committees/${committee.id}/invites`,
+        "/api/v1/events/{eventId}/committees/{committeeId}/invites",
+        {
+          method: "POST",
+          body: JSON.stringify({ name: inviteName.trim(), email: inviteEmail.trim(), track_ids: inviteTrackIds }),
+        },
+      );
+      setInviteResult(result);
+      setLinkCopied(false);
+      setNotice(result.invite_sent
+        ? `${result.person.name} invited · sign-in link sent to ${result.person.email}`
+        : `${result.person.name} is on the committee · their invitation was not emailed, so send them the link`);
+      await load();
+    } catch (reason: unknown) {
+      setError(errorSummary(reason));
+    } finally {
+      setInviteSaving(false);
+    }
+  };
+
+  const copyInviteLink = async (): Promise<void> => {
+    const link = inviteResult?.magic_link;
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+    } catch {
+      // Clipboard permission is not guaranteed; the link stays selectable in the
+      // field beside this button, so the organizer is never stuck.
+      setLinkCopied(false);
     }
   };
 
@@ -491,7 +571,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         </div><div class="evaluation-summary-note"><span>Recusals excluded from aggregates</span><strong class="tabular">{plan.summary.recusals.toLocaleString()}</strong></div><div class="spark" aria-label="Score distribution"><i style="height:35%" /><i style="height:52%" /><i style="height:39%" /><i style="height:71%" /><i style="height:67%" /><i style="height:81%" /><i style="height:74%" /><i style="height:92%" /><i style="height:83%" /><i style="height:96%" /></div></CardBody>
       </Card>
       <Card class="committee-card">
-        <CardHeader title="Program committee"><div class="card-actions"><Button small onClick={() => setDialog("committee")}>Manage</Button><Button small onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Edit assignments</Button></div></CardHeader>
+        <CardHeader title="Program committee"><div class="card-actions"><Button small variant="primary" onClick={openInvite} disabled={!committee}>Invite reviewer</Button><Button small onClick={() => setDialog("committee")}>Manage</Button><Button small onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Edit assignments</Button></div></CardHeader>
         <CardBody>{plan.rounds.length ? plan.rounds.map(renderCommitteeRound) : <div class="inline-empty"><span>No rounds yet. Create a round before assigning reviews.</span><Button small variant="primary" onClick={() => setDialog("plan")}>Configure plan</Button></div>}</CardBody>
       </Card>
       <Card class="promotion-card">
@@ -530,6 +610,52 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
     </form></div>}
     {dialog === "committee" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={createCommittee}><header><span class="eyebrow">Program committee</span><h2>Manage committee</h2></header><div class="eval-dialog-body"><label class="field">Committee name<input value={committeeName} onInput={(event) => setCommitteeName((event.currentTarget as HTMLInputElement).value)} /></label><div class="message-preview">Reviewer rows carry explicit track responsibilities. Scope changes recalculate queue membership without replacing completed reviews.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary">Save committee</Button></footer></form></div>}
     {dialog === "assignment" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={distribute}><header><span class="eyebrow">Round assignments</span><h2>Distribute assignments</h2></header><div class="eval-dialog-body"><label class="field">Round<select value={assignmentRoundId ?? firstRound?.id ?? ""} onChange={(event) => setAssignmentRoundId((event.currentTarget as HTMLSelectElement).value)}>{plan.rounds.map((round) => <option key={round.id} value={round.id}>{round.position + 1} · {round.name}</option>)}</select></label><label class="field">Assignment mode<select value={assignmentMode} onChange={(event) => setAssignmentMode((event.currentTarget as HTMLSelectElement).value as "everyone" | "n_per_submission")}><option value="n_per_submission">N reviewers per submission</option><option value="everyone">Everyone reviews everything</option></select></label><label class="field">Reviewers per submission<input type="number" min="1" value={reviewerTarget} onInput={(event) => setReviewerTarget(Number((event.currentTarget as HTMLInputElement).value))} /></label><div class="message-preview">Assignments belong to the selected round. Re-running distribution is idempotent and never replaces completed review or comparison evidence.</div></div><footer><Button type="button" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={!plan.rounds.some((round) => round.id === (assignmentRoundId ?? firstRound?.id) && Boolean(round.committee_id))}>Distribute</Button></footer></form></div>}
+    {dialog === "invite" && <div class="eval-dialog-backdrop" role="presentation"><form class="eval-dialog" onSubmit={inviteReviewer}>
+      <header><span class="eyebrow">{committee?.name ?? "Program committee"}</span><h2>Invite reviewer</h2></header>
+      <div class="eval-dialog-body">
+        {inviteResult ? <div class="invite-result" aria-live="polite">
+          <strong>{inviteResult.person.name} is on the committee.</strong>
+          <span class="subtle">Reviewing {inviteResult.track_ids.length === tracks.length ? "every track" : tracks.filter((track) => inviteResult.track_ids.includes(track.id)).map((track) => track.name).join(", ")}.</span>
+          <span class="subtle">{inviteResult.invite_sent
+            ? `A sign-in link was emailed to ${inviteResult.person.email}.`
+            : inviteResult.invite_suppressed
+              ? `The invitation to ${inviteResult.person.email} was logged rather than sent — this conference only emails addresses on its allowlist.`
+              : `The invitation to ${inviteResult.person.email} could not be queued. They are on the committee; send them a sign-in link yourself.`}</span>
+          {inviteResult.magic_link ? <div class="invite-link">
+            <input readOnly aria-label="Reviewer sign-in link" value={inviteResult.magic_link} onFocus={(event) => (event.currentTarget as HTMLInputElement).select()} />
+            <Button type="button" small onClick={() => void copyInviteLink()}>{linkCopied ? "Copied" : "Copy link"}</Button>
+          </div> : null}
+        </div> : <>
+          <label class="field">Name<input aria-label="Reviewer name" value={inviteName} placeholder="Nora Vale" onInput={(event) => setInviteName((event.currentTarget as HTMLInputElement).value)} /></label>
+          <label class="field">Email<input aria-label="Reviewer email" type="email" value={inviteEmail} placeholder="nora@example.org" onInput={(event) => setInviteEmail((event.currentTarget as HTMLInputElement).value)} /></label>
+          <fieldset class="field invite-tracks">
+            <legend>Track responsibilities</legend>
+            <div class="scope-checks">{tracks.map((track) => <label class="scope-check" key={track.id}>
+              <input
+                type="checkbox"
+                aria-label={track.name}
+                checked={inviteTrackIds.includes(track.id)}
+                onChange={(event) => setInviteTrackIds((event.currentTarget as HTMLInputElement).checked
+                  ? [...inviteTrackIds, track.id]
+                  : inviteTrackIds.filter((id) => id !== track.id))}
+              />
+              <span>{track.name}</span>
+            </label>)}</div>
+            <small class="subtle">A reviewer only sees abstracts in the tracks they are responsible for, so at least one is required. For a reviewer who already has responsibilities here, this list replaces them.</small>
+          </fieldset>
+          <div class="message-preview">One step creates the person, gives them this conference’s reviewer role, seats them on the committee, and scopes them to the tracks above. On a demo conference their sign-in link is shown here afterwards.</div>
+        </>}
+      </div>
+      <footer>
+        {/* The confirmation replaces the form rather than growing beneath it:
+            checking a track never moves a control, and the dialog changes state
+            wholesale on submit instead of pushing the buttons down a screen. */}
+        <Button type="button" onClick={() => setDialog(null)}>{inviteResult ? "Done" : "Cancel"}</Button>
+        {inviteResult
+          ? <Button type="button" variant="primary" onClick={openInvite}>Invite another</Button>
+          : <Button type="submit" variant="primary" disabled={inviteSaving || !committee || inviteName.trim() === "" || inviteEmail.trim() === "" || inviteTrackIds.length === 0}>{inviteSaving ? "Inviting…" : "Send invitation"}</Button>}
+      </footer>
+    </form></div>}
     {dialog === "promotion" && <div class="eval-dialog-backdrop" role="presentation"><div class="eval-dialog"><header><span class="eyebrow">Round promotion</span><h2>Preview the next funnel</h2></header><div class="eval-dialog-body"><div class="promotion-preview"><strong>Filtered promotion set</strong><span>Use the same typed filter as the conference submission list. Empty legacy selections never promote records.</span><label class="field">Status<select value={promotionStatus} onChange={(event) => { setPromotionStatus((event.currentTarget as HTMLSelectElement).value); setPromotionResult(null); }}><option value="in_review">In review</option><option value="submitted">Submitted</option><option value="accepted">Accepted</option><option value="waitlisted">Waitlisted</option></select></label><label class="field">Search<input value={promotionQuery} placeholder="Title, track, or speaker" onInput={(event) => { setPromotionQuery((event.currentTarget as HTMLInputElement).value); setPromotionResult(null); }} /></label>{promotionResult && <div class="promotion-result"><span><strong>{promotionResult.selected}</strong> selected</span><span><strong>{promotionResult.promoted}</strong> ready to promote</span><span><strong>{promotionResult.already_promoted}</strong> already in Round 2</span></div>}</div></div><footer><Button type="button" onClick={() => { setDialog(null); setPromotionResult(null); }}>Done</Button><Button type="button" onClick={() => void runPromotion(true)} disabled={promotionApplying}>Refresh preview</Button><Button type="button" variant="primary" onClick={() => void runPromotion(false)} disabled={promotionApplying || !promotionResult?.promoted}>{promotionApplying ? "Applying…" : "Promote selected"}</Button></footer></div></div>}
   </>;
 }
