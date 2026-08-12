@@ -1558,6 +1558,175 @@ const listRoundComparisons = defineApiRoute(
   },
 );
 
+const evaluationOverrideParams = roundParams.extend({
+  submissionId: z.string().min(1),
+  evaluationId: z.string().min(1),
+});
+
+const evaluationOverrideInput = z.object({
+  score: z.number(),
+  comment: z.string().max(4000).optional(),
+});
+
+interface OverriddenEvaluationRow {
+  id: string;
+  reviewer_person_id: string;
+  reviewer_kind: string;
+  reviewer_name: string;
+  score: number | null;
+}
+
+/**
+ * The evaluation a chair is about to override, proven to belong to this event's
+ * round and submission before anything is written. Looked up through the round
+ * and submission rather than by id alone, so an id from another conference
+ * cannot be steered into this one.
+ */
+async function overridableEvaluation(
+  db: D1Database,
+  eventId: string,
+  roundId: string,
+  submissionId: string,
+  evaluationId: string,
+): Promise<OverriddenEvaluationRow> {
+  const row = await db.prepare(`
+    SELECT evaluation.id, evaluation.reviewer_person_id, evaluation.score,
+      reviewer.kind AS reviewer_kind, reviewer.name AS reviewer_name
+    FROM evaluations evaluation
+    JOIN submissions submission
+      ON submission.id = evaluation.submission_id AND submission.event_id = ?
+    JOIN people reviewer ON reviewer.id = evaluation.reviewer_person_id
+    WHERE evaluation.id = ? AND evaluation.round_id = ? AND evaluation.submission_id = ?
+  `).bind(eventId, evaluationId, roundId, submissionId).first<OverriddenEvaluationRow>();
+  if (!row) throw ApiError.notFound("evaluation not found");
+  return row;
+}
+
+/**
+ * A chair's override of a recorded score.
+ *
+ * It is written onto the evaluation it overrides rather than as a second peer
+ * review, so the reviewer's own judgment survives beside it and the record can
+ * say plainly what the reviewer scored and what the chair decided instead. The
+ * same control governs a human reviewer and an Agent seat: the product's claim
+ * is that a chair can override any of them, not that agents get a side door.
+ */
+const overrideEvaluation = defineApiRoute(
+  {
+    method: "put",
+    path: "/api/v1/events/{eventId}/rounds/{roundId}/submissions/{submissionId}/evaluations/{evaluationId}/override",
+    operationId: "overrideEvaluationScore",
+    summary: "Override a recorded evaluation score",
+    description:
+      "Records a chair's score in place of the reviewer's own. The reviewer's original score and reasoning are preserved and stay visible beside the override.",
+    tags: ["Evaluation"],
+    request: {
+      params: evaluationOverrideParams,
+      body: { content: { "application/json": { schema: evaluationOverrideInput } } },
+    },
+    policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, roundId, submissionId, evaluationId } = context.req.valid("param");
+    requireProgram(context, eventId, true);
+    const round = await roundForEvent(context.env.DB, eventId, roundId);
+    const plan = await planForEvent(context.env.DB, eventId, round.plan_id);
+    const evaluation = await overridableEvaluation(context.env.DB, eventId, roundId, submissionId, evaluationId);
+    const body = context.req.valid("json");
+    // A plan may leave its scale open, and an override on an unbounded plan is
+    // not a validation failure — it is simply unbounded.
+    const scaleMin = plan.scale_min ?? null;
+    const scaleMax = plan.scale_max ?? null;
+    if ((scaleMin !== null && body.score < scaleMin) || (scaleMax !== null && body.score > scaleMax)) {
+      throw ApiError.unprocessable(`the override must sit on the plan's ${scaleMin ?? "—"}–${scaleMax ?? "—"} scale`, "score");
+    }
+    const actor = await evaluationActor(context);
+    const now = Date.now();
+    const comment = body.comment?.trim() ? body.comment.trim() : null;
+    await context.env.DB.batch([
+      context.env.DB.prepare(`
+        UPDATE evaluations
+        SET override_score = ?, override_comment = ?, override_person_id = ?, override_at = ?, updated_at = ?
+        WHERE id = ?
+      `).bind(body.score, comment, actor.personId, now, now, evaluationId),
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "evaluation_score_overridden",
+        entityType: "evaluation",
+        entityId: evaluationId,
+        before: { score: evaluation.score },
+        after: {
+          override_score: body.score,
+          reviewer_kind: evaluation.reviewer_kind,
+          reviewer_person_id: evaluation.reviewer_person_id,
+          submission_id: submissionId,
+        },
+        now,
+        requestId: actor.requestId,
+      }),
+    ]);
+    return context.json({
+      evaluation_id: evaluationId,
+      override: {
+        at: now,
+        comment,
+        person_id: actor.personId,
+        score: body.score,
+      },
+      overridden_score: evaluation.score,
+      reviewer: {
+        kind: evaluation.reviewer_kind,
+        name: evaluation.reviewer_name,
+        person_id: evaluation.reviewer_person_id,
+      },
+    }, 200);
+  },
+);
+
+/** Clearing an override restores the reviewer's own recorded value. */
+const clearEvaluationOverride = defineApiRoute(
+  {
+    method: "delete",
+    path: "/api/v1/events/{eventId}/rounds/{roundId}/submissions/{submissionId}/evaluations/{evaluationId}/override",
+    operationId: "clearEvaluationScoreOverride",
+    summary: "Clear a chair's score override",
+    tags: ["Evaluation"],
+    request: { params: evaluationOverrideParams },
+    policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, roundId, submissionId, evaluationId } = context.req.valid("param");
+    requireProgram(context, eventId, true);
+    await roundForEvent(context.env.DB, eventId, roundId);
+    const evaluation = await overridableEvaluation(context.env.DB, eventId, roundId, submissionId, evaluationId);
+    const actor = await evaluationActor(context);
+    const now = Date.now();
+    await context.env.DB.batch([
+      context.env.DB.prepare(`
+        UPDATE evaluations
+        SET override_score = NULL, override_comment = NULL, override_person_id = NULL, override_at = NULL, updated_at = ?
+        WHERE id = ?
+      `).bind(now, evaluationId),
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "evaluation_score_override_cleared",
+        entityType: "evaluation",
+        entityId: evaluationId,
+        after: { restored_score: evaluation.score, submission_id: submissionId },
+        now,
+        requestId: actor.requestId,
+      }),
+    ]);
+    return context.json({ cleared: true, evaluation_id: evaluationId, score: evaluation.score }, 200);
+  },
+);
+
 export const apiRoutes = [
   listPlans,
   createPlan,
@@ -1578,4 +1747,6 @@ export const apiRoutes = [
   removeRoundAssignment,
   promoteRound,
   listRoundComparisons,
+  overrideEvaluation,
+  clearEvaluationOverride,
 ];

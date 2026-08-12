@@ -306,7 +306,7 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 104, "Expected the exact foreign-key graph");
+  assert.equal(foreignKeyRows.length, 105, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 
@@ -393,9 +393,11 @@ try {
     INSERT INTO committees VALUES ('committee1','event1','Committee',1,1);
     INSERT INTO round_assignments VALUES
       ('assignment1','round1','submission1','person1',NULL,'open',1,1);
-    INSERT INTO evaluations VALUES
+    INSERT INTO evaluations
+      (id,round_id,submission_id,reviewer_person_id,recommendation,score,criteria_scores,comment,abstained,created_at,updated_at) VALUES
       ('evaluation1','round1','submission1','person1','approve',NULL,NULL,'',0,1,1);
-    INSERT INTO evaluations VALUES
+    INSERT INTO evaluations
+      (id,round_id,submission_id,reviewer_person_id,recommendation,score,criteria_scores,comment,abstained,created_at,updated_at) VALUES
       ('evaluation2','round2','submission1','person1','maybe',NULL,NULL,'',0,1,1);
     INSERT INTO comparisons VALUES
       ('comparison1','round2','person1','["submission1","s2","s3"]',
@@ -610,7 +612,7 @@ try {
   );
   expectConstraint(
     "round-aware evaluation uniqueness",
-    "INSERT INTO evaluations VALUES " +
+    "INSERT INTO evaluations (id,round_id,submission_id,reviewer_person_id,recommendation,score,criteria_scores,comment,abstained,created_at,updated_at) VALUES " +
       "('duplicate-evaluation','round1','submission1','person1','deny',NULL,NULL,'',0,1,1)",
   );
   expectConstraint(

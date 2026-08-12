@@ -72,7 +72,10 @@ export interface SubmissionNotification {
 export interface SubmissionAgentReview {
   id: string;
   name: string;
+  /** What the Agent seat itself recorded, kept even when a chair overrode it. */
   score: number | null;
+  /** The chair's value, when one governs; null when the agent's own stands. */
+  override_score: number | null;
   recommendation: string | null;
   comment: string | null;
 }

@@ -598,11 +598,14 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     db.prepare(`
       SELECT evaluation.id, evaluation.round_id, round.name AS round_name, round.position,
         evaluation.reviewer_person_id, person.name AS reviewer_name, person.kind AS reviewer_kind, evaluation.recommendation,
-        evaluation.score, evaluation.comment, evaluation.criteria_scores, evaluation.abstained, evaluation.updated_at
+        evaluation.score, evaluation.comment, evaluation.criteria_scores, evaluation.abstained, evaluation.updated_at,
+        evaluation.override_score, evaluation.override_comment, evaluation.override_at,
+        evaluation.override_person_id, overrider.name AS override_person_name
       FROM evaluations evaluation
       JOIN evaluation_rounds round ON round.id = evaluation.round_id
       JOIN evaluation_plans plan ON plan.id = round.plan_id
       JOIN people person ON person.id = evaluation.reviewer_person_id
+      LEFT JOIN people overrider ON overrider.id = evaluation.override_person_id
       WHERE plan.event_id = ? AND evaluation.submission_id = ?
       ORDER BY round.position, evaluation.updated_at DESC, evaluation.id
     `).bind(eventId, submissionId).all<Record<string, unknown>>(),
@@ -808,6 +811,9 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       // which is exactly when the organizer finds out about them. The one gate
       // is the grant the participants routes enforce.
       can_edit_participants: canWriteProgram,
+      // Overriding a recorded score is the chair's authority over the review,
+      // not the reviewer's, so it answers `program:write` and nothing else.
+      can_override_scores: canWriteProgram,
     },
   };
 }

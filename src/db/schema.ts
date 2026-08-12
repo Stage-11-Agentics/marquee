@@ -560,6 +560,11 @@ export interface EvaluationRow extends MutableRecord {
   abstained: 0 | 1;
   comment: string;
   criteria_scores: JsonText | null;
+  /** When a chair has overridden this score: when, why, whose, and what to. */
+  override_at: number | null;
+  override_comment: string | null;
+  override_person_id: Id | null;
+  override_score: number | null;
   recommendation: Decision | null;
   reviewer_person_id: Id;
   round_id: Id;

@@ -380,6 +380,7 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
       id: review.id,
       name: review.name,
       score: review.score === null ? null : Number(review.score),
+      override_score: review.override_score === null || review.override_score === undefined ? null : Number(review.override_score),
       recommendation: review.recommendation ?? null,
       comment: review.comment ?? null,
     })),
@@ -458,12 +459,19 @@ function notificationForRow(row: SubmissionQueryRow): NonNullable<SubmissionList
   }
 }
 
-const AGENT_REVIEWS_SELECT = `
+/**
+ * The agent line carries the chair's override when there is one, so the number
+ * on the results list is the number on the record. `score` stays the agent's
+ * own: the list says what the agent scored and what governs instead.
+ */
+function agentReviewsSelect(includeOverrides: boolean): string {
+  return `
   COALESCE((
     SELECT json_group_array(json_object(
       'id', evaluation.id,
       'name', reviewer.name,
       'score', evaluation.score,
+      'override_score', ${includeOverrides ? "evaluation.override_score" : "NULL"},
       'recommendation', evaluation.recommendation,
       'comment', evaluation.comment
     ))
@@ -476,14 +484,16 @@ const AGENT_REVIEWS_SELECT = `
       AND evaluation.abstained = 0
       AND evaluation_round.mode = 'scorecard'
   ), '[]') AS agent_reviews_json`;
+}
 
 interface ReviewQueryCapabilities {
   includeReviewerIdentity: boolean;
   includeAgentReviews: boolean;
+  includeOverrides: boolean;
 }
 
 async function reviewQueryCapabilities(database: D1Database): Promise<ReviewQueryCapabilities> {
-  const [hasReviewerIdentity, hasPeopleKind, hasAgentEvaluationFields, hasEvaluationRound] = await Promise.all([
+  const [hasReviewerIdentity, hasPeopleKind, hasAgentEvaluationFields, hasEvaluationRound, hasOverrides] = await Promise.all([
     hasColumns(database, "evaluations", ["reviewer_person_id"]),
     hasColumns(database, "people", ["kind"]),
     hasColumns(database, "evaluations", [
@@ -497,11 +507,13 @@ async function reviewQueryCapabilities(database: D1Database): Promise<ReviewQuer
       "abstained",
     ]),
     hasColumns(database, "evaluation_rounds", ["id", "mode"]),
+    hasColumns(database, "evaluations", ["override_score"]),
   ]);
   const includeReviewerIdentity = hasReviewerIdentity && hasPeopleKind;
   return {
     includeReviewerIdentity,
     includeAgentReviews: includeReviewerIdentity && hasAgentEvaluationFields && hasEvaluationRound,
+    includeOverrides: hasOverrides,
   };
 }
 
@@ -510,7 +522,7 @@ function itemSelect(
   reviewCapabilities: ReviewQueryCapabilities,
 ): string {
   const agentReviews = reviewCapabilities.includeAgentReviews
-    ? AGENT_REVIEWS_SELECT
+    ? agentReviewsSelect(reviewCapabilities.includeOverrides)
     : "'[]' AS agent_reviews_json";
   return `
   s.id,
@@ -539,7 +551,7 @@ function itemSelect(
       ORDER BY st.is_primary DESC, carried.position ASC, carried.id ASC
     ) ordered
   ), '[]') AS tracks_json,
-  ${reviewAggregateColumns("s.id", reviewCapabilities.includeReviewerIdentity)},
+  ${reviewAggregateColumns("s.id", reviewCapabilities.includeReviewerIdentity, reviewCapabilities.includeOverrides)},
   ${agentReviews},
   s.submitted_at,
   s.updated_at,

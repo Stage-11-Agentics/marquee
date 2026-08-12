@@ -20,16 +20,22 @@
  *
  * Abstained rows are excluded everywhere. A declared conflict must never drag
  * an average.
+ *
+ * A chair's override replaces the reviewer's own value for that evaluation. An
+ * override is a scalar the chair set deliberately, not a weighted computation
+ * over criteria, so an overridden row reports as unweighted rather than
+ * claiming an arithmetic it did not go through.
  */
 
 /** Rows contributing to one submission's aggregate, one per non-abstained evaluation. */
-function contributingRows(submissionRef: string, includeReviewerIdentity: boolean): string {
+function contributingRows(submissionRef: string, includeReviewerIdentity: boolean, includeOverrides: boolean): string {
+  const overrideScore = includeOverrides ? "evaluation.override_score" : "NULL";
   return `(SELECT
     COALESCE(candidate.weighted_value, candidate.scalar_value) AS value,
     CASE WHEN candidate.weighted_value IS NULL THEN 0 ELSE 1 END AS weighted
   FROM (
     SELECT
-      CASE WHEN evaluation.criteria_scores IS NULL THEN NULL ELSE (
+      CASE WHEN ${overrideScore} IS NOT NULL OR evaluation.criteria_scores IS NULL THEN NULL ELSE (
         SELECT SUM(criterion.weight_pct * element.value) / NULLIF(SUM(criterion.weight_pct), 0)
         FROM json_each(evaluation.criteria_scores) element
         JOIN rubric_criteria criterion
@@ -37,7 +43,7 @@ function contributingRows(submissionRef: string, includeReviewerIdentity: boolea
          AND (criterion.id = element.key OR lower(criterion.name) = lower(element.key))
         WHERE element.type IN ('integer', 'real') AND criterion.weight_pct > 0
       ) END AS weighted_value,
-      evaluation.score AS scalar_value
+      COALESCE(${overrideScore}, evaluation.score) AS scalar_value
     FROM evaluations evaluation
     ${includeReviewerIdentity ? `JOIN people reviewer
       ON reviewer.id = evaluation.reviewer_person_id
@@ -53,8 +59,8 @@ function contributingRows(submissionRef: string, includeReviewerIdentity: boolea
  * different FROM clauses (list, drafts, notification gaps) and all three get
  * the same aggregate for free.
  */
-export function reviewAggregateColumns(submissionRef: string, includeReviewerIdentity = true): string {
-  const rows = contributingRows(submissionRef, includeReviewerIdentity);
+export function reviewAggregateColumns(submissionRef: string, includeReviewerIdentity = true, includeOverrides = true): string {
+  const rows = contributingRows(submissionRef, includeReviewerIdentity, includeOverrides);
   return `(SELECT ROUND(AVG(contribution.value), 2) FROM ${rows} contribution) AS score,
   (SELECT COUNT(contribution.value) FROM ${rows} contribution) AS review_count,
   (SELECT COALESCE(MIN(CASE WHEN contribution.value IS NOT NULL THEN contribution.weighted END), 0)
