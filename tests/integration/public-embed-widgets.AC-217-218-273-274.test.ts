@@ -168,6 +168,42 @@ test("AC-274 · the speakers embed offers cards and list layouts carried in the 
   expect(configDefaultBody).not.toContain("layout=list");
 });
 
+// An embedded speaker list is the public directory on someone else's page
+// (EMB-04, EMB-12), and the two read as one product only if they order the
+// same way. The directory moved to surname order; the embed kept sorting on
+// the full name, so the same conference read "Aparna, Barr, Zoë" in one place
+// and "Zoë, Aparna, Barr" in the other.
+test("AC-274 · the speakers embed orders by surname, matching the public directory", async () => {
+  const seedSpeaker = (key: string, name: string, title: string, startsAt: number) => [
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)")
+      .bind(`person-${key}`, "org_embed_widgets", `${key}@example.com`, name, "Engineer", "Ordering Co", `${name} biography`, NOW, NOW),
+    env.DB.prepare(`INSERT INTO submissions (id, event_id, kind, title, abstract, status, primary_track_id, origin, submitter_person_id, search_blob, created_at, updated_at)
+      VALUES (?, ?, 'abstract', ?, ?, 'accepted', 'track-agents', 'public', ?, ?, ?, ?)`)
+      .bind(`sub-${key}`, EVENT_ID, title, `An abstract by ${name}`, `person-${key}`, `${title} ${name}`, NOW, NOW),
+    env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, 'track-agents', 1, ?, ?)")
+      .bind(`st-${key}`, `sub-${key}`, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, 'confirmed', ?, ?)")
+      .bind(`par-${key}`, `sub-${key}`, `person-${key}`, NOW, NOW),
+    env.DB.prepare(`INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
+      VALUES (?, ?, ?, 'session', ?, 45, 'room-widget', 'track-agents', 1, ?, ?)`)
+      .bind(`agenda-${key}`, EVENT_ID, `sub-${key}`, startsAt, NOW, NOW),
+  ];
+
+  await env.DB.batch([
+    // First-name order here is Aparna → Barr → Zoë; surname order is the reverse.
+    ...seedSpeaker("zoe", "Zoë Abernathy", "Retrieval at the edge", Date.UTC(2026, 9, 12, 16)),
+    ...seedSpeaker("barr", "Barr Mikkelsen", "Budgets for eval suites", Date.UTC(2026, 9, 12, 17)),
+    ...seedSpeaker("aparna", "Aparna Yardley", "Latency as a feature", Date.UTC(2026, 9, 12, 18)),
+  ]);
+  await purgePublicEmbedCache(env.CACHE, { eventId: EVENT_ID });
+
+  const list = await request(`/embed/${EVENT_SLUG}-speakers?event=${EVENT_SLUG}&layout=list`);
+  expect(list.status).toBe(200);
+  const body = await list.text();
+  const seeded = ["Zoë Abernathy", "Barr Mikkelsen", "Aparna Yardley"];
+  expect(seeded.toSorted((left, right) => body.indexOf(left) - body.indexOf(right))).toEqual(seeded);
+});
+
 test("CONTRACT · EMB-15 · the public iCal output is a published-only calendar feed", async () => {
   const response = await request(`/embed/${EVENT_SLUG}-sessions.ics?event=${EVENT_SLUG}`);
   const body = await response.text();

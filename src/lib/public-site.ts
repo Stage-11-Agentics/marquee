@@ -995,7 +995,9 @@ export async function loadPublicEmbed(
     formats: agenda.formats,
     rooms: agenda.rooms,
     sessions: agenda.sessions,
-    speakers: [...speakersById.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    // Same surname order the public directory uses — an embedded speaker list is
+    // the directory on someone else's page, and readers scan both by last name.
+    speakers: [...speakersById.values()].sort(comparePublicSpeakerDirectoryEntries),
     cfp: null,
     // The agenda resolved these against the catalogs, so a name-form value
     // reaches the embed's controls as the id its options carry.
