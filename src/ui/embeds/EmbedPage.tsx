@@ -1,7 +1,7 @@
 /** @jsxImportSource preact */
 import type { JSX } from "preact";
 
-import { EMBED_KINDS, type EmbedKind, type EmbedLayout } from "../../db/schema";
+import { EMBED_KINDS, EMBED_OUTPUT_FORMATS, type EmbedKind, type EmbedLayout, type EmbedOutputFormat } from "../../db/schema";
 import {
   publicAbstractSnippet,
   type PublicEmbedData,
@@ -92,6 +92,31 @@ export const EMBED_STYLES = `
 .embed-preview iframe { width: 100%; min-height: 380px; display: block; border: 1px solid var(--public-rule); background: white; }
 .embed-copy { display: flex; justify-content: flex-end; margin-top: 7px; }
 .embed-copy button { min-height: 32px; border: 1px solid var(--public-accent); border-radius: 2px; background: var(--public-accent); color: white; padding: 6px 10px; font-size: 11px; font-weight: 650; }
+.embed-output-segment { display: flex; border: 1px solid var(--public-rule); border-radius: 2px; overflow: hidden; }
+.embed-output-segment button { flex: 1 1 0; min-height: 34px; border: 0; border-right: 1px solid var(--public-rule); background: var(--public-surface); color: var(--public-muted); font: 650 10px/1 var(--public-mono); letter-spacing: .04em; padding: 0 4px; }
+.embed-output-segment button:last-child { border-right: 0; }
+.embed-output-segment button.active { background: var(--public-accent-wash); color: var(--public-accent); }
+.embed-saved-panel { margin-top: 16px; }
+.embed-saved-head { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
+.embed-saved-head p { margin: 5px 0 0; color: var(--public-muted); font-size: 11px; line-height: 1.45; }
+.embed-manager-status { flex: 0 0 auto; min-height: 20px; color: var(--public-muted); font: 600 10px/1.4 var(--public-mono); text-align: right; }
+.embed-save-row { display: flex; gap: 8px; align-items: end; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--public-rule-soft); }
+.embed-save-row label { display: grid; flex: 1 1 auto; gap: 5px; color: var(--public-muted); font: 650 10px/1 var(--public-mono); letter-spacing: .08em; text-transform: uppercase; }
+.embed-save-row input { width: 100%; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 8px; font-size: 12px; }
+.embed-save-row button, .embed-saved-row button { min-height: 32px; border: 1px solid var(--public-accent); border-radius: 2px; background: var(--public-surface); color: var(--public-accent); padding: 6px 10px; font-size: 11px; font-weight: 650; white-space: nowrap; }
+.embed-save-row button { background: var(--public-accent); color: white; }
+.embed-save-row button:disabled { cursor: wait; opacity: .65; }
+.embed-saved-list { display: grid; gap: 8px; margin-top: 14px; }
+.embed-saved-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--public-rule); background: var(--public-sunk); }
+.embed-saved-row > div:first-child { min-width: 0; }
+.embed-saved-row strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 13px/1.2 Georgia, serif; }
+.embed-saved-row small { display: block; margin-top: 4px; color: var(--public-muted); font: 600 9px/1.3 var(--public-mono); letter-spacing: .04em; text-transform: uppercase; }
+.embed-saved-row code { display: block; overflow: hidden; margin-top: 4px; color: var(--public-soft); text-overflow: ellipsis; white-space: nowrap; font: 9px/1.3 var(--public-mono); }
+.embed-saved-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.embed-saved-actions .is-enabled { color: var(--public-accent); font: 650 9px/1 var(--public-mono); text-transform: uppercase; }
+.embed-saved-actions .is-disabled { color: var(--public-soft); font: 650 9px/1 var(--public-mono); text-transform: uppercase; }
+.embed-saved-empty { padding: 14px; color: var(--public-muted); border: 1px dashed var(--public-rule); font-size: 11px; }
+@media (max-width: 680px) { .embed-saved-head, .embed-save-row, .embed-saved-row { align-items: stretch; flex-direction: column; } .embed-manager-status { text-align: left; } .embed-save-row button { width: 100%; } .embed-saved-actions { justify-content: space-between; } }
 @media (max-width: 680px) { .embed-config-grid { grid-template-columns: 1fr; } .embed-preview { min-height: 360px; } .embed-field-row { grid-template-columns: 1fr; } }
 @media (max-width: 375px) { .embed-session { grid-template-columns: 70px minmax(0, 1fr); padding: 11px; } .embed-header, .embed-controls, .embed-speaker-grid, .embed-speaker-list, .embed-cfp { padding-left: 11px; padding-right: 11px; } .embed-controls { grid-template-columns: 1fr; } .embed-speaker-grid { grid-template-columns: 1fr; } }
 `;
@@ -103,6 +128,7 @@ export const EMBED_CONFIG_SCRIPT = `
   const preview = document.querySelector('[data-embed-preview]');
   const copy = document.querySelector('[data-copy-embed]');
   const kindButtons = Array.from(document.querySelectorAll('[data-embed-kind]'));
+  const outputButtons = Array.from(document.querySelectorAll('[data-embed-output]'));
   const layoutButtons = Array.from(document.querySelectorAll('[data-embed-layout]'));
   const trackField = document.getElementById('embed-track');
   const statusField = document.getElementById('embed-status');
@@ -111,8 +137,10 @@ export const EMBED_CONFIG_SCRIPT = `
   const layoutNote = document.querySelector('[data-layout-note]');
   if (!form || !code || !preview) return;
   const KIND_LABEL = { agenda: 'Agenda', sessions: 'Sessions', speakers: 'Speakers', cfp: 'Call for speakers' };
+  const OUTPUT_LABEL = { html: 'Styled HTML', json: 'JSON feed', ical: 'iCal feed' };
   const state = {
     kind: kindButtons.find((b) => b.classList.contains('active'))?.dataset.embedKind || 'agenda',
+    output: outputButtons.find((b) => b.classList.contains('active'))?.dataset.embedOutput || 'html',
     layout: layoutButtons.find((b) => b.classList.contains('active'))?.dataset.embedLayout || 'cards',
   };
   const paintControls = () => {
@@ -125,6 +153,11 @@ export const EMBED_CONFIG_SCRIPT = `
     const layoutApplies = state.kind === 'speakers';
     layoutButtons.forEach((b) => { b.disabled = !layoutApplies; const active = layoutApplies && b.dataset.embedLayout === state.layout; b.classList.toggle('active', active); });
     if (layoutNote) layoutNote.textContent = layoutApplies ? 'Gallery cards or a compact list' : 'Applies to the Speakers format';
+  };
+  const pathFor = (slug, output, params) => {
+    if (output === 'json') return '/api/v1/public/embeds/' + encodeURIComponent(slug) + (params.toString() ? '?' + params.toString() : '');
+    if (output === 'ical') return '/embed/' + encodeURIComponent(slug) + '.ics' + (params.toString() ? '?' + params.toString() : '');
+    return '/embed/' + encodeURIComponent(slug) + (params.toString() ? '?' + params.toString() : '');
   };
   const update = () => {
     const values = new FormData(form);
@@ -139,12 +172,15 @@ export const EMBED_CONFIG_SCRIPT = `
     if (status && kind !== 'cfp') params.set('status', status);
     if (kind === 'speakers' && state.layout === 'list') params.set('layout', 'list');
     if (accent) params.set('accent', accent);
-    const src = '/embed/' + encodeURIComponent(slug) + (params.toString() ? '?' + params.toString() : '');
+    const src = pathFor(slug, state.output, params);
     const absolute = window.location.origin + src;
-    code.value = '<iframe src="' + absolute + '" title="' + event + ' ' + KIND_LABEL[kind].toLowerCase() + '" loading="lazy" style="width:100%;border:0"></iframe>';
+    code.value = state.output === 'html'
+      ? '<iframe src="' + absolute + '" title="' + event + ' ' + KIND_LABEL[kind].toLowerCase() + '" loading="lazy" style="width:100%;border:0"></iframe>'
+      : state.output === 'json' ? absolute : '<a href="' + absolute + '">Add ' + event + ' to calendar</a>';
     preview.src = src;
   };
   kindButtons.forEach((b) => b.addEventListener('click', () => { state.kind = b.dataset.embedKind; paintControls(); update(); }));
+  outputButtons.forEach((b) => b.addEventListener('click', () => { state.output = b.dataset.embedOutput; outputButtons.forEach((item) => { const active = item.dataset.embedOutput === state.output; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); }); update(); }));
   layoutButtons.forEach((b) => b.addEventListener('click', () => { if (b.disabled) return; state.layout = b.dataset.embedLayout; paintControls(); update(); }));
   form.querySelectorAll('select, input').forEach((control) => control.addEventListener('input', update));
   copy?.addEventListener('click', async () => {
@@ -153,6 +189,43 @@ export const EMBED_CONFIG_SCRIPT = `
   });
   paintControls();
   update();
+
+  const manager = document.querySelector('[data-embed-manager]');
+  const managerStatus = document.querySelector('[data-embed-manager-status]');
+  const savedList = document.querySelector('[data-saved-embed-list]');
+  const nameField = document.querySelector('[data-embed-name]');
+  const saveButton = document.querySelector('[data-save-embed]');
+  const eventId = String(form.querySelector('[name="event_id"]')?.value || '');
+  const apiPath = eventId ? '/api/v1/events/' + encodeURIComponent(eventId) + '/embeds' : '';
+  let saved = [];
+  const escapeHtml = (value) => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+  const renderSaved = () => {
+    if (!savedList) return;
+    if (saved.length === 0) { savedList.innerHTML = '<div class="embed-saved-empty">No saved embeds yet. Name the current configuration above to keep its code handy.</div>'; return; }
+    savedList.innerHTML = saved.map((item) => '<article class="embed-saved-row" data-saved-id="' + escapeHtml(item.id) + '"><div><strong>' + escapeHtml(item.name) + '</strong><small>' + escapeHtml(KIND_LABEL[item.kind] || item.kind) + ' · ' + escapeHtml(OUTPUT_LABEL[item.output_format] || item.output_format) + '</small><code>' + escapeHtml(item.slug) + '</code></div><div class="embed-saved-actions"><span class="' + (item.enabled ? 'is-enabled' : 'is-disabled') + '">' + (item.enabled ? 'Enabled' : 'Disabled') + '</span><button type="button" data-saved-code="' + escapeHtml(item.id) + '">Get code</button><button type="button" data-saved-toggle="' + escapeHtml(item.id) + '">' + (item.enabled ? 'Disable' : 'Enable') + '</button></div></article>').join('');
+    savedList.querySelectorAll('[data-saved-code]').forEach((button) => button.addEventListener('click', () => { const item = saved.find((candidate) => candidate.id === button.dataset.savedCode); if (!item) return; code.value = item.snippet; code.focus(); managerStatus.textContent = 'Code loaded for ' + item.name; }));
+    savedList.querySelectorAll('[data-saved-toggle]').forEach((button) => button.addEventListener('click', async () => {
+      const item = saved.find((candidate) => candidate.id === button.dataset.savedToggle); if (!item) return;
+      button.disabled = true;
+      try { const response = await fetch(apiPath + '/' + encodeURIComponent(item.id), { method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: !item.enabled }) }); if (!response.ok) throw new Error('save failed'); const payload = await response.json(); const updated = payload.data; saved = saved.map((candidate) => candidate.id === updated.id ? updated : candidate); renderSaved(); managerStatus.textContent = updated.enabled ? 'Embed enabled' : 'Embed disabled'; }
+      catch (_) { button.disabled = false; managerStatus.textContent = 'That change could not be saved. Try again.'; }
+    }));
+  };
+  const loadSaved = async () => {
+    if (!manager || !apiPath) return;
+    try { const response = await fetch(apiPath, { credentials: 'include' }); if (response.status === 401) { managerStatus.textContent = 'Sign in as an organizer to save embeds.'; if (saveButton) saveButton.disabled = true; return; } if (!response.ok) throw new Error('load failed'); const payload = await response.json(); saved = payload.data; managerStatus.textContent = saved.length ? saved.length + ' saved ' + (saved.length === 1 ? 'embed' : 'embeds') : 'Nothing saved yet'; renderSaved(); }
+    catch (_) { managerStatus.textContent = 'Saved embeds are unavailable right now.'; if (saveButton) saveButton.disabled = true; }
+  };
+  saveButton?.addEventListener('click', async () => {
+    const name = String(nameField?.value || '').trim();
+    if (!name) { managerStatus.textContent = 'Give this embed a name first.'; nameField?.focus(); return; }
+    saveButton.disabled = true;
+    const values = new FormData(form);
+    try { const response = await fetch(apiPath, { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, kind: state.kind, output_format: state.output, track: String(values.get('track') || '') || null, status: String(values.get('status') || '') || null, layout: state.kind === 'speakers' ? state.layout : null, accent: String(values.get('accent') || '') || null }) }); if (!response.ok) throw new Error('save failed'); const payload = await response.json(); saved = [payload.data, ...saved]; renderSaved(); managerStatus.textContent = 'Saved ' + payload.data.name; if (nameField) nameField.value = ''; }
+    catch (_) { managerStatus.textContent = 'That embed could not be saved. Try again.'; }
+    finally { saveButton.disabled = false; }
+  });
+  void loadSaved();
 })();
 `;
 
@@ -320,25 +393,38 @@ function embedSlug(event: PublicEvent, kind: EmbedKind): string {
   return `${event.slug}-${kind}`;
 }
 
-function snippet(event: PublicEvent, kind: EmbedKind, track: string, status: string, layout: EmbedLayout, accent: string): string {
+const EMBED_OUTPUT_LABEL: Record<EmbedOutputFormat, string> = {
+  html: "Styled HTML",
+  json: "JSON feed",
+  ical: "iCal feed",
+};
+
+function embedParams(kind: EmbedKind, track: string, status: string, layout: EmbedLayout, accent: string): URLSearchParams {
   const query = new URLSearchParams();
   if (track && kind !== "cfp") query.set("track", track);
   if (status && kind !== "cfp") query.set("status", status);
   if (kind === "speakers" && layout === "list") query.set("layout", "list");
   if (accent) query.set("accent", accent);
-  const source = `https://marquee.stage11.dev/embed/${embedSlug(event, kind)}${query.toString() ? `?${query.toString()}` : ""}`;
+  return query;
+}
+
+function embedPath(event: PublicEvent, kind: EmbedKind, output: EmbedOutputFormat, query: URLSearchParams): string {
+  const slug = embedSlug(event, kind);
+  const queryString = query.toString();
+  if (output === "json") return `/api/v1/public/embeds/${encodeURIComponent(slug)}${queryString ? `?${queryString}` : ""}`;
+  if (output === "ical") return `/embed/${encodeURIComponent(slug)}.ics${queryString ? `?${queryString}` : ""}`;
+  return `/embed/${encodeURIComponent(slug)}${queryString ? `?${queryString}` : ""}`;
+}
+
+function snippet(event: PublicEvent, kind: EmbedKind, track: string, status: string, layout: EmbedLayout, accent: string, output: EmbedOutputFormat): string {
+  const source = `https://marquee.stage11.dev${embedPath(event, kind, output, embedParams(kind, track, status, layout, accent))}`;
+  if (output === "json") return source;
+  if (output === "ical") return `<a href="${source}">Add ${event.name} to calendar</a>`;
   return `<iframe src="${source}" title="${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()}" loading="lazy" style="width:100%;border:0"></iframe>`;
 }
 
-function previewSrc(event: PublicEvent, kind: EmbedKind, track: string, status: string, layout: EmbedLayout, accent: string): string {
-  const slug = embedSlug(event, kind);
-  const params: Record<string, string> = {};
-  if (track && kind !== "cfp") params.track = track;
-  if (status && kind !== "cfp") params.status = status;
-  if (kind === "speakers" && layout === "list") params.layout = "list";
-  if (accent) params.accent = accent;
-  const query = new URLSearchParams(params).toString();
-  return `/embed/${encodeURIComponent(slug)}${query ? `?${query}` : ""}`;
+function previewSrc(event: PublicEvent, kind: EmbedKind, track: string, status: string, layout: EmbedLayout, accent: string, output: EmbedOutputFormat): string {
+  return embedPath(event, kind, output, embedParams(kind, track, status, layout, accent));
 }
 
 export function EmbedConfigPage({
@@ -349,6 +435,7 @@ export function EmbedConfigPage({
   status,
   layout,
   accent,
+  output,
   preview,
 }: {
   event: PublicEvent;
@@ -358,6 +445,7 @@ export function EmbedConfigPage({
   status: string;
   layout: EmbedLayout;
   accent: string;
+  output: EmbedOutputFormat;
   preview: PublicEmbedData;
 }): JSX.Element {
   const notApplicable = kind === "cfp";
@@ -372,6 +460,7 @@ export function EmbedConfigPage({
             <p>Choose a public surface, tune its filters and color, then take the live frame to your own site.</p>
             <form data-embed-config>
               <input type="hidden" name="event" value={event.slug} />
+              <input type="hidden" name="event_id" value={event.id} />
               <div class="embed-field">
                 <label>Format</label>
                 <div class="embed-format-segment" role="group" aria-label="Embed format">
@@ -379,6 +468,13 @@ export function EmbedConfigPage({
                     <button type="button" data-embed-kind={item} class={item === kind ? "active" : ""} aria-pressed={item === kind} key={item}>{EMBED_KIND_LABEL[item]}</button>
                   ))}
                 </div>
+              </div>
+              <div class="embed-field">
+                <label>Output</label>
+                <div class="embed-output-segment" role="group" aria-label="Output format">
+                  {EMBED_OUTPUT_FORMATS.map((item) => <button type="button" data-embed-output={item} class={item === output ? "active" : ""} aria-pressed={item === output} key={item}>{EMBED_OUTPUT_LABEL[item]}</button>)}
+                </div>
+                <span class="embed-field-note">Styled HTML for an iframe, JSON for a feed, or iCal for a calendar subscription.</span>
               </div>
               <div class="embed-field-row">
                 <div class="embed-field">
@@ -409,16 +505,21 @@ export function EmbedConfigPage({
                 <span class="embed-field-note" data-layout-note>{layoutApplies ? "Gallery cards or a compact list" : "Applies to the Speakers format"}</span>
               </div>
               <div class="embed-field"><label for="embed-accent">Accent color</label><input id="embed-accent" name="accent" type="color" value={accent} /></div>
-              <div class="embed-field"><label for="embed-code">Embed code</label><textarea data-embed-code id="embed-code" readOnly value={snippet(event, kind, track, status, layout, accent)} /></div>
+              <div class="embed-field"><label for="embed-code">Embed code or feed URL</label><textarea data-embed-code id="embed-code" readOnly value={snippet(event, kind, track, status, layout, accent, output)} /></div>
               <div class="embed-copy"><button type="button" data-copy-embed>Copy embed code</button></div>
             </form>
           </section>
           <section class="embed-config-panel">
             <h2>Live preview</h2>
-            <div class="embed-preview"><iframe data-embed-preview title={`${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()} live preview`} src={previewSrc(event, kind, track, status, layout, accent)} /></div>
+            <div class="embed-preview"><iframe data-embed-preview title={`${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()} live preview`} src={previewSrc(event, kind, track, status, layout, accent, output)} /></div>
             <p style={{ margin: "10px 0 0", fontSize: "11px" }}>Published changes are served anonymously and refreshed from a 30-second edge cache.</p>
           </section>
         </div>
+        <section class="embed-config-panel embed-saved-panel" data-embed-manager>
+          <div class="embed-saved-head"><div><h2>Saved embeds</h2><p>Keep named snippets for the pages your team maintains. Disabling one stops its public URL without editing your site.</p></div><span class="embed-manager-status" data-embed-manager-status role="status">Sign in as an organizer to manage saved embeds.</span></div>
+          <div class="embed-save-row"><label for="embed-name">Name this embed<input id="embed-name" data-embed-name type="text" maxLength={120} placeholder="Main conference site" /></label><button type="button" data-save-embed>Save current embed</button></div>
+          <div class="embed-saved-list" data-saved-embed-list><div class="embed-saved-empty">Loading saved embeds…</div></div>
+        </section>
       </main>
     </PublicShell>
   );

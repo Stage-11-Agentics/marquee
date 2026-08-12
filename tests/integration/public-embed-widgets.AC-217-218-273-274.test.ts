@@ -159,10 +159,27 @@ test("AC-274 · the speakers embed offers cards and list layouts carried in the 
   expect(configBody).toContain("layout=list");
   expect(configBody).toContain('data-embed-layout="cards"');
   expect(configBody).toContain('data-embed-layout="list"');
+  expect(configBody).toContain('data-embed-output="html"');
+  expect(configBody).toContain('data-embed-output="json"');
+  expect(configBody).toContain('data-embed-output="ical"');
 
   const configDefault = await request(`/embed/config?event=${EVENT_SLUG}&kind=speakers`);
   const configDefaultBody = await configDefault.text();
   expect(configDefaultBody).not.toContain("layout=list");
+});
+
+test("CONTRACT · EMB-15 · the public iCal output is a published-only calendar feed", async () => {
+  const response = await request(`/embed/${EVENT_SLUG}-sessions.ics?event=${EVENT_SLUG}`);
+  const body = await response.text();
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toContain("text/calendar");
+  expect(response.headers.get("content-disposition")).toContain("widget-conf-sessions.ics");
+  expect(body).toContain("BEGIN:VCALENDAR");
+  expect(body).toContain("METHOD:PUBLISH");
+  expect(body).toContain("Reliable multi-agent systems");
+  expect(body).toContain("Evaluation infrastructure at scale");
+  expect(body).toContain("Main Stage");
+  expect(body).not.toContain("PRIVATE");
 });
 
 test("AC-217 · the cfp embed renders the open deadline, formats, and a link to the public form; track/layout disable rather than disappear", async () => {

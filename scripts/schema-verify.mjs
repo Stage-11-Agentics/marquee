@@ -214,6 +214,7 @@ try {
   assert.match(firstApply.stdout, /0007_embed_widget_kinds\.sql/);
   assert.match(firstApply.stdout, /0008_form_field_dates\.sql/);
   assert.match(firstApply.stdout, /0010_bound_form_options\.sql/);
+  assert.match(firstApply.stdout, /0010_saved_embeds\.sql/);
 
   const secondApply = runWrangler([
     "d1",

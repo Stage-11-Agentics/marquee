@@ -12,6 +12,7 @@ import personCustomFieldsMigrationSql from "../../migrations/0009_person_custom_
 import fileCommentsMigrationSql from "../../migrations/0009_file_comments.sql?raw";
 import criterionKindsMigrationSql from "../../migrations/0009_criterion_kinds.sql?raw";
 import boundFormOptionsMigrationSql from "../../migrations/0010_bound_form_options.sql?raw";
+import savedEmbedsMigrationSql from "../../migrations/0010_saved_embeds.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -82,6 +83,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(fileCommentsMigrationSql),
     ...splitStatements(criterionKindsMigrationSql),
     ...splitStatements(boundFormOptionsMigrationSql),
+    ...splitStatements(savedEmbedsMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

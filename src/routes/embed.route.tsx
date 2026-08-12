@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 import { renderToString } from "preact-render-to-string";
 
-import { EMBED_KINDS, type EmbedKind } from "../db/schema";
+import { EMBED_KINDS, EMBED_OUTPUT_FORMATS, type EmbedKind, type EmbedOutputFormat } from "../db/schema";
 import type { Env } from "../index";
 import { ICON_LINKS } from "../lib/head-icons";
 import {
@@ -20,6 +20,7 @@ import {
   EmbedConfigPage,
   EmbedPage,
 } from "../ui/embeds/EmbedPage";
+import { buildPublicCalendarFeed } from "../lib/public-ics";
 import { PUBLIC_SITE_STYLES } from "../ui/public/agenda/PublicAgendaPage";
 import { renderPublicDocument } from "./public-agenda.route";
 
@@ -71,6 +72,7 @@ async function shellFor(context: { env: Env; req: { raw: Request } }): Promise<s
 embedRoutes.get("/embed/config", async (context) => {
   const query = context.req.query();
   const kind: EmbedKind = EMBED_KINDS.includes(query.kind as EmbedKind) ? (query.kind as EmbedKind) : "agenda";
+  const output: EmbedOutputFormat = EMBED_OUTPUT_FORMATS.includes(query.output as EmbedOutputFormat) ? (query.output as EmbedOutputFormat) : "html";
   const event = await loadPublicEvent(context.env.DB, query.event ?? query.event_slug);
   if (!event) return context.notFound();
   const track = query.track ?? "";
@@ -87,14 +89,17 @@ embedRoutes.get("/embed/config", async (context) => {
   if (!resolved) return context.notFound();
   const preview = await loadPublicEmbed(context.env.DB, resolved, { track, format, room, status, accent, layout });
   const shell = await shellFor(context);
-  const markup = renderToString(<EmbedConfigPage event={event} tracks={preview.tracks} kind={kind} track={track} status={status} layout={layout} accent={accent} preview={preview} />);
+  const markup = renderToString(<EmbedConfigPage event={event} tracks={preview.tracks} kind={kind} track={track} status={status} layout={layout} accent={accent} output={output} preview={preview} />);
   return context.html(renderEmbedDocument(shell, markup, EMBED_CONFIG_SCRIPT));
 });
 
 embedRoutes.get("/embed/:slug", async (context) => {
   const query = context.req.query();
+  const rawSlug = context.req.param("slug") ?? "";
+  const isCalendarFeed = rawSlug.endsWith(".ics");
+  const slug = isCalendarFeed ? rawSlug.slice(0, -4) : rawSlug;
   const result = await readEmbed(context.env.DB, context.env.CACHE, {
-    slug: context.req.param("slug"),
+    slug,
     eventSlug: query.event ?? query.event_slug,
     track: query.track,
     format: query.format,
@@ -105,6 +110,11 @@ embedRoutes.get("/embed/:slug", async (context) => {
   });
   if (!result) return context.notFound();
   context.header("Cache-Control", "public, max-age=30, s-maxage=30");
+  if (isCalendarFeed) {
+    context.header("Content-Type", "text/calendar; charset=utf-8");
+    context.header("Content-Disposition", `inline; filename="${encodeURIComponent(slug)}.ics"`);
+    return context.body(buildPublicCalendarFeed(result.data, new URL(context.req.url).origin));
+  }
   const shell = await shellFor(context);
   return context.html(renderEmbedDocument(shell, renderToString(<EmbedPage data={result.data} />)));
 });

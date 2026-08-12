@@ -1,6 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
-import { EMBED_KINDS, type EmbedKind, type EmbedLayout, type FormRow } from "../db/schema";
+import { EMBED_KINDS, type EmbedKind, type EmbedLayout, type EmbedOutputFormat, type FormRow } from "../db/schema";
 import { participantAudienceFilterSql, participantListSql } from "./participants";
 import { showsBuildingComparisonCount } from "./venue-disclosure";
 import { slugify } from "./ids";
@@ -124,6 +124,8 @@ export interface PublicEmbedConfig {
   tracks: string[];
   statuses: string[];
   accent: string | null;
+  layout: EmbedLayout | null;
+  output: EmbedOutputFormat;
 }
 
 export interface PublicEmbedFilters {
@@ -201,6 +203,7 @@ interface PublicSessionRow {
 }
 
 interface EmbedRow {
+  enabled: number;
   event_id: string;
   event_slug: string;
   kind: EmbedKind;
@@ -750,7 +753,7 @@ function validAccent(value: unknown): string | null {
   return typeof value === "string" && /^#[0-9a-f]{3,8}$/i.test(value) ? value : null;
 }
 
-function parseEmbedConfig(value: string | null, kind: EmbedKind): PublicEmbedConfig {
+export function parseEmbedConfig(value: string | null, kind: EmbedKind): PublicEmbedConfig {
   const raw = parseJson<Record<string, unknown>>(value, {});
   const trackValues = Array.isArray(raw.tracks)
     ? raw.tracks.filter((item): item is string => typeof item === "string")
@@ -758,11 +761,15 @@ function parseEmbedConfig(value: string | null, kind: EmbedKind): PublicEmbedCon
   const statusValues = Array.isArray(raw.statuses)
     ? raw.statuses.filter((item): item is string => typeof item === "string")
     : typeof raw.status === "string" ? [raw.status] : [];
+  const layout = raw.layout === "list" ? "list" : raw.layout === "cards" ? "cards" : null;
+  const output = raw.output === "json" || raw.output === "ical" ? raw.output : "html";
   return {
     kind,
     tracks: trackValues,
     statuses: statusValues,
     accent: validAccent(raw.accent ?? raw.color),
+    layout,
+    output,
   };
 }
 
@@ -784,13 +791,16 @@ export async function resolvePublicEmbed(
   request: { slug: string; eventSlug?: string | null; kind?: EmbedKind },
 ): Promise<ResolvedPublicEmbed | null> {
   const row = await database.prepare(
-    `SELECT embeds.event_id, events.slug AS event_slug, embeds.kind, embeds.slug, embeds.config
+    `SELECT embeds.event_id, events.slug AS event_slug, embeds.kind, embeds.slug, embeds.config, embeds.enabled
        FROM embeds JOIN events ON events.id = embeds.event_id
       WHERE events.status = 'live' AND embeds.slug = ? LIMIT 1`,
   ).bind(request.slug).first<EmbedRow>();
   if (row) {
+    if (row.enabled !== 1) return null;
+    const event = await findLiveEvent(database, row.event_slug);
+    if (!event) return null;
     return {
-      event: (await findLiveEvent(database, row.event_slug))!,
+      event,
       slug: row.slug,
       kind: row.kind,
       config: parseEmbedConfig(row.config, row.kind),
@@ -801,11 +811,12 @@ export async function resolvePublicEmbed(
   const eventSlug = request.eventSlug ?? inferEventSlug(request.slug);
   const event = await findLiveEvent(database, eventSlug);
   if (!event) return null;
+  if (request.slug !== kind && request.slug !== `${event.slug}-${kind}`) return null;
   return {
     event,
     slug: request.slug,
     kind,
-    config: { kind, tracks: [], statuses: [], accent: null },
+    config: { kind, tracks: [], statuses: [], accent: null, layout: null, output: "html" },
   };
 }
 
@@ -876,7 +887,9 @@ export async function loadPublicEmbed(
   const format = filters.format ?? null;
   const room = filters.room ?? null;
   const status = filters.status ?? resolved.config.statuses[0] ?? null;
-  const layout: EmbedLayout = filters.layout === "list" ? "list" : "cards";
+  const layout: EmbedLayout = filters.layout === "list"
+    ? "list"
+    : resolved.config.layout ?? "cards";
   const agenda = await loadPublicAgenda(database, {
     eventSlug: resolved.event.slug,
     allDays: true,

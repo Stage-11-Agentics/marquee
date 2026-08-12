@@ -103,6 +103,7 @@ export const MIRROR_OPERATIONS = ["upsert", "delete"] as const;
 export const IMPORT_OUTCOMES = ["created", "updated", "skipped", "failed"] as const;
 export const EMBED_KINDS = ["agenda", "sessions", "speakers", "cfp"] as const;
 export const EMBED_LAYOUTS = ["cards", "list"] as const;
+export const EMBED_OUTPUT_FORMATS = ["html", "json", "ical"] as const;
 export const AUDIT_ACTOR_KINDS = ["user", "api_token", "system", "airtable"] as const;
 
 export type EventStatus = (typeof EVENT_STATUSES)[number];
@@ -134,6 +135,7 @@ export type MirrorOperation = (typeof MIRROR_OPERATIONS)[number];
 export type ImportOutcome = (typeof IMPORT_OUTCOMES)[number];
 export type EmbedKind = (typeof EMBED_KINDS)[number];
 export type EmbedLayout = (typeof EMBED_LAYOUTS)[number];
+export type EmbedOutputFormat = (typeof EMBED_OUTPUT_FORMATS)[number];
 export type AuditActorKind = (typeof AUDIT_ACTOR_KINDS)[number];
 
 export interface MutableRecord {
@@ -627,8 +629,10 @@ export interface ImportRowRow extends MutableRecord {
 
 export interface EmbedRow extends MutableRecord {
   config: JsonText;
+  enabled: 0 | 1;
   event_id: Id;
   kind: EmbedKind;
+  name: string;
   slug: string;
 }
 

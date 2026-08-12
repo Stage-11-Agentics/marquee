@@ -59,6 +59,10 @@ test("AC-106 · API tokens and the sidebar API docs link resolve as real routes"
   expect(matchRoute("/api/docs")?.id).toBe("api-docs");
 });
 
+test("CONTRACT · EMB-15 · organizer embeds are discoverable at the mandated builder route", () => {
+  expect(matchRoute("/embed/config")).toMatchObject({ id: "embeds", label: "Embeds", external: true });
+});
+
 test("CONTRACT · the table installs no route for a module this product does not have", () => {
   // The Airtable mirror was cancelled and the AI first pass was never built.
   // An installed route claims a module exists; these two claimed one and had none.
