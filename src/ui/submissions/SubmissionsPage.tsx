@@ -9,6 +9,7 @@ import {
   submissionKindLabel,
   type SubmissionColumnId,
 } from "../../lib/submission-columns";
+import { reviewCountLabel, scoreBasisLabel } from "../../lib/review-aggregate";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, PageHeader } from "../shell/components";
 import type { NavigationOptions } from "../shell/router";
@@ -52,7 +53,7 @@ interface SavedView {
   config: {
     q: string;
     filters: Record<string, string>;
-    sort: "newest" | "updated" | "title" | "score";
+    sort: "newest" | "updated" | "title" | "score" | "score_asc";
     columns: SubmissionColumnId[];
   };
   /** This view's own matching total — never the list currently on screen. */
@@ -108,6 +109,7 @@ const SORT_OPTIONS = [
   ["newest", "Newest"],
   ["updated", "Recently updated"],
   ["score", "Score high → low"],
+  ["score_asc", "Score low → high"],
   ["title", "Title A → Z"],
 ] as const;
 
@@ -203,7 +205,13 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
     ? <span class={`notification-state ${item.notified.state}`} title={item.notified.detail}><strong>{item.notified.label}</strong><small>{item.notified.detail}</small></span>
     : <span class="subtle">—</span>;
   if (column === "tracks") return <span class="track-chips">{item.tracks.length ? item.tracks.map((track) => <span key={track.id} class="chip track-chip" style={{ borderLeftColor: track.color }} title={track.is_primary ? "Primary track" : "Additional track"}>{track.name}{track.is_primary ? " · Primary" : ""}</span>) : "—"}</span>;
-  if (column === "score") return <span class="tabular">{item.score === null ? "—" : item.score.toFixed(2)}</span>;
+  if (column === "score") return <>
+    <span class="tabular score-value" title={scoreBasisLabel(item.score, item.score_is_weighted)}>
+      {item.score === null ? "—" : item.score.toFixed(2)}
+      <span class="score-basis-mark" aria-hidden="true">{item.score !== null && !item.score_is_weighted ? "*" : "\u00a0"}</span>
+    </span>
+    <span class="row-meta">{reviewCountLabel(item.review_count)}</span>
+  </>;
   if (column === "submitted") return <span class="tabular">{item.status === "draft" ? "Not submitted" : formatMoment(item.submitted_at)}</span>;
   if (column === "updated") return <span class="tabular">{formatMoment(item.last_saved_at ?? item.updated_at)}</span>;
   if (column === "origin") return <span>{item.origin[0]!.toUpperCase() + item.origin.slice(1)}</span>;
@@ -242,6 +250,13 @@ export function SubmissionsPage({
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  /**
+   * The results export needs an evaluation plan. Resolved in the background so
+   * the button appears only when there is something behind it — a download
+   * control that 404s on a conference with no review plan is worse than no
+   * control at all.
+   */
+  const [resultsPlanId, setResultsPlanId] = useState<string | null>(null);
   const [columns, setColumns] = useState<SubmissionColumnId[]>(() => storedColumns(eventId));
   const [views, setViews] = useState<SavedView[]>([]);
   const [activeViewId, setActiveViewId] = useState("all-submissions");
@@ -682,6 +697,22 @@ export function SubmissionsPage({
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const plans = await apiFetch<{ data: Array<{ id: string }> }>(
+          `/api/v1/events/${encodeURIComponent(eventId)}/plans`,
+          { route: "/api/v1/events/{eventId}/plans" },
+        );
+        if (!cancelled) setResultsPlanId(plans.data[0]?.id ?? null);
+      } catch {
+        if (!cancelled) setResultsPlanId(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [eventId]);
+
   const activeView = views.find((view) => view.id === activeViewId);
   const orderedColumns = [...columns, ...SUBMISSION_COLUMN_REGISTRY.map((column) => column.id).filter((column) => !columns.includes(column))];
   const singleVenueName = rows.find((item) => item.slot && !item.slot.show_building)?.slot?.building ?? null;
@@ -692,7 +723,7 @@ export function SubmissionsPage({
         ? `${envelope.total.toLocaleString()} decisions need attention · ${notifiedSummary?.sendable.toLocaleString() ?? "—"} can be notified now · ${notifiedSummary?.no_valid_address.toLocaleString() ?? "—"} need an address first.`
         : `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered ${SUBMISSIONS_PAGE_SIZE} at a time for an instant response at full scale.`
         : "Loading the conference submission register…"}
-      actions={<><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
+      actions={<><span class="results-export-slot">{resultsPlanId && <a class="button" href={`/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`} download="review-results.csv">Export scores (CSV)</a>}</span><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
     />
     <div class={`export-message ${exportError ? "visible" : ""}`} role="status">{exportError || "Export status space reserved"}</div>
     {/*
@@ -777,7 +808,14 @@ export function SubmissionsPage({
       </div>
       <div class="submissions-table-wrap" ref={tableWrapRef} style={tableFrameMinHeight ? { minHeight: `${tableFrameMinHeight}px` } : undefined}>
         <table class="submissions-table">
-          <thead><tr><th class="check-col"><input type="checkbox" aria-label="Select visible rows" checked={rows.length > 0 && rows.every((item) => allMatching || selectedIds.has(item.id))} onChange={(event) => togglePage(event.currentTarget.checked)} /></th>{columns.map((column) => <th class={`${column}-col`}>{submissionColumn(column).label}</th>)}</tr></thead>
+          <thead><tr><th class="check-col"><input type="checkbox" aria-label="Select visible rows" checked={rows.length > 0 && rows.every((item) => allMatching || selectedIds.has(item.id))} onChange={(event) => togglePage(event.currentTarget.checked)} /></th>{columns.map((column) => column === "score"
+            ? <th class="score-col" aria-sort={sort === "score" ? "descending" : sort === "score_asc" ? "ascending" : "none"}>
+                <button type="button" class="column-sort" onClick={() => updateQuery({ sort: sort === "score" ? "score_asc" : "score", page: 1 })} title="Sort by weighted score">
+                  {submissionColumn(column).label}
+                  <span class="sort-glyph" aria-hidden="true">{sort === "score" ? "▼" : sort === "score_asc" ? "▲" : "·"}</span>
+                </button>
+              </th>
+            : <th class={`${column}-col`}>{submissionColumn(column).label}</th>)}</tr></thead>
           <tbody>
             {state.kind === "loading" && Array.from({ length: COLD_SKELETON_ROWS }, (_, index) => <SkeletonRow columns={columns} key={`skeleton-${index}`} />)}
             {state.kind === "error" && <tr class="state-row error"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Notification gaps did not load" : draftQueue ? "Drafts did not load" : "Submissions did not load"}</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></td></tr>}

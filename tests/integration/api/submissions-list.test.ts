@@ -66,7 +66,13 @@ async function buildFixture(): Promise<void> {
     CREATE TABLE IF NOT EXISTS participations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, person_id TEXT NOT NULL, role TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS tracks (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS submission_tracks (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, track_id TEXT NOT NULL, is_primary INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS evaluations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, score REAL);
+    CREATE TABLE IF NOT EXISTS evaluations (
+      id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, round_id TEXT,
+      score REAL, criteria_scores TEXT, abstained INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS rubric_criteria (
+      id TEXT PRIMARY KEY, round_id TEXT NOT NULL, name TEXT NOT NULL, weight_pct REAL NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS buildings (id TEXT PRIMARY KEY, name TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, building_id TEXT NOT NULL, name TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS agenda_items (
@@ -189,7 +195,7 @@ describe.sequential("MRQ-9 submissions list", () => {
 
   test("CONTRACT · the fixed column registry is complete and Title cannot be removed", () => {
     expect(SUBMISSION_COLUMN_REGISTRY.map((column) => column.label)).toEqual([
-      "Type", "ID", "Title", "Speakers", "Status", "Notified", "Tracks", "Score",
+      "Type", "ID", "Title", "Speakers", "Status", "Notified", "Tracks", "Weighted score",
       "Submitted", "Last updated", "Origin", "Missing fields",
     ]);
     expect(SUBMISSION_COLUMN_REGISTRY.find((column) => column.id === "title")?.required).toBe(true);

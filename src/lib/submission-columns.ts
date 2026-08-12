@@ -12,7 +12,9 @@ export const SUBMISSION_COLUMN_REGISTRY = [
   { id: "status", label: "Status", required: false },
   { id: "notified", label: "Notified", required: false },
   { id: "tracks", label: "Tracks", required: false },
-  { id: "score", label: "Score", required: false },
+  // The label says what the number is: a weight-normalised aggregate, not a
+  // raw average. The id is wire data (saved views persist it) and never moves.
+  { id: "score", label: "Weighted score", required: false },
   { id: "submitted", label: "Submitted", required: false },
   { id: "updated", label: "Last updated", required: false },
   { id: "origin", label: "Origin", required: false },
