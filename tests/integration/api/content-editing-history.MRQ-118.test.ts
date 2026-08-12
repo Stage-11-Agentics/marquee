@@ -407,3 +407,26 @@ test("AC-247-249 · MRQ-118: a draft stays editable for a principal without prog
   });
   expect(saved.status).toBe(200);
 });
+
+test("MRQ-118: a draft is editable without program:write but not restorable — restore has one door", async () => {
+  // `restoreSubmissionContent` requires program:write at every status, Draft
+  // included. A single shared flag would offer this seat a Restore button it
+  // cannot use — the same dead end as an editor that 403s, pointed the other way.
+  await insertSubmission("sub-118-draft-restore", "draft");
+  await requestAs(OPS_SESSION_ID, `/api/v1/events/${EVENT_ID}/submissions/sub-118-draft-restore`, {
+    method: "PATCH",
+    body: JSON.stringify({ title: "An edit to restore from" }),
+  });
+
+  const response = await requestAs(OPS_SESSION_ID, `/api/v1/events/${EVENT_ID}/submissions/sub-118-draft-restore`);
+  const view = await response.json() as { actions: { can_edit_content: boolean; can_restore_content: boolean }; history: HistoryEntry[] };
+  expect(view.actions.can_edit_content).toBe(true);
+  expect(view.actions.can_restore_content).toBe(false);
+
+  const entry = view.history.filter((row) => row.action === "content_updated")[0];
+  const refused = await requestAs(OPS_SESSION_ID, `/api/v1/events/${EVENT_ID}/submissions/sub-118-draft-restore/content/restore`, {
+    method: "POST",
+    body: JSON.stringify({ audit_id: entry.id }),
+  });
+  expect(refused.status).toBe(403);
+});

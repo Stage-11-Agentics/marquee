@@ -710,6 +710,12 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       // people the drafts queue exists for.
       can_edit_content: (EDITABLE_CONTENT_STATUSES as readonly string[]).includes(row.status)
         && (row.status === "draft" || canWriteProgram),
+      // Restore has only ONE door — `restoreSubmissionContent`, which requires
+      // `program:write` at every status including Draft. So it needs its own
+      // flag: reusing `can_edit_content` would offer a form admin a Restore
+      // button on a draft they may edit but may not restore, which is the same
+      // dead end this pair exists to prevent, merely pointed the other way.
+      can_restore_content: (EDITABLE_CONTENT_STATUSES as readonly string[]).includes(row.status) && canWriteProgram,
     },
   };
 }
