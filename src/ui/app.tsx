@@ -1,6 +1,11 @@
 import { hydrate, render } from "preact";
 import "../styles/tokens.css";
 import "../styles/components.css";
+// Register themes (theme round): every rule scoped under html[data-theme="…"],
+// so bundling all three keeps them orthogonal to each other and to Day/Night.
+import "../styles/themes/latent-space.css";
+import "../styles/themes/ai-engineer.css";
+import "../styles/themes/swyxy.css";
 import { AppShell } from "./shell/AppShell";
 import { installErrorReporting } from "./shell/error-reporting";
 import { DeliveryHealthShell } from "./health/DeliveryHealthShell";

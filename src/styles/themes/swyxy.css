@@ -1,0 +1,311 @@
+/* ══ swyxy (register theme) ══════════════════════════════════════════════
+   The swyx.io register. Design contract: prototypes/themes/swyxy.html
+   (header comment). swyxkit minimalism — indigo-800 (#3730a3) forward,
+   system sans, all-lowercase single-word nav (the labels themselves swap via
+   chrome.navLabels, not a text-transform), dense lists over cards, and his
+   post-index signature — date · format emoji · title — for the chase queue
+   and the speaker-task rows. His numbers set in tabular sans, so --mono
+   resolves to the system stack here.
+
+   The lowercase "dark" word in the topbar flips between the light and dark
+   palettes below; it persists as part of the one swyxy theme choice and is
+   explicit-toggle-only — prefers-color-scheme is never consulted (the MRQ-103
+   ruling; the preview's system-following script is deliberately NOT ported).
+
+   Contrast, measured (WCAG relative luminance), floor 4.5:1:
+     light: ink #0f172a on face 17.9:1 · ink-soft #334155 10.4:1
+            muted #64748b on face 4.8:1 · on sunk 4.5:1
+            accent #3730a3 9.9:1 · warn #b45309 5.0:1 · ok #15803d 5.0:1
+            on-accent #fff on indigo 9.9:1 · chip inks on wash 6.7–7.6:1
+     dark:  ink #e2e8f0 on face 14.5:1 · ink-soft #cbd5e1 12.0:1
+            muted #7d8da5 5.3:1 · accent #818cf8 6.0:1 · warn #fbbf24 10.7:1
+            on-accent #0b1120 on indigo 6.3:1 · chip inks on wash 8.2–11.2:1
+   ═══════════════════════════════════════════════════════════════════════ */
+html[data-theme="swyxy"] {
+  --bg:            #ffffff;
+  --surface:       #ffffff;
+  --surface-sunk:  #f8fafc;
+  --graph:         #f1f5f9;
+
+  --ink:           #0f172a;
+  --ink-soft:      #334155;
+  --muted:         #64748b;
+  --rule:          #e2e8f0;
+  --rule-soft:     #eef2f7;
+
+  --accent:        #3730a3;   /* Tailwind indigo-800                          */
+  --accent-ink:    #3730a3;   /* accent text on wash             8.9:1 on wash*/
+  --accent-wash:   #eef2ff;
+
+  --ok:            #15803d;
+  --warn:          #b45309;
+  --alarm:         #b91c1c;
+  --alarm-wash:    #fef2f2;
+
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* His figures are tabular sans, not mono: --mono resolves to the body
+     stack, so every gauge keeps tabular-nums from the base rules. */
+  --mono: var(--sans);
+  --display: var(--sans);
+  --radius: 6px;
+
+  /* Aliases and extensions — the same names the day block defines. */
+  --warning-soft: #fef9ec;
+  --success-soft: #f0fdf4;
+  --canvas: #0b1120;
+  --canvas-line: #1e293b;
+  --canvas-ink: #e2e8f0;
+
+  --accent-hover: #312e81;
+  --on-accent: #ffffff;
+  --success-ink: #166534;     /*  6.8:1 on success wash                       */
+  --success-line: #bbf7d0;
+  --danger-ink: #991b1b;      /*  7.6:1 on danger wash                        */
+  --danger-line: #fecaca;
+  --warning-line: #f0dfa8;
+  --warning-ink: #92400e;     /*  6.7:1 on warning wash                       */
+  --on-ink: #e2e8f0;
+  --backdrop: rgba(15, 23, 42, .4);
+  --break-tint: #64748b;
+}
+
+html[data-theme="swyxy"][data-swyxy-mode="dark"] {
+  --bg:            #0b1120;
+  --surface:       #0f172a;
+  --surface-sunk:  #111c33;
+  --graph:         #17203a;
+
+  --ink:           #e2e8f0;
+  --ink-soft:      #cbd5e1;
+  --muted:         #7d8da5;
+  --rule:          #1e293b;
+  --rule-soft:     #16202f;
+
+  --accent:        #818cf8;   /* indigo-400 over the dark ground              */
+  --accent-ink:    #a5b4fc;   /* accent text on wash             8.0:1 on wash*/
+  --accent-wash:   #1e1b4b;
+
+  --ok:            #4ade80;
+  --warn:          #fbbf24;
+  --alarm:         #f87171;
+  --alarm-wash:    #371b22;
+
+  --warning-soft: #2e230e;
+  --success-soft: #12271c;
+  --canvas: #060a13;
+  --canvas-line: #1e293b;
+  --canvas-ink: #e2e8f0;
+
+  --accent-hover: #a5b4fc;    /*  9.4:1 under dark ink                        */
+  --on-accent: #0b1120;
+  --success-ink: #86efac;     /* 11.2:1 on success wash                       */
+  --success-line: #1d4531;
+  --danger-ink: #fca5a5;      /*  8.2:1 on danger wash                        */
+  --danger-line: #6b2b33;
+  --warning-line: #574614;
+  --warning-ink: #fcd34d;     /* 10.7:1 on warning wash                       */
+  --on-ink: #0b1120;
+  --backdrop: rgba(3, 6, 12, .62);
+  --break-tint: #7d8da5;
+}
+
+/* ── chrome: his minimalism — word-mark, no icons, rounded hairlines ───── */
+html[data-theme="swyxy"] .brand-mark { display: none; }
+html[data-theme="swyxy"] .brand { padding-bottom: 21px; }
+html[data-theme="swyxy"] .brand-name {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  text-transform: lowercase;
+}
+/* marquee. — the dot is the accent. */
+html[data-theme="swyxy"] .brand-name::after { color: var(--accent); content: "."; }
+
+html[data-theme="swyxy"] .nav a { border-left: 0; border-radius: 6px; }
+html[data-theme="swyxy"] .nav a.active {
+  background: var(--accent-wash);
+  border-left-color: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}
+html[data-theme="swyxy"] .nav-icon { display: none; }
+html[data-theme="swyxy"] .nav-label { border-bottom: 0; letter-spacing: .02em; text-transform: lowercase; }
+
+html[data-theme="swyxy"] .event-switcher small,
+html[data-theme="swyxy"] .card-head h2,
+html[data-theme="swyxy"] .card-head h3,
+html[data-theme="swyxy"] .eyebrow,
+html[data-theme="swyxy"] .breadcrumbs,
+html[data-theme="swyxy"] .top-identity span,
+html[data-theme="swyxy"] .theme-switch select {
+  text-transform: lowercase;
+}
+
+html[data-theme="swyxy"] .theme-switch select { letter-spacing: .02em; }
+
+html[data-theme="swyxy"] .top-user {
+  background: var(--accent-wash);
+  border: 0;
+  border-radius: 50%;
+  color: var(--accent);
+  font-weight: 700;
+  text-transform: lowercase;
+}
+
+/* The "dark" word itself — plain text in the topbar, fixed width so the
+   light/dark swap never moves its neighbours. */
+html[data-theme="swyxy"] .swyxy-mode {
+  background: none;
+  border: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  min-width: 5ch;
+  padding: 0;
+  text-align: left;
+}
+html[data-theme="swyxy"] .swyxy-mode:hover { color: var(--accent); }
+
+html[data-theme="swyxy"] .button.primary,
+html[data-theme="swyxy"] .button.primary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* ── dashboard tropes: compact strip, dense lists, the post index ──────── */
+html[data-theme="swyxy"] .dashboard-pipeline-card { background-image: none; }
+html[data-theme="swyxy"] .dashboard-pipeline {
+  border-image: none;
+  border-top: 0;
+}
+html[data-theme="swyxy"] .dashboard-pipeline-stage {
+  background: var(--surface);
+  min-height: 0;
+  padding: 14px 12px;
+}
+html[data-theme="swyxy"] .dashboard-pipeline-stage:hover { background: var(--surface-sunk); }
+html[data-theme="swyxy"] .dashboard-pipeline-name {
+  font: 400 11px/1.2 var(--sans);
+  letter-spacing: 0;
+  text-transform: lowercase;
+}
+html[data-theme="swyxy"] .dashboard-pipeline-count {
+  color: var(--accent);
+  font: 800 24px/1.1 var(--sans);
+  letter-spacing: -.02em;
+  margin: 4px 0 2px;
+}
+html[data-theme="swyxy"] .dashboard-pipeline-note {
+  color: var(--muted);
+  font: 400 11px/1.4 var(--sans);
+  min-height: 0;
+  text-transform: lowercase;
+}
+
+/* The signature index: date · format emoji · title (rows are rendered by
+   the dashboard's "feed" variant; these are their styles). */
+html[data-theme="swyxy"] .register-feed { border-top: 1px solid var(--rule); }
+html[data-theme="swyxy"] .register-feed-row {
+  align-items: baseline;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  color: inherit;
+  display: grid;
+  font-size: 14px;
+  gap: 12px;
+  grid-template-columns: 74px 26px minmax(0, 1fr) auto;
+  padding: 9px 2px;
+  text-align: left;
+  text-decoration: none;
+  width: 100%;
+}
+html[data-theme="swyxy"] .register-feed-row:hover { background: var(--surface-sunk); }
+html[data-theme="swyxy"] .register-feed-date {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+html[data-theme="swyxy"] .register-feed-emoji { font-size: 13px; }
+html[data-theme="swyxy"] .register-feed-what { color: var(--ink); }
+html[data-theme="swyxy"] .register-feed-what b { font-weight: 600; }
+html[data-theme="swyxy"] .register-feed-what .detail { color: var(--muted); }
+html[data-theme="swyxy"] .register-feed-stat {
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+html[data-theme="swyxy"] .register-feed-stat.warn { color: var(--warn); }
+html[data-theme="swyxy"] .register-feed-head {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  text-transform: lowercase;
+}
+html[data-theme="swyxy"] .register-feed-head h2 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  margin: 0;
+}
+
+/* Dense key/value rows — waves, metrics, pressure — lists over cards. */
+html[data-theme="swyxy"] .register-kv {
+  align-items: baseline;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  color: inherit;
+  display: flex;
+  font-size: 14px;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 8px 2px;
+  text-align: left;
+  text-decoration: none;
+  width: 100%;
+}
+html[data-theme="swyxy"] .register-kv:hover { background: var(--surface-sunk); }
+html[data-theme="swyxy"] .register-kv .k { color: var(--ink); }
+html[data-theme="swyxy"] .register-kv .k .detail { color: var(--muted); font-size: 12.5px; }
+html[data-theme="swyxy"] .register-kv .v {
+  color: var(--accent);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+html[data-theme="swyxy"] .register-kv .v.muted { color: var(--muted); font-weight: 500; }
+html[data-theme="swyxy"] .register-bar-track {
+  background: var(--rule);
+  border-radius: 3px;
+  display: inline-block;
+  height: 5px;
+  margin-right: 8px;
+  overflow: hidden;
+  vertical-align: middle;
+  width: 110px;
+}
+html[data-theme="swyxy"] .register-bar-track i {
+  background: var(--accent);
+  display: block;
+  height: 100%;
+}
+
+html[data-theme="swyxy"] .card-head h2 {
+  font: 700 17px/1.2 var(--sans);
+  letter-spacing: -.01em;
+  text-transform: lowercase;
+}
+html[data-theme="swyxy"] .card-head { background: var(--surface); }
+html[data-theme="swyxy"] .page-head h1 {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  text-transform: lowercase;
+}
+html[data-theme="swyxy"] .page-head p { text-transform: lowercase; }

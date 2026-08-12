@@ -1,0 +1,228 @@
+/* ══ latent.space (register theme) ═════════════════════════════════════════
+   Gradient-on-black. Design contract: prototypes/themes/latent-space.html
+   (header comment). Syncopate stands in for Tachyon (wide geometric techno
+   display); the body sets in the Substack serif reading stack; figures and
+   micro-labels stay mono. Exactly one two-stop gradient — #FFA363 → #E56EFF —
+   carries all chroma on near-black; status reads as position on the gradient
+   (orange end = warn, pink end = alarm) over neutral greys. Tropes: hexagonal
+   logomark, the VAE-bottleneck silhouette behind the pipeline strip, lowercase
+   labels everywhere (people's names and titles are data — they keep case).
+
+   Unlike a palette theme this file may move type and chrome — that is what
+   "register" means — but every rule is scoped under html[data-theme=…], so
+   Day/Night are untouched.
+
+   Contrast, measured (WCAG relative luminance), floor 4.5:1:
+     ink        #f2f0f5 on surface  16.4:1 · ink-soft #c7c4cf  10.8:1
+     muted      #8b8896 on surface   5.3:1 · on sunk           5.5:1
+     accent     #e56eff on surface   7.1:1 · warn #ffa363      9.4:1
+     on-accent  #0b0b0e on pink      7.5:1 · on orange        10.0:1
+     danger-ink #f0a0ff on wash      9.0:1 · warning-ink      10.7:1
+     canvas-ink #e8e6ec on canvas   16.2:1 · on-ink (inverse) 16.4:1
+   ═══════════════════════════════════════════════════════════════════════ */
+html[data-theme="latent-space"] {
+  --bg:            #0b0b0e;
+  --surface:       #131318;
+  --surface-sunk:  #0f0f13;
+  --graph:         #1a1a21;   /* graph paper all but invisible on near-black  */
+
+  --ink:           #f2f0f5;
+  --ink-soft:      #c7c4cf;
+  --muted:         #8b8896;
+  --rule:          #26262e;
+  --rule-soft:     #1d1d24;
+
+  --accent:        #e56eff;   /* pink end of the single gradient              */
+  --accent-ink:    #e56eff;   /* accent text on wash             6.5:1 on wash*/
+  --accent-wash:   #231626;
+
+  --ok:            #b8b4c2;   /* neutral: ok carries no chroma here  9.1:1    */
+  --warn:          #ffa363;   /* orange end of the gradient                   */
+  --alarm:         #e56eff;   /* pink end of the gradient                     */
+  --alarm-wash:    #2a1626;
+
+  /* The register's one gradient, as tokens so chrome and tropes share it. */
+  --ls-grad:       linear-gradient(92deg, #ffa363 0%, #e56eff 100%);
+  --ls-grad-wash:  linear-gradient(92deg, rgba(255,163,99,.14), rgba(229,110,255,.14));
+  --ls-ink-on-grad:#0b0b0e;
+
+  --display: "Syncopate", "Arial Black", sans-serif;
+  --sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+
+  /* Aliases and extensions — the same names the day block defines. */
+  --warning-soft: #2a1f16;
+  --success-soft: #1a1a21;
+  --canvas: #08080a;
+  --canvas-line: #26262e;
+  --canvas-ink: #e8e6ec;
+
+  --accent-hover: #f09dff;    /* 10.3:1 under dark ink                        */
+  --on-accent: #0b0b0e;
+  --success-ink: #c9cdd4;     /* 10.8:1 on success wash                       */
+  --success-line: #33333c;
+  --danger-ink: #f0a0ff;      /*  9.0:1 on danger wash                        */
+  --danger-line: #5c2a52;
+  --warning-line: #5c4122;
+  --warning-ink: #ffc890;     /* 10.7:1 on warning wash                       */
+  --on-ink: #131318;          /* dark text on the light inverse chrome        */
+  --backdrop: rgba(11, 11, 14, .66);
+  --break-tint: #9a97a4;
+}
+
+/* ── chrome: lowercase labels, hex mark, gradient accents ──────────────── */
+html[data-theme="latent-space"] .brand-name,
+html[data-theme="latent-space"] .nav-label,
+html[data-theme="latent-space"] .breadcrumbs,
+html[data-theme="latent-space"] .card-head h2,
+html[data-theme="latent-space"] .card-head h3,
+html[data-theme="latent-space"] .eyebrow,
+html[data-theme="latent-space"] .button,
+html[data-theme="latent-space"] .page-head h1,
+html[data-theme="latent-space"] .dashboard-pipeline-name,
+html[data-theme="latent-space"] .dashboard-attention-item strong,
+html[data-theme="latent-space"] .theme-switch select,
+html[data-theme="latent-space"] .top-identity span {
+  text-transform: lowercase;
+}
+
+/* The hexagonal logomark carrying the gradient. */
+html[data-theme="latent-space"] .brand-mark {
+  background: var(--ls-grad);
+  border: 0;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  color: var(--ls-ink-on-grad);
+  font-family: var(--display);
+  text-transform: lowercase;
+}
+html[data-theme="latent-space"] .brand-name {
+  background: var(--ls-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+
+html[data-theme="latent-space"] .nav a.active {
+  background: linear-gradient(92deg, rgba(255,163,99,.08), rgba(229,110,255,.08));
+  border-image: linear-gradient(180deg, #ffa363, #e56eff) 1;
+  color: var(--ink);
+}
+html[data-theme="latent-space"] .nav a.active .nav-icon { color: var(--ink); }
+
+/* The avatar is the small hexagon of the register. */
+html[data-theme="latent-space"] .top-user {
+  background: var(--ls-grad);
+  border: 0;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  color: var(--ls-ink-on-grad);
+}
+
+/* The theme select keeps its own casing contract: the register's label is
+   lowercase, so the uppercase transform lifts while it is active. */
+html[data-theme="latent-space"] .theme-switch select { text-transform: none; }
+
+html[data-theme="latent-space"] .global-search button { font-style: italic; }
+
+/* Buttons: the primary key is the gradient; secondaries stay hairline mono. */
+html[data-theme="latent-space"] .button.primary,
+html[data-theme="latent-space"] .button.primary:hover {
+  background: var(--ls-grad);
+  border-color: transparent;
+  color: var(--ls-ink-on-grad);
+  font-weight: 700;
+}
+
+/* ── dashboard tropes ──────────────────────────────────────────────────── */
+/* The page title is the register's poster: Syncopate in the gradient. */
+html[data-theme="latent-space"] .dashboard-page .page-head h1 {
+  background: var(--ls-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+/* The pipeline strip draws over the VAE-bottleneck silhouette (the SVG is
+   rendered by the dashboard when chrome.pipelineDeco is "bottleneck"). */
+html[data-theme="latent-space"] .dashboard-pipeline-card {
+  background-color: var(--surface);
+  background-image: none;
+  position: relative;
+}
+html[data-theme="latent-space"] .register-bottleneck {
+  inset: 0;
+  height: 100%;
+  position: absolute;
+  width: 100%;
+}
+html[data-theme="latent-space"] .dashboard-pipeline {
+  border-image: var(--ls-grad) 1;
+  position: relative;
+}
+html[data-theme="latent-space"] .dashboard-pipeline-stage { background: transparent; }
+html[data-theme="latent-space"] .dashboard-pipeline-stage:hover { background: var(--ls-grad-wash); }
+html[data-theme="latent-space"] .dashboard-pipeline-count {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+/* The pinch: accepted is the autoencoder's bottleneck, so it swells and
+   carries the gradient. */
+html[data-theme="latent-space"] .dashboard-pipeline-stage.register-pinch .dashboard-pipeline-count {
+  background: var(--ls-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 36px;
+}
+html[data-theme="latent-space"] .dashboard-pipeline-note { color: var(--muted); font-style: italic; }
+html[data-theme="latent-space"] .register-pipeline-caption {
+  border-top: 1px solid var(--rule-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+  padding: 10px 16px;
+  position: relative;
+  text-align: center;
+}
+
+html[data-theme="latent-space"] .dashboard-attention-item {
+  border-left-color: var(--warn);
+}
+html[data-theme="latent-space"] .dashboard-attention-item:hover {
+  background: var(--surface);
+  border-image: linear-gradient(90deg, #ffa363, #e56eff) 1;
+}
+
+html[data-theme="latent-space"] .card-head h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: .1em;
+}
+html[data-theme="latent-space"] .card-head .subtle { font-style: italic; }
+
+html[data-theme="latent-space"] .dashboard-wave-bar {
+  background: var(--rule);
+  border: 0;
+  height: 3px;
+}
+html[data-theme="latent-space"] .dashboard-wave-bar i { background: var(--ls-grad); }
+
+html[data-theme="latent-space"] .dashboard-metric strong {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+html[data-theme="latent-space"] .chip.alarm {
+  background: transparent;
+  border-color: rgba(229,110,255,.5);
+  color: var(--alarm);
+}
