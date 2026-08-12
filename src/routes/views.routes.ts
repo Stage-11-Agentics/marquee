@@ -22,7 +22,7 @@ const viewFiltersSchema = submissionFilterSchema.omit({ q: true });
 const viewConfigSchema = z.object({
   q: z.string().trim().max(200).default(""),
   filters: viewFiltersSchema.default({}),
-  sort: z.enum(["newest", "updated", "title", "score"]).default("newest"),
+  sort: z.enum(["newest", "updated", "title", "score", "score_asc"]).default("newest"),
   columns: z.array(z.enum(SUBMISSION_COLUMN_IDS)).min(1).max(SUBMISSION_COLUMN_IDS.length),
 });
 const viewInputSchema = z.object({
@@ -30,7 +30,7 @@ const viewInputSchema = z.object({
   config: viewConfigSchema.optional(),
   q: z.string().trim().max(200).optional(),
   filters: viewFiltersSchema.optional(),
-  sort: z.enum(["newest", "updated", "title", "score"]).optional(),
+  sort: z.enum(["newest", "updated", "title", "score", "score_asc"]).optional(),
   columns: z.array(z.enum(SUBMISSION_COLUMN_IDS)).min(1).max(SUBMISSION_COLUMN_IDS.length).optional(),
 });
 

@@ -10,6 +10,7 @@ import type {
 } from "../api/submissions";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
 import { participantListSql } from "../lib/participants";
+import { reviewAggregateColumns } from "../lib/review-aggregate";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import {
   executeListPage,
@@ -23,7 +24,8 @@ export const SUBMISSION_SORTS = {
   newest: { column: "s.submitted_at", direction: "desc" },
   updated: { column: "s.updated_at", direction: "desc" },
   title: { column: "s.title COLLATE NOCASE", direction: "asc" },
-  score: { column: "score", direction: "desc" },
+  score: { column: "score", direction: "desc", nullsLast: true },
+  score_asc: { column: "score", direction: "asc", nullsLast: true },
 } as const satisfies SortRegistry;
 
 export const SUBMISSION_STATUS_FILTERS = [
@@ -164,6 +166,8 @@ interface SubmissionQueryRow {
   speakers_json: string;
   tracks_json: string;
   score: number | null;
+  review_count: number | null;
+  score_is_weighted: number | null;
   submitted_at: number | null;
   updated_at: number;
   origin: SubmissionListItem["origin"];
@@ -368,6 +372,8 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
       is_primary: Boolean(track.is_primary),
     })),
     score: row.score === null ? null : Number(row.score),
+    review_count: Number(row.review_count ?? 0),
+    score_is_weighted: Number(row.score_is_weighted ?? 0) === 1,
     submitted_at: row.submitted_at,
     last_saved_at: row.last_saved_at ?? null,
     updated_at: row.updated_at,
@@ -470,7 +476,7 @@ const ITEM_SELECT = `
       ORDER BY st.is_primary DESC, carried.position ASC, carried.id ASC
     ) ordered
   ), '[]') AS tracks_json,
-  (SELECT ROUND(AVG(evaluation.score), 2) FROM evaluations evaluation WHERE evaluation.submission_id = s.id) AS score,
+  ${reviewAggregateColumns("s.id")},
   s.submitted_at,
   s.updated_at,
   s.origin,

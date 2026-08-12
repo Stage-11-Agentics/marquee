@@ -1,6 +1,8 @@
 .table-card { min-width: 0; overflow: hidden; }
 .submissions-page .page-head p { font-family: var(--mono); font-variant-numeric: tabular-nums lining-nums; min-height: 2.7em; }
 .export-button { min-width: 92px; }
+/* Reserved whether or not an evaluation plan exists, so resolving one never shifts the header. */
+.results-export-slot { align-items: center; display: inline-flex; justify-content: flex-end; min-width: 150px; }
 .export-message { color: transparent; font: 400 10.5px/1.3 var(--mono); min-height: 18px; margin: -12px 0 8px; }
 .export-message.visible { color: var(--danger); }
 .notify-message { color: transparent; font: 400 10.5px/1.3 var(--mono); min-height: 18px; margin: -12px 0 8px; }
@@ -69,7 +71,13 @@
 .speakers-col { width: 18%; }
 .status-col { width: 105px; }
 .tracks-col { width: 25%; }
-.score-col { text-align: right !important; width: 70px; }
+.score-col { text-align: right !important; width: 104px; }
+.column-sort { align-items: center; background: none; border: 0; color: inherit; cursor: pointer; display: inline-flex; font: inherit; gap: 4px; justify-content: flex-end; letter-spacing: inherit; padding: 0; text-transform: inherit; width: 100%; }
+.column-sort:hover { color: var(--ink); }
+/* Fixed width: the direction changes, the header does not move. */
+.sort-glyph { display: inline-block; font-size: 9px; text-align: center; width: 10px; }
+.score-value { display: inline-block; font-variant-numeric: tabular-nums lining-nums; }
+.score-basis-mark { display: inline-block; text-align: left; width: 7px; }
 .submitted-col, .updated-col { width: 116px; }
 .origin-col { width: 92px; }
 .missing-col { width: 180px; }

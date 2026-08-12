@@ -143,6 +143,13 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
   const [promotionQuery, setPromotionQuery] = useState("");
   const [promotionResult, setPromotionResult] = useState<{ already_promoted: number; assignments: number; promoted: number; selected: number } | null>(null);
   const [promotionApplying, setPromotionApplying] = useState(false);
+  /**
+   * Per-reviewer round progress, rolled up from the assignments endpoint's
+   * already-correct assigned/reviewed counts. Null means "not loaded"; the card
+   * shows an em dash rather than falling back to the plan-wide count, which
+   * measured the wrong thing.
+   */
+  const [reviewerProgress, setReviewerProgress] = useState<Map<string, { assigned: number; reviewed: number }> | null>(null);
 
   const firstRound = plan?.rounds[0];
   const secondRound = plan?.rounds[1];
@@ -165,10 +172,39 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       setInstructions(detail.instructions);
       setRoundDrafts(Object.fromEntries(detail.rounds.map((round) => [round.id, round.name])));
       setReviewerTarget(detail.rounds[0]?.target_reviews_per_submission ?? 3);
+      await loadReviewerProgress(detail.rounds[0]?.id ?? null);
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * One row per (submission, reviewer), each repeating that reviewer's round
+   * totals; committee-assigned rows carry no reviewer and are skipped.
+   */
+  const loadReviewerProgress = async (roundId: string | null): Promise<void> => {
+    if (!roundId) {
+      setReviewerProgress(new Map());
+      return;
+    }
+    try {
+      const assignments = await api<{ data: Array<{ assigned_count: number; reviewed_count: number; reviewer_person_id: string | null }> }>(
+        `/api/v1/events/${eventId}/rounds/${roundId}/assignments`,
+        "/api/v1/events/{eventId}/rounds/{roundId}/assignments",
+      );
+      const rolled = new Map<string, { assigned: number; reviewed: number }>();
+      for (const row of assignments.data) {
+        if (!row.reviewer_person_id) continue;
+        rolled.set(row.reviewer_person_id, {
+          assigned: Number(row.assigned_count ?? 0),
+          reviewed: Number(row.reviewed_count ?? 0),
+        });
+      }
+      setReviewerProgress(rolled);
+    } catch {
+      setReviewerProgress(null);
     }
   };
 
@@ -384,6 +420,8 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
 
   return <>
     <PageHeader title="Evaluation plan" copy="A two-round funnel turns submitted abstracts into a focused committee decision without order-dependent setup." actions={<>
+      <a class="button primary" href="/submissions?sort=score">View results →</a>
+      <a class="button" href={`/api/v1/events/${eventId}/plans/${plan.id}/results/export?format=csv`} download="review-results.csv">Export scores (CSV)</a>
       <Button onClick={() => void load()}>Refresh</Button>
       <Button onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Distribute assignments</Button>
       <Button variant="primary" onClick={() => setDialog("plan")}>+ New evaluation plan</Button>
@@ -417,7 +455,11 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       </Card>
       <Card class="committee-card">
         <CardHeader title="Program committee"><div class="card-actions"><Button small onClick={() => setDialog("committee")}>Manage</Button><Button small onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Edit assignments</Button></div></CardHeader>
-        <CardBody>{committee ? <><div class="committee-intro"><span>{committee.members.length} reviewers · explicit track responsibility</span><span>{firstRound?.target_reviews_per_submission ?? 0} reviews per abstract</span></div><div class="committee-list">{committee.members.map((member) => <div class="committee-person" key={member.id}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div></div><span class="tabular subtle">{member.progress} / {firstRound?.progress.assigned_submissions ?? 0}</span></div>)}</div><Button class="full-width ghost" onClick={() => setDialog("committee")}>View all {committee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>No committee yet. Create one before distributing reviews.</span><Button small variant="primary" onClick={() => setDialog("committee")}>Create committee</Button></div>}</CardBody>
+        <CardBody>{committee ? <><div class="committee-intro"><span>{committee.members.length} reviewers · explicit track responsibility</span><span>{firstRound?.target_reviews_per_submission ?? 0} reviews per abstract</span></div><div class="committee-list">{committee.members.map((member) => <div class="committee-person" key={member.id}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div></div><span class="tabular subtle reviewer-progress" title="Reviews submitted of reviews assigned in this round">{(() => {
+  const rolled = reviewerProgress?.get(member.id);
+  if (!rolled) return "—/—";
+  return `${rolled.reviewed}/${rolled.assigned}`;
+})()} reviewed</span></div>)}</div><Button class="full-width ghost" onClick={() => setDialog("committee")}>View all {committee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>No committee yet. Create one before distributing reviews.</span><Button small variant="primary" onClick={() => setDialog("committee")}>Create committee</Button></div>}</CardBody>
       </Card>
       <Card class="promotion-card">
         <CardHeader title="Round promotion"><Chip>Funnel</Chip></CardHeader>
