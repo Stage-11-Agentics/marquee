@@ -448,7 +448,9 @@ async function formResponse(
   if (!record) throw ApiError.notFound("This conference form is not available.");
   const state = toPublicFormState(record, {
     origin: publicOrigin(context.req.url),
-    turnstileSiteKey: workerSecrets(context).TURNSTILE_SITE_KEY,
+    turnstileSiteKey: (await publicTurnstileExempt(context.env.DB, record.form.event_id))
+      ? null
+      : workerSecrets(context).TURNSTILE_SITE_KEY,
   });
   if (portalUrl && state.confirmation) state.confirmation.portal_url = portalUrl;
   return state;
