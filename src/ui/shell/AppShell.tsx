@@ -51,7 +51,6 @@ export function AppShell({ eventName = "AIE NYC 2026" }: { eventName?: string })
   const closeOverlay = useCallback(() => setOverlay(null), []);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
-  const unavailable = useCallback((title: string, copy: string) => setOverlay({ kind: "modal", title, copy }), []);
   const resetDemo = useCallback(async () => {
     if (resetting) return;
     if (!window.confirm("Reset the demo conference? This removes demo edits, submissions, uploads, and queued work.")) return;
@@ -131,7 +130,7 @@ export function AppShell({ eventName = "AIE NYC 2026" }: { eventName?: string })
   if (blocked) return <SeatBlockedPage seat={seat} navigate={navigate} />;
   return <>
     <div class="app-shell">
-      <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} resetting={resetting} onReset={() => void resetDemo()} />
+      <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} />
       <main class="main">
         <Topbar
           eventName={eventName}
