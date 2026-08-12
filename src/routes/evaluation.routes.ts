@@ -4,7 +4,7 @@ import { BULK_ID_LIMIT, bulkSelectorWireSchema, normalizeBulkSelector, runBulkBy
 import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
 import { defineApiRoute, errorResponses, jsonResponse, type ApiRouteEntry } from "../api/route";
-import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { demoMailWouldBeSuppressed, enqueueMailMessage } from "../jobs/mail/consumer";
 import { auditStatement } from "../lib/audit";
 import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail";
 import { getAuth } from "../lib/auth/auth-middleware";
@@ -77,7 +77,7 @@ const inviteInput = z.object({
   email: z.string().trim().min(3).max(320),
   title: z.string().trim().max(160).optional(),
   company: z.string().trim().max(160).optional(),
-  track_ids: z.array(z.string().min(1)).min(1),
+  track_ids: z.array(z.string().min(1)).min(1).max(50),
 });
 const distributionAssignmentsInput = z.object({
   committee_id: z.string().min(1),
@@ -735,7 +735,7 @@ const inviteCommitteeReviewer = defineApiRoute(
     operationId: "inviteCommitteeReviewer",
     summary: "Invite a reviewer onto a committee with track responsibilities",
     description:
-      "Creates the person, the reviewer membership, the committee seat, and the track responsibilities together, then sends a sign-in link. Demo conferences also return that link on screen.",
+      "Creates the person, the reviewer membership, the committee seat, and the track responsibilities together, then sends a sign-in link. The responsibilities named here replace the reviewer's existing ones for this conference. Demo conferences also return that link on screen.",
     tags: ["Evaluation"],
     request: { params: committeeParams, body: { content: { "application/json": { schema: inviteInput } } } },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
@@ -755,9 +755,31 @@ const inviteCommitteeReviewer = defineApiRoute(
     const actor = await evaluationActor(context);
     const now = Date.now();
 
+    // Matched case-insensitively: `uq_people_org_email` is case-sensitive, so a
+    // case-sensitive match would invent a second identity for `Nora@` beside
+    // `nora@` and mint the sign-in link for the wrong one.
     const existing = await context.env.DB.prepare(
-      "SELECT id, name FROM people WHERE org_id = ? AND email = ?",
+      "SELECT id, name FROM people WHERE org_id = ? AND lower(email) = ?",
     ).bind(event.org_id, email).first<{ id: string; name: string }>();
+    /**
+     * A magic link is person-scoped: exchanging one opens a session carrying
+     * every membership its person holds, org-wide. So an invitation must never
+     * resolve to a program-team member — otherwise "invite a reviewer" is a
+     * program lead typing the owner's address and reading back an owner session.
+     */
+    if (existing) {
+      const staff = await context.env.DB.prepare(`
+        SELECT 1 AS present FROM memberships
+        WHERE person_id = ? AND role IN ('owner', 'program_lead', 'ops')
+          AND (event_id = ? OR event_id IS NULL)
+      `).bind(existing.id, eventId).first<{ present: number }>();
+      if (staff) {
+        throw ApiError.unprocessable(
+          "that address belongs to a program-team member, who already has review access",
+          "email",
+        );
+      }
+    }
     const personId = existing?.id ?? newUlid(now);
 
     // `is_demo = 0` like every other runtime person writer: the flag marks the
@@ -792,7 +814,9 @@ const inviteCommitteeReviewer = defineApiRoute(
     // half-built person. `invite_sent` reports what actually happened.
     const link = await mintMagicLink(context.env.DB, { personId, purpose: "login", redirectTo: "/reviewer", now });
     const absoluteLink = `${new URL(context.req.url).origin}/api/v1/auth/exchange?token=${link.token}`;
-    let inviteSent = true;
+    // A demo conference logs mail to unlisted addresses instead of sending it,
+    // so "invitation sent" has to mean sent, not enqueued.
+    let inviteSent = !(await demoMailWouldBeSuppressed(context.env.DB, eventId, email));
     try {
       const mail = renderMagicLinkLoginMail(absoluteLink);
       const outboxId = await enqueueAuthMail(context.env.DB, {

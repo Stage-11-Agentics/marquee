@@ -223,6 +223,41 @@ describe("MRQ-107 reviewer provisioning", () => {
     expect(persona.person.id).not.toBe(invited.person.id);
   });
 
+  /**
+   * `uq_people_org_email` is case-sensitive, so a case-sensitive match would
+   * mint a second identity beside the real one and send the sign-in link there.
+   */
+  test("MRQ-107 · an address that differs only in case reaches the person who already holds it", async () => {
+    const now = Date.now();
+    await env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, '[]', 0, 'marquee', ?, ?)")
+      .bind("per_mixed_case", DEMO_ORGANIZATION_ID, "Nora@Example.org", "Nora Vale", now, now).run();
+
+    const body = await json<InviteResponse>(await invite({ name: "Nora Vale", email: "nora@example.org", track_ids: [TRACK_AGENTS] }));
+    expect(body.person_created).toBe(false);
+    expect(body.person.id).toBe("per_mixed_case");
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM people WHERE org_id = ? AND lower(email) = 'nora@example.org'")
+      .bind(DEMO_ORGANIZATION_ID).first<{ n: number }>();
+    expect(Number(rows?.n)).toBe(1);
+  });
+
+  /**
+   * A magic link is person-scoped: exchanging one opens a session carrying every
+   * membership its person holds. Minting one for a staff address would let a
+   * program lead read back an owner session from a control labelled "invite a
+   * reviewer".
+   */
+  test("MRQ-107 · an invitation cannot be aimed at a program-team member", async () => {
+    const staff = await env.DB.prepare("SELECT email FROM people WHERE id = ?").bind(ORGANIZER_ID).first<{ email: string }>();
+    const response = await invite({ name: "Not actually a reviewer", email: staff!.email, track_ids: [TRACK_AGENTS] });
+    expect(response.status).toBe(422);
+
+    const links = await env.DB.prepare("SELECT COUNT(*) AS n FROM magic_links WHERE person_id = ?").bind(ORGANIZER_ID).first<{ n: number }>();
+    expect(Number(links?.n)).toBe(0);
+    const seat = await env.DB.prepare("SELECT COUNT(*) AS n FROM committee_members WHERE committee_id = ? AND person_id = ?")
+      .bind(COMMITTEE_ID, ORGANIZER_ID).first<{ n: number }>();
+    expect(Number(seat?.n)).toBe(0);
+  });
+
   test("MRQ-107 · an anonymous caller cannot provision a reviewer", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/committees/${COMMITTEE_ID}/invites`, {
       method: "POST",

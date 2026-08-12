@@ -141,15 +141,28 @@ async function allowlistFor(db: D1Database, eventId: string): Promise<Set<string
   }
 }
 
-async function shouldSuppress(db: D1Database, row: OutboxRow): Promise<boolean> {
-  if (row.send_policy === "always_live") return false;
+/**
+ * Exported so a route can tell an operator the truth at the moment they act.
+ * A UI that says "invitation sent" while the consumer will suppress it is a
+ * label that lies, and the operator only finds out when nobody replies.
+ */
+export async function demoMailWouldBeSuppressed(
+  db: D1Database,
+  eventId: string,
+  toEmail: string,
+): Promise<boolean> {
   const event = await db
     .prepare("SELECT demo_mode FROM events WHERE id = ?")
-    .bind(row.event_id)
+    .bind(eventId)
     .first<{ demo_mode: 0 | 1 }>();
   if (!event || event.demo_mode !== 1) return false;
-  const allowlist = await allowlistFor(db, row.event_id);
-  return !allowlist.has(row.to_email.trim().toLowerCase());
+  const allowlist = await allowlistFor(db, eventId);
+  return !allowlist.has(toEmail.trim().toLowerCase());
+}
+
+async function shouldSuppress(db: D1Database, row: OutboxRow): Promise<boolean> {
+  if (row.send_policy === "always_live") return false;
+  return demoMailWouldBeSuppressed(db, row.event_id, row.to_email);
 }
 
 async function claimRow(db: D1Database, id: string, now: number): Promise<OutboxRow | null> {

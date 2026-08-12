@@ -240,7 +240,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       setLinkCopied(false);
       setNotice(result.invite_sent
         ? `${result.person.name} invited · sign-in link sent to ${result.person.email}`
-        : `${result.person.name} added to the committee · the invitation email could not be queued`);
+        : `${result.person.name} is on the committee · their invitation was logged, so send them the link`);
       await load();
     } catch (reason: unknown) {
       setError(errorSummary(reason));
@@ -390,14 +390,14 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
             />
             <span>{track.name}</span>
           </label>)}</div>
-          <small class="subtle">A reviewer only sees abstracts in the tracks they are responsible for, so at least one is required.</small>
+          <small class="subtle">A reviewer only sees abstracts in the tracks they are responsible for, so at least one is required. For a reviewer who already has responsibilities here, this list replaces them.</small>
         </fieldset>
         <div class="invite-result" aria-live="polite">
           {inviteResult ? <>
             <strong>{inviteResult.person.name} is on the committee.</strong>
             <span class="subtle">{inviteResult.invite_sent
               ? `A sign-in link was emailed to ${inviteResult.person.email}.`
-              : `The invitation email could not be queued — send the link below to ${inviteResult.person.email}.`}</span>
+              : `The invitation to ${inviteResult.person.email} was logged rather than sent — this conference only emails addresses on its allowlist. Send them the link below.`}</span>
             {inviteResult.magic_link ? <div class="invite-link">
               <input readOnly aria-label="Reviewer sign-in link" value={inviteResult.magic_link} onFocus={(event) => (event.currentTarget as HTMLInputElement).select()} />
               <Button type="button" small onClick={() => void copyInviteLink()}>{linkCopied ? "Copied" : "Copy link"}</Button>
