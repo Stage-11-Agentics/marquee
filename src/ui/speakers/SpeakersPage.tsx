@@ -49,12 +49,14 @@ function AddSpeakerPanel({
           route: "/api/v1/events/{eventId}/speakers",
           method: "POST",
           headers: { "content-type": "application/json" },
+          // Omit what was left blank rather than sending an explicit null: on
+          // an email that already belongs to someone, null means "clear this".
           body: JSON.stringify({
             name: draft.name,
             email: draft.email,
-            title: draft.title || null,
-            company: draft.company || null,
-            bio: draft.bio || null,
+            ...(draft.title.trim() ? { title: draft.title } : {}),
+            ...(draft.company.trim() ? { company: draft.company } : {}),
+            ...(draft.bio.trim() ? { bio: draft.bio } : {}),
           }),
         },
       );
@@ -79,7 +81,7 @@ function AddSpeakerPanel({
     {error ? <div class="speaker-inline-error" role="alert">{error}</div> : null}
     <div class="speaker-add-foot">
       <Button small onClick={onCancel} type="button">Cancel</Button>
-      <Button variant="primary" small type="submit" disabled={busy}>{busy ? "Saving…" : "Save speaker"}</Button>
+      <button class="speaker-fixed-action" type="submit" disabled={busy}>{busy ? "Saving…" : "Save speaker"}</button>
     </div>
   </form>;
 }
@@ -106,18 +108,24 @@ export function SpeakersPage({
 
   useEffect(() => {
     const controller = new AbortController();
-    const params = new URLSearchParams({ status: filters.status });
-    if (filters.track) params.set("track", filters.track);
-    if (filters.query.trim()) params.set("q", filters.query.trim());
-    apiFetch<SpeakerRosterSnapshot>(
-      `/api/v1/events/${encodeURIComponent(eventId)}/speakers?${params.toString()}`,
-      { route: "/api/v1/events/{eventId}/speakers", signal: controller.signal },
-    )
-      .then((snapshot) => setState({ kind: "ready", snapshot }))
-      .catch((caught: unknown) => {
-        if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(caught) });
-      });
-    return () => controller.abort();
+    // Aborting the fetch does not abort the D1 work already in flight, so the
+    // typeahead waits for a pause instead of firing a full roster scan per
+    // keystroke. Filter chips and the track select answer immediately.
+    const debounceMs = filters.query.trim() ? 180 : 0;
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ status: filters.status });
+      if (filters.track) params.set("track", filters.track);
+      if (filters.query.trim()) params.set("q", filters.query.trim());
+      apiFetch<SpeakerRosterSnapshot>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/speakers?${params.toString()}`,
+        { route: "/api/v1/events/{eventId}/speakers", signal: controller.signal },
+      )
+        .then((snapshot) => setState({ kind: "ready", snapshot }))
+        .catch((caught: unknown) => {
+          if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(caught) });
+        });
+    }, debounceMs);
+    return () => { window.clearTimeout(timer); controller.abort(); };
   }, [eventId, filterIdentity, reloadToken]);
 
   // The record lives in the URL, so an organizer can send someone a speaker,

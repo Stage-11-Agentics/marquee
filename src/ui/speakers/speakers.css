@@ -1,4 +1,7 @@
 .speakers-page { display: grid; gap: 16px; }
+/* Declared here rather than borrowed from whichever screen happens to be in the
+   same bundle; a label that goes unstyled is a label that becomes visible. */
+.speakers-page .sr-only { border: 0; clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 
 /* The header action keeps one width across "Add speaker" / "Close form": a
    control that resizes when you press it moves everything beside it. */

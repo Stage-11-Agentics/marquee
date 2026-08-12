@@ -13,10 +13,19 @@
  *     session exists), and
  *   - the acceptance boundary, where the cascade already mints their tasks.
  *
- * The guard is `WHERE NOT EXISTS` rather than `INSERT OR IGNORE` because there
- * is no unique constraint on `(event_id, person_id, role)` and `ALTER TABLE`
- * cannot add one — an index added over existing data would fail the migration
- * on any duplicate already out there.
+ * Duplicates are absorbed by the constraint, not by a read-then-write check:
+ * `uq_memberships_event` already covers `(org_id, event_id, person_id, role)`
+ * (`0001_init.sql:755`), so `ON CONFLICT DO NOTHING` is race-free where a
+ * `WHERE NOT EXISTS` guard is not. That matters: a double-clicked "Add speaker"
+ * racing the acceptance cascade would otherwise raise UNIQUE inside the
+ * cascade's batch and abort task minting for the whole acceptance.
+ *
+ * The bridge is deliberately one-way. Nothing here removes a membership when a
+ * talk is withdrawn or an acceptance reversed: the person may still hold
+ * another accepted session, the organizer may have added them by hand, and the
+ * reversal dialog asks the organizer explicitly about tasks, mail, and calendar
+ * without ever claiming to revoke portal access. Removing someone from the
+ * roster is an organizer act and wants its own control.
  */
 import { newUlid } from "../api/ids";
 
@@ -34,11 +43,8 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
     .prepare(
       `INSERT INTO memberships
          (id, org_id, event_id, person_id, role, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
-       SELECT ?, ?, ?, ?, 'speaker', 'pending', NULL, ?, ?, ?
-       WHERE NOT EXISTS (
-         SELECT 1 FROM memberships existing
-         WHERE existing.event_id = ? AND existing.person_id = ? AND existing.role = 'speaker'
-       )`,
+       VALUES (?, ?, ?, ?, 'speaker', 'pending', NULL, ?, ?, ?)
+       ON CONFLICT DO NOTHING`,
     )
     .bind(
       newUlid(input.now),
@@ -48,8 +54,6 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
       input.invitedAt ?? null,
       input.now,
       input.now,
-      input.eventId,
-      input.personId,
     );
 }
 

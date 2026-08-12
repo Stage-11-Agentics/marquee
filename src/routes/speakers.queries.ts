@@ -32,6 +32,19 @@ export const SPEAKER_STATUS_LABELS: Record<SpeakerStatus, string> = {
   declined: "Declined",
 };
 
+/**
+ * The submission states that make someone a speaker of this conference.
+ *
+ * `draft` is a half-typed public form nobody has submitted; `rejected` and
+ * `withdrawn` are people the conference is explicitly not hosting. Listing any
+ * of them on a speaker roster — and, through the board source below, chasing
+ * them for onboarding tasks — would make the roster a CFP funnel wearing the
+ * wrong noun.
+ */
+export const ROSTER_SUBMISSION_STATUSES = ["submitted", "in_review", "accepted", "waitlisted"] as const;
+
+const ROSTER_STATUS_LIST = ROSTER_SUBMISSION_STATUSES.map((status) => `'${status}'`).join(", ");
+
 /** Both bindings are the event id. */
 export const SPEAKER_ROSTER_PERSON_SOURCE = `
   SELECT person_id FROM memberships
@@ -39,7 +52,8 @@ export const SPEAKER_ROSTER_PERSON_SOURCE = `
   UNION
   SELECT part.person_id FROM participations part
     JOIN submissions rostered ON rostered.id = part.submission_id
-   WHERE rostered.event_id = ? AND part.role IN ('speaker', 'co_speaker')`;
+   WHERE rostered.event_id = ? AND part.role IN ('speaker', 'co_speaker')
+     AND rostered.status IN (${ROSTER_STATUS_LIST})`;
 
 /** Three bindings: the event id, three times. */
 export const ONBOARDING_PERSON_SOURCE = `
@@ -207,7 +221,8 @@ async function listParticipations(db: D1Database, eventId: string, personId?: st
               submission.title AS submission_title, submission.status AS submission_status
        FROM participations part
        JOIN submissions submission ON submission.id = part.submission_id
-       WHERE submission.event_id = ? AND part.role IN ('speaker', 'co_speaker')${scope.clause}
+       WHERE submission.event_id = ? AND part.role IN ('speaker', 'co_speaker')
+         AND submission.status IN (${ROSTER_STATUS_LIST})${scope.clause}
        ORDER BY part.person_id ASC, submission.title COLLATE NOCASE ASC, part.id ASC`,
     )
     .bind(eventId, ...scope.bindings)
@@ -224,7 +239,8 @@ async function listTracks(db: D1Database, eventId: string, personId?: string): P
        JOIN submissions submission ON submission.id = part.submission_id
        JOIN submission_tracks submission_track ON submission_track.submission_id = submission.id
        JOIN tracks track ON track.id = submission_track.track_id AND track.event_id = submission.event_id
-       WHERE submission.event_id = ? AND part.role IN ('speaker', 'co_speaker')${scope.clause}
+       WHERE submission.event_id = ? AND part.role IN ('speaker', 'co_speaker')
+         AND submission.status IN (${ROSTER_STATUS_LIST})${scope.clause}
        ORDER BY track.position ASC, track.id ASC`,
     )
     .bind(eventId, ...scope.bindings)

@@ -212,7 +212,7 @@ export function SpeakerRecord({
 
     <footer class="speaker-record-foot">
       <span class="speaker-save-state" aria-live="polite">{error ? <em class="alarm-text">{error}</em> : saved ? "Saved" : ""}</span>
-      <Button variant="primary" small disabled={busy || !form} onClick={() => void save()}>{busy ? "Saving…" : "Save speaker"}</Button>
+      <button class="speaker-fixed-action" type="button" disabled={busy || !form} onClick={() => void save()}>{busy ? "Saving…" : "Save speaker"}</button>
     </footer>
   </aside>;
 }

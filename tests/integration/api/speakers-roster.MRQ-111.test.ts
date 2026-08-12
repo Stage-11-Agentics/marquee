@@ -23,6 +23,8 @@ const ORGANIZER = "per_mrq111_organizer";
 const AUTH_SESSION = "sess_mrq111";
 const ACCEPTED_SPEAKER = "per_mrq111_accepted";
 const DONE_SPEAKER = "per_mrq111_done";
+const REJECTED_PERSON = "per_mrq111_rejected";
+const MODERATOR_PERSON = "per_mrq111_moderator";
 const SUBMITTED_ID = "sub_mrq111_pending";
 const SHELL = `<!doctype html><html><head><title>Marquee</title></head><body><div id="app"></div></body></html>`;
 const assets = { fetch: async () => new Response(SHELL, { headers: { "content-type": "text/html" } }) } as unknown as Fetcher;
@@ -87,10 +89,15 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(AUTH_SESSION, ORGANIZER, NOW + 86_400_000, NOW, NOW),
   ]);
   await env.DB.batch([
+    person(REJECTED_PERSON, "Sam Reyes", "sam@example.com"),
+    person(MODERATOR_PERSON, "Alex Chen", "alex@example.com"),
     submission("sub_mrq111_accepted", "Taming 40-Minute CI", "accepted", ACCEPTED_SPEAKER),
     submission(SUBMITTED_ID, "A talk still in the pile", "submitted", DONE_SPEAKER),
     participation("par_mrq111_accepted", "sub_mrq111_accepted", ACCEPTED_SPEAKER, "speaker"),
     participation("par_mrq111_pending", SUBMITTED_ID, DONE_SPEAKER, "speaker"),
+    submission("sub_mrq111_rejected", "A talk the conference declined", "rejected", REJECTED_PERSON),
+    participation("par_mrq111_rejected", "sub_mrq111_rejected", REJECTED_PERSON, "speaker"),
+    participation("par_mrq111_moderator", "sub_mrq111_accepted", MODERATOR_PERSON, "moderator"),
     env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES ('st_mrq111', 'sub_mrq111_accepted', 'track_mrq111', 1, ?, ?)").bind(NOW, NOW),
   ]);
 });
@@ -251,4 +258,54 @@ test("MRQ-111 · SPK-08 · every speaker payload carries the headshot pointer MR
   const body = await roster();
   expect(body.rows.length).toBeGreaterThan(0);
   for (const row of body.rows) expect(row).toHaveProperty("headshot_attachment_id");
+});
+
+test("MRQ-111 · SPK-01 · the roster is the speaker list, not the CFP funnel", async () => {
+  const body = await roster();
+  const names = body.rows.map((row) => row.name);
+  // A person the conference rejected is not one of its speakers, and neither is
+  // a moderator: listing either would make the roster a different noun.
+  expect(names).not.toContain("Sam Reyes");
+  expect(names).not.toContain("Alex Chen");
+  // The still-in-review speaker stays: they submitted and have not been told no.
+  expect(names).toContain("Dana Kowalski");
+});
+
+test("MRQ-111 · SPK-02 · adding a speaker who already exists never clears their profile", async () => {
+  // Marcus arrived through the CFP with a full profile. An organizer re-enters
+  // his name and email in the Add form and saves, filling nothing else in.
+  const again = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Marcus Okafor", email: "marcus@example.com" }),
+  });
+  expect(again.status).toBe(201);
+  const { speaker } = await again.json<{ speaker: { bio: string | null; title: string | null; company: string | null } }>();
+  expect(speaker.bio).toBe("A biography");
+  expect(speaker.title).toBe("Staff Engineer");
+  expect(speaker.company).toBe("Latticework Systems");
+});
+
+test("MRQ-111 · SPK-04 · setting a speaker back to Pending clears the invitation on both stores", async () => {
+  await env.DB.prepare("UPDATE participations SET invited_at = ? WHERE id = 'par_mrq111_accepted'").bind(NOW).run();
+  await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ confirmation_status: "pending" }),
+  });
+  const reread = await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`);
+  // A stale `invited_at` would make the rollup answer "invited" to the very
+  // request that set "pending" — the two stores disagreeing in one response.
+  expect((await reread.json<{ speaker: { status: string } }>()).speaker.status).toBe("pending");
+});
+
+test("MRQ-111 · SPK-02 · renaming onto another person's email is a field error, not a 500", async () => {
+  const response = await request(`/api/v1/events/${EVENT_ID}/speakers/${ACCEPTED_SPEAKER}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "dana@example.com" }),
+  });
+  expect(response.status).toBe(422);
+  const body = await response.json<{ error: { field?: string } }>();
+  expect(JSON.stringify(body)).toContain("email");
 });

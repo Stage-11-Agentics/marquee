@@ -36,10 +36,14 @@ const rosterQuery = z.object({
 
 const customFieldsSchema = z.record(z.string().min(1).max(80), z.string().max(2_000));
 
+// No `headshot_attachment_id` on create: an upload is owned by a person, and
+// the person does not exist yet. Accepting it here would have to either ignore
+// the field or trust an id it cannot check. Attach it on the PATCH instead.
+const { headshot_attachment_id: _headshotOnCreate, ...createProfileShape } = personProfilePatchShape;
 const createBody = z.object({
   name: z.string().trim().min(1).max(200),
   email: z.string().trim().email().max(320),
-  ...personProfilePatchShape,
+  ...createProfileShape,
   custom_fields: customFieldsSchema.optional(),
   /** Records that the organizer has reached out, without pretending mail was sent. */
   invited: z.boolean().optional(),
@@ -226,9 +230,17 @@ const createSpeaker = defineApiRoute(
       .first<PersonRow>();
 
     const personId = existing?.id ?? newUlid(now);
+    // Add-speaker is an add, never an erase. When the email resolves to someone
+    // the organization already knows, a field left blank on the form means "I
+    // did not retype this", not "delete what the speaker wrote in their portal".
+    // Without this, re-adding an accepted speaker by name and email wiped their
+    // title, company, and bio org-wide.
+    const profilePatch = existing
+      ? Object.fromEntries(Object.entries(body).filter(([, value]) => value !== null && value !== undefined))
+      : body;
     const resolved = resolvePersonProfile(
       existing ?? { title: null, company: null, bio: null, social_links: "[]", custom_fields: "{}" },
-      body,
+      profilePatch,
     );
     const customFields = normalizeCustomFields(body.custom_fields, existing?.custom_fields ?? "{}");
     const statements: D1PreparedStatement[] = [];
@@ -325,6 +337,13 @@ const patchSpeaker = defineApiRoute(
 
     const actor = await actorPersonId(context);
     const now = Date.now();
+    if (body.email !== undefined && body.email !== person.email) {
+      const taken = await context.env.DB
+        .prepare("SELECT id FROM people WHERE org_id = ? AND email = ? AND id <> ?")
+        .bind(event.org_id, body.email, personId)
+        .first<{ id: string }>();
+      if (taken) throw ApiError.unprocessable("another person in this organization already uses that email", "email");
+    }
     const resolved = resolvePersonProfile(person, body);
     const customFields = normalizeCustomFields(body.custom_fields, person.custom_fields);
     const headshot = await resolveHeadshot(context.env.DB, personId, person.headshot_attachment_id, body.headshot_attachment_id);
@@ -357,13 +376,19 @@ const patchSpeaker = defineApiRoute(
           .bind(stored, confirmedAt, invitedAt, now, eventId, personId),
         context.env.DB
           .prepare(
+            // Setting a speaker back to Pending has to clear the invitation
+            // too. `COALESCE` would preserve an earlier `invited_at`, and the
+            // rollup reads pending + invited_at as "Invited" — so the badge
+            // would come back Invited in the very response to setting Pending,
+            // while the membership row said otherwise.
             `UPDATE participations
-             SET confirmation_status = ?, confirmed_at = ?, invited_at = COALESCE(invited_at, ?), updated_at = ?
+             SET confirmation_status = ?, confirmed_at = ?,
+                 invited_at = ${invitedAt === null ? "NULL" : "COALESCE(invited_at, ?)"}, updated_at = ?
              WHERE person_id = ?
                AND role IN ('speaker', 'co_speaker')
                AND submission_id IN (SELECT id FROM submissions WHERE event_id = ?)`,
           )
-          .bind(stored, confirmedAt, invitedAt, now, personId, eventId),
+          .bind(...[stored, confirmedAt, ...(invitedAt === null ? [] : [invitedAt]), now, personId, eventId]),
       );
     }
 
