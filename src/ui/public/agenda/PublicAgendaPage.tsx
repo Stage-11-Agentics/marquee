@@ -603,7 +603,9 @@ function ScheduleSheets(): JSX.Element {
       <div class="sheet" id="schedule-phone-sheet" role="dialog" aria-modal="true" aria-labelledby="schedule-phone-title" data-schedule-sheet="phone">
         <h2 id="schedule-phone-title">Open on your phone</h2>
         <p>Scan and your phone picks up right where this leaves off — same stars, same schedule, both devices can edit. The link carries your private write key in the URL fragment, so it never reaches our logs. Don't share this one; use <b>Share</b> for friends.</p>
-        <img class="qr" alt="QR code for your private sync link" width="180" height="180" data-schedule-qr />
+        {/* Drawn in the browser, never fetched: the private write key rides
+            the URL fragment and must not reach a server to become an image. */}
+        <canvas class="qr" width="180" height="180" role="img" aria-label="QR code for your private sync link" data-schedule-qr />
         <div class="url-line" style={{ marginTop: "14px" }}>
           <code data-schedule-url="sync" />
           <button type="button" class="copy-btn" data-schedule-copy="sync">Copy</button>
@@ -695,6 +697,15 @@ export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgenda
               ? "Everything you've starred, in the order your conference happens. Stars live on this device until you sync or share."
               : data.event.tagline ?? "Practical sessions for people building and operating AI."}</p>
           </div>
+        </div>
+        {/*
+          A shared link's landing strip. The count cannot be known until the
+          code is fetched, so the strip ships at its final size and the script
+          fills the sentence — the same reserve-then-fill rule as the summary.
+        */}
+        <div class="sched-note" data-schedule-import hidden>
+          <span data-schedule-import-message>Someone shared a schedule with you.</span>{" "}
+          <button type="button" class="public-button" data-schedule-action="import">Import a copy into my schedule</button>
         </div>
         {mine ? <MySchedulePanels days={data.days} eventSlug={data.event.slug} /> : null}
         <form class="public-filters" method="get" action="/agenda" data-public-agenda-filters hidden={mine}>
