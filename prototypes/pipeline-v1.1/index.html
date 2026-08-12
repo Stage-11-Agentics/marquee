@@ -10,13 +10,13 @@
        on html[data-theme] plus a THEMES registry row. Day is unchanged and
        remains the default (no prefers-color-scheme auto-switch — judges get
        Day unless someone chooses otherwise; choice persists in localStorage).
-       Ships THREE night candidates for the operator to pick ONE from —
-       N1 Midnight Ops (blue-black, luminous teal, canvas lighter than page),
-       N2 Red-Shift (amber night-vision cockpit, blue banished),
-       N3 Graphite (neutral greys, day figure-ground preserved). Adding a
-       theme is one CSS block + one registry row. All palettes
-       contrast-measured: every text pair ≥ 4.5:1, most 6–16:1. Seeded tracks
-       carry per-theme octaves; custom tracks keep their stored color.
+       Night is the quiet server room: strictly neutral greys, chroma held
+       for status and the restrained teal, the agenda canvas still darker
+       than the page so day's figure-ground survives. Adding a theme is one
+       CSS block + one registry row. Contrast-measured: every text pair
+       ≥ 4.5:1, most 6–16:1. Seeded tracks carry per-theme octaves (day hues
+       are tuned for white and go muddy on dark ground); custom tracks keep
+       their stored color. ?theme= overrides for one load without persisting.
        v1.11 (2026-08-12): the cold start, from the true step zero. Initial
        setup is run by the operator's own coding agent reading SKILL.md
        (client ruling D4); the UI is the receipt. New: an unclaimed-instance
@@ -151,148 +151,14 @@
       --canvas-drop-bg: rgba(53,179,189,.14);
     }
 
-    /* ════ NIGHT CANDIDATE 1 · MIDNIGHT OPS ═══════════════════════════════
-       The re-lit instrument: blue-black ground, faces one step lighter, the
-       teal turned luminous. The agenda canvas sits LIGHTER than the page —
-       the day relationship deliberately inverted so the deep-work surface
-       still reads as "the lit instrument" at night.
-       Measured: all text pairs 6.1–16.2:1 (scratch contrast.mjs). ───────── */
-    html[data-theme="midnight"] {
-      --bg: #0b1117;
-      --panel: #131b23;
-      --sunk: #0e161d;
-      --graph: #1a242e;
-      --ink: #e8eef4;
-      --ink-soft: #b9c6d2;
-      --muted: #8a9dac;
-      --line: #243240;
-      --line-strong: #32424f;
-      --accent: #45c7d1;
-      --accent-soft: #10333a;
-      --accent-dark: #82dde6;
-      --accent-hover: #63d2da;
-      --on-accent: #06272b;
-      --accent-line: #2a5a60;
-      --danger: #ff8177;
-      --danger-soft: #3b1613;
-      --danger-ink: #ffa79f;
-      --danger-line: #6e2a24;
-      --warning: #e6b95c;
-      --warning-soft: #33270f;
-      --warning-line: #6e5722;
-      --warning-ink: #ecc887;
-      --warning-edge: #8a7433;
-      --success: #55cf93;
-      --success-soft: #10301f;
-      --success-ink: #8fe0b8;
-      --success-line: #275c40;
-      --on-ink: #0c1218;          /* inverse chrome flips light at night    */
-      --on-ink-plain: #0c1218;
-      --on-ink-line: #9fb3c0;
-      --on-ink-hover: #0b6a72;
-      --backdrop: rgba(0,0,0,.62);
-      --veil: rgba(255,255,255,.04);
-      --veil-strong: rgba(255,255,255,.06);
-      --veil-dim: rgba(255,255,255,.02);
-      --wave-tick: rgba(0,0,0,.45);
-      --break-tint: #8fa0ad;
-      --break-stripe: #142230;
-      --spectrum: linear-gradient(90deg,#8b85ff,#f2705f,#2ec4b6,#f59e0b,#5b8def,#b06ef5,#84cc16);
-      --canvas: #16232e;
-      --canvas-line: #2c3e4c;
-      --canvas-ink: #dbe6ec;
-      --canvas-muted: #8ba4b1;
-      --canvas-grid: #22323e;
-      --canvas-band-line: #20303c;
-      --canvas-tile: #1d2c38;
-      --canvas-tile-line: #354856;
-      --canvas-btn: #253845;
-      --canvas-btn-line: #3d5563;
-      --canvas-drop: #45c7d1;
-      --canvas-drop-bg: rgba(69,199,209,.14);
-    }
 
-    /* ════ NIGHT CANDIDATE 2 · RED-SHIFT ══════════════════════════════════
-       The night-vision cockpit: warm black, every neutral warmed, the
-       instrument light amber instead of teal — blue is banished so the
-       panel preserves the operator's dark adaptation. Status colors stay
-       semantic but warm-tilted.
-       Measured: all text pairs 5.6–15.9:1 (scratch contrast.mjs). ───────── */
-    html[data-theme="redshift"] {
-      --bg: #120d08;
-      --panel: #1a130c;
-      --sunk: #150f09;
-      --graph: #221910;
-      --ink: #f2e8da;
-      --ink-soft: #d3c3ac;
-      --muted: #ab9377;
-      --line: #33271a;
-      --line-strong: #453626;
-      --accent: #f5a83c;
-      --accent-soft: #33230d;
-      --accent-dark: #ffc46e;
-      --accent-hover: #ffb95a;
-      --on-accent: #291a05;
-      --accent-line: #6e5422;
-      --danger: #ff7b6b;
-      --danger-soft: #3d1510;
-      --danger-ink: #ffa598;
-      --danger-line: #73291f;
-      --warning: #e9cf6a;
-      --warning-soft: #322a0e;
-      --warning-line: #6e5e22;
-      --warning-ink: #f0dc9e;
-      --warning-edge: #8a7433;
-      --success: #8fca7f;
-      --success-soft: #16301a;
-      --success-ink: #aedbb1;
-      --success-line: #33592f;
-      --on-ink: #14100b;
-      --on-ink-plain: #14100b;
-      --on-ink-line: #b39a79;
-      --on-ink-hover: #8a5c00;
-      --backdrop: rgba(0,0,0,.62);
-      --veil: rgba(255,255,255,.04);
-      --veil-strong: rgba(255,255,255,.06);
-      --veil-dim: rgba(255,255,255,.02);
-      --wave-tick: rgba(0,0,0,.45);
-      --break-tint: #8f8577;
-      --break-stripe: #1d1610;
-      --spectrum: linear-gradient(90deg,#b8a5ff,#ff8a70,#7fc9a8,#f5a83c,#8fb8d9,#d79aff,#b5c96a);
-      --canvas: #1e150c;
-      --canvas-line: #382a1a;
-      --canvas-ink: #ecdfca;
-      --canvas-ink-soft: #c7b394;
-      --canvas-eyebrow: #c9a06a;
-      --canvas-muted: #a58c69;
-      --canvas-link: #ffc46e;
-      --canvas-accent: #ffb95a;
-      --canvas-code-ink: #e3d5bd;
-      --canvas-log-ink: #cbbb9e;
-      --canvas-chip-line: #4a3b26;
-      --canvas-chip-ink: #dcc9ab;
-      --canvas-ok-bg: rgba(143,202,127,.14);
-      --canvas-ok-line: #3d5c33;
-      --canvas-ok-ink: #aedbb1;
-      --canvas-grid: #2c2013;
-      --canvas-band-line: #291d11;
-      --canvas-day-ink: #dbc9ab;
-      --canvas-tile: #261b0f;
-      --canvas-tile-line: #45341f;
-      --canvas-tile-ink: #f2e8da;
-      --canvas-tile-muted: #ab9377;
-      --canvas-btn: #2f2213;
-      --canvas-btn-line: #52402a;
-      --canvas-drop: #f5a83c;
-      --canvas-drop-bg: rgba(245,168,60,.14);
-    }
 
-    /* ════ NIGHT CANDIDATE 3 · GRAPHITE ═══════════════════════════════════
+    /* ════ NIGHT ══════════════════════════════════════════════════════════
        The quiet server room: strictly neutral greys, chroma reserved for
        status and the restrained teal. The agenda canvas stays DARKER than
        the page — the day figure-ground relationship preserved as-is.
-       Measured: all text pairs 6.3–15.7:1 (scratch contrast.mjs). ───────── */
-    html[data-theme="graphite"] {
+       Measured: all text pairs 6.3–15.7:1. ─────────────────────────────── */
+    html[data-theme="night"] {
       --bg: #121416;
       --panel: #1a1d20;
       --sunk: #15181b;
@@ -1187,9 +1053,7 @@
       const NIGHT_TRACKS = { "AI in Financial Services":"#8b85ff", "Agents":"#f2705f", "Evals":"#2ec4b6", "Infra":"#f59e0b", "Open Models":"#5b8def", "RAG / Retrieval":"#b06ef5", "Security":"#ef5da8", "Leadership":"#84cc16" };
       const THEMES = [
         { id: "day", label: "Day" },
-        { id: "midnight", label: "N1 · Midnight", tracks: NIGHT_TRACKS },
-        { id: "redshift", label: "N2 · Red-Shift", tracks: { "AI in Financial Services":"#b8a5ff", "Agents":"#ff8a70", "Evals":"#7fc9a8", "Infra":"#f5a83c", "Open Models":"#8fb8d9", "RAG / Retrieval":"#d79aff", "Security":"#ff7d9e", "Leadership":"#b5c96a" } },
-        { id: "graphite", label: "N3 · Graphite", tracks: NIGHT_TRACKS }
+        { id: "night", label: "Night", tracks: NIGHT_TRACKS }
       ];
       function currentTheme() { return THEMES.find(t=>t.id===state.theme) || THEMES[0]; }
       function applyTheme() {
