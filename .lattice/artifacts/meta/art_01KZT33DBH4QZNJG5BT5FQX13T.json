@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T04:18:46Z",
+  "created_by": "agent:codex-mrq-91",
+  "custom_fields": {},
+  "id": "art_01KZT33DBH4QZNJG5BT5FQX13T",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT33DBH4QZNJG5BT5FQX13T.png",
+    "size_bytes": 965753
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Local c11 browser proof at exact review-fix head 61b42ed: OSM tiles, named building pin, top-left Directions, fixed map slot.",
+  "tags": [],
+  "title": "MRQ-91 final local speaker portal screenshot",
+  "token_usage": null,
+  "type": "file"
+}

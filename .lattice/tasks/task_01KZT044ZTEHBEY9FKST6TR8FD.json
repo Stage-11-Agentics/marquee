@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:delegator-mrq-94",
   "branch_links": [],
-  "comment_count": 5,
+  "comment_count": 6,
   "complexity": null,
   "created_at": "2026-08-12T03:26:44Z",
   "created_by": {
@@ -29,18 +29,18 @@
     }
   ],
   "id": "task_01KZT044ZTEHBEY9FKST6TR8FD",
-  "last_event_id": "ev_01KZT2R9PE5SKR8MYTH2CP5A4W",
-  "last_status_changed_at": "2026-08-12T04:04:16Z",
+  "last_event_id": "ev_01KZT3G0A6RCJ8S7R70XXPWQQ5",
+  "last_status_changed_at": "2026-08-12T04:25:38Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-94",
   "status": "review",
   "tags": null,
   "title": "Public agenda: day-one default fakes an empty conference, \"Show full agenda\" is a no-op, JSON link is exposed, and there is no way home",
   "type": "bug",
-  "updated_at": "2026-08-12T04:12:42Z",
+  "updated_at": "2026-08-12T04:25:38Z",
   "urgency": null
 }

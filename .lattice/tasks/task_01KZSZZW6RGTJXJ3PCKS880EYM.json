@@ -43,10 +43,15 @@
       "id": "art_01KZT2RSDDN4CZ1ZZBXP3J3WZ1",
       "role": "review",
       "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT38BFYEP0X5NJZWQA62SZ4",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZSZZW6RGTJXJ3PCKS880EYM",
-  "last_event_id": "ev_01KZT2RSDYC47GE4PC4TWWXXNH",
+  "last_event_id": "ev_01KZT38BG2TT28C0DQ4JKRTBBC",
   "last_status_changed_at": "2026-08-12T04:08:10Z",
   "linked_files": [],
   "priority": "critical",
@@ -58,6 +63,6 @@
   "tags": null,
   "title": "Upload is broken on the deployed site \u2014 presigned R2 PUT fails CORS preflight, no bucket policy exists",
   "type": "bug",
-  "updated_at": "2026-08-12T04:12:58Z",
+  "updated_at": "2026-08-12T04:21:28Z",
   "urgency": null
 }
