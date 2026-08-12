@@ -228,8 +228,11 @@ const SIGNIN_STYLES = `
 .signin-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .signin-actions-pair { display: flex; gap: 8px; }
 /* The status line holds its height whether or not it has anything to say, so
-   the button never moves under the pointer mid-submit. */
-.signin-status { min-height: 16px; flex: 1; color: var(--ink-soft); font: 400 11px/1.4 var(--mono); }
+   the button never moves under the pointer mid-submit. 30px, not one line's
+   16px: the acknowledgement wraps to two lines at this card width, and a
+   16px reservation only holds because the button's own 30px happens to govern
+   the row. Reserving the height that actually lands makes it hold on purpose. */
+.signin-status { min-height: 30px; flex: 1; color: var(--ink-soft); font: 400 11px/1.4 var(--mono); }
 .signin-status.is-error { color: var(--danger); }
 .signin-link { margin-top: 18px; border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--sunk); padding: 10px 12px; display: grid; gap: 6px; }
 .signin-link a { font: 400 11.5px/1.6 var(--mono); color: var(--accent-dark); word-break: break-all; }
