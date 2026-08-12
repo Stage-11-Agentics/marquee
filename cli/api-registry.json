@@ -1,6 +1,6 @@
 {
   "source": "/api/openapi.json",
-  "documentSha256": "927d6842b29c4879a63ce64ad9f7a3474cf7275d5d936572e398e38b55e4032f",
+  "documentSha256": "780fb374e9f7eb8da000a4bd4a0dadbbbbd879d90c8754fe36264c060c8ebd7c",
   "operations": [
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId} removeAgendaItem",
     "DELETE /api/v1/events/{eventId}/formats/{formatId} deleteEventFormat",
@@ -112,6 +112,7 @@
     "POST /api/v1/events/{eventId}/rounds/{roundId}/comparisons writeReviewerComparison",
     "POST /api/v1/events/{eventId}/rounds/{roundId}/promote promoteEvaluationSubmissions",
     "POST /api/v1/events/{eventId}/rounds/{roundId}/submissions/{submissionId}/evaluations writeReviewerEvaluation",
+    "POST /api/v1/events/{eventId}/speakers/invite inviteSpeakersToPortal",
     "POST /api/v1/events/{eventId}/submissions createAdminSubmission",
     "POST /api/v1/events/{eventId}/submissions/{submissionId}/decision decideSubmission",
     "POST /api/v1/events/{eventId}/submissions/{submissionId}/invites sendSubmissionCalendarInvites",
