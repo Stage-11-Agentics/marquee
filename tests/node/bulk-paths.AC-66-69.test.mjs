@@ -249,6 +249,20 @@ const EXPECTED_PLACEHOLDER_SITES = [
     classification: "NAMED_FINDING: category routing expands one D1 placeholder per track; no input max",
   },
   {
+    file: "src/routes/files-export.routes.ts",
+    owner: "attachmentObjectsFor",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; explicit 80-ID export-read chunks stay below D1's binding cap",
+  },
+  {
+    file: "src/routes/files-export.routes.ts",
+    owner: "taskRowsFor",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; explicit 80-ID export-read chunks stay below D1's binding cap",
+  },
+  {
     file: "src/routes/public-form.routes.ts",
     owner: "moveAttachments",
     binding: "placeholders",
