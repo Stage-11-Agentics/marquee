@@ -5,7 +5,7 @@ import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
 import { notFoundDocument } from "./public-agenda.route";
-import { loadPublicForm, toPublicFormState } from "./public-form.shared";
+import { loadPublicForm, publicTurnstileExempt, toPublicFormState } from "./public-form.shared";
 import { PublicForm } from "../ui/public/form/PublicForm";
 import { PUBLIC_FORM_STYLES } from "../ui/public/form/styles";
 
@@ -45,7 +45,9 @@ publicFormRoutes.get("/f/:slug", async (context) => {
   if (!record) return notFoundDocument(await assetShell(context.env.ASSETS, context.req.raw));
   const state = toPublicFormState(record, {
     origin: new URL(context.req.url).origin,
-    turnstileSiteKey: context.env.TURNSTILE_SITE_KEY,
+    turnstileSiteKey: (await publicTurnstileExempt(context.env.DB, record.form.event_id))
+      ? null
+      : context.env.TURNSTILE_SITE_KEY,
   });
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(await assetShell(context.env.ASSETS, context.req.raw), state));

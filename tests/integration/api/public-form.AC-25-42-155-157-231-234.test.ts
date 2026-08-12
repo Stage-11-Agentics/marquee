@@ -94,6 +94,21 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(html.indexOf("Session title")).toBeLessThan(html.indexOf("Product or service"));
   });
 
+  test("AC-231 · a demo conference withholds the Turnstile site key, so no widget mounts to block the client", async () => {
+    // Exempting the SERVER is not enough. The client mounts the widget whenever
+    // it is handed a site key, and then refuses to issue any public write until
+    // that widget returns a token — so an exempted server simply never gets
+    // called. Withholding the key is what actually opens the path.
+    const rendered = await request("/f/public-cfp", { method: "GET" });
+    expect(rendered.status).toBe(200);
+    // The site key vitest.worker.config.ts hands the Worker.
+    expect(await rendered.text()).not.toContain("1x00000000000000000000AA");
+
+    const asJson = await request("/api/v1/public/forms/public-cfp", { method: "GET" });
+    const state = await json<{ turnstile_site_key: string | null }>(asJson);
+    expect(state.turnstile_site_key).toBeNull();
+  });
+
   test("AC-231 · a demo conference takes a draft and a submission with no Turnstile token at all", async () => {
     // The fixture event is already demo_mode = 1. Rejecting every token proves
     // the gate is SKIPPED rather than satisfied: without the exemption these
