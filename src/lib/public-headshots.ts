@@ -36,6 +36,13 @@ export const SYNTHETIC_PUBLIC_HEADSHOT_SLUGS = [
   "mukund-sridhar",
 ] as const;
 
+/** Published seeded speakers intentionally rendered with initials only. */
+export const INTENTIONAL_PUBLIC_HEADSHOT_FALLBACK_SLUGS = [
+  "aarush-selvan",
+  "barry-zhang",
+  "zack-reneau-wedeen",
+] as const;
+
 const SYNTHETIC_HEADSHOT_SET = new Set<string>(SYNTHETIC_PUBLIC_HEADSHOT_SLUGS);
 
 export function syntheticPublicHeadshotUrl(name: string, isDemo: boolean): string | null {
