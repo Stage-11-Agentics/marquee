@@ -6,6 +6,7 @@ import type {
   PublicEvent,
   PublicSession,
   PublicSpeaker,
+  PublicSpeakerSummary,
   PublicVenueDisclosure,
 } from "../../../lib/public-site";
 
@@ -85,7 +86,7 @@ export const PUBLIC_SITE_STYLES = `
 .public-speaker-link strong, .public-session-link strong { display: block; font-size: 13px; }
 .public-speaker-link small, .public-session-link small { display: block; margin-top: 3px; color: var(--public-muted); }
 .public-profile { display: flex; align-items: flex-start; gap: 14px; }
-.public-avatar { width: 48px; height: 48px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--public-rule); background: var(--public-accent-wash); color: var(--public-accent); font: 700 12px/1 var(--public-mono); }
+.public-avatar { --avatar-size: 48px; width: var(--avatar-size); height: var(--avatar-size); display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--public-rule); background: var(--public-accent-wash); color: var(--public-accent); font: 700 12px/1 var(--public-mono); object-fit: cover; }
 .public-profile h1 { margin-top: 0; }
 .public-not-found { max-width: 680px; margin: 40px auto; text-align: center; }
 .public-not-found .public-card { min-height: 300px; display: grid; place-items: center; }
@@ -295,6 +296,19 @@ function initials(name: string): string {
   return name.split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
 }
 
+export function PublicSpeakerAvatar({
+  speaker,
+  className,
+}: {
+  speaker: PublicSpeakerSummary;
+  className?: string;
+}): JSX.Element {
+  const classes = ["public-avatar", className].filter(Boolean).join(" ");
+  return speaker.headshotUrl
+    ? <img class={classes} src={speaker.headshotUrl} alt={`${speaker.name} synthetic avatar`} width="48" height="48" loading="lazy" />
+    : <span class={classes} role="img" aria-label={`${speaker.name} initials avatar`}>{initials(speaker.name)}</span>;
+}
+
 export function PublicSpeakerPage({ event, venue, speaker }: { event: PublicEvent; venue: PublicVenueDisclosure; speaker: PublicSpeaker }): JSX.Element {
   const venueName = venue.buildingName ?? event.venue ?? "Online";
   return (
@@ -303,7 +317,7 @@ export function PublicSpeakerPage({ event, venue, speaker }: { event: PublicEven
         <article class="public-card">
           <div class="public-kicker">{venueName}</div>
           <div class="public-profile">
-            <div class="public-avatar" aria-hidden="true">{initials(speaker.name)}</div>
+            <PublicSpeakerAvatar speaker={speaker} />
             <div>
               <div class="public-kicker">Speaker</div>
               <h1>{speaker.name}</h1>
