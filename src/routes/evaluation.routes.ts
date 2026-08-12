@@ -221,7 +221,7 @@ interface PersonRow {
   name: string;
 }
 
-function requireProgram(
+export function requireProgram(
   context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0],
   eventId: string,
   write: boolean,

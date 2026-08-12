@@ -35,7 +35,9 @@
 .spark i { background: var(--accent); display: block; flex: 1; min-height: 4px; opacity: .78; }
 .committee-intro { color: var(--muted); display: flex; font: 10px/1.3 var(--mono); gap: 20px; justify-content: space-between; margin-bottom: 12px; }
 .committee-list { display: grid; gap: 0; }
-.committee-person { align-items: center; border-top: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 28px minmax(0, 1fr) 80px; min-height: 55px; }
+.committee-person { align-items: center; border-top: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 28px minmax(0, 1fr) 104px; min-height: 55px; }
+/* Fixed width and tabular numerals: 0/2 becoming 2/2 must not move the row. */
+.reviewer-progress { text-align: right; white-space: nowrap; }
 .mini-avatar { align-items: center; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: 2px; display: grid; font: 600 9px/1 var(--mono); height: 26px; justify-content: center; width: 26px; }
 .committee-person strong { display: block; font: 600 11px/1.2 var(--mono); }
 .scope-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }

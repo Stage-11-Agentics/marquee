@@ -79,6 +79,10 @@ export interface SubmissionListItem {
   speakers: SubmissionSpeakerListItem[];
   tracks: SubmissionTrackListItem[];
   score: number | null;
+  /** Non-abstained evaluations behind `score`. "4.7 from 1 review" is not 4.7. */
+  review_count: number;
+  /** False when `score` fell back to a pre-criteria scalar and is not weighted. */
+  score_is_weighted: boolean;
   submitted_at: number | null;
   last_saved_at: number | null;
   updated_at: number;
