@@ -349,7 +349,7 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
       const response = await api<{ queued: boolean; outstanding: number }>(`/api/v1/events/${eventId}/rounds/${round.id}/reviewers/${personId}/remind`, "/api/v1/events/{eventId}/rounds/{roundId}/reviewers/{personId}/remind", {
         method: "POST",
       });
-      setNotice(response.queued ? `Reviewer reminder queued · ${response.outstanding} outstanding` : "Reviewer reminder already queued for this round");
+      setNotice(response.queued ? `Reviewer reminder queued · ${response.outstanding} outstanding` : "Reviewer reminder already queued today");
       await load({ quiet: true });
     } catch (reason: unknown) {
       setError(errorSummary(reason));
@@ -442,12 +442,12 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
         const progress = roundProgress?.[member.id];
         const coverageLabel = progress
           ? `${progress.reviewed_count} / ${progress.assigned_count} reviewed`
-          : roundProgress === null ? "Coverage unavailable" : "No assignments yet";
+          : roundProgress === undefined ? "Reading coverage…" : roundProgress === null ? "Coverage unavailable" : "No assignments yet";
         const action = progress?.outstanding_count
           ? <Button small variant="ghost" onClick={() => void remindReviewer(round, member.id)}>Remind</Button>
           : progress
             ? <span class="tabular subtle">{progress.reviewed_count} complete</span>
-            : <span class="tabular subtle">{roundProgress === null ? "Coverage unavailable" : "No assignments yet"}</span>;
+            : <span class="tabular subtle">—</span>;
         return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{member.name}</strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
       })}</div><Button class="full-width ghost" onClick={() => setDialog("committee")}>View all {roundCommittee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>Choose a reviewer pool on this round card before distributing assignments.</span><Button small variant="primary" onClick={() => setDialog("committee")}>Manage committee</Button></div>}
     </section>;

@@ -109,11 +109,13 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
       env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, 'Other event reviewers', ?, ?)").bind(OTHER_COMMITTEE_ID, OTHER_EVENT_ID, now, now),
     ]);
     const crossEvent = await request(`/api/v1/events/${EVENT_ID}/plans/${plan.id}/rounds`, { method: "POST", body: JSON.stringify({ name: "Cross-event pool", position: 0, mode: "scorecard", committee_id: OTHER_COMMITTEE_ID, target_reviews_per_submission: 1 }) });
-    expect(crossEvent.status).toBe(404);
+    expect(crossEvent.status).toBe(422);
     const round = await request(`/api/v1/events/${EVENT_ID}/plans/${plan.id}/rounds`, { method: "POST", body: JSON.stringify({ name: "Round 1", position: 0, mode: "scorecard", committee_id: COMMITTEE_ID, target_reviews_per_submission: 1 }) });
     expect(round.status).toBe(201);
-    const roundBody = await json<{ rounds: Array<{ committee_id: string | null; name: string }> }>(round);
+    const roundBody = await json<{ rounds: Array<{ committee_id: string | null; id: string; name: string }> }>(round);
     expect(roundBody.rounds.find((item) => item.name === "Round 1")?.committee_id).toBe(COMMITTEE_ID);
+    const crossEventUpdate = await request(`/api/v1/events/${EVENT_ID}/rounds/${roundBody.rounds.find((item) => item.name === "Round 1")?.id}`, { method: "PATCH", body: JSON.stringify({ committee_id: OTHER_COMMITTEE_ID }) });
+    expect(crossEventUpdate.status).toBe(422);
     const committee = await request(`/api/v1/events/${EVENT_ID}/committees`, { method: "POST", body: JSON.stringify({ name: "Independent committee" }) });
     expect(committee.status).toBe(201);
     const committeeBody = await json<{ id: string }>(committee);

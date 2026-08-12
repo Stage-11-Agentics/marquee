@@ -291,11 +291,11 @@ async function criteriaForRound(db: D1Database, roundId: string): Promise<Array<
   return result.results.map((criterion) => ({ ...criterion, options: parseCriterionOptions(criterion.options) }));
 }
 
-async function committeeForEvent(db: D1Database, eventId: string, committeeId: string): Promise<CommitteeRow> {
+async function committeeForEvent(db: D1Database, eventId: string, committeeId: string, field?: string): Promise<CommitteeRow> {
   const committee = await db.prepare(
     "SELECT id, event_id, name FROM committees WHERE id = ? AND event_id = ?",
   ).bind(committeeId, eventId).first<CommitteeRow>();
-  if (!committee) throw ApiError.notFound("committee not found");
+  if (!committee) throw field ? ApiError.unprocessable("committee is not in this conference", field) : ApiError.notFound("committee not found");
   return committee;
 }
 
@@ -459,7 +459,7 @@ const createPlan = defineApiRoute(
       "INSERT INTO evaluation_plans (id, event_id, name, instructions, scale_min, scale_max, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(planId, eventId, body.name, body.instructions, body.scale_min ?? null, body.scale_max ?? null, body.status, now, now)];
     for (const [index, round] of (body.rounds ?? []).entries()) {
-      if (round.committee_id) await committeeForEvent(context.env.DB, eventId, round.committee_id);
+      if (round.committee_id) await committeeForEvent(context.env.DB, eventId, round.committee_id, "committee_id");
       const roundId = crypto.randomUUID();
       const position = round.position ?? index;
       statements.push(context.env.DB.prepare(
@@ -538,7 +538,7 @@ const addRound = defineApiRoute(
     requireProgram(context, eventId, true);
     await planForEvent(context.env.DB, eventId, planId);
     const body = context.req.valid("json");
-    if (body.committee_id) await committeeForEvent(context.env.DB, eventId, body.committee_id);
+    if (body.committee_id) await committeeForEvent(context.env.DB, eventId, body.committee_id, "committee_id");
     if (body.criteria) assertCriteriaTotal(body.criteria);
     const count = await context.env.DB.prepare("SELECT COUNT(*) AS count FROM evaluation_rounds WHERE plan_id = ?").bind(planId).first<{ count: number }>();
     if (Number(count?.count ?? 0) >= 2) throw ApiError.unprocessable("an evaluation plan has exactly one or two rounds", "position");
@@ -575,7 +575,7 @@ const updateRound = defineApiRoute(
     requireProgram(context, eventId, true);
     const current = await roundForEvent(context.env.DB, eventId, roundId);
     const body = context.req.valid("json");
-    if (body.committee_id) await committeeForEvent(context.env.DB, eventId, body.committee_id);
+    if (body.committee_id) await committeeForEvent(context.env.DB, eventId, body.committee_id, "committee_id");
     const opensAt = body.opens_at === undefined ? current.opens_at : body.opens_at;
     const closesAt = body.closes_at === undefined ? current.closes_at : body.closes_at;
     if (opensAt !== null && closesAt !== null && opensAt !== undefined && closesAt !== undefined && opensAt > closesAt) {

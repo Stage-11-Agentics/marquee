@@ -47,6 +47,8 @@ test("AC-158 + AC-159 · the mobile reviewer keeps thumb controls and a stable b
   expect(reviewerStyles).toMatch(/\.reviewer-feedback-slot \{ min-height: 58px; \}/);
   expect(reviewerStyles).toMatch(/\.decision-button \{ min-height: 48px;/);
   expect(reviewerStyles).toMatch(/\.score-buttons button \{ min-height: 44px; \}/);
+  expect(reviewerStyles).toMatch(/\.reviewer-conflict \{ min-height: 48px; \}/);
+  expect(reviewerStyles).toContain(".review-save-actions .reviewer-save { margin-top: 0; }");
   expect(reviewerStyles).toMatch(/\.reviewer-detail \{ border-left: 0;.*height: 100dvh;/);
 });
 
