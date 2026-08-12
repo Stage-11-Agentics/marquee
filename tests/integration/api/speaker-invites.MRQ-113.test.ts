@@ -40,7 +40,7 @@ async function request(path: string, init: RequestInit = {}, cookie = ownerCooki
 describe.sequential("MRQ-113 portal invites", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("SPK-06 · an organizer can invite one or many event speakers and sees demo links", async () => {
+  test("AC-282 + AC-283 · an organizer can invite one or many event speakers and sees demo links", async () => {
     expect((await request(`/api/v1/events/${EVENT_ID}/speakers/invite`, { method: "POST", body: JSON.stringify({ person_ids: [PRIYA_ID, MARCUS_ID] }) })).status).toBe(200);
     const result = await (await request(`/api/v1/events/${EVENT_ID}/speakers/invite`, { method: "POST", body: JSON.stringify({ person_ids: [PRIYA_ID, MARCUS_ID] }) })).json<{
       ok: boolean;
@@ -55,7 +55,7 @@ describe.sequential("MRQ-113 portal invites", () => {
     expect(Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM magic_links WHERE person_id IN (?, ?)").bind(PRIYA_ID, MARCUS_ID).first<{ count: number }>())?.count)).toBe(4);
   });
 
-  test("SPK-06 · unauthenticated and cross-event speaker requests are refused without writes", async () => {
+  test("AC-282 + AC-283 · unauthenticated and cross-event speaker requests are refused without writes", async () => {
     const before = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox").first<{ count: number }>())?.count);
     expect((await request(`/api/v1/events/${EVENT_ID}/speakers/invite`, { method: "POST", body: JSON.stringify({ person_ids: [PRIYA_ID] }) }, "")).status).toBe(401);
     expect((await request(`/api/v1/events/${EVENT_ID}/speakers/invite`, { method: "POST", body: JSON.stringify({ person_ids: [OUTSIDER_ID] }) })).status).toBe(404);

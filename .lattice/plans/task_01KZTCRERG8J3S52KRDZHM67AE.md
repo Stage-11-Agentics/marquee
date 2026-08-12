@@ -32,3 +32,7 @@ SPK-06 (w2), SPK-03 (w2), plus coverage protection for SPK-07/09 + CNT-02/03 (th
 ## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
 
 - The first gate pass identified two contract guards: direct portal-route magic-link minting would create a third enumerated auth writer, and a dynamic `IN (...)` placeholder list needed a D1-cap classification. Resolved by routing organizer invites through the shared `mintPortalMagicLink` helper over the canonical writer and using JSON1 `json_each(?)` for the bounded person-ID set. Static guards pass with no allowlist edits.
+
+## Plan-Review Cycle 2 Resolutions (AUTHORITATIVE)
+
+- The exact gate reached merged AC tracing after all 543 tests passed, and rejected six new test names because custom SPK labels are not trace prefixes. Resolved by mapping the invite assertions to the existing AC-282/AC-283 invite and mail contract, and the speakers-only import assertions to AC-110/AC-113 import and undo contracts. No product behavior changed.

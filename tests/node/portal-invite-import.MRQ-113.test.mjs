@@ -5,7 +5,7 @@ import test from "node:test";
 
 const root = resolve(import.meta.dirname, "../..");
 
-test("SPK-06 · the onboarding speaker surface exposes single and bulk portal invites", async () => {
+test("AC-282 + AC-283 · the onboarding speaker surface exposes single and bulk portal invites", async () => {
   const source = await readFile(resolve(root, "src/ui/onboarding/OnboardingPage.tsx"), "utf8");
   assert.match(source, /Invite to portal/);
   assert.match(source, /Invite to portal \(\$\{selectedRows\.length\}\)/);
@@ -13,7 +13,7 @@ test("SPK-06 · the onboarding speaker surface exposes single and bulk portal in
   assert.match(source, /outbox row .*delivery remains provider-controlled/);
 });
 
-test("SPK-03 · the import surface names speakers-only mode and does not require external_ref", async () => {
+test("AC-110 + AC-113 · the import surface names speakers-only mode and does not require external_ref", async () => {
   const page = await readFile(resolve(root, "src/ui/import/SessionizeImportPage.tsx"), "utf8");
   const importer = await readFile(resolve(root, "src/lib/sessionize-import.ts"), "utf8");
   assert.match(page, /Sessions CSV <small>\(optional\)<\/small>/);
@@ -24,7 +24,7 @@ test("SPK-03 · the import surface names speakers-only mode and does not require
   assert.match(importer, /manifest\.sessions_csv \?\? ""/);
 });
 
-test("SPK-06 · invite API is organizer-authenticated and event-scoped", async () => {
+test("AC-282 + AC-283 · invite API is organizer-authenticated and event-scoped", async () => {
   const source = await readFile(resolve(root, "src/routes/speaker-invites.routes.ts"), "utf8");
   assert.match(source, /path: "\/api\/v1\/events\/\{eventId\}\/speakers\/invite"/);
   assert.match(source, /kind: "grants", grants: \["program:write"\]/);

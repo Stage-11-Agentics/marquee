@@ -164,7 +164,7 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     ])).toEqual(beforeUndoControl);
   }, 20_000);
 
-  test("SPK-03 · speakers-only CSV accepts no external_ref and makes the person durable", async () => {
+  test("AC-110 + AC-113 · speakers-only CSV accepts no external_ref and makes the person durable", async () => {
     const speakersOnlyCsv = [
       "Name,Email,Job Title,Company,Bio",
       'Dana Kowalski,dana-only@example.test,Conference operator,Open Programs,"Keeps speaker rosters coherent."',
