@@ -96,7 +96,10 @@ const DOCUMENT_CONFIG = {
       "Optimistic concurrency is scoped to **agenda items**, where concurrent editing is real:",
       "every agenda item read carries a strong `etag`, `PATCH` and `DELETE` on an item require",
       "that exact tag in `If-Match`, and a stale tag is refused `409` with the current tag in the",
-      "`ETag` response header. Every other mutation is last-write-wins.",
+      "`ETag` response header. No operation other than the two agenda item mutations takes",
+      "`If-Match`. Several mutations still refuse a concurrent change on their own terms — agenda",
+      "publication, submission decisions, participation responses, and task completion each answer",
+      "`409` when the record moved underneath the request — so a `409` is worth handling on any write.",
     ].join("\n"),
   },
   servers: [
