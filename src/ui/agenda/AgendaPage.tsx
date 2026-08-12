@@ -13,6 +13,7 @@ import type {
   AgendaView,
 } from "../../api/agenda";
 import { AGENDA_VIEWS, durationIsAllowed, MAX_BATCH_PUBLISH_IDS, viewNames } from "../../api/agenda";
+import { autoPlaceSummary, planAutoPlacements, type AutoPlaceSlot } from "../../lib/auto-place";
 import { displayRoomLabel, showsBuildingComparison, showsBuildingComparisonCount, visibleVenueConflicts } from "../../lib/venue-disclosure";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
@@ -88,6 +89,17 @@ export function zonedStart(date: string, time: string, timezone: string): number
     candidate += target - renderedTarget;
   }
   return candidate;
+}
+
+/** Every opening the organizer could drag into, in the order the board lays them out. */
+export function autoPlaceSlots(snapshot: AgendaSnapshot): AutoPlaceSlot[] {
+  const slots: AutoPlaceSlot[] = [];
+  for (const day of dayOptions(snapshot)) {
+    for (const time of TIME_SLOTS) {
+      slots.push({ day: day.value, time, starts_at: zonedStart(day.value, time, snapshot.event.timezone) });
+    }
+  }
+  return slots;
 }
 
 function speakerLine(session: AgendaSession): string {
@@ -606,6 +618,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
   const [publishSelection, setPublishSelection] = useState<string[]>([]);
   const [publicationStep, setPublicationStep] = useState<PublicationStep>("select");
   const [publicationBusy, setPublicationBusy] = useState(false);
+  const [autoPlaceBusy, setAutoPlaceBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const boardRef = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef<Partial<Record<AgendaView, { top: number; left: number }>>>({});
@@ -732,6 +745,55 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
     }
   };
 
+  /**
+   * One action, ordinary writes: the plan is arithmetic over the snapshot, but
+   * every placement lands through the same route a drag uses, so what the pass
+   * produces is indistinguishable from hand-placed work — and survives reload.
+   */
+  const autoPlace = async () => {
+    const current = state.kind === "ready" ? state.snapshot : null;
+    if (!current || autoPlaceBusy) return;
+    const plan = planAutoPlacements({
+      sessions: current.sessions,
+      rooms: current.rooms,
+      unscheduled: current.unscheduled,
+      slots: autoPlaceSlots(current),
+    });
+    if (!plan.placements.length) {
+      setNotice(autoPlaceSummary(plan));
+      return;
+    }
+    setAutoPlaceBusy(true);
+    rememberScroll();
+    let placed = 0;
+    try {
+      for (const placement of plan.placements) {
+        await apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/agenda/items`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            submission_id: placement.submission_id,
+            starts_at: placement.starts_at,
+            room_id: placement.room_id,
+            track_id: placement.track_id,
+            duration_min: placement.duration_min,
+          }),
+          route: AGENDA_ITEMS_ROUTE,
+        });
+        placed += 1;
+      }
+      setNotice(autoPlaceSummary({ placements: plan.placements.slice(0, placed), remaining: plan.remaining }));
+    } catch (error: unknown) {
+      // A partial pass is still real work; say how much landed before the stop.
+      setNotice(placed
+        ? `Auto-placed ${placed} before stopping · ${errorSummary(error)}`
+        : errorSummary(error));
+    } finally {
+      setAutoPlaceBusy(false);
+      await load();
+    }
+  };
+
   const publishSelected = async () => {
     if (!publishSelection.length) return;
     setPublicationBusy(true);
@@ -820,6 +882,15 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
       <div class="segment agenda-view-tabs" role="tablist" aria-label="Agenda views">{viewNames().map((candidate) => <button type="button" role="tab" aria-selected={view === candidate} class={view === candidate ? "active" : ""} key={candidate} onClick={() => { rememberScroll(); setView(candidate); }}>{candidate[0]!.toUpperCase() + candidate.slice(1)}</button>)}</div>
       <label class="agenda-filter"><span class="eyebrow">Day</span><select value={selectedDay} onChange={(event) => { rememberScroll(); setDay((event.currentTarget as HTMLSelectElement).value); }}><option value="all">All days</option>{days.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
       <label class="agenda-filter"><span class="eyebrow">Track</span><select value={track} onChange={(event) => { rememberScroll(); setTrack((event.currentTarget as HTMLSelectElement).value); }}><option value="">All tracks</option>{snapshot.tracks.map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select></label>
+      <Button
+        class="agenda-auto-place"
+        data-auto-place="true"
+        disabled={autoPlaceBusy || snapshot.unscheduled.length === 0}
+        title={snapshot.unscheduled.length === 0
+          ? "Nothing to auto-place — every schedulable Session is already on the agenda."
+          : "Fill open room and time slots with unscheduled Sessions. Deterministic, not AI — it seats what fits and leaves the judgement to you."}
+        onClick={() => void autoPlace()}
+      >{autoPlaceBusy ? "Placing…" : "Auto-place"}</Button>
       <span class="toolbar-spacer" />
       <span class="subtle agenda-status-note">No save button · changes persist as you place</span>
     </div>
