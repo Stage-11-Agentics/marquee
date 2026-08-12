@@ -152,7 +152,7 @@ function csvRows(text: string): string[][] {
 describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export", () => {
   beforeAll(seedResultsFixture, 15_000);
 
-  test("ABS-04 · the aggregate is the weighted number, not the plain average", async () => {
+  test("CONTRACT · ABS-04: the aggregate is the weighted number, not the plain average", async () => {
     const rows = await listOrder("score");
     const weighted = rows.find((row) => row.id === SUB_WEIGHTED);
     // Originality 4 at 66.67% and Relevance 2 at 33.33% is 3.33; the plain
@@ -163,7 +163,7 @@ describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export"
     expect(weighted?.review_count).toBe(1);
   });
 
-  test("a pre-criteria scalar score still shows, labelled unweighted", async () => {
+  test("CONTRACT · a pre-criteria scalar score still shows, labelled unweighted", async () => {
     const rows = await listOrder("score");
     const legacy = rows.find((row) => row.id === SUB_LEGACY);
     expect(legacy?.score).toBeCloseTo(4, 2);
@@ -171,7 +171,7 @@ describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export"
     expect(legacy?.review_count).toBe(1);
   });
 
-  test("ABS-10 · sorting by score reorders in both directions, unscored last", async () => {
+  test("CONTRACT · ABS-10: sorting by score reorders in both directions, unscored last", async () => {
     const descending = (await listOrder("score")).map((row) => row.id);
     expect(descending).toEqual([SUB_TOP, SUB_LEGACY, SUB_WEIGHTED, SUB_UNSCORED]);
 
@@ -182,7 +182,7 @@ describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export"
     expect(ascending[0]).not.toBe(descending[0]);
   });
 
-  test("ABS-13 · the results export carries scores, and they match the screen", async () => {
+  test("CONTRACT · ABS-13: the results export carries scores, and they match the screen", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/csv");
@@ -219,12 +219,12 @@ describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export"
     }
   });
 
-  test("the export refuses a plan that belongs to another conference", async () => {
+  test("CONTRACT · the export refuses a plan that belongs to another conference", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/plans/plan-does-not-exist/results/export?format=csv`);
     expect(response.status).toBe(404);
   });
 
-  test("ABS-08 · assignment progress reports per-reviewer assigned and reviewed counts", async () => {
+  test("CONTRACT · ABS-08: assignment progress reports per-reviewer assigned and reviewed counts", async () => {
     await env.DB.prepare(
       "INSERT INTO round_assignments (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, 'assigned', 1, 1)",
     ).bind("assignment-results-top", ROUND_ID, SUB_TOP, ORGANIZER_ID).run();
