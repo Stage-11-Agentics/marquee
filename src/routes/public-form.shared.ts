@@ -89,6 +89,30 @@ export function publicField(field: FormFieldView): PublicFormField {
   };
 }
 
+/**
+ * How many people this form's fields can actually collect.
+ *
+ * The participant schema is a fixed pair of slots — `speaker_*` and one
+ * optional `co_speaker_*` — while `max_speakers` is a number an organizer types
+ * into the form builder. A form advertising four speakers through a shape that
+ * can only ever hold two is a contract nobody can satisfy, and the applicant
+ * reads the shortfall as a bug in the form rather than a limit of it.
+ *
+ * A form with no participant fields at all collects its people some other way
+ * (or not at all); it declares no capacity here and is left alone.
+ */
+export function collectableParticipantSlots(fields: readonly FormFieldView[]): number | null {
+  const has = (key: string): boolean => fields.some((field) => field.key === key);
+  if (!has("speaker_name") && !has("speaker_email")) return null;
+  return 1 + (has("co_speaker_name") && has("co_speaker_email") ? 1 : 0);
+}
+
+/** What the form may promise: never more than its fields can take. */
+export function advertisedMaxSpeakers(configured: number, fields: readonly FormFieldView[]): number {
+  const slots = collectableParticipantSlots(fields);
+  return slots === null ? configured : Math.min(configured, slots);
+}
+
 function answerValue(valueJson: string | null, valueText: string | null): unknown {
   if (valueJson !== null) return parseJson(valueJson, null);
   return valueText;
@@ -304,7 +328,7 @@ export function toPublicFormState(
       closes_at: asNumber(record.form.closes_at),
       per_submitter_limit: Number(record.form.per_submitter_limit),
       min_speakers: Number(record.form.min_speakers),
-      max_speakers: Number(record.form.max_speakers),
+      max_speakers: advertisedMaxSpeakers(Number(record.form.max_speakers), record.fields),
       max_sponsors: Number(record.form.max_sponsors),
     },
     state: record.state,

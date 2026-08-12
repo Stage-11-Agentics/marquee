@@ -17,7 +17,9 @@ import { verifyTurnstile } from "../lib/r2/turnstile";
 import { boundSourceOf } from "../lib/bound-options";
 import {
   answerAttachmentId,
+  advertisedMaxSpeakers,
   answerText,
+  collectableParticipantSlots,
   countFormForPerson,
   emailFromAnswers,
   findEventContext,
@@ -181,8 +183,7 @@ function requiredSubmissionIssues(
   answers: Record<string, unknown>,
   form: { min_speakers: number; max_speakers: number },
 ): Array<{ fieldKey: string; message: string }> {
-  const hasParticipantSchema = fields.some((field) => field.key === "speaker_name" || field.key === "speaker_email");
-  if (!hasParticipantSchema) return [];
+  if (collectableParticipantSlots(fields) === null) return [];
   const primaryPresent = Boolean(answerText(answers, "speaker_name") || normalisePublicEmail(answers.speaker_email));
   const coName = answerText(answers, "co_speaker_name");
   const coEmail = normalisePublicEmail(answers.co_speaker_email);
@@ -190,7 +191,9 @@ function requiredSubmissionIssues(
   if (participantCount < Number(form.min_speakers)) {
     return [{ fieldKey: "speaker_name", message: "Add at least one participant before sending this abstract, then try again." }];
   }
-  if (participantCount > Number(form.max_speakers)) {
+  // The same ceiling the form advertises. Enforcing the raw configured number
+  // here would let the two disagree the moment either one moves.
+  if (participantCount > advertisedMaxSpeakers(Number(form.max_speakers), fields)) {
     return [{ fieldKey: "speaker_name", message: "Remove an extra participant so the conference limit is respected, then try again." }];
   }
   if (answers.co_speaker_name && !answers.co_speaker_email) {
