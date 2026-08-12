@@ -230,8 +230,8 @@ export function BottleneckDeco(): JSX.Element {
   return <svg class="register-bottleneck" viewBox="0 0 1200 170" preserveAspectRatio="none" aria-hidden="true">
     <defs>
       <linearGradient id="register-ls-grad" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="#ffa363" />
-        <stop offset="1" stop-color="#e56eff" />
+        <stop offset="0" stop-color="var(--ls-grad-from)" />
+        <stop offset="1" stop-color="var(--ls-grad-to)" />
       </linearGradient>
     </defs>
     <path d="M0,14 C 320,14 420,68 600,68 C 780,68 880,14 1200,14 L1200,156 C 880,156 780,102 600,102 C 420,102 320,156 0,156 Z"

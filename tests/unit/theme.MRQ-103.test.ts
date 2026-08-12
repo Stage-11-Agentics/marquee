@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { THEMES, THEME_STORAGE_KEY, SWYXY_MODE_STORAGE_KEY, applyTheme, applySwyxyMode, isThemeId, readSwyxyMode, readTheme, writeSwyxyMode, writeTheme } from "../../src/ui/shell/theme";
+import { THEMES, THEME_STORAGE_KEY, SWYXY_MODE_STORAGE_KEY, applyTheme, applySwyxyMode, domSwyxyMode, domTheme, isThemeId, readSwyxyMode, readTheme, writeSwyxyMode, writeTheme } from "../../src/ui/shell/theme";
 import { chromeFor } from "../../src/ui/shell/register";
 import { routeTable } from "../../src/ui/shell/route-table";
 
@@ -228,6 +228,53 @@ describe("theme round · register themes", () => {
     const swyxyOverrides = chromeFor("swyxy").navLabels;
     for (const id of sidebarIds) {
       expect(swyxyOverrides[id], `swyxy nav is missing sidebar route "${id}"`).toBeDefined();
+    }
+  });
+
+  test("CONTRACT · the pre-paint script honours every theme id, including the one that stamps nothing", () => {
+    // `?theme=day` is the comparison link a judge uses to check a register
+    // against the default. If "day" is missing from the script's id map the
+    // override silently falls through to storage: the document keeps wearing
+    // the stored register while the app reports Day, so the select, the
+    // search glyph and the dashboard renderers all disagree with the screen.
+    const shell = readFileSync(resolve(root, "index.html"), "utf8");
+    const ids = shell.match(/var ids = \{([^}]*)\}/)?.[1] ?? "";
+    for (const theme of THEMES) {
+      expect(ids, `pre-paint script does not accept "${theme.id}"`).toContain(`"${theme.id}"`);
+    }
+    // …and still refuses to stamp an attribute for Day.
+    expect(shell).toContain('t !== "day"');
+  });
+
+  test("CONTRACT · the live readers answer the document, not the URL, so a comparison link cannot freeze the switcher", () => {
+    // readTheme/readSwyxyMode prefer `?theme=`/`?mode=` — correct for the
+    // pre-paint decision, wrong for a subscriber: on `?theme=swyxy&mode=dark`
+    // the toggle would re-read "dark" from the URL after every click and the
+    // control would be inert. domTheme/domSwyxyMode read what is worn.
+    applyTheme("night");
+    expect(domTheme()).toBe("night");
+    applyTheme("day");
+    expect(domTheme()).toBe("day");
+
+    applySwyxyMode("dark");
+    expect(domSwyxyMode()).toBe("dark");
+    applySwyxyMode("light");
+    expect(domSwyxyMode()).toBe("light");
+  });
+
+  test("CONTRACT · radius stays theme-invariant — a register re-lights the instrument, it does not re-machine it", () => {
+    // Structure tokens are what keep a register recognisably Marquee. A
+    // register may move colour and type; moving --radius in the token block
+    // reshapes every card, button and input in the product at once.
+    for (const theme of THEMES) {
+      if (theme.kind !== "register") continue;
+      const sheet = readFileSync(resolve(root, `src/styles/themes/${theme.id}.css`), "utf8");
+      const block = sheet.match(/html\[data-theme="[^"]+"\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+      for (const token of ["--radius", "--space", "--hairline", "--shadow"]) {
+        expect(block, `${theme.id} overrides the structure token ${token}`).not.toMatch(
+          new RegExp(`^\\s*${token}\\s*:`, "m"),
+        );
+      }
     }
   });
 });

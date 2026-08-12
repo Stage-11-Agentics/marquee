@@ -73,6 +73,23 @@ export function readTheme(): ThemeId {
   }
 }
 
+/**
+ * What the document is *currently wearing*, as opposed to what storage or the
+ * URL would choose. The pre-paint script in index.html has already resolved
+ * `?theme=` and storage into the attribute, so once the page is up the
+ * attribute is the only honest answer: re-reading the URL here would pin a
+ * live subscriber to a comparison link's override and make the switcher inert.
+ */
+export function domTheme(): ThemeId {
+  const attribute = document.documentElement.dataset.theme;
+  return isThemeId(attribute) ? attribute : "day";
+}
+
+/** swyxy's mode as worn, for the same reason as `domTheme`. */
+export function domSwyxyMode(): SwyxyMode {
+  return document.documentElement.dataset.swyxyMode === "dark" ? "dark" : "light";
+}
+
 export function applyTheme(theme: ThemeId): void {
   if (theme === "day") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = theme;

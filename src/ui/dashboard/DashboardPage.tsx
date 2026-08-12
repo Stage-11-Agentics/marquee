@@ -1,7 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
-import type { DashboardCount, DashboardSnapshot, DashboardTaskPreview, DashboardWave } from "../../api/dashboard";
+import type { DashboardCount, DashboardSnapshot, DashboardWave } from "../../api/dashboard";
 import { apiFetch, backoffDelayMs } from "../shell/api-client";
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { clientBuildSha } from "../shell/error-reporting";

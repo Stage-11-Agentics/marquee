@@ -47,7 +47,10 @@ html[data-theme="swyxy"] {
      stack, so every gauge keeps tabular-nums from the base rules. */
   --mono: var(--sans);
   --display: var(--sans);
-  --radius: 6px;
+  /* No --radius here. Radius is a structure token and DESIGN.md holds it
+     theme-invariant: a register re-lights the instrument, it does not
+     re-machine it. swyxy's softer corners live on its own chrome selectors
+     (the nav pill below), not on the token every card and input reads. */
 
   /* Aliases and extensions — the same names the day block defines. */
   --warning-soft: #fef9ec;
@@ -201,7 +204,15 @@ html[data-theme="swyxy"] .dashboard-pipeline-name {
 }
 html[data-theme="swyxy"] .dashboard-pipeline-count {
   color: var(--accent);
-  font: 800 24px/1.1 var(--sans);
+  /* Longhands, not the `font` shorthand: the shorthand resets
+     font-variant-numeric to normal, and this register's --mono resolves to
+     the body sans, so the gauge would lose the tabular figures it inherits
+     and the counts would jitter on every 5s refresh. */
+  font-family: var(--sans);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
   letter-spacing: -.02em;
   margin: 4px 0 2px;
 }
@@ -245,6 +256,7 @@ html[data-theme="swyxy"] .register-feed-what .detail { color: var(--muted); }
 html[data-theme="swyxy"] .register-feed-stat {
   color: var(--accent);
   font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
   white-space: nowrap;
 }

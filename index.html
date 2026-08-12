@@ -29,10 +29,13 @@
     <script>
       try {
         var params = new URLSearchParams(window.location.search);
-        var ids = { "night": 1, "latent-space": 1, "ai-engineer": 1, "swyxy": 1 };
+        // "day" is a valid id that stamps nothing — it must still be honoured
+        // as an override, or `?theme=day` falls through to storage and the
+        // document wears one theme while the app reports another.
+        var ids = { "day": 1, "night": 1, "latent-space": 1, "ai-engineer": 1, "swyxy": 1 };
         var t = params.get("theme");
         if (!ids[t]) t = localStorage.getItem("marquee-theme");
-        if (ids[t]) {
+        if (ids[t] && t !== "day") {
           document.documentElement.dataset.theme = t;
           if (t === "swyxy") {
             var mode = params.get("mode") || localStorage.getItem("marquee-swyxy-mode");

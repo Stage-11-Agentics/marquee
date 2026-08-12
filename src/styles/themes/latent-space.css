@@ -42,7 +42,13 @@ html[data-theme="latent-space"] {
   --alarm-wash:    #2a1626;
 
   /* The register's one gradient, as tokens so chrome and tropes share it. */
-  --ls-grad:       linear-gradient(92deg, #ffa363 0%, #e56eff 100%);
+  /* The two ends are their own tokens because the bottleneck silhouette is an
+     inline SVG, and an SVG `stop-color` cannot read a gradient — only a
+     colour. Retyping the hex in the component put two of this register's
+     colours outside every check the project runs. */
+  --ls-grad-from:  #ffa363;
+  --ls-grad-to:    #e56eff;
+  --ls-grad:       linear-gradient(92deg, var(--ls-grad-from) 0%, var(--ls-grad-to) 100%);
   --ls-grad-wash:  linear-gradient(92deg, rgba(255,163,99,.14), rgba(229,110,255,.14));
   --ls-ink-on-grad:#0b0b0e;
 
@@ -107,7 +113,7 @@ html[data-theme="latent-space"] .brand-name {
 
 html[data-theme="latent-space"] .nav a.active {
   background: linear-gradient(92deg, rgba(255,163,99,.08), rgba(229,110,255,.08));
-  border-image: linear-gradient(180deg, #ffa363, #e56eff) 1;
+  border-image: linear-gradient(180deg, var(--ls-grad-from), var(--ls-grad-to)) 1;
   color: var(--ink);
 }
 html[data-theme="latent-space"] .nav a.active .nav-icon { color: var(--ink); }
@@ -198,7 +204,7 @@ html[data-theme="latent-space"] .dashboard-attention-item {
 }
 html[data-theme="latent-space"] .dashboard-attention-item:hover {
   background: var(--surface);
-  border-image: linear-gradient(90deg, #ffa363, #e56eff) 1;
+  border-image: linear-gradient(90deg, var(--ls-grad-from), var(--ls-grad-to)) 1;
 }
 
 html[data-theme="latent-space"] .card-head h2 {

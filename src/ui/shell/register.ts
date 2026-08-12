@@ -9,7 +9,7 @@
 // is what keeps Day and Night byte-identical while the registry is open.
 
 import { useEffect, useState } from "preact/hooks";
-import { readTheme, readSwyxyMode, type SwyxyMode, type ThemeId } from "./theme";
+import { domSwyxyMode, domTheme, type SwyxyMode, type ThemeId } from "./theme";
 
 export interface RegisterChrome {
   /** Glyph pinned at the left of the topbar search box. */
@@ -109,17 +109,23 @@ export function ensureThemeAssets(theme: ThemeId): void {
   const url = THEME_FONT_URLS[theme];
   if (!url || typeof document === "undefined") return;
   if (document.querySelector(`link[data-theme-fonts="${theme}"]`)) return;
-  const preconnect = document.createElement("link");
-  preconnect.rel = "preconnect";
-  preconnect.href = "https://fonts.gstatic.com";
-  preconnect.crossOrigin = "anonymous";
+  // One preconnect for the whole document, not one per register: the guard
+  // above is keyed by theme, so switching latent-space → ai-engineer would
+  // otherwise stack a second identical hint on every switch.
+  if (!document.querySelector('link[data-theme-fonts-preconnect]')) {
+    const preconnect = document.createElement("link");
+    preconnect.rel = "preconnect";
+    preconnect.href = "https://fonts.gstatic.com";
+    preconnect.crossOrigin = "anonymous";
+    preconnect.dataset.themeFontsPreconnect = "";
+    document.head.appendChild(preconnect);
+  }
   const stylesheet = document.createElement("link");
   stylesheet.rel = "stylesheet";
   stylesheet.href = url;
   stylesheet.dataset.themeFonts = theme;
   // appendChild, not append: the test tsconfig pulls in the worker types
   // alongside DOM, where `append` resolves to the FormData/BodyInit overload.
-  document.head.appendChild(preconnect);
   document.head.appendChild(stylesheet);
 }
 
@@ -129,9 +135,13 @@ export function ensureThemeAssets(theme: ThemeId): void {
  * an observer on `<html>` re-renders every subscriber on a switch.
  */
 export function useThemeId(): ThemeId {
-  const [theme, setTheme] = useState(readTheme);
+  // Both the seed and the observer read the DOM, never storage or the URL.
+  // `readTheme()` prefers a `?theme=` override, which is right for the
+  // pre-paint decision and wrong afterwards: on a comparison link it would
+  // keep answering the URL's theme no matter what the switcher did.
+  const [theme, setTheme] = useState(domTheme);
   useEffect(() => {
-    const observer = new MutationObserver(() => setTheme(readTheme()));
+    const observer = new MutationObserver(() => setTheme(domTheme()));
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     return () => observer.disconnect();
   }, []);
@@ -140,9 +150,9 @@ export function useThemeId(): ThemeId {
 
 /** swyxy's light/dark, live like useThemeId — the mode is its own attribute. */
 export function useSwyxyMode(): SwyxyMode {
-  const [mode, setMode] = useState(readSwyxyMode);
+  const [mode, setMode] = useState(domSwyxyMode);
   useEffect(() => {
-    const observer = new MutationObserver(() => setMode(readSwyxyMode()));
+    const observer = new MutationObserver(() => setMode(domSwyxyMode()));
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-swyxy-mode"] });
     return () => observer.disconnect();
   }, []);
