@@ -225,6 +225,7 @@ function ledgerFoot(snapshot: DeliveryHealthSnapshot): string {
 }
 
 function LedgerCard({ snapshot, navigate }: { snapshot: DeliveryHealthSnapshot; navigate: Props["navigate"] }): JSX.Element {
+  const emailCapability = snapshot.capabilities.find((capability) => capability.id === "email");
   return <section class="card health-ledger" aria-label="Who is owed a message">
     <header class="card-head">
       <div><h2>Owed a message</h2><span class="subtle">Decided, and not yet told</span></div>
@@ -232,7 +233,9 @@ function LedgerCard({ snapshot, navigate }: { snapshot: DeliveryHealthSnapshot; 
     </header>
     <div class="card-body health-ledger-body">
       {snapshot.owed.length === 0
-        ? <p class="health-ledger-clear">Nobody is waiting. Every decision on this conference has reached the person it was about.</p>
+        ? <p class="health-ledger-clear">{emailCapability?.level === "unknown"
+          ? "Nobody is marked for follow-up yet. Your mail provider does not report delivery, so this screen does not claim every message reached a mailbox."
+          : "Nobody is waiting. Every decision on this conference has reached the person it was about."}</p>
         : <>
           <div class="health-owed-reasons" aria-label="Why they are waiting">
             {(snapshot.owed_reasons ?? []).map((reason) => <span class={`health-reason level-${reason.level}`} key={reason.state}>

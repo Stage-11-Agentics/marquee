@@ -141,13 +141,28 @@ Spam · Turnstile     configured        the public form is protected
 Domain               configured        TLS active
 ```
 
-Each unconfigured row carries its fix. For mail it is one secret:
+Each unconfigured row carries its fix. For outbound mail it is one secret:
 
 ```sh
 npx wrangler secret put RESEND_API_KEY
 ```
 
 or tell your agent "configure mail" — same step, same result.
+
+For arrival truth, add a Resend webhook after the Worker has a public HTTPS
+URL. Point it at `/api/v1/webhooks/resend`, subscribe to delivered, bounced,
+complained, and delayed delivery events, and store the signing secret:
+
+```sh
+npx wrangler secret put RESEND_WEBHOOK_SECRET
+```
+
+The signing secret is the `whsec_…` value returned when the webhook is created;
+keep it in Wrangler or your local ignored `.dev.vars`, never in the repository.
+If the webhook is not configured, Marquee continues sending but labels arrival
+as unknown instead of claiming that provider acceptance reached a mailbox. The
+[Resend webhook guide](https://resend.com/docs/webhooks/introduction) documents
+the endpoint and event setup.
 
 If you open intake while mail is unconfigured, Marquee stops you once and
 says exactly what will happen: the form goes live, submitters get no

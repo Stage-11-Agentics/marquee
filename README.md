@@ -289,6 +289,7 @@ in the environment; do not commit it.
    npx wrangler secret put TURNSTILE_SITE_KEY
    npx wrangler secret put TURNSTILE_SECRET_KEY
    npx wrangler secret put RESEND_API_KEY
+   npx wrangler secret put RESEND_WEBHOOK_SECRET
    npx wrangler secret put R2_ACCESS_KEY_ID
    npx wrangler secret put R2_SECRET_ACCESS_KEY
    npx wrangler secret put UPLOAD_TOKEN_SECRET
@@ -298,6 +299,16 @@ in the environment; do not commit it.
    Enter values from your secret manager when Wrangler prompts. Do not use
    `.dev.vars`, the published Turnstile test pair, or the fake R2 values for a
    hosted deployment.
+
+   To let Marquee know whether an accepted message reached a recipient, create
+   a Resend webhook at `https://your-domain.example/api/v1/webhooks/resend`.
+   Subscribe to `email.delivered`, `email.bounced`, `email.complained`, and
+   `email.delivery_delayed`, then store the returned `whsec_` signing secret as
+   `RESEND_WEBHOOK_SECRET`. Without that webhook, the health surface says that
+   the mail provider does not report delivery; it never turns provider
+   acceptance into a claim that a mailbox received the message. See [Resend's
+   webhook setup](https://resend.com/docs/webhooks/introduction) and [request
+   verification](https://resend.com/docs/webhooks/verify-webhooks-requests).
 
 4. Apply the schema, seed the remote D1, deploy, and check the public health
    endpoint.
