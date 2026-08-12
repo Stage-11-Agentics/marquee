@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { formatFileSize, readStoredFileAnswer } from "../../lib/file-answers";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
+import { useIdentity } from "../shell/identity";
 import "./review.css";
 
 const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
@@ -189,6 +190,11 @@ function recommendationLabel(value: ReviewState["recommendation"]): string {
 }
 
 export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string }): JSX.Element {
+  // Anonymity runs one way: the reviewer must not see the speaker. Hiding the
+  // reviewer from themselves buys nothing and costs attribution — every review
+  // recorded here lands under this name on the organizer's record, so the name
+  // belongs on screen while the review is being written.
+  const identity = useIdentity();
   const [plan, setPlan] = useState<ReviewerPlan | null>(null);
   const [roundId, setRoundId] = useState<string | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -444,7 +450,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     <div class="reviewer-frame">
       <header class="reviewer-topline">
         <div class="reviewer-brand"><span class="brand-mark" aria-hidden="true">M</span><span>Marquee</span><span class="reviewer-slash">/</span><strong>Reviewer</strong></div>
-        <div class="reviewer-top-meta"><span class="chip">{roundName}</span><span class="chip">{roundMode === "comparison" ? "Comparison mode" : "Scorecard mode"}</span><span class="chip success">{blindMode ? "Anonymous review" : "Identity visible"}</span><button type="button" class="reviewer-exit" onClick={exitQueue}>Exit queue</button></div>
+        <div class="reviewer-top-meta"><span class="chip reviewer-whoami" title="The reviewer this queue belongs to">{identity ? `Reviewing as ${identity.name}` : "Reviewing as you"}</span><span class="chip">{roundName}</span><span class="chip">{roundMode === "comparison" ? "Comparison mode" : "Scorecard mode"}</span><span class="chip success">{blindMode ? "Anonymous review" : "Identity visible"}</span><button type="button" class="reviewer-exit" onClick={exitQueue}>Exit queue</button></div>
       </header>
       <header class="reviewer-heading">
         <div><span class="eyebrow">{plan.name}</span><h1>{roundMode === "comparison" ? "Comparison queue" : "Reviewer queue"}</h1><p>{roundMode === "comparison" ? <><span class="tabular">{Math.min(3, queue.length)}</span> submissions loaded · rank ties are allowed</> : <><span class="tabular">{queue.length ? currentIndex + 1 : 0}</span> of <span class="tabular">{queue.length}</span> in your authorized tracks · <span class="tabular">{Math.max(0, queue.length - currentIndex - 1)}</span> remaining</>}</p></div>

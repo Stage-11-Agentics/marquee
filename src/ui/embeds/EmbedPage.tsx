@@ -450,8 +450,15 @@ export function EmbedConfigPage({
 }): JSX.Element {
   const notApplicable = kind === "cfp";
   const layoutApplies = kind === "speakers";
+  // The public session and speaker pages send a visitor back to the agenda,
+  // because that is where a visitor came from. This page is the organizer's
+  // embed builder, reached from the sidebar's "Embeds" row — it is served
+  // outside the admin shell, so the shell's own navigation is not on screen and
+  // "← Agenda" was the only way out: a door to the public site from an
+  // organizer tool, which is not where the organizer was. Point the way back at
+  // the shell they left.
   return (
-    <PublicShell event={event} title="Embed configuration" actions={<a class="public-button" href={`/agenda?event=${encodeURIComponent(event.slug)}`}>← Agenda</a>}>
+    <PublicShell event={event} title="Embed configuration" actions={<a class="public-button" href="/dashboard">← Program home</a>}>
       <main class="embed-config">
         <div class="public-kicker">Public surfaces · no login required</div>
         <div class="embed-config-grid">
