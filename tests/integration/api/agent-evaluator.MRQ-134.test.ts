@@ -194,7 +194,7 @@ test("AC-288 · an Agent seat provisions atomically and its bound credential rec
   expect(record.evaluations).toContainEqual(expect.objectContaining({ reviewer_person_id: seat.person.id, reviewer_kind: "agent", comment: "The rationale names the concrete tradeoff." }));
 });
 
-test("AC-289a · issue-time binding rejects an attempted human seat binding", async () => {
+  test("AC-289 · issue-time binding rejects an attempted human seat binding", async () => {
   const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM api_tokens").first<{ n: number }>();
   const response = await request("/api/v1/org/tokens", {
     method: "POST",
@@ -209,7 +209,7 @@ test("AC-289a · issue-time binding rejects an attempted human seat binding", as
   expect(after?.n).toBe(before?.n);
 });
 
-test("AC-289b · changing a live seat to human fails closed at token resolution", async () => {
+  test("AC-289 · changing a live seat to human fails closed at token resolution", async () => {
   const seat = await createSeat();
   await env.DB.prepare("UPDATE people SET kind = 'human' WHERE id = ?").bind(seat.person.id).run();
   const response = await bearer(`/api/v1/events/${EVENT_ID}/reviewer/queue`, seat.token.secret);
@@ -217,7 +217,7 @@ test("AC-289b · changing a live seat to human fails closed at token resolution"
   expect(await response.text()).not.toContain(seat.person.id);
 });
 
-test("AC-289c · an unbound bearer has an empty queue but cannot read or write a reviewer resource", async () => {
+  test("AC-289 · an unbound bearer has an empty queue but cannot read or write a reviewer resource", async () => {
   const secret = "mq_unbound_mrq134";
   await env.DB.prepare(
     `INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, acts_as_person_id, created_at, updated_at)
@@ -235,7 +235,7 @@ test("AC-289c · an unbound bearer has an empty queue but cannot read or write a
   expect(await write.text()).not.toContain(SUBMISSION_ID);
 });
 
-test("AC-289d · track and assignment boundaries reject guessed resources without metadata", async () => {
+  test("AC-289 · track and assignment boundaries reject guessed resources without metadata", async () => {
   const seat = await createSeat();
   await assign(seat.person.id, OUT_OF_SCOPE_SUBMISSION_ID, "assignment-mrq134-agent-out");
   const withoutTrack = await bearer(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/submissions/${OUT_OF_SCOPE_SUBMISSION_ID}`, seat.token.secret);
