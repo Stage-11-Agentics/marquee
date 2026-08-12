@@ -31,3 +31,9 @@
 ## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
 
 - No reviewer findings yet. Self-review decision: use one serve path with explicit dual authorization and parent-provided version/list components; preserve the existing answer preview contract rather than broadening media access by URL shape alone.
+
+## Plan-Review Cycle 2 Resolutions (AUTHORITATIVE)
+
+- Parent MRQ-115's frozen export contract is now authoritative: import `VersionedOwnerType`, `FileVersionList`, `listVersionsFor`, `listVersionsForOwners` from `src/lib/files/versions.ts`, and mount `FileVersions` from `src/ui/files/FileVersions.tsx`. Do not recreate either helper/component or write attachment SQL.
+- MRQ-115 also owns `GET /api/v1/events/{eventId}/files` and `/files`; this ticket only adds the speaker record panel and consumes the returned version lists. `FileVersion.url` is an unauthenticated capability URL, so any copy-link/download affordance will be truthfully labeled.
+- The parent ref is published at `feb3654`; this branch was rebased onto it before implementation. Re-run `npm ci` after the rebase and do not expect the parent exports until its implementation commit lands.
