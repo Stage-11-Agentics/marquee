@@ -227,7 +227,7 @@ interface PersonRow {
   name: string;
 }
 
-function requireProgram(
+export function requireProgram(
   context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0],
   eventId: string,
   write: boolean,
@@ -278,7 +278,6 @@ function publicRound(round: RoundRow): Omit<RoundRow, "timezone"> {
   const { timezone: _timezone, ...publicFields } = round;
   return publicFields;
 }
-
 /**
  * Weighting is a claim about ratings, so only rating criteria are counted. A
  * scorecard of one dropdown and one comment box is a real scorecard and saves

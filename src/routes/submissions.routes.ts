@@ -53,6 +53,8 @@ const submissionListItemSchema = z.object({
   speakers: z.array(submissionSpeakerSchema),
   tracks: z.array(submissionTrackSchema),
   score: z.number().nullable(),
+  review_count: z.number().int(),
+  score_is_weighted: z.boolean(),
   submitted_at: z.number().int().nullable(),
   last_saved_at: z.number().int().nullable(),
   updated_at: z.number().int(),

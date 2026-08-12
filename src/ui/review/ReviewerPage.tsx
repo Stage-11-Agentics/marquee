@@ -292,6 +292,18 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     });
   };
 
+  /** An emptied dropdown or textarea records nothing rather than an empty string. */
+  const setCriterion = (criterionId: string, value: number | string): void => {
+    if (!current) return;
+    setDrafts((previous) => {
+      const draft = previous[current.id] ?? EMPTY_REVIEW;
+      const next = { ...draft.criteria };
+      if (value === "") delete next[criterionId];
+      else next[criterionId] = value;
+      return { ...previous, [current.id]: { ...draft, criteria: next } };
+    });
+  };
+
   const openDetailFor = async (submissionId: string): Promise<void> => {
     if (!roundId) return;
     cardRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : cardRef.current;

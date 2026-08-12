@@ -539,6 +539,8 @@ export function EvaluationPage({ eventId = DEFAULT_EVENT_ID }: EvaluationPagePro
 
   return <>
     <PageHeader title="Evaluation plan" copy="A two-round funnel turns submitted abstracts into a focused committee decision without order-dependent setup." actions={<>
+      <a class="button primary" href="/submissions?sort=score">View results →</a>
+      <a class="button" href={`/api/v1/events/${eventId}/plans/${plan.id}/results/export?format=csv`} download="review-results.csv">Export scores (CSV)</a>
       <Button onClick={() => void load()}>Refresh</Button>
       <Button onClick={() => { setAssignmentRoundId(firstRound?.id ?? null); setDialog("assignment"); }}>Distribute assignments</Button>
       <Button variant="primary" onClick={() => setDialog("plan")}>+ New evaluation plan</Button>
