@@ -43,11 +43,16 @@ test("CONTRACT · MRQ-129 promoting the caption to a control moves nothing below
   assert.match(hover, /border-left-color/);
   assert.doesNotMatch(hover, /padding|border-width|border: /);
 
-  // The popover carries the prototype's designed width, and is anchored rather
-  // than pushing the navigation down as it opens.
+  // The popover carries the prototype's designed width and is measured onto the
+  // viewport: the sidebar is a scroll container, and a scroll container clips
+  // both axes, so a 264px popover laid out inside a 224px column would lose the
+  // status chips and submission gauges it exists to show.
   const popover = ruleFor(css, ".switcher-pop");
-  assert.match(popover, /position: absolute/);
+  assert.match(popover, /position: fixed/);
   assert.match(popover, /width: 264px/);
+  const switcher = await source("src/ui/shell/EventSwitcher.tsx");
+  assert.match(switcher, /getBoundingClientRect\(\)/);
+  assert.match(switcher, /window\.addEventListener\("scroll", position, true\)/);
 });
 
 test("CONTRACT · MRQ-129 the switcher is keyboard-operable and never a second create path", async () => {

@@ -28,7 +28,10 @@ button.event-context:hover, button.event-context[aria-expanded="true"] { backgro
 .event-add:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
 
 /* The popover — a compact instrument list, not a menu. */
-.switcher-pop { background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); left: 4px; padding: 4px; position: absolute; top: calc(100% - 12px); width: 264px; z-index: 60; }
+/* Measured onto the viewport, because the sidebar scrolls and a scroll
+   container clips both axes — an absolutely-positioned 264px popover inside a
+   224px column loses its chips and gauges off the right edge. */
+.switcher-pop { background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px; position: fixed; width: 264px; z-index: 60; }
 .switcher-pop .pop-filter { padding: 4px; }
 .switcher-pop .pop-filter input { background: var(--sunk); border: 1px solid var(--line); border-radius: var(--radius); font: 400 11.5px/1.2 var(--mono); padding: 6px 8px; width: 100%; }
 .switcher-pop .pop-filter input:focus { border-color: var(--accent); outline: none; }

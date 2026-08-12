@@ -54,6 +54,7 @@ export function EventSwitcher({
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const [focusIndex, setFocusIndex] = useState(-1);
+  const [anchor, setAnchor] = useState({ left: 0, top: 0 });
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -63,15 +64,35 @@ export function EventSwitcher({
     setFocusIndex(-1);
   }, []);
 
+  /**
+   * The popover is measured onto the viewport rather than laid out inside the
+   * sidebar. The sidebar scrolls (`overflow-y: auto`), and a scroll container
+   * clips both axes — so an absolutely-positioned popover 264px wide inside a
+   * 224px column loses its status chips and submission gauges off the right
+   * edge, which is precisely the information the list exists to show.
+   */
+  const position = useCallback(() => {
+    const box = triggerRef.current?.getBoundingClientRect();
+    if (box) setAnchor({ left: box.left, top: box.bottom + 4 });
+  }, []);
+
   useEffect(() => {
     if (!open) return;
+    position();
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target;
       if (target instanceof Node && !rootRef.current?.contains(target)) close();
     };
     document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open, close]);
+    window.addEventListener("resize", position);
+    // Capture phase: the sidebar's own scroll does not bubble.
+    window.addEventListener("scroll", position, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [open, close, position]);
 
   const query = filter.trim().toLowerCase();
   const matching = query.length === 0
@@ -163,7 +184,7 @@ export function EventSwitcher({
       <a class="event-add" href="/conferences/new" title="Create conference" aria-label="Create conference" onClick={(event) => { event.preventDefault(); close(); navigate("/conferences/new"); }}>＋</a>
     </div>
 
-    {open && <div class="switcher-pop" role="listbox" aria-label="Conferences" data-event-popover>
+    {open && <div class="switcher-pop" role="listbox" aria-label="Conferences" data-event-popover style={{ left: `${anchor.left}px`, top: `${anchor.top}px` }}>
       {events.length > FILTER_THRESHOLD && <div class="pop-filter">
         <input
           type="search"

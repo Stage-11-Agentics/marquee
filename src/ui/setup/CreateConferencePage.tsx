@@ -229,6 +229,12 @@ export function CreateConferencePage({ navigate }: { navigate: (target: string) 
     }
   };
 
+  const submittable = name.trim().length > 0
+    && dates.startsOn.length > 0
+    && dates.endsOn.length > 0
+    && dates.startsOn <= dates.endsOn
+    && timezone.length > 0;
+
   const outcome = mode === "sessionize"
     ? "You'll land in the Sessionize importer next."
     : mode === "scratch"
@@ -344,7 +350,13 @@ export function CreateConferencePage({ navigate }: { navigate: (target: string) 
     <div class="setup-actions">
       <span class="subtle setup-outcome">{outcome}</span>
       <span class="setup-error" role="status" aria-live="polite">{error}</span>
-      <Button variant="primary" onClick={() => void create()} disabled={busy || name.trim().length === 0} aria-busy={busy}>
+      {/*
+        Every required field arrives filled, so the only way one empties is that
+        somebody cleared it — and a cleared date otherwise buys a 400 whose
+        sentence ("the system sent a request this conference could not accept")
+        tells the organizer nothing about which field to look at.
+      */}
+      <Button variant="primary" onClick={() => void create()} disabled={busy || !submittable} aria-busy={busy}>
         {busy ? "Creating…" : `Create ${name.trim() || "conference"}`}
       </Button>
     </div>
