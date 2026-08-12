@@ -38,8 +38,8 @@ function snapshot(overrides: Partial<SubmitterSnapshot> = {}): SubmitterSnapshot
   };
 }
 
-function render(state: SubmitterSnapshot): string {
-  return renderToString(h(SubmitterPortal, { snapshot: state, onSignOut: () => undefined }));
+function render(state: SubmitterSnapshot, viewingAsSpeaker = false): string {
+  return renderToString(h(SubmitterPortal, { snapshot: state, onSignOut: () => undefined, viewingAsSpeaker }));
 }
 
 describe("MRQ-150 the submitter's empty state", () => {
@@ -86,6 +86,12 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(render(snapshot({ submissions: [submission({ status: "in_review" })] }))).toContain("under review");
     expect(render(snapshot({ submissions: [submission({ status: "withdrawn" })] }))).toContain("You withdrew this abstract");
     expect(render(snapshot({ submissions: [submission({ status: "rejected" })] }))).toContain("was not selected");
+  });
+
+  test("CONTRACT · MRQ-153 · a rejected submitter preview keeps its viewing-as label", () => {
+    const html = render(snapshot({ submissions: [submission({ status: "rejected" })] }), true);
+    expect(html).toContain("Viewing as speaker · organizer preview");
+    expect(html).toContain("Your abstract was not selected");
   });
 
   test("CONTRACT · MRQ-150 · no submissions still leaves the reader somewhere to go", () => {
