@@ -75,6 +75,65 @@ html[data-theme="latent-space"] {
   --break-tint: #9a97a4;
 }
 
+/* ── native controls: dark chrome follows the register ─────────────────── */
+/* Native widgets otherwise keep the browser's light defaults, which is most
+   visible on the agenda's Filter Sessions field and on long scroll surfaces. */
+html[data-theme="latent-space"],
+html[data-theme="latent-space"] * {
+  color-scheme: dark;
+  scrollbar-color: var(--rule) var(--surface-sunk);
+}
+
+html[data-theme="latent-space"]::-webkit-scrollbar,
+html[data-theme="latent-space"] *::-webkit-scrollbar {
+  background-color: var(--surface-sunk);
+  height: 10px;
+  width: 10px;
+}
+html[data-theme="latent-space"]::-webkit-scrollbar-track,
+html[data-theme="latent-space"] *::-webkit-scrollbar-track {
+  background-color: var(--surface-sunk);
+}
+html[data-theme="latent-space"]::-webkit-scrollbar-thumb,
+html[data-theme="latent-space"] *::-webkit-scrollbar-thumb {
+  background-color: var(--rule);
+  border: 2px solid var(--surface-sunk);
+  border-radius: var(--radius);
+}
+html[data-theme="latent-space"]::-webkit-scrollbar-thumb:hover,
+html[data-theme="latent-space"] *::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent);
+}
+
+html[data-theme="latent-space"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-theme="latent-space"] select,
+html[data-theme="latent-space"] textarea {
+  background-color: var(--surface-sunk);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+}
+html[data-theme="latent-space"] input::placeholder,
+html[data-theme="latent-space"] textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+html[data-theme="latent-space"] input[type="checkbox"],
+html[data-theme="latent-space"] input[type="radio"],
+html[data-theme="latent-space"] input[type="range"] {
+  accent-color: var(--accent);
+}
+html[data-theme="latent-space"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+html[data-theme="latent-space"] select:focus-visible,
+html[data-theme="latent-space"] textarea:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-wash);
+  outline: none;
+}
+html[data-theme="latent-space"] select option {
+  background-color: var(--surface);
+  color: var(--ink);
+}
+
 /* ── chrome: lowercase labels, hex mark, gradient accents ──────────────── */
 html[data-theme="latent-space"] .brand-name,
 html[data-theme="latent-space"] .nav-label,
