@@ -13,6 +13,11 @@ export interface RouteDefinition {
 export const routeTable: readonly RouteDefinition[] = [
   { id: "dashboard", path: "/dashboard", label: "Program home", icon: "⌂", group: "home", sidebar: true },
   { id: "board", path: "/board", label: "Program board", icon: "▥", group: "home", sidebar: true },
+  // The whole list and its create action are entrances, not lifecycle stages —
+  // the Pipeline group below is a numbered ladder and an unnumbered row in the
+  // middle of it reads as a broken sequence.
+  { id: "submissions", path: "/submissions", label: "Abstracts & sessions", icon: "▤", group: "home", sidebar: true },
+  { id: "submission-new", path: "/submissions/new", label: "Add a session", icon: "+", group: "home", sidebar: true },
   { id: "submitted", path: "/submissions?status=submitted", label: "Submitted", icon: "1", group: "pipeline", sidebar: true },
   { id: "in-review", path: "/submissions?status=in_review", label: "In review", icon: "2", group: "pipeline", sidebar: true },
   { id: "waved", path: "/submissions?status=waved", label: "Waved", icon: "3", group: "pipeline", sidebar: true },
@@ -20,7 +25,6 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "onboarding", path: "/onboarding", label: "Onboarding", icon: "5", group: "pipeline", sidebar: true },
   { id: "scheduled", path: "/submissions?status=scheduled", label: "Scheduled", icon: "6", group: "pipeline", sidebar: true },
   { id: "published", path: "/submissions?status=published", label: "Published", icon: "7", group: "pipeline", sidebar: true },
-  { id: "submissions", path: "/submissions", label: "Abstracts & sessions", icon: "", group: "utility" },
   { id: "forms", path: "/forms", label: "CFP forms", icon: "□", group: "modules", sidebar: true },
   { id: "evaluation", path: "/evaluation", label: "Evaluation plan", icon: "◇", group: "modules", sidebar: true },
   { id: "reviewer", path: "/reviewer", label: "Review queue", icon: "✓", group: "modules", sidebar: true },
@@ -31,6 +35,11 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "communications", path: "/communications", label: "Communications", icon: "✉", group: "modules", sidebar: true },
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "○", group: "modules", sidebar: true, external: true },
   { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "modules", sidebar: true, external: true },
+  // Server-rendered outside the admin shell (`embed.route.tsx`), and `app.tsx`
+  // treats every `/embed/` path as a public page — so this must navigate for
+  // real. A client-side push would land the shell on a route it does not render
+  // and draw an empty state over a builder that works.
+  { id: "embeds", path: "/embed/config", label: "Embeds", icon: "◨", group: "modules", sidebar: true, external: true },
   { id: "settings", path: "/settings", label: "Conference settings", icon: "⚙", group: "modules", sidebar: true },
   // The people-facing page carries its own chrome, so the sidebar hands it a
   // real browser navigation rather than a client-side push.
@@ -38,9 +47,12 @@ export const routeTable: readonly RouteDefinition[] = [
   // The query variant shares the health document entrypoint without adding an
   // unowned app bootstrap branch. It is deliberately outside the main flow.
   { id: "system-health", path: "/delivery-health?view=system", label: "System health", icon: "◌", group: "utility", sidebar: true, external: true },
+  // Reached from a co-speaker's invitation link, never from navigation. It is
+  // declared here because it is a real route, and a route map that omits a real
+  // route is the same defect as one that invents a route that is not.
+  { id: "co-speaker", path: "/co-speaker", label: "Co-speaker confirmation", icon: "", group: "utility", external: true },
   { id: "venues", path: "/settings/venues", label: "Venues", icon: "⌖", group: "utility" },
   { id: "submission-detail", path: "/submissions/:id", label: "Submission record", icon: "", group: "utility" },
-  { id: "submission-new", path: "/submissions/new", label: "Create submission", icon: "", group: "utility" },
   { id: "task-templates", path: "/settings/tasks", label: "Task templates", icon: "", group: "utility" },
   { id: "api-tokens", path: "/settings/api", label: "API tokens", icon: "", group: "utility" },
   { id: "api-docs", path: "/api/docs", label: "API & CLI", icon: "⌘", group: "utility" },
