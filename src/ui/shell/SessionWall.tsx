@@ -15,10 +15,18 @@ import { useDialogLifecycle } from "./OverlayHosts";
  * its own — an authored surface that cannot drift from Flight Deck, and one
  * fewer set of tokens for Night to have to redefine.
  */
+/**
+ * Stable identity, at module scope. `useDialogLifecycle` lists `onClose` in its
+ * dependency array, and the wall stays mounted while the page behind it keeps
+ * rendering — a fresh arrow per render would tear down and re-run the effect
+ * every time, bouncing focus and eventually leaving `document.body` unscrollable.
+ */
+const INERT = (): void => undefined;
+
 export function SessionWall({ next }: { next: string }): JSX.Element {
   // Deliberately inert: the session is gone, so there is nothing behind this to
   // dismiss back to. Both ways out are the two buttons.
-  const ref = useDialogLifecycle(true, () => undefined);
+  const ref = useDialogLifecycle(true, INERT);
   return (
     <div class="modal-backdrop">
       <section

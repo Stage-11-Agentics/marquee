@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { JSX } from "preact";
 import { renderToString } from "preact-render-to-string";
 
@@ -183,9 +184,13 @@ const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="U
 
 export function renderClaimDocument(shell: string, state: ClaimPageState): string {
   const markup = renderToString(<ClaimPage state={state} />);
+  // A function replacer, never a string one: `$&`, `$'` and `` $` `` are
+  // substitution directives to String.replace, and `markup` carries
+  // query-supplied text.
+  const inject = () => `<div id="app">${markup}</div>`;
   const document = shell.includes("<div id=\"app\"></div>")
-    ? shell.replace('<div id="app"></div>', `<div id="app">${markup}</div>`)
-    : FALLBACK_DOCUMENT.replace('<div id="app"></div>', `<div id="app">${markup}</div>`);
+    ? shell.replace('<div id="app"></div>', inject)
+    : FALLBACK_DOCUMENT.replace('<div id="app"></div>', inject);
   return document
     .replace("</head>", `<style data-marquee-claim>${CLAIM_STYLES}</style></head>`)
     .replace("</body>", `<script data-marquee-claim>${CLAIM_SCRIPT}</script></body>`);
@@ -210,9 +215,19 @@ async function assetShell(assets: Fetcher | undefined, request: Request): Promis
 
 export const claimRoutes = new Hono<{ Bindings: Env }>();
 
-for (const [path, door] of [["/claim/:token", "claim"], ["/join/:token", "org_invite"]] as const) {
-  claimRoutes.get(path, async (context) => {
-    const token = context.req.param("token");
+/**
+ * Both paths are registered as literal `.get()` calls rather than through a
+ * loop, because `check:routes` finds server-rendered pages by matching
+ * `.get("<literal>"` in this directory — and what it cannot see, it cannot
+ * check is reachable. These two spent a release being answered by the assets
+ * router instead of the Worker precisely because they were invisible to it.
+ */
+function claimPage(door: ClaimDoor) {
+  return async (context: Context<{ Bindings: Env }>) => {
+    // The route cannot match without one; the fallback exists because the
+    // handler is typed against the generic context rather than this path, and
+    // an empty token resolves to the inert page, which is the right answer.
+    const token = context.req.param("token") ?? "";
     const url = new URL(context.req.url);
     let live = false;
     try {
@@ -238,5 +253,8 @@ for (const [path, door] of [["/claim/:token", "claim"], ["/join/:token", "org_in
     return context.html(
       renderClaimDocument(await assetShell(context.env.ASSETS, context.req.raw), state),
     );
-  });
+  };
 }
+
+claimRoutes.get("/claim/:token", claimPage("claim"));
+claimRoutes.get("/join/:token", claimPage("org_invite"));

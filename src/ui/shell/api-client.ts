@@ -66,8 +66,11 @@ export const ERROR_TREATMENTS: Readonly<Record<MarqueeErrorCode, ErrorTreatment>
     retryable: false,
   },
   unauthenticated: {
+    // The wall raised over the screen carries the sign-in action and says the
+    // same sentence. A panel behind it repeating the instruction is two answers
+    // to one question, and only one of them has a button.
     sentence: "Your session has expired.",
-    recovery: "Sign in again to pick up where you left off.",
+    recovery: "Nothing you were working on has been lost.",
     retryable: false,
   },
   forbidden: {

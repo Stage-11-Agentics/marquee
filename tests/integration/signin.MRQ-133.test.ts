@@ -144,6 +144,46 @@ test("CONTRACT · MRQ-133 · demo mode returns the link on screen", async () => 
   expect(body.magic_link).toMatch(/\/api\/v1\/auth\/exchange\?token=/);
 });
 
+/**
+ * The takeover this door would otherwise open.
+ *
+ * A claim-created owner is a `people` row inside the SAME organization as the
+ * demo event — `resolveOrganization` reuses the oldest org — and holds an
+ * org-wide membership with a null event, so the attribution fallback resolves
+ * them to the demo event. Keying the on-screen link on the event alone would
+ * hand a real owner's fifteen-minute sign-in link to anyone who knows their
+ * address, from the public form this ticket builds.
+ */
+test("CONTRACT · MRQ-133 · a real person in the demo org never gets a link on screen", async () => {
+  await seedDemoFixture();
+  const demoOrgId = await env.DB
+    .prepare("SELECT org_id FROM events WHERE demo_mode = 1 LIMIT 1")
+    .first<{ org_id: string }>();
+  await env.DB.prepare(
+    `INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at)
+     VALUES ('per_real_owner', ?, 'owner@real.example', 'Real Owner', 0, 'marquee', 1, 1)`,
+  ).bind(demoOrgId?.org_id).run();
+  await env.DB.prepare(
+    `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
+     VALUES ('mem_real_owner', ?, NULL, 'per_real_owner', 'owner', 1, 1)`,
+  ).bind(demoOrgId?.org_id).run();
+
+  const response = await requestLink({ email: "owner@real.example" });
+  const body = await response.json<{ message: string; magic_link?: string }>();
+  expect(body.message).toBe(ACKNOWLEDGEMENT);
+  expect(body.magic_link).toBeUndefined();
+  // The mail is still enqueued — the owner gets their link by email, as designed.
+  expect(await outboxRows()).toHaveLength(1);
+});
+
+test("CONTRACT · MRQ-133 · a demo persona is exempt from the cooldown, because the screen is its only channel", async () => {
+  await seedDemoFixture();
+  const first = await requestLink({ email: "organizer@demo.marquee.example" });
+  const second = await requestLink({ email: "organizer@demo.marquee.example" });
+  expect((await first.json<{ magic_link?: string }>()).magic_link).toBeDefined();
+  expect((await second.json<{ magic_link?: string }>()).magic_link).toBeDefined();
+});
+
 test("CONTRACT · MRQ-133 · a second request inside the cooldown does not send a second mail", async () => {
   await seedRealInstance();
   await requestLink({ email: ADDRESS });

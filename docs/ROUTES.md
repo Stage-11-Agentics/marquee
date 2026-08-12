@@ -70,10 +70,15 @@ Registered in `src/routes/*.route.tsx`, outside the SPA.
 | `/` | src/routes/landing.route.tsx |
 | `/:eventSlug/:kind/embed` | src/routes/embed.route.tsx |
 | `/agenda` | src/routes/public-agenda.route.tsx |
+<<<<<<< HEAD
 | `/agenda/agents` | src/routes/public-agenda.route.tsx |
+=======
+| `/claim/:token` | src/routes/claim.route.tsx |
+>>>>>>> 90ca058e (MRQ-133: close the takeover the review found, and eight smaller findings)
 | `/embed/:slug` | src/routes/embed.route.tsx |
 | `/embed/config` | src/routes/embed.route.tsx |
 | `/f/:slug` | src/routes/public-form.route.tsx |
+| `/join/:token` | src/routes/claim.route.tsx |
 | `/login` | src/routes/signin.route.tsx |
 | `/p/:slug` | src/routes/public-agenda.route.tsx |
 | `/s/:slug` | src/routes/public-agenda.route.tsx |
@@ -93,7 +98,11 @@ routes — the text to hand any agent or reader that needs to know what exists.
 
 ```text
 ROUTES (real paths, not hash routes):
+<<<<<<< HEAD
   Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /embed/:slug /embed/config /f/:slug /login /p/:slug /s/:slug /sign-in /signin /site /speakers
+=======
+  Public, no auth: / /:eventSlug/:kind/embed /agenda /claim/:token /embed/:slug /embed/config /f/:slug /join/:token /login /p/:slug /s/:slug /sign-in /signin /speakers
+>>>>>>> 90ca058e (MRQ-133: close the takeover the review found, and eight smaller findings)
   Organizer (admin shell): /people /lists /pipeline /crm /directory /contacts /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /roster /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /import
   Review queue: /reviewer
   Speaker portal: /portal

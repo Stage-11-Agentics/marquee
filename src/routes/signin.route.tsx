@@ -84,11 +84,14 @@ function ReasonBanner({ reason, signedIn }: { reason: SigninReason; signedIn: bo
   );
 }
 
-function MailCallout(): JSX.Element {
+function MailCallout({ demo }: { demo: boolean }): JSX.Element {
   return (
     <div class="signin-callout" data-signin-mail="unconfigured">
-      <strong>This deployment cannot send mail yet.</strong> A link requested here will not
-      arrive. Configure the sender and it will:
+      <strong>This deployment cannot send mail yet.</strong>{" "}
+      {demo
+        ? "A link requested here will not be emailed; the demo shows it on screen instead."
+        : "A link requested here will not arrive."}{" "}
+      Configure the sender and it will:
       {INSTANCE_STATUS_FIXES.mail.map((command) => (
         <code key={command}>{command}</code>
       ))}
@@ -106,7 +109,7 @@ function SigninForm({ state }: { state: SigninPageState }): JSX.Element {
         arrives by email. It works once and expires in fifteen minutes.
       </p>
       {state.reason && <ReasonBanner reason={state.reason} signedIn={false} />}
-      {!state.mailConfigured && <MailCallout />}
+      {!state.mailConfigured && <MailCallout demo={state.demo} />}
       <form class="signin-form" id="signin-form" method="post" action="/api/v1/auth/magic-link">
         <input type="hidden" name="next" value={state.next} />
         <label class="signin-field" for="signin-email">
@@ -337,9 +340,13 @@ const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="U
 
 export function renderSigninDocument(shell: string, state: SigninPageState): string {
   const markup = renderToString(<SigninPage state={state} />);
+  // A function replacer, never a string one: `$&`, `$'` and `` $` `` are
+  // substitution directives to String.replace, and `markup` carries the
+  // query-supplied `next`.
+  const inject = () => `<div id="app">${markup}</div>`;
   const document = shell.includes("<div id=\"app\"></div>")
-    ? shell.replace('<div id="app"></div>', `<div id="app">${markup}</div>`)
-    : FALLBACK_DOCUMENT.replace('<div id="app"></div>', `<div id="app">${markup}</div>`);
+    ? shell.replace('<div id="app"></div>', inject)
+    : FALLBACK_DOCUMENT.replace('<div id="app"></div>', inject);
   return document
     .replace("</head>", `<style data-marquee-signin>${SIGNIN_STYLES}</style></head>`)
     .replace("</body>", `<script data-marquee-signin>${SIGNIN_SCRIPT}</script></body>`);
@@ -364,7 +371,10 @@ async function assetShell(assets: Fetcher | undefined, request: Request): Promis
 
 export async function readSigninState(context: Context<{ Bindings: Env }>): Promise<SigninPageState> {
   const url = new URL(context.req.url);
-  const next = safeNext(url.searchParams.get("next")) ?? "";
+  // Bounded like the claim page's prefills: a query value is rendered into
+  // the form and posted back as `redirect_to`, where it is stored and later
+  // becomes a Location header.
+  const next = safeNext(url.searchParams.get("next")?.slice(0, 512)) ?? "";
   const reason = readReason(url.searchParams.get("reason"));
 
   let signedIn: SigninSignedIn | null = null;

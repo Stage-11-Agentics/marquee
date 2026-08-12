@@ -186,7 +186,12 @@ const requestMagicLink = defineApiRoute(
     // path may differ by a byte on whether the address exists, whether the
     // instance has an event, or whether a link was minted just now — the answer
     // is an acknowledgement, never an oracle.
-    if (person && !(await hasFreshLoginLink(context.env.DB, person.id, now))) {
+    // A seeded demo persona is exempt: on a demo instance the on-screen link IS
+    // the delivery channel, and the raw token of the first link is unrecoverable
+    // (only its hash is stored), so a cooled second submit would leave a judge
+    // holding an acknowledgement and no link for a minute. The cooldown exists
+    // to stop a mail cannon, and demo mail is never sent.
+    if (person && (person.is_demo === 1 || !(await hasFreshLoginLink(context.env.DB, person.id, now)))) {
       const memberships = await loadMembershipsForOrg(context.env.DB, person.id, person.org_id);
       const event = await attributionEvent(context.env.DB, person, memberships, body.event_id);
       // `outbox.event_id` is NOT NULL. An org with no event at all therefore has
@@ -212,7 +217,14 @@ const requestMagicLink = defineApiRoute(
           ...mail,
         });
         await enqueueMailMessage(context.env.MAIL_QUEUE, outboxId);
-        if (event.demo_mode === 1) onScreenLink = absoluteLink;
+        // The person, not just the event. A claim-created owner is a `people`
+        // row in the same organization as the demo event — `resolveOrganization`
+        // reuses the oldest org — and holds an org-wide membership with a null
+        // event, so the attribution fallback resolves them to the demo event.
+        // Keying the on-screen link on the event alone would hand a real
+        // owner's 15-minute sign-in link to anyone who knows their address.
+        // Seeded personas carry `is_demo = 1`; claimed people carry 0.
+        if (event.demo_mode === 1 && person.is_demo === 1) onScreenLink = absoluteLink;
       }
     }
 
