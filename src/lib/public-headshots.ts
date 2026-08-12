@@ -1,5 +1,3 @@
-import { slugify } from "./ids.ts";
-
 /**
  * Deliberately synthetic avatars for the published demo roster. These are
  * monograms and geometric marks, never photographs or generated faces. The
@@ -45,8 +43,18 @@ export const INTENTIONAL_PUBLIC_HEADSHOT_FALLBACK_SLUGS = [
 
 const SYNTHETIC_HEADSHOT_SET = new Set<string>(SYNTHETIC_PUBLIC_HEADSHOT_SLUGS);
 
+function slugifyPublicHeadshotName(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replaceAll(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/-{2,}/g, "-")
+    .replaceAll(/^-|-$/g, "");
+}
+
 export function syntheticPublicHeadshotUrl(name: string, isDemo: boolean): string | null {
   if (!isDemo) return null;
-  const slug = slugify(name);
+  const slug = slugifyPublicHeadshotName(name);
   return SYNTHETIC_HEADSHOT_SET.has(slug) ? `/headshots/${slug}.svg` : null;
 }
