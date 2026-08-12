@@ -34,19 +34,19 @@ function entry(overrides: Partial<HistoryEntryView> = {}): HistoryEntryView {
   };
 }
 
-test("CNT-11: a history row renders the editor's name, never the actor kind", () => {
+test("CONTRACT · CNT-11 · a history row renders the editor's name, never the actor kind", () => {
   const html = renderToString(h(ContentHistory, { entries: [entry()], label, moment, onRestore: () => {} }));
   expect(html).toContain("Priya Raman");
   // The bug this replaced: `<span>{entry.actor_kind}</span>` printed "user".
   expect(html).not.toMatch(/>user</);
 });
 
-test("MRQ-118: an actor-less row says so rather than borrowing someone's name", () => {
+test("CONTRACT · an actor-less history row says so rather than borrowing someone's name", () => {
   const html = renderToString(h(ContentHistory, { entries: [entry({ actor_name: null })], label, moment, onRestore: () => {} }));
   expect(html).toContain("Conference team");
 });
 
-test("CNT-11: a restorable row offers the control and names the version it restores to", () => {
+test("CONTRACT · CNT-11 · a restorable row offers the control and names the version it restores to", () => {
   const html = renderToString(h(ContentHistory, { entries: [entry()], label, moment, onRestore: () => {} }));
   expect(html).toContain("Restore this version");
   // An audit row records a CHANGE, so "restore" is ambiguous without saying
@@ -57,7 +57,7 @@ test("CNT-11: a restorable row offers the control and names the version it resto
   expect(html).toContain("Taming 40-Minute CI");
 });
 
-test("MRQ-118: a non-content row appears in the timeline but offers no restore", () => {
+test("CONTRACT · a non-content history row appears in the timeline but offers no restore", () => {
   const html = renderToString(h(ContentHistory, {
     entries: [entry({ action: "scheduled", restorable: false, before: null })],
     label, moment, onRestore: () => {},
@@ -66,12 +66,12 @@ test("MRQ-118: a non-content row appears in the timeline but offers no restore",
   expect(html).not.toContain("Restore this version");
 });
 
-test("MRQ-118: without an onRestore handler the panel is read-only", () => {
+test("CONTRACT · without an onRestore handler the history panel is read-only", () => {
   const html = renderToString(h(ContentHistory, { entries: [entry()], label, moment }));
   expect(html).not.toContain("Restore this version");
 });
 
-test("MRQ-118: an empty history says so instead of rendering a bare panel", () => {
+test("CONTRACT · an empty history says so instead of rendering a bare panel", () => {
   const html = renderToString(h(ContentHistory, { entries: [], label, moment }));
   expect(html).toContain("No history recorded.");
 });

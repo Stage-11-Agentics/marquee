@@ -135,7 +135,7 @@ beforeEach(async () => {
   await insertSubmission("sub-118-accepted", "accepted");
 });
 
-test("CNT-09: an organizer edits an accepted Session's title and abstract, and it persists on reload", async () => {
+test("CONTRACT · CNT-09 · an organizer edits an accepted Session's title and abstract, and it persists on reload", async () => {
   const response = await editContent("sub-118-accepted", {
     title: `UPDATED: ${ORIGINAL_TITLE}`,
     abstract: `${ORIGINAL_ABSTRACT}${LIVE_DEMO}`,
@@ -147,13 +147,13 @@ test("CNT-09: an organizer edits an accepted Session's title and abstract, and i
   expect(reloaded.abstract).toContain("live demo of remote build caching");
 });
 
-test("CNT-09: the edit maintains search_blob, so the session is still findable by its new title", async () => {
+test("CONTRACT · CNT-09 · the edit maintains search_blob, so the session is still findable by its new title", async () => {
   await editContent("sub-118-accepted", { title: `UPDATED: ${ORIGINAL_TITLE}` });
   const row = await env.DB.prepare("SELECT search_blob FROM submissions WHERE id = ?").bind("sub-118-accepted").first<{ search_blob: string }>();
   expect(row?.search_blob).toContain("updated: taming 40-minute ci");
 });
 
-test("MRQ-118: one edit writes exactly one audit row carrying both before and after", async () => {
+test("CONTRACT · one edit writes exactly one audit row carrying both before and after", async () => {
   await editContent("sub-118-accepted", { title: "First edit" });
   const rows = await auditRows("sub-118-accepted");
   expect(rows).toHaveLength(1);
@@ -162,13 +162,13 @@ test("MRQ-118: one edit writes exactly one audit row carrying both before and af
   expect(JSON.parse(rows[0].after_json ?? "{}")).toMatchObject({ title: "First edit" });
 });
 
-test("MRQ-118: a save that changes nothing writes no history row", async () => {
+test("CONTRACT · a save that changes nothing writes no history row", async () => {
   const response = await editContent("sub-118-accepted", { title: ORIGINAL_TITLE, abstract: ORIGINAL_ABSTRACT });
   expect(response.status).toBe(200);
   expect(await auditRows("sub-118-accepted")).toHaveLength(0);
 });
 
-test("CNT-11: history entries carry the editor's NAME, not the literal string 'user'", async () => {
+test("CONTRACT · CNT-11 · history entries carry the editor's NAME, not the literal string 'user'", async () => {
   await editContent("sub-118-accepted", { abstract: `${ORIGINAL_ABSTRACT}${LIVE_DEMO}` });
   await editContent("sub-118-accepted", { abstract: `${ORIGINAL_ABSTRACT}${LIVE_DEMO}${LAPTOP}` });
 
@@ -185,7 +185,7 @@ test("CNT-11: history entries carry the editor's NAME, not the literal string 'u
   expect(content[0].created_at).toBeGreaterThanOrEqual(content[1].created_at);
 });
 
-test("CNT-11: restoring the version before the second edit drops that edit and keeps the first", async () => {
+test("CONTRACT · CNT-11 · restoring the version before the second edit drops that edit and keeps the first", async () => {
   await editContent("sub-118-accepted", { abstract: `${ORIGINAL_ABSTRACT}${LIVE_DEMO}` });
   await editContent("sub-118-accepted", { abstract: `${ORIGINAL_ABSTRACT}${LIVE_DEMO}${LAPTOP}` });
 
@@ -199,7 +199,7 @@ test("CNT-11: restoring the version before the second edit drops that edit and k
   expect(after.abstract).not.toContain("bring a laptop");
 });
 
-test("MRQ-118: a restore ADDS a row and leaves every earlier row byte-identical", async () => {
+test("CONTRACT · a restore ADDS a row and leaves every earlier row byte-identical", async () => {
   await editContent("sub-118-accepted", { abstract: `${ORIGINAL_ABSTRACT}${LIVE_DEMO}` });
   await editContent("sub-118-accepted", { abstract: `${ORIGINAL_ABSTRACT}${LIVE_DEMO}${LAPTOP}` });
   const originals = await auditRows("sub-118-accepted");
@@ -219,7 +219,7 @@ test("MRQ-118: a restore ADDS a row and leaves every earlier row byte-identical"
   expect(JSON.parse(afterRestore[2].after_json ?? "{}").abstract).not.toContain("bring a laptop");
 });
 
-test("MRQ-118: the status allowlist is enforced — rejected and withdrawn content cannot be rewritten", async () => {
+test("CONTRACT · the status allowlist is enforced — rejected and withdrawn content cannot be rewritten", async () => {
   for (const status of ["rejected", "withdrawn"]) {
     await insertSubmission(`sub-118-${status}`, status);
     const response = await editContent(`sub-118-${status}`, { title: "Rewriting the record" });
@@ -229,7 +229,7 @@ test("MRQ-118: the status allowlist is enforced — rejected and withdrawn conte
   }
 });
 
-test("MRQ-118: every allowlisted status accepts an edit", async () => {
+test("CONTRACT · every allowlisted status accepts an edit", async () => {
   for (const status of ["submitted", "in_review", "accepted", "waitlisted"]) {
     await insertSubmission(`sub-118-ok-${status}`, status);
     const response = await editContent(`sub-118-ok-${status}`, { title: `Edited while ${status}` });
@@ -237,7 +237,7 @@ test("MRQ-118: every allowlisted status accepts an edit", async () => {
   }
 });
 
-test("MRQ-118: a live Session refuses a silent edit and accepts a confirmed one", async () => {
+test("CONTRACT · a live Session refuses a silent edit and accepts a confirmed one", async () => {
   await insertSubmission("sub-118-live", "accepted");
   const now = Date.now();
   await env.DB.prepare("DELETE FROM agenda_items WHERE submission_id = ?").bind("sub-118-live").run();
@@ -254,7 +254,7 @@ test("MRQ-118: a live Session refuses a silent edit and accepts a confirmed one"
   expect(confirmed.status).toBe(200);
 });
 
-test("MRQ-118: restore refuses a history id belonging to another record", async () => {
+test("CONTRACT · restore refuses a history id belonging to another record", async () => {
   await insertSubmission("sub-118-other", "accepted");
   await editContent("sub-118-other", { title: "Other record edit" });
   const other = await readRecord("sub-118-other");
@@ -266,7 +266,7 @@ test("MRQ-118: restore refuses a history id belonging to another record", async 
   expect(untouched.title).toBe(ORIGINAL_TITLE);
 });
 
-test("MRQ-118: restore refuses a history row that records no earlier content", async () => {
+test("CONTRACT · restore refuses a history row that records no earlier content", async () => {
   // `published` is a real audit action with no `before` payload — the shape a
   // restore must decline rather than apply as an empty record.
   await editContent("sub-118-accepted", { title: "An edit" });
@@ -280,7 +280,7 @@ test("MRQ-118: restore refuses a history row that records no earlier content", a
   expect(response.status).toBe(404);
 });
 
-test("MRQ-118: non-content rows appear in the History card but offer no restore", async () => {
+test("CONTRACT · non-content rows appear in the History card but offer no restore", async () => {
   const now = Date.now();
   await env.DB.prepare(
     `INSERT INTO audit_log (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at, request_id)
@@ -294,7 +294,7 @@ test("MRQ-118: non-content rows appear in the History card but offer no restore"
   expect(scheduled?.actor_name).toBeTruthy();
 });
 
-test("MRQ-118: a draft edit still works and now earns a history row too", async () => {
+test("CONTRACT · a draft edit still works and now earns a history row too", async () => {
   await insertSubmission("sub-118-draft", "draft");
   const response = await request(`/api/v1/events/${EVENT_ID}/submissions/sub-118-draft`, {
     method: "PATCH",
@@ -309,7 +309,7 @@ test("MRQ-118: a draft edit still works and now earns a history row too", async 
   expect(rows[0].action).toBe("content_updated");
 });
 
-test("MRQ-118: a principal without program:write cannot edit content or restore a version", async () => {
+test("CONTRACT · a principal without program:write cannot edit content or restore a version", async () => {
   // The audit log is the record of who changed what. A seat that cannot write
   // the program must not be able to write into it — nor to move the content by
   // way of a restore, which is the same write wearing a different verb.
@@ -332,7 +332,7 @@ test("MRQ-118: a principal without program:write cannot edit content or restore 
   expect(untouched.title).toBe("A legitimate edit");
 });
 
-test("MRQ-118: content from another event is unreachable through this event's path", async () => {
+test("CONTRACT · content from another event is unreachable through this event's path", async () => {
   const response = await request(`/api/v1/events/evt-mrq-118-nonexistent/submissions/sub-118-accepted/content`, {
     method: "PATCH",
     body: JSON.stringify({ title: "Cross-event write" }),
@@ -342,7 +342,7 @@ test("MRQ-118: content from another event is unreachable through this event's pa
   expect(untouched.title).toBe(ORIGINAL_TITLE);
 });
 
-test("MRQ-118: search_blob is the trigger's trimmed value, not a hand-rolled one beside it", async () => {
+test("CONTRACT · search_blob is the trigger's trimmed value, not a hand-rolled one beside it", async () => {
   // The abstract keeps its trailing space (only `title` is trimmed by the input
   // schema), which is exactly where the two expressions disagree: a hand-rolled
   // `${title} ${abstract}`.toLowerCase() would store "…body.   ", while
@@ -353,7 +353,7 @@ test("MRQ-118: search_blob is the trigger's trimmed value, not a hand-rolled one
   expect(row?.search_blob).toBe("padded title body.");
 });
 
-test("MRQ-118: restoring a title-only history row leaves the abstract alone", async () => {
+test("CONTRACT · restoring a title-only history row leaves the abstract alone", async () => {
   await editContent("sub-118-accepted", { abstract: "An abstract worth keeping." });
   const now = Date.now();
   await env.DB.prepare(
@@ -372,7 +372,7 @@ test("MRQ-118: restoring a title-only history row leaves the abstract alone", as
   expect(record.abstract).toBe("An abstract worth keeping.");
 });
 
-test("MRQ-118: ops staff can read the record but are not offered an editor they cannot use", async () => {
+test("CONTRACT · ops staff can read the record but are not offered an editor they cannot use", async () => {
   // The UI renders the content editor and the restore control from this one
   // flag. A reviewer can read the record; they must not be shown fields whose
   // Save returns 403 after they have typed into them.
@@ -385,13 +385,13 @@ test("MRQ-118: ops staff can read the record but are not offered an editor they 
   expect(organizerView.actions.can_edit_content).toBe(true);
 });
 
-test("MRQ-118: an uneditable status closes the editor even for a full organizer", async () => {
+test("CONTRACT · an uneditable status closes the editor even for a full organizer", async () => {
   await insertSubmission("sub-118-closed", "withdrawn");
   const record = await readRecord("sub-118-closed") as unknown as { actions: { can_edit_content: boolean } };
   expect(record.actions.can_edit_content).toBe(false);
 });
 
-test("AC-247-249 · MRQ-118: a draft stays editable for a principal without program:write", async () => {
+test("CONTRACT · a draft stays editable for a principal without program:write", async () => {
   // Drafts save through `patchDraft`, which is gated on requireDraftRead — not
   // on program:write. Gating the shared editor on the grant alone would remove
   // a shipped capability from the people the drafts queue exists for.
@@ -408,7 +408,7 @@ test("AC-247-249 · MRQ-118: a draft stays editable for a principal without prog
   expect(saved.status).toBe(200);
 });
 
-test("MRQ-118: a draft is editable without program:write but not restorable — restore has one door", async () => {
+test("CONTRACT · a draft is editable without program:write but not restorable — restore has one door", async () => {
   // `restoreSubmissionContent` requires program:write at every status, Draft
   // included. A single shared flag would offer this seat a Restore button it
   // cannot use — the same dead end as an editor that 403s, pointed the other way.
