@@ -95,7 +95,7 @@ html[data-theme="ai-engineer"] .global-search button {
   font-size: 12px;
 }
 
-html[data-theme="ai-engineer"] .theme-switch select { text-transform: none; width: 118px; }
+html[data-theme="ai-engineer"] .theme-switch select { text-transform: none; }
 
 html[data-theme="ai-engineer"] .top-user {
   background: var(--surface);
