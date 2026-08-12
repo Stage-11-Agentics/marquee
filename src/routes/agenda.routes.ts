@@ -28,6 +28,9 @@ import {
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const itemParams = eventParams.extend({ itemId: z.string().min(1) });
+const ifMatchHeaders = z.object({
+  "if-match": z.string().min(1).describe("The agenda item's current strong ETag."),
+});
 
 const speakerSchema = z.object({
   id: z.string(),
@@ -439,7 +442,11 @@ const updateAgendaItem = defineApiRoute(
       rateLimit: { bucket: "write" },
       concurrency: "if-match",
     },
-    request: { params: itemParams, body: { content: { "application/json": { schema: updateBody } } } },
+    request: {
+      params: itemParams,
+      headers: ifMatchHeaders,
+      body: { content: { "application/json": { schema: updateBody } } },
+    },
     responses: { 200: jsonResponse(mutationResultSchema, "Updated agenda item"), ...errors },
   },
   async (context) => {
@@ -510,7 +517,7 @@ const removeAgendaItem = defineApiRoute(
       rateLimit: { bucket: "write" },
       concurrency: "if-match",
     },
-    request: { params: itemParams },
+    request: { params: itemParams, headers: ifMatchHeaders },
     responses: { 204: { description: "Agenda item removed" }, ...errors },
   },
   async (context) => {

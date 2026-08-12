@@ -90,7 +90,7 @@ const DOCUMENT_CONFIG = {
       `Versioned operations live under \`${API_BASE_PATH}\`. Lists share one contract`,
       "(`page`, `per_page`, `q`, `sort`, plus typed per-endpoint filters) and return",
       "`{data, page, per_page, total, total_pages}`. Every failure with a body uses one",
-      "error envelope. Mutations carry strong `ETag`/`If-Match` optimistic concurrency.",
+      "error envelope. Strong `ETag`/`If-Match` optimistic concurrency currently applies only to the two agenda item mutation operations that require it.",
       "Responses carry `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset`.",
     ].join("\n"),
   },

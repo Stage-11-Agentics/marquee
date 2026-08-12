@@ -23,6 +23,7 @@ import { publicFormRoutes } from "./routes/public-form.route";
 import { publicAgendaRoutes } from "./routes/public-agenda.route";
 import { embedRoutes } from "./routes/embed.route";
 import { calendarRoutes } from "./routes/calendar.route";
+import skill from "../SKILL.md?raw";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -140,6 +141,14 @@ app.route("/", publicFormRoutes);
 app.route("/", publicAgendaRoutes);
 app.route("/", embedRoutes);
 app.route("/", calendarRoutes);
+// Keep the canonical repository skill fetchable by agents; the assets router
+// would otherwise turn this unknown path into the SPA shell.
+app.get("/SKILL.md", () => new Response(skill, {
+  headers: {
+    "Cache-Control": "public, max-age=300",
+    "Content-Type": "text/markdown; charset=utf-8",
+  },
+}));
 // The API app is built from the generated route manifest. Assembly digests the
 // OpenAPI document, which is async, so it is memoized on first request rather
 // than awaited at module scope.
