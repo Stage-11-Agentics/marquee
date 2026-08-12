@@ -194,6 +194,7 @@ html[data-theme="ai-engineer"] .register-term-out strong { color: var(--ink); }
 html[data-theme="ai-engineer"] .register-term-flag { color: var(--muted); font-size: 10.5px; margin-left: auto; white-space: nowrap; }
 
 /* ── waves: ASCII progress bars ────────────────────────────────────────── */
+html[data-theme="ai-engineer"] .dashboard-wave-row { grid-template-columns: 150px 1fr; }
 html[data-theme="ai-engineer"] .register-wave-ascii {
   color: var(--ink);
   font: 400 12px/1.4 var(--mono);
