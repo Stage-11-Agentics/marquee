@@ -112,12 +112,12 @@ async function taskRowsFor(
   return rows.results;
 }
 
-async function attachmentObjectsFor(db: D1Database, attachmentIds: readonly string[]): Promise<Map<string, AttachmentObjectRow>> {
+async function attachmentObjectsFor(db: D1Database, eventId: string, attachmentIds: readonly string[]): Promise<Map<string, AttachmentObjectRow>> {
   if (attachmentIds.length === 0) return new Map();
   const rows = await db.prepare(
     `SELECT id, r2_key, r2_etag FROM attachments
-      WHERE status = 'ready' AND id IN (${attachmentIds.map(() => "?").join(",")})`,
-  ).bind(...attachmentIds).all<AttachmentObjectRow>();
+      WHERE event_id = ? AND status = 'ready' AND id IN (${attachmentIds.map(() => "?").join(",")})`,
+  ).bind(eventId, ...attachmentIds).all<AttachmentObjectRow>();
   return new Map(rows.results.map((row) => [row.id, row]));
 }
 
@@ -146,7 +146,7 @@ async function handleExport(context: Context<ApiEnv>): Promise<Response> {
     const version = latest.get(row.id);
     return version ? [version.attachment_id] : [];
   });
-  const objects = await attachmentObjectsFor(env.DB, attachmentIds);
+  const objects = await attachmentObjectsFor(env.DB, eventId, attachmentIds);
   const manifest: string[] = [];
   const entries: ZipStoreEntry[] = [];
 
