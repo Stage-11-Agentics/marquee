@@ -1,0 +1,20 @@
+{
+  "ticket": "MRQ-105",
+  "owns": [
+    "AC-275",
+    "AC-276",
+    "AC-277",
+    "AC-278",
+    "AC-279",
+    "AC-280",
+    "AC-281",
+    "AC-282",
+    "AC-283",
+    "AC-284",
+    "AC-285",
+    "AC-286",
+    "AC-287"
+  ],
+  "exercises": [],
+  "notes": "MRQ-105 builds EVALUATION §2.4, the post-deadline cold-start band: the path from a cloned repository to an owned conference. Landing this manifest is what turns §2.4's trace:ac enforcement on — the band was unenforced by construction until the owning ticket claimed it. The slice is one vertical: migration 0009 widening magic_links for the two purposes that pre-date their person; the claim-link mint and its CLI verb; the /claim/:token and /join/:token exchange pages over one shared exchange implementation; the unclaimed landing behind a hard zero-owner guard; the post-claim scoped-token handoff over the existing api_tokens route; POST /api/v1/events with the /conferences/new screen and the switcher's plus; organizer invites and removal; GET /api/v1/instance/status derived from real binding and secret presence; the mail-unconfigured intake acknowledgment; POST /api/v1/admin/remove-demo; the SKILL setup chapter through renderSkill(); and the docs-truth scan. The band is outside the Wednesday terminal gate and this work does not enter it — the seeded demo holds an owner membership, so every judged surface renders exactly as it did before."
+}
