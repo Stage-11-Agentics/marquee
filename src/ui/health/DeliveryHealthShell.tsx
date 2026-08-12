@@ -2,7 +2,7 @@ import type { JSX } from "preact";
 import { useCallback, useState } from "preact/hooks";
 
 import { ErrorBoundary } from "../shell/ErrorSurface";
-import { OverlayHost, ToastHost, type OverlayState } from "../shell/OverlayHosts";
+import { ToastHost } from "../shell/OverlayHosts";
 import { QuickSearch } from "../shell/QuickSearch";
 import { Sidebar } from "../shell/Sidebar";
 import { Topbar } from "../shell/Topbar";
@@ -21,7 +21,6 @@ export function DeliveryHealthShell({
   eventName = "AIE NYC 2026",
   eventId = "evt_aie-ny-2026",
 }: { eventName?: string; eventId?: string }): JSX.Element {
-  const [overlay, setOverlay] = useState<OverlayState | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const identity = useIdentity();
@@ -29,10 +28,6 @@ export function DeliveryHealthShell({
   const [toast, setToast] = useState("");
 
   const navigate = useCallback((target: string) => { window.location.assign(target); }, []);
-  const unavailable = useCallback(
-    (title: string, copy: string) => setOverlay({ kind: "modal", title, copy }),
-    [],
-  );
   const resetDemo = useCallback(async () => {
     if (resetting) return;
     if (!window.confirm("Reset the demo conference? This removes demo edits, submissions, uploads, and queued work.")) return;
@@ -50,7 +45,6 @@ export function DeliveryHealthShell({
         activeId={route?.id}
         eventName={eventName}
         navigate={navigate}
-        unavailable={unavailable}
         resetting={resetting}
         onReset={() => void resetDemo()}
       />
@@ -73,7 +67,6 @@ export function DeliveryHealthShell({
         </div>
       </main>
     </div>
-    <OverlayHost state={overlay} onClose={() => setOverlay(null)} />
     <QuickSearch key={searchOpen ? "open" : "closed"} eventId={eventId} open={searchOpen} onClose={() => setSearchOpen(false)} navigate={navigate} />
     <ToastHost message={toast} />
   </>;
