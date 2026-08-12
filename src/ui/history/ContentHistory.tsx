@@ -27,6 +27,8 @@ interface Props {
   /** Omit to render the timeline read-only — no restore controls appear. */
   onRestore?: (entryId: string) => void | Promise<void>;
   busy?: boolean;
+  /** When true the record is on the public site, so a restore changes it. */
+  livePublicly?: boolean;
   label: (action: string) => string;
   moment: (value: number | null) => string;
   emptyCopy?: string;
@@ -43,7 +45,7 @@ function preview(value: string): string {
   return value.length > 52 ? `${value.slice(0, 51)}…` : value;
 }
 
-export function ContentHistory({ entries, onRestore, busy = false, label, moment, emptyCopy }: Props): JSX.Element {
+export function ContentHistory({ entries, onRestore, busy = false, livePublicly = false, label, moment, emptyCopy }: Props): JSX.Element {
   const [confirming, setConfirming] = useState<string | null>(null);
 
   if (entries.length === 0) return <span class="subtle">{emptyCopy ?? "No history recorded."}</span>;
@@ -70,6 +72,12 @@ export function ContentHistory({ entries, onRestore, busy = false, label, moment
               </span>
             : <Button small variant="ghost" disabled={busy} onClick={() => setConfirming(entry.id)}>Restore this version</Button>)}
         </div>
+        {/* On a live Session a restore rewrites the public agenda. Saying so
+            before the second click is the whole point of having a second
+            click; a bare "Confirm" would make this the quiet path around the
+            warning the editor gives. */}
+        {restorable && confirming === entry.id && livePublicly
+          && <small class="history-warning">This replaces what attendees see on the public agenda.</small>}
         {/* Naming the version the button restores TO is what makes "Restore"
             unambiguous. An audit row records a change, so the version it
             offers is the one that preceded it — a reader should not have to

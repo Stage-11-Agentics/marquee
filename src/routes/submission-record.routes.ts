@@ -9,6 +9,7 @@ import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { membershipAllowsGrant, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { decisionHistory } from "../lib/decision-history";
 import {
   attachmentPreviewPath,
@@ -187,6 +188,23 @@ async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   return { kind: "api_token", personId: token.created_by, requestId };
 }
 
+/**
+ * Can this caller actually write program content on this conference?
+ *
+ * The record is READABLE by ops staff and form admins, neither of whom holds
+ * `program:write` — so rendering the content editor and the restore control on
+ * a read grant alone would hand them fields whose Save returns 403 and loses
+ * what they typed. The projection answers the question the UI needs to ask,
+ * from the same grant the write routes enforce.
+ */
+function canWriteProgram(context: Context<ApiEnv>, eventId: string): boolean {
+  const auth = getAuth(context);
+  if (!auth) return false;
+  if (auth.kind === "token") return tokenHasGrant(auth, "program:write", eventId);
+  const role = roleForEvent(auth.memberships, eventId);
+  return role !== null && membershipAllowsGrant(role, "program:write");
+}
+
 async function audit(
   db: D1Database,
   eventId: string,
@@ -235,10 +253,11 @@ interface ContentState {
  * it reads as authoritative while being free to disagree with reality — so the
  * two statements are produced together and are never separable by a caller.
  *
- * `search_blob` is rebuilt in the same expression the portal uses
- * (`portal.routes.ts`), because the board and the public site both search that
- * column: an edit that did not touch it would leave a session findable only
- * under its old title.
+ * `search_blob` is deliberately NOT written here. The `submissions_search_blob_update`
+ * trigger (`migrations/0001_init.sql`) rebuilds it after any UPDATE of title or
+ * abstract, and its expression trims where a hand-rolled one does not. Writing
+ * the column here too would be dead code that quietly disagrees with the value
+ * the database actually keeps.
  */
 function contentWriteStatements(
   db: D1Database,
@@ -253,17 +272,9 @@ function contentWriteStatements(
   return [
     db.prepare(
       `UPDATE submissions
-       SET title = ?, abstract = ?, search_blob = ?, last_saved_at = ?, last_write_source = 'marquee', updated_at = ?
+       SET title = ?, abstract = ?, last_saved_at = ?, last_write_source = 'marquee', updated_at = ?
        WHERE id = ? AND event_id = ?`,
-    ).bind(
-      after.title,
-      after.abstract,
-      `${after.title} ${after.abstract ?? ""}`.toLowerCase(),
-      now,
-      now,
-      submissionId,
-      eventId,
-    ),
+    ).bind(after.title, after.abstract, now, now, submissionId, eventId),
     auditStatement(db, {
       eventId,
       actorKind: actor.kind,
@@ -427,7 +438,13 @@ async function projectAnswers(
   return answers;
 }
 
-async function loadRecord(db: D1Database, eventId: string, submissionId: string): Promise<Record<string, unknown>> {
+/**
+ * `canWriteProgram` defaults to true because every caller but two is a route
+ * the grants policy has already gated — reaching them at all proves the grant.
+ * The two `authenticated` routes (the record read and the drafts editor) pass
+ * the resolved answer, because they admit principals who genuinely lack it.
+ */
+async function loadRecord(db: D1Database, eventId: string, submissionId: string, canWriteProgram = true): Promise<Record<string, unknown>> {
   const row = await db.prepare(`
     SELECT
       s.id, s.event_id, event.name AS event_name, event.timezone,
@@ -682,6 +699,10 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string)
       // derives to `scheduled` and a stage test would happily publish it to
       // the public site.
       can_publish: slot !== null && !slot.is_published && row.status === "accepted",
+      // Both halves must hold: an editable status AND the grant to write it.
+      // The UI renders the content editor and the restore control from this
+      // one field, so neither can appear over a write the server would refuse.
+      can_edit_content: canWriteProgram && (EDITABLE_CONTENT_STATUSES as readonly string[]).includes(row.status),
     },
   };
 }
@@ -903,7 +924,7 @@ const getSubmissionRecord = defineApiRoute(
     if (!submission) throw ApiError.notFound("submission not found");
     if (submission.status === "draft") await requireDraftRead(context, eventId);
     else await requireSubmissionRead(context, eventId);
-    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId)), 200);
   },
 );
 
@@ -967,7 +988,7 @@ const patchDraft = defineApiRoute(
       }
     }
     await context.env.DB.batch(statements);
-    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId)), 200);
   },
 );
 
@@ -1050,7 +1071,10 @@ const restoreSubmissionContent = defineApiRoute(
     if (!restored) throw ApiError.unprocessable("that history entry records no earlier content to restore", "audit_id");
 
     const before: ContentState = { title: current.title, abstract: current.abstract };
-    const after: ContentState = { title: restored.title ?? current.title, abstract: restored.abstract };
+    const after: ContentState = {
+      title: restored.title ?? current.title,
+      abstract: "abstract" in restored ? (restored.abstract ?? null) : current.abstract,
+    };
     if (after.title === before.title && after.abstract === before.abstract) {
       return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
     }

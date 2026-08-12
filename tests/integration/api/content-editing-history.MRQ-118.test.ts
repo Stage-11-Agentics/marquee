@@ -49,6 +49,18 @@ interface RecordView {
   history: HistoryEntry[];
 }
 
+// Ops staff: can READ every record, holds no `program:write`. The exact seat
+// a status-only UI gate would hand an editor whose Save returns 403.
+const OPS_SESSION_ID = "sess-mrq-118-ops";
+const OPS_PERSON_ID = "per-mrq-118-ops";
+
+async function requestAs(sessionId: string, path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("cookie", `mq_session=${sessionId}`);
+  if (init.body !== undefined) headers.set("content-type", "application/json");
+  return SELF.fetch(`${ORIGIN}${path}`, { ...init, headers });
+}
+
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("cookie", `mq_session=${SESSION_ID}`);
@@ -104,6 +116,19 @@ beforeAll(async () => {
     `INSERT INTO rooms (id, building_id, event_id, name, capacity, av_capabilities, notes, position, created_at, updated_at)
      VALUES (?, ?, ?, 'Room 118', 100, '[]', NULL, 0, ?, ?)`,
   ).bind(ROOM_ID, BUILDING_ID, EVENT_ID, now, now).run();
+
+  // A principal who can READ the record but holds no program:write grant.
+  await env.DB.prepare(
+    "INSERT INTO people (id, org_id, name, email, created_at, updated_at) VALUES (?, (SELECT org_id FROM events WHERE id = ?), 'MRQ-118 Ops', 'ops-118@example.test', ?, ?)",
+  ).bind(OPS_PERSON_ID, EVENT_ID, now, now).run();
+  await env.DB.prepare(
+    `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
+     VALUES ('membership-mrq-118-ops', (SELECT org_id FROM events WHERE id = ?), ?, ?, 'ops', ?, ?)`,
+  ).bind(EVENT_ID, EVENT_ID, OPS_PERSON_ID, now, now).run();
+  await env.DB.prepare(
+    `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
+     VALUES (?, ?, 'ops', ?, 'fixture', NULL, ?, ?)`,
+  ).bind(OPS_SESSION_ID, OPS_PERSON_ID, now + 86_400_000, now, now).run();
 });
 
 beforeEach(async () => {
@@ -282,4 +307,86 @@ test("MRQ-118: a draft edit still works and now earns a history row too", async 
   const rows = await auditRows("sub-118-draft");
   expect(rows).toHaveLength(1);
   expect(rows[0].action).toBe("content_updated");
+});
+
+test("MRQ-118: a principal without program:write cannot edit content or restore a version", async () => {
+  // The audit log is the record of who changed what. A seat that cannot write
+  // the program must not be able to write into it — nor to move the content by
+  // way of a restore, which is the same write wearing a different verb.
+  const edit = await requestAs(OPS_SESSION_ID, `/api/v1/events/${EVENT_ID}/submissions/sub-118-accepted/content`, {
+    method: "PATCH",
+    body: JSON.stringify({ title: "Written by the wrong seat" }),
+  });
+  expect(edit.status).toBe(403);
+
+  await editContent("sub-118-accepted", { title: "A legitimate edit" });
+  const record = await readRecord("sub-118-accepted");
+  const entry = record.history.filter((row) => row.action === "content_updated")[0];
+  const restore = await requestAs(OPS_SESSION_ID, `/api/v1/events/${EVENT_ID}/submissions/sub-118-accepted/content/restore`, {
+    method: "POST",
+    body: JSON.stringify({ audit_id: entry.id }),
+  });
+  expect(restore.status).toBe(403);
+
+  const untouched = await readRecord("sub-118-accepted");
+  expect(untouched.title).toBe("A legitimate edit");
+});
+
+test("MRQ-118: content from another event is unreachable through this event's path", async () => {
+  const response = await request(`/api/v1/events/evt-mrq-118-nonexistent/submissions/sub-118-accepted/content`, {
+    method: "PATCH",
+    body: JSON.stringify({ title: "Cross-event write" }),
+  });
+  expect([403, 404]).toContain(response.status);
+  const untouched = await readRecord("sub-118-accepted");
+  expect(untouched.title).toBe(ORIGINAL_TITLE);
+});
+
+test("MRQ-118: search_blob is the trigger's trimmed value, not a hand-rolled one beside it", async () => {
+  // The abstract keeps its trailing space (only `title` is trimmed by the input
+  // schema), which is exactly where the two expressions disagree: a hand-rolled
+  // `${title} ${abstract}`.toLowerCase() would store "…body.   ", while
+  // submissions_search_blob_update stores the trimmed value. Asserting the
+  // trimmed one pins that the database owns this column alone.
+  await editContent("sub-118-accepted", { title: "Padded Title", abstract: "Body.   " });
+  const row = await env.DB.prepare("SELECT search_blob FROM submissions WHERE id = ?").bind("sub-118-accepted").first<{ search_blob: string }>();
+  expect(row?.search_blob).toBe("padded title body.");
+});
+
+test("MRQ-118: restoring a title-only history row leaves the abstract alone", async () => {
+  await editContent("sub-118-accepted", { abstract: "An abstract worth keeping." });
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO audit_log (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at, request_id)
+     VALUES (?, ?, ?, 'user', 'content_updated', 'submission', ?, ?, ?, ?, NULL)`,
+  ).bind(
+    "aud-118-titleonly", EVENT_ID, ORGANIZER_ID, "sub-118-accepted",
+    JSON.stringify({ title: "An older title" }), JSON.stringify({ title: "Current" }), now,
+  ).run();
+
+  const response = await restoreContent("sub-118-accepted", { audit_id: "aud-118-titleonly" });
+  expect(response.status).toBe(200);
+  const record = await readRecord("sub-118-accepted");
+  expect(record.title).toBe("An older title");
+  // An absent key is not a null one: a title-only row must not blank the body.
+  expect(record.abstract).toBe("An abstract worth keeping.");
+});
+
+test("MRQ-118: ops staff can read the record but are not offered an editor they cannot use", async () => {
+  // The UI renders the content editor and the restore control from this one
+  // flag. A reviewer can read the record; they must not be shown fields whose
+  // Save returns 403 after they have typed into them.
+  const asOps = await requestAs(OPS_SESSION_ID, `/api/v1/events/${EVENT_ID}/submissions/sub-118-accepted`);
+  expect(asOps.status).toBe(200);
+  const opsView = await asOps.json() as { actions: { can_edit_content: boolean } };
+  expect(opsView.actions.can_edit_content).toBe(false);
+
+  const organizerView = await readRecord("sub-118-accepted") as unknown as { actions: { can_edit_content: boolean } };
+  expect(organizerView.actions.can_edit_content).toBe(true);
+});
+
+test("MRQ-118: an uneditable status closes the editor even for a full organizer", async () => {
+  await insertSubmission("sub-118-closed", "withdrawn");
+  const record = await readRecord("sub-118-closed") as unknown as { actions: { can_edit_content: boolean } };
+  expect(record.actions.can_edit_content).toBe(false);
 });

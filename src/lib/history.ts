@@ -143,17 +143,21 @@ export function isContentAction(action: string): action is ContentAction {
  * the history rewrite this feature promises never to do, so the reader accepts
  * either and the writer only ever emits the new shape.
  */
-export function contentOf(payload: Record<string, unknown> | null): { title: string | null; abstract: string | null } | null {
+export function contentOf(payload: Record<string, unknown> | null): { title?: string; abstract?: string | null } | null {
   if (!payload) return null;
   const snapshot = payload as ContentSnapshot;
   const hasTitle = typeof snapshot.title === "string";
-  const abstract = snapshot.abstract !== undefined ? snapshot.abstract : snapshot.description;
-  const hasAbstract = typeof abstract === "string" || abstract === null;
+  const rawAbstract = "abstract" in snapshot ? snapshot.abstract : snapshot.description;
+  const hasAbstract = typeof rawAbstract === "string" || rawAbstract === null;
   if (!hasTitle && !hasAbstract) return null;
-  return {
-    title: typeof snapshot.title === "string" ? snapshot.title : null,
-    abstract: typeof abstract === "string" ? abstract : null,
-  };
+  // A field the payload does not carry is ABSENT, not null. Collapsing the two
+  // would let a title-only history row blank an abstract on restore — silent
+  // data loss dressed as a restore, in the one feature that promises never to
+  // lose anything.
+  const restored: { title?: string; abstract?: string | null } = {};
+  if (hasTitle) restored.title = snapshot.title as string;
+  if (hasAbstract) restored.abstract = rawAbstract as string | null;
+  return restored;
 }
 
 /** A row can be restored when it is a content action carrying a readable `before`. */
