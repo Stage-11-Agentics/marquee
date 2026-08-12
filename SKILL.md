@@ -24,6 +24,7 @@ The command registry is:
 - `node cli/marquee.mjs submissions schedule <event-id> <submission-id> --set starts_at=<ms> --set duration_min=<n> --set room_id=<id>`
 - `node cli/marquee.mjs submissions publish <event-id> <submission-id>`
 - `node cli/marquee.mjs tasks list <event-id> --overdue`
+- `node cli/marquee.mjs files list <event-id> --state <name>`
 - `node cli/marquee.mjs remind <event-id> --filter <key=value> (--template <key> | --subject <s> --body <b>)`
 - `node cli/marquee.mjs diagnose`
 - `node cli/marquee.mjs logs --tail`

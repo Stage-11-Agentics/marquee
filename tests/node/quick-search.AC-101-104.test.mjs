@@ -10,6 +10,7 @@ const matcher = readFileSync(new URL("../../src/lib/quick-search.ts", import.met
 const searchRoute = readFileSync(new URL("../../src/routes/search.routes.ts", import.meta.url), "utf8");
 const speed = readFileSync(new URL("../../scripts/checks/speed.ts", import.meta.url), "utf8");
 const deliveryHealthShell = readFileSync(new URL("../../src/ui/health/DeliveryHealthShell.tsx", import.meta.url), "utf8");
+const appEntry = readFileSync(new URL("../../src/ui/app.tsx", import.meta.url), "utf8");
 
 const routeRows = [...routeTable.matchAll(/^\s*\{ id: "([^"]+)", path: "([^"]+)"[^\n]*\},?$/gm)].map((match) => ({
   id: match[1],
@@ -17,12 +18,43 @@ const routeRows = [...routeTable.matchAll(/^\s*\{ id: "([^"]+)", path: "([^"]+)"
   source: match[0],
 }));
 
+/**
+ * The honest ways a route can sit outside the admin shell, read from the code
+ * that decides it rather than from a list somebody keeps up to date:
+ *
+ *   1. `app.tsx` routes it without AppShell — either its public-page predicate
+ *      or one of its own render branches.
+ *   2. `AppShell` returns it before drawing the admin chrome.
+ *
+ * `external: true` is the route table's way of saying "not an admin shell page",
+ * and it is also the easiest thing in this repo to reach for when a screen will
+ * not cooperate. Pinning the *set* catches the addition; checking the *reason*
+ * catches the dodge, which is the failure actually worth stopping.
+ */
+const appEntryExact = [...appEntry.matchAll(/pathname\s*===\s*"([^"]+)"/g)].map((match) => match[1]);
+const appEntryPrefixes = [...appEntry.matchAll(/pathname\.startsWith\("([^"]+)"\)/g)].map((match) => match[1]);
+const shellEarlyReturns = [...appShell.matchAll(/location\.pathname === "([^"]+)"\) return </g)].map((match) => match[1]);
+
+function outsideTheShellBecause(pathname) {
+  if (appEntryExact.includes(pathname) || appEntryPrefixes.some((prefix) => pathname.startsWith(prefix))) return "app.tsx routes it without AppShell";
+  if (shellEarlyReturns.includes(pathname)) return "AppShell returns it before the admin chrome";
+  return null;
+}
+
 test("AC-101 · every AppShell admin route is covered by one shared QuickSearch mount", () => {
   assert.ok(routeRows.length >= 20, "route-table contract should enumerate the installed routes");
   const external = routeRows.filter((row) => row.source.includes("external: true"));
-  assert.deepEqual(external.map((row) => row.id).sort(), ["delivery-health", "event-site", "portal", "system-health"]);
+  assert.deepEqual(external.map((row) => row.id).sort(), ["co-speaker", "delivery-health", "embeds", "event-site", "portal", "system-health"]);
+  // Every one of them earns it. A route marked external that the shell would
+  // happily have rendered is a screen quietly removed from the shared search,
+  // and this is the assertion that refuses it.
+  for (const row of external) {
+    const pathname = row.path.split("?")[0];
+    const reason = outsideTheShellBecause(pathname);
+    assert.ok(reason, `route "${row.id}" (${row.path}) is marked external: true, but AppShell renders it — it belongs inside the shared shell, not outside it`);
+  }
   const separate = routeRows.filter((row) => row.source.includes("external: true") || row.id === "reviewer");
-  assert.deepEqual(separate.map((row) => row.id).sort(), ["delivery-health", "event-site", "portal", "reviewer", "system-health"]);
+  assert.deepEqual(separate.map((row) => row.id).sort(), ["co-speaker", "delivery-health", "embeds", "event-site", "portal", "reviewer", "system-health"]);
   // Delivery health carries the shared chrome itself, so the guarantee holds
   // there the same way: one shared search mount over the same route table.
   assert.equal((deliveryHealthShell.match(/<QuickSearch\b/g) ?? []).length, 1);

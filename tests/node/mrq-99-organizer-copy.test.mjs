@@ -9,8 +9,12 @@ test("CONTRACT · MRQ-99 organizer copy removes the sidebar dead end", async () 
   const sidebar = await source("src/ui/shell/Sidebar.tsx");
   const appShell = await source("src/ui/shell/AppShell.tsx");
 
-  assert.match(sidebar, /<a class="event-switcher" href="\/dashboard"/);
-  assert.match(sidebar, /navigate\("\/dashboard"\)/);
+  // MRQ-99 removed a switcher that opened an "unavailable" overlay. MRQ-106
+  // finished the job: the conference name is a caption now, not a control that
+  // navigates to the page you are already on. The dead end stays dead, and it
+  // does not come back as a link either.
+  assert.match(sidebar, /<div class="event-context"><small>Conference<\/small>/);
+  assert.doesNotMatch(sidebar, /event-switcher/);
   assert.doesNotMatch(sidebar, /unavailable\s*\(/);
   assert.doesNotMatch(appShell, /unavailable\s*=\s*useCallback/);
 });

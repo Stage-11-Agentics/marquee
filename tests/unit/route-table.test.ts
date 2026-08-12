@@ -2,12 +2,40 @@ import { expect, test } from "vitest";
 
 import { matchRoute, routesFor } from "../../src/ui/shell/route-table";
 
+/**
+ * The prototype's navigation order, plus three rows MRQ-106 adds knowing they
+ * are a deviation from it: the submissions list and its create action (both
+ * reachable only by typing a URL before this), and the embed builder (which
+ * lived two hops away on the public site). The prototype could not have
+ * anticipated a discoverability finding; the order it does specify is intact.
+ */
 test("CONTRACT · the sidebar reproduces the binding prototype navigation order", () => {
   expect([...routesFor("home"), ...routesFor("pipeline"), ...routesFor("modules")].map((route) => route.label)).toEqual([
-    "Program home", "Program board", "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published",
-    "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Communications", "Speaker portal", "Conference site", "Conference settings",
+    "Program home", "Program board", "Abstracts & sessions", "Add a session",
+    "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published",
+    "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Files", "Communications", "Speaker portal", "Conference site",
+    "Embeds", "Conference settings",
     "Speaker follow-ups",
   ]);
+});
+
+test("CONTRACT · MRQ-115 — the files library is reachable by the noun an organizer searches for", () => {
+  // CNT-S3 step 5 enumerates the labels an operator (and the eval agent) will
+  // look for. "Files" is one of them, spelled exactly; a cleverer name here is
+  // a screen nobody finds.
+  expect(matchRoute("/files")).toMatchObject({ id: "files", label: "Files", group: "modules", sidebar: true });
+});
+
+test("CONTRACT · MRQ-106 · the embed builder navigates for real, because the shell does not render it", () => {
+  // `app.tsx` treats every `/embed/` path as a public page, so a client-side
+  // push would draw the shell's "not installed" empty state over a working
+  // server-rendered builder — worse than having no link at all.
+  expect(matchRoute("/embed/config")).toMatchObject({ label: "Embeds", external: true, sidebar: true });
+});
+
+test("CONTRACT · MRQ-106 · the submissions list and its create action are in the sidebar", () => {
+  expect(matchRoute("/submissions")).toMatchObject({ id: "submissions", sidebar: true, group: "home" });
+  expect(matchRoute("/submissions/new")).toMatchObject({ id: "submission-new", sidebar: true, group: "home" });
 });
 
 test("AC-1 · speaker follow-ups and system health are real external destinations in their binding groups", () => {

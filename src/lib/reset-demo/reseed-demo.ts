@@ -31,6 +31,7 @@ export const WIPE_ORDER = [
   "reviewer_track_scopes",
   "saved_views",
   "audit_log",
+  "file_comments",
   "calendar_invites",
   "speaker_tasks",
   "task_templates",
@@ -146,6 +147,10 @@ const DELETE_PLANS: Partial<Record<WipeTable, DeletePlan>> = {
   },
   audit_log: {
     sql: "DELETE FROM audit_log WHERE event_id = ?",
+    bindings: [DEMO_EVENT_ID],
+  },
+  file_comments: {
+    sql: "DELETE FROM file_comments WHERE event_id = ?",
     bindings: [DEMO_EVENT_ID],
   },
   calendar_invites: {
