@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 
+import { formatFileSize, readStoredFileAnswer } from "../../lib/file-answers";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
 import "./review.css";
@@ -126,21 +127,22 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function displayField(field: DetailField): string {
   if (field.value_text !== null && field.value_text !== "") return field.value_text;
   if (field.value_json === null) return "Not answered";
+  let value: unknown;
   try {
-    const value: unknown = JSON.parse(field.value_json);
-    return Array.isArray(value) ? value.join(" · ") : String(value);
+    value = JSON.parse(field.value_json);
   } catch {
     return field.value_json;
   }
+  // A reviewer reads the file's name and weight, never its storage payload —
+  // and never its image, which blind mode exists to withhold.
+  const file = readStoredFileAnswer(value);
+  if (file) return `${file.filename} · ${formatFileSize(file.sizeBytes)}`;
+  if (Array.isArray(value)) return value.join(" · ");
+  if (typeof value === "object" && value !== null) return "Not answered";
+  return String(value);
 }
 
 function recommendationLabel(value: ReviewState["recommendation"]): string {
@@ -416,7 +418,7 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
             <section class="reviewer-detail-section"><h3>Full abstract</h3><p class="detail-copy">{detail.abstract ?? "No abstract was submitted."}</p></section>
             <section class="reviewer-detail-section"><h3>Evaluator-visible submission fields</h3>{detail.fields.length ? <dl class="review-field-grid">{detail.fields.map((field) => <div class="review-field" key={field.key}><dt>{field.label}</dt><dd>{displayField(field)}</dd></div>)}</dl> : <p class="subtle">No additional conference fields were submitted.</p>}</section>
             <section class="reviewer-detail-section"><h3>Speaker details · blind mode</h3><dl class="review-field-grid"><div class="review-field"><dt>Speaker name</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></div><div class="review-field"><dt>Email</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></div><div class="review-field"><dt>Company / affiliation</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></div><div class="review-field"><dt>Biography</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></div></dl></section>
-            <section class="reviewer-detail-section"><h3>Attached files · {detail.files.length}</h3>{detail.files.length ? <div class="review-file-list">{detail.files.map((file) => <div class="review-file-row" key={file.id}><span class="review-file-icon">{file.content_type.split("/").pop()?.toUpperCase() ?? "FILE"}</span><div><strong>{file.filename}</strong><span>{file.content_type} · {formatBytes(file.size_bytes)}</span></div><Chip tone={file.status === "ready" ? "success" : "warning"}>{file.status === "ready" ? "Available" : "Processing"}</Chip></div>)}</div> : <p class="subtle">No files attached to this submission.</p>}</section>
+            <section class="reviewer-detail-section"><h3>Attached files · {detail.files.length}</h3>{detail.files.length ? <div class="review-file-list">{detail.files.map((file) => <div class="review-file-row" key={file.id}><span class="review-file-icon">{file.content_type.split("/").pop()?.toUpperCase() ?? "FILE"}</span><div><strong>{file.filename}</strong><span>{file.content_type} · {formatFileSize(file.size_bytes)}</span></div><Chip tone={file.status === "ready" ? "success" : "warning"}>{file.status === "ready" ? "Available" : "Processing"}</Chip></div>)}</div> : <p class="subtle">No files attached to this submission.</p>}</section>
             {detail.review && <section class="reviewer-detail-section"><h3>Your saved recommendation</h3><div class="saved-review"><strong>{recommendationLabel(detail.review.recommendation)}</strong><span>{detail.review.comment || "No committee note."}</span><small>Saved by reviewer <span class="tabular">{detail.review.actor_id}</span> · {new Date(detail.review.updated_at).toLocaleString()}</small></div></section>}
           </div>
           <footer class="reviewer-detail-actions"><span class="subtle">Queue ID <span class="tabular">{detail.id}</span> · position <span class="tabular">{currentIndex + 1}</span> preserved</span><Button variant="primary" onClick={closeDetail}>Close &amp; return to queue</Button></footer>
