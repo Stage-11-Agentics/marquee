@@ -8,7 +8,7 @@ import "./forms.css";
 
 type FormKind = "abstract" | "session";
 type FormStatus = "draft" | "open" | "closed";
-type FieldType = "short_text" | "long_text" | "single_select" | "multi_select" | "url" | "email" | "file" | "number";
+type FieldType = "short_text" | "long_text" | "single_select" | "multi_select" | "url" | "email" | "file" | "number" | "date";
 
 interface FormSummary {
   id: string;
@@ -85,6 +85,7 @@ const FIELD_TYPES: Array<{ value: FieldType; label: string }> = [
   { value: "email", label: "Email" },
   { value: "file", label: "File upload" },
   { value: "number", label: "Number" },
+  { value: "date", label: "Date" },
 ];
 
 const STEP_NAMES = ["Type & basics", "Welcome", "Form fields", "Participants", "Rules & routing", "Messages", "Publish"];
@@ -157,7 +158,7 @@ function PreviewControl({ field, value, onChange }: { field: FormField; value: F
   if (field.type === "single_select") return <select class="forms-preview-input" aria-label={field.label} value={typeof value === "string" ? value : ""} onChange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}><option value="">Choose an option</option>{selectOptions(field).map((option) => <option key={option} value={option}>{option}</option>)}</select>;
   if (field.type === "multi_select") return <div class="forms-preview-options">{selectOptions(field).map((option) => <label key={option}><input type="checkbox" checked={Array.isArray(value) && value.includes(option)} onChange={(event) => { const current = Array.isArray(value) ? value.filter((item): item is FormAnswerValue => item !== option) : []; onChange((event.currentTarget as HTMLInputElement).checked ? [...current, option] : current); }} /> {option}</label>)}</div>;
   if (field.type === "file") return <input class="forms-preview-input" aria-label={field.label} type="file" />;
-  return <input class="forms-preview-input" aria-label={field.label} type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "url" ? "url" : "text"} value={typeof value === "string" || typeof value === "number" ? String(value) : ""} onInput={(event) => onChange((event.currentTarget as HTMLInputElement).value)} />;
+  return <input class="forms-preview-input" aria-label={field.label} type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "date" ? "date" : "text"} value={typeof value === "string" || typeof value === "number" ? String(value) : ""} onInput={(event) => onChange((event.currentTarget as HTMLInputElement).value)} />;
 }
 
 function Preview({ fields, answers, onAnswer }: { fields: FormField[]; answers: Record<string, FormAnswerValue>; onAnswer: (key: string, value: FormAnswerValue) => void }): JSX.Element {

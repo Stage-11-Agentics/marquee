@@ -7,6 +7,7 @@ import calendarReversalMigrationSql from "../../migrations/0004_calendar_reversa
 import taskCancellationWebhooksMigrationSql from "../../migrations/0005_task_cancellation_webhooks.sql?raw";
 import auditRequestIdMigrationSql from "../../migrations/0006_audit_log_request_id.sql?raw";
 import embedWidgetKindsMigrationSql from "../../migrations/0007_embed_widget_kinds.sql?raw";
+import formFieldDatesMigrationSql from "../../migrations/0008_form_field_dates.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -72,6 +73,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(taskCancellationWebhooksMigrationSql),
     ...splitStatements(auditRequestIdMigrationSql),
     ...splitStatements(embedWidgetKindsMigrationSql),
+    ...splitStatements(formFieldDatesMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

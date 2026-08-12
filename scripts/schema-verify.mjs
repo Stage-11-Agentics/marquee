@@ -125,9 +125,15 @@ function parseMirrorColumns(source) {
 }
 
 const initialTables = names(/^CREATE TABLE (\w+) \(/gm, initialMigration);
-const expectedTables = names(/^CREATE TABLE (\w+) \(/gm, migration);
-const expectedIndexes = names(/^CREATE (?:UNIQUE )?INDEX (\w+)/gm, migration);
-const expectedTriggers = names(/^CREATE TRIGGER (\w+)/gm, migration);
+// Rebuild migrations create transient *_new tables before dropping and
+// renaming them. They are not part of the final product table registry.
+const expectedTables = names(/^CREATE TABLE (\w+) \(/gm, migration)
+  .filter((name) => !name.endsWith("_new"));
+// A rebuild recreates the original named indexes after dropping the old
+// table. The final schema has one of each, even though the migration history
+// contains the declaration twice.
+const expectedIndexes = [...new Set(names(/^CREATE (?:UNIQUE )?INDEX (\w+)/gm, migration))];
+const expectedTriggers = [...new Set(names(/^CREATE TRIGGER (\w+)/gm, migration))];
 const mirrorColumns = parseMirrorColumns(typeMirror);
 const requiredIndexes = [
   "idx_agenda_event_published_starts",
@@ -204,6 +210,9 @@ try {
   assert.match(firstApply.stdout, /0003_building_access_note\.sql/);
   assert.match(firstApply.stdout, /0004_calendar_reversal\.sql/);
   assert.match(firstApply.stdout, /0005_task_cancellation_webhooks\.sql/);
+  assert.match(firstApply.stdout, /0006_audit_log_request_id\.sql/);
+  assert.match(firstApply.stdout, /0007_embed_widget_kinds\.sql/);
+  assert.match(firstApply.stdout, /0008_form_field_dates\.sql/);
 
   const secondApply = runWrangler([
     "d1",

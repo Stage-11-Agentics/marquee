@@ -59,7 +59,7 @@ const publicFieldSchema = z.object({
   key: z.string(),
   label: z.string(),
   help_text: z.string().nullable(),
-  type: z.enum(["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number"]),
+  type: z.enum(["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number", "date"]),
   required: z.boolean(),
   position: z.number().int().nonnegative(),
   config: z.record(z.string(), z.unknown()),
