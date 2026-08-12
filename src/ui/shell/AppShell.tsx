@@ -10,6 +10,7 @@ import { useBrowserRouter } from "./router";
 import { SeatBlockedPage, useSeat } from "./seat";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { useIdentity } from "./identity";
 import { QuickSearch } from "./QuickSearch";
 import { CommsScreen } from "../comms/CommsScreen";
 import { DashboardPage } from "../dashboard/DashboardPage";
@@ -36,11 +37,13 @@ type ResetResponse = {
 const RESET_DEMO_ROUTE = "/api/v1/admin/reset-demo";
 const RESET_DEMO_STATUS_ROUTE = "/api/v1/admin/reset-demo/{jobId}";
 
-export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { eventName?: string; userInitials?: string }): JSX.Element {
+export function AppShell({ eventName = "AIE NYC 2026" }: { eventName?: string }): JSX.Element {
   const [location, navigate] = useBrowserRouter();
   const route = matchRoute(location.pathname, location.search);
   const [overlay, setOverlay] = useState<OverlayState | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const identity = useIdentity();
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState("");
   const { seat, blocked } = useSeat();
@@ -129,7 +132,15 @@ export function AppShell({ eventName = "AIE NYC 2026", userInitials = "MC" }: { 
     <div class="app-shell">
       <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} unavailable={unavailable} resetting={resetting} onReset={() => void resetDemo()} />
       <main class="main">
-        <Topbar eventName={eventName} routeName={routeName} userInitials={userInitials} openSearch={openSearch} openUser={() => unavailable("Program lead", "Account preferences land with authentication and conference administration.")} />
+        <Topbar
+          eventName={eventName}
+          routeName={routeName}
+          identity={identity}
+          userMenuOpen={userMenuOpen}
+          openSearch={openSearch}
+          toggleUser={() => setUserMenuOpen((open) => !open)}
+          closeUser={() => setUserMenuOpen(false)}
+        />
         <div class="page">
           {/* The shell's own boundary. Panels inside a screen carry their own,
               but a route module that throws on its first render has none — and

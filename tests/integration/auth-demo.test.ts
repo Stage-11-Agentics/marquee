@@ -7,6 +7,7 @@ import {
   DEMO_EVENT_ID,
   DEMO_ORGANIZATION_ID,
   DEMO_ORGANIZER_PERSON_ID,
+  DEMO_SPEAKER_PERSON_ID,
   demoFixtureRows,
 } from "../../src/lib/reset-demo/demo-fixture";
 import { applyMigrations, env } from "./apply-migrations";
@@ -304,4 +305,67 @@ test("CONTRACT · degrading to anonymous is scoped to public routes only", async
 
   expect(response.status).toBe(401);
   expect((await response.json<{ error: { code: string } }>()).error.code).toBe("unauthenticated");
+});
+
+// KYS-2. The demo hands out an owner session and a speaker session from the
+// same landing page onto the same cookie, and the admin shell showed neither a
+// name nor a way out. Identity has to come from the server for the shell to
+// render it, and sign-out has to actually end the session — a menu entry that
+// leaves the cookie alive is worse than no menu entry.
+
+async function demoSessionCookie(role: string): Promise<string> {
+  const response = await app.request("/api/v1/auth/demo", {
+    method: "POST",
+    body: JSON.stringify({ role }),
+    headers: { "content-type": "application/json" },
+  }, env);
+  expect(response.status).toBe(200);
+  return (response.headers.get("set-cookie") ?? "").split(";")[0];
+}
+
+async function readMe(cookie: string) {
+  const response = await app.request("/api/v1/auth/me", { headers: { cookie } }, env);
+  return { status: response.status, body: await response.json<{
+    person_id?: string;
+    person_name?: string | null;
+    person_email?: string | null;
+    memberships?: { role: string }[];
+  }>() };
+}
+
+test("CONTRACT · /auth/me names the person behind a session, not just their id", async () => {
+  await seedDemoFixture();
+  const { status, body } = await readMe(await demoSessionCookie("organizer"));
+
+  expect(status).toBe(200);
+  expect(body.person_id).toBe(DEMO_ORGANIZER_PERSON_ID);
+  // An id is not an answer to "which hat am I wearing".
+  expect(body.person_name).toBe("Demo Organizer");
+  expect(body.person_email).toBe("organizer@demo.marquee.example");
+  expect(body.memberships?.[0]?.role).toBe("owner");
+});
+
+test("CONTRACT · the two demo personas are distinguishable from /auth/me alone", async () => {
+  await seedDemoFixture();
+  const organizer = await readMe(await demoSessionCookie("organizer"));
+  const speaker = await readMe(await demoSessionCookie("speaker"));
+
+  expect(speaker.status).toBe(200);
+  expect(speaker.body.person_id).toBe(DEMO_SPEAKER_PERSON_ID);
+  // The judge's actual question, asked of the API: same shell, different hat.
+  expect(speaker.body.person_name).not.toBe(organizer.body.person_name);
+  expect(speaker.body.memberships?.[0]?.role).toBe("speaker");
+  expect(organizer.body.memberships?.[0]?.role).toBe("owner");
+});
+
+test("CONTRACT · signing out ends the session, so the shell's exit is a real exit", async () => {
+  await seedDemoFixture();
+  const cookie = await demoSessionCookie("organizer");
+  expect((await readMe(cookie)).status).toBe(200);
+
+  const loggedOut = await app.request("/api/v1/auth/logout", { method: "POST", headers: { cookie } }, env);
+  expect(loggedOut.status).toBe(200);
+
+  // The same cookie the browser still holds must no longer buy anything.
+  expect((await readMe(cookie)).status).toBe(401);
 });
