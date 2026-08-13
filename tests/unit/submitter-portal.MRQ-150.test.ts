@@ -94,7 +94,7 @@ describe("MRQ-150 the submitter's empty state", () => {
     }));
     expect(html).toContain("Your draft is saved, not yet submitted");
     expect(html).toContain("Finish and submit your abstract");
-    expect(html).toContain("confirmation email");
+    expect(html).toContain("Continue your conference abstract");
     expect(html).toContain("reopens it");
     expect(html).not.toContain("Nothing is waiting on you");
     expect(html.toLowerCase()).not.toContain("under review");
@@ -114,7 +114,9 @@ describe("MRQ-150 the submitter's empty state", () => {
   });
 
   test("CONTRACT · MRQ-150 · the submitter chip uses Maybe for a waitlisted abstract", () => {
-    expect(render(snapshot({ submissions: [submission({ status: "waitlisted" })] }))).toContain(">Maybe<");
+    const html = render(snapshot({ submissions: [submission({ status: "waitlisted" })] }));
+    expect(html).toContain("Your abstract is Maybe");
+    expect(html).toContain(">Maybe<");
   });
 
   test("CONTRACT · MRQ-150 · a lead status never borrows another abstract's wave date", () => {
@@ -127,8 +129,30 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).toContain("Your abstract was not selected");
     expect(html).toContain("Lead abstract");
     expect(html).toContain("Other abstract");
-    expect(html).not.toContain("Wave 2");
-    expect(html).not.toContain("October 1, 2026");
+    const otherStart = html.indexOf('data-submission-id="other-submitted"');
+    const leadStart = html.indexOf('data-submission-id="lead-rejected"');
+    const otherRow = html.slice(otherStart, html.indexOf("</article>", otherStart));
+    const leadRow = html.slice(leadStart, html.indexOf("</article>", leadStart));
+    expect(otherRow).toContain("Wave 2");
+    expect(otherRow).toContain("October 1, 2026");
+    expect(leadRow).not.toContain("Wave 2");
+    expect(leadRow).not.toContain("October 1, 2026");
+  });
+
+  test("CONTRACT · MRQ-150 · a draft lead does not hide another abstract's decision date", () => {
+    const html = render(snapshot({
+      submissions: [
+        submission({ id: "lead-draft", status: "draft", submitted_at: null, wave_name: null, wave_decision_on: null }),
+        submission({ id: "other-submitted", status: "submitted", wave_name: "Wave 2", wave_decision_on: "2026-10-01" }),
+      ],
+    }));
+    const otherStart = html.indexOf('data-submission-id="other-submitted"');
+    const otherRow = html.slice(otherStart, html.indexOf("</article>", otherStart));
+    expect(html).toContain("Your draft is saved, not yet submitted");
+    expect(html).toContain("Finish and submit your abstract");
+    expect(otherRow).toContain("Wave 2");
+    expect(otherRow).toContain("October 1, 2026");
+    expect(html).not.toContain("Decisions for Wave 2 go out by October 1, 2026");
   });
 
   test("CONTRACT · MRQ-153 · a rejected submitter preview keeps its viewing-as label", () => {

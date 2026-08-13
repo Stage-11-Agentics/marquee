@@ -228,4 +228,5 @@
 .portal-submitted-copy { min-width: 0; }
 .portal-submitted-copy strong { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .portal-submitted-copy span { color: var(--muted); font-size: 11px; }
+.portal-submitted-copy .portal-submitted-wave { color: var(--ink-soft); display: block; }
 .portal-submitted-status { color: var(--muted); font: 600 10px/1 var(--mono); letter-spacing: .08em; text-align: right; text-transform: uppercase; }

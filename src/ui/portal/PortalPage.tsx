@@ -777,7 +777,7 @@ function formatCalendarDay(value: string): string {
 function submitterHeadline(status: string): string {
   if (status === "draft") return "Your draft is saved, not yet submitted";
   if (status === "accepted") return "Your abstract was accepted";
-  if (status === "waitlisted") return "Your abstract is waitlisted";
+  if (status === "waitlisted") return "Your abstract is Maybe";
   if (status === "rejected") return "Your abstract was not selected";
   if (status === "withdrawn") return "You withdrew this abstract";
   if (status === "in_review") return "Your abstract is under review";
@@ -790,6 +790,10 @@ function submitterStatusLabel(status: string): string {
   return status.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
+function isSubmitterAwaitingDecision(status: string): boolean {
+  return status === "submitted" || status === "in_review";
+}
+
 function submitterOutcomeCopy(status: string): string {
   if (status === "accepted") return "The program team accepted this abstract for the conference.";
   if (status === "waitlisted") return "The program team marked this abstract as Maybe.";
@@ -799,10 +803,17 @@ function submitterOutcomeCopy(status: string): string {
 }
 
 function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX.Element {
-  return <article class="portal-submitted-row" data-submission-status={submission.status}>
+  const decisionDetails = isSubmitterAwaitingDecision(submission.status)
+    ? [
+      submission.wave_name,
+      submission.wave_decision_on ? `decision by ${formatCalendarDay(submission.wave_decision_on)}` : null,
+    ].filter((value): value is string => Boolean(value)).join(" · ")
+    : null;
+  return <article class="portal-submitted-row" data-submission-id={submission.id} data-submission-status={submission.status}>
     <div class="portal-submitted-copy">
       <strong title={submission.title}>{submission.title}</strong>
       <span>{submission.format ?? "Format not set"} · {submission.submitted_at === null ? "Not yet submitted" : `Submitted ${formatDate(submission.submitted_at)}`}</span>
+      {decisionDetails ? <span class="portal-submitted-wave">{decisionDetails}</span> : null}
     </div>
     <span class="portal-submitted-status">{submitterStatusLabel(submission.status)}</span>
   </article>;
@@ -823,7 +834,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
   const decisionOn = lead.wave_decision_on;
   const waveName = lead.wave_name;
   const isDraft = lead.status === "draft";
-  const isAwaitingDecision = lead.status === "submitted" || lead.status === "in_review";
+  const isAwaitingDecision = isSubmitterAwaitingDecision(lead.status);
   const decisionCopy = decisionOn
     ? `Decisions for ${waveName ?? "this round"} go out by ${formatCalendarDay(decisionOn)}.`
     : "The program team has not set a decision date for this round yet.";
@@ -832,7 +843,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
     ? snapshot.submissions.map((submission) => submission.form_slug).find((value): value is string => Boolean(value)) ?? null
     : null;
   const heroCopy = isDraft
-    ? "This abstract is saved as a draft, not yet submitted. The link in your confirmation email reopens it when you are ready to finish and submit."
+    ? "This abstract is saved as a draft, not yet submitted."
     : isAwaitingDecision
       ? decisionCopy
       : submitterOutcomeCopy(lead.status);
@@ -846,7 +857,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
       {viewingAsSpeaker ? <div class="portal-viewing-as" role="status">Viewing as speaker · organizer preview</div> : null}
       <section class="portal-status-hero" aria-labelledby="portal-status-heading" data-portal-seat="submitter">
         <span class="eyebrow">Current status</span>
-        <h1 id="portal-status-heading">{submitterHeadline(lead?.status ?? "submitted")}</h1>
+        <h1 id="portal-status-heading">{submitterHeadline(lead.status)}</h1>
         <div class="portal-status-meta">
           <div class="portal-status-copy">
             <strong title={lead.title}>{lead.title}</strong><br />
@@ -865,15 +876,15 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
         {isDraft ? <section class="portal-panel portal-submitter-flow" aria-labelledby="next-heading">
           <header class="portal-panel-head"><h2 id="next-heading">Your next step</h2><span>action needed</span></header>
           <div class="portal-panel-body">
-            <div class="portal-submitter-action"><strong>Finish and submit your abstract.</strong><p>This abstract is saved as a draft, not yet submitted. The link in your confirmation email reopens it when you are ready to finish and submit.</p></div>
+            <div class="portal-submitter-action"><strong>Finish and submit your abstract.</strong><p>The email titled “Continue your conference abstract” includes a link that reopens it when you are ready to finish and submit.</p></div>
           </div>
         </section> : isAwaitingDecision ? <section class="portal-panel portal-submitter-flow" aria-labelledby="next-heading">
           <header class="portal-panel-head"><h2 id="next-heading">What happens next</h2><span>three steps</span></header>
           <div class="portal-panel-body">
             <ol class="portal-next-steps">
-              <li><strong>Review.</strong> The program team reads every abstract. Yours is in the queue — there is no further step for you here.</li>
-              <li><strong>Decision.</strong> {decisionCopy} We write to <strong>{snapshot.person.email}</strong> either way.</li>
-              <li><strong>If it is accepted.</strong> This page becomes your speaker portal — your tasks, profile, headshot, and session time all arrive here.</li>
+              <li><strong>Review.</strong><span>The program team reads every abstract. Yours is in the queue — there is no further step for you here.</span></li>
+              <li><strong>Decision.</strong><span>{decisionCopy} We write to <strong>{snapshot.person.email}</strong> either way.</span></li>
+              <li><strong>If it is accepted.</strong><span>This page becomes your speaker portal — your tasks, profile, headshot, and session time all arrive here.</span></li>
             </ol>
           </div>
         </section> : <section class="portal-panel portal-submitter-flow" aria-labelledby="status-update-heading">
