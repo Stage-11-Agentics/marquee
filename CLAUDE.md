@@ -108,34 +108,6 @@ git worktree add ../Marquee-worktrees/<branch> <branch>
 - The board is committed to `main` on purpose. Conflicts in `.lattice/events/*.jsonl`
   and `ids.json` are survivable and visible; uncommitted board state disappears silently.
 
-## The primary checkout is the Lattice board's home, never a workspace
-
-`/Users/atin/Projects/Stage11/deployments/Marquee` holds the one Lattice board.
-Every linked worktree resolves to it — Lattice's `find_root()` deliberately jumps to
-the primary worktree so the fleet shares one board instead of diverging copies. That
-design holds only while the primary checkout is a stable anchor.
-
-**So: no code work in the primary checkout.** No branching, no `git stash`, no
-`git checkout <branch>`, no `git clean`, no rebasing, no editing source. It stays
-parked on `main`. All work happens in a linked worktree:
-
-```sh
-git worktree add ../Marquee-worktrees/<branch> <branch>
-```
-
-- **Launch agents with the board pinned:** `c11 launch-agent … --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee`.
-  Board resolution then never depends on cwd or on what branch anything is on.
-- **Minting tickets is single-writer** — the orchestrator/intake agent only. Lattice's
-  CLI has an unlocked read-decide-write window, and concurrent `lattice create` calls
-  are how the ID counter corrupts and starts re-minting `MRQ-1`. Delegators updating
-  their *own* task's status, plan, and comments is fine; those touch disjoint files.
-- **Never "clean up" state you cannot attribute.** In a multi-agent tree, unfamiliar
-  uncommitted changes are almost always a sibling agent's live work. Ask, or leave it.
-  If the tree looks broken, raise a c11 flag rather than reaching for `stash` or
-  `reset` — recovering a stash nobody knew to look in costs far more than waiting.
-- The board is committed to `main` on purpose. Conflicts in `.lattice/events/*.jsonl`
-  and `ids.json` are survivable and visible; uncommitted board state disappears silently.
-
 ## Delegator harness defaults (this project)
 
 **Model routing by kind of work** (operator directive, 2026-08-10):
