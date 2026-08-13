@@ -145,9 +145,8 @@ test("AC-106 · the docs route returns HTML rendered from the same document, wit
 
 /**
  * MRQ-150 — `info.description` is a claim a technical judge can falsify in one
- * request, so it is held to the route table rather than to an author's memory.
- * The document used to state that mutations carry `ETag`/`If-Match` optimistic
- * concurrency; two of two hundred did.
+ * request, so it is held to the route table that actually enforces it rather
+ * than to an author's memory.
  */
 test("CONTRACT · MRQ-150 · the document's concurrency claim matches the routes that actually enforce it", async () => {
   const enforcing = apiManifest
