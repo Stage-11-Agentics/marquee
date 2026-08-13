@@ -11,6 +11,7 @@ import {
   authorizeReviewerQueueScope,
   reviewerPersonIdForEvent,
 } from "../lib/reviewer-scope";
+import { parseSocialLinks } from "../lib/person-profile";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const roundParams = eventParams.extend({ roundId: z.string().min(1) });
@@ -116,6 +117,24 @@ interface ScopeRow {
   color: string;
   id: string;
   name: string;
+}
+
+interface ReviewerProfileRow {
+  bio: string | null;
+  company: string | null;
+  email: string;
+  headshot_attachment_id: string | null;
+  id: string;
+  name: string;
+  social_links: string | null;
+  title: string | null;
+  updated_at: number;
+}
+
+interface CommitteeRow {
+  id: string;
+  name: string;
+  role: string;
 }
 
 const proposalStatus = {
@@ -307,6 +326,72 @@ async function reviewerTrackScopes(db: D1Database, eventId: string, personId: st
     ORDER BY track.position, track.id
   `).bind(eventId, personId).all<ScopeRow>();
   return result.results;
+}
+
+async function reviewerProfile(db: D1Database, eventId: string, personId: string): Promise<Record<string, unknown> | null> {
+  const row = await db.prepare(`
+    SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
+      person.social_links, person.headshot_attachment_id, person.updated_at
+    FROM people person
+    JOIN memberships membership
+      ON membership.person_id = person.id
+     AND membership.event_id = ?
+     AND membership.role = 'reviewer'
+    WHERE person.id = ?
+  `).bind(eventId, personId).first<ReviewerProfileRow>();
+  if (!row) return null;
+  return {
+    bio: row.bio,
+    company: row.company,
+    email: row.email,
+    headshot_attachment_id: row.headshot_attachment_id,
+    id: row.id,
+    name: row.name,
+    social_links: parseSocialLinks(row.social_links),
+    title: row.title,
+    updated_at: row.updated_at,
+  };
+}
+
+async function reviewerCommittees(db: D1Database, eventId: string, personId: string): Promise<CommitteeRow[]> {
+  const result = await db.prepare(`
+    SELECT committee.id, committee.name, member.role
+    FROM committee_members member
+    JOIN committees committee
+      ON committee.id = member.committee_id
+     AND committee.event_id = ?
+    WHERE member.person_id = ?
+    ORDER BY committee.name COLLATE NOCASE, committee.id
+  `).bind(eventId, personId).all<CommitteeRow>();
+  return result.results;
+}
+
+/** Count only assigned records that this reviewer can still truthfully see. */
+async function reviewerReviewedCount(db: D1Database, eventId: string, roundId: string, personId: string): Promise<number> {
+  const row = await db.prepare(`
+    SELECT COUNT(DISTINCT evaluation.submission_id) AS reviewed
+    FROM evaluations evaluation
+    JOIN round_assignments assignment
+      ON assignment.round_id = evaluation.round_id
+     AND assignment.submission_id = evaluation.submission_id
+     AND assignment.reviewer_person_id = evaluation.reviewer_person_id
+     AND assignment.status IN ('assigned', 'complete')
+    JOIN submissions submission
+      ON submission.id = assignment.submission_id
+     AND submission.event_id = ?
+    WHERE evaluation.round_id = ?
+      AND evaluation.reviewer_person_id = ?
+      AND EXISTS (
+        SELECT 1
+        FROM submission_tracks carried
+        JOIN reviewer_track_scopes scope
+          ON scope.track_id = carried.track_id
+         AND scope.event_id = submission.event_id
+         AND scope.person_id = ?
+        WHERE carried.submission_id = submission.id
+      )
+  `).bind(eventId, roundId, personId, personId).first<{ reviewed: number }>();
+  return Number(row?.reviewed ?? 0);
 }
 
 async function activeRoundForEvent(db: D1Database, eventId: string, principal: Principal): Promise<RoundRow> {
@@ -521,10 +606,20 @@ async function reviewerQueuePayload(
     const row = rows.get(submissionId) ?? null;
     if (row) data.push({ ...row, tracks: parseJsonArray(row.tracks), queue_id: row.id, position: index + 1 });
   }
-  const completed = personId === null ? [] : await completedQueue(db, principal, eventId, round, personId);
+  const [completed, profile, committees, reviewed] = personId === null
+    ? [[], null, [], 0] as const
+    : await Promise.all([
+      completedQueue(db, principal, eventId, round, personId),
+      reviewerProfile(db, eventId, personId),
+      reviewerCommittees(db, eventId, personId),
+      reviewerReviewedCount(db, eventId, round.id, personId),
+    ]);
+  const counts = { reviewed, total: data.length + reviewed, waiting: data.length };
   return {
+    committees,
     completed,
     completed_truncated: completed.length >= COMPLETED_PAGE,
+    counts,
     current_id: data[0]?.id ?? null,
     current_index: data.length ? 0 : null,
     data,
@@ -533,11 +628,14 @@ async function reviewerQueuePayload(
     remaining: data.length,
     round: {
       anonymized: Boolean(round.anonymized),
+      closes_at: round.closes_at,
       criteria: await criteriaForRound(db, round.id),
       id: round.id,
       mode: round.mode,
       name: round.name,
+      position: round.position,
     },
+    person: profile,
     scopes: personId ? await reviewerTrackScopes(db, eventId, personId) : [],
     total: data.length,
   };
@@ -645,11 +743,19 @@ async function comparisonQueuePayload(
     const row = rows.get(submissionId);
     if (row) data.push({ ...row, tracks: parseJsonArray(row.tracks), queue_id: row.id, position: data.length + 1 });
   }
+  const [profile, committees, reviewed] = await Promise.all([
+    reviewerProfile(db, eventId, personId),
+    reviewerCommittees(db, eventId, personId),
+    reviewerReviewedCount(db, eventId, round.id, personId),
+  ]);
   return {
+    committees,
     data,
     eligible_count: eligibleIds.length,
+    counts: { reviewed, total: eligibleIds.length + reviewed, waiting: eligibleIds.length },
     plan: { id: round.plan_id, name: round.plan_name },
-    round: { anonymized: Boolean(round.anonymized), id: round.id, mode: round.mode, name: round.name, position: round.position },
+    round: { anonymized: Boolean(round.anonymized), closes_at: round.closes_at, id: round.id, mode: round.mode, name: round.name, position: round.position },
+    person: profile,
     scopes: await reviewerTrackScopes(db, eventId, personId),
   };
 }

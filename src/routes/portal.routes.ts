@@ -285,6 +285,20 @@ function requireUnscopedSpeakerSession(context: import("hono").Context<ApiEnv>):
   return auth;
 }
 
+/** A self-owned public profile belongs to any event seat that has one. */
+async function requireProfileSession(context: import("hono").Context<ApiEnv>): Promise<SessionAuth> {
+  const auth = requireUnscopedSpeakerSession(context);
+  const membership = await context.env.DB.prepare(`
+    SELECT 1 AS present
+    FROM memberships
+    WHERE org_id = ? AND person_id = ? AND event_id IS NOT NULL
+      AND role IN ('speaker', 'reviewer')
+    LIMIT 1
+  `).bind(auth.orgId, auth.personId).first<{ present: number }>();
+  if (!membership) throw ApiError.notFound("speaker profile not found");
+  return auth;
+}
+
 function coSpeakerParticipationId(auth: SessionAuth): string | null {
   const hint = auth.roleHint;
   if (!hint?.startsWith("cospeaker_profile:")) return null;
@@ -1385,8 +1399,7 @@ function talkEditingOpen(current: Awaited<ReturnType<typeof editableTalk>>): boo
 }
 
 async function updateProfile(context: import("hono").Context<ApiEnv>, body: z.infer<typeof profileBody>) {
-  const auth = requireUnscopedSpeakerSession(context);
-  await speakerEvent(context.env.DB, auth);
+  const auth = await requireProfileSession(context);
   const current = await personFor(context.env.DB, auth.personId);
   let headshot = current.headshot_attachment_id;
   if (body.headshot_attachment_id !== undefined) {
@@ -1557,8 +1570,8 @@ const updateSpeakerProfile = defineApiRoute(
     method: "patch",
     path: "/api/v1/me/profile",
     operationId: "updateSpeakerProfile",
-    summary: "Update the authenticated speaker profile",
-    description: "Updates the session speaker's public profile and optional ready headshot attachment.",
+    summary: "Update the authenticated profile",
+    description: "Updates the session person's public profile and optional ready headshot attachment.",
     tags: ["Speaker portal"],
     request: { body: { content: { "application/json": { schema: profileBody } } } },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
