@@ -108,7 +108,7 @@ describe("MRQ-150 the submitter's empty state", () => {
       const html = render(snapshot({ submissions: [submission({ status })] }));
       expect(html).not.toContain("What happens next");
       expect(html).not.toContain("portal-next-steps");
-      expect(html).toContain("Nothing else is needed from you here.");
+      expect(html).toMatch(/No further action is needed from you in this submitter seat\.|Nothing else is needed from you here\./);
       expect(html.toLowerCase()).not.toContain("next decision");
       expect(html.toLowerCase()).not.toContain("go out by");
       expect(html.toLowerCase()).not.toContain("has not set a decision date");
@@ -119,6 +119,10 @@ describe("MRQ-150 the submitter's empty state", () => {
     const html = render(snapshot({ submissions: [submission({ status: "waitlisted" })] }));
     expect(html).toContain("Your abstract is a Maybe");
     expect(html).toContain(">Maybe<");
+    expect(html).toContain("still in consideration");
+    expect(html).toContain("September 21, 2026");
+    expect(html).toContain("What happens next");
+    expect(html).not.toContain("Nothing else is needed from you here.");
   });
 
   test("CONTRACT · MRQ-150 · a lead status never borrows another abstract's wave date", () => {

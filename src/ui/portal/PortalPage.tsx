@@ -791,6 +791,10 @@ function submitterStatusLabel(status: string): string {
 }
 
 function isSubmitterAwaitingDecision(status: string): boolean {
+  return status === "submitted" || status === "in_review" || status === "waitlisted";
+}
+
+function isSubmitterAwaitingReview(status: string): boolean {
   return status === "submitted" || status === "in_review";
 }
 
@@ -799,11 +803,22 @@ function submitterOutcomeCopy(status: string): string {
   if (status === "waitlisted") return "The program team marked this abstract as Maybe.";
   if (status === "rejected") return "The program team did not select this abstract for the conference.";
   if (status === "withdrawn") return "This abstract is no longer in consideration.";
-  return "This abstract's current status is recorded here.";
+  return "The conference team has not shared a more specific update for this abstract yet.";
 }
 
-function submitterTerminalCopy(): string {
+function submitterTerminalCopy(status: string): string {
+  if (status === "accepted") return "No further action is needed from you in this submitter seat.";
   return "Nothing else is needed from you here.";
+}
+
+function submitterProgressCopy(status: string): string {
+  if (status === "draft") return "Finish and submit your abstract";
+  if (status === "waitlisted") return "Maybe · still in consideration";
+  if (isSubmitterAwaitingReview(status)) return "Nothing is waiting on you";
+  if (status === "accepted") return "Accepted";
+  if (status === "rejected") return "Not selected";
+  if (status === "withdrawn") return "Withdrawn";
+  return "Status current";
 }
 
 function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX.Element {
@@ -838,7 +853,8 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
   const decisionOn = lead.wave_decision_on;
   const waveName = lead.wave_name;
   const isDraft = lead.status === "draft";
-  const isAwaitingDecision = isSubmitterAwaitingDecision(lead.status);
+  const isWaitlisted = lead.status === "waitlisted";
+  const isAwaitingReview = isSubmitterAwaitingReview(lead.status);
   const decisionCopy = decisionOn
     ? `Decisions for ${waveName ?? "this round"} go out by ${formatCalendarDay(decisionOn)}.`
     : "The program team has not set a decision date for this round yet.";
@@ -848,10 +864,12 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
     : null;
   const heroCopy = isDraft
     ? "This abstract is saved as a draft, not yet submitted."
-    : isAwaitingDecision
+    : isWaitlisted
+      ? "The program team marked this abstract as Maybe. It is still in consideration."
+      : isAwaitingReview
       ? decisionCopy
       : submitterOutcomeCopy(lead.status);
-  const progressCopy = isDraft ? "Finish and submit your abstract" : isAwaitingDecision ? "Nothing is waiting on you" : "Status recorded";
+  const progressCopy = submitterProgressCopy(lead.status);
   return <div class="portal-shell">
     <header class="portal-top">
       <span class="portal-brand">Marquee · Your submission</span>
@@ -882,7 +900,10 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
           <div class="portal-panel-body">
             <div class="portal-submitter-action"><strong>Finish and submit your abstract.</strong><p>If you saved this draft through the public call, the email titled “Continue your conference abstract” includes a link that reopens it when you are ready to finish and submit.</p></div>
           </div>
-        </section> : isAwaitingDecision ? <section class="portal-panel portal-submitter-flow" aria-labelledby="next-heading">
+        </section> : isWaitlisted ? <section class="portal-panel portal-submitter-flow" aria-labelledby="maybe-heading">
+          <header class="portal-panel-head"><h2 id="maybe-heading">What happens next</h2><span>Maybe status</span></header>
+          <div class="portal-panel-body"><p class="portal-submitter-status-note">{decisionCopy} Any further update will appear here.</p></div>
+        </section> : isAwaitingReview ? <section class="portal-panel portal-submitter-flow" aria-labelledby="next-heading">
           <header class="portal-panel-head"><h2 id="next-heading">What happens next</h2><span>three steps</span></header>
           <div class="portal-panel-body">
             <ol class="portal-next-steps">
@@ -892,8 +913,8 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
             </ol>
           </div>
         </section> : <section class="portal-panel portal-submitter-flow" aria-labelledby="status-update-heading">
-          <header class="portal-panel-head"><h2 id="status-update-heading">Submission update</h2><span>status recorded</span></header>
-          <div class="portal-panel-body"><p class="portal-submitter-status-note">{submitterTerminalCopy()}</p></div>
+          <header class="portal-panel-head"><h2 id="status-update-heading">Submission update</h2><span>current outcome</span></header>
+          <div class="portal-panel-body"><p class="portal-submitter-status-note">{submitterTerminalCopy(lead.status)}</p></div>
         </section>}
         <section class="portal-panel" aria-labelledby="reach-heading">
           <header class="portal-panel-head"><h2 id="reach-heading">Getting back here</h2><span>{snapshot.person.email}</span></header>

@@ -73,8 +73,8 @@ const declineBody = z.object({ note: z.string().trim().max(10_000).nullable().op
 
 /** Statuses that still have a decision coming, so a wave date is worth showing. */
 const AWAITING_DECISION = ["draft", "submitted", "in_review"];
-/** Submitter drafts are unfinished work, not abstracts waiting for a decision. */
-const SUBMITTER_AWAITING_DECISION = ["submitted", "in_review"];
+/** Submitter drafts are unfinished work; Maybe remains in consideration. */
+const SUBMITTER_AWAITING_DECISION = ["submitted", "in_review", "waitlisted"];
 
 const portalResponseSchema = z
   .object({
