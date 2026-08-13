@@ -8,6 +8,9 @@ https://marquee.stage11.dev/health` names the build you are on).
 **Base URL: https://marquee.stage11.dev**
 **Seats: https://marquee.stage11.dev/signin — organizer, reviewer, speaker.
 One click each, no password, no signup.**
+**Prefer typing an address? `organizer@demo.com`, `reviewer@demo.com` and
+`speaker@demo.com` in the sign-in form open the same three seats directly — no
+link to wait for.**
 
 The demo is a populated instance of **AI Engineer New York 2026** (Oct 12–14,
 Sheraton New York Times Square): 1,001 seeded submissions, a live review round,

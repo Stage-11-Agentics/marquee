@@ -15,11 +15,13 @@ live site immediately before submitting.**
 > New York 2026 (Oct 12–14): ~1,000 submissions, a live review round, a built
 > agenda, and a published public program.
 >
-> SIGN IN: https://marquee.stage11.dev/signin has three one-click demo seats,
-> no password: "Enter as organizer" (full program workspace), "Enter as
+> SIGN IN: https://marquee.stage11.dev/signin leads with three one-click demo
+> seats, no password: "Enter as organizer" (full program workspace), "Enter as
 > reviewer" (a track-scoped evaluation queue), "Enter as speaker" (an accepted
-> speaker's portal with status, schedule, tasks, bio). Sign out at /signin to
-> switch seats.
+> speaker's portal with status, schedule, tasks, bio). The sign-in form below
+> them opens the same seats for organizer@demo.com, reviewer@demo.com and
+> speaker@demo.com — typed, no email round-trip. Sign out at /signin to switch
+> seats.
 >
 > ORGANIZER surfaces (after entering as organizer): /dashboard (pipeline and
 > wave planner), /submissions (the register, ~1,000 rows, server-side

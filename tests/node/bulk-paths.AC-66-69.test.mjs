@@ -172,6 +172,20 @@ function nonMapPlaceholderSites(modules) {
 
 const EXPECTED_PLACEHOLDER_SITES = [
   {
+    file: "src/lib/auth/demo-seat.ts",
+    owner: "findDemoPersona",
+    binding: "preferenceOrder",
+    expression: 'preferred.map(() => "?")',
+    classification: "at most two ids, from the module-level DEMO_PERSONA_PREFERENCE table; no caller-supplied list reaches it",
+  },
+  {
+    file: "src/lib/auth/demo-seat.ts",
+    owner: "findDemoPersona",
+    binding: "staffExclusion",
+    expression: 'DEMO_STAFF_ROLES.map(() => "?")',
+    classification: "one placeholder per role in the three-value DEMO_STAFF_ROLES taxonomy",
+  },
+  {
     file: "src/lib/events/copy-event.ts",
     owner: "planEventCopy",
     binding: null,
@@ -226,20 +240,6 @@ const EXPECTED_PLACEHOLDER_SITES = [
     binding: "placeholders",
     expression: 'statuses.map(() => "?")',
     classification: "bounded by the seven-value SCHEDULABLE_STATUS_OPTIONS taxonomy",
-  },
-  {
-    file: "src/routes/auth.routes.ts",
-    owner: "findDemoPersona",
-    binding: "preferenceOrder",
-    expression: 'preferred.map(() => "?")',
-    classification: "at most two ids, from the module-level DEMO_PERSONA_PREFERENCE table; no caller-supplied list reaches it",
-  },
-  {
-    file: "src/routes/auth.routes.ts",
-    owner: "findDemoPersona",
-    binding: "staffExclusion",
-    expression: 'DEMO_STAFF_ROLES.map(() => "?")',
-    classification: "one placeholder per role in the three-value DEMO_STAFF_ROLES taxonomy",
   },
   {
     file: "src/routes/evaluation.routes.ts",

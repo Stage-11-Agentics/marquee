@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
-import type { EventRow, MembershipRole, MembershipRow, PersonRow } from "../db/schema";
+import type { EventRow, MembershipRow, PersonRow } from "../db/schema";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import { clearSessionCookie, setSessionCookie } from "../lib/cookies";
@@ -11,13 +11,9 @@ import { consumeMagicLink, mintMagicLink } from "../lib/auth/magic-links";
 import { createSession, revokeSession, SESSION_TTL_MS } from "../lib/auth/auth-sessions";
 import { loadMembershipsForOrg } from "../lib/auth/scope-resolution";
 import { pickOutboxEventId, rolesOf, signinRedirect } from "../lib/auth/signin-destination";
+import type { DemoRole } from "../lib/auth/demo-seat";
+import { DEMO_ROLE_TO_MEMBERSHIP, demoRoleForEmail, findDemoPersona } from "../lib/auth/demo-seat";
 import { findDemoEvent } from "../lib/demo-event";
-import {
-  DEMO_ORGANIZER_PERSON_ID,
-  DEMO_SPEAKER_PERSON_ID,
-  SHIPPED_DEMO_ORGANIZER_PERSON_ID,
-  SHIPPED_DEMO_SPEAKER_PERSON_ID,
-} from "../lib/reset-demo/demo-fixture";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 
 /**
@@ -83,6 +79,12 @@ const magicLinkResponseSchema = z.object({
   ok: z.literal(true),
   message: z.string(),
   magic_link: z.string().optional(),
+  /**
+   * Present only when a demo address opened a demo seat: the session cookie is
+   * already set and this says where that seat lives. Absent on every other
+   * instance and every other address, so its absence is never an oracle.
+   */
+  demo_seat: z.object({ role: roleSchema, redirect_to: z.string() }).optional(),
 });
 const authMeResponseSchema = z.object({
   kind: z.enum(["session", "api_token"]),
@@ -121,7 +123,8 @@ const demoLogin = defineApiRoute(
   },
   (async (context: Context<ApiEnv>) => {
     const body = await context.req.json<z.infer<typeof demoRequestSchema>>();
-    const membershipRole = DEMO_ROLE_TO_MEMBERSHIP[body.role];
+    const role = body.role as DemoRole;
+    const membershipRole = DEMO_ROLE_TO_MEMBERSHIP[role];
     const event = await findDemoEvent(context.env.DB);
     if (!event) {
       dropRejectedSessionCookie(context);
@@ -131,7 +134,7 @@ const demoLogin = defineApiRoute(
       );
     }
 
-    const persona = await findDemoPersona(context.env.DB, event.id, body.role, membershipRole);
+    const persona = await findDemoPersona(context.env.DB, event.id, role, membershipRole);
     if (!persona) {
       dropRejectedSessionCookie(context);
       return context.json(
@@ -149,7 +152,7 @@ const demoLogin = defineApiRoute(
     context.header("Cache-Control", "no-store");
     return context.json({
       ok: true as const,
-      role: body.role,
+      role,
       event_id: event.id,
       person: { id: persona.id, name: persona.name },
     }, 200);
@@ -179,6 +182,16 @@ const requestMagicLink = defineApiRoute(
   (async (context: Context<ApiEnv>) => {
     const body = await context.req.json<z.infer<typeof magicLinkRequestSchema>>();
     const now = Date.now();
+
+    // A demo address typed into the form is the same request as clicking the
+    // matching door, so it gets the same session rather than a mail round-trip
+    // to an address no mailbox will ever hold. Off a demo instance this returns
+    // null and the address falls through to the generic answer below, which is
+    // what every unknown address gets — the door must not become an oracle for
+    // "is this deployment the demo".
+    const demoSeat = await openDemoSeatForEmail(context, body.email, body.redirect_to);
+    if (demoSeat) return demoSeat;
+
     const person = await findPersonForSignin(context.env.DB, body.email, body.event_id);
     let onScreenLink: string | undefined;
 
@@ -359,71 +372,41 @@ const getCurrentAuth = defineApiRoute(
   }) as never,
 );
 
-const DEMO_ROLE_TO_MEMBERSHIP: Record<string, MembershipRole> = {
-  organizer: "owner",
-  reviewer: "reviewer",
-  speaker: "speaker",
-};
-
-/** SPEC §4.1's program-staff roles — the seats that carry organizer navigation. */
-const DEMO_STAFF_ROLES: readonly string[] = ["owner", "program_lead", "ops"];
-
 /**
- * The persona the demo fixture names for a role, when it names one.
+ * The seat a demo address opens, or null when this instance has none.
  *
- * Reviewer names none: it resolves to whichever seeded reviewer sorts first,
- * which is the honest answer for a role the fixture does not personify.
+ * Null is the important half. Everything here gates on a live demo event and a
+ * seeded persona for the role, so on a self-hosted instance `organizer@demo.com`
+ * is exactly as unremarkable as any other address nobody registered: the caller
+ * falls through to the generic acknowledgement, mints nothing, and sets no
+ * cookie. Nothing about the reply tells a stranger which kind of deployment
+ * they are talking to.
  */
-const DEMO_PERSONA_PREFERENCE: Record<string, readonly string[]> = {
-  organizer: [SHIPPED_DEMO_ORGANIZER_PERSON_ID, DEMO_ORGANIZER_PERSON_ID],
-  reviewer: [],
-  speaker: [SHIPPED_DEMO_SPEAKER_PERSON_ID, DEMO_SPEAKER_PERSON_ID],
-};
+async function openDemoSeatForEmail(
+  context: Context<ApiEnv>,
+  email: string,
+  redirectTo: string | undefined,
+): Promise<Response | null> {
+  const role: DemoRole | null = demoRoleForEmail(email);
+  if (!role) return null;
+  const event = await findDemoEvent(context.env.DB);
+  if (!event) return null;
+  const membershipRole = DEMO_ROLE_TO_MEMBERSHIP[role];
+  const persona = await findDemoPersona(context.env.DB, event.id, role, membershipRole);
+  if (!persona) return null;
 
-/**
- * A demo door has to open the same seat every time, and the *right* seat.
- *
- * The seeded program staffer holds `reviewer` alongside `owner` and
- * `program_lead`, so an unordered `LIMIT 1` can answer "sign me in as a
- * reviewer" with the organizer — the reviewer door would then present full
- * organizer navigation, which is not a reviewer demo at all. Two rules fix it:
- * a non-staff role never resolves to a staff holder, and the remaining
- * candidates are ordered rather than left to whatever the table returns.
- */
-async function findDemoPersona(
-  db: D1Database,
-  eventId: string,
-  role: string,
-  membershipRole: MembershipRole,
-): Promise<PersonRow | null> {
-  const preferred = DEMO_PERSONA_PREFERENCE[role] ?? [];
-  const excludeStaff = !DEMO_STAFF_ROLES.includes(membershipRole);
-  const bindings: (string | number)[] = [eventId, membershipRole];
-  const staffExclusion = excludeStaff
-    ? `AND NOT EXISTS (
-         SELECT 1 FROM memberships staff
-         WHERE staff.person_id = p.id
-           AND staff.role IN (${DEMO_STAFF_ROLES.map(() => "?").join(", ")})
-           AND (staff.event_id = ? OR staff.event_id IS NULL)
-       )`
-    : "";
-  if (excludeStaff) bindings.push(...DEMO_STAFF_ROLES, eventId);
-  const preferenceOrder = preferred.length > 0
-    ? `CASE WHEN p.id IN (${preferred.map(() => "?").join(", ")}) THEN 0 ELSE 1 END, `
-    : "";
-  if (preferred.length > 0) bindings.push(...preferred);
-
-  const persona = await db.prepare(
-    `SELECT p.* FROM people p
-     JOIN memberships m ON m.person_id = p.id
-     WHERE p.is_demo = 1 AND m.event_id = ? AND m.role = ?
-     ${staffExclusion}
-     ORDER BY ${preferenceOrder}p.created_at ASC, p.id ASC
-     LIMIT 1`,
-  )
-    .bind(...bindings)
-    .first<PersonRow>();
-  return persona ?? null;
+  const session = await createSession(context.env.DB, {
+    personId: persona.id,
+    roleHint: membershipRole,
+    userAgent: context.req.header("user-agent") ?? "",
+  });
+  setSessionCookie(context, session.id, SESSION_TTL_MS / 1000);
+  context.header("Cache-Control", "no-store");
+  return context.json({
+    ok: true as const,
+    message: `Demo mode · signing you in as ${persona.name}.`,
+    demo_seat: { role, redirect_to: signinRedirect(redirectTo, [membershipRole]) },
+  }, 200);
 }
 
 /** One unused, unexpired login link per person per minute. */
