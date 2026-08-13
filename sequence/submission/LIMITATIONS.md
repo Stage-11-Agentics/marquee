@@ -72,23 +72,6 @@ Verified against build `30b53f5ae78e`, 2026-08-12.
 - **A submitter cannot edit a proposal while the call is open.** They can watch
   it — the submitter seat below shows status and the decision when it lands —
   but changing an answer after submitting means asking the organizer.
-- **A speakers-only CSV import lands people, not roster members.** A Sessionize
-  import that includes `sessions_csv` is unaffected — those speakers arrive with
-  a session, and the roster reads them through their participation. But importing
-  a speakers file *alone* writes the `people` rows and no `memberships` row, and
-  the roster is `memberships(role='speaker')` ∪ `participations` on live
-  submissions. So the wizard reports "1 created", the person appears in the
-  org-level People list, and the conference roster count does not move; a roster
-  search for them returns nothing, and they cannot reach the speaker portal,
-  because portal sign-in reads the same membership. `src/lib/speaker-membership.ts`
-  names the two places that write the bridge — an organizer hand-adding a speaker,
-  and the acceptance cascade — and the importer is a third that does not call it.
-  The roster's own copy ("everyone who was imported or added by hand") promises
-  otherwise, so this is the product contradicting itself rather than a documented
-  boundary. Found by the sbek round-4 evidence (SPK-03) and confirmed by local
-  repro; the fix is one bridge call in the import speaker path plus undo handling,
-  deliberately deferred rather than rushed against a deadline.
-
 ## Internal — fix or route around before submission (not for the form)
 
 - **The CFP header says "Closes Apr 30, 2027"** — six months after the

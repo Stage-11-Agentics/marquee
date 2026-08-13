@@ -223,7 +223,7 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     expect(Number(membershipCountAfterRepeat?.count)).toBe(4);
 
     const danaSession = await createSession(env.DB, { personId: danaId, roleHint: "speaker", userAgent: "mrq165-import", now: Date.now() });
-    const portal = await request(`/api/v1/me/portal?event_id=${EVENT_ID}`, {}, `mq_session=${danaSession.id}`);
+    const portal = await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, {}, `mq_session=${danaSession.id}`);
     expect(portal.status).toBe(200);
     expect(await portal.json<{ seat: string; event: { id: string }; person: { id: string } }>()).toMatchObject({ seat: "speaker", event: { id: EVENT_ID }, person: { id: danaId } });
     await env.DB.prepare("DELETE FROM auth_sessions WHERE id = ?").bind(danaSession.id).run();
