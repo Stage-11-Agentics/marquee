@@ -89,6 +89,9 @@
   first row, so the header cell is where the width has to land for it to count.
 */
 .onboarding-task-column { width: 86px; }
+/* A task's name is how the organizer identifies its column, so a long one
+   wraps rather than losing its last characters off the edge of the cell. */
+.onboarding-matrix thead th.onboarding-task-column span { display: block; overflow-wrap: anywhere; }
 .onboarding-last-contact-column { width: 100px; }
 .onboarding-track-column { width: 138px; }
 .onboarding-track { align-items: center; display: flex; font: 10px/1.25 var(--mono); gap: 5px; white-space: nowrap; }
