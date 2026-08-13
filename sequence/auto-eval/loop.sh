@@ -226,13 +226,16 @@ Wait for RUN-COMPLETE (loop.sh watch), then run this again.
 
   if [[ ${1:-} != --no-deploy ]]; then
     say "3/5 deploy main from the clean tree"
+    # Detached, never `checkout main`: the primary checkout holds that branch and
+    # git refuses to have it in two worktrees at once. The deploy tree only ever
+    # needs the commit, never the branch name.
     # The token is sourced inside this subshell and nowhere else. DEPLOY.md keeps it
     # under MARQUEE_CLOUDFLARE_API_TOKEN precisely so a bare CLOUDFLARE_API_TOKEN
     # never leaks to every tool that sources the platform env; the rename happens on
     # the wrangler line, at the last possible moment.
     ( set -a; . "$CREDENTIALS_ENV"; set +a
       cd "$DEPLOY_TREE" \
-      && git fetch github main --quiet && git checkout --quiet main && git reset --hard --quiet github/main \
+      && git fetch github main --quiet && git checkout --quiet --detach github/main \
       && npx vite build >/dev/null \
       && CLOUDFLARE_API_TOKEN="${MARQUEE_CLOUDFLARE_API_TOKEN:?not in $CREDENTIALS_ENV}" npx wrangler deploy )
 
