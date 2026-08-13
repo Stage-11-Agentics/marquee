@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Marquee">
+  <!--
+    swyxy's tab. The register hides the sidebar tile and signs itself with the
+    wordmark instead — marquee. — so the icon is that signature at 16px: the
+    mark on indigo-800, and the period that is the whole joke.
+
+    The M is the favicon.svg geometry narrowed from 12 units of width to 10
+    (stems 2–4 and 10–12, the V still cut a full unit deep) to buy the period
+    its own space on the right. Every vertical edge is still a whole unit.
+    A tab icon has no room for the wordmark, but it has room for the dot.
+  -->
+  <rect width="16" height="16" rx="1.5" fill="#3730a3"/>
+  <path fill="#ffffff" d="M2 2H4V13H2ZM4 2H6L7.5 13H6.5ZM8 2H10L7.5 13H6.5ZM10 2H12V13H10Z"/>
+  <circle cx="13.6" cy="11.85" r="1.15" fill="#ffffff"/>
+</svg>

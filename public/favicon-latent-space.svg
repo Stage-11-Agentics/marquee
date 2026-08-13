@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Marquee">
+  <!--
+    latent.space's tab: the register's hexagonal logomark, carrying the one
+    two-stop gradient (#FFA363 → #E56EFF) it allows itself, with the M knocked
+    out in the near-black the shell uses for ink on that gradient.
+
+    The hexagon is the sidebar mark's clip-path at 16 units: (8,0) (16,4)
+    (16,12) (8,16) (0,12) (0,4). Between y=4 and y=12 it is full width, which
+    is why the M is compressed into exactly that band — the stems keep their
+    whole-unit x edges (still razor-sharp at 16px) and the slanted corners
+    clear the top of the M by a full unit.
+  -->
+  <defs>
+    <linearGradient id="ls" x1="0" y1="0" x2="16" y2=".6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffa363"/>
+      <stop offset="1" stop-color="#e56eff"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#ls)" d="M8 0L16 4V12L8 16L0 12V4Z"/>
+  <path fill="#0b0b0e" d="M2 4H4V12H2ZM4 4H6L8.5 12H7.5ZM10 4H12L8.5 12H7.5ZM12 4H14V12H12Z"/>
+</svg>
