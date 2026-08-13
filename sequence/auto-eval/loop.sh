@@ -57,6 +57,16 @@ atlas() { ssh atlas "$*"; }
 
 live_sha() { curl -fsS --max-time 15 "$SITE/health" | python3 -c 'import sys,json;print(json.load(sys.stdin)["build"])'; }
 
+# A run that was stopped short, graded more than one build, or is otherwise not
+# attributable. Recorded in state so nothing can quietly use it: a void run is
+# indistinguishable from a good one on disk — same judgements, same shape — and
+# diffing against one manufactures regressions that were never real.
+is_void() {
+  python3 -c "
+import json,sys
+print('yes' if '$1' in json.load(open('$STATE')).get('voidRuns',[]) else 'no')"
+}
+
 # The newest run directory on Atlas, whether or not it has been synced yet.
 atlas_run_stamp() { atlas "ls -1t ~/$KIT_ATLAS/runs | head -1"; }
 
@@ -81,7 +91,8 @@ cmd_status() {
   printf 'round      %s%s\n' "$(jget round)" "$([[ $(jget halted) == True ]] && echo '  [HALTED]' || true)"
   printf 'live sha   %s\n' "$(live_sha)"
   printf 'anchor     %s (%s%%)\n' "$(jget anchor)" "$(jget anchorPct)"
-  printf 'run        %s — %s/6 areas judged\n' "$stamp" "$judged"
+  printf 'run        %s — %s/6 areas judged%s\n' "$stamp" "$judged" \
+    "$([[ $(is_void "$stamp") == yes ]] && echo '   [VOID — do not cite]' || true)"
   printf 'atlas job  %s\n' "$job"
   atlas "tail -4 ~/$KIT_ATLAS/PROGRESS.log"
 }
@@ -124,14 +135,29 @@ cmd_watch() {
 cmd_mine() {
   local stamp; stamp=$(jget runStamp); [[ -n $stamp ]] || die "no synced run; run: loop.sh sync"
   local baseline=""
-  [[ ${1:-} == --baseline ]] && baseline="--baseline $KIT_LOCAL/runs/$2"
+  if [[ ${1:-} == --baseline ]]; then
+    [[ $(is_void "$2") == yes ]] && die "REFUSING: $2 is a void run. Diffing against it
+invents regressions. Use the last run that graded a single build end to end."
+    baseline="--baseline $KIT_LOCAL/runs/$2"
+  fi
   (cd "$KIT_LOCAL" && node "$SELF_DIR/mine.mjs" --kit . --run "runs/$stamp" $baseline)
 }
 
 # The safety property. Compares this round against the anchor (best round so far)
 # and refuses to let the loop deploy into a falling score.
 cmd_guard() {
-  local pct; pct=$(cmd_mine | python3 -c 'import sys,json;print(json.load(sys.stdin)["headline"]["pct"])')
+  # Prefer the harness's own area-weighted headline over mine.mjs's flat-weight
+  # approximation. They differ by more than a point — round 4 read 88.1 official
+  # against 86.9 flat — and the floor has to guard the number the competition
+  # reads. mine.mjs is the fallback for a round scored but not yet finalised.
+  local pct stamp; stamp=$(jget runStamp)
+  pct=$(python3 -c "
+import json,sys
+d=json.load(open('$KIT_LOCAL/runs/$stamp/report.json'))
+if d.get('scoreWithheld'): sys.exit(1)
+print(d['overallPct'])
+" 2>/dev/null) \
+    || pct=$(cmd_mine | python3 -c 'import sys,json;print(json.load(sys.stdin)["headline"]["pct"])')
   local anchor_pct; anchor_pct=$(jget anchorPct)
   say "round pct $pct  anchor $anchor_pct"
   if [[ -z $anchor_pct ]]; then
@@ -231,14 +257,20 @@ one mutable site interleave their data and both become unreadable."
   # Push the kickoff script every time: the version that runs is the version in
   # this repo, not whatever was last hand-edited on the box.
   scp -q "$SELF_DIR/atlas/kickoff-round.sh" "atlas:$KIT_ATLAS/kickoff-round.sh"
-  atlas "chmod +x ~/$KIT_ATLAS/kickoff-round.sh && ~/$KIT_ATLAS/kickoff-round.sh $round $sha"
-  set_state "round=$round" "runStamp=null"
-
-  # Declare the freeze only after the round is genuinely up: a marker left behind
-  # by a kickoff that refused would block the whole fleet for nothing.
+  # Declare the freeze BEFORE the round exists, not after. The gap between
+  # "browsing has started" and "the marker is on disk" is a window in which a
+  # sibling agent reads `stale` and ships — which is how round 4 came to grade two
+  # builds. A marker left by a kickoff that refuses is the cheaper failure, and
+  # the trap below clears it anyway.
   printf 'round %s grading %s on Atlas since %s — auto-eval coordinator. Lifted by `loop.sh barrier`.\n' \
     "$round" "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$FREEZE_FILE"
   say "deploy freeze declared at $FREEZE_FILE"
+
+  trap 'rm -f "$FREEZE_FILE"; die "kickoff refused — freeze lifted, no round started"' ERR
+  atlas "chmod +x ~/$KIT_ATLAS/kickoff-round.sh && ~/$KIT_ATLAS/kickoff-round.sh $round $sha"
+  trap - ERR
+
+  set_state "round=$round" "runStamp=null"
 }
 
 case "${1:-status}" in
