@@ -21,6 +21,7 @@ It asks both sources — `GET /health` for the sha baked into the running Worker
 |---|---|---|
 | `fresh` | 0 | the live Worker is main's head |
 | `cosmetic` | 0 | behind, but only on files that never reach the Worker (board, docs) |
+| `frozen` | 0 | behind on purpose — a deploy freeze is declared; see below. `drift` holds what it would otherwise have said |
 | `stale` | 1 | behind on `src/`, `migrations/`, or build config — live is a different product |
 | `off-main` | 1 | the live build is not an ancestor of main; someone deployed a branch |
 | `unknown` | 2 | could not determine — treat as stale |
@@ -66,6 +67,31 @@ expected reading and is not an instruction to deploy.
 The clean way to keep the queue moving without arming that trap is to hold product PRs until
 the freeze lifts and land only docs-only ones, which grade `cosmetic` and leave the check
 green.
+
+### Declare the freeze so the tool says it for you
+
+`check:deploy` reads a freeze marker and reports **`frozen`** at exit 0 instead of `stale` at
+exit 1, naming who declared it and why, and keeping the reading it would otherwise have given
+under `drift`. A freeze never upgrades a verdict — `fresh` stays `fresh`.
+
+Declare one either way:
+
+```sh
+echo "sbek round 5 grading f9630de0 until ~21:52Z — Eval Round Prep" > .deploy-freeze
+# or, for a single command:
+MARQUEE_DEPLOY_FREEZE="…" npm run check:deploy
+```
+
+**Put the marker in the tree you will deploy from.** The file is looked for at the root of the
+checkout the script is running in, and the redeploy recipe above deploys from a *fresh linked
+worktree* — which will not contain a marker written in the primary checkout. When declaring a
+freeze for other agents, either drop the marker in each deploying worktree or export
+`MARQUEE_PRIMARY_CHECKOUT=~/Projects/Stage11/deployments/Marquee`, which is also probed. The
+marker is gitignored: a freeze is per-machine and per-moment, never committed.
+
+The marker is the convenience, not the guarantee. The `stale` verdict carries the freeze
+warning whether or not anyone declared one, because the moment the marker is most likely to be
+missing is exactly the moment the trap springs.
 
 ---
 

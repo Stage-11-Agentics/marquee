@@ -48,7 +48,7 @@
  */
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import { REPOSITORY_ROOT, emit, parseArguments } from "./lib/command.mjs";
 
@@ -73,6 +73,20 @@ const PRODUCT_PATHS = [
 ];
 
 /**
+ * The primary checkout, found from any linked worktree without being told.
+ *
+ * `--git-common-dir` resolves to the primary worktree's `.git`, so its parent is
+ * the primary checkout. This matters because deploys happen from a *fresh linked
+ * worktree* — the recipe below says so — and a marker written once in the primary
+ * checkout would otherwise be invisible at exactly the moment it is needed.
+ */
+function primaryCheckout() {
+  const commonDirectory = git(["rev-parse", "--git-common-dir"], { allowFailure: true });
+  if (!commonDirectory) return undefined;
+  return dirname(resolve(REPOSITORY_ROOT, commonDirectory.trim()));
+}
+
+/**
  * A declared deploy freeze, if one is in force.
  *
  * Deliberately a plain file at a fixed path rather than anything cleverer: it has
@@ -84,7 +98,7 @@ function readFreeze(environment = process.env) {
   if (typeof inline === "string" && inline.trim().length > 0) {
     return { reason: inline.trim(), source: "MARQUEE_DEPLOY_FREEZE" };
   }
-  for (const root of [REPOSITORY_ROOT, environment.MARQUEE_PRIMARY_CHECKOUT].filter(Boolean)) {
+  for (const root of [REPOSITORY_ROOT, environment.MARQUEE_PRIMARY_CHECKOUT, primaryCheckout()].filter(Boolean)) {
     try {
       const text = readFileSync(resolve(root, ".deploy-freeze"), "utf8").trim();
       if (text.length > 0) return { reason: text, source: resolve(root, ".deploy-freeze") };
