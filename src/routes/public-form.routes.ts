@@ -11,10 +11,12 @@ import { enqueuePublicFormConfirmation, enqueueOutbox } from "../jobs/mail/outbo
 import { escapeHtml } from "../jobs/mail/render";
 import { findTemplate } from "../jobs/mail/templates";
 import { enqueueAuthMail } from "../lib/auth/auth-mail";
+import { auditStatement } from "../lib/audit";
 import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../lib/auth/draft-resume-copy";
 import { mintMagicLink, mintMagicLink as issueParticipantMagicLink } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { verifyTurnstile } from "../lib/r2/turnstile";
+import { submitterEditability } from "../lib/submission-editing";
 import { boundSourceOf } from "../lib/bound-options";
 import {
   answerAttachmentId,
@@ -57,6 +59,7 @@ const submitBodySchema = draftBodySchema.extend({
   resumeToken: z.string().min(20).max(256).optional(),
   resume_token: z.string().min(20).max(256).optional(),
 });
+const submittedEditBodySchema = z.object({ answers: answersSchema.optional() });
 
 const publicFieldSchema = z.object({
   id: z.string(),
@@ -93,6 +96,8 @@ const publicFormSchema = z.object({
   resume_url: z.string().nullable(),
   last_saved_at: z.number().int().nullable(),
   submitted_at: z.number().int().nullable(),
+  submission_editable: z.boolean(),
+  submission_edit_reason: z.string().nullable(),
   turnstile_site_key: z.string().nullable(),
   confirmation: z.object({
     title: z.string(), message: z.string(), email: z.string(), resume_url: z.string().nullable(), portal_url: z.string().nullable(),
@@ -597,6 +602,84 @@ async function autosaveDraft(
   return formResponse(context, slug, token, base.email ?? emailFromAnswers(projected.projected.answers) ?? undefined);
 }
 
+/**
+ * A resume token is a capability for the one submission it hashes to. It is
+ * deliberately separate from draft autosave: after submission the response
+ * keeps its submitted status, but an undecided response may still be changed
+ * while the public call remains open. The same before/after audit shape as the
+ * authenticated speaker editor lets the organizer record show one timeline.
+ */
+async function editSubmittedSubmission(
+  context: Context<ApiEnv>,
+  slug: string,
+  token: string,
+  body: z.infer<typeof submittedEditBodySchema>,
+): Promise<PublicFormState> {
+  await draftTokenAllowed(context.env.CACHE, token);
+  const base = await loadPublicForm(context.env.DB, slug, { resumeToken: token });
+  if (!base || !base.submission) {
+    throw ApiError.forbidden("Use the resume link that belongs to this abstract, then try again.");
+  }
+  const editability = submitterEditability({
+    submissionStatus: base.submission.status,
+    formStatus: base.form.status,
+    opensAt: Number(base.form.opens_at ?? 0) || null,
+    closesAt: Number(base.form.closes_at ?? 0) || null,
+  });
+  if (!editability.enabled) throw ApiError.conflict(editability.reason ?? "This abstract cannot be edited right now.");
+
+  // Merge a partial request into the server's current projection. The browser
+  // sends the whole form, but merging makes a copied resume request safe and
+  // prevents an omitted field from being silently erased.
+  const raw = rawAnswersFromBody({ ...base.answers, ...answerMap(body) });
+  const projected = projectPublicAnswers(base.fields, raw);
+  const domainIssues = [
+    ...projected.issues,
+    ...requiredSubmissionIssues(base.fields, projected.projected.answers, base.form),
+  ];
+  if (domainIssues.length > 0) {
+    throw ApiError.unprocessable("Add the requested details, then choose Save changes again.", undefined, { issues: domainIssues });
+  }
+
+  const title = answerText(projected.projected.answers, "title") ?? base.submission.title ?? "Untitled abstract";
+  const abstract = answerText(projected.projected.answers, "abstract");
+  const now = Date.now();
+  if (title === base.submission.title && abstract === base.answers.abstract) {
+    return formResponse(context, slug, token, base.email ?? emailFromAnswers(projected.projected.answers) ?? undefined);
+  }
+  await context.env.DB.batch([
+    context.env.DB.prepare(
+      `UPDATE submissions SET title = ?, abstract = ?, search_blob = ?, last_saved_at = ?,
+       last_write_source = 'marquee', updated_at = ?
+       WHERE id = ? AND form_id = ? AND submitter_person_id = ?
+         AND status IN ('submitted', 'in_review')`,
+    ).bind(
+      title,
+      abstract,
+      JSON.stringify(projected.projected.answers),
+      now,
+      now,
+      base.submission.id,
+      base.form.id,
+      base.submission.submitter_person_id,
+    ),
+    auditStatement(context.env.DB, {
+      eventId: base.form.event_id,
+      actorKind: "user",
+      actorPersonId: base.submission.submitter_person_id,
+      action: "speaker_talk_updated",
+      entityType: "submission",
+      entityId: base.submission.id,
+      before: { title: base.submission.title, description: base.answers.abstract ?? base.submission.abstract },
+      after: { title, description: abstract },
+      now,
+      requestId: context.get("requestId") ?? null,
+    }),
+  ]);
+  await replaceProjectedAnswers(context.env.DB, base.submission.id, base.fields, projected.projected.answers, now);
+  return formResponse(context, slug, token, base.email ?? emailFromAnswers(projected.projected.answers) ?? undefined);
+}
+
 async function handlePublicSubmission(
   context: Context<ApiEnv>,
   slug: string,
@@ -857,6 +940,25 @@ const autosavePublicDraft = defineApiRoute(
   },
 );
 
+const editPublicSubmissionRoute = defineApiRoute(
+  {
+    method: "patch",
+    path: "/api/v1/public/forms/{slug}/submissions/{token}",
+    operationId: "editPublicSubmission",
+    summary: "Edit an undecided public submission",
+    description: "Resume-token authenticated submitter edits remain available while the call for speakers is open.",
+    tags: ["Public forms"],
+    request: { params: draftParams, body: { content: { "application/json": { schema: submittedEditBodySchema } } } },
+    policy: { auth: { kind: "public" }, rateLimit: { bucket: "write", keying: "ip_submission" }, concurrency: "none" },
+    responses: { 200: jsonResponse(writeResponseSchema, "Submission saved"), ...errorResponses([403, 404, 409, 422, 429, 500]) },
+  },
+  async (context) => {
+    const params = context.req.valid("param");
+    const state = await editSubmittedSubmission(context, params.slug, params.token, context.req.valid("json"));
+    return context.json(state, 200);
+  },
+);
+
 const submitPublicFormRoute = defineApiRoute(
   {
     method: "post",
@@ -875,4 +977,4 @@ const submitPublicFormRoute = defineApiRoute(
   },
 );
 
-export const apiRoutes = [getPublicForm, createPublicDraft, autosavePublicDraft, submitPublicFormRoute];
+export const apiRoutes = [getPublicForm, createPublicDraft, autosavePublicDraft, editPublicSubmissionRoute, submitPublicFormRoute];

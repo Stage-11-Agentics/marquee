@@ -8,6 +8,7 @@ import {
   type ProjectedFormAnswers,
 } from "../lib/form-conditions";
 import { sha256Hex } from "../lib/auth/random-token";
+import { submitterEditability } from "../lib/submission-editing";
 import type {
   PublicFormConfirmation,
   PublicFormField,
@@ -39,6 +40,8 @@ export interface PublicFormRecord {
   resumeMissed: boolean;
   lastSavedAt: number | null;
   submittedAt: number | null;
+  submissionEditable: boolean;
+  submissionEditReason: string | null;
 }
 
 export interface PublicFormWriteResult {
@@ -256,6 +259,15 @@ export async function loadPublicForm(
   else if (form.per_submitter_limit > 0 && count >= Number(form.per_submitter_limit)) state = "at_limit";
   else state = "open";
 
+  const editability = submission
+    ? submitterEditability({
+        submissionStatus: submission.status,
+        formStatus: form.status,
+        opensAt: asNumber(form.opens_at),
+        closesAt: asNumber(form.closes_at),
+      }, now)
+    : { enabled: false, reason: null };
+
   return {
     form,
     conference: { name: row.conference_name, slug: row.conference_slug },
@@ -269,10 +281,12 @@ export async function loadPublicForm(
     resumeMissed: Boolean(options.resumeToken?.trim()) && submission === null,
     lastSavedAt: asNumber(submission?.last_saved_at),
     submittedAt: asNumber(submission?.submitted_at),
+    submissionEditable: editability.enabled,
+    submissionEditReason: editability.reason,
   };
 }
 
-function messageForState(state: PublicFormStateName): string | null {
+function messageForState(state: PublicFormStateName, submissionEditable = false): string | null {
   switch (state) {
     case "closed":
       return "This call for speakers is closed. Keep your link and return when the conference reopens.";
@@ -281,7 +295,9 @@ function messageForState(state: PublicFormStateName): string | null {
     case "resumed":
       return "Your saved draft is back. Review the answers, then choose Submit when you are ready.";
     case "submitted":
-      return "Your abstract is in. Keep this link if you need to revisit the confirmation.";
+      return submissionEditable
+        ? "Your abstract is in. You can still edit it while the call for speakers is open."
+        : "Your abstract is in. Keep this link if you need to revisit the confirmation.";
     default:
       return null;
   }
@@ -340,9 +356,11 @@ export function toPublicFormState(
     resume_url: resumeUrl,
     last_saved_at: record.lastSavedAt,
     submitted_at: record.submittedAt,
+    submission_editable: record.submissionEditable,
+    submission_edit_reason: record.submissionEditReason,
     turnstile_site_key: options.turnstileSiteKey ?? null,
     confirmation,
-    message: record.resumeMissed ? resumeMissMessage(record.state) : messageForState(record.state),
+    message: record.resumeMissed ? resumeMissMessage(record.state) : messageForState(record.state, record.submissionEditable),
   };
 }
 

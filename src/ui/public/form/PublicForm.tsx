@@ -514,20 +514,28 @@ export function PublicForm({ initial }: PublicFormProps) {
       setPageError("Add the highlighted details, then choose Submit again. Your answers are still here.");
       return;
     }
+    const editingSubmitted = state.state === "submitted" && state.submission_editable && Boolean(state.resume_token);
     setBusy(true);
     try {
-      const token = await requestTurnstileToken();
+      const token = editingSubmitted ? undefined : await requestTurnstileToken();
       if (turnstileRequired() && !token) {
         setPageError(SECURITY_CHECK_UNFINISHED);
         return;
       }
-      const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/submissions`, {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answers, resumeToken: state.resume_token ?? undefined, turnstileToken: token }),
-        route: "/api/v1/public/forms/{slug}/submissions",
+      const route = editingSubmitted
+        ? `/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/submissions/${encodeURIComponent(state.resume_token ?? "")}`
+        : `/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/submissions`;
+      const payload = await apiFetch<PublicFormState>(route, {
+        method: editingSubmitted ? "PATCH" : "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify(editingSubmitted
+          ? { answers }
+          : { answers, resumeToken: state.resume_token ?? undefined, turnstileToken: token }),
+        route: editingSubmitted
+          ? "/api/v1/public/forms/{slug}/submissions/{token}"
+          : "/api/v1/public/forms/{slug}/submissions",
       });
       if (!payload || !("state" in payload)) throw new Error("The submission response was unreadable.");
-      removeTurnstile();
+      if (!editingSubmitted) removeTurnstile();
       setState(payload);
       writeAnswers(payload.answers);
       setDirty(false);
@@ -600,8 +608,9 @@ export function PublicForm({ initial }: PublicFormProps) {
     return <div class={`public-field${error ? " has-error" : ""}`} data-field-key={field.key} data-field-type={field.type} key={field.key}>{label}{note}{control}{retiredNote}{counter}<div class={`public-field-error${error ? " has-message" : ""}`} role={error ? "alert" : undefined} aria-hidden={!error}>{error ?? " "}</div></div>;
   }
 
-  const closed = state.state === "closed" || state.state === "at_limit" || state.state === "submitted";
-  if (state.state === "submitted" && state.confirmation) {
+  const editingSubmitted = state.state === "submitted" && state.submission_editable && Boolean(state.resume_token);
+  const closed = state.state === "closed" || state.state === "at_limit" || (state.state === "submitted" && !editingSubmitted);
+  if (state.state === "submitted" && state.confirmation && !editingSubmitted) {
     return <div class="public-form"><PublicHeader state={state} /><main class="public-form-main"><section class="public-confirmation" aria-live="polite"><div class="public-brand-mark">✓</div><h2>{state.confirmation.title}</h2><p>{state.confirmation.message}</p><p>We will write to <strong>{state.confirmation.email}</strong>.</p>{state.resume_url && <p class="public-resume">Save this link to reopen this confirmation later; the same link is in your confirmation email. <a class="public-resume-link" href={resumeLinkPath(state.resume_url)}>{resumeLinkPath(state.resume_url)}</a></p>}{state.confirmation.portal_url && <p>This link is your sign-in. <a href={state.confirmation.portal_url}>Track your submission →</a></p>}</section></main><PublicFooter /></div>;
   }
 
@@ -627,7 +636,15 @@ export function PublicForm({ initial }: PublicFormProps) {
       ? (dirty ? "Saving…" : state.last_saved_at ? `Saved ${new Date(state.last_saved_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Draft linked")
       : "";
   const resumePath = state.resume_url ? resumeLinkPath(state.resume_url) : null;
-  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && state.state !== "closed" && <span>Closes {new Date(state.form.closes_at).toLocaleDateString()}</span>}<span class={`public-save-status${saveStatus ? " has-value" : ""}`} aria-live="polite" aria-hidden={!saveStatus}>{saveStatus}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}<div class={`public-error${pageError ? " has-message" : ""}`} role={pageError ? "alert" : undefined} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div>{collectsParticipants && <p class="public-participant-limit">Include at least {minimumParticipants}; this form has {coSpeakerSlots}.</p>}<fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset>{state.resume_url && <div class="public-draft-resume" role="status"><strong>Private resume link</strong><span>Keep this link to return to this draft. It is also sent to your contact address.</span><div class="public-draft-resume-actions"><a class="public-resume-link" href={resumePath ?? "#"}>{resumePath}</a><button class="public-copy-link" type="button" onClick={() => { void copyResumeLink(); }}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy resume link"}</button></div></div>}<div class="public-form-footer"><div class="public-form-footer-copy">{draftEmailPrompt && !state.resume_token && !closed && <div class="public-draft-email"><label for="public-draft-email">Contact address for your resume link</label><input id="public-draft-email" ref={draftEmailRef} type="email" value={answerEmail(answers)} onInput={(event) => setAnswer("speaker_email", (event.currentTarget as HTMLInputElement).value)} /><span>We will send a private link here so you can return to this draft.</span></div>}<span class="public-security">{closed ? "This form is not accepting answers right now, so its fields are closed for editing." : "Your answers stay here while you work. A resume link goes to the address you enter."}</span></div><div class="public-form-actions"><button class="public-save-draft" type="button" data-save-draft onMouseDown={() => { preserveDraftOnBlur.current = true; }} onClick={() => { void saveDraft(); }} disabled={busy || closed}>Save draft</button><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : "Submit abstract"}</button></div></div></form></main><PublicFooter /></div>;
+  const resumeCopy = editingSubmitted
+    ? "Keep this private link to reopen and edit your submitted abstract while the call is open."
+    : "Keep this link to return to this draft. It is also sent to your contact address.";
+  const securityCopy = editingSubmitted
+    ? "Your abstract is submitted. Changes are saved to the same conference record while the call is open."
+    : closed
+      ? "This form is not accepting answers right now, so its fields are closed for editing."
+      : "Your answers stay here while you work. A resume link goes to the address you enter.";
+  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && state.state !== "closed" && <span>Closes {new Date(state.form.closes_at).toLocaleDateString()}</span>}<span class={`public-save-status${saveStatus ? " has-value" : ""}`} aria-live="polite" aria-hidden={!saveStatus}>{saveStatus}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}{!editingSubmitted && state.state === "submitted" && state.submission_edit_reason ? <div class="public-notice alarm" role="status">{state.submission_edit_reason}</div> : null}<div class={`public-error${pageError ? " has-message" : ""}`} role={pageError ? "alert" : undefined} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div>{collectsParticipants && <p class="public-participant-limit">Include at least {minimumParticipants}; this form has {coSpeakerSlots}.</p>}<fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset>{state.resume_url && <div class="public-draft-resume" role="status"><strong>{editingSubmitted ? "Private edit link" : "Private resume link"}</strong><span>{resumeCopy}</span><div class="public-draft-resume-actions"><a class="public-resume-link" href={resumePath ?? "#"}>{resumePath}</a><button class="public-copy-link" type="button" onClick={() => { void copyResumeLink(); }}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy resume link"}</button></div></div>}<div class="public-form-footer"><div class="public-form-footer-copy">{draftEmailPrompt && !state.resume_token && !closed && <div class="public-draft-email"><label for="public-draft-email">Contact address for your resume link</label><input id="public-draft-email" ref={draftEmailRef} type="email" value={answerEmail(answers)} onInput={(event) => setAnswer("speaker_email", (event.currentTarget as HTMLInputElement).value)} /><span>We will send a private link here so you can return to this draft.</span></div>}<span class="public-security">{securityCopy}</span></div><div class="public-form-actions"><button class="public-save-draft" type="button" data-save-draft onMouseDown={() => { preserveDraftOnBlur.current = true; }} onClick={() => { void saveDraft(); }} disabled={busy || closed || editingSubmitted}>Save draft</button><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : editingSubmitted ? "Save changes" : "Submit abstract"}</button></div></div></form></main><PublicFooter /></div>;
 }
 
 function PublicHeader({ state }: { state: PublicFormState }) {

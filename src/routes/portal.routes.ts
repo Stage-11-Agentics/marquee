@@ -35,6 +35,7 @@ import {
 import { listFormFields, type FormFieldView } from "./forms.queries";
 import { auditStatement, writeAudit } from "../lib/audit";
 import { contentHistoryFor } from "../lib/history";
+import { submitterEditability } from "../lib/submission-editing";
 import {
   parseSocialLinks,
   personProfilePatchShape,
@@ -969,6 +970,7 @@ async function talkIsEditable(db: D1Database, eventId: string, submissionId: str
 type SubmitterSubmissionRow = {
   id: string;
   title: string;
+  description: string | null;
   status: string;
   submitted_at: number | null;
   updated_at: number;
@@ -977,6 +979,9 @@ type SubmitterSubmissionRow = {
   wave_decision_on: string | null;
   participation_role: string;
   form_slug: string | null;
+  form_status: string | null;
+  form_opens_at: number | null;
+  form_closes_at: number | null;
 };
 
 /**
@@ -993,9 +998,9 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
       // this person *two* participations on their own abstract — `submitter` and
       // `speaker` (SPEC §10: the two are the same person until two addresses
       // ship) — so a join here would show every abstract twice.
-      `SELECT s.id, s.title, s.status, s.submitted_at, s.updated_at,
+      `SELECT s.id, s.title, s.abstract AS description, s.status, s.submitted_at, s.updated_at,
          format.name AS format_name, wave.name AS wave_name, wave.decision_on AS wave_decision_on,
-         form.slug AS form_slug,
+         form.slug AS form_slug, form.status AS form_status, form.opens_at AS form_opens_at, form.closes_at AS form_closes_at,
          (SELECT p.role FROM participations p
            WHERE p.submission_id = s.id AND p.person_id = ?
            ORDER BY CASE p.role WHEN 'submitter' THEN 0 ELSE 1 END, p.position ASC, p.id ASC
@@ -1003,7 +1008,7 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
        FROM submissions s
        LEFT JOIN formats format ON format.id = s.format_id AND format.event_id = s.event_id
        LEFT JOIN waves wave ON wave.id = s.wave_id AND wave.event_id = s.event_id
-       LEFT JOIN forms form ON form.id = s.form_id AND form.event_id = s.event_id AND form.status = 'open'
+       LEFT JOIN forms form ON form.id = s.form_id AND form.event_id = s.event_id
        WHERE s.event_id = ?
          AND EXISTS (SELECT 1 FROM participations p WHERE p.submission_id = s.id AND p.person_id = ?)
        ORDER BY s.updated_at DESC, s.id ASC`,
@@ -1031,6 +1036,7 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
       }
     }
   }
+  const now = Date.now();
   return {
     seat: "submitter" as const,
     event,
@@ -1038,6 +1044,7 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
     submissions: submissions.map((row) => ({
       id: row.id,
       title: row.title,
+      description: row.description,
       status: row.status,
       format: row.format_name,
       submitted_at: row.submitted_at,
@@ -1046,7 +1053,17 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
       wave_decision_on: row.wave_decision_on,
       role: row.participation_role,
       // Only set while the form is still open — an expired call is not a way back.
-      form_slug: row.form_slug,
+      form_slug: row.form_status === "open"
+        && (row.form_opens_at === null || row.form_opens_at <= now)
+        && (row.form_closes_at === null || row.form_closes_at > now)
+        ? row.form_slug
+        : null,
+      edit: submitterEditability({
+        submissionStatus: row.status,
+        formStatus: row.form_status,
+        opensAt: row.form_opens_at,
+        closesAt: row.form_closes_at,
+      }, now),
     })),
     tasks: [] as never[],
     handbook: { markdown: "" },
@@ -1241,28 +1258,39 @@ async function editableTalk(
   db: D1Database,
   auth: SessionAuth,
   submissionId: string,
-): Promise<{ eventId: string; submission: { id: string; title: string; abstract: string | null; updated_at: number }; formStatus: string | null; closesAt: number | null; override: boolean }> {
+): Promise<{ eventId: string; submission: { id: string; title: string; abstract: string | null; status: string; updated_at: number }; formStatus: string | null; opensAt: number | null; closesAt: number | null; override: boolean; isSubmitter: boolean; hasSpeakerMembership: boolean }> {
   const row = await db
     .prepare(
       `SELECT submission.id, submission.event_id, submission.title, submission.abstract, submission.updated_at,
-         form.status AS form_status, form.closes_at
+         submission.status, form.status AS form_status, form.opens_at, form.closes_at,
+         EXISTS (SELECT 1 FROM participations submitter
+           WHERE submitter.submission_id = submission.id AND submitter.person_id = ? AND submitter.role = 'submitter') AS is_submitter,
+         EXISTS (SELECT 1 FROM memberships speaker_membership
+           WHERE speaker_membership.event_id = submission.event_id AND speaker_membership.person_id = ? AND speaker_membership.role = 'speaker') AS has_speaker_membership
        FROM submissions submission
        JOIN events conference ON conference.id = submission.event_id AND conference.org_id = ?
-       JOIN participations participation ON participation.submission_id = submission.id AND participation.person_id = ?
        LEFT JOIN forms form ON form.id = submission.form_id AND form.event_id = submission.event_id
-       JOIN memberships membership ON membership.event_id = submission.event_id
-         AND membership.person_id = ? AND membership.role = 'speaker'
-       WHERE submission.id = ?`,
+       WHERE submission.id = ?
+         AND (
+           EXISTS (SELECT 1 FROM participations submitter_access
+             WHERE submitter_access.submission_id = submission.id AND submitter_access.person_id = ? AND submitter_access.role = 'submitter')
+           OR EXISTS (SELECT 1 FROM memberships speaker_access
+             WHERE speaker_access.event_id = submission.event_id AND speaker_access.person_id = ? AND speaker_access.role = 'speaker')
+         )`,
     )
-    .bind(auth.orgId, auth.personId, auth.personId, submissionId)
+    .bind(auth.personId, auth.personId, auth.orgId, submissionId, auth.personId, auth.personId)
     .first<{
       id: string;
       event_id: string;
       title: string;
       abstract: string | null;
+      status: string;
       updated_at: number;
       form_status: string | null;
+      opens_at: number | null;
       closes_at: number | null;
+      is_submitter: number;
+      has_speaker_membership: number;
     }>();
   if (!row) throw ApiError.notFound("submission not found");
   const setting = await db
@@ -1271,16 +1299,29 @@ async function editableTalk(
     .first<{ value_json: string }>();
   return {
     eventId: row.event_id,
-    submission: { id: row.id, title: row.title, abstract: row.abstract, updated_at: row.updated_at },
+    submission: { id: row.id, title: row.title, abstract: row.abstract, status: row.status, updated_at: row.updated_at },
     formStatus: row.form_status,
+    opensAt: row.opens_at,
     closesAt: row.closes_at,
     override: parseJson<{ enabled?: boolean }>(setting?.value_json, {}).enabled === true,
+    isSubmitter: row.is_submitter === 1,
+    hasSpeakerMembership: row.has_speaker_membership === 1,
   };
 }
 
 function talkEditingOpen(current: Awaited<ReturnType<typeof editableTalk>>): boolean {
   if (current.override) return true;
-  return current.formStatus === "open" && (current.closesAt === null || current.closesAt > Date.now());
+  if (current.isSubmitter && !current.hasSpeakerMembership) {
+    return submitterEditability({
+      submissionStatus: current.submission.status,
+      formStatus: current.formStatus,
+      opensAt: current.opensAt,
+      closesAt: current.closesAt,
+    }).enabled;
+  }
+  return current.formStatus === "open"
+    && (current.opensAt === null || current.opensAt <= Date.now())
+    && (current.closesAt === null || current.closesAt > Date.now());
 }
 
 async function updateProfile(context: import("hono").Context<ApiEnv>, body: z.infer<typeof profileBody>) {
