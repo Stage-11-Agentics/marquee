@@ -139,6 +139,25 @@ describe.sequential("MRQ-80 deliberate decision resend", () => {
     expect(JSON.parse(audit?.after_json ?? "{}" )).toMatchObject({ outbox_id: resendBody.outbox_id, to_email: "new-address@mrq80.test" });
   });
 
+  test("CONTRACT · the record names every address a decision was sent to, newest first", async () => {
+    // "Correct the address, then send again" is only actionable if the
+    // organizer can see which address the last attempt used. The original send
+    // carries the submission's decision id as its entity and the retry carries
+    // it too; both must reach the card, and the corrected recipient with them.
+    const response = await request(`/api/v1/events/${EVENT_ID}/submissions/${SUBMISSION_ID}`);
+    expect(response.status).toBe(200);
+    const record = await response.json<{
+      decision_recipient: { email: string } | null;
+      decision_sends: Array<{ to_email: string; kind: string; status: string; delivery_state: string }>;
+    }>();
+    expect(record.decision_recipient?.email).toBe("new-address@mrq80.test");
+    expect(record.decision_sends.length).toBeGreaterThanOrEqual(2);
+    expect(record.decision_sends[0]).toMatchObject({ to_email: "new-address@mrq80.test", kind: "accepted" });
+    expect(record.decision_sends.map((send) => send.to_email)).toContain("old-address@mrq80.test");
+    // A provider verdict the webhook has never written must not read as one.
+    expect(record.decision_sends.every((send) => send.delivery_state === "unknown")).toBe(true);
+  });
+
   test("CONTRACT · MRQ-80 · the bulk notifier still excludes the already-sent decision after a deliberate resend", async () => {
     const before = await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = ?").bind(EVENT_ID).first<{ total: number }>();
     const response = await request(`/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, { method: "POST" });

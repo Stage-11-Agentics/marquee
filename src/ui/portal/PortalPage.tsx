@@ -967,6 +967,29 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
   </div>;
 }
 
+/**
+ * What the portal says to an account that has no seat in it. An organizer
+ * reaches this from the sidebar's own "Speaker portal" entry, and the generic
+ * failure state told them the site was broken — "We could not load your
+ * portal · conference not found" — when the server had answered correctly.
+ * The truth is short, and every route out of it is one they can use.
+ */
+function NoSeatNotice(): JSX.Element {
+  return <div class="portal-shell">
+    <header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></header>
+    <main class="portal-main"><div class="portal-error portal-answer"><div>
+      <strong>You have no speaker record at this conference.</strong>
+      <p>The speaker portal opens one speaker's own workspace — their tasks, profile, and session times. Nothing here failed: this account is not a speaker or a submitter at this conference.</p>
+      <p>If you organize this conference, open any speaker's portal from their record on the Speakers page.</p>
+      <div class="portal-seat-actions">
+        <a class="portal-button" href="/roster">Speakers</a>
+        <a class="portal-button secondary" href="/dashboard">Program home</a>
+        <a class="portal-button secondary" href="/">Return to conference</a>
+      </div>
+    </div></div></main>
+  </div>;
+}
+
 function PortalPage(): JSX.Element {
   const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const viewingAsSpeaker = query?.get("viewing_as") === "speaker";
@@ -992,11 +1015,17 @@ function PortalPage(): JSX.Element {
   const handbook = useMemo(() => speaker?.handbook.markdown ?? "", [speaker?.handbook.markdown]);
   if (loading && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-loading">Loading your conference portal…</div></main></div>;
   if (error && !snapshot && error.status === 401) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></div><main class="portal-main"><div class="portal-error"><div><strong>Sign in to open your speaker portal.</strong><p>Your session is missing or has expired.</p><a class="portal-signin" href="/signin?next=/portal">Sign in</a></div></div></main></div>;
+  /* A 404 here is not a failure to load — it is a true answer: this account
+     has no speaker or submitter record at this conference. Organizers reach
+     it constantly from the sidebar, and "We could not load your portal ·
+     conference not found" told them the site was broken when nothing was.
+     Every route out of it is a route they can actually use. */
+  if (error && !snapshot && error.status === 404) return <NoSeatNotice />;
   if (error && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-error"><div><strong>We could not load your portal.</strong><p>{error.message}</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
   if (snapshot && snapshot.seat === "submitter") return <SubmitterPortal snapshot={snapshot} onSignOut={() => void signOut()} viewingAsSpeaker={viewingAsSpeaker} />;
   if (!speaker) return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></header><main class="portal-main"><div class="portal-error"><div><strong>No portal data is available.</strong><p>Try loading the speaker workspace again.</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
   return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={() => void signOut()}>Sign out</button></header><main class="portal-main">{viewingAsSpeaker ? <div class="portal-viewing-as" role="status">Viewing as speaker · organizer preview</div> : null}{speaker.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : speaker.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={speaker.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {speaker.person.name}</h2><p>{speaker.event.name} · your speaker workspace</p></div><div class="portal-progress">{completedTasks} / {activeTasks.length} tasks complete</div></div><div class="portal-grid"><TasksPanel eventId={speaker.event.id} tasks={speaker.tasks} submissions={speaker.submissions} person={speaker.person} onRefresh={refresh} /><ProfileEditor eventId={speaker.event.id} person={speaker.person} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{speaker.submissions.length} record{speaker.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{speaker.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : speaker.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{speaker.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{speaker.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{speaker.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
 }
 
-export { PortalPage, SubmitterPortal };
+export { NoSeatNotice, PortalPage, SubmitterPortal };
 export type { PortalPerson, PortalSubmission, PortalTask, SubmitterSnapshot, SubmitterSubmission };

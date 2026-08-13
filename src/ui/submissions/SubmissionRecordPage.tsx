@@ -6,7 +6,7 @@ import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } from "../shell/components";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
 import { ContentHistory } from "../history/ContentHistory";
-import { decidedNote, headerChipTone, moment, statusLabel } from "./record-copy";
+import { decidedNote, headerChipTone, lastSendLine, moment, sendMoment, sendMomentFor, sendOutcome, statusLabel, type DecisionSend } from "./record-copy";
 import "./record.css";
 
 const SUBMISSION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}";
@@ -73,6 +73,10 @@ interface RecordData {
   tracks: Array<{ id: string; name: string; color: string; is_primary: boolean }>;
   participants: Participant[]; answers: Array<{ id: string; field_id: string; label: string | null; key: string | null; type: string | null; value_text: string | null; value_json: unknown; file: FileAnswerView | null }>;
   decisions: Array<{ id: string; kind?: "decision" | "reversal"; decision: string; resulting_status: string; feedback_md: string | null; note?: string | null; decided_at: number; decided_by_name: string | null }>;
+  /** Who a decision mail goes to today, decided by the sender's own rule. */
+  decision_recipient: { person_id: string; name: string; email: string } | null;
+  /** Every decision mail this record has produced, newest first. */
+  decision_sends: Array<DecisionSend & { id: string; kind: "accepted" | "rejected" }>;
   evaluations: EvaluationEvidence[];
   comparisons: Array<{ round_id: string; round_name: string; reviewer_name: string; reviewer_kind: "human" | "agent"; ranking: unknown; submission_ids: string[] }>;
   evaluation: { rounds: Round[]; reviewer_options: Reviewer[] };
@@ -273,6 +277,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [messageError, setMessageError] = useState("");
   const [messageNotice, setMessageNotice] = useState("");
   const [resendNotice, setResendNotice] = useState("");
+  const [sendsOpen, setSendsOpen] = useState(false);
   const [overrideError, setOverrideError] = useState("");
   const [participantMode, setParticipantMode] = useState<"existing" | "new">("existing");
   const [participantRole, setParticipantRole] = useState<string>("co_speaker");
@@ -566,7 +571,25 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("approve"); setFeedbackDraft(""); }}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy)} onClick={() => { setDecisionRequest("maybe"); setFeedbackDraft(""); }}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("deny"); setFeedbackDraft(""); }}>Reject</Button>}<span class="subtle">Feedback (optional) is saved with the decision; accepted and rejected decisions also include it in the speaker email.</span></div></CardBody></Card>}
         {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>{decisionRequest === "maybe" ? "A waitlist does not send a message. Any feedback you add is saved with the decision." : "Feedback is optional. If you add it, the speaker will see the same words in the decision email."}</p><label class="field"><span>Feedback for the speaker (optional)</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist" : "Reject and notify"}</Button></div></div>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{decision.kind === "reversal" ? `Acceptance reversed · ${statusLabel(decision.resulting_status)}` : statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.note || decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
-        {record.actions.can_resend_decision && <Card><CardHeader title="Decision delivery"><span class="subtle">The decision is already recorded.</span></CardHeader><CardBody><p class="record-delivery-copy">If the speaker did not receive this decision, correct the address on their speaker record, then send the decision again.</p><div class="record-action-row"><Button onClick={() => navigate(speakerRecordHref)}>Edit speaker address</Button><Button variant="primary" disabled={Boolean(busy)} onClick={() => void resendDecision()}>{busy === "resend" ? "Queueing…" : "Send decision again"}</Button></div>{resendNotice && <p class="record-inline-message notice" role="status">{resendNotice}</p>}</CardBody></Card>}
+        {record.actions.can_resend_decision && <Card><CardHeader title="Decision delivery"><span class="subtle">The decision is already recorded.</span></CardHeader><CardBody>
+          <p class="record-delivery-copy">If the speaker did not receive this decision, correct the address on their speaker record, then send the decision again.</p>
+          {/* The address the last attempt used, named on the card. Without it
+              "send it again" repeats a typo the organizer cannot see, and the
+              speaker stays uninformed twice. */}
+          <p class="record-delivery-last" data-send-count={record.decision_sends.length}>{lastSendLine(record.decision_sends, record.decision_recipient?.email ?? null)}</p>
+          {record.decision_sends.length > 0 && <details class="record-delivery-history" open={sendsOpen} onToggle={(event) => setSendsOpen(event.currentTarget.open)}>
+            <summary>{sendsOpen ? "Hide previous sends" : `Review previous sends (${record.decision_sends.length})`}</summary>
+            <ul class="record-delivery-sends">{record.decision_sends.map((send) => <li key={send.id}>
+              <span class="record-delivery-address">{send.to_email}</span>
+              <span class="subtle">{statusLabel(send.kind)} · {sendMoment(sendMomentFor(send))}</span>
+              <Chip tone={sendOutcome(send).tone}>{sendOutcome(send).label}</Chip>
+              {/* A demo hold is not a fault; only an alarm outcome is coloured like one. */}
+              {send.reason && <small class={sendOutcome(send).tone === "alarm" ? "record-delivery-reason alarm" : "record-delivery-reason"}>{send.reason}</small>}
+            </li>)}</ul>
+          </details>}
+          <div class="record-action-row"><Button onClick={() => navigate(speakerRecordHref)}>Edit speaker address</Button><Button variant="primary" disabled={Boolean(busy)} onClick={() => void resendDecision()}>{busy === "resend" ? "Queueing…" : "Send decision again"}</Button></div>
+          {resendNotice && <p class="record-inline-message notice" role="status">{resendNotice}</p>}
+        </CardBody></Card>}
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }, SCHEDULE_ROUTE); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}
         <Card><CardHeader title="Participants"><span class="tabular">{record.participants.length}</span></CardHeader><CardBody>

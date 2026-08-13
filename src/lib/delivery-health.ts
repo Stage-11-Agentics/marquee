@@ -283,7 +283,8 @@ function daysSince(from: number, now: number): number {
  * Reason tokens are internal vocabulary and never reach the screen; anything
  * unrecognized falls through to a sentence that is true of every case.
  */
-function heldBackReason(reason: string | null): string {
+/** Shared with the record's delivery card so both name a hold the same way. */
+export function heldBackReason(reason: string | null): string {
   if (reason === "demo_mode_not_allowlisted") return "Held back while this conference was in demo mode.";
   if (reason === "acceptance_reversed") return "Cancelled because the acceptance was reversed.";
   return "Held back before it left the building.";
