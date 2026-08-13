@@ -13,6 +13,7 @@ const OWNER_ID = "person_mrq31_owner";
 const SEEDED_PERSON_ID = "person_mrq31_seeded";
 const UPDATED_PERSON_ID = "person_mrq31_updated";
 const PREEXISTING_PERSON_ID = "person_mrq31_preexisting";
+const SKIPPED_MEMBERSHIP_PERSON_ID = "person_mrq31_skipped_membership";
 const PREEXISTING_MEMBERSHIP_ID = "membership_mrq31_preexisting";
 const SEEDED_SUBMISSION_ID = "submission_mrq31_seeded";
 const SEEDED_EVALUATION_ID = "evaluation_mrq31_seeded";
@@ -35,6 +36,7 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, 'seeded@mrq31.test', 'Seeded unrelated person', 'Seeded title', 'Seeded company', 'Do not touch this person.', NULL, '[]', 0, 'marquee', ?, ?)").bind(SEEDED_PERSON_ID, ORG_ID, now, now),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, 'updated@mrq31.test', 'Updated Import Speaker', 'Old title', 'Old company', 'Old bio.', NULL, '[]', 0, 'marquee', ?, ?)").bind(UPDATED_PERSON_ID, ORG_ID, now, now),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, 'preexisting@mrq31.test', 'Pre-existing Import Speaker', 'Existing title', 'Existing company', 'Existing bio.', NULL, '[]', 0, 'marquee', ?, ?)").bind(PREEXISTING_PERSON_ID, ORG_ID, now, now),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, 'skipped-membership@mrq31.test', 'Skipped Membership Import Speaker', 'Same title', 'Same company', 'Same bio.', NULL, '[]', 0, 'marquee', ?, ?)").bind(SKIPPED_MEMBERSHIP_PERSON_ID, ORG_ID, now, now),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at) VALUES ('person_mrq31_reviewer', ?, 'reviewer@example.test', 'Seeded Review Lead', 'Seeded reviewer', 'Seeded committee', 'Seeded reviewer bio', NULL, '[]', 0, 'marquee', ?, ?)").bind(ORG_ID, now, now),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('membership_mrq31_owner', ?, ?, ?, 'program_lead', ?, ?)").bind(ORG_ID, EVENT_ID, OWNER_ID, now, now),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'speaker', ?, ?)").bind(PREEXISTING_MEMBERSHIP_ID, ORG_ID, EVENT_ID, PREEXISTING_PERSON_ID, now, now),
@@ -178,6 +180,7 @@ describe.sequential("MRQ-31 Sessionize import", () => {
       'Dana Kowalski,dana-only@example.test,Conference operator,Open Programs,"Keeps speaker rosters coherent."',
       'Updated Import Speaker,updated@mrq31.test,New title,New company,"New bio."',
       'Pre-existing Import Speaker,preexisting@mrq31.test,Existing title,Existing company,"Existing bio."',
+      'Skipped Membership Import Speaker,skipped-membership@mrq31.test,Same title,Same company,"Same bio."',
     ].join("\n");
     const uploaded = await request(`/api/v1/events/${EVENT_ID}/imports`, { method: "POST", body: JSON.stringify({ source: "sessionize", speakers_csv: speakersOnlyCsv }) });
     expect(uploaded.status).toBe(201);
@@ -190,34 +193,34 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     expect(mapped.status).toBe(200);
     const run = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/run`, { method: "POST" });
     expect(run.status).toBe(200);
-    expect(await run.json<{ counts: { created: number; updated: number; skipped: number; speakers: number; sessions: number; failed: number } }>()).toMatchObject({ counts: { created: 1, updated: 1, skipped: 1, speakers: 3, sessions: 0, failed: 0 } });
+    expect(await run.json<{ counts: { created: number; updated: number; skipped: number; speakers: number; sessions: number; failed: number } }>()).toMatchObject({ counts: { created: 1, updated: 1, skipped: 2, speakers: 4, sessions: 0, failed: 0 } });
     expect(await env.DB.prepare("SELECT name, email FROM people WHERE email = 'dana-only@example.test'").first()).toMatchObject({ name: "Dana Kowalski", email: "dana-only@example.test" });
 
-    for (const name of ["Kowalski", "Updated Import", "Pre-existing Import"]) {
+    for (const name of ["Kowalski", "Updated Import", "Pre-existing Import", "Skipped Membership"]) {
       const roster = await request(`/api/v1/events/${EVENT_ID}/speakers?q=${encodeURIComponent(name)}`);
       expect(roster.status).toBe(200);
       const body = await roster.json<{ total: number; rows: Array<{ name: string; is_member: boolean }> }>();
-      expect(body.total).toBe(3);
+      expect(body.total).toBe(4);
       expect(body.rows).toHaveLength(1);
       expect(body.rows[0]).toMatchObject({ name: expect.stringContaining(name), is_member: true });
     }
 
     const membershipsAfterRun = await env.DB.prepare(
-      "SELECT id, person_id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id IN (?, ?) ORDER BY person_id",
-    ).bind(EVENT_ID, UPDATED_PERSON_ID, PREEXISTING_PERSON_ID).all<{ id: string; person_id: string }>();
-    expect(membershipsAfterRun.results).toHaveLength(2);
+      "SELECT id, person_id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id IN (?, ?, ?) ORDER BY person_id",
+    ).bind(EVENT_ID, UPDATED_PERSON_ID, PREEXISTING_PERSON_ID, SKIPPED_MEMBERSHIP_PERSON_ID).all<{ id: string; person_id: string }>();
+    expect(membershipsAfterRun.results).toHaveLength(3);
     const dana = await env.DB.prepare("SELECT id FROM people WHERE email = 'dana-only@example.test'").first<{ id: string }>();
     if (!dana?.id) throw new Error("Dana was not imported");
     const danaId = dana.id;
     const danaMembership = await env.DB.prepare("SELECT id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id = ?").bind(EVENT_ID, danaId).first<{ id: string }>();
     expect(danaMembership?.id).toBeTruthy();
-    expect(new Set([...(membershipsAfterRun.results.map((row) => row.person_id)), danaId])).toHaveLength(3);
+    expect(new Set([...(membershipsAfterRun.results.map((row) => row.person_id)), danaId])).toHaveLength(4);
 
     const repeated = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/run`, { method: "POST" });
     expect(repeated.status).toBe(200);
-    expect(await repeated.json<{ counts: { skipped: number; failed: number } }>()).toMatchObject({ counts: { skipped: 3, failed: 0 } });
-    const membershipCountAfterRepeat = await env.DB.prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id IN (?, ?, ?)").bind(EVENT_ID, danaId, UPDATED_PERSON_ID, PREEXISTING_PERSON_ID).first<{ count: number }>();
-    expect(Number(membershipCountAfterRepeat?.count)).toBe(3);
+    expect(await repeated.json<{ counts: { skipped: number; failed: number } }>()).toMatchObject({ counts: { skipped: 4, failed: 0 } });
+    const membershipCountAfterRepeat = await env.DB.prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id IN (?, ?, ?, ?)").bind(EVENT_ID, danaId, UPDATED_PERSON_ID, PREEXISTING_PERSON_ID, SKIPPED_MEMBERSHIP_PERSON_ID).first<{ count: number }>();
+    expect(Number(membershipCountAfterRepeat?.count)).toBe(4);
 
     const danaSession = await createSession(env.DB, { personId: danaId, roleHint: "speaker", userAgent: "mrq165-import", now: Date.now() });
     const portal = await request(`/api/v1/me/portal?event_id=${EVENT_ID}`, {}, `mq_session=${danaSession.id}`);
@@ -232,5 +235,6 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     expect(await env.DB.prepare("SELECT id FROM memberships WHERE id = ? AND event_id = ? AND person_id = ? AND role = 'speaker'").bind(PREEXISTING_MEMBERSHIP_ID, EVENT_ID, PREEXISTING_PERSON_ID).first()).toMatchObject({ id: PREEXISTING_MEMBERSHIP_ID });
     expect(await env.DB.prepare("SELECT title, company, bio FROM people WHERE id = ?").bind(UPDATED_PERSON_ID).first()).toMatchObject({ title: "Old title", company: "Old company", bio: "Old bio." });
     expect(await env.DB.prepare("SELECT id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id = ?").bind(EVENT_ID, UPDATED_PERSON_ID).first()).toBeNull();
+    expect(await env.DB.prepare("SELECT id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id = ?").bind(EVENT_ID, SKIPPED_MEMBERSHIP_PERSON_ID).first()).toBeNull();
   }, 20_000);
 });

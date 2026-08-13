@@ -166,8 +166,6 @@ interface ImportSnapshot {
   kind: "speaker" | "session";
   person: PersonRow | null;
   attachment: AttachmentRow | null;
-  /** Present on speaker snapshots; records the membership this row owned. */
-  membership?: MembershipRow | null;
   membership_created?: boolean;
   membership_id?: string | null;
   submission: SubmissionRow | null;
@@ -485,9 +483,9 @@ async function importSpeaker(
   const beforeAttachment = current ? await attachmentForPerson(db, event.id, current.id) : null;
   const beforeMembership = current ? await speakerMembershipForPerson(db, event.id, current.id) : null;
   const before: ImportSnapshot = current ? {
-    kind: "speaker", person: current, attachment: beforeAttachment, membership: beforeMembership, membership_created: false, membership_id: null, submission: null,
+    kind: "speaker", person: current, attachment: beforeAttachment, membership_created: false, membership_id: null, submission: null,
     participations: [], answers: [], evaluations: [],
-  } : { kind: "speaker", person: null, attachment: null, membership: null, membership_created: false, membership_id: null, submission: null, participations: [], answers: [], evaluations: [] };
+  } : { kind: "speaker", person: null, attachment: null, membership_created: false, membership_id: null, submission: null, participations: [], answers: [], evaluations: [] };
   const now = nowAfter(current?.updated_at);
   const id = current?.id ?? stableImportId("person", event.id, externalRef || email);
   const next = {
@@ -535,10 +533,6 @@ async function importSpeaker(
   if (!beforeMembership && membershipWrite.meta.changes > 0) {
     before.membership_created = true;
     before.membership_id = (await speakerMembershipForPerson(db, event.id, person.id))?.id ?? null;
-  } else if (!beforeMembership) {
-    // Another writer won the race between the snapshot read and the
-    // idempotent bridge. Preserve that row as pre-existing for undo.
-    before.membership = await speakerMembershipForPerson(db, event.id, person.id);
   }
   const outcome = !current ? "created" : changed || attachmentChanged ? "updated" : "skipped";
   const reason = [
