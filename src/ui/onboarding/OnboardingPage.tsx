@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { OnboardingFilter, OnboardingRow, OnboardingSnapshot, OnboardingSpeakerDetail } from "../../routes/onboarding.queries";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
@@ -233,6 +233,8 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
   const deepLinkedPerson = new URLSearchParams(search).get("person");
   const [origin, setOrigin] = useState<HTMLElement | null>(null);
   const [inviteState, setInviteState] = useState<{ kind: "idle" | "sending" } | { kind: "success"; result: PortalInviteResponse } | { kind: "error"; message: string }>({ kind: "idle" });
+  const matrixRef = useRef<HTMLDivElement>(null);
+  const [matrixOverflows, setMatrixOverflows] = useState(false);
   const filterIdentity = JSON.stringify(filters);
   const ready = state.kind === "ready" ? state.snapshot : null;
   const rows = ready?.rows ?? [];
@@ -258,6 +260,18 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
     const timer = window.setInterval(() => load(false), 5_000);
     return () => { disposed = true; active?.abort(); window.clearInterval(timer); };
   }, [eventId, filterIdentity]);
+
+  // Whether the grid hides columns depends on the viewport as much as on the
+  // template count, so it is measured rather than guessed.
+  useEffect(() => {
+    const element = matrixRef.current;
+    if (!element) { setMatrixOverflows(false); return; }
+    const measure = () => setMatrixOverflows(element.scrollWidth > element.clientWidth + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [state.kind, ready?.task_templates.length, rows.length]);
 
   useEffect(() => {
     if (deepLinkedPerson) setDrawer({ kind: "speaker", personId: deepLinkedPerson });
@@ -302,6 +316,7 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
       setInviteState({ kind: "error", message: errorSummary(error) });
     }
   };
+  const lastTaskColumn = ready?.task_templates.at(-1) ?? null;
   const taskTypes = ready?.facets.task_types ?? [];
   const tracks = ready?.facets.tracks ?? [];
   const counts = ready?.counts ?? { all: 0, overdue: 0, incomplete: 0, risk: 0 };
@@ -324,7 +339,7 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
         {state.kind === "loading" ? <div class="onboarding-board-state">Reading live task state…</div> : null}
         {state.kind === "error" ? <div class="onboarding-board-state error"><strong>Chase board unavailable</strong><span>{state.message}</span></div> : null}
         {state.kind === "ready" && rows.length === 0 ? <EmptyState title={hasActiveFilters ? "No speakers match these filters" : "Nothing outstanding"} copy={hasActiveFilters ? "Adjust the filters to see speakers with outstanding conference tasks." : "Every accepted speaker is clear. Completed and cancelled work remains in the record, while this board keeps only tasks the conference still owes."} action={hasActiveFilters ? <Button variant="primary" onClick={clearFilters}>Clear filters</Button> : <Button variant="primary" onClick={() => navigate?.("/submissions?status=accepted_any")}>Open accepted speakers</Button>} /> : null}
-        {state.kind === "ready" && rows.length > 0 ? <div class="onboarding-matrix-wrap"><table class="onboarding-matrix"><thead><tr><th class="onboarding-select-column"><input type="checkbox" aria-label="Select all visible speakers" checked={allVisibleSelected} onChange={toggleAll} /></th><th scope="col" class="onboarding-speaker-column">Speaker</th><th scope="col" class="onboarding-track-column">Track</th>{ready.task_templates.map((task) => <th scope="col" class="onboarding-task-column" key={task.id}><span title={task.description}>{task.name}</span></th>)}<th scope="col" class="onboarding-last-contact-column">Last contact</th><th class="onboarding-action-column" scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td class="onboarding-select-column"><input type="checkbox" aria-label={`Select ${row.person.name}`} checked={selected.has(row.id)} onChange={() => toggleRow(row.id)} /></td><th scope="row" class="onboarding-speaker-column"><button class="onboarding-speaker-link" type="button" onClick={(event) => openDrawer({ kind: "speaker", personId: row.person.id }, event.currentTarget)}><SpeakerAvatar eventId={eventId} person={row.person} className="onboarding-row-avatar" /><span><strong>{row.person.name}</strong><small>{row.person.company || row.person.email} · {row.wave?.name ?? "No wave"} · {row.sessions.length} Session{row.sessions.length === 1 ? "" : "s"}</small></span></button></th><td class="onboarding-track-column">{row.tracks.length > 0 ? row.tracks.map((track) => <span class="onboarding-track" key={track.id}><i style={{ backgroundColor: track.color }} aria-hidden="true" />{track.name}</span>) : <span class="onboarding-muted">No track</span>}</td>{ready.task_templates.map((task) => { const cell = row.cells[task.id] ?? { glyph: "—", state: "unassigned", title: task.name, due_at: null, owed: false }; return <td key={task.id} class={`onboarding-cell state-${cell.state}`}><span class="onboarding-glyph" aria-label={`${cell.title}: ${cell.state}`}>{cell.glyph}</span><small>{cell.state === "unassigned" || cell.state === "cancelled" ? "—" : cell.due_at === null ? "—" : formatDueDate(cell.due_at)}</small></td>; })}<td class="onboarding-last-contact">{formatDate(row.last_contact)}</td><td class="onboarding-action-column"><Button small onClick={(event) => selectForNudge(row, event)}>Nudge</Button></td></tr>)}</tbody></table></div> : null}
+        {state.kind === "ready" && rows.length > 0 ? <><div class="onboarding-matrix-scroll-note" aria-live="polite"><strong class="tabular">{ready.task_templates.length}</strong><span>task column{ready.task_templates.length === 1 ? "" : "s"}{matrixOverflows && lastTaskColumn ? ` · scroll the grid sideways to reach “${lastTaskColumn.name}”` : ""}</span></div><div class="onboarding-matrix-wrap" ref={matrixRef}><table class="onboarding-matrix"><thead><tr><th class="onboarding-select-column"><input type="checkbox" aria-label="Select all visible speakers" checked={allVisibleSelected} onChange={toggleAll} /></th><th scope="col" class="onboarding-speaker-column">Speaker</th><th scope="col" class="onboarding-track-column">Track</th>{ready.task_templates.map((task) => <th scope="col" class="onboarding-task-column" key={task.id}><span title={task.description}>{task.name}</span></th>)}<th scope="col" class="onboarding-last-contact-column">Last contact</th><th class="onboarding-action-column" scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td class="onboarding-select-column"><input type="checkbox" aria-label={`Select ${row.person.name}`} checked={selected.has(row.id)} onChange={() => toggleRow(row.id)} /></td><th scope="row" class="onboarding-speaker-column"><button class="onboarding-speaker-link" type="button" onClick={(event) => openDrawer({ kind: "speaker", personId: row.person.id }, event.currentTarget)}><SpeakerAvatar eventId={eventId} person={row.person} className="onboarding-row-avatar" /><span><strong>{row.person.name}</strong><small>{row.person.company || row.person.email} · {row.wave?.name ?? "No wave"} · {row.sessions.length} Session{row.sessions.length === 1 ? "" : "s"}</small><small>{row.tasks.every((task) => task.state === "unassigned") ? "No tasks assigned" : `${row.tasks.filter((task) => task.state !== "unassigned").length} of ${row.tasks.length} tasks assigned`}</small></span></button></th><td class="onboarding-track-column">{row.tracks.length > 0 ? row.tracks.map((track) => <span class="onboarding-track" key={track.id}><i style={{ backgroundColor: track.color }} aria-hidden="true" />{track.name}</span>) : <span class="onboarding-muted">No track</span>}</td>{ready.task_templates.map((task) => { const cell = row.cells[task.id] ?? { glyph: "—", state: "unassigned", title: task.name, due_at: null, owed: false }; return <td key={task.id} class={`onboarding-cell state-${cell.state}`}><span class="onboarding-glyph" aria-label={`${cell.title}: ${cell.state}`}>{cell.glyph}</span><small>{cell.state === "unassigned" || cell.state === "cancelled" ? "—" : cell.due_at === null ? "—" : formatDueDate(cell.due_at)}</small></td>; })}<td class="onboarding-last-contact">{formatDate(row.last_contact)}</td><td class="onboarding-action-column"><Button small onClick={(event) => selectForNudge(row, event)}>Nudge</Button></td></tr>)}</tbody></table></div></> : null}
       </section>
     </> : <div class="onboarding-loading-card card">{state.kind === "error" ? <><strong>Chase board unavailable</strong><span>{state.message}</span></> : "Reading the conference chase board…"}</div>}
     {drawer ? <div class="onboarding-drawer-layer"><button class="onboarding-drawer-backdrop" type="button" aria-label="Close drawer" onClick={() => setDrawer(null)} />{drawer.kind === "speaker" ? <SpeakerDrawer eventId={eventId} personId={drawer.personId} onClose={() => setDrawer(null)} /> : <ComposeDrawer eventId={eventId} rows={selectedRows} onClose={() => setDrawer(null)} />}</div> : null}
