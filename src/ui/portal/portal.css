@@ -229,6 +229,7 @@
 .portal-submitter-action p, .portal-submitter-status-note { margin: 0; }
 .portal-submitter-status-note { color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
 .portal-submitter-seat .portal-panel-head > span { min-width: 0; overflow-wrap: anywhere; text-align: right; }
+.portal-submitter-seat .portal-empty { overflow-wrap: anywhere; }
 .portal-seat-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .portal-seat-actions .portal-button { align-items: center; display: inline-flex; text-decoration: none; }
 .portal-submitted-row { align-items: center; border-bottom: 1px solid var(--rule-soft); display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) 104px; min-height: 60px; padding: 12px 0; }

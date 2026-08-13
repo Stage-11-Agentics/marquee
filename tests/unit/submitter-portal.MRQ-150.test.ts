@@ -52,6 +52,15 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).not.toContain("Speaker portal");
   });
 
+  test("CONTRACT · MRQ-150 · a long submitter email remains contained in the return panel", () => {
+    const html = render(snapshot({ person: {
+      id: "per",
+      name: "Avery Okonkwo",
+      email: "verylongindividualname1234567890@somecompanydomainname.com",
+    }, submissions: [submission({ status: "accepted" })] }));
+    expect(html.match(/verylongindividualname1234567890@somecompanydomainname\.com/g)).toHaveLength(2);
+  });
+
   test("CONTRACT · MRQ-150 · it names when a decision arrives and where it will be sent", () => {
     const html = render(snapshot());
     expect(html).toContain("September 21, 2026");
