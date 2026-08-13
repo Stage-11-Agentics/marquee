@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:mrq-137",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": null,
+  "created_at": "2026-08-12T19:19:08Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "SURFACE: /submissions?sort=<unknown>\n\nWHAT BREAKS: /submissions?sort=score_desc renders the page shell with an empty table and 'Submissions did not load - The system sent a request this conference could not accept... - ref a2a0da', and the sort dropdown renders with no option selected. A shareable/bookmarkable list view fails whole rather than degrading to a valid default.\n\nROOT CAUSE (confirmed at live sha 75b871d94c6f):\n- src/api/list.ts:43 -> sort: z.enum(sortKeys).default(options.defaultSort ?? sortKeys[0])\n- .default() supplies a value when the key is MISSING; it does not catch an INVALID one. An unknown value therefore throws a ZodError -> 400 -> the list surface shows its load-failure state.\n- Valid values are newest | updated | title | score | score_asc (src/routes/views.routes.ts:25). 'score_desc' is a plausible guess that is not in the whitelist -- exactly what an agent or a hand-edited URL produces.\n\nFIX SHAPE: .catch(default) alongside .default(default) on the sort field in src/api/list.ts. Roughly one line, and it fixes every list endpoint built on the shared list contract at once.\n\nWHY URGENT: cheap, and it is the failure mode an agent driving the product by URL hits first -- which bears directly on the 'agent-native by design' claim.\n\nSIZE: trivial. No dependency.\n\nPROVENANCE: sbek run 2026-08-12T15-33-34, abstract-management judgement, defects[4]. Validated by reading live source.",
+  "done_at": "2026-08-12T21:28:45Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZVRB01YT63W48HNCD03XGAA",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVWT9VKJHN1VHFDZQTM1BNT",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVXBRRXEAHM23KZPCQAV6QT",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVY1C83YR6CEK6R5Z72V98Y",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVY1C83YR6CEK6R5Z72V98X",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVPM1E366WXXAS2CDPE2QFY",
+  "last_event_id": "ev_01KZVY1C83YR6CEK6R5Z72V991",
+  "last_status_changed_at": "2026-08-12T21:28:45Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-137",
+  "status": "done",
+  "tags": null,
+  "title": "An unrecognised sort value hard-errors the whole submissions list instead of falling back",
+  "type": "bug",
+  "updated_at": "2026-08-12T21:28:45Z",
+  "urgency": null
+}

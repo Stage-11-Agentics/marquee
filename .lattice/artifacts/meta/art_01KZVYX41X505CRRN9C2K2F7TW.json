@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:43:54Z",
+  "created_by": "agent:delegator-mrq-79",
+  "custom_fields": {},
+  "id": "art_01KZVYX41X505CRRN9C2K2F7TW",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVYX41X505CRRN9C2K2F7TW.md",
+    "size_bytes": 670
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged PR #129 at commit a8b97e0a7ea02a412e063b32b942182e1e611d3b. Exact-head CI fast-gate 31642426841 was green, including the AC-250 singleton-provider invariant and full suite. Independent exact-he",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,43 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": null,
+  "created_at": "2026-08-12T21:59:51Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "Source: .briefs/eval-gap-v2-human-lens.md section 4, authored by Fable (Eval V2 Audit, surface:55). Operator-approved 2026-08-12. Read that section for the full human-problem framing before starting. (V2-2, ~60 min, one agent, four small fixes across the reviewer/evaluation surfaces.)\n\n1. QUEUE COPY STATES THE REAL RULE. Replace 'in your authorized tracks' and the responsibility panel's track-intersection sentence with the rule the engine actually enforces: 'assigned to you \u2014 directly or through your committee \u2014 within your track responsibility.' (Closes ABS-05, w3 partial.)\n\n2. THE INVITE SIGN-IN LINK IS READABLE, NOT ONLY COPYABLE. Render the full URL as wrapping text (an anchor or code block), keeping the Copy button. A human can read it over a shoulder; an agent can read it from the accessibility tree. The eval logged this as a defect: the credential is displayed truncated inside a readonly input with only a Copy button, and the conference only emails allowlisted addresses, so that IS the delivery path. (Closes CFP-10, w2 partial; also unblocks ABS-05 verification.)\n\n3. EXPORTS SAY WHAT THEY DID. After either export: 'Exported {n} rows \u00b7 {filename}' in the existing notice slot. The error path already exists. (Closes ABS-13, w2 partial.)\n\n4. ONE SCORE, ONE NAME. The record's per-review row shows the same weighted value the list shows, via the shared review-aggregate definition, labelled, with the raw optional scalar as secondary detail. 'Saved by reviewer {actor_id}' becomes the reviewer's name. Pure legibility \u2014 this hardens CFP-11's pass.\n   NOTE FOR WHOEVER PICKS THIS UP: an earlier evaluation filed a data-integrity defect here claiming a comment appeared on the wrong reviewer's row and a 4.00 displayed as 2.00. BOTH DISSOLVED on investigation \u2014 the demo reviewer seat resolves to per_reviewer-dario-quill (so the comment was on its own row), and the UI labels weighted vs unweighted rows. There is NO corruption bug. This item is about making that legible so no future reader repeats the misreading. Do not go hunting for a data bug that does not exist.\n\nVERIFY. As demo reviewer (chip reads 'Reviewing as ...'), save 4/4/4/4 plus a comment; the organizer record shows that name, that comment, 4.00 weighted. Invite a reviewer; read the link text without clicking Copy. Fire both exports; see the confirmation.",
+  "done_at": "2026-08-12T23:25:23Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZW0F151K3GACVVYD7WSGHJT",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZW14ZB930MYV840B33EXC02",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZW1MP2XPE0XAMQ284QYXB5B",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVZT9ZXG2G8Z0S9331FD1RM",
+  "last_event_id": "ev_01KZW4PYEMVXCG8F3ERPR4MGNA",
+  "last_status_changed_at": "2026-08-12T23:25:23Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-151",
+  "status": "done",
+  "tags": null,
+  "title": "V2-2: the review chain tells the reviewer and the chair the same truth",
+  "type": "task",
+  "updated_at": "2026-08-12T23:25:23Z",
+  "urgency": null
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:38:05Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZVYJEXYYC5712JCX4GXZZK6",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVYJEXYYC5712JCX4GXZZK6.md",
+    "size_bytes": 4127
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "code-review (review)",
+  "token_usage": null,
+  "type": "file"
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:03:14Z",
+  "created_by": "agent:codex-mrq-146-final-reviewer",
+  "custom_fields": {},
+  "id": "art_01KZVWJNDSFBFBE60REKY391HK",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVWJNDSFBFBE60REKY391HK.md",
+    "size_bytes": 1548
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Final rebased exact-head review: PASS, no findings.",
+  "tags": [],
+  "title": "MRQ-146 final exact-head code review",
+  "token_usage": null,
+  "type": "note"
+}

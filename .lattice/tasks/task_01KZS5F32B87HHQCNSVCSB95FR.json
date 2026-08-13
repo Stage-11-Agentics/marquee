@@ -1,27 +1,58 @@
 {
   "assigned_to": "agent:delegator-mrq-80",
   "branch_links": [],
-  "comment_count": 3,
+  "comment_count": 11,
   "complexity": null,
   "created_at": "2026-08-11T19:40:51Z",
   "created_by": "agent:claude-cli",
   "custom_fields": {},
   "description": "The delivery-health screen tells an organizer to \"send the decision again\". The\nsystem will not do it. This ticket makes that sentence true.\n\nTHE DEFECT\nnotifyExistingDecisions (src/jobs/cascade/decisions.ts:441), behind\nPOST /api/v1/events/{eventId}/submissions/not-notified/notify, excludes any\nsubmission that already has an outbox row at status='sent':\n\n  AND NOT EXISTS (SELECT 1 FROM outbox sent WHERE ... sent.status = 'sent' ...)\n\nSince a send is marked 'sent' the moment the provider accepts it, a speaker\nwhose acceptance hard-bounced is both invisible to the health screen AND refused\nby the retry tool. The one failure this product exists to prevent \u2014 a speaker\nnever learning they were accepted \u2014 is fully reachable today.\n\nWHY THIS IS SEPARATE FROM MRQ-79\nDetection and recovery have different costs and different dependencies. MRQ-79\nneeds a deployment and a provider dashboard step. This needs neither, and it\ncovers the case no provider will ever report: the speaker emails you saying they\nnever got it. Recovery is useful without classification; classification is\nnearly useless without recovery.\n\nWHAT IT DOES\n- A per-record action: \"This did not reach them \u2014 fix the address and send\n  again.\" It mints a fresh idempotency key (the retryKey pattern at\n  decisions.ts:504 already does this) so a NEW outbox row is created even when\n  the prior row is 'sent'.\n- An organizer-set \"not received\" mark on the record, so a message a human knows\n  bounced lands on the delivery-health ledger without waiting for any provider\n  to tell us. At most one nullable column.\n- Health-screen rows that are actionable rather than advisory.\n\nACCEPTANCE CRITERIA\n1. Editing a speaker's email and choosing send again produces a new outbox row\n   and a real send \u2014 verified end to end, not just at the endpoint.\n2. Marking \"not received\" puts the speaker back on the ledger with the decision\n   intact and no duplicate decision written.\n3. The daily 100-send cap is respected: recovery sends queue like any other and\n   never bypass the outbox.\n4. Idempotent under double-click \u2014 one action, one message.\n5. Demo mode still holds the mail back exactly as configured.\n\nWHEN DONE: there is no stuck case an organizer cannot get out of, whether or not\nanything ever told us the message failed.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-12T21:11:49Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZVPEVH9B108HR1W4CWKSTRF",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVTKYD1A47M0HVKM3WS1TTD",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVTR1ME54GTHD7JT4X7FY94",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVWW6FPYF69KC13CEDDS3RJ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVX2BREHDTNV8F21NBM2V7C",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVX2BRDC336JPF88QSV7Z1H",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZS5F32B87HHQCNSVCSB95FR",
-  "last_event_id": "ev_01KZVP8NGGXAGC4FDBH6ZRB2QV",
-  "last_status_changed_at": "2026-08-12T19:12:55Z",
+  "last_event_id": "ev_01KZVX2BREHDTNV8F21NBM2V7F",
+  "last_status_changed_at": "2026-08-12T21:11:49Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-80",
-  "status": "planned",
+  "status": "done",
   "tags": null,
   "title": "Recovery \u2014 let an organizer fix an address and actually resend",
   "type": "task",
-  "updated_at": "2026-08-12T19:12:55Z",
+  "updated_at": "2026-08-12T21:11:49Z",
   "urgency": null
 }

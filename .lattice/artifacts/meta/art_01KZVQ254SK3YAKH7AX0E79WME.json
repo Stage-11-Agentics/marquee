@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T19:26:51Z",
+  "created_by": "AgentEvaluator-1",
+  "custom_fields": {},
+  "id": "art_01KZVQ254SK3YAKH7AX0E79WME",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVQ254SK3YAKH7AX0E79WME.md",
+    "size_bytes": 802
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Completed and merged as PR #115 (merge commit 1058ed23caf76e2a2dd4b7dfcd0b278a32fe3849). Final exact-head validation at 0e638e8: npm run pr-gate -- --ticket MRQ-134 passed (122 integration files/848 t",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

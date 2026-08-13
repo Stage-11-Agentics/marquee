@@ -1,0 +1,50 @@
+{
+  "assigned_to": {
+    "base_name": "agent:mrq-148-delegator",
+    "framework": "claude-code",
+    "model": "claude-opus-5",
+    "name": "agent:mrq-148-delegator-1",
+    "serial": 1,
+    "session": "sess_01KZVZ82JWWYSBJR0CFAYH8XP0"
+  },
+  "branch_links": [],
+  "comment_count": 4,
+  "complexity": null,
+  "created_at": "2026-08-12T21:27:49Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "OPERATOR DECISION 2026-08-12: the declared non-goal is REVERSED. AI-assisted scheduling is now IN SCOPE and must ship tonight. Together with MRQ-149 this is the ENTIRE arithmetic distance from 98.7% to 100% on the eval.\n\nRUBRIC ITEM: AIA-08, weight 1, type depth, testability auto. Currently `not_found` (zero credit).\n\nCRITERION (verbatim): 'Some assisted or automatic scheduling capability exists that places unscheduled sessions into slots in one action (\"AI\" auto-scheduling judged generously as any auto-place assist).'\n\nPASSES WHEN (verbatim): 'An auto-schedule/AI-assist control is present in the builder and, when triggered, places at least one previously unscheduled session into a slot/room. Judge generously -- any one-action assisted placement counts, and whether the result shows conflict flags is recorded but not gating. Fail if no such capability exists anywhere in the builder ... or if the control exists but performs no placement when triggered.'\n\nREAD THAT AGAIN, BECAUSE IT MAKES THIS TICKET SMALL: the rubric says 'judged generously' and 'any one-action assisted placement counts'. **You do not need an LLM. You do not need a model call. You do not need an optimiser.** A deterministic 'Auto-place' button that finds free time x room slots and assigns unscheduled sessions into them, in one action, EARNS THIS ITEM IN FULL. Do not build an AI scheduler tonight. Build an honest assisted placer.\n\nMINIMUM BAR:\n- A control in /agenda-builder (label it honestly -- 'Auto-place', 'Fill open slots', or similar).\n- One click places at least one previously unscheduled session into a real slot and room.\n- The placement persists across reload (it must go through the same path manual placement uses, not a client-side fake).\n- Conflict flagging is recorded but NOT gating -- do not block the ship on perfect conflict avoidance. Prefer placing into non-conflicting slots where cheap, and let the existing conflict panel do its job otherwise.\n\nBE HONEST IN THE COPY. PHILOSOPHY.md and this product's whole posture is that it does not overclaim. Do NOT label a deterministic placer as 'AI'. Call it what it is. The rubric explicitly accepts any assisted placement, so honesty costs nothing here -- and MRQ-146 exists precisely because the API was caught overclaiming. Do not create a second instance of that.\n\nEVIDENCE THE JUDGE WANTS: screenshot of the control, plus before/after grid screenshots showing the previously unscheduled session now placed.\n\nSIZE: small-to-medium, and it is worth more per hour than anything else left on the board.\n\nPROVENANCE: sbek run 2026-08-12T15-33-34, ai-agenda, AIA-08. Re-baseline by Eval Closer (surface:48) established this and MRQ-149 as the only remaining distance to 100%.",
+  "done_at": "2026-08-12T23:06:55Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KZVZA60ETH13H8HDN7633ZPE",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVZDWMEJQNEM92MY29YFPRH",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZW3N3FJ5BZD4PGC3WNXQ7MW",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZVXZNAFTNG66WE67VQ3DJAX",
+  "last_event_id": "ev_01KZW3N3T9WMX4EC2SY3FAFMZD",
+  "last_status_changed_at": "2026-08-12T23:06:55Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-148",
+  "status": "done",
+  "tags": null,
+  "title": "AIA-08: one-action assisted placement in the agenda builder",
+  "type": "task",
+  "updated_at": "2026-08-12T23:06:55Z",
+  "urgency": null
+}

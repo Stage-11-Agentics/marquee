@@ -1,16 +1,34 @@
 {
   "active_sessions": {
     "AgentEvaluator-1": "sess_01KZVFR1QPQ9PMT7PY3B0RRWP0",
+    "DiffAnalyst-1": "sess_01KZVRC5WKV4ACDY7V0JQE0YS3",
+    "EvalFixOrchestrator-1": "sess_01KZW4PSFBWA0T8GP141KZ3RA3",
     "EvalIntake-1": "sess_01KZVFJPQ119CRD98KZJZNMD8E",
+    "Mrq135-1": "sess_01KZVTBMYSWKHARE2BQTDKZRKQ",
+    "PortalDeadEnd-1": "sess_01KZVY8ECYYK8201C9M895R503",
+    "SurfaceSurveyor-1": "sess_01KZW5S0AP6H89N4C3GQXNSGCP",
+    "agent:mrq-148-delegator-1": "sess_01KZVZ82JWWYSBJR0CFAYH8XP0",
+    "agent:mrq-148-delegator-2": "sess_01KZW3M8TYTEE9X46JWP31GCSH",
     "feedback-intake-1": "sess_01KZSZXGH17A7VWN1TA7QNT7WG",
     "intake-1": "sess_01KZT6C1JSV9KWWS2F5EZSN5V6",
-    "merge-agent-1": "sess_01KZT4CNZA5J534NFWXB4DDE8Y"
+    "merge-agent-1": "sess_01KZT4CNZA5J534NFWXB4DDE8Y",
+    "mrq-136-delegator-1": "sess_01KZVV6HED75H66P63MX4GQH6Q",
+    "mrq-136-delegator-2": "sess_01KZVV6Z2P1TQQ5Y582VSV58M2",
+    "mrq-149-delegator-1": "sess_01KZVYM1N0N2W0M4SVBW8YFS16"
   },
   "serial_counters": {
     "AgentEvaluator": 1,
+    "DiffAnalyst": 1,
+    "EvalFixOrchestrator": 1,
     "EvalIntake": 1,
+    "Mrq135": 1,
+    "PortalDeadEnd": 1,
+    "SurfaceSurveyor": 1,
+    "agent:mrq-148-delegator": 2,
     "feedback-intake": 1,
     "intake": 1,
-    "merge-agent": 1
+    "merge-agent": 1,
+    "mrq-136-delegator": 2,
+    "mrq-149-delegator": 1
   }
 }

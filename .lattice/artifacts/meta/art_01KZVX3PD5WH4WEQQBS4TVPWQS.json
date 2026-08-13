@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:12:32Z",
+  "created_by": "agent:delegator-mrq-128",
+  "custom_fields": {},
+  "id": "art_01KZVX3PD5WH4WEQQBS4TVPWQS",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVX3PD5WH4WEQQBS4TVPWQS.md",
+    "size_bytes": 1136
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "MRQ-128 completed and merged as PR #127 (https://github.com/Stage-11-Agentics/marquee/pull/127). Exact merged head 5020ee6b adds the /settings/webhooks organizer route and UI, event-scoped HTTPS endpo",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

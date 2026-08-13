@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:codex-v2-6",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": null,
+  "created_at": "2026-08-12T21:59:51Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "Source: .briefs/eval-gap-v2-human-lens.md section 4, authored by Fable (Eval V2 Audit, surface:55). Operator-approved 2026-08-12. Read that section for the full human-problem framing before starting. (V2-6, ~45 min.)\n\nHUMAN PROBLEM. Publishing is batch-only and one-way. When a speaker cancels the night before the site goes out, there is no way to pull that one session off the public agenda.\n\nGOOD LOOKS LIKE. The submission record's slot panel \u2014 where 'Live on the public site' already reads \u2014 becomes a control: Publish / Unpublish this session, with the same confirmation gravity the batch flow has. The API gains the is_published = 0 transition, audited, like the reversal path. Public output already gates on the flag, so there is NO public-side work.\n\nCLOSES. CNT-12 (w3 cannot_judge \u2014 MANDATORY for 100%: a cannot_judge is excluded from the denominator, so it costs nothing today but makes a perfect score unreachable while it stands). Also serves the EMB precondition step ('set every scheduled session content status to Approved') with a real control.\n\nVERIFY. Unpublish a published session -> gone from the /site agenda on reload. Publish it back -> it returns.",
+  "done_at": "2026-08-12T23:25:24Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZW0GZAA6PJKK1520PWJPYWT",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZW20Z27KNEEY6Z29KWYVZ9E",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZW2F1W1GJ5XV0CSDQ41GKDG",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZW2VXGRT5H99FWBVCPPE2PQ",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZW3504SPZ4VV7B2YQJ7WE4D",
+      "role": "validation",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZVZTACVZ2RN48XDJRGY0HR7",
+  "last_event_id": "ev_01KZW4PYV16A49XRR76GBEYYRC",
+  "last_status_changed_at": "2026-08-12T23:25:24Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-155",
+  "status": "done",
+  "tags": null,
+  "title": "V2-6: publication is a status the organizer can set, and unset",
+  "type": "task",
+  "updated_at": "2026-08-12T23:25:24Z",
+  "urgency": null
+}

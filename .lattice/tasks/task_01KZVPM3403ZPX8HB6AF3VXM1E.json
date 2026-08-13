@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:mrq-139",
+  "branch_links": [],
+  "comment_count": 7,
+  "complexity": null,
+  "created_at": "2026-08-12T19:19:10Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "SURFACE: /submissions/<id> PARTICIPANTS panel, and /submissions/new.\n\nWHAT BREAKS: Co-presenters cannot be attached to a submission from the organizer side at all. The record renders a full PARTICIPANTS panel but offers no add/remove/edit affordance, and the organizer create form has exactly one person slot ('Submitter REQUIRED'). The only participant-entry path is the public form's single fixed co-speaker name/email pair, which has no role picker.\n\nCONFIRMED AT LIVE SHA 75b871d94c6f:\n- src/ui/submissions/SubmissionRecordPage.tsx:231 -> the Participants Card maps record.participants and renders an empty state; there is no mutation control anywhere in the file. grep for add-participant across src/ui/submissions/ returns nothing.\n- The public CFP form exposes exactly one co-speaker pair: fields co_speaker_name and co_speaker_email (GET /api/v1/public/forms/cfp on live).\n- Yet that same live response declares form.max_speakers: 4. The form's own contract allows four people; the form can only ever collect two.\n\nFIX SHAPE: an add-participant control on the record (person picker + role), and either honour max_speakers with repeatable co-speaker slots on the public form or stop advertising 4.\n\nWHY URGENT: multi-presenter sessions are ordinary at a conference of this kind, and the max_speakers:4 vs one-slot contradiction is a self-inflicted inconsistency a reader of the API will notice.\n\nSIZE: medium.\n\nPROVENANCE: sbek run 2026-08-12T15-33-34, abstract-management judgement, defects[3]. Validated live.",
+  "done_at": "2026-08-12T21:32:48Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZVRF84W8MWZXRQRJE9SJST3",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVTVCPQCK532JCWG2BP7CF1",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVWRJ8SWZ8V6NCSAQM781RD",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVY8S7TC25TQFKNRM8KMSE0",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVY8S7RKWDS3BSXNV0E2EN0",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVPM3403ZPX8HB6AF3VXM1E",
+  "last_event_id": "ev_01KZVY8S7TC25TQFKNRM8KMSE2",
+  "last_status_changed_at": "2026-08-12T21:32:48Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-139",
+  "status": "done",
+  "tags": null,
+  "title": "A submission's participants are read-only: no way to add a co-presenter after intake",
+  "type": "bug",
+  "updated_at": "2026-08-12T21:32:48Z",
+  "urgency": null
+}
