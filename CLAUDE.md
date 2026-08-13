@@ -34,6 +34,12 @@ Open-source speaker/session-management platform for conference organizers, built
 **`Stage-11-Agentics/marquee` on GitHub — private — is the single home for this project.**
 A collaborator works through it, so it is where the work has to live.
 
+- **Private is the intended state, not a gap.** The repo stays private through the build.
+  Going public is a step *of* the submission, taken deliberately when the submission is
+  made — not a precondition someone should race to satisfy beforehand. The submission pack
+  names the repo URL, and that URL is a 404 to an outsider until then; that is expected and
+  is not a defect to fix. **Do not make this repo public.** Only the operator does that, and
+  only as part of submitting.
 - Remote is **`github`**; branch is **`main`**. There is no `origin`.
 - **The Forgejo repo is retired. Do not push to it, fetch from it, or re-add it as a remote.**
   The `forgejo` remote has been removed from the checkout deliberately, so a stale command
