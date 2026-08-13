@@ -2,9 +2,11 @@ import type { JSX } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { formatFileSize, readStoredFileAnswer } from "../../lib/file-answers";
+import { ROLE_HOME } from "../../lib/auth/signin-destination";
 import { ProfileForm, type PortalPerson } from "../portal/PortalPage";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
+import { ThemeSwitch } from "../shell/ThemeSwitch";
 import { useIdentity } from "../shell/identity";
 import "./review.css";
 
@@ -319,7 +321,7 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
   const current = revising ?? queue[currentIndex] ?? null;
   const currentReview = current ? drafts[current.id] ?? EMPTY_REVIEW : EMPTY_REVIEW;
 
-  const returnHome = (): void => { window.location.assign("/reviewer"); };
+  const returnHome = (): void => { window.location.assign(ROLE_HOME.reviewer); };
 
   const updateReview = (patch: Partial<ReviewState>): void => {
     if (!current) return;
@@ -539,10 +541,11 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
   return <main class="reviewer-surface" data-reviewer-surface="true" data-mobile-review="375px">
     <div class="reviewer-frame">
       <header class="reviewer-topline">
-        <div class="reviewer-brand"><span class="brand-mark" aria-hidden="true">M</span><span>Marquee</span><span class="reviewer-slash">/</span><strong>{isHome ? "Reviewer home" : "Reviewer"}</strong></div>
+        <a class="reviewer-brand" href={ROLE_HOME.reviewer} aria-label="Marquee reviewer home"><span class="brand-mark" aria-hidden="true">M</span><span>Marquee</span><span class="reviewer-slash">/</span><strong>{isHome ? "Reviewer home" : "Reviewer"}</strong></a>
         <div class="reviewer-top-meta">
           <span class="chip reviewer-whoami" title="The reviewer this queue belongs to">{identity ? `Reviewing as ${identity.name}` : "Reviewing as you"}</span>
-          {isHome ? <span class="chip">Reviewer seat</span> : <><span class="chip">{roundName}</span><span class="chip">{roundMode === "comparison" ? "Comparison mode" : "Scorecard mode"}</span><span class="chip success">{blindMode ? "Anonymous review" : "Identity visible"}</span><a class="reviewer-exit" href="/reviewer">Exit queue</a></>}
+          {isHome ? <span class="chip">Reviewer seat</span> : <><span class="chip">{roundName}</span><span class="chip">{roundMode === "comparison" ? "Comparison mode" : "Scorecard mode"}</span><span class="chip success">{blindMode ? "Anonymous review" : "Identity visible"}</span><a class="reviewer-exit" href={ROLE_HOME.reviewer}>Exit queue</a></>}
+          <ThemeSwitch />
         </div>
       </header>
       <header class="reviewer-heading">
@@ -596,7 +599,7 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
           </div>
         </section>
       </> : <>
-        {!current ? <section class="reviewer-empty instrument"><span class="empty-mark" aria-hidden="true">✓</span><h2>{roundMode === "comparison" ? "Comparison queue clear" : "Queue clear"}</h2><p>{roundMode === "comparison" ? "There are not three submissions assigned to you within your track responsibility waiting for comparison." : "There are no unreviewed submissions assigned to you within your track responsibility."}</p><a class="button" href="/reviewer">Return to reviewer home</a><button type="button" class="button" onClick={() => void load()}>Check again</button></section> : roundMode === "comparison" ? <div class="comparison-board" data-comparison-round={roundId} data-mobile-review="comparison">
+        {!current ? <section class="reviewer-empty instrument"><span class="empty-mark" aria-hidden="true">✓</span><h2>{roundMode === "comparison" ? "Comparison queue clear" : "Queue clear"}</h2><p>{roundMode === "comparison" ? "There are not three submissions assigned to you within your track responsibility waiting for comparison." : "There are no unreviewed submissions assigned to you within your track responsibility."}</p><a class="button" href={ROLE_HOME.reviewer}>Return to reviewer home</a><button type="button" class="button" onClick={() => void load()}>Check again</button></section> : roundMode === "comparison" ? <div class="comparison-board" data-comparison-round={roundId} data-mobile-review="comparison">
         {queue.slice(0, 3).map((item, index) => <article class="card comparison-card" key={item.id}>
           <CardBody>
             <div class="review-card-chips"><span class="chip">Card {index + 1}</span><span class="chip">{item.format ?? "Abstract"}</span><span class="chip tabular">{item.id}</span></div>

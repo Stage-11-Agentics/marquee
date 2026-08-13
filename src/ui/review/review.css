@@ -1,11 +1,13 @@
 .reviewer-surface { min-height: 100vh; overflow-x: clip; padding: 0 24px 56px; }
 .reviewer-frame { margin: 0 auto; max-width: 1220px; min-width: 0; }
 .reviewer-topline { align-items: center; border-bottom: 1px solid var(--line-strong); display: flex; justify-content: space-between; min-height: 58px; }
-.reviewer-brand { align-items: center; display: flex; font: 600 11px/1 var(--mono); gap: 9px; letter-spacing: .12em; min-width: 0; text-transform: uppercase; }
+.reviewer-brand { align-items: center; color: var(--ink); display: flex; font: 600 11px/1 var(--mono); gap: 9px; letter-spacing: .12em; min-width: 0; text-decoration: none; text-transform: uppercase; }
+.reviewer-brand:hover { color: var(--accent-dark); }
 .reviewer-brand .brand-mark { flex-basis: 25px; height: 25px; width: 25px; }
 .reviewer-slash { color: var(--muted); font-weight: 400; }
 .reviewer-brand strong { color: var(--accent-dark); }
 .reviewer-top-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; min-width: 0; }
+.reviewer-top-meta > .theme-switch { flex: 0 0 138px; min-width: 138px; }
 .reviewer-exit { align-items: center; background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); display: inline-flex; font: 600 10.5px/1 var(--mono); justify-content: center; min-height: 30px; padding: 7px 11px; text-decoration: none; }
 .reviewer-exit:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
 .reviewer-heading { align-items: start; display: flex; gap: 18px; justify-content: space-between; margin: 28px 0 20px; }
