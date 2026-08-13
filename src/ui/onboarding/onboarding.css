@@ -58,15 +58,20 @@
 .onboarding-matrix thead th:not(:first-child) { border-left: 1px solid var(--line); }
 .onboarding-matrix tbody tr:last-child th, .onboarding-matrix tbody tr:last-child td { border-bottom: 0; }
 .onboarding-matrix tbody tr:hover { background: color-mix(in srgb, var(--accent-wash) 42%, transparent); }
-.onboarding-select-column { padding-left: 12px !important; width: 38px; }
+.onboarding-matrix { --select-column-width: 38px; }
+.onboarding-select-column { padding-left: 12px !important; width: var(--select-column-width); }
 /*
   Scrolling sideways to reach a task column must not cost the row's identity —
   a grid of glyphs with the names scrolled away is unreadable. The checkbox and
   the speaker cell stay pinned to the left edge; both need an opaque background
   because the cells beneath them travel underneath.
+
+  The speaker cell's offset is the select column's width, so the two read from
+  one token: a hand-copied number would misalign the pinned pair the moment
+  either changed, and nothing but the eye would catch it.
 */
 .onboarding-matrix th.onboarding-select-column, .onboarding-matrix td.onboarding-select-column { left: 0; position: sticky; z-index: 1; }
-.onboarding-matrix th.onboarding-speaker-column { left: 38px; position: sticky; z-index: 1; }
+.onboarding-matrix th.onboarding-speaker-column { left: var(--select-column-width); position: sticky; z-index: 1; }
 .onboarding-matrix tbody .onboarding-select-column, .onboarding-matrix tbody th.onboarding-speaker-column { background: var(--panel); }
 .onboarding-matrix tbody tr:hover .onboarding-select-column, .onboarding-matrix tbody tr:hover th.onboarding-speaker-column { background: color-mix(in srgb, var(--accent-wash) 42%, var(--panel)); }
 .onboarding-matrix thead th.onboarding-select-column, .onboarding-matrix thead th.onboarding-speaker-column { z-index: 3; }
