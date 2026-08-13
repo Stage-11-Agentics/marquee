@@ -3,7 +3,7 @@
 Being first to name a gap reads as confidence; every item here is one a
 diligent judge could find anyway. Which of these go in the form is the
 operator's call — they are written so any subset can be pasted as-is.
-Verified against build `1f53732201aa`, 2026-08-12.
+Verified against build `30b53f5ae78e`, 2026-08-12.
 
 ## Deliberately not built
 
@@ -63,27 +63,31 @@ Verified against build `1f53732201aa`, 2026-08-12.
 - **Speed budgets are instruments, not CI gates.** 14 per-surface budgets are
   measurable in one command (`npm run check:speed`, real browser); they do not
   run in CI.
-- **No end-to-end browser test suite.** 388 node tests and 855 worker tests,
-  all passing, plus design/API/route parity gates — but `npm run e2e` is a
-  registered stub. Browser-level verification was done by hand and by the
-  graders' own harness.
+- **No end-to-end browser test suite.** 1,180 hermetic tests, all passing (542
+  Worker-project, 442 node-project, 196 in the Node runner), plus
+  design/API/route parity gates — but `npm run e2e` is a registered stub.
+  Browser-level verification was done by hand and by the graders' own harness.
 - **No MCP server.** The integration path is the OpenAPI document, the CLI,
   and the skill file; an MCP shim could be generated from the served spec.
-- **`SKILL.md` ships in the repo, not from the site** — fetching
-  `/SKILL.md` from the deployment returns the app shell.
+- **A submitter cannot edit a proposal while the call is open.** They can watch
+  it — the submitter seat below shows status and the decision when it lands —
+  but changing an answer after submitting means asking the organizer.
 
 ## Internal — fix or route around before submission (not for the form)
 
-- **Fresh-submitter portal handoff is broken on the live build.** Submitting
-  the public CFP and clicking "Open your speaker portal →" on the confirmation
-  page authenticates the new speaker (the session is real) but `/portal` fails
-  with "conference not found" — `GET /api/v1/me/portal` 404s because the fresh
-  person has no membership row. The seeded speaker seat works fine, and the
-  quickstart routes judges through it, but a judge who follows the natural
-  link will hit this. Verified live 2026-08-12 ~21:40 UTC.
 - **The CFP header says "Closes Apr 30, 2027"** — six months after the
   conference it belongs to (Oct 2026). Seed data oddity; cheap reseed fix.
-- **The OpenAPI `info.description` still claims** "Mutations carry strong
-  ETag/If-Match optimistic concurrency" — one sentence, contradicted by the
-  spec's own zero `If-Match` header parameters. Delete or soften the sentence
-  before a diligent judge diffs it.
+
+### Resolved since this file was written — do not route judges around these
+
+- **The fresh-submitter portal handoff works, and it is worth seeing.**
+  Submitting the public CFP and following "Track your submission →" lands on a
+  submitter seat: "Your abstract is in", the three-step what-happens-next, the
+  wave's decision date, the address we will write to, and how to get back in.
+  It no longer 404s — `portalSnapshot` falls back to the submitter's own event.
+  Walked live on `30b53f5ae78e`. Point judges at it rather than away from it.
+- **`/SKILL.md` is served by the deployment**, not repo-only: it returns the
+  real skill file, not the app shell.
+- **The OpenAPI `info.description`** no longer makes the blanket ETag/If-Match
+  claim; it scopes optimistic concurrency to agenda items, which is what the
+  spec's own `If-Match` parameters carry.

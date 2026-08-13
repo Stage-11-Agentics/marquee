@@ -4,17 +4,17 @@
 
 > Marquee is one Cloudflare Worker. Hono routes it, Preact renders it, Zod
 > validates every boundary, TypeScript covers all of it. D1 (SQLite at the
-> edge) is the single source of truth — 18 migrations carrying real constraints
+> edge) is the single source of truth — 20 migrations carrying real constraints
 > in the database, not just the app; R2 holds uploads, KV caches, and four
 > Queues keep mail, mirror work, bulk operations, and webhooks off the request
 > path. Public pages — the CFP form, the agenda, the speaker directory — are
 > server-rendered, so they are fast, and they work before (and without) any
 > JavaScript. The admin app is a single-page client of the same REST API
-> anyone else can call: 195 operations, defined once as route objects that
+> anyone else can call: 211 operations, defined once as route objects that
 > generate both the handler and the live OpenAPI 3.1 document, so the docs
 > cannot drift from the code. Vite builds it; `npx vite dev` runs the real
-> Worker locally; 388 node tests and 855 worker tests run hermetically —
-> no network, no live services.
+> Worker locally; 1,180 tests run hermetically — 542 Worker-project, 442
+> node-project, 196 in the Node test runner — no network, no live services.
 
 ## Why these choices, in one line each
 
@@ -38,10 +38,10 @@
 
 | Fact | Where |
 |---|---|
-| 195 API operations / 154 paths, OpenAPI 3.1 | `curl https://marquee.stage11.dev/api/openapi.json` |
+| 211 API operations / 167 paths, OpenAPI 3.1 | `curl https://marquee.stage11.dev/api/openapi.json` |
 | ETag = SHA-256 of the served spec | compare `curl -sI` ETag to `shasum -a 256` of the body |
-| 18 migrations, constraints in-database | `migrations/` |
-| 388 node + 855 worker tests | `npm test` (hermetic, no network) |
+| 20 migrations, constraints in-database | `migrations/` |
+| 1,180 hermetic tests (542 Worker + 442 node project + 196 Node runner) | `npm test` (hermetic, no network) |
 | Server-rendered public pages | `curl https://marquee.stage11.dev/agenda` — the program is in the HTML |
 | Deployed build | `curl https://marquee.stage11.dev/health` |
 | Local run | README §"Clean local checkout" — build, migrate, seed, `wrangler dev` |

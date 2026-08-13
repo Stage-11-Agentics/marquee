@@ -1,7 +1,7 @@
 # Marquee — identity and descriptions
 
 Ready-to-paste name, one-liner, and descriptions at three lengths. Facts verified
-against the deployed site on 2026-08-12 (build `1f53732201aa`).
+against the deployed site on 2026-08-12 (build `30b53f5ae78e`).
 
 ## Name
 
@@ -23,7 +23,7 @@ Alternate, if the field is tight (≤10 words):
 > issue calendar invites, a live onboarding chase board, drag-and-drop agenda
 > with conflict detection, and a public program. Apache-2.0, self-hosted on
 > Cloudflare. The demo holds 1,001 submissions. The UI is a client of its own
-> 195-operation API.
+> 211-operation API.
 
 *(Word-counted at 58 including the URL-free tail — if the field enforces 50
 hard, cut the last sentence.)*
@@ -41,7 +41,7 @@ hard, cut the last sentence.)*
 > plus room, speaker, and building-transit conflict detection.
 >
 > It is Apache-2.0 and self-hosted on Cloudflare (Workers, D1, R2, Queues).
-> The admin UI is a plain client of a 195-operation REST API with a live
+> The admin UI is a plain client of a 211-operation REST API with a live
 > OpenAPI 3.1 document, a 48-command CLI, and an agent skill file — so your
 > team, your scripts, and your agents all operate the same surface.
 >
@@ -72,7 +72,7 @@ hard, cut the last sentence.)*
 >
 > Marquee is Apache-2.0, runs on Cloudflare (Workers, D1, R2, KV, Queues), and
 > never phones home — the log builder has no field for a speaker's email
-> address. The admin UI is a plain client of a 195-operation REST API with a
+> address. The admin UI is a plain client of a 211-operation REST API with a
 > live OpenAPI 3.1 document, a 48-command dependency-free CLI, and a generated
 > agent skill file: humans, scripts, and agents operate the same surface, and
 > none of them is privileged.
@@ -84,7 +84,7 @@ hard, cut the last sentence.)*
 
 | Claim | Check |
 |---|---|
-| 195 operations / OpenAPI 3.1 | `curl -s https://marquee.stage11.dev/api/openapi.json` — 154 paths, 195 operations |
+| 211 operations / OpenAPI 3.1 | `curl -s https://marquee.stage11.dev/api/openapi.json` — 167 paths, 211 operations |
 | 1,001 submissions | seeded count; the live CFP accrues a few test submissions on top |
 | 48-command CLI | `node cli/marquee.mjs --help` in the repo |
 | Apache-2.0 | `LICENSE` at the repo root |

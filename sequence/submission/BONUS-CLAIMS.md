@@ -2,7 +2,7 @@
 
 The brief names five bonuses. We claim three and forfeit two, stated plainly so
 nothing here contradicts what a judge finds. Verified against build
-`1f53732201aa`, 2026-08-12.
+`30b53f5ae78e`, 2026-08-12.
 
 ---
 
@@ -23,7 +23,7 @@ a placeholder.
 The brief's reference is the incumbent's partial, sales-gated API. Marquee's
 answer is a different category:
 
-- **195 operations across 154 paths** in a live OpenAPI 3.1 document —
+- **211 operations across 167 paths** in a live OpenAPI 3.1 document —
   `curl https://marquee.stage11.dev/api/openapi.json` — generated from the same
   route objects the Worker serves. A route cannot ship without its contract:
   the registration function takes the OpenAPI definition and the handler as

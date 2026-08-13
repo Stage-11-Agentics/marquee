@@ -6,7 +6,7 @@ filling it in takes five minutes of copy-paste, not an hour of writing at
 21:45 PT.
 
 Every factual claim in this pack was verified against the deployed site
-(build `1f53732201aa`) on 2026-08-12. If a deploy lands after that, re-run the
+(build `30b53f5ae78e`) on 2026-08-12. If a deploy lands after that, re-run the
 checks each file cites — most are one `curl`.
 
 **The judge-facing one-pager** lives at
