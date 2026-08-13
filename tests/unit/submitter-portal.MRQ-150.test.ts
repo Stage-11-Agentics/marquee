@@ -56,6 +56,7 @@ describe("MRQ-150 the submitter's empty state", () => {
     const html = render(snapshot());
     expect(html).toContain("September 21, 2026");
     expect(html).toContain("Wave 1");
+    expect(html).toContain("Next decision · Wave 1 · decision by September 21, 2026");
     expect(html).toContain("avery.okonkwo@example.com");
   });
 
@@ -80,8 +81,10 @@ describe("MRQ-150 the submitter's empty state", () => {
       submissions: [submission({ status: "draft", submitted_at: null, form_slug: null, wave_name: null, wave_decision_on: null })],
     }));
     expect(html).toContain("call closed");
+    expect(html).toContain("Draft saved · call closed");
     expect(html).toContain("Keep your draft link");
     expect(html).toContain("The call for speakers is closed");
+    expect(html).not.toContain("Finish and submit your abstract");
     expect(html).not.toContain("You can finish and submit while the call is open");
   });
 
