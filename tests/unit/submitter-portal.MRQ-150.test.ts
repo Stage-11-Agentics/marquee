@@ -97,6 +97,7 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).toContain("If you saved this draft through the public call");
     expect(html).toContain("Continue your conference abstract");
     expect(html).toContain("reopens it");
+    expect(html).toContain("while the call is open");
     expect(html).not.toContain("Nothing is waiting on you");
     expect(html.toLowerCase()).not.toContain("under review");
     expect(html.toLowerCase()).not.toContain("decision");

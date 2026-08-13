@@ -894,7 +894,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
         {isDraft ? <section class="portal-panel portal-submitter-flow" aria-labelledby="next-heading">
           <header class="portal-panel-head"><h2 id="next-heading">Your next step</h2><span>action needed</span></header>
           <div class="portal-panel-body">
-            <div class="portal-submitter-action"><strong>Finish and submit your abstract.</strong><p>If you saved this draft through the public call, the email titled “Continue your conference abstract” includes a link that reopens it when you are ready to finish and submit.</p></div>
+            <div class="portal-submitter-action"><strong>Finish and submit your abstract.</strong><p>If you saved this draft through the public call, the email titled “Continue your conference abstract” includes a link that reopens it. You can finish and submit while the call is open.</p></div>
           </div>
         </section> : isWaitlisted ? <section class="portal-panel portal-submitter-flow" aria-labelledby="maybe-heading">
           <header class="portal-panel-head"><h2 id="maybe-heading">What happens next</h2><span>Maybe status</span></header>

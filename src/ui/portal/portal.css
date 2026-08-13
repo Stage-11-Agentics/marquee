@@ -191,7 +191,6 @@
 
 @media (max-width: 820px) {
   .portal-grid { grid-template-columns: 1fr; }
-  .portal-submitter-flow { min-height: 376px; }
 }
 @media (max-width: 580px) {
   .portal-status-meta, .portal-welcome { align-items: start; display: grid; }
@@ -219,7 +218,10 @@
 .portal-next-steps li > strong, .portal-next-steps li > span { grid-column: 2; }
 .portal-next-steps strong { color: var(--ink); }
 /* Reserve the height of the three-step review flow for every status. */
-.portal-submitter-flow { min-height: 301px; }
+.portal-submitter-flow { min-height: 320px; }
+@media (max-width: 820px) {
+  .portal-submitter-flow { min-height: 376px; }
+}
 .portal-submitter-action { color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
 .portal-submitter-action strong { color: var(--ink); display: block; font-size: 13px; margin-bottom: 10px; }
 .portal-submitter-action p, .portal-submitter-status-note { margin: 0; }
