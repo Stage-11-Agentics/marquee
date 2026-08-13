@@ -33,6 +33,10 @@ const SUBMISSION_ID = "submission-mrq149-ci";
 const AGENT_EVALUATION_ID = "evaluation-mrq149-agent";
 const HUMAN_EVALUATION_ID = "evaluation-mrq149-human";
 const NOW = Date.UTC(2026, 7, 20, 16);
+// Fixture rows stay pinned to NOW; a session's expiry cannot, because the Worker
+// checks it against the real clock. Anchored to NOW, these sessions would expire
+// on 2026-08-21 and fail every run after that date.
+const SESSION_EXPIRES_AT = Date.now() + 86_400_000;
 
 interface EvaluationView {
   id: string;
@@ -93,7 +97,7 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES (?, ?, 'owner', ?, 'mrq149-chair', NULL, ?, ?)`,
-    ).bind(CHAIR_SESSION, CHAIR_ID, NOW + 86_400_000, NOW, NOW),
+    ).bind(CHAIR_SESSION, CHAIR_ID, SESSION_EXPIRES_AT, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO people (id, org_id, email, name, kind, is_demo, last_write_source, created_at, updated_at)
        VALUES (?, ?, ?, 'Nora Vale', 'human', 0, 'marquee', ?, ?),
@@ -105,7 +109,7 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES (?, ?, 'reviewer', ?, 'mrq149-reviewer', NULL, ?, ?)`,
-    ).bind(REVIEWER_SESSION, REVIEWER_ID, NOW + 86_400_000, NOW, NOW),
+    ).bind(REVIEWER_SESSION, REVIEWER_ID, SESSION_EXPIRES_AT, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
        VALUES ('membership-mrq149-reviewer', ?, ?, ?, 'reviewer', ?, ?),
