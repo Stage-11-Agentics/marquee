@@ -806,11 +806,6 @@ function submitterOutcomeCopy(status: string): string {
   return "The conference team has not shared a more specific update for this abstract yet.";
 }
 
-function submitterTerminalCopy(status: string): string {
-  if (status === "accepted") return "No further action is needed from you in this submitter seat.";
-  return "Nothing else is needed from you here.";
-}
-
 function submitterProgressCopy(status: string): string {
   if (status === "draft") return "Finish and submit your abstract";
   if (status === "waitlisted") return "Maybe · still in consideration";
@@ -914,7 +909,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
           </div>
         </section> : <section class="portal-panel portal-submitter-flow" aria-labelledby="status-update-heading">
           <header class="portal-panel-head"><h2 id="status-update-heading">Submission update</h2><span>current outcome</span></header>
-          <div class="portal-panel-body"><p class="portal-submitter-status-note">{submitterTerminalCopy(lead.status)}</p></div>
+          <div class="portal-panel-body"><p class="portal-submitter-status-note">{submitterOutcomeCopy(lead.status)}</p></div>
         </section>}
         <section class="portal-panel" aria-labelledby="reach-heading">
           <header class="portal-panel-head"><h2 id="reach-heading">Getting back here</h2><span>{snapshot.person.email}</span></header>

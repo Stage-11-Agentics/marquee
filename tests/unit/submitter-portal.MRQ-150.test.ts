@@ -108,7 +108,11 @@ describe("MRQ-150 the submitter's empty state", () => {
       const html = render(snapshot({ submissions: [submission({ status })] }));
       expect(html).not.toContain("What happens next");
       expect(html).not.toContain("portal-next-steps");
-      expect(html).toMatch(/No further action is needed from you in this submitter seat\.|Nothing else is needed from you here\./);
+      expect(html).toContain(status === "accepted"
+        ? "The program team accepted this abstract for the conference."
+        : status === "rejected"
+          ? "The program team did not select this abstract for the conference."
+          : "This abstract is no longer in consideration.");
       expect(html.toLowerCase()).not.toContain("next decision");
       expect(html.toLowerCase()).not.toContain("go out by");
       expect(html.toLowerCase()).not.toContain("has not set a decision date");
