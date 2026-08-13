@@ -7,7 +7,7 @@ import { instanceIsUnclaimed } from "../lib/auth/instance-claim";
 import { DEMO_EVENT_ORDER, SEEDED_DEMO_EVENT_ID } from "../lib/demo-event";
 import { ICON_LINKS } from "../lib/head-icons";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
-import { THEMES } from "../ui/shell/theme";
+import { LANDING_THEMES } from "../ui/shell/theme";
 import { hasSpeakerTaskCancellationColumn, submissionStatusPredicate } from "./submissions.queries";
 
 export interface LandingCounts {
@@ -180,17 +180,13 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
       </header>
 
       <div class="landing-flow">
-        <section class="theme-choose" aria-label="Pick a look before you enter">
+        <section class="theme-choose" id="pick-theme" aria-label="Pick a look before you enter">
           <div class="theme-choose-copy">
-            <div class="eyebrow">First — pick your look</div>
-            <h2>One product. Five registers.</h2>
-            <p>
-              Every screen re-lights in the look you choose, and the switcher in the top bar
-              changes it any time. Each preview is the real program home, dressed.
-            </p>
+            <h2>Welcome to Marquee</h2>
+            <p class="theme-choose-lead">Pick your theme.</p>
           </div>
           <div class="theme-grid" role="group" aria-label="Available themes">
-            {THEMES.map((theme) => (
+            {LANDING_THEMES.map((theme) => (
               <button key={theme.id} type="button" class="theme-card" data-theme-choice={theme.id} aria-pressed="false">
                 <span class="theme-shot">
                   <img src={`/themes/${theme.id}.webp`} alt={`The program home in the ${theme.label} theme`} width={1440} height={900} />
@@ -203,12 +199,14 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
             ))}
           </div>
           <div class="theme-choose-note">
-            Marquee Light is on by default — <a class="theme-skip" href="#choose-role">skip straight to the demo ↓</a>
+            Marquee Light is the default, and you can change it at any time —{" "}
+            <a class="theme-skip" href="#choose-role">skip straight to the demo →</a>
           </div>
         </section>
 
         <main class="hero" id="choose-role">
         <div class="hero-copy">
+          <a class="theme-back" href="/" data-landing-back>← Pick a different theme</a>
           <div class="eyebrow">Open-source conference program operations</div>
           <h1>Fantastic conferences, effortlessly.</h1>
           <p>
@@ -331,11 +329,21 @@ const LANDING_STYLES = `
 .mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning-ink); border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
 .preview-notice { display: block; margin-top: 6px; }
 .landing-foot { border-top: 1px solid var(--line); padding: 18px clamp(20px,5vw,70px); color: var(--muted); font: 400 11px/1 var(--mono); display: flex; justify-content: space-between; }
-.theme-choose { width: min(1280px,92vw); margin: 0 auto; min-height: calc(100svh - 77px); display: grid; align-content: center; gap: 26px; padding: 48px 0 34px; }
-.theme-choose-copy .eyebrow { color: var(--accent-dark); margin-bottom: 12px; }
-.theme-choose h2 { font: 500 clamp(30px,3.6vw,44px)/1.05 var(--mono); letter-spacing: -.045em; margin: 0 0 14px; }
-.theme-choose-copy p { color: var(--ink-soft); font-size: 14.5px; line-height: 1.6; max-width: 560px; margin: 0; }
-.theme-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; }
+/*
+ * Two screens, one document. The stage attribute is stamped on <html> before
+ * first paint (see LANDING_STAGE_SCRIPT), so picking a theme swaps screens with
+ * no scroll and no round trip. With scripting off no attribute is ever set, and
+ * these rules do not apply: the page is the single scrolling column it renders
+ * as, picker first, hero under the fold behind the skip link.
+ */
+html[data-landing-stage] .landing-flow { display: grid; align-content: center; }
+html[data-landing-stage="choose"] .hero { display: none; }
+html[data-landing-stage="choose"] .theme-choose { min-height: 0; }
+html[data-landing-stage="enter"] .theme-choose { display: none; }
+.theme-choose { width: min(940px,92vw); margin: 0 auto; min-height: calc(100svh - 77px); display: grid; align-content: center; justify-items: center; gap: 26px; padding: 48px 0 34px; text-align: center; }
+.theme-choose h2 { font: 700 clamp(40px,6.4vw,74px)/1 var(--mono); letter-spacing: -.055em; margin: 0 0 16px; }
+.theme-choose-lead { font: 500 clamp(19px,2.6vw,28px)/1.2 var(--mono); letter-spacing: -.03em; color: var(--ink-soft); margin: 0; }
+.theme-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); justify-content: center; gap: 16px; width: 100%; }
 .theme-card { display: grid; padding: 0; text-align: left; background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
 .theme-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .theme-card[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); border-color: var(--accent); }
@@ -346,8 +354,16 @@ const LANDING_STYLES = `
 .theme-kind { color: var(--muted); font: 400 9.5px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .08em; }
 .theme-choose-note { color: var(--muted); font: 400 11px/1.4 var(--mono); }
 .theme-skip { color: var(--accent-dark); text-decoration: underline; text-underline-offset: 2px; }
-@media (max-width: 1000px) { .theme-grid { grid-template-columns: repeat(3,1fr); } .theme-choose { min-height: 0; } }
-@media (max-width: 560px) { .theme-grid { grid-template-columns: repeat(2,1fr); } }
+.theme-back { display: inline-block; margin-bottom: 16px; color: var(--muted); font: 400 11px/1 var(--mono); text-decoration: underline; text-underline-offset: 3px; }
+.theme-back:hover { color: var(--accent-dark); }
+@media (max-width: 1000px) { .theme-choose { min-height: 0; } }
+@media (max-width: 620px) { .theme-grid { grid-template-columns: minmax(0,1fr); } }
+/* A laptop is short, not wide: on a 900px-tall screen the four previews at full
+   size push the choice off the bottom, and a picker you have to scroll is the
+   thing this page exists to stop being. Trade preview size for the whole set
+   staying on one screen. */
+@media (max-height: 1000px) { .theme-choose { width: min(780px,92vw); gap: 18px; padding: 26px 0 20px; } .theme-choose h2 { font-size: clamp(34px,5vw,54px); margin-bottom: 10px; } .theme-choose-lead { font-size: clamp(17px,2vw,22px); } }
+@media (max-height: 760px) { .theme-choose { width: min(600px,92vw); gap: 14px; padding: 18px 0 14px; } }
 @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 34px; padding: 42px 0 52px; } .landing-links .button:first-child { display: none; } }
 @media (max-width: 520px) { .landing-nav { align-items: flex-start; gap: 16px; } .landing-links { flex: 1; justify-content: flex-end; } .landing-links .button { min-height: 30px; padding: 7px 9px; } .hero h1 { font-size: clamp(36px, 12vw, 48px); } .hero p { font-size: 14px; } .landing-foot { align-items: flex-start; flex-direction: column; gap: 8px; } }
 `;
@@ -362,6 +378,29 @@ const LANDING_SCRIPT = `
     "ai-engineer": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
   };
   const root = document.documentElement;
+  // Which of the two screens is showing. #choose-role in the URL means "already
+  // through the door", so a shared link, a reload, and the back button all land
+  // where the visitor left off. The head script stamps this before first paint;
+  // re-stamping here covers a head script that never ran.
+  const stageForHash = () => (location.hash === "#choose-role" ? "enter" : "choose");
+  const setStage = (stage) => {
+    root.dataset.landingStage = stage;
+    if (stage === "enter") window.scrollTo(0, 0);
+  };
+  let pushedStage = false;
+  setStage(stageForHash());
+  const syncStage = () => setStage(stageForHash());
+  window.addEventListener("hashchange", syncStage);
+  window.addEventListener("popstate", syncStage);
+  const backLink = document.querySelector("[data-landing-back]");
+  if (backLink) {
+    backLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (pushedStage) { pushedStage = false; history.back(); return; }
+      history.pushState(null, "", location.pathname + location.search);
+      setStage("choose");
+    });
+  }
   const cards = Array.from(document.querySelectorAll("[data-theme-choice]"));
   const markPressed = () => {
     const worn = root.dataset.theme || "day";
@@ -388,8 +427,13 @@ const LANDING_SCRIPT = `
         document.head.append(pre, css);
       }
       markPressed();
-      const roles = document.getElementById("choose-role");
-      if (roles) roles.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Picking a theme is entering. No scroll, no fetch: the hero is already in
+      // the document, so the swap is a repaint away.
+      if (location.hash !== "#choose-role") {
+        history.pushState(null, "", "#choose-role");
+        pushedStage = true;
+      }
+      setStage("enter");
     });
   });
   document.querySelectorAll("[data-demo-role]").forEach((link) => {
@@ -421,13 +465,34 @@ const LANDING_SCRIPT = `
 
 const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Program operations</title>${ICON_LINKS}</head><body><div id="app"></div></body></html>`;
 
+/**
+ * Which screen the landing opens on, decided before the first paint.
+ *
+ * It runs in the head, ahead of any markup, so a visitor arriving at
+ * `/#choose-role` never sees the theme picker flash past on the way to the hero.
+ * Setting the attribute is also what arms the two-screen CSS at all: if
+ * scripting is off this never runs, no attribute is ever set, and the page stays
+ * the one scrolling column it was rendered as.
+ */
+const LANDING_STAGE_SCRIPT = `
+(() => {
+  try {
+    document.documentElement.dataset.landingStage =
+      location.hash === "#choose-role" ? "enter" : "choose";
+  } catch (_) { /* no attribute: the scrolling fallback is a correct page */ }
+})();
+`;
+
 export function renderLandingDocument(shell: string, data: LandingData): string {
   const markup = renderToString(<LandingPage data={data} />);
   const document = shell.includes("<div id=\"app\"></div>")
     ? shell.replace('<div id="app"></div>', `<div id="app">${markup}</div>`)
     : FALLBACK_DOCUMENT.replace('<div id="app"></div>', `<div id="app">${markup}</div>`);
   return document
-    .replace("</head>", `<style data-marquee-landing>${LANDING_STYLES}</style></head>`)
+    .replace(
+      "</head>",
+      `<style data-marquee-landing>${LANDING_STYLES}</style><script data-marquee-landing-stage>${LANDING_STAGE_SCRIPT}</script></head>`,
+    )
     .replace("</body>", `<script data-marquee-landing>${LANDING_SCRIPT}</script></body>`);
 }
 

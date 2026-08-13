@@ -45,6 +45,20 @@ export const THEMES: readonly ThemeDefinition[] = [
   { id: "swyxy", label: "swyxy", kind: "register" },
 ];
 
+/**
+ * The themes the front door offers (operator ruling, 2026-08-13).
+ *
+ * The landing picker is a first impression, not a catalogue — it shows these
+ * four. swyxy is deliberately not among them; it stays fully available from the
+ * top-bar switcher, one click away for anyone already inside. Every theme here
+ * still needs its `public/themes/<id>.webp` preview.
+ */
+export const LANDING_THEME_IDS: readonly ThemeId[] = ["day", "night", "latent-space", "ai-engineer"];
+
+export const LANDING_THEMES: readonly ThemeDefinition[] = THEMES.filter((theme) =>
+  LANDING_THEME_IDS.includes(theme.id),
+);
+
 export function isThemeId(value: unknown): value is ThemeId {
   return THEMES.some((theme) => theme.id === value);
 }
