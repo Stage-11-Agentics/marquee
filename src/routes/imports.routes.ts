@@ -8,6 +8,7 @@ import {
   normalizeMapping,
   readImportManifest,
   runSessionizeImport,
+  speakerEmailMappingError,
   undoSessionizeImport,
   type ImportRunCounts,
   type SessionizeManifest,
@@ -160,6 +161,8 @@ const mapImport = defineApiRoute(
     if (record.undone_at !== null) throw ApiError.conflict("an undone import cannot be remapped");
     const manifest = await readImportManifest(bindings(context).MEDIA, record.file_key);
     const mapping = normalizeMapping(context.req.valid("json"), manifest.sessions_csv, manifest.speakers_csv);
+    const mappingError = speakerEmailMappingError(mapping, manifest.speakers_csv);
+    if (mappingError) throw ApiError.unprocessable(mappingError, "speakers.email");
     await context.env.DB.prepare("UPDATE imports SET mapping = ?, status = 'mapped', updated_at = ? WHERE id = ? AND event_id = ?")
       .bind(JSON.stringify(mapping), Date.now(), importId, eventId).run();
     const updated = await readImport(context, eventId, importId);

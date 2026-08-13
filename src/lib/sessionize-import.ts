@@ -452,8 +452,9 @@ async function personByEmail(db: D1Database, orgId: string, email: string): Prom
 
 async function personByName(db: D1Database, orgId: string, name: string): Promise<PersonRow | null> {
   if (!name) return null;
-  return db.prepare("SELECT * FROM people WHERE org_id = ? AND lower(name) = lower(?) ORDER BY id LIMIT 1")
-    .bind(orgId, name).first<PersonRow>();
+  const matches = await db.prepare("SELECT * FROM people WHERE org_id = ? AND lower(name) = lower(?) ORDER BY id LIMIT 2")
+    .bind(orgId, name).all<PersonRow>();
+  return matches.results.length === 1 ? matches.results[0] ?? null : null;
 }
 
 async function attachmentForPerson(db: D1Database, eventId: string, personId: string): Promise<AttachmentRow | null> {
@@ -478,10 +479,12 @@ async function importSpeaker(
   const lastName = row.last_name.trim();
   const name = row.name.trim() || [firstName, lastName].filter(Boolean).join(" ");
   if (!name) throw new Error("speaker name is required");
-  const email = normalizeEmail(row.email || `speaker+${hashPart(`${event.id}|${externalRef || name}`)}@example.invalid`);
+  const email = normalizeEmail(row.email);
+  if (!email) throw new Error("speaker email is required");
   const byEmail = await personByEmail(db, event.org_id, email);
   const current = byEmail ?? await personByName(db, event.org_id, name);
   const matchedBy = !current ? null : byEmail ? "normalized email" : "name";
+  const keepsStoredEmail = Boolean(current && !byEmail);
   const beforeAttachment = current ? await attachmentForPerson(db, event.id, current.id) : null;
   const beforeMembership = current ? await speakerMembershipForPerson(db, event.id, current.id) : null;
   const before: ImportSnapshot = current ? {
@@ -499,7 +502,7 @@ async function importSpeaker(
   // undo reverses it.
   const merge = (incoming: string, stored: string | null): string | null => incoming.trim() || stored;
   const next = {
-    email,
+    email: keepsStoredEmail ? current!.email : email,
     name,
     title: merge(row.title, current?.title ?? null),
     company: merge(row.company, current?.company ?? null),
@@ -559,6 +562,7 @@ async function importSpeaker(
     current
       ? `matched by ${matchedBy}`
       : externalRef ? `new person, keyed by external_ref ${externalRef}` : "new person, keyed by normalized email",
+    keepsStoredEmail ? "kept email (name match)" : null,
     overwritten.length ? `overwrote ${overwritten.join(", ")}` : null,
     retained.length ? `kept ${retained.join(", ")} (blank in CSV)` : null,
     headshot ? "headshot retained as a pending external attachment" : null,
@@ -918,6 +922,13 @@ export function manifestPreview(manifest: SessionizeManifest, mapping?: Sessioni
     sessions: previewCsv("sessions", manifest.sessions_csv ?? "", mapping?.sessions),
     speakers: previewCsv("speakers", manifest.speakers_csv, mapping?.speakers),
   };
+}
+
+export function speakerEmailMappingError(mapping: SessionizeMapping, speakersCsv: string): string | null {
+  const emailColumn = mapping.speakers.email;
+  return emailColumn && parseCsv(speakersCsv).headers.includes(emailColumn)
+    ? null
+    : "speakers.email column is required before import";
 }
 
 export async function runSessionizeImport(
