@@ -4,7 +4,7 @@ The eval harness (`sbek`) passes a free-text `submissionNotes` field into every
 scenario prompt. It is our only channel to the grading agent, it is read by a
 machine, and a claim it cannot verify costs credibility on top of the wasted
 turns. Everything below was verified against the deployed build
-(`1f53732201aa`) on 2026-08-12. **Re-verify the seat list and URLs against the
+(`30b53f5ae78e`) on 2026-08-12. **Re-verify the seat list and URLs against the
 live site immediately before submitting.**
 
 ---
@@ -33,10 +33,12 @@ live site immediately before submitting.**
 > tracks), /settings/api (scoped API tokens), /import (Sessionize CSV import).
 >
 > PUBLIC, no login: /f/cfp (the live CFP form — submissions work end to end,
-> including headshot upload and saved drafts with resume links), /agenda
+> including headshot upload and saved drafts with resume links; after
+> submitting, "Track your submission" signs you in to a submitter view of your
+> own abstract and its decision), /agenda
 > (published program; day tabs; attendees can star sessions into a personal
 > schedule), /speakers (directory), /api/docs and /api/openapi.json (the REST
-> API the admin UI itself runs on; 195 operations).
+> API the admin UI itself runs on; 211 operations).
 >
 > Mail is demo-safe by design: sends render and log in /communications but
 > non-allowlisted addresses are never delivered, so bulk actions are safe to

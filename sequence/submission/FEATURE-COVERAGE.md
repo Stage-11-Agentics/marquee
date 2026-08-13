@@ -3,7 +3,7 @@
 The brief's six active features and three struck ones, each with a status, where
 to see it on the live site, and the requirement numbers it traces to
 (`sequence/research/competition-requirements.md`). Verified against build
-`1f53732201aa`, 2026-08-12.
+`30b53f5ae78e`, 2026-08-12.
 
 Statuses: **shipped** · **partial** (works, with named gaps) · **not built**.
 
@@ -42,7 +42,9 @@ discrete labelled fields, and there is no admin↔portal impersonation toggle.
 
 Thirteen template keys cover the lifecycle (acceptance, rejection, submission
 confirmation, task assignment, overdue nudges, form-closing reminders, reviewer
-reminders, magic-link login, and more). Decision feedback is written once and
+reminders, magic-link login, and more). Nine of them are the organizer's to
+edit and appear in Communications; the other four are reviewer and auth mail
+the product sends on its own. Decision feedback is written once and
 rendered into both the email and the portal (R51 — the bonus named in
 Discord). Calendar invites are real ICS with `METHOD:REQUEST` and attendee,
 Google/Outlook deep links, room *and* building in the location, `SEQUENCE`

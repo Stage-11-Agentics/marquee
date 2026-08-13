@@ -1,14 +1,14 @@
 # Differentiators — what Marquee ships that nobody asked for
 
 Eight things, each checkable in under a minute, none of them on the brief's
-list. Verified against build `1f53732201aa`, 2026-08-12.
+list. Verified against build `30b53f5ae78e`, 2026-08-12.
 
-### 1. The UI is a plain client of a 195-operation API
+### 1. The UI is a plain client of a 211-operation API
 
 The brief said "bonus points for API." Marquee's architecture makes a UI-only
 feature structurally impossible to write: a route enters the registry only
 through a function that takes the OpenAPI contract and the handler as one
-object (`src/api/route.ts`). 195 operations, live at
+object (`src/api/route.ts`). 211 operations, live at
 [/api/openapi.json](https://marquee.stage11.dev/api/openapi.json), rendered at
 [/api/docs](https://marquee.stage11.dev/api/docs), and the document's ETag is
 the SHA-256 of its own bytes — a docs-match-code guarantee you can check with
@@ -22,7 +22,7 @@ build forms, triage the queue, review, accept, schedule, publish, chase
 stragglers, diagnose the deployment — as commands, with zero npm dependencies.
 `SKILL.md` (19 KB, in the repo) is generated from the CLI registry and teaches
 any coding agent to run a conference on Marquee; a test fails if the skill ever
-has to fall back to `curl`, because that would mean the CLI has a hole. Four
+has to fall back to `curl`, because that would mean the CLI has a hole. Five
 operator screens carry a **"Hand this to your agent"** button that copies a
 paste-ready brief.
 
