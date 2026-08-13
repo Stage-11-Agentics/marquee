@@ -15,7 +15,7 @@ function shellSources(): string[] {
     .map((entry) => readFileSync(fileURLToPath(new URL(`../../src/ui/shell/${entry.name}`, import.meta.url)), "utf8"));
 }
 
-test("AC-10 · the reviewer topline brand and exit link use the seat-home mapping", () => {
+test("CONTRACT · MRQ-171 amendment 10 · the reviewer topline brand and exit link use the seat-home mapping", () => {
   expect(signinDestination).toContain('reviewer: "/reviewer"');
   expect(reviewerPage).toContain('import { ROLE_HOME } from "../../lib/auth/signin-destination"');
   expect(reviewerPage).toContain('<a class="reviewer-brand" href={ROLE_HOME.reviewer}');
@@ -23,7 +23,7 @@ test("AC-10 · the reviewer topline brand and exit link use the seat-home mappin
   expect(reviewerPage).not.toContain("window.history.back");
 });
 
-test("AC-11 · the theme control is one shared implementation used by admin and both reviewer pages", () => {
+test("CONTRACT · MRQ-171 amendment 11 · the theme control is one shared implementation used by admin and both reviewer pages", () => {
   expect(topbar).toContain('import { ThemeSwitch } from "./ThemeSwitch"');
   expect(topbar).toContain("<ThemeSwitch />");
   expect(topbar).not.toContain('class="theme-switch"');

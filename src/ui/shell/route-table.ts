@@ -53,7 +53,7 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "forms", path: "/forms", label: "CFP forms", icon: "□", group: "modules", sidebar: true },
   { id: "evaluation", path: "/evaluation", label: "Evaluation plan", icon: "◇", group: "modules", sidebar: true },
   { id: "reviewer", path: "/reviewer", label: "Reviewer home", icon: "✓", group: "modules", sidebar: true },
-  { id: "reviewer-queue", path: "/reviewer/queue", label: "Reviewer queue", icon: "", group: "utility" },
+  { id: "reviewer-queue", path: "/reviewer/queue", label: "Review queue", icon: "", group: "utility" },
   { id: "agenda", path: "/agenda-builder", label: "Agenda", icon: "▦", group: "modules", sidebar: true },
   // "Files" verbatim: this is the noun an organizer reaches for when they want
   // the deck, and renaming it to something cleverer only makes it unfindable.

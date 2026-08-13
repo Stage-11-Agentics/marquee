@@ -536,7 +536,7 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
 
   if (loading) return <main class="reviewer-surface instrument" aria-busy="true"><div class="reviewer-loading"><span class="eyebrow">Reviewer {isHome ? "home" : "queue"}</span><strong>Loading your reviewer seat…</strong><span class="subtle">Applying your track responsibility before any submission fields load.</span></div></main>;
   if (error && !plan) return <main class="reviewer-surface"><div class="reviewer-frame"><EmptyState title="Reviewer seat unavailable" copy={error} action={<Button variant="primary" onClick={() => void load()}>Try again</Button>} /></div></main>;
-  if (!plan) return <main class="reviewer-surface"><div class="reviewer-frame"><EmptyState title="No review plan" copy="A conference review round has not been configured yet." action={<Button variant="primary" onClick={returnHome}>Return to reviewer home</Button>} /></div></main>;
+  if (!plan) return <main class="reviewer-surface"><div class="reviewer-frame"><EmptyState title="No review plan" copy="A conference review round has not been configured yet." action={<Button variant="primary" onClick={returnHome}>Return to conference reviewer home</Button>} /></div></main>;
 
   return <main class="reviewer-surface" data-reviewer-surface="true" data-mobile-review="375px">
     <div class="reviewer-frame">

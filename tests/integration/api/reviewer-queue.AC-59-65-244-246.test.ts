@@ -169,7 +169,7 @@ describe.sequential("MRQ-18 reviewer queue", () => {
     expect(revisitedBody.data[0]?.queue_id).toBe(firstBody.data[0]?.queue_id);
   });
 
-  test("MRQ-171 · reviewer context carries the home data and the existing profile route accepts a reviewer seat", async () => {
+  test("CONTRACT · MRQ-171 · reviewer context carries the home data and the existing profile route accepts a reviewer seat", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/reviewer/queue`);
     expect(response.status).toBe(200);
     const body = await json<QueueEnvelope>(response);

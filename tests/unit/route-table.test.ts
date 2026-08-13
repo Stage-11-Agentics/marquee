@@ -25,7 +25,7 @@ test("CONTRACT · the sidebar reproduces the binding prototype navigation order"
 });
 
 test("CONTRACT · MRQ-171 · the reviewer queue is a real route outside the organizer shell", () => {
-  expect(matchRoute("/reviewer/queue")).toMatchObject({ id: "reviewer-queue", label: "Reviewer queue", group: "utility" });
+  expect(matchRoute("/reviewer/queue")).toMatchObject({ id: "reviewer-queue", label: "Review queue", group: "utility" });
 });
 
 test("CONTRACT · MRQ-115 — the files library is reachable by the noun an organizer searches for", () => {
