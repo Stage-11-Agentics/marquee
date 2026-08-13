@@ -197,35 +197,38 @@ describe.sequential("MRQ-31 Sessionize import", () => {
       const roster = await request(`/api/v1/events/${EVENT_ID}/speakers?q=${encodeURIComponent(name)}`);
       expect(roster.status).toBe(200);
       const body = await roster.json<{ total: number; rows: Array<{ name: string; is_member: boolean }> }>();
-      expect(body.total).toBe(1);
+      expect(body.total).toBe(3);
+      expect(body.rows).toHaveLength(1);
       expect(body.rows[0]).toMatchObject({ name: expect.stringContaining(name), is_member: true });
     }
 
     const membershipsAfterRun = await env.DB.prepare(
-      "SELECT id, person_id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id IN (?, ?, ?) ORDER BY person_id",
-    ).bind(EVENT_ID, "person_import_mrq31", UPDATED_PERSON_ID, PREEXISTING_PERSON_ID).all<{ id: string; person_id: string }>();
+      "SELECT id, person_id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id IN (?, ?) ORDER BY person_id",
+    ).bind(EVENT_ID, UPDATED_PERSON_ID, PREEXISTING_PERSON_ID).all<{ id: string; person_id: string }>();
     expect(membershipsAfterRun.results).toHaveLength(2);
     const dana = await env.DB.prepare("SELECT id FROM people WHERE email = 'dana-only@example.test'").first<{ id: string }>();
-    expect(dana?.id).toBeTruthy();
-    const danaMembership = await env.DB.prepare("SELECT id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id = ?").bind(EVENT_ID, dana?.id).first<{ id: string }>();
+    if (!dana?.id) throw new Error("Dana was not imported");
+    const danaId = dana.id;
+    const danaMembership = await env.DB.prepare("SELECT id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id = ?").bind(EVENT_ID, danaId).first<{ id: string }>();
     expect(danaMembership?.id).toBeTruthy();
-    expect(new Set([...(membershipsAfterRun.results.map((row) => row.person_id)), dana?.id])).toHaveLength(3);
+    expect(new Set([...(membershipsAfterRun.results.map((row) => row.person_id)), danaId])).toHaveLength(3);
 
     const repeated = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/run`, { method: "POST" });
     expect(repeated.status).toBe(200);
     expect(await repeated.json<{ counts: { skipped: number; failed: number } }>()).toMatchObject({ counts: { skipped: 3, failed: 0 } });
-    const membershipCountAfterRepeat = await env.DB.prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id IN (?, ?, ?)").bind(EVENT_ID, dana?.id, UPDATED_PERSON_ID, PREEXISTING_PERSON_ID).first<{ count: number }>();
+    const membershipCountAfterRepeat = await env.DB.prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id IN (?, ?, ?)").bind(EVENT_ID, danaId, UPDATED_PERSON_ID, PREEXISTING_PERSON_ID).first<{ count: number }>();
     expect(Number(membershipCountAfterRepeat?.count)).toBe(3);
 
-    const danaSession = await createSession(env.DB, { personId: dana!.id, roleHint: "speaker", userAgent: "mrq165-import", now: Date.now() });
+    const danaSession = await createSession(env.DB, { personId: danaId, roleHint: "speaker", userAgent: "mrq165-import", now: Date.now() });
     const portal = await request(`/api/v1/me/portal?event_id=${EVENT_ID}`, {}, `mq_session=${danaSession.id}`);
     expect(portal.status).toBe(200);
-    expect(await portal.json<{ seat: string; event: { id: string }; person: { id: string } }>()).toMatchObject({ seat: "speaker", event: { id: EVENT_ID }, person: { id: dana!.id } });
+    expect(await portal.json<{ seat: string; event: { id: string }; person: { id: string } }>()).toMatchObject({ seat: "speaker", event: { id: EVENT_ID }, person: { id: danaId } });
+    await env.DB.prepare("DELETE FROM auth_sessions WHERE id = ?").bind(danaSession.id).run();
 
     const undone = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/undo`, { method: "POST" });
     expect(undone.status).toBe(200);
     expect(await env.DB.prepare("SELECT id FROM people WHERE email = 'dana-only@example.test'").first()).toBeNull();
-    expect(await env.DB.prepare("SELECT id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id = ?").bind(EVENT_ID, dana!.id).first()).toBeNull();
+    expect(await env.DB.prepare("SELECT id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id = ?").bind(EVENT_ID, danaId).first()).toBeNull();
     expect(await env.DB.prepare("SELECT id FROM memberships WHERE id = ? AND event_id = ? AND person_id = ? AND role = 'speaker'").bind(PREEXISTING_MEMBERSHIP_ID, EVENT_ID, PREEXISTING_PERSON_ID).first()).toMatchObject({ id: PREEXISTING_MEMBERSHIP_ID });
     expect(await env.DB.prepare("SELECT title, company, bio FROM people WHERE id = ?").bind(UPDATED_PERSON_ID).first()).toMatchObject({ title: "Old title", company: "Old company", bio: "Old bio." });
     expect(await env.DB.prepare("SELECT id FROM memberships WHERE event_id = ? AND role = 'speaker' AND person_id = ?").bind(EVENT_ID, UPDATED_PERSON_ID).first()).toBeNull();

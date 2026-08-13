@@ -1,4 +1,6 @@
-import type { ImportRowRow } from "../db/schema";
+import type { ImportRowRow, MembershipRow } from "../db/schema";
+
+import { speakerMembershipStatement } from "./speaker-membership";
 
 export type SessionizeEntity = "sessions" | "speakers";
 
@@ -164,6 +166,10 @@ interface ImportSnapshot {
   kind: "speaker" | "session";
   person: PersonRow | null;
   attachment: AttachmentRow | null;
+  /** Present on speaker snapshots; records the membership this row owned. */
+  membership?: MembershipRow | null;
+  membership_created?: boolean;
+  membership_id?: string | null;
   submission: SubmissionRow | null;
   participations: ParticipationRow[];
   answers: AnswerRow[];
@@ -457,6 +463,11 @@ async function attachmentForPerson(db: D1Database, eventId: string, personId: st
     .bind(eventId, personId).first<AttachmentRow>();
 }
 
+async function speakerMembershipForPerson(db: D1Database, eventId: string, personId: string): Promise<MembershipRow | null> {
+  return db.prepare("SELECT * FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker' LIMIT 1")
+    .bind(eventId, personId).first<MembershipRow>();
+}
+
 async function importSpeaker(
   db: D1Database,
   event: EventRow,
@@ -472,10 +483,11 @@ async function importSpeaker(
   const email = normalizeEmail(row.email || `speaker+${hashPart(`${event.id}|${externalRef || name}`)}@example.invalid`);
   const current = await personByEmail(db, event.org_id, email) ?? await personByName(db, event.org_id, name);
   const beforeAttachment = current ? await attachmentForPerson(db, event.id, current.id) : null;
+  const beforeMembership = current ? await speakerMembershipForPerson(db, event.id, current.id) : null;
   const before: ImportSnapshot = current ? {
-    kind: "speaker", person: current, attachment: beforeAttachment, submission: null,
+    kind: "speaker", person: current, attachment: beforeAttachment, membership: beforeMembership, membership_created: false, membership_id: null, submission: null,
     participations: [], answers: [], evaluations: [],
-  } : { kind: "speaker", person: null, attachment: null, submission: null, participations: [], answers: [], evaluations: [] };
+  } : { kind: "speaker", person: null, attachment: null, membership: null, membership_created: false, membership_id: null, submission: null, participations: [], answers: [], evaluations: [] };
   const now = nowAfter(current?.updated_at);
   const id = current?.id ?? stableImportId("person", event.id, externalRef || email);
   const next = {
@@ -519,6 +531,15 @@ async function importSpeaker(
     }
   }
   person = (await db.prepare("SELECT * FROM people WHERE id = ?").bind(id).first<PersonRow>())!;
+  const membershipWrite = await speakerMembershipStatement(db, { orgId: event.org_id, eventId: event.id, personId: person.id, now }).run();
+  if (!beforeMembership && membershipWrite.meta.changes > 0) {
+    before.membership_created = true;
+    before.membership_id = (await speakerMembershipForPerson(db, event.id, person.id))?.id ?? null;
+  } else if (!beforeMembership) {
+    // Another writer won the race between the snapshot read and the
+    // idempotent bridge. Preserve that row as pre-existing for undo.
+    before.membership = await speakerMembershipForPerson(db, event.id, person.id);
+  }
   const outcome = !current ? "created" : changed || attachmentChanged ? "updated" : "skipped";
   const reason = [
     externalRef ? `matched external_ref ${externalRef}` : "matched by normalized email",
@@ -801,6 +822,16 @@ async function cleanupImportedPerson(db: D1Database, personId: string): Promise<
   await db.prepare("DELETE FROM people WHERE id = ? AND id LIKE '%_import_%'").bind(personId).run();
 }
 
+async function removeImportedSpeakerMembership(db: D1Database, eventId: string, personId: string, snapshot: ImportSnapshot): Promise<void> {
+  if (snapshot.membership_created !== true) return;
+  if (snapshot.membership_id) {
+    await db.prepare("DELETE FROM memberships WHERE id = ? AND event_id = ? AND person_id = ? AND role = 'speaker'")
+      .bind(snapshot.membership_id, eventId, personId).run();
+    return;
+  }
+  await db.prepare("DELETE FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'").bind(eventId, personId).run();
+}
+
 async function restoreSnapshot(db: D1Database, snapshot: ImportSnapshot): Promise<void> {
   if (snapshot.kind === "speaker") {
     if (!snapshot.person) {
@@ -921,7 +952,9 @@ export async function undoSessionizeImport(db: D1Database, eventId: string, impo
   for (const row of rows.results) {
     const snapshot = row.before_json ? JSON.parse(row.before_json) as ImportSnapshot : null;
     const createdMarker = snapshot?.submission === null && snapshot?.person === null;
-    if (!row.target_id || row.outcome === "failed" || (row.outcome === "skipped" && !createdMarker)) continue;
+    const membershipCreatedMarker = row.entity === "speaker" && snapshot?.membership_created === true;
+    if (!row.target_id || row.outcome === "failed" || (row.outcome === "skipped" && !createdMarker && !membershipCreatedMarker)) continue;
+    if (snapshot && membershipCreatedMarker) await removeImportedSpeakerMembership(db, eventId, row.target_id, snapshot);
     if (snapshot && snapshot.submission === null && snapshot.person === null) {
       if (row.entity === "session") await deleteCreatedSubmission(db, row.target_id);
       else await cleanupImportedPerson(db, row.target_id);
