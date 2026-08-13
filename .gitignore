@@ -20,3 +20,6 @@ cli/api-registry.json
 
 # The sbek eval kit is its own git repo, checked out here for eval runs.
 .eval-kit-agent/
+
+# A deploy freeze is per-machine and per-moment, never committed.
+.deploy-freeze
