@@ -22,7 +22,7 @@
 
 import type { D1Database } from "@cloudflare/workers-types";
 
-import { publicMediaUrl } from "../r2/keys";
+import { publicMediaUrl } from "../r2/media-links";
 
 /** Attachment owners this module can version. Mirrors the `attachments.owner_type` CHECK. */
 export type VersionedOwnerType =
@@ -44,10 +44,7 @@ export interface FileVersion {
   uploaded_at: number;
   /** Derived from the owner pointer on every read. Never persisted. */
   is_latest: boolean;
-  /**
-   * Separate-origin media URL. This is an unauthenticated capability URL:
-   * anyone holding it can fetch the object. Surfaces that expose it must say so.
-   */
+  /** Short-lived, signed capability URL on the separate media origin. */
   url: string;
 }
 
@@ -161,6 +158,8 @@ export async function listVersionsForOwners(
   ownerType: VersionedOwnerType,
   ownerIds: readonly string[],
   mediaPublicOrigin: string,
+  mediaSigningSecret: string,
+  nowMs = Date.now(),
 ): Promise<Map<string, FileVersionList>> {
   const unique = [...new Set(ownerIds.filter((id) => id.length > 0))];
   const lists = new Map<string, FileVersionList>(unique.map((id) => [id, emptyList(ownerType, id)]));
@@ -186,8 +185,8 @@ export async function listVersionsForOwners(
     const pointerMatches = pointer !== null && ownerRows.some((row) => row.id === pointer);
     const newest = ownerRows[ownerRows.length - 1];
     const latestId = pointerMatches ? pointer : newest?.id ?? null;
-    const versions = ownerRows
-      .map((row) => ({
+    const versions = (await Promise.all(
+      ownerRows.map(async (row) => ({
         attachment_id: row.id,
         version: row.version,
         filename: row.filename,
@@ -195,9 +194,14 @@ export async function listVersionsForOwners(
         size_bytes: row.size_bytes,
         uploaded_at: row.created_at,
         is_latest: row.id === latestId,
-        url: publicMediaUrl(mediaPublicOrigin, { status: "ready", r2_key: row.r2_key }),
-      }))
-      .reverse();
+        url: await publicMediaUrl(
+          mediaPublicOrigin,
+          { status: "ready", r2_key: row.r2_key },
+          mediaSigningSecret,
+          nowMs,
+        ),
+      })),
+    )).reverse();
     lists.set(ownerId, {
       owner_type: ownerType,
       owner_id: ownerId,
@@ -217,7 +221,9 @@ export async function listVersionsFor(
   ownerType: VersionedOwnerType,
   ownerId: string,
   mediaPublicOrigin: string,
+  mediaSigningSecret: string,
+  nowMs = Date.now(),
 ): Promise<FileVersionList> {
-  const lists = await listVersionsForOwners(db, ownerType, [ownerId], mediaPublicOrigin);
+  const lists = await listVersionsForOwners(db, ownerType, [ownerId], mediaPublicOrigin, mediaSigningSecret, nowMs);
   return lists.get(ownerId) ?? emptyList(ownerType, ownerId);
 }

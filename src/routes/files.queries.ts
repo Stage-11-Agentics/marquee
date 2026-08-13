@@ -15,6 +15,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import { listVersionsForOwners, type FileVersion } from "../lib/files/versions";
+import { MEDIA_LINK_POLICY } from "../lib/r2/media-links";
 
 export const FILE_STATES = ["all", "uploaded", "missing", "overdue"] as const;
 export type FileStateFilter = (typeof FILE_STATES)[number];
@@ -49,8 +50,8 @@ export interface FilesSnapshot {
   counts: Record<FileStateFilter, number>;
   facets: { task_types: { id: string; name: string; count: number }[] };
   metrics: { expected: number; received: number; missing: number; overdue: number };
-  /** Named so a caller cannot mistake these URLs for authenticated ones. */
-  link_policy: "unauthenticated-capability-url";
+  /** Named so a caller can see the expiry and revocation boundary of these URLs. */
+  link_policy: typeof MEDIA_LINK_POLICY;
 }
 
 export interface FilesQuery {
@@ -118,6 +119,7 @@ export async function listFiles(
   db: D1Database,
   eventId: string,
   mediaPublicOrigin: string,
+  mediaSigningSecret: string,
   query: FilesQuery = {},
   now: number = Date.now(),
 ): Promise<FilesSnapshot> {
@@ -141,6 +143,8 @@ export async function listFiles(
     "task_upload",
     tasks.results.map((task) => task.id),
     mediaPublicOrigin,
+    mediaSigningSecret,
+    now,
   );
 
   const all: FilesRow[] = tasks.results.map((task) => {
@@ -212,6 +216,6 @@ export async function listFiles(
       missing: live.filter((row) => row.state !== "uploaded").length,
       overdue: live.filter((row) => row.state === "overdue").length,
     },
-    link_policy: "unauthenticated-capability-url",
+    link_policy: MEDIA_LINK_POLICY,
   };
 }

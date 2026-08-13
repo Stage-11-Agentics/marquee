@@ -28,6 +28,7 @@ const ORG_ID = "org_mrq115";
 const EVENT_ID = "evt_mrq115";
 const ORIGIN = "https://marquee.stage11.dev";
 const MEDIA_ORIGIN = "media.marquee.test";
+const MEDIA_SECRET = "mrq115-upload-token-secret";
 const FORM_ID = "form_mrq115";
 const ORGANIZER = "per_mrq115_organizer";
 const PRIYA = "per_mrq115_priya";
@@ -159,7 +160,7 @@ test("CONTRACT · MRQ-115 — is_latest follows the deliverable pointer even whe
   // The pointer is what the portal writes and what AV stages from. If a
   // "newest wins" rule ever creeps in, this is the test that catches it.
   await env.DB.prepare("UPDATE speaker_tasks SET attachment_id = ? WHERE id = ?").bind(SLIDES_V1, PRIYA_SLIDES_TASK).run();
-  const list = await listVersionsFor(env.DB, "task_upload", PRIYA_SLIDES_TASK, MEDIA_ORIGIN);
+  const list = await listVersionsFor(env.DB, "task_upload", PRIYA_SLIDES_TASK, MEDIA_ORIGIN, MEDIA_SECRET);
   expect(list.latest?.attachment_id).toBe(SLIDES_V1);
   expect(list.latest?.version).toBe(1);
   expect(list.latest_source).toBe("pointer");
@@ -168,7 +169,7 @@ test("CONTRACT · MRQ-115 — is_latest follows the deliverable pointer even whe
 
 test("CONTRACT · MRQ-115 — an upload that never completed is not a version", async () => {
   await storeUpload(SLIDES_PENDING, PRIYA_SLIDES_TASK, "slides.pdf", NOW, "pending");
-  const list = await listVersionsFor(env.DB, "task_upload", PRIYA_SLIDES_TASK, MEDIA_ORIGIN);
+  const list = await listVersionsFor(env.DB, "task_upload", PRIYA_SLIDES_TASK, MEDIA_ORIGIN, MEDIA_SECRET);
   expect(list.version_count).toBe(2);
   expect(list.versions.map((version) => version.attachment_id)).not.toContain(SLIDES_PENDING);
   // And the count the organizer reads stays 2, not a hopeful 3.
@@ -176,13 +177,13 @@ test("CONTRACT · MRQ-115 — an upload that never completed is not a version", 
 });
 
 test("CONTRACT · MRQ-115 — the batch read numbers each owner independently and answers for owners with nothing", async () => {
-  const lists = await listVersionsForOwners(env.DB, "task_upload", [PRIYA_SLIDES_TASK, MARCUS_SLIDES_TASK], MEDIA_ORIGIN);
+  const lists = await listVersionsForOwners(env.DB, "task_upload", [PRIYA_SLIDES_TASK, MARCUS_SLIDES_TASK], MEDIA_ORIGIN, MEDIA_SECRET, NOW);
   expect(lists.get(PRIYA_SLIDES_TASK)?.version_count).toBe(2);
   const marcus = lists.get(MARCUS_SLIDES_TASK);
   expect(marcus, "an owner with no uploads still gets an answer").toBeDefined();
   expect(marcus?.versions).toEqual([]);
   expect(marcus?.latest).toBeNull();
-  const single = await listVersionsFor(env.DB, "task_upload", PRIYA_SLIDES_TASK, MEDIA_ORIGIN);
+  const single = await listVersionsFor(env.DB, "task_upload", PRIYA_SLIDES_TASK, MEDIA_ORIGIN, MEDIA_SECRET, NOW);
   expect(single).toEqual(lists.get(PRIYA_SLIDES_TASK));
 });
 

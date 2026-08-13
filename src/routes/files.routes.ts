@@ -22,6 +22,10 @@ function mediaOrigin(context: Context<ApiEnv>): string {
   return (context.env as unknown as { MEDIA_PUBLIC_ORIGIN?: string }).MEDIA_PUBLIC_ORIGIN ?? "";
 }
 
+function mediaSigningSecret(context: Context<ApiEnv>): string {
+  return (context.env as unknown as { UPLOAD_TOKEN_SECRET: string }).UPLOAD_TOKEN_SECRET;
+}
+
 const listFilesRoute = defineApiRoute(
   {
     method: "get",
@@ -29,7 +33,7 @@ const listFilesRoute = defineApiRoute(
     operationId: "listConferenceFiles",
     summary: "Read the conference files library",
     description:
-      "One row per requested deliverable — filled or empty — with the speaker, session, upload date, size, and full version history of each file. Version numbers and the current version are derived from the deliverable's latest-pointer, never stored. Every returned file URL is an unauthenticated capability URL on the media origin.",
+      "One row per requested deliverable — filled or empty — with the speaker, session, upload date, size, and full version history of each file. Version numbers and the current version are derived from the deliverable's latest-pointer, never stored. Every returned file URL is a short-lived signed capability on the separate media origin; it expires 24 hours after it is issued and is invalidated immediately when its attachment or owning participation is revoked.",
     tags: ["Files"],
     request: { params: eventParams, query: filesQuery },
     policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
@@ -40,7 +44,7 @@ const listFilesRoute = defineApiRoute(
     const query = context.req.valid("query");
     const event = await context.env.DB.prepare("SELECT id FROM events WHERE id = ?").bind(eventId).first<{ id: string }>();
     if (!event) throw ApiError.notFound("conference not found");
-    const snapshot = await listFiles(context.env.DB, eventId, mediaOrigin(context), {
+    const snapshot = await listFiles(context.env.DB, eventId, mediaOrigin(context), mediaSigningSecret(context), {
       state: query.state,
       taskType: query.task_type,
       search: query.q,

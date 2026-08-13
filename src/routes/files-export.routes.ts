@@ -11,6 +11,7 @@ interface ExportEnv {
   DB: D1Database;
   MEDIA: R2Bucket;
   MEDIA_PUBLIC_ORIGIN?: string;
+  UPLOAD_TOKEN_SECRET: string;
 }
 
 interface ExportTaskRow {
@@ -174,6 +175,7 @@ async function handleExport(context: Context<ApiEnv>): Promise<Response> {
     "task_upload",
     taskIds,
     env.MEDIA_PUBLIC_ORIGIN ?? "",
+    env.UPLOAD_TOKEN_SECRET,
   );
   const latest = new Map<string, FileVersion | null>(rows.map((row) => [row.id, latestFor(row.id, versionLists)]));
   const attachmentIds = rows.flatMap((row) => {
