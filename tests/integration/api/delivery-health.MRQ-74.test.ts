@@ -24,6 +24,14 @@ const DAY = 86_400_000;
 // hour including the first seconds of a new UTC day.
 const REAL_NOW = Date.now();
 const SENT_TODAY_AT = Math.max(REAL_NOW - (REAL_NOW % DAY), REAL_NOW - 60_000);
+// The CFP window is the second. `deliveryHealthFacts` files an open form as
+// expired once `closes_at` falls behind the clock, and the route hands it the
+// real `Date.now()` — so a window pinned to NOW described a form that closed on
+// 2026-08-15 and would have taken this suite red on that date, exactly as the
+// sent-row above did on 2026-08-12. The fixture means "a call that is open and
+// closes in four days"; only the real clock keeps saying that.
+const FORM_OPENS_AT = REAL_NOW - 30 * DAY;
+const FORM_CLOSES_AT = REAL_NOW + 4 * DAY;
 
 interface HealthSnapshot {
   generated_at: number;
@@ -72,7 +80,7 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare(
       `INSERT INTO forms (id, event_id, name, slug, kind, status, opens_at, closes_at, created_at, updated_at)
        VALUES ('form-mrq74', ?, 'Call for speakers', 'cfp', 'abstract', 'open', ?, ?, ?, ?)`,
-    ).bind(EVENT_ID, NOW - 30 * DAY, NOW + 4 * DAY, NOW, NOW),
+    ).bind(EVENT_ID, FORM_OPENS_AT, FORM_CLOSES_AT, NOW, NOW),
   ]);
 
   const submissions: Array<[string, string, string, string, string]> = [

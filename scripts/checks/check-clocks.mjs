@@ -123,6 +123,22 @@ function closeOf(source, start) {
   return index;
 }
 
+/** Every call to `name(...)`, argument list included, as one unit of text. */
+function calls(source, name) {
+  const found = [];
+  const opener = new RegExp(`\\b${name}\\s*\\(`, "g");
+  let match;
+  while ((match = opener.exec(source)) !== null) {
+    const end = closeOf(source, match.index + match[0].length);
+    found.push({
+      text: source.slice(match.index, end),
+      startLine: source.slice(0, match.index).split("\n").length,
+    });
+    opener.lastIndex = end;
+  }
+  return found;
+}
+
 /**
  * Every `DB.prepare(...)` and the chained calls that carry its bindings, as one
  * unit of text. This is the scope a fixture INSERT actually occupies.
@@ -242,6 +258,27 @@ for (const file of await testFiles()) {
         "expires_at against the real Date.now(), so this credential dies on a date " +
         "nobody wrote down and takes the whole file to 401 with it",
       fix: "mint expires_at (and the row's timestamps) from Date.now()",
+    });
+  }
+
+  // The same defect through the other door. `createSession` computes expires_at
+  // from the `now` it is handed, so a suite that passes its fixture anchor gets
+  // a credential dated to the fixture and dies 30 days after a date in the
+  // source — no INSERT anywhere for a statement rule to read.
+  for (const call of calls(source, "createSession")) {
+    const code = stripComments(call.text);
+    if (!new RegExp(`\\bnow\\s*:\\s*(?:${LITERAL_DATE.source})`).test(code)
+      && !(anchors.size && new RegExp(`\\bnow\\s*:\\s*(${[...anchors].join("|")})\\b`).test(code))) continue;
+    if (ALLOW.test(lines[call.startLine - 1] ?? "") || ALLOW.test(lines[call.startLine - 2] ?? "")) continue;
+    findings.push({
+      rule: "auth-session-expiry-from-literal-date",
+      file: relative,
+      line: call.startLine,
+      detail:
+        "createSession handed a calendar-pinned clock; it dates expires_at from that " +
+        "clock while resolveSession reads the real one, so the session outlives the " +
+        "fixture date by exactly one TTL and not a moment longer",
+      fix: "let createSession default its own now, or pass Date.now()",
     });
   }
 
