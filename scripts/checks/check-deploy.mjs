@@ -25,10 +25,30 @@
  *   - not an ancestor of `main` at all — someone deployed a branch. Loudest case;
  *     the drift is unbounded and no diff describes it.
  *
- * Exit codes are the contract for callers that gate on this: 0 fresh or
- * cosmetic-only drift, 1 stale on product code, 2 could not determine.
+ * Exit codes are the contract for callers that gate on this: 0 fresh, cosmetic-only
+ * drift, or a declared freeze; 1 stale on product code; 2 could not determine.
+ *
+ * ## The freeze
+ *
+ * There is one situation where `stale` is the intended state and acting on it does
+ * damage: an eval run grades the *live* site over ~100 minutes, so the build is
+ * pinned behind `main` on purpose. A merge during that window makes this command
+ * read `stale`, and an agent who follows DEPLOY.md correctly — sees red, ships the
+ * drift — destroys the measurement while doing everything right.
+ *
+ * That makes an alarm that is correct almost always and catastrophically wrong in
+ * the window nobody flagged, which is worse than no alarm, because it has earned
+ * trust it does not deserve there. Two defences, in order of reliability:
+ *
+ *   1. A freeze marker (`.deploy-freeze` at the repo root, or `MARQUEE_DEPLOY_FREEZE`)
+ *      turns the verdict into `frozen`, exit 0, naming who declared it and why.
+ *   2. Failing that, the `stale` verdict says so itself. The second defence matters
+ *      more, because it works when someone forgot the first — which is exactly the
+ *      circumstance where the trap springs.
  */
+import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
 
 import { REPOSITORY_ROOT, emit, parseArguments } from "./lib/command.mjs";
 
@@ -51,6 +71,29 @@ const PRODUCT_PATHS = [
   "wrangler.jsonc",
   "wrangler.toml",
 ];
+
+/**
+ * A declared deploy freeze, if one is in force.
+ *
+ * Deliberately a plain file at a fixed path rather than anything cleverer: it has
+ * to be readable by an agent in any worktree, on a build that predates the freeze,
+ * with no service to ask and no state to sync.
+ */
+function readFreeze(environment = process.env) {
+  const inline = environment.MARQUEE_DEPLOY_FREEZE;
+  if (typeof inline === "string" && inline.trim().length > 0) {
+    return { reason: inline.trim(), source: "MARQUEE_DEPLOY_FREEZE" };
+  }
+  for (const root of [REPOSITORY_ROOT, environment.MARQUEE_PRIMARY_CHECKOUT].filter(Boolean)) {
+    try {
+      const text = readFileSync(resolve(root, ".deploy-freeze"), "utf8").trim();
+      if (text.length > 0) return { reason: text, source: resolve(root, ".deploy-freeze") };
+    } catch {
+      // No marker here; try the next root.
+    }
+  }
+  return undefined;
+}
 
 function git(arguments_, { allowFailure = false } = {}) {
   try {
@@ -165,6 +208,10 @@ function newRequiredSecrets({ liveBuild, mainSha }) {
   ];
 }
 
+function freezeDeclared(result) {
+  return Boolean(result && result.freeze && result.freeze.reason);
+}
+
 async function main() {
   const parsed = parseArguments();
   const url = typeof parsed.url === "string" ? parsed.url : DEFAULT_URL;
@@ -190,6 +237,7 @@ async function main() {
     ]);
 
     const verdict = classify({ liveBuild: live.build, mainSha: head.sha });
+    const freeze = readFreeze();
     result = {
       command: "check:deploy",
       status: verdict.status,
@@ -200,10 +248,15 @@ async function main() {
       behind: verdict.behind,
       productFiles: verdict.productFiles ?? [],
       newRequiredSecrets: verdict.newRequiredSecrets ?? [],
+      ...(freeze ? { freeze } : {}),
       verdict: {
         fresh: "the live Worker is main's head",
         cosmetic: "behind main, but only on files that never reach the Worker — deployed product is current",
-        stale: "behind main on product code — the live site is not what main describes",
+        stale:
+          "behind main on product code — the live site is not what main describes." +
+          " BEFORE DEPLOYING, check whether an eval run is grading the live site:" +
+          " during one, the build is pinned behind main on purpose and shipping the" +
+          " drift destroys the measurement. Stale is not by itself an instruction to deploy.",
         "off-main": "the live build is not an ancestor of main — a branch was deployed",
       }[verdict.status],
     };
@@ -222,6 +275,15 @@ async function main() {
     });
     process.exitCode = 2;
     return;
+  }
+
+  if (freezeDeclared(result) && result.status !== "fresh") {
+    result.drift = result.status;               // keep what it would have said
+    result.status = "frozen";
+    result.verdict =
+      `deploy freeze in force — ${result.freeze.reason}. The live build is pinned` +
+      ` behind main deliberately (it would otherwise read "${result.drift}").` +
+      ` DO NOT DEPLOY until whoever declared the freeze lifts it.`;
   }
 
   emit(result);
