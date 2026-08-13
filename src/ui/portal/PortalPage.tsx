@@ -803,7 +803,7 @@ function submitterOutcomeCopy(status: string): string {
   if (status === "waitlisted") return "The program team marked this abstract as Maybe.";
   if (status === "rejected") return "The program team did not select this abstract for the conference.";
   if (status === "withdrawn") return "This abstract is no longer in consideration.";
-  return "The conference team has not shared a more specific update for this abstract yet.";
+  return "The program team has not shared a more specific update for this abstract yet.";
 }
 
 function submitterProgressCopy(status: string): string {
@@ -854,9 +854,10 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
     ? `Decisions for ${waveName ?? "this round"} go out by ${formatCalendarDay(decisionOn)}.`
     : "The program team has not set a decision date for this round yet.";
   // Only offered while the call is genuinely still open; the server sends null otherwise.
-  const openForm = !isDraft
-    ? snapshot.submissions.map((submission) => submission.form_slug).find((value): value is string => Boolean(value)) ?? null
-    : null;
+  const openForm = snapshot.submissions
+    .filter((submission) => submission.status !== "draft")
+    .map((submission) => submission.form_slug)
+    .find((value): value is string => Boolean(value)) ?? null;
   const heroCopy = isDraft
     ? "This abstract is saved as a draft, not yet submitted."
     : isWaitlisted

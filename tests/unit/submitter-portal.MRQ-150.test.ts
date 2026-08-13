@@ -165,6 +165,16 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).not.toContain("Decisions for Wave 2 go out by October 1, 2026");
   });
 
+  test("CONTRACT · MRQ-150 · an open call remains reachable when a newer draft leads the list", () => {
+    const html = render(snapshot({
+      submissions: [
+        submission({ id: "lead-draft", status: "draft", submitted_at: null, wave_name: null, wave_decision_on: null }),
+        submission({ id: "other-submitted", status: "submitted", form_slug: "cfp" }),
+      ],
+    }));
+    expect(html).toContain('href="/f/cfp"');
+  });
+
   test("CONTRACT · MRQ-153 · a rejected submitter preview keeps its viewing-as label", () => {
     const html = render(snapshot({ submissions: [submission({ status: "rejected" })] }), true);
     expect(html).toContain("Viewing as speaker · organizer preview");
