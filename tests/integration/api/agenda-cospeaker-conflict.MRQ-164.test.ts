@@ -59,7 +59,7 @@ async function seedFixture(): Promise<void> {
 describe.sequential("MRQ-164 co-speaker double-booking", () => {
   beforeAll(seedFixture, 10_000);
 
-  test("REPRO · a co-speaker added after intake is double-booked and the agenda says so", async () => {
+  test("AC-77 · MRQ-164 REPRO · a co-speaker added after intake is double-booked and the agenda says so", async () => {
     const added = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions/sub-164-ci/participants`, {
       method: "POST",
       body: JSON.stringify({ name: "Marcus Okafor", email: "marcus@mrq164.test", role: "co_speaker" }),
@@ -85,7 +85,7 @@ describe.sequential("MRQ-164 co-speaker double-booking", () => {
     expect(snapshot.conflicts.filter((conflict) => conflict.kind === "person" && conflict.person_id === "person-marcus-164")).toHaveLength(1);
   });
 
-  test("REPRO · a session created through + Add session is double-booked and the agenda says so", async () => {
+  test("AC-77 · MRQ-164 REPRO · a session created through + Add session is double-booked and the agenda says so", async () => {
     const created = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions`, {
       method: "POST",
       body: JSON.stringify({

@@ -87,7 +87,7 @@ describe("MRQ-21 agenda conflict computation", () => {
     }
   });
 
-  test("MRQ-164 · a Session whose only participant is its submitter is still double-booked", () => {
+  test("AC-77 · MRQ-164 · a Session whose only participant is its submitter is still double-booked", () => {
     const personId = "person-submitter-only";
     const conflicts = deriveConflicts([
       session("first", "one", START, [participant(personId, "co_speaker"), participant("person-lead", "speaker")]),
@@ -98,7 +98,7 @@ describe("MRQ-21 agenda conflict computation", () => {
     expect(conflicts.filter((conflict) => conflict.kind === "person" && conflict.person_id === personId)).toHaveLength(1);
   });
 
-  test("MRQ-164 · a submitter who is not presenting raises no conflict beside a real speaker", () => {
+  test("AC-77 · MRQ-164 · a submitter who is not presenting raises no conflict beside a real speaker", () => {
     const conflicts = deriveConflicts([
       session("first", "one", START, [participant("person-speaker", "speaker"), participant("person-desk", "submitter")]),
       session("second", "two", START, [participant("person-desk", "submitter"), participant("person-other", "speaker")]),

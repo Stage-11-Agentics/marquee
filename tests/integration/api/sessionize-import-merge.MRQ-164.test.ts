@@ -56,7 +56,7 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
 describe.sequential("MRQ-164 Sessionize import merge", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("a blank CSV cell keeps the stored value while a filled one wins, and the row says which", async () => {
+  test("CONTRACT · MRQ-164 · a blank CSV cell keeps the stored value while a filled one wins, and the row says which", async () => {
     const uploaded = await request(`/api/v1/events/${EVENT_ID}/imports`, {
       method: "POST",
       body: JSON.stringify({ source: "sessionize", sessions_csv: SESSIONS_CSV, speakers_csv: SPEAKERS_CSV }),
@@ -83,7 +83,7 @@ describe.sequential("MRQ-164 Sessionize import merge", () => {
     expect(speakerRow?.reason).toContain("kept company, bio (blank in CSV)");
   });
 
-  test("a created row does not claim it matched an existing person", async () => {
+  test("CONTRACT · MRQ-164 · a created row does not claim it matched an existing person", async () => {
     const csv = [
       "Speaker ID,Name,Email,Job Title,Company,Bio,Photo URL",
       "speaker-newcomer,Dana Kowalski,dana@mrq164.test,Researcher,Cloudreach,Writes about evaluation.,",
