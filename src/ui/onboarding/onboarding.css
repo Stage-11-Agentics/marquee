@@ -32,6 +32,18 @@
 .onboarding-board-filters select { font-family: var(--mono); font-size: 10px; min-width: 190px; text-transform: none; }
 .onboarding-filter-count { color: var(--muted); font: 500 10px/1 var(--mono); margin-left: auto; padding-bottom: 10px; }
 .onboarding-demo-safe { color: var(--accent-dark); display: block; font: 600 9px/1.2 var(--mono); margin-top: 8px; }
+/*
+  The grid is wider than the page whenever a conference authors more than about
+  six tasks, and the columns it hides are the newest ones — the far right is
+  exactly where a task added after setup lands. Silent horizontal overflow made
+  a tracked task read as an untracked one: a speaker whose only work is new
+  showed a row of em dashes while their real state sat off-screen. So the strip
+  says how many task columns exist and, when they do not fit, which one is
+  furthest out. Its height is reserved either way, so the grid never jumps as
+  filters change what fits.
+*/
+.onboarding-matrix-scroll-note { align-items: center; border-bottom: 1px solid var(--line); color: var(--muted); display: flex; font: 500 10px/1.4 var(--mono); gap: 6px; min-height: 30px; padding: 6px 12px; }
+.onboarding-matrix-scroll-note strong { color: var(--ink); font-weight: 600; }
 .onboarding-matrix-wrap { overflow-x: auto; }
 /*
   Every column states a width and the table is at least as wide as their sum, so
@@ -47,6 +59,18 @@
 .onboarding-matrix tbody tr:last-child th, .onboarding-matrix tbody tr:last-child td { border-bottom: 0; }
 .onboarding-matrix tbody tr:hover { background: color-mix(in srgb, var(--accent-wash) 42%, transparent); }
 .onboarding-select-column { padding-left: 12px !important; width: 38px; }
+/*
+  Scrolling sideways to reach a task column must not cost the row's identity —
+  a grid of glyphs with the names scrolled away is unreadable. The checkbox and
+  the speaker cell stay pinned to the left edge; both need an opaque background
+  because the cells beneath them travel underneath.
+*/
+.onboarding-matrix th.onboarding-select-column, .onboarding-matrix td.onboarding-select-column { left: 0; position: sticky; z-index: 1; }
+.onboarding-matrix th.onboarding-speaker-column { left: 38px; position: sticky; z-index: 1; }
+.onboarding-matrix tbody .onboarding-select-column, .onboarding-matrix tbody th.onboarding-speaker-column { background: var(--panel); }
+.onboarding-matrix tbody tr:hover .onboarding-select-column, .onboarding-matrix tbody tr:hover th.onboarding-speaker-column { background: color-mix(in srgb, var(--accent-wash) 42%, var(--panel)); }
+.onboarding-matrix thead th.onboarding-select-column, .onboarding-matrix thead th.onboarding-speaker-column { z-index: 3; }
+.onboarding-matrix th.onboarding-speaker-column::after { border-right: 1px solid var(--line); bottom: 0; content: ""; position: absolute; right: 0; top: 0; }
 .onboarding-action-column { text-align: right !important; width: 76px; }
 /*
   Fixed layout takes each column's width from the first row and shares whatever
@@ -64,7 +88,11 @@
   already stated 100px, but only on the body `<td>` — fixed layout reads the
   first row, so the header cell is where the width has to land for it to count.
 */
-.onboarding-task-column, .onboarding-last-contact-column { width: 100px; }
+.onboarding-task-column { width: 86px; }
+/* A task's name is how the organizer identifies its column, so a long one
+   wraps rather than losing its last characters off the edge of the cell. */
+.onboarding-matrix thead th.onboarding-task-column span { display: block; overflow-wrap: anywhere; }
+.onboarding-last-contact-column { width: 100px; }
 .onboarding-track-column { width: 138px; }
 .onboarding-track { align-items: center; display: flex; font: 10px/1.25 var(--mono); gap: 5px; white-space: nowrap; }
 .onboarding-track + .onboarding-track { margin-top: 4px; }
@@ -78,7 +106,7 @@
 .onboarding-speaker-link strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .onboarding-speaker-link small, .onboarding-speaker-link em { color: var(--muted); display: block; font: 10px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .onboarding-speaker-link em { color: var(--accent-dark); font-style: normal; }
-.onboarding-cell { border-left: 1px solid var(--line); text-align: center; width: 100px; }
+.onboarding-cell { border-left: 1px solid var(--line); text-align: center; width: 86px; }
 .onboarding-cell .onboarding-glyph { align-items: center; display: grid; font: 600 17px/1 var(--mono); height: 24px; justify-content: center; margin: 0 auto 3px; width: 24px; }
 .onboarding-cell small { color: var(--muted); display: block; font: 9px/1.2 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .onboarding-cell.state-overdue .onboarding-glyph { background: var(--alarm); color: #fff; }
