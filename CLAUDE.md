@@ -139,8 +139,14 @@ c11 launch-agent --type codex --model gpt-5.6-luna --effort max \
 
 Three footguns, all hit in this run:
 
-- **`--effort high` is a downgrade, `--effort max` is the target.** `~/.codex/config.toml` sets `model_reasoning_effort = "xhigh"`, so an explicit `high` silently drops *below* the configured default — that was the original footgun. Passing nothing inherits xhigh; passing `max` is what the operator actually wants for build work (directive 2026-08-10). Only the sanctioned Luna-at-capacity fallback runs `terra` at `high`.
+- **`--effort high` is a downgrade, `--effort max` is the target.** `max` is what the operator wants for build work (directive 2026-08-10), and an explicit `high` lands below it. **Never rely on the inherited default:** `~/.codex/config.toml` currently reads `model_reasoning_effort = "high"`, so passing nothing now inherits `high` rather than the `xhigh` this section once assumed. Pass the tier every time. Only the sanctioned Luna-at-capacity fallback runs `terra` at `high`.
 - **Always pass `--model`.** That config still pins `model = "gpt-5.6-sol"`, so a launch without `--model` quietly gets the wrong model.
-- **Fast service tier is off** — `service_tier = "default"` in `~/.codex/config.toml` (machine-wide; backup at `~/.codex/config.toml.bak-marquee`). `c11 launch-agent` has no passthrough for `-c key=value`, so this has to live in the config rather than the launch line.
+- **Fast mode is available, and `c11 launch-agent` cannot reach it.** `service_tier` is the switch — `codex features list` shows `fast_mode  stable  true`, while `~/.codex/config.toml` holds `service_tier = "default"` (machine-wide; backup at `~/.codex/config.toml.bak-marquee`). `launch-agent` has no `-c key=value` passthrough, and editing the config to turn fast on would silently re-tier every other codex agent in the fleet mid-run. So for a fast agent, skip `launch-agent`: open a bare surface with `c11 new-surface`, then `c11 send` the invocation yourself.
+
+```sh
+codex --yolo -c service_tier=fast -c model_reasoning_effort=max --model gpt-5.6-luna
+```
+
+  Confirm it took by reading the status line — it must say `gpt-5.6-luna max fast` and `Fast on`. Both `-c` overrides are load-bearing: the config's defaults sit below each one, so omitting either quietly gives you a slower or dumber agent than you asked for. You trade `launch-agent`'s identity stamping for this, so set `--title`/`set-description` by hand.
 
 Model names are verified live before use, not assumed — `gpt-5.6-luna` and `gpt-5.6-terra` were both confirmed answering before being written here.
