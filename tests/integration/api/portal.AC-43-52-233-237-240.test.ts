@@ -415,6 +415,23 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(body.handbook.markdown).toContain("[Conference site]");
   });
 
+  test("CONTRACT · a speaker can only read or edit a submission they participate in", async () => {
+    const ownRead = await request(`/api/v1/me/submissions/${SUBMISSION_ID}/talk`);
+    expect(ownRead.status).toBe(200);
+
+    const otherRead = await request(`/api/v1/me/submissions/${SUBMISSION_ID}/talk`, {}, otherSpeakerCookie);
+    expect([403, 404]).toContain(otherRead.status);
+    const otherWrite = await request(
+      `/api/v1/me/submissions/${SUBMISSION_ID}/talk`,
+      { method: "PATCH", body: JSON.stringify({ title: "Speaker B must not edit speaker A" }) },
+      otherSpeakerCookie,
+    );
+    expect([403, 404]).toContain(otherWrite.status);
+
+    const unchanged = await request(`/api/v1/me/submissions/${SUBMISSION_ID}/talk`);
+    expect((await unchanged.json<{ submission: { title: string } }>()).submission.title).not.toBe("Speaker B must not edit speaker A");
+  });
+
   test("AC-237 · speaker talk edits record actor and time, close with the form, and reopen only by organizer control", async () => {
     const first = await request(`/api/v1/me/submissions/${SUBMISSION_ID}/talk`, { method: "PATCH", body: JSON.stringify({ title: "Updated conference talk", description: "Updated description" }) });
     expect(first.status).toBe(200);

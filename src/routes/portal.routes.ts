@@ -1274,11 +1274,17 @@ async function editableTalk(
          AND (
            EXISTS (SELECT 1 FROM participations submitter_access
              WHERE submitter_access.submission_id = submission.id AND submitter_access.person_id = ? AND submitter_access.role = 'submitter')
-           OR EXISTS (SELECT 1 FROM memberships speaker_access
-             WHERE speaker_access.event_id = submission.event_id AND speaker_access.person_id = ? AND speaker_access.role = 'speaker')
+           OR (
+             EXISTS (SELECT 1 FROM participations speaker_participation_access
+               WHERE speaker_participation_access.submission_id = submission.id
+                 AND speaker_participation_access.person_id = ?
+                 AND speaker_participation_access.role IN ('speaker', 'co_speaker'))
+             AND EXISTS (SELECT 1 FROM memberships speaker_access
+               WHERE speaker_access.event_id = submission.event_id AND speaker_access.person_id = ? AND speaker_access.role = 'speaker')
+           )
          )`,
     )
-    .bind(auth.personId, auth.personId, auth.orgId, submissionId, auth.personId, auth.personId)
+    .bind(auth.personId, auth.personId, auth.orgId, submissionId, auth.personId, auth.personId, auth.personId)
     .first<{
       id: string;
       event_id: string;
@@ -1507,6 +1513,29 @@ const updateSpeakerProfile = defineApiRoute(
   async (context) => updateProfile(context, context.req.valid("json")),
 );
 
+const getSpeakerTalk = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/me/submissions/{submissionId}/talk",
+    operationId: "getSpeakerTalk",
+    summary: "Read an authenticated speaker talk",
+    description: "Returns the authenticated speaker's own talk and its content history, scoped to a participation on that submission.",
+    tags: ["Speaker portal"],
+    request: { params: submissionParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(talkResponseSchema, "Speaker talk"), ...errorResponses([401, 403, 404, 429, 500]) },
+  },
+  async (context) => {
+    const auth = requireUnscopedSpeakerSession(context);
+    const { submissionId } = context.req.valid("param");
+    const current = await editableTalk(context.env.DB, auth, submissionId);
+    return context.json({
+      submission: current.submission,
+      history: await historyFor(context.env.DB, current.eventId, submissionId),
+    }, 200);
+  },
+);
+
 const updateSpeakerTalk = defineApiRoute(
   {
     method: "patch",
@@ -1599,6 +1628,7 @@ export const apiRoutes = [
   declineParticipation,
   completeSpeakerTask,
   updateSpeakerProfile,
+  getSpeakerTalk,
   updateSpeakerTalk,
   updateSpeakerTalkEditing,
 ];
