@@ -17,6 +17,11 @@ import { applyMigrations, env } from "../apply-migrations";
  */
 
 const NOW = Date.UTC(2026, 7, 12, 9, 0, 0);
+// Business data is anchored to the fixed NOW on purpose — deterministic fixtures.
+// A session's expiry is not business data: the Worker checks it against the real
+// clock, so anchoring it to NOW gave this file a 24-hour shelf life and it began
+// failing every run the day after that date. Validity is measured from now.
+const SESSION_EXPIRES_AT = Date.now() + 86_400_000;
 const ORG_ID = "org_mrq131";
 const OTHER_ORG_ID = "org_mrq131_other";
 const EVENT_ID = "evt_mrq131";
@@ -90,7 +95,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq131', ?, ?, ?, 'owner', ?, ?)")
       .bind(ORG_ID, ORGANIZER, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)")
-      .bind(AUTH_SESSION, ORGANIZER, NOW + 86_400_000, NOW, NOW),
+      .bind(AUTH_SESSION, ORGANIZER, SESSION_EXPIRES_AT, NOW, NOW),
   ]);
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO submissions (id, event_id, kind, title, abstract, status, origin, submitter_person_id, search_blob, created_at, updated_at)
