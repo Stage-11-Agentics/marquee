@@ -334,6 +334,18 @@ An allowlisted edit applies within one webhook cycle; **an edit to any other fie
 
 **`event_settings`** — key/value JSON per event: `schedulable_statuses`, `demo_safe_allowlist`, `ai_assist_enabled` (**default false**, AC-167), `anonymized_default`, `airtable`, `search_weights`. Writer: settings screens + seed. Reader: the code paths named above.
 
+> **`demo_safe_allowlist` has no writer.** Nothing in `src/`, no route, and not the
+> seed ever sets this key; its only appearance in the codebase is the `SELECT` in
+> `src/jobs/mail/consumer.ts`. It is therefore always empty in every deployment, and
+> in demo mode every `demo_safe` message is written `suppressed` rather than sent.
+> The outbox, the queued counts and the per-recipient log all render correctly while
+> nothing leaves — the confirmations describe the queue, not delivery. `always_live`
+> messages (the public CFP confirmation) are unaffected and do dispatch, which is how
+> we know the credential and payload are sound and only the gate is closed.
+> One query settles it for any deployment:
+> `SELECT count(*) FROM outbox WHERE provider_message_id IS NOT NULL` — zero means
+> nothing has ever left. See `code/platform/resend.md` for the general pattern.
+
 ---
 
 ## 4. API surface
