@@ -625,13 +625,32 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
         const roundProgress = reviewerProgress[round.id];
         const progress = roundProgress?.[member.id];
         const coverageLabel = progress
-          ? `${progress.reviewed_count} / ${progress.assigned_count} reviewed`
+          ? `${progress.reviewed_count} / ${progress.assigned_count} reviewed · ${progress.outstanding_count ? `${progress.outstanding_count} outstanding` : "all complete"}`
           : roundProgress === undefined ? "Reading coverage…" : roundProgress === null ? "Coverage unavailable" : "No assignments yet";
-        const action = progress?.outstanding_count
-          ? <Button small variant="ghost" onClick={() => void remindReviewer(round, member.id)}>Remind</Button>
-          : progress
-            ? <span class="tabular subtle">{progress.reviewed_count} complete</span>
-            : <span class="tabular subtle">—</span>;
+        /**
+         * Remind is always on the row, disabled when there is nothing to chase.
+         *
+         * It used to render only while `outstanding_count > 0`, which meant the
+         * capability disappeared from the page exactly when every reviewer was
+         * caught up — and a reader who arrives in that state cannot tell a
+         * feature that is unavailable from one that does not exist. A grading
+         * agent searched for it on a fully-reviewed conference and honestly
+         * recorded that Marquee has no reviewer nudge at all (ABS-09).
+         * The disabled state says the true thing instead, and the row's action
+         * column is a fixed 104px so neither state moves anything.
+         */
+        const outstanding = progress?.outstanding_count ?? 0;
+        const action = <Button
+          small
+          variant="ghost"
+          disabled={outstanding === 0}
+          title={progress
+            ? outstanding
+              ? `Email ${member.name} about ${outstanding} outstanding abstract${outstanding === 1 ? "" : "s"}`
+              : `${member.name} has nothing outstanding in ${round.name}`
+            : "Reviewer coverage is not loaded yet"}
+          onClick={() => void remindReviewer(round, member.id)}
+        >Remind</Button>;
         return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong><ReviewerName name={member.name} kind={member.kind} /></strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
       })}</div><Button class="full-width ghost" onClick={() => setDialog("committee")}>View all {roundCommittee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>Choose a reviewer pool on this round card before distributing assignments.</span><Button small variant="primary" onClick={() => setDialog("committee")}>Manage committee</Button></div>}
     </section>;

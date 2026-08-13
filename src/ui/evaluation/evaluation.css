@@ -64,6 +64,13 @@
 .evaluation-alert button { background: none; border: 0; color: inherit; font-size: 17px; line-height: 1; }
 .round-recusal-status { color: var(--danger); font: 11px/1.4 var(--mono); min-height: 16px; }
 .committee-person-action { align-items: center; display: flex; justify-content: flex-end; min-height: 28px; min-width: 0; }
+/* Remind sits on every reviewer row, including the caught-up ones, so the
+   capability is discoverable on a fully-reviewed conference. A ghost button at
+   the global .45 disabled opacity nearly disappears against the panel, which
+   would trade one invisible control for another; it also must not light up
+   under the pointer and promise a click that does nothing. */
+.committee-person-action .button:disabled { border-color: var(--line); opacity: .6; }
+.committee-person-action .button:disabled:hover { background: transparent; border-color: var(--line); color: var(--ink-soft); }
 .inline-empty { align-items: start; color: var(--muted); display: grid; font-size: 12px; gap: 12px; min-height: 58px; padding: 10px 0; }
 .eval-dialog-backdrop { align-items: center; background: rgba(16, 24, 32, .46); display: grid; inset: 0; padding: 18px; place-items: center; position: fixed; z-index: 600; }
 .eval-dialog { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); max-height: calc(100vh - 36px); max-width: 620px; overflow: auto; width: 100%; }
