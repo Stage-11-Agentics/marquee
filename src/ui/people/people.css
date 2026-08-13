@@ -546,6 +546,8 @@
   gap: var(--s2);
 }
 
+.people-import-undo { min-width: 112px; }
+
 .people-field { display: grid; gap: 5px; }
 
 .people-field > span {

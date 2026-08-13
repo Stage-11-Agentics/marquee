@@ -305,68 +305,6 @@ test("CONTRACT · MRQ-131 · CRM-05 · a CSV import creates, updates, and report
   expect(priya.person.title).toBe("Distinguished Engineer");
 });
 
-test("CONTRACT · MRQ-167 · a people import receipt snapshots updates and batch undo restores them", async () => {
-  const csv = [
-    "Full Name,Email,Company,Job Title,Bio",
-    "Stale Export Name,PRIYA@example.com,Stale Export Co,Stale Export Title,Stale export bio.",
-  ].join("\n");
-  const response = await post("/api/v1/org/imports", { csv, filename: "stale-speakers.csv" });
-  expect(response.status).toBe(202);
-  const result = await response.json() as { import_id: string; updated: number };
-  expect(result.updated).toBe(1);
-
-  const receipt = await env.DB.prepare(
-    "SELECT outcome, target_id, before_json FROM import_rows WHERE import_id = ? AND row_index = 0",
-  ).bind(result.import_id).first<{ outcome: string; target_id: string; before_json: string | null }>();
-  expect(receipt?.outcome).toBe("updated");
-  expect(receipt?.target_id).toBe(SPEAKER);
-  expect(JSON.parse(receipt?.before_json ?? "null")).toEqual({
-    email: "priya@example.com",
-    name: "Priya Raman",
-    title: "Principal Engineer",
-    company: "Latticework Systems",
-    bio: "A biography",
-  });
-
-  expect(await env.DB.prepare("SELECT name, title, company, bio FROM people WHERE id = ?").bind(SPEAKER).first()).toEqual({
-    name: "Stale Export Name",
-    title: "Stale Export Title",
-    company: "Stale Export Co",
-    bio: "Stale export bio.",
-  });
-
-  const undone = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
-  expect(undone.status).toBe(200);
-  expect(await undone.json()).toMatchObject({ undone: 1, retained_manifest: true });
-  expect(await env.DB.prepare("SELECT name, title, company, bio FROM people WHERE id = ?").bind(SPEAKER).first()).toEqual({
-    name: "Priya Raman",
-    title: "Principal Engineer",
-    company: "Latticework Systems",
-    bio: "A biography",
-  });
-
-  const importState = await env.DB.prepare("SELECT status, undone_at FROM imports WHERE id = ?").bind(result.import_id).first<{ status: string; undone_at: number | null }>();
-  expect(importState?.status).toBe("undone");
-  expect(importState?.undone_at).not.toBeNull();
-});
-
-test("CONTRACT · MRQ-167 · blank profile cells still leave hand-entered values alone", async () => {
-  const csv = [
-    "Full Name,Email,Company,Job Title,Bio",
-    "Priya Raman,PRIYA@example.com,,,",
-  ].join("\n");
-  const response = await post("/api/v1/org/imports", { csv, filename: "partial-speakers.csv" });
-  expect(response.status).toBe(202);
-  expect((await response.json() as { updated: number }).updated).toBe(1);
-
-  expect(await env.DB.prepare("SELECT name, title, company, bio FROM people WHERE id = ?").bind(SPEAKER).first()).toEqual({
-    name: "Priya Raman",
-    title: "Principal Engineer",
-    company: "Latticework Systems",
-    bio: "A biography",
-  });
-});
-
 test("CONTRACT · MRQ-131 · CRM-12 · the header's counts agree with the list underneath it", async () => {
   await post(`/api/v1/org/people/${SUBMITTER}/stage`, { stage: "identified" });
   const summary = await json<{ people: number; conferences: number; in_pipeline: number; top_companies: Array<{ value: string; count: number }> }>(

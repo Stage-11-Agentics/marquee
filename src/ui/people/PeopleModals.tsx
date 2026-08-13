@@ -18,10 +18,12 @@ import {
   createList,
   createPerson,
   importPeople,
+  undoImportedPeople,
   previewOrgMail,
   sendOrgMail,
   saveControl,
   type PeopleFilters,
+  type PeopleImportResult,
   type Person,
   type SavedPersonList,
 } from "./people-api";
@@ -52,13 +54,18 @@ function Modal({
 export function ImportPeopleModal({
   onClose,
   onImported,
+  onUndone,
 }: {
   onClose: () => void;
-  onImported: (result: { created: number; updated: number; skipped: number; unmapped: string[] }) => void;
+  onImported: (result: PeopleImportResult) => void;
+  onUndone: (undone: number) => void;
 }): JSX.Element {
   const [busy, setBusy] = useState(false);
+  const [undoBusy, setUndoBusy] = useState(false);
   const [error, setError] = useState("");
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
+  const [result, setResult] = useState<PeopleImportResult | null>(null);
+  const [undone, setUndone] = useState<number | null>(null);
   const [hot, setHot] = useState(false);
 
   const read = async (picked: File | undefined) => {
@@ -72,7 +79,9 @@ export function ImportPeopleModal({
     setBusy(true);
     setError("");
     try {
-      onImported(await importPeople({ csv: file.text, filename: file.name }));
+      const imported = await importPeople({ csv: file.text, filename: file.name });
+      setResult(imported);
+      onImported(imported);
     } catch (caught) {
       setError(errorSummary(caught));
     } finally {
@@ -80,44 +89,77 @@ export function ImportPeopleModal({
     }
   };
 
+  const undo = async () => {
+    if (!result || undoBusy || undone !== null) return;
+    setUndoBusy(true);
+    setError("");
+    try {
+      const outcome = await undoImportedPeople(result.import_id);
+      setUndone(outcome.undone);
+      onUndone(outcome.undone);
+    } catch (caught) {
+      setError(errorSummary(caught));
+    } finally {
+      setUndoBusy(false);
+    }
+  };
+
   return <Modal
     title="Import people"
-    meta="Matched on email — an existing person is updated, never duplicated"
+    meta={result ? "Receipt retained — the last import can be undone as one change" : "Matched on email — an existing person is updated, never duplicated"}
     onClose={onClose}
-    foot={<>
+    foot={result ? <>
+      <Button onClick={onClose}>Done</Button>
+      <Button
+        class="people-import-undo"
+        variant={undone === null ? "danger" : ""}
+        disabled={undoBusy || undone !== null}
+        onClick={() => void undo()}
+      >{undone === null ? (undoBusy ? "Undoing…" : "Undo import") : "Import undone"}</Button>
+    </> : <>
       <Button onClick={onClose}>Cancel</Button>
       <Button variant="primary" disabled={!file || busy} onClick={() => void run()}>
         {busy ? "Importing…" : file ? `Import ${file.name}` : "Choose a file first"}
       </Button>
     </>}
   >
-    <AgentBriefPanel copy={peopleImportBrief(window.location.origin)} />
-
-    <div class="people-field">
-      <span>Or just drop a file</span>
-      <div
-        class={`people-dropzone ${hot ? "hot" : ""}`}
-        onDragOver={(event) => { event.preventDefault(); setHot(true); }}
-        onDragLeave={() => setHot(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          setHot(false);
-          void read(event.dataTransfer?.files?.[0]);
-        }}
-      >
-        <span class="people-kpi-name">{file ? file.name : "speakers.csv"}</span>
-        <div class="people-hint">
-          Drop a CSV here, or choose one. Columns are mapped by their headers — the same endpoint your
-          agent would call.
-        </div>
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          aria-label="Choose a CSV of people"
-          onChange={(event) => void read((event.currentTarget as HTMLInputElement).files?.[0])}
-        />
+    {result ? <div class="people-preview" role="status">
+      <div class="people-preview-subject">{undone === null ? "Import applied" : "Import undone"}</div>
+      <div class="people-preview-body">
+        {undone === null
+          ? `${result.created} created · ${result.updated} updated · ${result.skipped} skipped. The receipt records overwritten values and remains available until you undo it.`
+          : `${undone} ${undone === 1 ? "person was" : "people were"} restored. The receipt remains available for audit.`}
       </div>
-    </div>
+      <div class="people-hint">Receipt <span class="tabular">{result.import_id}</span></div>
+    </div> : <>
+      <AgentBriefPanel copy={peopleImportBrief(window.location.origin)} />
+
+      <div class="people-field">
+        <span>Or just drop a file</span>
+        <div
+          class={`people-dropzone ${hot ? "hot" : ""}`}
+          onDragOver={(event) => { event.preventDefault(); setHot(true); }}
+          onDragLeave={() => setHot(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setHot(false);
+            void read(event.dataTransfer?.files?.[0]);
+          }}
+        >
+          <span class="people-kpi-name">{file ? file.name : "speakers.csv"}</span>
+          <div class="people-hint">
+            Drop a CSV here, or choose one. Columns are mapped by their headers — the same endpoint your
+            agent would call.
+          </div>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            aria-label="Choose a CSV of people"
+            onChange={(event) => void read((event.currentTarget as HTMLInputElement).files?.[0])}
+          />
+        </div>
+      </div>
+    </>}
 
     {error ? <div class="people-state error" role="alert">{error}</div> : <div />}
   </Modal>;

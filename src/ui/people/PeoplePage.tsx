@@ -330,9 +330,12 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
     {modal === "import" ? <ImportPeopleModal
       onClose={() => setModal("")}
       onImported={(result) => {
-        setModal("");
         setReloadToken((token) => token + 1);
-        announce(`${result.created} created · ${result.updated} updated · ${result.skipped} skipped`);
+        announce(`${result.created} created · ${result.updated} updated · ${result.skipped} skipped · receipt ready to undo`);
+      }}
+      onUndone={(undone) => {
+        setReloadToken((token) => token + 1);
+        announce(`${undone} ${undone === 1 ? "person" : "people"} restored from the import receipt`);
       }}
     /> : null}
 
