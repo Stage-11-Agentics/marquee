@@ -16,6 +16,7 @@ import {
   ERROR_TREATMENTS,
   MarqueeApiError,
   describeError,
+  errorSummary,
   fieldError,
   onUnauthenticated,
   referenceCode,
@@ -195,6 +196,60 @@ describe("the beacon throttle", () => {
     expect(errorSignature("boom", "    at renderWaves (a.ts:1:1)")).not.toBe(
       errorSignature("boom", "    at renderTasks (b.ts:1:1)"),
     );
+  });
+});
+
+describe("MRQ-169 · a refusal the server wrote for this case", () => {
+  test("CONTRACT · a 422 with an authored message keeps that sentence, plus the reference", async () => {
+    const requestId = "3c9d1b70-1111-2222-3333-444455556666";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      error: {
+        code: "unprocessable",
+        field: "reviewer_person_id",
+        message: "Sam Whitfield reviews Evals and Infra; this abstract carries RAG/Retrieval. Widen their responsibilities or pick another reviewer.",
+      },
+      request_id: requestId,
+    }), { status: 422, headers: { "content-type": "application/json" } })));
+    try {
+      const failure = await apiFetch("/api/v1/events/evt/rounds/rnd/assignments", {
+        method: "POST",
+        route: "/api/v1/events/{eventId}/rounds/{roundId}/assignments",
+      }).catch((error: unknown) => error) as MarqueeApiError;
+      expect(describeError(failure).sentence).toContain("Sam Whitfield reviews Evals and Infra");
+      expect(describeError(failure).sentence).not.toContain("state it cannot be in");
+      expect(errorSummary(failure)).toContain("ref 3c9d1b");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("CONTRACT · a refusal with no message of its own still lands on the taxonomy sentence", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { code: "unprocessable" } }), {
+      status: 422,
+      headers: { "content-type": "application/json" },
+    })));
+    try {
+      const failure = await apiFetch("/api/v1/events/evt/rounds/rnd/assignments", {
+        method: "POST",
+        route: "/api/v1/events/{eventId}/rounds/{roundId}/assignments",
+      }).catch((error: unknown) => error) as MarqueeApiError;
+      expect(describeError(failure).sentence).toBe("That change would leave the program in a state it cannot be in.");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("CONTRACT · codes whose taxonomy sentence is the better answer keep it", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      error: { code: "forbidden", message: "evaluation management requires program access for this conference" },
+    }), { status: 403, headers: { "content-type": "application/json" } })));
+    try {
+      const failure = await apiFetch("/api/v1/events/evt/plans", { route: "/api/v1/events/{eventId}/plans" })
+        .catch((error: unknown) => error) as MarqueeApiError;
+      expect(describeError(failure).sentence).toBe("Your account does not have access to this.");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

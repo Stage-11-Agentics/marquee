@@ -160,13 +160,10 @@ async function assignedSubmissionIds(
     SELECT DISTINCT assignment.submission_id
     FROM round_assignments assignment
     JOIN submissions submission ON submission.id = assignment.submission_id
-    LEFT JOIN committee_members member
-      ON member.committee_id = assignment.committee_id AND member.person_id = ?
-    LEFT JOIN committees committee ON committee.id = assignment.committee_id
     WHERE assignment.round_id = ?
       AND submission.event_id = ?
       AND assignment.status IN ('assigned', 'complete')
-      AND (assignment.reviewer_person_id = ? OR (member.person_id IS NOT NULL AND committee.event_id = ?))
+      AND assignment.reviewer_person_id = ?
       AND NOT EXISTS (
         SELECT 1
         FROM evaluations evaluation
@@ -175,7 +172,7 @@ async function assignedSubmissionIds(
           AND evaluation.reviewer_person_id = ?
       )
     ORDER BY submission.updated_at DESC, submission.id
-  `).bind(personId, roundId, eventId, personId, eventId, personId).all<{ submission_id: string }>();
+  `).bind(roundId, eventId, personId, personId).all<{ submission_id: string }>();
   return result.results.map((row) => row.submission_id);
 }
 
@@ -189,13 +186,10 @@ async function comparisonCandidateIds(
     SELECT DISTINCT assignment.submission_id
     FROM round_assignments assignment
     JOIN submissions submission ON submission.id = assignment.submission_id
-    LEFT JOIN committee_members member
-      ON member.committee_id = assignment.committee_id AND member.person_id = ?
-    LEFT JOIN committees committee ON committee.id = assignment.committee_id
     WHERE assignment.round_id = ?
       AND submission.event_id = ?
       AND assignment.status IN ('assigned', 'complete')
-      AND (assignment.reviewer_person_id = ? OR (member.person_id IS NOT NULL AND committee.event_id = ?))
+      AND assignment.reviewer_person_id = ?
       AND NOT EXISTS (
         SELECT 1
         FROM comparisons comparison
@@ -207,7 +201,7 @@ async function comparisonCandidateIds(
           )
       )
     ORDER BY submission.updated_at DESC, submission.id
-  `).bind(personId, roundId, eventId, personId, eventId, roundId, personId).all<{ submission_id: string }>();
+  `).bind(roundId, eventId, personId, roundId, personId).all<{ submission_id: string }>();
   return result.results.map((row) => row.submission_id);
 }
 
@@ -259,19 +253,16 @@ async function completedSubmissionIds(
     SELECT DISTINCT assignment.submission_id
     FROM round_assignments assignment
     JOIN submissions submission ON submission.id = assignment.submission_id
-    LEFT JOIN committee_members member
-      ON member.committee_id = assignment.committee_id AND member.person_id = ?
-    LEFT JOIN committees committee ON committee.id = assignment.committee_id
     JOIN evaluations evaluation
       ON evaluation.round_id = assignment.round_id
       AND evaluation.submission_id = assignment.submission_id
       AND evaluation.reviewer_person_id = ?
     WHERE assignment.round_id = ?
       AND submission.event_id = ?
-      AND (assignment.reviewer_person_id = ? OR (member.person_id IS NOT NULL AND committee.event_id = ?))
+      AND assignment.reviewer_person_id = ?
     ORDER BY evaluation.updated_at DESC, assignment.submission_id
     LIMIT ?
-  `).bind(personId, personId, roundId, eventId, personId, eventId, COMPLETED_PAGE + 1).all<{ submission_id: string }>();
+  `).bind(personId, roundId, eventId, personId, COMPLETED_PAGE + 1).all<{ submission_id: string }>();
   return result.results.map((row) => row.submission_id);
 }
 
@@ -724,19 +715,8 @@ const writeComparisonRoute = defineApiRoute(
       SET status = 'complete', updated_at = ?
       WHERE round_id = ?
         AND submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-        AND (
-          reviewer_person_id = ?
-          OR EXISTS (
-            SELECT 1 FROM committee_members member
-            JOIN committees committee ON committee.id = member.committee_id
-            JOIN evaluation_rounds assigned_round ON assigned_round.id = round_assignments.round_id
-            JOIN evaluation_plans assigned_plan ON assigned_plan.id = assigned_round.plan_id
-            WHERE member.committee_id = round_assignments.committee_id
-              AND member.person_id = ?
-              AND committee.event_id = assigned_plan.event_id
-          )
-        )
-    `).bind(now, roundId, JSON.stringify(body.submission_ids), reviewerPersonId, reviewerPersonId).run();
+        AND reviewer_person_id = ?
+    `).bind(now, roundId, JSON.stringify(body.submission_ids), reviewerPersonId).run();
     return context.json({
       id,
       ranking,

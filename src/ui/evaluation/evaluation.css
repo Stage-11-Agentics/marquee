@@ -102,6 +102,31 @@
 .criterion-total.valid strong { color: var(--success); }
 .criterion-total.invalid strong { color: var(--danger); }
 .message-preview { background: var(--sunk); border: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.55; padding: 10px 12px; }
+/* A refusal renders inside the dialog that caused it, in reserved space: the
+   page banner behind the backdrop is invisible, and a slot that appears from
+   nothing would push the footer buttons out from under the pointer. */
+.eval-dialog-error { color: var(--danger); font: 11px/1.45 var(--mono); min-height: 16px; }
+/* The outcome slot is a FIXED box, not a growing one: the report replaces the
+   explainer without moving the footer buttons, and a long reviewer list scrolls
+   inside it rather than pushing Distribute out from under the pointer. */
+.distribution-outcome { display: grid; height: 186px; }
+.coverage-report { background: var(--sunk); border: 1px solid var(--line); display: grid; font-size: 11px; gap: 6px; grid-auto-rows: max-content; line-height: 1.55; overflow-y: auto; padding: 10px 12px; }
+.distribution-outcome .message-preview { overflow-y: auto; }
+.coverage-report strong { color: var(--ink); font-size: 12.5px; }
+.coverage-gap { color: var(--danger); }
+.coverage-reviewers { border-top: 1px solid var(--line); display: grid; gap: 3px; margin-top: 3px; padding-top: 7px; }
+.coverage-reviewer { color: var(--muted); display: flex; gap: 10px; justify-content: space-between; }
+.coverage-reviewer strong { color: var(--ink-soft); font-size: 11px; }
+.committee-intro-actions { align-items: center; display: flex; gap: 10px; }
+.pool-list { display: grid; gap: 14px; }
+.pool-block { border: 1px solid var(--line); border-radius: var(--radius); padding: 11px 13px; }
+.pool-head { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; }
+.pool-head strong { display: block; font: 600 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.pool-head .subtle { display: block; font-size: 11px; margin-top: 4px; }
+.pool-empty { color: var(--muted); font-size: 11px; margin: 10px 0 2px; }
+.pool-create { align-items: end; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; }
+.pool-create .field { display: grid; gap: 5px; }
+.pool-create input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 32px; padding: 6px 8px; width: 100%; }
 
 /* Invite reviewer — the provisioning dialog (MRQ-107). */
 .invite-tracks { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }

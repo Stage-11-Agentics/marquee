@@ -328,13 +328,17 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect((await json<{ round: { mode: string } }>(switched)).round.mode).toBe("comparison");
   });
 
-  test("AC-98 · round-two assignment reuses the track guard and writes no out-of-scope row", async () => {
+  test("AC-98 · round-two distribution reports what no reviewer can cover and writes no out-of-scope row", async () => {
     const before = await env.DB.prepare("SELECT COUNT(*) AS count FROM round_assignments WHERE round_id = ? AND submission_id = ?").bind(ROUND_TWO_ID, SUBMISSION_OUT_OF_SCOPE).first<{ count: number }>();
-    const rejected = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_TWO_ID}/assignments`, {
+    // MRQ-169: an abstract nobody in the pool is responsible for is a coverage
+    // fact the organizer needs, not an error that discards the whole run.
+    const uncoverable = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_TWO_ID}/assignments`, {
       method: "POST",
       body: JSON.stringify({ committee_id: COMMITTEE_ID, mode: "everyone", submission_ids: [SUBMISSION_OUT_OF_SCOPE] }),
     });
-    expect(rejected.status).toBe(422);
+    expect(uncoverable.status).toBe(200);
+    expect(await json<{ assigned_new: number; uncovered: number; uncovered_tracks: string[] }>(uncoverable))
+      .toMatchObject({ assigned_new: 0, uncovered: 1, uncovered_tracks: ["Security"] });
     const after = await env.DB.prepare("SELECT COUNT(*) AS count FROM round_assignments WHERE round_id = ? AND submission_id = ?").bind(ROUND_TWO_ID, SUBMISSION_OUT_OF_SCOPE).first<{ count: number }>();
     expect(Number(after?.count)).toBe(Number(before?.count ?? 0));
 
@@ -577,5 +581,285 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     `).bind(EVENT_ID).all<{ committee_id: string | null; id: string }>();
     expect(after.results.find((round) => round.id === ROUND_ONE_ID)?.committee_id).toBe(COMMITTEE_ID);
     expect(after.results.filter((round) => before.results.some((item) => item.id === round.id)).every((round) => round.committee_id === body.id)).toBe(true);
+  });
+});
+
+/**
+ * MRQ-169 — one idea of an assignment.
+ *
+ * The rebuild's contract in one place: distribution is scope-aware, balanced,
+ * idempotent and honest about what it could not cover; a round past the first
+ * reviews what was promoted into it; a reviewer's queue is exactly their rows;
+ * a recorded review can be read back and revised; and every refusal names the
+ * rule and the fix.
+ */
+const M169_TRACK_AGENTS = "track-mrq169-agents";
+const M169_TRACK_EVALS = "track-mrq169-evals";
+const M169_TRACK_LEADERSHIP = "track-mrq169-leadership";
+const M169_ORGANIZER_SESSION = "sess-mrq169-organizer";
+const M169_SAM_SESSION = "sess-mrq169-sam";
+const M169_SAM = "per-mrq169-sam";
+const M169_RIVA = "per-mrq169-riva";
+const M169_COMMITTEE = "committee-mrq169";
+const M169_PLAN = "plan-mrq169";
+const M169_ROUND_ONE = "round-mrq169-one";
+const M169_ROUND_TWO = "round-mrq169-two";
+const M169_AGENTS_ONE = "sub-mrq169-agents-one";
+const M169_AGENTS_TWO = "sub-mrq169-agents-two";
+const M169_EVALS = "sub-mrq169-evals";
+const M169_LEADERSHIP = "sub-mrq169-leadership";
+const M169_CRITERION_RATING = "criterion-mrq169-originality";
+const M169_CRITERION_CHOICE = "criterion-mrq169-recommendation";
+const M169_CRITERION_TEXT = "criterion-mrq169-comments";
+
+async function as(cookie: string, path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("cookie", cookie);
+  if (init.body !== undefined) headers.set("content-type", "application/json");
+  return SELF.fetch(`${ORIGIN}${path}`, { ...init, headers });
+}
+
+async function seedAssignmentModelFixture(): Promise<void> {
+  await applyMigrations();
+  const now = Date.now();
+  for (const row of demoFixtureRows(now)) await env.DB.prepare(row.statement).bind(...row.bindings).run();
+  const person = (id: string, name: string, email: string) => env.DB.prepare(
+    "INSERT INTO people (id, org_id, email, name, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, '[]', 1, 'marquee', ?, ?)",
+  ).bind(id, DEMO_ORGANIZATION_ID, email, name, now, now);
+  const reviewerMembership = (id: string, personId: string) => env.DB.prepare(
+    "INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'reviewer', ?, ?)",
+  ).bind(id, DEMO_ORGANIZATION_ID, EVENT_ID, personId, now, now);
+  const session = (id: string, personId: string, hint: string) => env.DB.prepare(
+    "INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, ?, ?, 'fixture', NULL, ?, ?)",
+  ).bind(id, personId, hint, now + 86_400_000, now, now);
+  const track = (id: string, name: string, position: number) => env.DB.prepare(
+    "INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, ?, '#0b6a72', ?, ?, ?)",
+  ).bind(id, EVENT_ID, name, position, now, now);
+  const submission = (id: string, title: string) => env.DB.prepare(`
+    INSERT INTO submissions (id, event_id, kind, bypass_evaluation, title, abstract, status, origin, submitter_person_id, submitted_at, last_saved_at, search_blob, created_at, updated_at)
+    VALUES (?, ?, 'abstract', 0, ?, ?, 'in_review', 'public', ?, ?, ?, ?, ?, ?)
+  `).bind(id, EVENT_ID, title, `${title} abstract`, ORGANIZER_ID, now, now, title.toLowerCase(), now, now);
+  const carries = (id: string, submissionId: string, trackId: string) => env.DB.prepare(
+    "INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
+  ).bind(id, submissionId, trackId, now, now);
+  const scope = (id: string, personId: string, trackId: string) => env.DB.prepare(
+    "INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+  ).bind(id, EVENT_ID, personId, trackId, now, now);
+
+  await env.DB.batch([
+    session(M169_ORGANIZER_SESSION, ORGANIZER_ID, "organizer"),
+    person(M169_SAM, "Sam Whitfield", "sam@mrq169.example"),
+    person(M169_RIVA, "Riva Okonjo", "riva@mrq169.example"),
+    reviewerMembership("mem-mrq169-sam", M169_SAM),
+    reviewerMembership("mem-mrq169-riva", M169_RIVA),
+    session(M169_SAM_SESSION, M169_SAM, "reviewer"),
+    track(M169_TRACK_AGENTS, "Agents", 0),
+    track(M169_TRACK_EVALS, "Evals", 1),
+    track(M169_TRACK_LEADERSHIP, "Leadership", 2),
+    submission(M169_AGENTS_ONE, "Taming 40-Minute CI"),
+    submission(M169_AGENTS_TWO, "Your AI Pair Programmer"),
+    submission(M169_EVALS, "Docs That Answer Back"),
+    submission(M169_LEADERSHIP, "Running a program team"),
+    carries("st-mrq169-a1", M169_AGENTS_ONE, M169_TRACK_AGENTS),
+    carries("st-mrq169-a2", M169_AGENTS_TWO, M169_TRACK_AGENTS),
+    carries("st-mrq169-e", M169_EVALS, M169_TRACK_EVALS),
+    carries("st-mrq169-l", M169_LEADERSHIP, M169_TRACK_LEADERSHIP),
+    scope("rts-mrq169-sam-agents", M169_SAM, M169_TRACK_AGENTS),
+    scope("rts-mrq169-sam-evals", M169_SAM, M169_TRACK_EVALS),
+    scope("rts-mrq169-riva-agents", M169_RIVA, M169_TRACK_AGENTS),
+    env.DB.prepare("INSERT INTO evaluation_plans (id, event_id, name, instructions, scale_min, scale_max, status, created_at, updated_at) VALUES (?, ?, 'Assignment model', 'Read it, then recommend.', 1, 5, 'open', ?, ?)").bind(M169_PLAN, EVENT_ID, now, now),
+    env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, 'Program reviewers', ?, ?)").bind(M169_COMMITTEE, EVENT_ID, now, now),
+    env.DB.prepare("INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, committee_id, target_reviews_per_submission, created_at, updated_at) VALUES (?, ?, 0, 'Initial review', 'scorecard', 0, ?, 2, ?, ?)").bind(M169_ROUND_ONE, M169_PLAN, M169_COMMITTEE, now, now),
+    env.DB.prepare("INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, committee_id, target_reviews_per_submission, created_at, updated_at) VALUES (?, ?, 1, 'Final review', 'scorecard', 0, ?, 1, ?, ?)").bind(M169_ROUND_TWO, M169_PLAN, M169_COMMITTEE, now, now),
+    env.DB.prepare("INSERT INTO committee_members (id, committee_id, person_id, role, created_at, updated_at) VALUES ('cm-mrq169-sam', ?, ?, 'chair', ?, ?)").bind(M169_COMMITTEE, M169_SAM, now, now),
+    env.DB.prepare("INSERT INTO committee_members (id, committee_id, person_id, role, created_at, updated_at) VALUES ('cm-mrq169-riva', ?, ?, 'reviewer', ?, ?)").bind(M169_COMMITTEE, M169_RIVA, now, now),
+    env.DB.prepare("INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES (?, ?, 'Originality', 'numeric', NULL, 1, 5, 100, 0, ?, ?)").bind(M169_CRITERION_RATING, M169_ROUND_ONE, now, now),
+    env.DB.prepare("INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES (?, ?, 'Recommendation', 'select', ?, NULL, NULL, 0, 1, ?, ?)").bind(M169_CRITERION_CHOICE, M169_ROUND_ONE, JSON.stringify(["Accept", "Maybe", "Reject"]), now, now),
+    env.DB.prepare("INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES (?, ?, 'Comments', 'text', NULL, NULL, NULL, 0, 2, ?, ?)").bind(M169_CRITERION_TEXT, M169_ROUND_ONE, now, now),
+  ]);
+}
+
+interface CoverageReport {
+  already_assigned: number;
+  assigned_new: number;
+  cap_reached: boolean;
+  fully_covered: number;
+  partially_covered: number;
+  reviewers: Array<{ assigned_count: number; name: string; person_id: string }>;
+  submissions_total: number;
+  uncovered: number;
+  uncovered_tracks: string[];
+}
+
+async function distribute(body: Record<string, unknown>, roundId = M169_ROUND_ONE): Promise<Response> {
+  return as(`mq_session=${M169_ORGANIZER_SESSION}`, `/api/v1/events/${EVENT_ID}/rounds/${roundId}/assignments`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+async function assignmentRows(roundId: string): Promise<Array<{ reviewer_person_id: string | null; submission_id: string }>> {
+  const rows = await env.DB.prepare(
+    "SELECT submission_id, reviewer_person_id FROM round_assignments WHERE round_id = ? ORDER BY submission_id, reviewer_person_id",
+  ).bind(roundId).all<{ reviewer_person_id: string | null; submission_id: string }>();
+  return rows.results;
+}
+
+describe.sequential("MRQ-169 one idea of an assignment", () => {
+  beforeAll(seedAssignmentModelFixture, 15_000);
+
+  test("CONTRACT · distribution covers what the pool can reach, balances it, and reports the rest", async () => {
+    const response = await distribute({ committee_id: M169_COMMITTEE, mode: "n_per_submission", reviewers_per_submission: 2 });
+    expect(response.status).toBe(200);
+    const report = await json<CoverageReport>(response);
+
+    // Sam reviews Agents and Evals, Riva only Agents, and nobody holds
+    // Leadership — so the run writes what it can and names what it cannot.
+    expect(report).toMatchObject({
+      submissions_total: 4,
+      assigned_new: 5,
+      already_assigned: 0,
+      fully_covered: 2,
+      partially_covered: 1,
+      uncovered: 1,
+      uncovered_tracks: ["Leadership"],
+      cap_reached: false,
+    });
+    expect(report.reviewers.map((reviewer) => [reviewer.name, reviewer.assigned_count]))
+      .toEqual([["Riva Okonjo", 2], ["Sam Whitfield", 3]]);
+    expect(await assignmentRows(M169_ROUND_ONE)).toEqual([
+      { submission_id: M169_AGENTS_ONE, reviewer_person_id: M169_RIVA },
+      { submission_id: M169_AGENTS_ONE, reviewer_person_id: M169_SAM },
+      { submission_id: M169_AGENTS_TWO, reviewer_person_id: M169_RIVA },
+      { submission_id: M169_AGENTS_TWO, reviewer_person_id: M169_SAM },
+      { submission_id: M169_EVALS, reviewer_person_id: M169_SAM },
+    ]);
+  });
+
+  test("CONTRACT · re-running a distribution tops it up rather than doubling it", async () => {
+    const rerun = await distribute({ committee_id: M169_COMMITTEE, mode: "n_per_submission", reviewers_per_submission: 2 });
+    expect(rerun.status).toBe(200);
+    expect(await json<CoverageReport>(rerun)).toMatchObject({ assigned_new: 0, already_assigned: 5 });
+    expect(await assignmentRows(M169_ROUND_ONE)).toHaveLength(5);
+  });
+
+  test("CONTRACT · a later round reviews what was promoted into it, and says so when nothing has been", async () => {
+    const empty = await distribute({ committee_id: M169_COMMITTEE, mode: "n_per_submission", reviewers_per_submission: 1 }, M169_ROUND_TWO);
+    expect(empty.status).toBe(422);
+    const refusal = await json<{ error: { message: string } }>(empty);
+    expect(refusal.error.message).toContain("promoted into Final review");
+    expect(await assignmentRows(M169_ROUND_TWO)).toEqual([]);
+
+    const promoted = await as(`mq_session=${M169_ORGANIZER_SESSION}`, `/api/v1/events/${EVENT_ID}/rounds/${M169_ROUND_ONE}/promote`, {
+      method: "POST",
+      body: JSON.stringify({ preview: false, selector: { ids: [M169_AGENTS_ONE, M169_AGENTS_TWO] } }),
+    });
+    expect(promoted.status).toBe(200);
+
+    // Round two targets the promoted abstracts only — never every submitted one
+    // — and the per-reviewer limit spreads them one apiece and says it bound.
+    const distributed = await distribute({ committee_id: M169_COMMITTEE, mode: "n_per_submission", reviewers_per_submission: 1, max_per_reviewer: 1 }, M169_ROUND_TWO);
+    expect(distributed.status).toBe(200);
+    expect(await json<CoverageReport>(distributed)).toMatchObject({
+      submissions_total: 2,
+      assigned_new: 2,
+      uncovered: 0,
+      cap_reached: true,
+    });
+    expect(await assignmentRows(M169_ROUND_TWO)).toEqual([
+      { submission_id: M169_AGENTS_ONE, reviewer_person_id: M169_RIVA },
+      { submission_id: M169_AGENTS_TWO, reviewer_person_id: M169_SAM },
+    ]);
+  });
+
+  test("CONTRACT · the reviewer's queue is exactly the rows they hold", async () => {
+    const queue = await as(`mq_session=${M169_SAM_SESSION}`, `/api/v1/events/${EVENT_ID}/rounds/${M169_ROUND_ONE}/queue`);
+    expect(queue.status).toBe(200);
+    const body = await json<{ data: Array<{ id: string; title: string }>; total: number }>(queue);
+    const titles = body.data.map((item) => item.title);
+    expect(titles).toContain("Taming 40-Minute CI");
+    expect(titles).toContain("Your AI Pair Programmer");
+    expect(titles).toContain("Docs That Answer Back");
+    expect(titles).not.toContain("Running a program team");
+    expect(body.total).toBe(body.data.length);
+
+    // Riva holds two of the three, and the queue header counts exactly those.
+    await env.DB.prepare("DELETE FROM round_assignments WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?")
+      .bind(M169_ROUND_ONE, M169_EVALS, M169_SAM).run();
+    const narrowed = await as(`mq_session=${M169_SAM_SESSION}`, `/api/v1/events/${EVENT_ID}/rounds/${M169_ROUND_ONE}/queue`);
+    const narrowedBody = await json<{ data: Array<{ title: string }> }>(narrowed);
+    expect(narrowedBody.data.map((item) => item.title)).not.toContain("Docs That Answer Back");
+  });
+
+  test("CONTRACT · a recorded review reads back whole and a revision replaces it in place", async () => {
+    const record = async (values: Record<string, unknown>) => as(
+      `mq_session=${M169_SAM_SESSION}`,
+      `/api/v1/events/${EVENT_ID}/rounds/${M169_ROUND_ONE}/submissions/${M169_AGENTS_ONE}/evaluations`,
+      { method: "POST", body: JSON.stringify(values) },
+    );
+    const first = await record({
+      recommendation: "maybe",
+      score: 2,
+      comment: "Needs measurements.",
+      criteria_scores: { [M169_CRITERION_RATING]: 2, [M169_CRITERION_CHOICE]: "Maybe", [M169_CRITERION_TEXT]: "Ask for clean and incremental builds." },
+    });
+    expect(first.status).toBe(200);
+
+    const queue = await as(`mq_session=${M169_SAM_SESSION}`, `/api/v1/events/${EVENT_ID}/rounds/${M169_ROUND_ONE}/queue`);
+    const completed = (await json<{ completed: Array<{ id: string; review: { comment: string; criteria_scores: Record<string, unknown>; recommendation: string; score: number } }> }>(queue)).completed;
+    const saved = completed.find((item) => item.id === M169_AGENTS_ONE);
+    expect(saved?.review).toMatchObject({ recommendation: "maybe", score: 2, comment: "Needs measurements." });
+    expect(saved?.review.criteria_scores).toEqual({
+      [M169_CRITERION_RATING]: 2,
+      [M169_CRITERION_CHOICE]: "Maybe",
+      [M169_CRITERION_TEXT]: "Ask for clean and incremental builds.",
+    });
+
+    const revised = await record({
+      recommendation: "approve",
+      score: 4,
+      comment: "The measurements arrived.",
+      criteria_scores: { [M169_CRITERION_RATING]: 4, [M169_CRITERION_CHOICE]: "Accept", [M169_CRITERION_TEXT]: "Clean and incremental both improved." },
+    });
+    expect(revised.status).toBe(200);
+    const rows = await env.DB.prepare(
+      "SELECT recommendation, score, comment, criteria_scores FROM evaluations WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?",
+    ).bind(M169_ROUND_ONE, M169_AGENTS_ONE, M169_SAM).all<{ comment: string; criteria_scores: string; recommendation: string; score: number }>();
+    // One row, revised — never a second opinion from the same reviewer.
+    expect(rows.results).toHaveLength(1);
+    expect(rows.results[0]).toMatchObject({ recommendation: "approve", score: 4, comment: "The measurements arrived." });
+    expect(JSON.parse(rows.results[0]!.criteria_scores)).toEqual({
+      [M169_CRITERION_RATING]: 4,
+      [M169_CRITERION_CHOICE]: "Accept",
+      [M169_CRITERION_TEXT]: "Clean and incremental both improved.",
+    });
+  });
+
+  test("CONTRACT · a direct assignment refusal names both sides of the rule and the fix", async () => {
+    const refused = await distribute({ submission_id: M169_LEADERSHIP, reviewer_person_id: M169_SAM });
+    expect(refused.status).toBe(422);
+    const body = await json<{ error: { field: string; message: string } }>(refused);
+    expect(body.error.field).toBe("reviewer_person_id");
+    expect(body.error.message).toContain("Sam Whitfield reviews Agents and Evals");
+    expect(body.error.message).toContain("this abstract carries Leadership");
+    expect(body.error.message).toContain("Widen their responsibilities or pick another reviewer");
+  });
+
+  test("CONTRACT · removing a reviewer from a pool keeps their reviews and their existing assignments", async () => {
+    const before = await assignmentRows(M169_ROUND_ONE);
+    const removed = await as(`mq_session=${M169_ORGANIZER_SESSION}`, `/api/v1/events/${EVENT_ID}/committees/${M169_COMMITTEE}/reviewers/${M169_SAM}`, { method: "DELETE" });
+    expect(removed.status).toBe(200);
+    expect(await json<{ assignments_retained: number; evaluations_preserved: boolean; removed: boolean }>(removed))
+      .toMatchObject({ evaluations_preserved: true, removed: true });
+    expect(await assignmentRows(M169_ROUND_ONE)).toEqual(before);
+    const evaluation = await env.DB.prepare("SELECT recommendation FROM evaluations WHERE reviewer_person_id = ? AND submission_id = ?")
+      .bind(M169_SAM, M169_AGENTS_ONE).first<{ recommendation: string }>();
+    expect(evaluation?.recommendation).toBe("approve");
+
+    // The pool is what distribution reads, so the next run uses who is left.
+    const seat = await env.DB.prepare("SELECT COUNT(*) AS count FROM committee_members WHERE committee_id = ?").bind(M169_COMMITTEE).first<{ count: number }>();
+    expect(Number(seat?.count)).toBe(1);
+    const missing = await as(`mq_session=${M169_ORGANIZER_SESSION}`, `/api/v1/events/${EVENT_ID}/committees/${M169_COMMITTEE}/reviewers/${M169_SAM}`, { method: "DELETE" });
+    expect(missing.status).toBe(404);
   });
 });

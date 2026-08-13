@@ -534,7 +534,9 @@ function itemSelect(
   ${participantListSql({
     submissionId: "s.id",
     audience: "program",
-    fields: { id: "speaker.id", name: "speaker.name", company: "speaker.company" },
+    // The role travels with the name: the results table's "+1" has to be able
+    // to say who the other person is and what they are doing on the session.
+    fields: { id: "speaker.id", name: "speaker.name", company: "speaker.company", role: "participation.role" },
   })} AS speakers_json,
   COALESCE((
     SELECT json_group_array(json_object(

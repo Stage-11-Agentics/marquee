@@ -90,22 +90,24 @@ const REVIEWER_TRACK_SCOPE_SQL = `
   )
 `;
 
+/**
+ * An assignment is a (round, submission, reviewer) row — always.
+ *
+ * A committee is a reviewer pool, never an assignment shape. When a blanket
+ * `committee_id` row also counted as "assigned to everyone in it", the queue
+ * and the progress dashboard read the same table and disagreed: a reviewer
+ * given two abstracts opened a queue of thirty-seven, and none of the blanket
+ * work could be counted or chased. Distribution materializes pool decisions
+ * into rows; this predicate reads exactly those rows.
+ */
 const REVIEWER_ASSIGNMENT_SCOPE_SQL = `
   EXISTS (
     SELECT 1
     FROM round_assignments assignment
-    LEFT JOIN committee_members member
-      ON member.committee_id = assignment.committee_id
-     AND member.person_id = ?
-    LEFT JOIN committees committee
-      ON committee.id = assignment.committee_id
     WHERE assignment.round_id = ?
       AND assignment.submission_id = submission.id
       AND assignment.status IN ('assigned', 'complete')
-      AND (
-        assignment.reviewer_person_id = ?
-        OR (member.person_id IS NOT NULL AND committee.event_id = submission.event_id)
-      )
+      AND assignment.reviewer_person_id = ?
   )
 `;
 
@@ -151,7 +153,7 @@ export async function authorizeReviewerScope(
         AND ${REVIEWER_ASSIGNMENT_SCOPE_SQL}
       ) AS allowed
     `)
-    .bind(request.submissionId, request.eventId, personId, personId, request.roundId, personId)
+    .bind(request.submissionId, request.eventId, personId, request.roundId, personId)
     .first<AllowedRow>();
 
   if (allowed?.allowed !== 1) {
@@ -197,7 +199,6 @@ export async function authorizeReviewerQueueScope(
     `).bind(
       request.eventId,
       ...chunk,
-      personId,
       personId,
       request.roundId,
       personId,

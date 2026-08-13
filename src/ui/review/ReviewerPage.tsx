@@ -214,6 +214,16 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detail, setDetail] = useState<SubmissionDetail | null>(null);
+  /**
+   * The review being revised, if any.
+   *
+   * A recorded review used to be readable only as four sections down inside
+   * the full-submission modal, and correctable not at all — even though the
+   * write endpoint has always been an upsert. Revision re-enters the ordinary
+   * review layout with the stored values in place, so "see exactly what you
+   * recorded" and "change it" are the same screen.
+   */
+  const [revising, setRevising] = useState<CompletedItem | null>(null);
   const cardRef = useRef<HTMLElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
 
@@ -265,7 +275,7 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
     const index = currentId === null ? -1 : queue.findIndex((item) => item.id === currentId);
     return index >= 0 ? index : 0;
   }, [currentId, queue]);
-  const current = queue[currentIndex] ?? null;
+  const current = revising ?? queue[currentIndex] ?? null;
   const currentReview = current ? drafts[current.id] ?? EMPTY_REVIEW : EMPTY_REVIEW;
 
   const exitQueue = (): void => {
@@ -295,6 +305,29 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
       else next[criterionId] = value;
       return { ...previous, [current.id]: { ...draft, criteria: next } };
     });
+  };
+
+  /** Re-enter the review layout with what the reviewer already recorded. */
+  const openRevision = (item: CompletedItem): void => {
+    setDrafts((previous) => ({
+      ...previous,
+      [item.id]: {
+        abstained: item.review?.abstained ?? false,
+        comment: item.review?.comment ?? "",
+        criteria: item.review?.criteria_scores ?? {},
+        recommendation: item.review?.recommendation ?? null,
+        score: item.review?.score ?? null,
+      },
+    }));
+    setError(null);
+    setNotice(null);
+    setRevising(item);
+    requestAnimationFrame(() => cardRef.current?.scrollIntoView({ block: "start" }));
+  };
+
+  const leaveRevision = (): void => {
+    setRevising(null);
+    setNotice(null);
   };
 
   const openDetailFor = async (submissionId: string): Promise<void> => {
@@ -342,6 +375,24 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
       // Keep a failed write from erasing the reviewer's in-progress scorecard.
       // The draft becomes the submitted state only after the server accepts it.
       setDrafts((previous) => ({ ...previous, [current.id]: review }));
+      if (revising) {
+        const savedAt = Date.now();
+        const updated: DetailReview = {
+          abstained: review.abstained,
+          actor_id: revising.review?.actor_id ?? "",
+          comment: review.comment,
+          created_at: revising.review?.created_at ?? savedAt,
+          criteria_scores: Object.keys(review.criteria).length ? review.criteria : null,
+          decision_proposal: null,
+          recommendation: review.abstained ? null : review.recommendation,
+          score: review.abstained ? null : review.score,
+          updated_at: savedAt,
+        };
+        setCompleted((previous) => previous.map((item) => item.id === revising.id ? { ...item, review: updated } : item));
+        setRevising(null);
+        setNotice(review.abstained ? "Conflict recorded · your review was replaced by the conflict" : `Review updated · ${recommendationLabel(review.recommendation)} recorded`);
+        return;
+      }
       const oldIndex = currentIndex;
       const nextQueue = queue.filter((item) => item.id !== current.id);
       const saved = current;
@@ -369,8 +420,9 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
   };
 
   const saveNext = async (): Promise<void> => {
-    if (!currentReview.recommendation || currentReview.abstained) return;
-    await commitReview(currentReview);
+    if (!currentReview.recommendation) return;
+    if (currentReview.abstained && !revising) return;
+    await commitReview({ ...currentReview, abstained: false });
   };
 
   const saveRecusal = async (): Promise<void> => {
@@ -460,7 +512,7 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
       </section>
       <section class="reviewer-responsibility" aria-label="Your track responsibility">
         <div><span class="eyebrow">Your responsibility</span><div class="scope-row">{scopes.length ? scopes.map((scope) => <Chip key={scope.id}><span class="scope-dot" style={{ background: scope.color }} />{scope.name}</Chip>) : <span class="subtle">No track scope is assigned.</span>}</div></div>
-        <p>A submission appears when it is assigned to you — directly or through your committee — and carries a track in your scope. Record, file, export, and review access use the same rule.</p>
+        <p>A submission appears when it is assigned to you in this round and carries a track in your scope. Record, file, export, and review access use the same rule.</p>
       </section>
       {!current ? <section class="reviewer-empty instrument"><span class="empty-mark" aria-hidden="true">✓</span><h2>{roundMode === "comparison" ? "Comparison queue clear" : "Queue clear"}</h2><p>{roundMode === "comparison" ? "There are not three submissions assigned to you within your track responsibility waiting for comparison." : "There are no unreviewed submissions assigned to you within your track responsibility."}</p><button type="button" class="button" onClick={() => void load()}>Check again</button></section> : roundMode === "comparison" ? <div class="comparison-board" data-comparison-round={roundId} data-mobile-review="comparison">
         {queue.slice(0, 3).map((item, index) => <article class="card comparison-card" key={item.id}>
@@ -487,7 +539,7 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
           </CardBody>
         </article>
         <Card class="review-score-card">
-          <div class="card-head"><div><h2>Your recommendation</h2><span class="subtle">Primary path · no numeric score required</span></div><span class="review-key-hint">A / M / D</span></div>
+          <div class="card-head"><div><h2>Your recommendation</h2><span class="subtle">{revising ? `Recorded ${new Date(revising.review?.updated_at ?? Date.now()).toLocaleString()} · saving updates your review` : "Primary path · no numeric score required"}</span></div><span class="review-key-hint">A / M / D</span></div>
           <CardBody>
             <div class="decision-buttons" data-reviewer-controls="recommendation" role="group" aria-label="Recommendation">
               {["approve", "maybe", "deny"].map((value) => <button type="button" class={`decision-button ${currentReview.recommendation === value ? "active" : ""}`} aria-pressed={currentReview.recommendation === value} onClick={() => updateReview({ recommendation: value as ReviewState["recommendation"] })}>{recommendationLabel(value as ReviewState["recommendation"])}</button>)}
@@ -507,7 +559,7 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
               </div>)}
             </div>}
             <label class="review-comment"><span>Committee note (optional)</span><textarea data-reviewer-control="comment" value={currentReview.comment} placeholder="Context for the committee" onInput={(event) => updateReview({ comment: (event.currentTarget as HTMLTextAreaElement).value })} /></label>
-            <div class="review-save-actions"><button type="button" class="button primary reviewer-save" data-reviewer-control="save-next" disabled={!currentReview.recommendation || saving} onClick={() => void saveNext()}>{saving ? "Saving…" : "Save recommendation & next →"}</button><button type="button" class="button reviewer-conflict" data-reviewer-control="declare-conflict" disabled={saving} onClick={() => void saveRecusal()}>Declare conflict</button></div>
+            <div class="review-save-actions"><button type="button" class="button primary reviewer-save" data-reviewer-control="save-next" disabled={!currentReview.recommendation || saving} onClick={() => void saveNext()}>{saving ? "Saving…" : revising ? "Update review" : "Save recommendation & next →"}</button><button type="button" class="button reviewer-conflict" data-reviewer-control="declare-conflict" disabled={saving} onClick={() => void saveRecusal()}>Declare conflict</button>{revising ? <button type="button" class="button reviewer-leave-revision" data-reviewer-control="leave-revision" disabled={saving} onClick={leaveRevision}>Back to queue</button> : null}</div>
             <p class="review-shortcuts">Keyboard: <span class="tabular">A M D</span> recommendation · <span class="tabular">1–5</span> score · <span class="tabular">Enter</span> save &amp; next</p>
           </CardBody>
         </Card>
@@ -515,14 +567,14 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
       {completed.length > 0 && <section class="reviewer-completed" aria-label="Completed reviews">
         <header class="reviewer-completed-head">
           <div><span class="eyebrow">Completed</span><h2><span class="tabular">{completed.length}</span> review{completed.length === 1 ? "" : "s"} submitted</h2></div>
-          <span class="subtle">{completedTruncated ? "Your most recent reviews. Reopen any of them to see exactly what was recorded." : "Reopen any of them to see exactly what was recorded."}</span>
+          <span class="subtle">{completedTruncated ? "Your most recent reviews. Reopen any of them to read and revise exactly what was recorded." : "Reopen any of them to read and revise exactly what was recorded."}</span>
         </header>
         <div class="reviewer-completed-list">
-          {completed.map((item) => <button type="button" class="reviewer-completed-row" key={item.id} onClick={() => void openDetailFor(item.id)}>
+          {completed.map((item) => <button type="button" class={`reviewer-completed-row${revising?.id === item.id ? " open" : ""}`} key={item.id} aria-current={revising?.id === item.id ? "true" : undefined} onClick={() => openRevision(item)}>
             <span class="completed-mark" aria-hidden="true">✓</span>
             <span class="completed-title">{item.title}</span>
             <span class="chip">{item.review?.abstained ? "Conflict" : item.review ? recommendationLabel(item.review.recommendation) : "Recorded"}</span>
-            <span class="completed-open">Reopen →</span>
+            <span class="completed-open">{revising?.id === item.id ? "Open below ↑" : "Reopen →"}</span>
           </button>)}
         </div>
       </section>}
@@ -533,6 +585,16 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
           <header class="reviewer-detail-head"><div><span class="eyebrow">{detail.blind_mode ? "Anonymous submission" : "Submission"} · queue position preserved</span><h2 id="reviewer-detail-title">{detail.title}</h2><p>{detail.blind_mode ? "Speaker identity and contact fields remain redacted while blind review is active." : "Evaluator-visible submission details."}</p></div><button type="button" class="reviewer-detail-close" onClick={closeDetail} aria-label="Close full submission">×</button></header>
           <div class="reviewer-detail-body">
             <div class="review-card-chips"><span class="chip">{detail.format ?? "Abstract"}</span>{detail.tracks.map((track, index) => <span class="chip" key={track.id} style={{ borderLeft: `3px solid ${track.color}` }}>{track.name}{index === 0 ? " · Primary" : ""}</span>)}<span class="chip tabular">{detail.id}</span></div>
+            {detail.review && <section class="reviewer-detail-section reviewer-detail-record"><h3>{detail.review.abstained ? "Conflict recorded" : "Your saved review"}</h3><div class="saved-review"><strong>{detail.review.abstained ? "Declared conflict" : recommendationLabel(detail.review.recommendation)}</strong><span>{detail.review.comment || "No committee note."}</span><small>Saved by reviewer <span class="tabular">{detail.review.actor_id}</span> · {new Date(detail.review.updated_at).toLocaleString()}</small></div>
+              {detail.review.criteria_scores && Object.keys(detail.review.criteria_scores).length > 0 && <dl class="review-field-grid saved-criteria" data-saved-criteria>
+                {Object.entries(detail.review.criteria_scores).map(([criterionId, value]) => <div class="review-field" key={criterionId}>
+                  <dt>{criteria.find((criterion) => criterion.id === criterionId)?.name ?? criterionId}</dt>
+                  <dd class="tabular">{String(value)}</dd>
+                </div>)}
+              </dl>}
+              {detail.review.score !== null && <p class="subtle">Overall score <span class="tabular">{detail.review.score}</span></p>}
+              <div class="saved-review-actions"><Button small onClick={() => { const item = completed.find((entry) => entry.id === detail.id); closeDetail(); if (item) openRevision(item); }}>Revise this review</Button></div>
+            </section>}
             <section class="reviewer-detail-section"><h3>Full abstract</h3><p class="detail-copy">{detail.abstract ?? "No abstract was submitted."}</p></section>
             <section class="reviewer-detail-section"><h3>Evaluator-visible submission fields</h3>{detail.fields.length ? <dl class="review-field-grid">{detail.fields.map((field) => <div class="review-field" key={field.key}><dt>{field.label}</dt><dd>{displayField(field)}</dd></div>)}</dl> : <p class="subtle">No additional conference fields were submitted.</p>}</section>
             <section class="reviewer-detail-section"><h3>Speaker details{detail.blind_mode ? " · blind mode" : ""}</h3><dl class="review-field-grid">
@@ -542,15 +604,6 @@ export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
               <div class="review-field"><dt>Biography</dt><dd>{detail.blind_mode ? <span class="blind-redaction">Redacted in anonymous review</span> : detail.identity?.bio ?? "Not recorded"}</dd></div>
             </dl></section>
             <section class="reviewer-detail-section"><h3>Attached files · {detail.files.length}</h3>{detail.files.length ? <div class="review-file-list">{detail.files.map((file) => <div class="review-file-row" key={file.id}><span class="review-file-icon">{file.content_type.split("/").pop()?.toUpperCase() ?? "FILE"}</span><div><strong>{file.filename}</strong><span>{file.content_type} · {formatFileSize(file.size_bytes)}</span></div><Chip tone={file.status === "ready" ? "success" : "warning"}>{file.status === "ready" ? "Available" : "Processing"}</Chip></div>)}</div> : <p class="subtle">No files attached to this submission.</p>}</section>
-            {detail.review && <section class="reviewer-detail-section"><h3>{detail.review.abstained ? "Conflict recorded" : "Your saved review"}</h3><div class="saved-review"><strong>{detail.review.abstained ? "Declared conflict" : recommendationLabel(detail.review.recommendation)}</strong><span>{detail.review.comment || "No committee note."}</span><small>Saved by reviewer <span class="tabular">{detail.review.actor_id}</span> · {new Date(detail.review.updated_at).toLocaleString()}</small></div>
-              {detail.review.criteria_scores && Object.keys(detail.review.criteria_scores).length > 0 && <dl class="review-field-grid saved-criteria" data-saved-criteria>
-                {Object.entries(detail.review.criteria_scores).map(([criterionId, value]) => <div class="review-field" key={criterionId}>
-                  <dt>{criteria.find((criterion) => criterion.id === criterionId)?.name ?? criterionId}</dt>
-                  <dd class="tabular">{String(value)}</dd>
-                </div>)}
-              </dl>}
-              {detail.review.score !== null && <p class="subtle">Overall score <span class="tabular">{detail.review.score}</span></p>}
-            </section>}
           </div>
           <footer class="reviewer-detail-actions"><span class="subtle">Queue ID <span class="tabular">{detail.id}</span> · position <span class="tabular">{currentIndex + 1}</span> preserved</span><Button variant="primary" onClick={closeDetail}>Close &amp; return to queue</Button></footer>
         </>}

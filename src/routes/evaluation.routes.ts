@@ -14,6 +14,7 @@ import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { comparisonWinCounts, validateComparisonRanking } from "../lib/evaluation-comparisons";
 import { enqueueOutbox } from "../jobs/mail/outbox";
 import { mergeDataForReviewerReminder } from "../jobs/mail/merge-data";
+import { allocateAssignments, type AllocationSubmission } from "../lib/assignment-allocation";
 import { errorFields } from "../lib/observability/log";
 import { reviewerCanBeAssignedToSubmission } from "../lib/reviewer-scope";
 import { parseCriterionOptions } from "../lib/rubric-criteria";
@@ -160,6 +161,8 @@ const distributionAssignmentsInput = z.object({
   reviewer_person_ids: z.array(z.string().min(1)).min(1).optional(),
   submission_ids: z.array(z.string().min(1)).min(1).optional(),
   reviewers_per_submission: z.number().int().positive().max(100).optional(),
+  /** A ceiling on what any one reviewer ends up holding in this round. */
+  max_per_reviewer: z.number().int().positive().max(10_000).optional(),
 });
 const directAssignmentInput = z.object({
   submission_id: z.string().min(1),
@@ -1054,6 +1057,69 @@ const createAgentEvaluatorSeat = defineApiRoute(
   },
 );
 
+/**
+ * Taking a reviewer off a pool is a change to who gets *new* work.
+ *
+ * Their recorded evaluations and the assignments they already hold are
+ * deliberately left alone: a pool is the source of future distribution, not a
+ * retroactive claim about evidence. The copy on the button says exactly this,
+ * so nobody removes a member expecting their reviews to vanish — or fearing
+ * that they will.
+ */
+const removeCommitteeReviewer = defineApiRoute(
+  {
+    method: "delete",
+    path: "/api/v1/events/{eventId}/committees/{committeeId}/reviewers/{personId}",
+    operationId: "removeCommitteeReviewer",
+    summary: "Remove a reviewer from a committee",
+    description:
+      "Removes the committee seat only. Recorded evaluations and assignments the reviewer already holds are preserved.",
+    tags: ["Evaluation"],
+    request: { params: reviewerScopeParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: ok, ...errors },
+  },
+  async (context) => {
+    const { eventId, committeeId, personId } = context.req.valid("param");
+    requireProgram(context, eventId, true);
+    await committeeForEvent(context.env.DB, eventId, committeeId);
+    const seat = await context.env.DB.prepare(
+      "SELECT id FROM committee_members WHERE committee_id = ? AND person_id = ?",
+    ).bind(committeeId, personId).first<{ id: string }>();
+    if (!seat) throw ApiError.notFound("reviewer is not on this committee");
+    const now = Date.now();
+    const actor = await evaluationActor(context);
+    const retained = await context.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM round_assignments assignment
+      JOIN evaluation_rounds round ON round.id = assignment.round_id
+      JOIN evaluation_plans plan ON plan.id = round.plan_id AND plan.event_id = ?
+      WHERE assignment.reviewer_person_id = ?
+    `).bind(eventId, personId).first<{ count: number }>();
+    await context.env.DB.batch([
+      context.env.DB.prepare("DELETE FROM committee_members WHERE id = ?").bind(seat.id),
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "reviewer_removed_from_committee",
+        entityType: "person",
+        entityId: personId,
+        before: { committee_id: committeeId },
+        now,
+        requestId: actor.requestId,
+      }),
+    ]);
+    return context.json({
+      assignments_retained: Number(retained?.count ?? 0),
+      committee_id: committeeId,
+      evaluations_preserved: true,
+      person_id: personId,
+      removed: true,
+    }, 200);
+  },
+);
+
 const getReviewerScopes = defineApiRoute(
   {
     method: "get",
@@ -1105,6 +1171,123 @@ const replaceReviewerScopes = defineApiRoute(
   },
 );
 
+interface TargetRow {
+  id: string;
+  track_names: string;
+}
+
+/**
+ * What a round is actually reviewing.
+ *
+ * Round one screens everything the call for proposals received; a later round
+ * reviews exactly what was promoted into it. Targeting every submitted
+ * abstract in round two is how "distribute" silently assigned the wrong work —
+ * or, on an unpromoted round, appeared to succeed while doing nothing at all.
+ */
+async function distributionTargets(
+  db: D1Database,
+  eventId: string,
+  round: RoundRow,
+  submissionIds: readonly string[] | undefined,
+): Promise<AllocationSubmission[]> {
+  const trackNames = `
+    COALESCE((
+      SELECT json_group_array(track.name)
+      FROM submission_tracks carried
+      JOIN tracks track ON track.id = carried.track_id
+      WHERE carried.submission_id = submission.id
+    ), '[]') AS track_names
+  `;
+  const rows = submissionIds
+    ? await db.prepare(`
+        SELECT submission.id, ${trackNames}
+        FROM submissions submission
+        WHERE submission.event_id = ?
+          AND submission.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+        ORDER BY submission.updated_at, submission.id
+      `).bind(eventId, JSON.stringify([...new Set(submissionIds)])).all<TargetRow>()
+    : round.position === 0
+      ? await db.prepare(`
+          SELECT submission.id, ${trackNames}
+          FROM submissions submission
+          WHERE submission.event_id = ?
+            AND submission.status IN ('submitted', 'in_review')
+            AND submission.bypass_evaluation = 0
+          ORDER BY submission.updated_at, submission.id
+        `).bind(eventId).all<TargetRow>()
+      : await db.prepare(`
+          SELECT submission.id, ${trackNames}
+          FROM round_promotions promotion
+          JOIN submissions submission
+            ON submission.id = promotion.submission_id AND submission.event_id = ?
+          WHERE promotion.to_round_id = ?
+          ORDER BY submission.updated_at, submission.id
+        `).bind(eventId, round.id).all<TargetRow>();
+  if (submissionIds && rows.results.length !== new Set(submissionIds).size) {
+    throw ApiError.notFound("one or more submissions are not in this conference");
+  }
+  return rows.results.map((row) => ({
+    id: row.id,
+    trackNames: (JSON.parse(row.track_names) as string[]).filter((name) => typeof name === "string"),
+  }));
+}
+
+/** "Evals and Infra" — the organizer's own list, not a JSON array. */
+function nameList(names: readonly string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0]!;
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+/**
+ * A refusal that names the rule and the fix.
+ *
+ * "reviewer is outside the submission's track scope" is true and useless: the
+ * organizer cannot see either side of the intersection that failed, so the
+ * only way forward is guessing. This says which responsibilities the reviewer
+ * holds, which tracks the abstract carries, and the two ways out.
+ */
+async function trackScopeRefusal(
+  db: D1Database,
+  eventId: string,
+  reviewerPersonId: string,
+  submissionId: string,
+): Promise<string> {
+  const [reviewer, submission] = await Promise.all([
+    db.prepare(`
+      SELECT person.name,
+        COALESCE((
+          SELECT json_group_array(track.name)
+          FROM reviewer_track_scopes scope
+          JOIN tracks track ON track.id = scope.track_id
+          WHERE scope.event_id = ? AND scope.person_id = person.id
+          ORDER BY track.position, track.id
+        ), '[]') AS track_names
+      FROM people person WHERE person.id = ?
+    `).bind(eventId, reviewerPersonId).first<{ name: string; track_names: string }>(),
+    db.prepare(`
+      SELECT COALESCE((
+        SELECT json_group_array(track.name)
+        FROM submission_tracks carried
+        JOIN tracks track ON track.id = carried.track_id
+        WHERE carried.submission_id = submission.id
+      ), '[]') AS track_names
+      FROM submissions submission WHERE submission.id = ?
+    `).bind(submissionId).first<{ track_names: string }>(),
+  ]);
+  const reviewerName = reviewer?.name ?? "That reviewer";
+  const reviewerTracks = JSON.parse(reviewer?.track_names ?? "[]") as string[];
+  const submissionTracks = JSON.parse(submission?.track_names ?? "[]") as string[];
+  if (reviewerTracks.length === 0) {
+    return `${reviewerName} has no track responsibilities yet, so no abstract is theirs to review. Give them at least one responsibility first.`;
+  }
+  if (submissionTracks.length === 0) {
+    return `This abstract carries no track, so no reviewer's responsibilities can reach it. Add a track to the abstract, then assign ${reviewerName}.`;
+  }
+  return `${reviewerName} reviews ${nameList(reviewerTracks)}; this abstract carries ${nameList(submissionTracks)}. Widen their responsibilities or pick another reviewer.`;
+}
+
 const distributeAssignments = defineApiRoute(
   {
     method: "post",
@@ -1136,7 +1319,10 @@ const distributeAssignments = defineApiRoute(
       `).bind(body.reviewer_person_id, eventId).first<{ id: string }>();
       if (!reviewer) throw ApiError.unprocessable("reviewer is not a member of this conference", "reviewer_person_id");
       if (!await reviewerCanBeAssignedToSubmission(context.env.DB, eventId, body.reviewer_person_id, body.submission_id)) {
-        throw ApiError.unprocessable("reviewer is outside the submission's track scope", "reviewer_person_id");
+        throw ApiError.unprocessable(
+          await trackScopeRefusal(context.env.DB, eventId, body.reviewer_person_id, body.submission_id),
+          "reviewer_person_id",
+        );
       }
       const existing = await context.env.DB.prepare(
         "SELECT id FROM round_assignments WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?",
@@ -1153,47 +1339,143 @@ const distributeAssignments = defineApiRoute(
     }
     const committeeId = body.committee_id ?? round.committee_id;
     if (!committeeId) throw ApiError.unprocessable("select a reviewer pool for this round", "committee_id");
-    await committeeForEvent(context.env.DB, eventId, committeeId);
-    const committeeReviewers = await reviewersForCommittee(context.env.DB, committeeId);
-    const reviewers = body.reviewer_person_ids
-      ? committeeReviewers.filter((reviewer) => body.reviewer_person_ids?.includes(reviewer.id))
-      : committeeReviewers;
-    if (!reviewers.length) throw ApiError.unprocessable("the committee needs at least one reviewer", "reviewer_person_ids");
-    const submissions = body.submission_ids
-      ? (await context.env.DB.prepare(`SELECT id FROM submissions WHERE event_id = ? AND id IN (${body.submission_ids.map(() => "?").join(", ")})`).bind(eventId, ...body.submission_ids).all<{ id: string }>()).results
-      : (await context.env.DB.prepare("SELECT id FROM submissions WHERE event_id = ? AND status IN ('submitted', 'in_review') AND bypass_evaluation = 0 ORDER BY updated_at, id").bind(eventId).all<{ id: string }>()).results;
-    if (submissions.length !== (body.submission_ids?.length ?? submissions.length)) throw ApiError.notFound("one or more submissions are not in this conference");
-    const target = body.reviewers_per_submission ?? round.target_reviews_per_submission;
-    if (body.mode === "n_per_submission" && target > reviewers.length) throw ApiError.unprocessable("the requested reviewer target exceeds the committee size", "reviewers_per_submission");
-    const pairs: Array<[string, string]> = [];
-    for (const [submissionIndex, submission] of submissions.entries()) {
-      const chosen = body.mode === "everyone"
-        ? reviewers
-        : Array.from({ length: target }, (_, offset) => reviewers[(submissionIndex + offset) % reviewers.length]!);
-      for (const reviewer of chosen) pairs.push([submission.id, reviewer.id]);
+    const committee = await committeeForEvent(context.env.DB, eventId, committeeId);
+    /**
+     * The pool is the reviewers who could actually hold a row: a committee
+     * seat AND this conference's reviewer membership. A seat without the
+     * membership passes every list and fails every assignment, which is the
+     * kind of disagreement this rebuild exists to remove.
+     */
+    const poolRows = await context.env.DB.prepare(`
+      SELECT person.id, person.name
+      FROM committee_members member
+      JOIN people person ON person.id = member.person_id
+      JOIN memberships membership
+        ON membership.person_id = person.id
+       AND membership.event_id = ?
+       AND membership.role = 'reviewer'
+      WHERE member.committee_id = ?
+      ORDER BY person.name COLLATE NOCASE, person.id
+    `).bind(eventId, committeeId).all<{ id: string; name: string }>();
+    const requested = body.reviewer_person_ids ? new Set(body.reviewer_person_ids) : null;
+    const reviewers = requested
+      ? poolRows.results.filter((reviewer) => requested.has(reviewer.id))
+      : poolRows.results;
+    if (!reviewers.length) {
+      throw ApiError.unprocessable(
+        `${committee.name} has no reviewer who can take work yet. Invite a reviewer to this pool, then distribute.`,
+        "reviewer_person_ids",
+      );
     }
-    // Committee distribution is a bulk write, so validate every pair before
-    // constructing any statement. A bad second-round pair must leave zero
-    // assignment rows behind, just like the direct assignment path.
-    const invalidPair = (await Promise.all(
-      pairs.map(async ([submissionId, reviewerId]) => ({
-        allowed: await reviewerCanBeAssignedToSubmission(context.env.DB, eventId, reviewerId, submissionId),
-        reviewerId,
-        submissionId,
-      })),
-    )).find((pair) => !pair.allowed);
-    if (invalidPair) {
-      throw ApiError.unprocessable("reviewer is outside the submission's track scope", "reviewer_person_ids", {
-        reviewer_person_id: invalidPair.reviewerId,
-        submission_id: invalidPair.submissionId,
-      });
+
+    const submissions = await distributionTargets(context.env.DB, eventId, round, body.submission_ids);
+    if (!submissions.length) {
+      throw ApiError.unprocessable(
+        round.position === 0
+          ? `No abstracts are waiting for review in ${round.name} yet. They appear here as soon as the call for proposals receives them.`
+          : `No abstracts have been promoted into ${round.name} yet — promote them from the previous round first.`,
+        "submission_ids",
+      );
     }
+
+    // Eligibility for the whole distribution in ONE query: the pool crossed
+    // with the target set through the tracks each side carries. The old
+    // per-pair check ran ~2,000 D1 round trips and refused everything on the
+    // first miss; a 1,000-abstract conference cannot be distributed that way.
+    const submissionIdsJson = JSON.stringify(submissions.map((submission) => submission.id));
+    const reviewerIdsJson = JSON.stringify(reviewers.map((reviewer) => reviewer.id));
+    const [eligibleRows, existingRows, loadRows] = await Promise.all([
+      context.env.DB.prepare(`
+        SELECT carried.submission_id AS submission_id, scope.person_id AS reviewer_person_id
+        FROM submission_tracks carried
+        JOIN reviewer_track_scopes scope
+          ON scope.track_id = carried.track_id AND scope.event_id = ?
+        WHERE carried.submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+          AND scope.person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+        GROUP BY carried.submission_id, scope.person_id
+      `).bind(eventId, submissionIdsJson, reviewerIdsJson).all<{ reviewer_person_id: string; submission_id: string }>(),
+      context.env.DB.prepare(`
+        SELECT submission_id, reviewer_person_id
+        FROM round_assignments
+        WHERE round_id = ?
+          AND reviewer_person_id IS NOT NULL
+          AND submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+      `).bind(roundId, submissionIdsJson).all<{ reviewer_person_id: string; submission_id: string }>(),
+      context.env.DB.prepare(`
+        SELECT reviewer_person_id, COUNT(*) AS assigned_count
+        FROM round_assignments
+        WHERE round_id = ? AND reviewer_person_id IS NOT NULL
+        GROUP BY reviewer_person_id
+      `).bind(roundId).all<{ assigned_count: number; reviewer_person_id: string }>(),
+    ]);
+
+    const poolOrder = new Map(reviewers.map((reviewer, index) => [reviewer.id, index]));
+    const eligible = new Map<string, string[]>();
+    for (const row of eligibleRows.results) {
+      const list = eligible.get(row.submission_id) ?? [];
+      list.push(row.reviewer_person_id);
+      eligible.set(row.submission_id, list);
+    }
+    for (const list of eligible.values()) {
+      list.sort((left, right) => (poolOrder.get(left) ?? 0) - (poolOrder.get(right) ?? 0));
+    }
+    const existing = new Map<string, Set<string>>();
+    for (const row of existingRows.results) {
+      const held = existing.get(row.submission_id) ?? new Set<string>();
+      held.add(row.reviewer_person_id);
+      existing.set(row.submission_id, held);
+    }
+    const load = new Map<string, number>(reviewers.map((reviewer) => [reviewer.id, 0]));
+    for (const row of loadRows.results) load.set(row.reviewer_person_id, Number(row.assigned_count));
+
+    const report = allocateAssignments({
+      submissions,
+      eligible,
+      existing,
+      load,
+      reviewersPerSubmission: body.mode === "everyone"
+        ? null
+        : body.reviewers_per_submission ?? round.target_reviews_per_submission,
+      maxPerReviewer: body.max_per_reviewer ?? null,
+    });
+
+    // Written in bounded batches through one prepared statement each: the pair
+    // set travels as JSON rather than as placeholders, so a thousand abstracts
+    // times three reviewers is a handful of statements, not thousands.
     const now = Date.now();
-    const statements = pairs.map(([submissionId, reviewerId]) => context.env.DB.prepare(
-      "INSERT OR IGNORE INTO round_assignments (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, 'assigned', ?, ?)",
-    ).bind(crypto.randomUUID(), roundId, submissionId, reviewerId, now, now));
+    const BATCH = 500;
+    const statements: D1PreparedStatement[] = [];
+    for (let offset = 0; offset < report.pairs.length; offset += BATCH) {
+      const chunk = report.pairs.slice(offset, offset + BATCH);
+      statements.push(context.env.DB.prepare(`
+        INSERT OR IGNORE INTO round_assignments
+          (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at)
+        SELECT lower(hex(randomblob(16))), ?,
+          json_extract(pair.value, '$[0]'), json_extract(pair.value, '$[1]'),
+          NULL, 'assigned', ?, ?
+        FROM json_each(?) pair
+      `).bind(roundId, now, now, JSON.stringify(chunk)));
+    }
     if (statements.length) await context.env.DB.batch(statements);
-    return context.json({ mode: body.mode, requested: pairs.length, assignments: pairs.length, reviewers: reviewers.map((reviewer) => reviewer.id), submissions: submissions.length }, 200);
+
+    return context.json({
+      already_assigned: report.already_assigned,
+      assigned_new: report.assigned_new,
+      cap_reached: report.cap_reached,
+      committee_id: committeeId,
+      fully_covered: report.fully_covered,
+      mode: body.mode,
+      partially_covered: report.partially_covered,
+      reviewers: reviewers.map((reviewer) => ({
+        assigned_count: report.per_reviewer.get(reviewer.id) ?? 0,
+        name: reviewer.name,
+        person_id: reviewer.id,
+      })),
+      round_id: roundId,
+      submissions_total: report.submissions_total,
+      uncovered: report.uncovered,
+      uncovered_tracks: report.uncovered_tracks,
+    }, 200);
   },
 );
 
@@ -1743,6 +2025,7 @@ export const apiRoutes = [
   addCommitteeReviewer,
   inviteCommitteeReviewer,
   createAgentEvaluatorSeat,
+  removeCommitteeReviewer,
   getReviewerScopes,
   replaceReviewerScopes,
   distributeAssignments,

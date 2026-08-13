@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../../lib/auth/draft-resume-copy";
 import { apiFetch } from "../shell/api-client";
+import { participationRoleLabel } from "../shell/identity-format";
 import { isUploadAborted, putFileToR2, speakerUploadFailureMessage, type UploadProgressHandlers } from "../upload/upload-client";
 import { formatBytes, validateClientUpload } from "../upload/upload-policy";
 import type { SignedUpload } from "../../lib/r2/protocol";
@@ -111,6 +112,7 @@ type PortalSubmission = {
     is_published: boolean;
   } | null;
   decision_feedback: { id: string | null; markdown: string; decided_at: number | null } | null;
+  co_presenters: Array<{ id: string; name: string; role: string }>;
   participations: Array<{
     id: string;
     role: string;
@@ -230,11 +232,9 @@ function formatPortalTime(value: number | null, timezone: string): string {
 
 type UploadHandlers = UploadProgressHandlers & { onAbortReady?: (abort: (() => void) | null) => void };
 
+/** The stage credit, in the organizer's words — shared with every other surface. */
 function roleLabel(value: string): string {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  return participationRoleLabel(value);
 }
 
 async function uploadFile(file: File, ownerType: "task_upload" | "person_headshot", ownerId: string, handlers: UploadHandlers = {}): Promise<string> {
@@ -653,7 +653,9 @@ function ProfileEditor({ eventId, person, onSaved }: { eventId: string; person: 
 }
 
 function TalkCard({ submission, onSaved }: { submission: PortalSubmission; onSaved: () => Promise<void> }): JSX.Element {
-  return <article class="portal-talk"><TalkEditor submission={submission} onSaved={onSaved} />{submission.history && submission.history.length > 0 ? <div class="portal-history" aria-label="Talk edit history">{submission.history.map((item) => <div class="portal-history-item" key={item.id}><strong>{item.actor_name ?? "Conference team"}</strong> · {formatDate(item.created_at)} · updated title or description</div>)}</div> : null}</article>;
+  /* A speaker should be able to confirm from their own portal that the people
+     sharing their session are on the record — and see it when nobody is. */
+  return <article class="portal-talk"><TalkEditor submission={submission} onSaved={onSaved} /><div class="portal-copresenters"><span class="portal-copresenters-label">On this session with you</span>{submission.co_presenters.length === 0 ? <span class="portal-copresenters-empty">Nobody else is on this record. Ask the conference team to add a co-speaker.</span> : <ul>{submission.co_presenters.map((person) => <li key={`${person.id}-${person.role}`}><strong>{person.name}</strong><span>{roleLabel(person.role)}</span></li>)}</ul>}</div>{submission.history && submission.history.length > 0 ? <div class="portal-history" aria-label="Talk edit history">{submission.history.map((item) => <div class="portal-history-item" key={item.id}><strong>{item.actor_name ?? "Conference team"}</strong> · {formatDate(item.created_at)} · updated title or description</div>)}</div> : null}</article>;
 }
 
 function ParticipationActions({ submission, onRefresh }: { submission: PortalSubmission; onRefresh: () => Promise<void> }): JSX.Element {

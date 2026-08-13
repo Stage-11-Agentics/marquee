@@ -12,7 +12,10 @@ const submissionsStyles = source("../../src/ui/submissions/submissions.css");
 
 test("CONTRACT · MRQ-151 · reviewer queue copy names assignment and track scope", () => {
   expect(reviewerPageSource).toContain("assigned to you");
-  expect(reviewerPageSource).toContain("directly or through your committee");
+  // MRQ-169: a committee is a reviewer pool, never an assignment shape, so the
+  // queue rule names the row that actually decides membership.
+  expect(reviewerPageSource).toContain("assigned to you in this round");
+  expect(reviewerPageSource).not.toContain("directly or through your committee");
   expect(reviewerPageSource).toContain("carries a track in your scope");
   expect(reviewerPageSource).not.toContain("in your authorized tracks");
   expect(reviewerPageSource).not.toContain("any carried track intersects your scope");

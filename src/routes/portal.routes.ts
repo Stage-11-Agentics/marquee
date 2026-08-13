@@ -164,6 +164,8 @@ type SubmissionProjection = {
     confirmation_status: "pending" | "confirmed" | "declined";
     confirmed_at: number | null;
   }>;
+  /** Everyone else on this talk, so a speaker can confirm the record is right. */
+  co_presenters_json: string;
   arrival?: ArrivalProjection;
 };
 
@@ -707,6 +709,19 @@ async function listSubmissions(db: D1Database, event: EventProjection, personId:
          agenda.is_published,
          participation.id AS participation_id, participation.role AS participation_role,
          participation.confirmation_status, participation.confirmed_at,
+         COALESCE((
+           SELECT json_group_array(json_object('id', ordered.id, 'name', ordered.name, 'role', ordered.role))
+           FROM (
+             SELECT other_person.id, other_person.name, other.role
+             FROM participations other
+             JOIN people other_person ON other_person.id = other.person_id
+             WHERE other.submission_id = s.id
+               AND other.person_id != ?
+               AND other.role IN ('speaker', 'co_speaker', 'moderator', 'chairperson')
+             GROUP BY other_person.id, other_person.name, other.role
+             ORDER BY other.position, other.id
+           ) ordered
+         ), '[]') AS co_presenters_json,
          decision.id AS feedback_decision_id, decision.feedback_md, decision.decided_at AS feedback_decided_at
        FROM submissions s
        JOIN participations participation
@@ -725,7 +740,7 @@ async function listSubmissions(db: D1Database, event: EventProjection, personId:
        WHERE s.event_id = ?
        ORDER BY s.updated_at DESC, s.id ASC`,
     )
-    .bind(personId, event.id)
+    .bind(personId, personId, event.id)
     .all<SubmissionProjection>();
 
   const grouped = new Map<string, SubmissionProjection>();
@@ -953,6 +968,7 @@ function submissionView(event: EventProjection, row: SubmissionProjection, showB
       ? { id: row.feedback_decision_id, markdown: row.feedback_md, decided_at: row.feedback_decided_at }
       : null,
     participations: row.participations,
+    co_presenters: JSON.parse(row.co_presenters_json ?? "[]") as Array<{ id: string; name: string; role: string }>,
     talk_editable: true,
   };
 }

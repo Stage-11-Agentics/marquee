@@ -249,13 +249,6 @@ const EXPECTED_PLACEHOLDER_SITES = [
     classification: "outside the named assignment-distribution path; reviewer-scope read shared by the scopes PUT (no track-ID max) and the reviewer invite (track_ids.max(50))",
   },
   {
-    file: "src/routes/evaluation.routes.ts",
-    owner: "distributeAssignments",
-    binding: "submissions",
-    expression: 'body.submission_ids.map(() => "?")',
-    classification: "NAMED_FINDING: assignment selection expands one D1 placeholder per submission; no selector max",
-  },
-  {
     file: "src/routes/public-form-routing.ts",
     owner: "selectSubmissionRouting",
     binding: "tracks",
@@ -369,8 +362,13 @@ test("CONTRACT · every named bulk family has one classified write seam", async 
   assert.match(scopes.sendCommunication, /enqueueBulkReminder/);
   assert.match(scopes.recipientsFor, /json_each\(\?\)/);
   assert.match(scopes.recipientsFor, /return \[\]/);
-  assert.match(scopes.distributeEvaluationAssignments, /const statements = pairs\.map/);
+  // MRQ-169: distribution selects and writes through json_each rather than one
+  // placeholder per submission and one statement per pair, so a 1,000-abstract
+  // round is a handful of bounded statements instead of thousands of bindings.
+  assert.match(scopes.distributeEvaluationAssignments, /FROM json_each\(\?\) pair/);
+  assert.match(scopes.distributeEvaluationAssignments, /report\.pairs\.slice\(offset, offset \+ BATCH\)/);
   assert.match(scopes.distributeEvaluationAssignments, /INSERT OR IGNORE INTO round_assignments/);
+  assert.doesNotMatch(scopes.distributeEvaluationAssignments, /body\.submission_ids\.map\(\(\) => "\?"\)/);
   assert.match(scopes.promoteEvaluationSubmissions, /runBulkByIds/);
   assert.match(scopes.selectSubmissionRouting, /SELECT id, name FROM tracks/);
   assert.match(routingModule.source, /writeRoutingPoolAssignment/);

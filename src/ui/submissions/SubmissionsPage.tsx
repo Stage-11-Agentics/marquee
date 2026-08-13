@@ -11,6 +11,7 @@ import {
 } from "../../lib/submission-columns";
 import { reviewCountLabel, scoreBasisLabel } from "../../lib/review-aggregate";
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { participationRoleLabel } from "../shell/identity-format";
 import { Button, PageHeader, ReviewerName } from "../shell/components";
 import type { NavigationOptions } from "../shell/router";
 import {
@@ -204,7 +205,11 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
   }
   if (column === "speakers") {
     const [first, ...rest] = item.speakers;
-    return <span title={item.speakers.map((speaker) => speaker.name).join(", ")}>{first ? `${first.name}${rest.length ? ` +${rest.length}` : ""}` : "—"}</span>;
+    // "+1" has to be answerable without opening the record: the hover carries
+    // every co-presenter by name and role, and the roles ride along in the
+    // list payload so the cell never has to ask the server a second question.
+    const roster = item.speakers.map((speaker) => `${speaker.name} · ${participationRoleLabel(speaker.role)}`).join("\n");
+    return <span title={roster || "No speaker on this record"}>{first ? `${first.name}${rest.length ? ` +${rest.length}` : ""}` : "—"}</span>;
   }
   if (column === "status") return <span class={`chip status-chip ${item.status}`}>{statusLabel(item.status)}</span>;
   if (column === "notified") return item.notified

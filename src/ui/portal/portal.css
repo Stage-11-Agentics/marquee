@@ -167,6 +167,13 @@
 .portal-talks { display: grid; gap: 14px; margin-top: 18px; }
 .portal-talk { border-top: 1px solid var(--rule-soft); display: grid; gap: 10px; padding-top: 14px; }
 .portal-talk:first-child { border-top: 0; padding-top: 0; }
+.portal-copresenters { border: 1px solid var(--rule-soft); border-radius: 6px; display: grid; gap: 6px; padding: 9px 11px; }
+.portal-copresenters-label { color: var(--muted); font: 600 10px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.portal-copresenters-empty { color: var(--muted); font-size: 12px; }
+.portal-copresenters ul { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.portal-copresenters li { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.portal-copresenters li strong { font-size: 12.5px; }
+.portal-copresenters li span { color: var(--muted); font-size: 11px; }
 .portal-talk h3 { display: -webkit-box; font-size: 14px; line-height: 1.35; margin: 0; min-height: 2.7em; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .portal-talk-description { color: var(--ink-soft); font-size: 12px; line-height: 1.55; margin: 0; white-space: pre-wrap; }
 .portal-history { border-left: 2px solid var(--rule); display: grid; gap: 8px; margin-top: 4px; padding-left: 12px; }

@@ -27,6 +27,7 @@ const submission: PortalSubmission = {
   wave_decision_on: null,
   slot: null,
   decision_feedback: null,
+  co_presenters: [],
   participations: [],
   talk_editable: true,
   history: [],
