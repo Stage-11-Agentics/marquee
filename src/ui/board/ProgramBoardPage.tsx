@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import type { BoardCard, BoardColumn, BoardFacets, BoardListEnvelope, BoardStage } from "../../api/board";
 import { apiFetch, errorSummary } from "../shell/api-client";
@@ -8,6 +8,12 @@ import "./board.css";
 
 const PAGE_SIZE = 100;
 const CARD_HEIGHT = 132;
+/* board.css sizes the columns to the window, so the height this component needs
+   for its virtual window is a fact to read off the DOM rather than a number to
+   impose on it — which is what keeps the measurement from chasing itself: how
+   many cards are rendered cannot change how tall the list is. The fallback is
+   what the first render assumes before the observer has spoken. */
+const ASSUMED_COLUMN_HEIGHT = 560;
 
 type LoadState =
   | { kind: "loading" }
@@ -53,14 +59,27 @@ function BoardCardButton({ card, navigate }: { card: BoardCard; navigate: (targe
 
 function VirtualColumn({ column, cards, navigate }: { column: BoardColumn; cards: BoardCard[]; navigate: (target: string) => void }): JSX.Element {
   const [scrollTop, setScrollTop] = useState(0);
-  const viewportHeight = 560;
+  const [viewportHeight, setViewportHeight] = useState(ASSUMED_COLUMN_HEIGHT);
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = listRef.current;
+    if (!node) return;
+    const read = () => setViewportHeight(node.clientHeight || ASSUMED_COLUMN_HEIGHT);
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(read);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const first = Math.max(0, Math.floor(scrollTop / CARD_HEIGHT) - 3);
   const visibleCount = Math.ceil(viewportHeight / CARD_HEIGHT) + 6;
   const visible = cards.slice(first, first + visibleCount);
   return <section class="program-board-column" aria-label={`${column.label}, ${column.count.toLocaleString()} records`}>
     <header class="program-board-column-head"><div><strong>{column.label}</strong><small>{column.entry_action}</small></div><span class="program-board-count tabular">{column.count.toLocaleString()}</span></header>
     <div class="program-board-derived-note">{column.id === "scheduled" ? "placed on the working agenda" : column.id === "published" ? "live on the public site" : column.id === "declined" ? "decision history" : "Record-owned actions"}</div>
-    <div class="program-board-column-list" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)} style={{ height: `${viewportHeight}px` }}>
+    <div class="program-board-column-list" ref={listRef} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
       {cards.length === 0 ? <div class="program-board-empty">No matching submissions</div> : <div style={{ height: `${cards.length * CARD_HEIGHT}px`, position: "relative" }}>
         <div class="program-board-window" style={{ transform: `translateY(${first * CARD_HEIGHT}px)` }}>
           {visible.map((card) => <BoardCardButton key={card.id} card={card} navigate={navigate} />)}

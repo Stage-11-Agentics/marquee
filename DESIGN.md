@@ -21,7 +21,7 @@ Then a skin round (House Lights · Press Room · Flight Deck) ran on the frozen 
 
 ## Themes
 
-The aesthetic has two lightings, and the machinery takes more. A theme is **one `html[data-theme="…"]` block in `tokens.css` plus one row in `src/ui/shell/theme.ts`** — palette only. Spacing, radius, the hairline, the type stacks and `--shadow: none` are **theme-invariant**; that constraint is what makes Night a re-lit instrument instead of a generic dark mode.
+The aesthetic has two lightings, and the machinery takes more. A theme is **one `html[data-theme="…"]` block in `tokens.css` plus one row in `src/ui/shell/theme.ts`** — palette only. Spacing, radius, the hairline, the type stacks and `--shadow: none` are **theme-invariant**; that constraint is what makes Night a re-lit instrument instead of a generic dark mode. The single exception is **native scroll furniture** — `color-scheme` and the `::-webkit-scrollbar` pseudo-elements, which CSS exposes nowhere a token can reach. A dark palette that skips them gets the browser's white trough down every scrolling surface, so they sit beside the token block, keyed to the same theme, and stay the same 10px in every one.
 
 - **Day** — the cockpit in daylight, exactly as specified above.
 - **Night** — *the quiet server room.* Strictly neutral greys with chroma held back for status and a restrained teal. The agenda canvas stays **darker than the page**, preserving the figure-ground relationship Day establishes. Chosen by the client 2026-08-12 over two alternatives (a blue-black "Midnight Ops" and an amber night-vision "Red-Shift").
@@ -30,7 +30,7 @@ The aesthetic has two lightings, and the machinery takes more. A theme is **one 
 
 Binding rules for any theme, present or future:
 
-- **Every color is a token.** A literal color is invisible to the theme system: right in Day, silently wrong in Night. `check:design` fails on any literal color in `components.css`, and on any color token Day introduces that Night does not redefine.
+- **Every color is a token.** A literal color is invisible to the theme system: right in Day, silently wrong in Night. `check:design` fails on any literal color in `components.css`, and on any color token Day introduces that Night does not redefine. **The check does not read the per-feature stylesheets**, and that is where the rule gets broken in practice — a hardcoded white in `dashboard.css` painted the whole Night pipeline strip light-on-light until an operator saw it. Until the check covers `src/ui/**/*.css`, reviewing one of those files means reading it for literals by eye.
 - **Contrast is measured, not eyeballed.** Every text pair carries its ratio; nothing below 4.5:1. Night's floor is 6.3:1.
 - **Track colors are never rewritten.** They are the organizer's data, and they paint borders and dots rather than text, so they carry no contrast duty. (The prototype's *seeded* tracks do carry night octaves — that is demo data, not authored data.)
 - **Theme is stamped before first paint** (inline script in `index.html`). Resolving a palette after hydration flashes white on every load — the jump the craft rules forbid.

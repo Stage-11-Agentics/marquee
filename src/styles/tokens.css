@@ -68,6 +68,13 @@
   --on-ink: #dff2f3;              /* text on inverse (--ink) chrome */
   --backdrop: rgba(16, 24, 32, .46);
   --break-tint: #64748b;          /* neutral: breaks are not a track */
+  /* The pipeline stage face: a translucent veil over the card ground rather
+     than an opaque fill, so the strip reads as one instrument with seven
+     cells instead of seven boxes. Lifting it out of the light and into the
+     dark is a sign flip — at night the veil lightens what it covers — which
+     is exactly why it has to be a token and not a literal. */
+  --veil: rgba(255, 255, 255, .72);
+  --spectrum: linear-gradient(90deg,#635bff,#db4c3f,#0d9488,#d97706,#2563eb,#9333ea,#4d7c0f);
 }
 
 /* ══ NIGHT ═══════════════════════════════════════════════════════════════
@@ -124,6 +131,45 @@ html[data-theme="night"] {
   --on-ink: #101315;              /* inverse chrome flips light at night    */
   --backdrop: rgba(0, 0, 0, .62);
   --break-tint: #939ea6;
+  --veil: rgba(255, 255, 255, .04);
+  --spectrum: linear-gradient(90deg,#8b85ff,#f2705f,#2ec4b6,#f59e0b,#5b8def,#b06ef5,#84cc16);
+}
+
+/* ── native scroll furniture ──────────────────────────────────────────────
+   `color-scheme` and `scrollbar-color` are color declarations, so they belong
+   to the palette like any other: without them the browser paints its light
+   default scrollbar — a white trough with a grey thumb — down every scrolling
+   surface of a dark screen, which is the loudest thing on the page. The
+   scrollbar sizing that follows is WebKit's only route to a themed trough
+   (`scrollbar-color` alone is Firefox's), and it is deliberately the same 10px
+   the register themes use, so no theme moves the width of a scroll gutter.
+   ─────────────────────────────────────────────────────────────────────── */
+html[data-theme="night"] { color-scheme: dark; }
+html[data-theme="night"],
+html[data-theme="night"] * { scrollbar-color: var(--rule) var(--surface-sunk); }
+html[data-theme="night"]::-webkit-scrollbar,
+html[data-theme="night"] *::-webkit-scrollbar {
+  background-color: var(--surface-sunk);
+  height: 10px;
+  width: 10px;
+}
+html[data-theme="night"]::-webkit-scrollbar-track,
+html[data-theme="night"] *::-webkit-scrollbar-track {
+  background-color: var(--surface-sunk);
+}
+html[data-theme="night"]::-webkit-scrollbar-thumb,
+html[data-theme="night"] *::-webkit-scrollbar-thumb {
+  background-color: var(--rule);
+  border: 2px solid var(--surface-sunk);
+  border-radius: var(--radius);
+}
+html[data-theme="night"]::-webkit-scrollbar-thumb:hover,
+html[data-theme="night"] *::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent);
+}
+html[data-theme="night"]::-webkit-scrollbar-corner,
+html[data-theme="night"] *::-webkit-scrollbar-corner {
+  background-color: var(--surface-sunk);
 }
 
 * { box-sizing: border-box; }
