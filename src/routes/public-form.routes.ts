@@ -11,6 +11,7 @@ import { enqueuePublicFormConfirmation, enqueueOutbox } from "../jobs/mail/outbo
 import { escapeHtml } from "../jobs/mail/render";
 import { findTemplate } from "../jobs/mail/templates";
 import { enqueueAuthMail } from "../lib/auth/auth-mail";
+import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../lib/auth/draft-resume-copy";
 import { mintMagicLink, mintMagicLink as issueParticipantMagicLink } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { verifyTurnstile } from "../lib/r2/turnstile";
@@ -548,9 +549,9 @@ async function createDraft(
     toEmail: email,
     templateKey: "draft_resume",
     entityId: submissionId,
-    subject: "Continue your conference abstract",
-    text: `Continue your conference abstract here: ${resumeUrl}`,
-    html: `<p><a href="${resumeUrl}">Continue your conference abstract</a></p>`,
+    subject: PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT,
+    text: `${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT} here: ${resumeUrl}`,
+    html: `<p><a href="${resumeUrl}">${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT}</a></p>`,
     now,
   });
   await enqueueMailMessage(context.env.MAIL_QUEUE, mail);

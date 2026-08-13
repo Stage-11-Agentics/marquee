@@ -75,6 +75,16 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).toContain('href="/signin?next=/portal"');
   });
 
+  test("CONTRACT · MRQ-150 · a closed draft does not promise that it can be submitted now", () => {
+    const html = render(snapshot({
+      submissions: [submission({ status: "draft", submitted_at: null, form_slug: null, wave_name: null, wave_decision_on: null })],
+    }));
+    expect(html).toContain("call closed");
+    expect(html).toContain("Keep your draft link");
+    expect(html).toContain("The call for speakers is closed");
+    expect(html).not.toContain("You can finish and submit while the call is open");
+  });
+
   test("CONTRACT · MRQ-150 · with no decision date it says so rather than inventing one", () => {
     const html = render(snapshot({ submissions: [submission({ wave_name: null, wave_decision_on: null })] }));
     expect(html).toContain("has not set a decision date");
@@ -88,15 +98,100 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(render(snapshot({ submissions: [submission({ status: "rejected" })] }))).toContain("was not selected");
   });
 
+  test("CONTRACT · MRQ-150 · a draft names the submitter's next action and makes no review promise", () => {
+    const html = render(snapshot({
+      submissions: [submission({ status: "draft", submitted_at: null, wave_name: null, wave_decision_on: null })],
+    }));
+    expect(html).toContain("Your draft is saved, not yet submitted");
+    expect(html).toContain("Finish and submit your abstract");
+    expect(html).toContain("If you saved this draft through the public call");
+    expect(html).toContain("Continue your conference abstract");
+    expect(html).toContain("reopens it");
+    expect(html).toContain("while the call is open");
+    expect(html).not.toContain("Nothing is waiting on you");
+    expect(html.toLowerCase()).not.toContain("under review");
+    expect(html.toLowerCase()).not.toContain("decision");
+    expect(html).not.toContain('href="/f/cfp"');
+  });
+
+  test("CONTRACT · MRQ-150 · decided statuses do not show a forward-looking decision flow", () => {
+    for (const status of ["accepted", "rejected", "withdrawn"] as const) {
+      const html = render(snapshot({ submissions: [submission({ status })] }));
+      expect(html).not.toContain("What happens next");
+      expect(html).not.toContain("portal-next-steps");
+      expect(html).toContain(status === "accepted"
+        ? "The program team accepted this abstract for the conference."
+        : status === "rejected"
+          ? "The program team did not select this abstract for the conference."
+          : "This abstract is no longer in consideration.");
+      expect(html.toLowerCase()).not.toContain("next decision");
+      expect(html.toLowerCase()).not.toContain("go out by");
+      expect(html.toLowerCase()).not.toContain("has not set a decision date");
+    }
+  });
+
+  test("CONTRACT · MRQ-150 · the submitter chip uses Maybe for a waitlisted abstract", () => {
+    const html = render(snapshot({ submissions: [submission({ status: "waitlisted" })] }));
+    expect(html).toContain("Your abstract is a Maybe");
+    expect(html).toContain(">Maybe<");
+    expect(html).toContain("still in consideration");
+    expect(html).toContain("remains in consideration");
+    expect(html).toContain("What happens next");
+    expect(html).not.toContain("September 21, 2026");
+    expect(html).not.toContain("decision by");
+    expect(html).not.toContain("go out by");
+    expect(html).not.toContain("Nothing else is needed from you here.");
+  });
+
+  test("CONTRACT · MRQ-150 · a lead status never borrows another abstract's wave date", () => {
+    const html = render(snapshot({
+      submissions: [
+        submission({ id: "lead-rejected", title: "Lead abstract", status: "rejected", wave_name: null, wave_decision_on: null }),
+        submission({ id: "other-submitted", title: "Other abstract", status: "submitted", wave_name: "Wave 2", wave_decision_on: "2026-10-01" }),
+      ],
+    }));
+    expect(html).toContain("Your abstract was not selected");
+    expect(html).toContain("Lead abstract");
+    expect(html).toContain("Other abstract");
+    const otherStart = html.indexOf('data-submission-id="other-submitted"');
+    const leadStart = html.indexOf('data-submission-id="lead-rejected"');
+    const otherRow = html.slice(otherStart, html.indexOf("</article>", otherStart));
+    const leadRow = html.slice(leadStart, html.indexOf("</article>", leadStart));
+    expect(otherRow).toContain("Wave 2");
+    expect(otherRow).toContain("October 1, 2026");
+    expect(leadRow).not.toContain("Wave 2");
+    expect(leadRow).not.toContain("October 1, 2026");
+  });
+
+  test("CONTRACT · MRQ-150 · a draft lead does not hide another abstract's decision date", () => {
+    const html = render(snapshot({
+      submissions: [
+        submission({ id: "lead-draft", status: "draft", submitted_at: null, wave_name: null, wave_decision_on: null }),
+        submission({ id: "other-submitted", status: "submitted", wave_name: "Wave 2", wave_decision_on: "2026-10-01" }),
+      ],
+    }));
+    const otherStart = html.indexOf('data-submission-id="other-submitted"');
+    const otherRow = html.slice(otherStart, html.indexOf("</article>", otherStart));
+    expect(html).toContain("Your draft is saved, not yet submitted");
+    expect(html).toContain("Finish and submit your abstract");
+    expect(otherRow).toContain("Wave 2");
+    expect(otherRow).toContain("October 1, 2026");
+    expect(html).not.toContain("Decisions for Wave 2 go out by October 1, 2026");
+  });
+
+  test("CONTRACT · MRQ-150 · an open call remains reachable when a newer draft leads the list", () => {
+    const html = render(snapshot({
+      submissions: [
+        submission({ id: "lead-draft", status: "draft", submitted_at: null, wave_name: null, wave_decision_on: null }),
+        submission({ id: "other-submitted", status: "submitted", form_slug: "cfp" }),
+      ],
+    }));
+    expect(html).toContain('href="/f/cfp"');
+  });
+
   test("CONTRACT · MRQ-153 · a rejected submitter preview keeps its viewing-as label", () => {
     const html = render(snapshot({ submissions: [submission({ status: "rejected" })] }), true);
     expect(html).toContain("Viewing as speaker · organizer preview");
     expect(html).toContain("Your abstract was not selected");
-  });
-
-  test("CONTRACT · MRQ-150 · no submissions still leaves the reader somewhere to go", () => {
-    const html = render(snapshot({ submissions: [] }));
-    expect(html).toContain("No abstract is on file");
-    expect(html).toContain('href="/signin?next=/portal"');
   });
 });

@@ -148,6 +148,40 @@ describe.sequential("MRQ-150 the submitter's portal", () => {
     expect(snapshot.submissions[0].wave_decision_on).toBe("2026-09-21");
   });
 
+  test("CONTRACT · MRQ-150 · a saved draft does not receive the next wave's decision date", async () => {
+    const title = "A draft that still needs its final pass";
+    const { cookie } = await submitAndFollowPortalLink({
+      title,
+      name: "Draft Example",
+      email: "draft@example.com",
+    });
+    await env.DB.prepare("UPDATE submissions SET status = 'draft', submitted_at = NULL, wave_id = NULL WHERE title = ?")
+      .bind(title)
+      .run();
+
+    const snapshot = await json<{ submissions: Array<{ status: string; wave_name: string | null; wave_decision_on: string | null }> }>(
+      await request("/api/v1/me/portal", { headers: { cookie } }),
+    );
+    expect(snapshot.submissions[0]).toMatchObject({ status: "draft", wave_name: null, wave_decision_on: null });
+  });
+
+  test("CONTRACT · MRQ-150 · a Maybe does not receive a made-up next-wave decision date", async () => {
+    const title = "A Maybe that remains in consideration";
+    const { cookie } = await submitAndFollowPortalLink({
+      title,
+      name: "Maybe Example",
+      email: "maybe@example.com",
+    });
+    await env.DB.prepare("UPDATE submissions SET status = 'waitlisted', submitted_at = ?, wave_id = NULL WHERE title = ?")
+      .bind(NOW, title)
+      .run();
+
+    const snapshot = await json<{ submissions: Array<{ status: string; wave_name: string | null; wave_decision_on: string | null }> }>(
+      await request("/api/v1/me/portal", { headers: { cookie } }),
+    );
+    expect(snapshot.submissions[0]).toMatchObject({ status: "waitlisted", wave_name: null, wave_decision_on: null });
+  });
+
   test("CONTRACT · MRQ-150 · the submitter seat carries no speaker surface, and no speaker membership is invented", async () => {
     const { cookie } = await submitAndFollowPortalLink({
       title: "Retrieval without the vector database",

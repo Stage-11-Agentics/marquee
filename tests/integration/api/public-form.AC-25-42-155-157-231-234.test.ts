@@ -312,8 +312,9 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(created.status).toBe(201);
     const draft = await json<{ resume_token: string; draft_id: string; state: string }>(created);
     expect(draft.state).toBe("resumed");
-    const resumeMail = await env.DB.prepare("SELECT to_email, text FROM outbox WHERE template_key = 'draft_resume'").first<{ to_email: string; text: string }>();
+    const resumeMail = await env.DB.prepare("SELECT to_email, subject, text FROM outbox WHERE template_key = 'draft_resume'").first<{ to_email: string; subject: string; text: string }>();
     expect(resumeMail?.to_email).toBe("draft@example.com");
+    expect(resumeMail?.subject).toBe("Continue your conference abstract");
     expect(resumeMail?.text).toContain(`/f/public-cfp?resume=${draft.resume_token}`);
 
     await env.DB.prepare(
