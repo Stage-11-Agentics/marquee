@@ -85,6 +85,11 @@ test("CONTRACT · the matrix declares its hidden columns and keeps the speaker p
   assert.match(css, /\.onboarding-matrix-scroll-note \{[^}]*min-height: \d+px/);
 
   assert.match(css, /\.onboarding-matrix th\.onboarding-speaker-column \{[^}]*position: sticky/);
+  // The speaker cell's pinned offset is the select column's width. One token
+  // for both, or a later width change misaligns the pair and only the eye
+  // catches it.
+  assert.match(css, /\.onboarding-select-column \{[^}]*width: var\(--select-column-width\)/);
+  assert.match(css, /\.onboarding-matrix th\.onboarding-speaker-column \{[^}]*left: var\(--select-column-width\)/);
   assert.match(css, /\.onboarding-matrix th\.onboarding-select-column[^{]*\{[^}]*position: sticky/);
   // A pinned cell the rows travel under needs an opaque background.
   assert.match(css, /\.onboarding-matrix tbody[^{]*onboarding-speaker-column \{[^}]*background: var\(--panel\)/);
