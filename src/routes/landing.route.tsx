@@ -7,6 +7,7 @@ import { instanceIsUnclaimed } from "../lib/auth/instance-claim";
 import { DEMO_EVENT_ORDER, SEEDED_DEMO_EVENT_ID } from "../lib/demo-event";
 import { ICON_LINKS } from "../lib/head-icons";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
+import { THEMES } from "../ui/shell/theme";
 import { hasSpeakerTaskCancellationColumn, submissionStatusPredicate } from "./submissions.queries";
 
 export interface LandingCounts {
@@ -178,7 +179,35 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
         </div>
       </header>
 
-      <main class="hero">
+      <div class="landing-flow">
+        <section class="theme-choose" aria-label="Pick a look before you enter">
+          <div class="theme-choose-copy">
+            <div class="eyebrow">First — pick your look</div>
+            <h2>One product. Five registers.</h2>
+            <p>
+              Every screen re-lights in the look you choose, and the switcher in the top bar
+              changes it any time. Each preview is the real program home, dressed.
+            </p>
+          </div>
+          <div class="theme-grid" role="group" aria-label="Available themes">
+            {THEMES.map((theme) => (
+              <button key={theme.id} type="button" class="theme-card" data-theme-choice={theme.id} aria-pressed="false">
+                <span class="theme-shot">
+                  <img src={`/themes/${theme.id}.webp`} alt={`The program home in the ${theme.label} theme`} width={1440} height={900} />
+                </span>
+                <span class="theme-card-label">
+                  <span class="theme-name">{theme.label}</span>
+                  <span class="theme-kind">{theme.kind}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <div class="theme-choose-note">
+            Marquee Light is on by default — <a class="theme-skip" href="#choose-role">skip straight to the demo ↓</a>
+          </div>
+        </section>
+
+        <main class="hero" id="choose-role">
         <div class="hero-copy">
           <div class="eyebrow">Open-source conference program operations</div>
           <h1>Fantastic conferences, effortlessly.</h1>
@@ -213,7 +242,8 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
             {data.notice && <span class="preview-notice"> {data.notice}</span>}
           </div>
         </section>
-      </main>
+        </main>
+      </div>
 
       <footer class="landing-foot">
         <span>Apache-2.0 · Self-hosted · API-first</span>
@@ -281,6 +311,7 @@ export function UnclaimedLandingPage(): JSX.Element {
 }
 
 const LANDING_STYLES = `
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 .landing { min-height: 100vh; background: var(--bg); display: grid; grid-template-rows: auto 1fr auto; }
 .landing-nav { padding: 20px clamp(20px,5vw,70px); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--panel); }
 .landing-nav .brand { padding: 0; }
@@ -300,12 +331,67 @@ const LANDING_STYLES = `
 .mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning-ink); border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
 .preview-notice { display: block; margin-top: 6px; }
 .landing-foot { border-top: 1px solid var(--line); padding: 18px clamp(20px,5vw,70px); color: var(--muted); font: 400 11px/1 var(--mono); display: flex; justify-content: space-between; }
+.theme-choose { width: min(1280px,92vw); margin: 0 auto; min-height: calc(100svh - 77px); display: grid; align-content: center; gap: 26px; padding: 48px 0 34px; }
+.theme-choose-copy .eyebrow { color: var(--accent-dark); margin-bottom: 12px; }
+.theme-choose h2 { font: 500 clamp(30px,3.6vw,44px)/1.05 var(--mono); letter-spacing: -.045em; margin: 0 0 14px; }
+.theme-choose-copy p { color: var(--ink-soft); font-size: 14.5px; line-height: 1.6; max-width: 560px; margin: 0; }
+.theme-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; }
+.theme-card { display: grid; padding: 0; text-align: left; background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+.theme-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-card[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); border-color: var(--accent); }
+.theme-shot { display: block; aspect-ratio: 16 / 10; background: var(--sunk); border-bottom: 1px solid var(--line); }
+.theme-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.theme-card-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 9px 11px; }
+.theme-name { font: 600 12px/1.2 var(--mono); letter-spacing: -.01em; }
+.theme-kind { color: var(--muted); font: 400 9.5px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+.theme-choose-note { color: var(--muted); font: 400 11px/1.4 var(--mono); }
+.theme-skip { color: var(--accent-dark); text-decoration: underline; text-underline-offset: 2px; }
+@media (max-width: 1000px) { .theme-grid { grid-template-columns: repeat(3,1fr); } .theme-choose { min-height: 0; } }
+@media (max-width: 560px) { .theme-grid { grid-template-columns: repeat(2,1fr); } }
 @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 34px; padding: 42px 0 52px; } .landing-links .button:first-child { display: none; } }
 @media (max-width: 520px) { .landing-nav { align-items: flex-start; gap: 16px; } .landing-links { flex: 1; justify-content: flex-end; } .landing-links .button { min-height: 30px; padding: 7px 9px; } .hero h1 { font-size: clamp(36px, 12vw, 48px); } .hero p { font-size: 14px; } .landing-foot { align-items: flex-start; flex-direction: column; gap: 8px; } }
 `;
 
 const LANDING_SCRIPT = `
 (() => {
+  // Font URLs mirror the pre-paint script in index.html and the registry in
+  // src/ui/shell/theme.ts — keep the three in sync. The landing cannot import
+  // the app's helpers because it hydrates nothing: this script is the page.
+  const THEME_FONTS = {
+    "latent-space": "https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&display=swap",
+    "ai-engineer": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
+  };
+  const root = document.documentElement;
+  const cards = Array.from(document.querySelectorAll("[data-theme-choice]"));
+  const markPressed = () => {
+    const worn = root.dataset.theme || "day";
+    cards.forEach((card) => card.setAttribute("aria-pressed", String(card.getAttribute("data-theme-choice") === worn)));
+  };
+  markPressed();
+  cards.forEach((card) => {
+    card.addEventListener("click", () => {
+      const id = card.getAttribute("data-theme-choice");
+      if (id === "day") delete root.dataset.theme;
+      else root.dataset.theme = id;
+      // swyxy's dark mode is part of the one stored swyxy choice; every other
+      // theme must clear the modifier or it leaks onto the next register.
+      delete root.dataset.swyxyMode;
+      try {
+        if (id === "swyxy" && localStorage.getItem("marquee-swyxy-mode") === "dark") root.dataset.swyxyMode = "dark";
+        localStorage.setItem("marquee-theme", id);
+      } catch (_) { /* private mode: the theme still applies for this visit */ }
+      if (THEME_FONTS[id] && !document.querySelector('link[data-theme-fonts="' + id + '"]')) {
+        const pre = document.createElement("link");
+        pre.rel = "preconnect"; pre.href = "https://fonts.gstatic.com"; pre.crossOrigin = "anonymous";
+        const css = document.createElement("link");
+        css.rel = "stylesheet"; css.href = THEME_FONTS[id]; css.dataset.themeFonts = id;
+        document.head.append(pre, css);
+      }
+      markPressed();
+      const roles = document.getElementById("choose-role");
+      if (roles) roles.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
   document.querySelectorAll("[data-demo-role]").forEach((link) => {
     link.addEventListener("click", async (event) => {
       event.preventDefault();

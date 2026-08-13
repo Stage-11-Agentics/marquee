@@ -1,6 +1,7 @@
 import { beforeEach, expect, test } from "vitest";
 
 import { loadLandingData, renderLandingDocument } from "../../src/routes/landing.route";
+import { THEMES } from "../../src/ui/shell/theme";
 import { applyMigrations, env } from "./apply-migrations";
 
 // Anchored to the real clock: the fixtures below are offsets ("due yesterday"),
@@ -83,4 +84,31 @@ test("CONTRACT · CFP-03 landing brand copy follows the current conference name"
   expect(html).toContain("the populated Future Summit 2028 workspace");
   expect(html).not.toContain("Built for AIE NYC 2026");
   expect(html).not.toContain("populated AIE NYC 2026 workspaces");
+});
+
+test("CONTRACT · the landing offers every registered theme, previewed, before the role doors", async () => {
+  const html = renderLandingDocument(SHELL, await loadLandingData(env.DB));
+
+  // Every theme in the registry gets a card and a real preview image; the
+  // registry is the source of truth, so a sixth theme fails here until the
+  // landing shows it.
+  for (const theme of THEMES) {
+    expect(html).toContain(`data-theme-choice="${theme.id}"`);
+    expect(html).toContain(`/themes/${theme.id}.webp`);
+    expect(html).toContain(theme.label);
+  }
+
+  // The ask ordering is the feature: the look is chosen before the role. The
+  // picker section must render ahead of the role doors, and the skip path to
+  // them must exist for a visitor who wants none of it.
+  // (The nav's "Enter demo" shortcut legitimately sits above the picker; the
+  // ordering that matters is against the hero's role doors.)
+  expect(html.indexOf("data-theme-choice")).toBeGreaterThan(-1);
+  expect(html.indexOf("data-theme-choice")).toBeLessThan(html.indexOf("Enter as organizer"));
+  expect(html).toContain('id="choose-role"');
+  expect(html).toContain('href="#choose-role"');
+
+  // The choice must persist into the app: the picker writes the same storage
+  // key the shell's switcher and the pre-paint script read.
+  expect(html).toContain("marquee-theme");
 });
