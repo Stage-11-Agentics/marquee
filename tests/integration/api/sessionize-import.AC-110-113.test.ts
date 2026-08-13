@@ -172,7 +172,7 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     ])).toEqual(beforeUndoControl);
   }, 20_000);
 
-  test("MRQ-165 · speakers-only import joins the roster and portal, stays idempotent, and undoes only its memberships", async () => {
+  test("CONTRACT · MRQ-165 · speakers-only import joins the roster and portal, stays idempotent, and undoes only its memberships", async () => {
     const speakersOnlyCsv = [
       "Name,Email,Job Title,Company,Bio",
       'Dana Kowalski,dana-only@example.test,Conference operator,Open Programs,"Keeps speaker rosters coherent."',
