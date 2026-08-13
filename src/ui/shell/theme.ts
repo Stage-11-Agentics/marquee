@@ -63,6 +63,64 @@ export function isThemeId(value: unknown): value is ThemeId {
   return THEMES.some((theme) => theme.id === value);
 }
 
+/**
+ * The tab dresses with the page.
+ *
+ * A register repaints the shell down to its mark — latent.space wears a
+ * gradient hexagon, AI Engineer a shell prompt, swyxy the wordmark's period —
+ * and a tab still showing the Flight Deck M above one of them reads as another
+ * site's icon on the wrong window. So icon and browser-chrome colour are part
+ * of the theme, applied by whoever applies the theme: the pre-paint script in
+ * index.html on load, and `applyTheme` on every switch after it. Keep the two
+ * in sync; the shell's map is the same map.
+ *
+ * Only the two live formats move. /favicon.ico is the legacy last resort and
+ * stays the Day mark: a browser old enough to need it is one no register theme
+ * was drawn for. The icon paths are `/favicon-<id>` by construction, so a new
+ * theme's assets are named by its id and nothing here needs a new branch.
+ */
+export const THEME_CHROME_COLOR: Record<ThemeId, string> = {
+  day: "#eaeef2",
+  night: "#121416",
+  "latent-space": "#0b0b0e",
+  "ai-engineer": "#ffffff",
+  swyxy: "#ffffff",
+};
+export const SWYXY_DARK_CHROME_COLOR = "#0b1120";
+
+export function themeIcons(theme: ThemeId): { svg: string; png: string } {
+  if (theme === "day") return { svg: "/favicon.svg", png: "/favicon-32.png" };
+  return { svg: `/favicon-${theme}.svg`, png: `/favicon-${theme}-32.png` };
+}
+
+function dressIcon(id: string, href: string): void {
+  const link = document.getElementById(id) as HTMLLinkElement | null;
+  if (!link || link.getAttribute("href") === href) return;
+  // Swap the element rather than its href: browsers re-read an icon reliably
+  // when the link itself changes, and less reliably when only the attribute
+  // does — the difference is a tab that keeps the old mark until reload.
+  const fresh = link.cloneNode(false) as HTMLLinkElement;
+  fresh.setAttribute("href", href);
+  link.replaceWith(fresh);
+}
+
+/** Point the tab's icon and chrome colour at what the document is wearing. */
+export function applyHeadDress(theme: ThemeId, mode: SwyxyMode): void {
+  // No document, or a head this route rewrote without the tags: nothing to
+  // dress, and the palette must still apply.
+  if (typeof document === "undefined" || typeof document.getElementById !== "function") return;
+  const icons = themeIcons(theme);
+  dressIcon("icon-svg", icons.svg);
+  dressIcon("icon-png", icons.png);
+  const meta = document.getElementById("theme-color-meta") as HTMLMetaElement | null;
+  if (meta) {
+    meta.setAttribute(
+      "content",
+      theme === "swyxy" && mode === "dark" ? SWYXY_DARK_CHROME_COLOR : THEME_CHROME_COLOR[theme],
+    );
+  }
+}
+
 // `?theme=<id>` overrides the stored choice for comparison links (and
 // screenshot runs) without writing storage; `?mode=dark` does the same for
 // swyxy's palette. Both fall through to storage when absent or invalid.
@@ -117,6 +175,7 @@ export function applyTheme(theme: ThemeId): void {
   // `html[data-theme="swyxy"]` with the mode as a modifier.
   if (theme === "swyxy") applySwyxyMode(readSwyxyMode());
   else delete document.documentElement.dataset.swyxyMode;
+  applyHeadDress(theme, theme === "swyxy" ? domSwyxyMode() : "light");
 }
 
 export function writeTheme(theme: ThemeId): void {
@@ -143,6 +202,9 @@ export function applySwyxyMode(mode: SwyxyMode): void {
   // `html[data-theme="swyxy"]` alone is the light register.
   if (mode === "dark") document.documentElement.dataset.swyxyMode = "dark";
   else delete document.documentElement.dataset.swyxyMode;
+  // The chrome colour follows the mode as well as the theme; the icon does
+  // not — one indigo mark carries both swyxy palettes.
+  if (domTheme() === "swyxy") applyHeadDress("swyxy", mode);
 }
 
 export function writeSwyxyMode(mode: SwyxyMode): void {

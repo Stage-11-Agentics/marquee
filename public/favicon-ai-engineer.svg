@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Marquee">
+  <!--
+    AI Engineer's tab: the shell prompt the register puts in place of the M.
+    Strict monochrome, so the tile is pure ink and the prompt pure white —
+    the same inversion the sidebar mark and the search field wear.
+
+    The chevron is stroked rather than filled because at 16px a filled arrow
+    of this weight closes up into a triangle. Butt caps and a mitre join keep
+    the vertex a point; the underscore is a rect on whole-ish units so its top
+    edge stays one crisp line.
+  -->
+  <rect width="16" height="16" rx="1.5" fill="#000000"/>
+  <path d="M4 4.6L7.6 8L4 11.4" fill="none" stroke="#ffffff" stroke-width="1.7"/>
+  <rect x="8.6" y="10.6" width="4" height="1.6" fill="#ffffff"/>
+</svg>

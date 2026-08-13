@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { THEMES, THEME_STORAGE_KEY, SWYXY_MODE_STORAGE_KEY, applyTheme, applySwyxyMode, domSwyxyMode, domTheme, isThemeId, readSwyxyMode, readTheme, writeSwyxyMode, writeTheme } from "../../src/ui/shell/theme";
+import { THEMES, THEME_STORAGE_KEY, THEME_CHROME_COLOR, SWYXY_DARK_CHROME_COLOR, SWYXY_MODE_STORAGE_KEY, applyTheme, applySwyxyMode, domSwyxyMode, domTheme, isThemeId, readSwyxyMode, readTheme, themeIcons, writeSwyxyMode, writeTheme } from "../../src/ui/shell/theme";
 import { chromeFor } from "../../src/ui/shell/register";
 import { routeTable } from "../../src/ui/shell/route-table";
 
@@ -12,14 +12,43 @@ const root = resolve(import.meta.dirname, "../..");
 // the Worker-free pool: a theme toggle should not cost a Miniflare isolate.
 type FakeStorage = { store: Map<string, string>; throwOn?: "get" | "set" };
 
+// The head tags the theme dresses — enough of an element for a swap-and-replace
+// to be observable, and nothing more.
+class FakeElement {
+  attrs: Record<string, string> = {};
+  constructor(readonly id: string, private readonly head: Map<string, FakeElement>) {}
+  getAttribute(name: string): string | null { return this.attrs[name] ?? null; }
+  setAttribute(name: string, value: string): void { this.attrs[name] = value; }
+  cloneNode(): FakeElement {
+    const clone = new FakeElement(this.id, this.head);
+    clone.attrs = { ...this.attrs };
+    return clone;
+  }
+  replaceWith(next: FakeElement): void { this.head.set(this.id, next); }
+}
+
+let head: Map<string, FakeElement>;
+
 function installDom(storage: FakeStorage | null): void {
   const dataset: Record<string, string> = {};
+  head = new Map();
+  // The tags index.html ships, in the state a fresh Day document has them.
+  for (const [id, attrs] of [
+    ["icon-svg", { href: "/favicon.svg" }],
+    ["icon-png", { href: "/favicon-32.png" }],
+    ["theme-color-meta", { content: THEME_CHROME_COLOR.day }],
+  ] as const) {
+    const element = new FakeElement(id, head);
+    element.attrs = { ...attrs };
+    head.set(id, element);
+  }
   (globalThis as Record<string, unknown>).document = {
     documentElement: {
       dataset: new Proxy(dataset, {
         deleteProperty(target, key: string) { delete target[key]; return true; },
       }),
     },
+    getElementById: (id: string) => head.get(id) ?? null,
   };
   (globalThis as Record<string, unknown>).localStorage = storage
     ? {
@@ -260,6 +289,70 @@ describe("theme round · register themes", () => {
     expect(domSwyxyMode()).toBe("dark");
     applySwyxyMode("light");
     expect(domSwyxyMode()).toBe("light");
+  });
+
+  test("CONTRACT · the tab dresses with the page: every theme points the icon links and chrome colour at its own mark", () => {
+    const worn = (id: string, attr: string) => head.get(id)?.getAttribute(attr);
+    for (const theme of THEMES) {
+      applyTheme(theme.id);
+      const icons = themeIcons(theme.id);
+      expect(worn("icon-svg", "href"), `${theme.id} icon`).toBe(icons.svg);
+      expect(worn("icon-png", "href"), `${theme.id} raster`).toBe(icons.png);
+      expect(worn("theme-color-meta", "content"), `${theme.id} chrome`).toBe(THEME_CHROME_COLOR[theme.id]);
+    }
+    // …and switching back restores the shipped Day set rather than leaving the
+    // last register's mark in the tab.
+    applyTheme("day");
+    expect(worn("icon-svg", "href")).toBe("/favicon.svg");
+    expect(worn("icon-png", "href")).toBe("/favicon-32.png");
+  });
+
+  test("CONTRACT · every theme's icon files exist — the path is built from the id, so a missing asset is a blank tab, not an error", () => {
+    for (const theme of THEMES) {
+      const icons = themeIcons(theme.id);
+      for (const href of [icons.svg, icons.png]) {
+        expect(existsSync(resolve(root, "public", href.slice(1))), `${theme.id}: ${href} is not in public/`).toBe(true);
+      }
+    }
+  });
+
+  test("CONTRACT · swyxy's dark word moves the chrome colour and leaves the mark alone", () => {
+    writeTheme("swyxy");
+    expect(head.get("theme-color-meta")?.getAttribute("content")).toBe(THEME_CHROME_COLOR.swyxy);
+    writeSwyxyMode("dark");
+    expect(head.get("theme-color-meta")?.getAttribute("content")).toBe(SWYXY_DARK_CHROME_COLOR);
+    // One indigo mark carries both swyxy palettes.
+    expect(head.get("icon-svg")?.getAttribute("href")).toBe("/favicon-swyxy.svg");
+    writeSwyxyMode("light");
+    expect(head.get("theme-color-meta")?.getAttribute("content")).toBe(THEME_CHROME_COLOR.swyxy);
+  });
+
+  test("CONTRACT · a head without the icon tags still gets its palette — the fallback documents carry no ids", () => {
+    head.clear();
+    expect(() => applyTheme("latent-space")).not.toThrow();
+    expect(currentAttribute()).toBe("latent-space");
+  });
+
+  test("CONTRACT · the pre-paint script dresses the same tags, so the browser never caches the wrong icon", () => {
+    // As with the palette: two implementations of one contract. The script
+    // runs before the icon links are fetched; applyTheme runs on every switch
+    // after. A tag renamed on one side and not the other means the first paint
+    // and the first toggle disagree about which mark the tab wears.
+    const shell = readFileSync(resolve(root, "index.html"), "utf8");
+    for (const id of ["icon-svg", "icon-png", "theme-color-meta"]) {
+      expect(shell, `index.html has no #${id}`).toContain(`id="${id}"`);
+      expect(shell, `the pre-paint script never dresses #${id}`).toContain(`"${id}"`);
+    }
+    for (const theme of THEMES) {
+      if (theme.id === "day") continue; // Day is what the markup already ships.
+      expect(shell, `the script's chrome colours omit ${theme.id}`).toContain(
+        `"${theme.id}": "${THEME_CHROME_COLOR[theme.id]}"`,
+      );
+    }
+    expect(shell).toContain(SWYXY_DARK_CHROME_COLOR);
+    // The paths are built from the id on both sides.
+    expect(shell).toContain('"/favicon-" + t + ".svg"');
+    expect(shell).toContain('"/favicon-" + t + "-32.png"');
   });
 
   test("CONTRACT · radius stays theme-invariant — a register re-lights the instrument, it does not re-machine it", () => {
