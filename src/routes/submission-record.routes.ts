@@ -547,7 +547,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
   `).bind(eventId, submissionId).first<BaseRecordRow>();
   if (!row) throw ApiError.notFound("submission not found");
 
-  const [participants, answers, tracks, decisions, reversals, evaluations, comparisons, history, rounds, reviewerOptions] = await Promise.all([
+  const [participants, answers, tracks, decisions, reversals, evaluations, comparisons, history, rounds, criteria, reviewerOptions] = await Promise.all([
     db.prepare(`
       SELECT participation.id, participation.person_id, person.name, person.email, person.company,
         person.title, participation.role, participation.position, participation.confirmation_status,
@@ -652,6 +652,21 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       WHERE plan.event_id = ?
       ORDER BY round.position, round.id, assignment.id
     `).bind(submissionId, eventId).all<Record<string, unknown>>(),
+    /**
+     * An evaluation's criteria_scores is a map keyed by criterion id, which
+     * says nothing on its own. Without the rubric beside it the record can only
+     * render the aggregate — and a scorecard whose free-text criterion holds the
+     * reviewer's written rationale shows the organizer nothing at all.
+     */
+    db.prepare(`
+      SELECT criterion.id, criterion.round_id, criterion.name, criterion.kind,
+        criterion.weight_pct, criterion.position
+      FROM rubric_criteria criterion
+      JOIN evaluation_rounds round ON round.id = criterion.round_id
+      JOIN evaluation_plans plan ON plan.id = round.plan_id
+      WHERE plan.event_id = ?
+      ORDER BY criterion.round_id, criterion.position
+    `).bind(eventId).all<Record<string, unknown>>(),
     db.prepare(`
       SELECT DISTINCT person.id, person.name, person.kind, person.company,
         COALESCE((SELECT json_group_array(scope.track_id) FROM reviewer_track_scopes scope WHERE scope.event_id = membership.event_id AND scope.person_id = person.id), '[]') AS track_ids
@@ -673,6 +688,15 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       plan_status: item.plan_status,
       mode: item.mode,
       target_reviews_per_submission: Number(item.target_reviews_per_submission),
+      criteria: criteria.results
+        .filter((criterion) => String(criterion.round_id) === String(item.id))
+        .map((criterion) => ({
+          id: criterion.id,
+          name: criterion.name,
+          kind: criterion.kind,
+          weight_pct: Number(criterion.weight_pct ?? 0),
+          position: Number(criterion.position ?? 0),
+        })),
       reviewers: [],
       evaluations: [],
       comparisons: [],

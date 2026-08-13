@@ -53,6 +53,7 @@ interface EvaluationEvidence {
   recommendation: string | null;
   score: number | null;
   comment: string;
+  criteria_scores: Record<string, number | string> | null;
   override_score: number | null;
   override_comment: string | null;
   override_at: number | null;
@@ -60,7 +61,8 @@ interface EvaluationEvidence {
   scale_min: number | null;
   scale_max: number | null;
 }
-interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; reviewers: Assignment[]; evaluations: Array<{ abstained: boolean; score: number | null; recommendation: string | null; comment: string; reviewer_kind: "human" | "agent" }>; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
+interface RubricCriterion { id: string; name: string; kind: "numeric" | "select" | "text"; weight_pct: number; position: number }
+interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; criteria: RubricCriterion[]; reviewers: Assignment[]; evaluations: Array<{ abstained: boolean; score: number | null; recommendation: string | null; comment: string; reviewer_kind: "human" | "agent" }>; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
 interface RecordData {
   id: string; event_id: string; event_name: string; kind: "abstract" | "session"; title: string; abstract: string | null;
   status: string; stage: string; stage_label: string; bypass_evaluation: boolean; origin: string; vendor_affiliation: string;
@@ -137,8 +139,42 @@ function scoreText(score: number | null): string {
  * the superseded line when an override exists, and by the form while it is
  * open — both are the operator's own action, not a shift under their cursor.
  */
-function EvaluationEvidenceRow({ evaluation, canOverride, busy, error, onOverride, onClear }: {
+/**
+ * A scorecard is the rubric its round defines — weighted numbers, a
+ * recommendation, and whatever free text the round asks for. The aggregate and
+ * the committee note are the only two of those the record used to show, so a
+ * reviewer's written rationale entered against a text criterion reached nobody:
+ * the person deciding accept or reject saw a number and an em dash.
+ *
+ * Text answers lead because they are the reasoning; the weighted numbers follow
+ * as a compact line. A criterion the reviewer left unanswered is omitted rather
+ * than shown empty — the rubric is not a checklist of what they owed.
+ */
+function ScorecardAnswers({ criteria, scores }: { criteria: RubricCriterion[]; scores: Record<string, number | string> | null }): JSX.Element | null {
+  if (!scores || !criteria.length) return null;
+  const answered = criteria
+    .filter((criterion) => scores[criterion.id] !== undefined && String(scores[criterion.id]).trim() !== "")
+    .map((criterion) => ({ criterion, value: scores[criterion.id] }));
+  if (!answered.length) return null;
+  const prose = answered.filter((entry) => entry.criterion.kind === "text");
+  const rated = answered.filter((entry) => entry.criterion.kind !== "text");
+  return <div class="evaluation-scorecard">
+    {prose.map((entry) => <div class="evaluation-criterion-note" key={entry.criterion.id}>
+      <small>{entry.criterion.name}</small>
+      <span>{String(entry.value)}</span>
+    </div>)}
+    {rated.length > 0 && <div class="evaluation-criterion-scores">
+      {rated.map((entry) => <span key={entry.criterion.id}>
+        {entry.criterion.name}{entry.criterion.weight_pct > 0 ? ` ${entry.criterion.weight_pct}%` : ""}
+        {" · "}<strong class="tabular">{String(entry.value)}</strong>
+      </span>)}
+    </div>}
+  </div>;
+}
+
+function EvaluationEvidenceRow({ evaluation, criteria, canOverride, busy, error, onOverride, onClear }: {
   evaluation: EvaluationEvidence;
+  criteria: RubricCriterion[];
   canOverride: boolean;
   busy: boolean;
   error: string;
@@ -165,6 +201,7 @@ function EvaluationEvidenceRow({ evaluation, canOverride, busy, error, onOverrid
       ? "Conflict declared"
       : `${scoreText(overridden ? evaluation.override_score : evaluation.score)} · ${evaluation.recommendation || "No recommendation"}`}</strong>
     <span>{evaluation.abstained ? "Reviewer recused; no recommendation recorded." : evaluation.comment || "—"}</span>
+    {!evaluation.abstained && <ScorecardAnswers criteria={criteria} scores={evaluation.criteria_scores} />}
     {overridden && <span class="evaluation-superseded">
       Overridden by {evaluation.override_person_name || "a chair"} · {evaluation.reviewer_name} scored <span class="tabular">{scoreText(evaluation.score)}</span>
       {evaluation.override_comment ? ` · ${evaluation.override_comment}` : ""}
@@ -451,6 +488,9 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   if (state.kind === "loading") return <div class="submission-record-page"><PageHeader title="Submission record" copy="Reading the complete conference record…" /><Card><CardBody><div class="record-state">Loading record…</div></CardBody></Card></div>;
   if (state.kind === "error") return <div class="submission-record-page"><PageHeader title="Submission record" copy={state.notFound ? "This record could not be found." : "This record could not be reached right now."} /><Card><CardBody><div class="record-state error"><strong>{state.notFound ? "Record not found" : "Record unavailable"}</strong><span>{state.message}</span><div class="record-action-row"><Button onClick={() => navigate("/submissions")}>Back to submissions</Button><Button variant="primary" onClick={reload}>Retry</Button></div></div></CardBody></Card></div>;
   const record = state.record;
+  // Every round's rubric, so an evaluation's criteria_scores can be read back
+  // as the questions the reviewer actually answered.
+  const criteriaByRound = new Map(record.evaluation.rounds.map((round) => [round.id, round.criteria ?? []]));
   const speakerParticipant = record.participants.find((participant) => participant.role === "speaker")
     ?? record.participants.find((participant) => participant.role === "co_speaker")
     ?? record.participants.find((participant) => participant.role !== "submitter");
@@ -527,7 +567,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           </form>}
         </CardBody></Card>
         <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
-        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} error={busy === `override-${evaluation.id}` ? "" : overrideError} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
+        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} criteria={criteriaByRound.get(evaluation.round_id) ?? []} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} error={busy === `override-${evaluation.id}` ? "" : overrideError} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
         <Card><CardHeader title="History"><span class="subtle">Every change, who made it, and when.</span></CardHeader><CardBody><ContentHistory entries={record.history} onRestore={record.actions.can_restore_content ? ((entryId) => void restoreVersion(entryId, isLivePublicly)) : undefined} busy={Boolean(busy)} label={statusLabel} moment={moment} livePublicly={isLivePublicly} /></CardBody></Card>
       </div>
       <aside class="record-aside stack">

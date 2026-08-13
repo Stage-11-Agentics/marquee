@@ -79,6 +79,13 @@
 .override-chip-placeholder { visibility: hidden; }
 .record-evaluation small { align-items: center; display: flex; flex-wrap: wrap; gap: 4px; }
 .evaluation-superseded { color: var(--muted); }
+/* The rubric the reviewer answered, under the aggregate that summarised it.
+   Prose first — it is the reasoning — then the weighted numbers as one line. */
+.evaluation-scorecard { border-left: 2px solid var(--line); display: grid; gap: 7px; margin-top: 7px; padding-left: 9px; }
+.evaluation-criterion-note { display: grid; gap: 2px; }
+.evaluation-criterion-note small { color: var(--muted); font: 600 9px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.evaluation-criterion-note span { color: var(--ink); font-size: 11px; line-height: 1.5; }
+.evaluation-criterion-scores { color: var(--muted); display: flex; flex-wrap: wrap; font-size: 10px; gap: 4px 12px; }
 .evaluation-override-controls { margin-top: 3px; min-height: 26px; }
 .evaluation-override-form { display: grid; gap: 6px; }
 .evaluation-override-form .field span { font-size: 10px; }
