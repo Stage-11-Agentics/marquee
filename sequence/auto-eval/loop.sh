@@ -57,6 +57,16 @@ atlas() { ssh atlas "$*"; }
 
 live_sha() { curl -fsS --max-time 15 "$SITE/health" | python3 -c 'import sys,json;print(json.load(sys.stdin)["build"])'; }
 
+# A run that was stopped short, graded more than one build, or is otherwise not
+# attributable. Recorded in state so nothing can quietly use it: a void run is
+# indistinguishable from a good one on disk — same judgements, same shape — and
+# diffing against one manufactures regressions that were never real.
+is_void() {
+  python3 -c "
+import json,sys
+print('yes' if '$1' in json.load(open('$STATE')).get('voidRuns',[]) else 'no')"
+}
+
 # The newest run directory on Atlas, whether or not it has been synced yet.
 atlas_run_stamp() { atlas "ls -1t ~/$KIT_ATLAS/runs | head -1"; }
 
@@ -64,6 +74,13 @@ atlas_run_stamp() { atlas "ls -1t ~/$KIT_ATLAS/runs | head -1"; }
 # has been fired through this spine yet, so fall back to the round-4 job that
 # seeded it.
 job_name() { local r; r=$(jget round); [[ -n $r && $r != 0 ]] && echo "sbek-round$r" || echo "sbek-round4"; }
+
+# Ground truth for "is a round in flight", asked of Atlas rather than inferred from
+# our own state. A round fired by another agent — which is exactly how round 5
+# started — is invisible to state.json but very much real.
+round_running() {
+  atlas "~/bin/atlas-job status 2>/dev/null" | grep -qE '^sbek-round[0-9]+ +RUNNING'
+}
 
 # --- verbs -----------------------------------------------------------------
 
@@ -74,7 +91,8 @@ cmd_status() {
   printf 'round      %s%s\n' "$(jget round)" "$([[ $(jget halted) == True ]] && echo '  [HALTED]' || true)"
   printf 'live sha   %s\n' "$(live_sha)"
   printf 'anchor     %s (%s%%)\n' "$(jget anchor)" "$(jget anchorPct)"
-  printf 'run        %s — %s/6 areas judged\n' "$stamp" "$judged"
+  printf 'run        %s — %s/6 areas judged%s\n' "$stamp" "$judged" \
+    "$([[ $(is_void "$stamp") == yes ]] && echo '   [VOID — do not cite]' || true)"
   printf 'atlas job  %s\n' "$job"
   atlas "tail -4 ~/$KIT_ATLAS/PROGRESS.log"
 }
@@ -117,14 +135,29 @@ cmd_watch() {
 cmd_mine() {
   local stamp; stamp=$(jget runStamp); [[ -n $stamp ]] || die "no synced run; run: loop.sh sync"
   local baseline=""
-  [[ ${1:-} == --baseline ]] && baseline="--baseline $KIT_LOCAL/runs/$2"
+  if [[ ${1:-} == --baseline ]]; then
+    [[ $(is_void "$2") == yes ]] && die "REFUSING: $2 is a void run. Diffing against it
+invents regressions. Use the last run that graded a single build end to end."
+    baseline="--baseline $KIT_LOCAL/runs/$2"
+  fi
   (cd "$KIT_LOCAL" && node "$SELF_DIR/mine.mjs" --kit . --run "runs/$stamp" $baseline)
 }
 
 # The safety property. Compares this round against the anchor (best round so far)
 # and refuses to let the loop deploy into a falling score.
 cmd_guard() {
-  local pct; pct=$(cmd_mine | python3 -c 'import sys,json;print(json.load(sys.stdin)["headline"]["pct"])')
+  # Prefer the harness's own area-weighted headline over mine.mjs's flat-weight
+  # approximation. They differ by more than a point — round 4 read 88.1 official
+  # against 86.9 flat — and the floor has to guard the number the competition
+  # reads. mine.mjs is the fallback for a round scored but not yet finalised.
+  local pct stamp; stamp=$(jget runStamp)
+  pct=$(python3 -c "
+import json,sys
+d=json.load(open('$KIT_LOCAL/runs/$stamp/report.json'))
+if d.get('scoreWithheld'): sys.exit(1)
+print(d['overallPct'])
+" 2>/dev/null) \
+    || pct=$(cmd_mine | python3 -c 'import sys,json;print(json.load(sys.stdin)["headline"]["pct"])')
   local anchor_pct; anchor_pct=$(jget anchorPct)
   say "round pct $pct  anchor $anchor_pct"
   if [[ -z $anchor_pct ]]; then
@@ -149,6 +182,17 @@ Then raise a flag for the operator."
 # THE mutation window. The only place anything about the target changes.
 cmd_barrier() {
   [[ $(jget halted) == True ]] && die "loop is halted; clear state.halted after an operator call"
+
+  # The hard gate. Everything below this line mutates the thing a running round is
+  # measuring: the reset wipes its data, the deploy moves its target. The freeze
+  # marker is a convention between agents and can be stale or absent; the job
+  # status cannot. Ask Atlas, always, and refuse.
+  if [[ ${1:-} != --force ]] && round_running; then
+    die "REFUSING: a round is in flight on Atlas.
+The barrier resets the demo and deploys — both destroy a measurement in progress.
+Wait for RUN-COMPLETE (loop.sh watch), then run this again.
+  ssh atlas '~/bin/atlas-job status'"
+  fi
 
   # The barrier is the only thing that lifts the freeze. `fire` declares it, and
   # between those two points every other agent's check:deploy reads "frozen, do
@@ -182,13 +226,16 @@ cmd_barrier() {
 
   if [[ ${1:-} != --no-deploy ]]; then
     say "3/5 deploy main from the clean tree"
+    # Detached, never `checkout main`: the primary checkout holds that branch and
+    # git refuses to have it in two worktrees at once. The deploy tree only ever
+    # needs the commit, never the branch name.
     # The token is sourced inside this subshell and nowhere else. DEPLOY.md keeps it
     # under MARQUEE_CLOUDFLARE_API_TOKEN precisely so a bare CLOUDFLARE_API_TOKEN
     # never leaks to every tool that sources the platform env; the rename happens on
     # the wrangler line, at the last possible moment.
     ( set -a; . "$CREDENTIALS_ENV"; set +a
       cd "$DEPLOY_TREE" \
-      && git fetch github main --quiet && git checkout --quiet main && git reset --hard --quiet github/main \
+      && git fetch github main --quiet && git checkout --quiet --detach github/main \
       && npx vite build >/dev/null \
       && CLOUDFLARE_API_TOKEN="${MARQUEE_CLOUDFLARE_API_TOKEN:?not in $CREDENTIALS_ENV}" npx wrangler deploy )
 
@@ -206,19 +253,27 @@ cmd_barrier() {
 cmd_fire() {
   local sha=${1:?usage: loop.sh fire <sha-12>}
   [[ $(jget halted) == True ]] && die "loop is halted"
+  round_running && die "REFUSING: a round is already in flight on Atlas. Two runs against
+one mutable site interleave their data and both become unreadable."
   local round=$(( $(jget round) + 1 ))
   say "firing round $round against $sha"
   # Push the kickoff script every time: the version that runs is the version in
   # this repo, not whatever was last hand-edited on the box.
   scp -q "$SELF_DIR/atlas/kickoff-round.sh" "atlas:$KIT_ATLAS/kickoff-round.sh"
-  atlas "chmod +x ~/$KIT_ATLAS/kickoff-round.sh && ~/$KIT_ATLAS/kickoff-round.sh $round $sha"
-  set_state "round=$round" "runStamp=null"
-
-  # Declare the freeze only after the round is genuinely up: a marker left behind
-  # by a kickoff that refused would block the whole fleet for nothing.
+  # Declare the freeze BEFORE the round exists, not after. The gap between
+  # "browsing has started" and "the marker is on disk" is a window in which a
+  # sibling agent reads `stale` and ships — which is how round 4 came to grade two
+  # builds. A marker left by a kickoff that refuses is the cheaper failure, and
+  # the trap below clears it anyway.
   printf 'round %s grading %s on Atlas since %s — auto-eval coordinator. Lifted by `loop.sh barrier`.\n' \
     "$round" "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$FREEZE_FILE"
   say "deploy freeze declared at $FREEZE_FILE"
+
+  trap 'rm -f "$FREEZE_FILE"; die "kickoff refused — freeze lifted, no round started"' ERR
+  atlas "chmod +x ~/$KIT_ATLAS/kickoff-round.sh && ~/$KIT_ATLAS/kickoff-round.sh $round $sha"
+  trap - ERR
+
+  set_state "round=$round" "runStamp=null"
 }
 
 case "${1:-status}" in
