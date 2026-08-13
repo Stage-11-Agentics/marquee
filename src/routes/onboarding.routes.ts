@@ -51,8 +51,8 @@ const getOnboardingSpeakerRoute = defineApiRoute(
   },
   async (context) => {
     const { eventId, personId } = context.req.valid("param");
-    const mediaPublicOrigin = (context.env as unknown as { MEDIA_PUBLIC_ORIGIN?: string }).MEDIA_PUBLIC_ORIGIN ?? "";
-    const detail = await getOnboardingSpeaker(context.env.DB, eventId, personId, Date.now(), mediaPublicOrigin);
+    const mediaEnv = context.env as unknown as { MEDIA_PUBLIC_ORIGIN?: string; UPLOAD_TOKEN_SECRET: string };
+    const detail = await getOnboardingSpeaker(context.env.DB, eventId, personId, Date.now(), mediaEnv.MEDIA_PUBLIC_ORIGIN ?? "", mediaEnv.UPLOAD_TOKEN_SECRET);
     if (!detail) throw ApiError.notFound("speaker not found");
     return context.json(detail, 200);
   },

@@ -9,6 +9,10 @@ export default defineConfig({
         bindings: {
           TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
           TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+          // Media links are signed inside Worker-backed integration tests too;
+          // this binding keeps SELF.fetch fixtures deterministic without ever
+          // putting a production secret in wrangler vars.
+          UPLOAD_TOKEN_SECRET: "worker-test-upload-token-secret",
           RESEND_WEBHOOK_SECRET: "whsec_dGVzdC13ZWJob29rLXNlY3JldA==",
           // The suite drives thousands of requests; at the default `info` each
           // one writes a JSON line that vitest then intercepts and re-emits.

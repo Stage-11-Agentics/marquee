@@ -17,6 +17,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import { listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
+import { MEDIA_LINK_POLICY } from "../lib/r2/media-links";
 
 export interface SpeakerFileGroup {
   /** The owner the files hang from — the person for a photo, the task for a deliverable. */
@@ -35,8 +36,8 @@ export interface SpeakerFilesSnapshot {
   /** Live deliverable slots — cancelled work is still listed but is not owed. */
   expected: number;
   received: number;
-  /** Named so a caller cannot mistake these URLs for authenticated ones. */
-  link_policy: "unauthenticated-capability-url";
+  /** Named so a caller can see the expiry and revocation boundary of these URLs. */
+  link_policy: typeof MEDIA_LINK_POLICY;
 }
 
 interface TaskRow {
@@ -70,6 +71,7 @@ export async function listSpeakerFiles(
   eventId: string,
   personId: string,
   mediaPublicOrigin: string,
+  mediaSigningSecret: string,
 ): Promise<SpeakerFilesSnapshot> {
   const tasks = await db
     .prepare(
@@ -84,8 +86,8 @@ export async function listSpeakerFiles(
     .all<TaskRow>();
 
   const [headshots, deliverables] = await Promise.all([
-    listVersionsForOwners(db, "person_headshot", [personId], mediaPublicOrigin),
-    listVersionsForOwners(db, "task_upload", tasks.results.map((task) => task.id), mediaPublicOrigin),
+    listVersionsForOwners(db, "person_headshot", [personId], mediaPublicOrigin, mediaSigningSecret),
+    listVersionsForOwners(db, "task_upload", tasks.results.map((task) => task.id), mediaPublicOrigin, mediaSigningSecret),
   ]);
 
   const headshotList = headshots.get(personId);
@@ -125,6 +127,6 @@ export async function listSpeakerFiles(
     groups,
     expected: live.length,
     received: live.filter((group) => group.versions.latest !== null).length,
-    link_policy: "unauthenticated-capability-url",
+    link_policy: MEDIA_LINK_POLICY,
   };
 }

@@ -565,6 +565,7 @@ export async function getOnboardingSpeaker(
   personId: string,
   now = Date.now(),
   mediaPublicOrigin = "",
+  mediaSigningSecret: string,
 ): Promise<OnboardingSpeakerDetail | null> {
   const person = await db.prepare(
     `SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
@@ -581,13 +582,15 @@ export async function getOnboardingSpeaker(
     listTemplates(db, eventId),
     listTasks(db, eventId, [personId]),
     listSessions(db, eventId, [personId]),
-    listVersionsFor(db, "person_headshot", personId, mediaPublicOrigin),
+    listVersionsFor(db, "person_headshot", personId, mediaPublicOrigin, mediaSigningSecret, now),
   ]);
   const taskFileLists = await listVersionsForOwners(
     db,
     "task_upload",
     taskRows.filter((task) => task.kind === "file").map((task) => task.id),
     mediaPublicOrigin,
+    mediaSigningSecret,
+    now,
   );
   const templatesById = new Map(templates.map((template) => [template.id, template]));
   const assignedTemplateIds = new Set(taskRows.map((task) => task.template_id));

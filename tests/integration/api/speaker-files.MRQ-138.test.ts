@@ -142,7 +142,7 @@ test("CONTRACT · MRQ-138 — requested deliverables appear on the same record, 
   expect(deliverable!.versions.latest?.filename).toBe("taming-ci.pdf");
   // The photo leads the record; it is the file every speaker has.
   expect(snapshot.groups[0].kind).toBe("headshot");
-  expect(snapshot).toMatchObject({ expected: 1, received: 1, link_policy: "unauthenticated-capability-url" });
+  expect(snapshot).toMatchObject({ expected: 1, received: 1, link_policy: "short-lived-revocable-capability-url" });
 });
 
 test("CONTRACT · MRQ-138 — a speaker who has sent nothing still gets a row that says so", async () => {

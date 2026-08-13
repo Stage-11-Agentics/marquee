@@ -209,6 +209,10 @@ function mediaOrigin(context: Context<ApiEnv>): string {
   return (context.env as unknown as { MEDIA_PUBLIC_ORIGIN?: string }).MEDIA_PUBLIC_ORIGIN ?? "";
 }
 
+function mediaSigningSecret(context: Context<ApiEnv>): string {
+  return (context.env as unknown as { UPLOAD_TOKEN_SECRET: string }).UPLOAD_TOKEN_SECRET;
+}
+
 const readSpeakerFiles = defineApiRoute(
   {
     method: "get",
@@ -216,7 +220,7 @@ const readSpeakerFiles = defineApiRoute(
     operationId: "listEventSpeakerFiles",
     summary: "List everything one speaker has sent the conference",
     description:
-      "The speaker's profile photo and every requested deliverable, each with filename, upload date, size, and full version history. Version numbers and the current version are derived from the owner's latest-pointer, never stored. Every returned file URL is an unauthenticated capability URL on the media origin.",
+      "The speaker's profile photo and every requested deliverable, each with filename, upload date, size, and full version history. Version numbers and the current version are derived from the owner's latest-pointer, never stored. Every returned file URL is a short-lived signed capability on the separate media origin; it expires after 15 minutes and is invalidated when its attachment or owning participation is revoked.",
     tags: ["Speakers", "Files"],
     request: { params: speakerParams },
     policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
@@ -227,7 +231,7 @@ const readSpeakerFiles = defineApiRoute(
     await eventFor(context.env.DB, eventId);
     const speaker = await getSpeaker(context.env.DB, eventId, personId);
     if (!speaker) throw ApiError.notFound("speaker not found");
-    return context.json({ data: await listSpeakerFiles(context.env.DB, eventId, personId, mediaOrigin(context)) }, 200);
+    return context.json({ data: await listSpeakerFiles(context.env.DB, eventId, personId, mediaOrigin(context), mediaSigningSecret(context)) }, 200);
   },
 );
 

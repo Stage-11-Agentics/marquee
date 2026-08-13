@@ -23,7 +23,8 @@ import { authHasRole } from "../lib/auth/scope-resolution";
 import { SESSION_COOKIE_NAME } from "../lib/cookies";
 import { isPreviewableImage } from "../lib/file-answers";
 import { uploadError } from "../lib/r2/errors";
-import { objectKeyFor, publicMediaUrl } from "../lib/r2/keys";
+import { objectKeyFor } from "../lib/r2/keys";
+import { mediaAttachmentIsActive, publicMediaUrl, verifyMediaUrl } from "../lib/r2/media-links";
 import { extensionOf, parseUploadOwnerConfig, policyFor, sanitizeFilename, validateDeclared } from "../lib/r2/policy";
 import { presignPut, type R2SigningConfig } from "../lib/r2/presign";
 import type { UploadOwnerConfig } from "../lib/r2/protocol";
@@ -560,7 +561,7 @@ async function handleComplete(context: Context<ApiEnv>) {
   return context.json({
     attachmentId: row.id,
     status: "ready",
-    url: publicMediaUrl(env.MEDIA_PUBLIC_ORIGIN, { status: "ready", r2_key: row.r2_key }),
+    url: await publicMediaUrl(env.MEDIA_PUBLIC_ORIGIN, { status: "ready", r2_key: row.r2_key }, env.UPLOAD_TOKEN_SECRET),
     contentType: row.content_type,
     sizeBytes: row.size_bytes,
   });
@@ -578,11 +579,30 @@ async function handleMedia(context: Context<ApiEnv>) {
   }
 
   const key = decodeURIComponent(url.pathname.replace(/^\/api\/v1\/media\//, ""));
+  if (!(await verifyMediaUrl(key, url, env.UPLOAD_TOKEN_SECRET))) {
+    return context.notFound();
+  }
+
   const row = await env.DB.prepare(
-    `SELECT status, r2_etag, content_type, filename FROM attachments WHERE r2_key = ?1`,
+    `SELECT id, event_id, owner_type, owner_id, status, r2_etag, content_type, filename
+       FROM attachments
+      WHERE r2_key = ?1`,
   )
     .bind(key)
-    .first<{ status: "pending" | "ready"; r2_etag: string | null; content_type: string; filename: string }>();
+    .first<{
+      id: string;
+      event_id: string;
+      owner_type: "person_headshot" | "task_upload" | "event_logo" | "import_file" | "draft_file" | "submission_file";
+      owner_id: string;
+      status: "pending" | "ready";
+      r2_etag: string | null;
+      content_type: string;
+      filename: string;
+    }>();
+
+  if (!row || row.status !== "ready" || !(await mediaAttachmentIsActive(env.DB, row))) {
+    return context.notFound();
+  }
 
   return serveMediaObject(env.MEDIA, key, row);
 }
@@ -749,7 +769,7 @@ const uploadCompleteResponseSchema = z
   .object({
     attachmentId: z.string(),
     status: z.literal("ready"),
-    url: z.string(),
+    url: z.string().describe("A short-lived signed URL on the separate media origin; it expires after 15 minutes."),
     contentType: z.string(),
     sizeBytes: z.number(),
   })
@@ -973,7 +993,7 @@ const serveMedia = defineApiRoute(
     operationId: "serveMedia",
     summary: "Serve a verified upload",
     description:
-      "Serves a ready upload only from the configured separate media origin, as an attachment with nosniff protection.",
+      "Serves a ready upload only from the configured separate media origin when presented with its short-lived signed URL. The link expires after 15 minutes and is rejected when its attachment or owning speaker participation is revoked; downloads remain attachments with nosniff protection.",
     tags: ["Uploads"],
     request: { params: mediaParamsSchema },
     policy: {

@@ -261,6 +261,10 @@ function portalMediaOrigin(context: import("hono").Context<ApiEnv>): string {
   return (context.env as unknown as { MEDIA_PUBLIC_ORIGIN?: string }).MEDIA_PUBLIC_ORIGIN ?? "";
 }
 
+function portalMediaSigningSecret(context: import("hono").Context<ApiEnv>): string {
+  return (context.env as unknown as { UPLOAD_TOKEN_SECRET: string }).UPLOAD_TOKEN_SECRET;
+}
+
 function isSessionAuth(auth: AuthContext | null): auth is SessionAuth {
   return auth?.kind === "session";
 }
@@ -816,7 +820,7 @@ function taskPayload(
   };
 }
 
-async function listTasks(db: D1Database, event: EventProjection, personId: string, mediaPublicOrigin: string): Promise<Record<string, unknown>[]> {
+async function listTasks(db: D1Database, event: EventProjection, personId: string, mediaPublicOrigin: string, mediaSigningSecret: string): Promise<Record<string, unknown>[]> {
   const [rows, cancellationAudits] = await Promise.all([
     db
       .prepare(
@@ -856,6 +860,7 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
     "task_upload",
     rows.results.filter((task) => task.kind === "file").map((task) => task.id),
     mediaPublicOrigin,
+    mediaSigningSecret,
   );
 
   return Promise.all(rows.results.map(async (task) => {
@@ -1082,7 +1087,7 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
   };
 }
 
-async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrigin: string, requestedEventId?: string) {
+async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrigin: string, mediaSigningSecret: string, requestedEventId?: string) {
   const speakerSeat = await findSpeakerEvent(db, auth, requestedEventId);
   if (!speakerSeat) {
     const submitterSeat = await findSubmitterEvent(db, auth, requestedEventId);
@@ -1093,7 +1098,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
   const person = await personFor(db, auth.personId);
   const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount] = await Promise.all([
     listSubmissions(db, event, auth.personId),
-    listTasks(db, event, auth.personId, mediaPublicOrigin),
+    listTasks(db, event, auth.personId, mediaPublicOrigin, mediaSigningSecret),
     primaryBuildingFor(db, event.id),
     pinnedBuildingCountFor(db, event.id),
   ]);
@@ -1407,7 +1412,7 @@ const getPortal = defineApiRoute(
   async (context) => {
     const auth = requireUnscopedSpeakerSession(context);
     const query = context.req.valid("query");
-    return context.json(await portalSnapshot(context.env.DB, auth, portalMediaOrigin(context), query.eventId), 200);
+    return context.json(await portalSnapshot(context.env.DB, auth, portalMediaOrigin(context), portalMediaSigningSecret(context), query.eventId), 200);
   },
 );
 

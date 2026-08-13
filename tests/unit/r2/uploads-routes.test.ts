@@ -432,7 +432,7 @@ test("AC-232 · a completed upload with matching magic bytes becomes ready and s
   expect(completed.url).toContain("media.marquee.test");
 
   const mediaHostResponse = await app.fetch(
-    new Request(`https://media.marquee.test/api/v1/media/${row!.r2_key}`),
+    new Request(completed.url),
     BASE_ENV,
   );
   expect(mediaHostResponse.status).toBe(200);
