@@ -63,6 +63,11 @@ loop.sh fire <sha>        kick the next round on Atlas against a known sha
 - **Deploy only at the barrier.** Merging is continuous; deploying is not. A round
   whose areas were measured against three builds cannot be diffed against the
   next one, and attribution is the loop's entire value.
+- **`fire` declares the deploy freeze; `barrier` is the only thing that lifts it.**
+  The marker (`.deploy-freeze` in the primary checkout) makes the rule above
+  binding on the *whole fleet* rather than just this loop — without it, a sibling
+  agent reading `check:deploy` sees `stale`, ships the drift, and destroys the
+  measurement while following DEPLOY.md correctly.
 - **Migrations stay gated on the operator.** A bad merge costs a `git revert`. A
   migration applied to the live D1 does not come back that way.
 - **One gate at a time.** Same branch, three runs on 2026-08-12: load 14 → 78s,

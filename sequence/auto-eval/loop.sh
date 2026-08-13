@@ -24,6 +24,10 @@ STATE="$STATE_DIR/state.json"
 GATE_LOCK=${GATE_LOCK:-/tmp/marquee-gate.lock}
 CREDENTIALS_ENV=${CREDENTIALS_ENV:-$HOME/Projects/Stage11/code/platform/.credentials/.env}
 DEMO_HEADER=${DEMO_HEADER:-AI Engineer New York 2026}
+# The fleet-wide deploy freeze (check-deploy.mjs). It reads the marker from the
+# current worktree root or MARQUEE_PRIMARY_CHECKOUT, so the primary checkout is
+# where it belongs: findable from every worktree, including the deploy tree.
+FREEZE_FILE=${FREEZE_FILE:-$MARQUEE_ROOT/.deploy-freeze}
 # Score-floor: a round may lose this many points before the loop stops deploying.
 FLOOR_DROP=${FLOOR_DROP:-2.0}
 
@@ -146,6 +150,15 @@ Then raise a flag for the operator."
 cmd_barrier() {
   [[ $(jget halted) == True ]] && die "loop is halted; clear state.halted after an operator call"
 
+  # The barrier is the only thing that lifts the freeze. `fire` declares it, and
+  # between those two points every other agent's check:deploy reads "frozen, do
+  # not deploy" — which is what stops a well-behaved sibling from destroying a
+  # measurement by following DEPLOY.md correctly.
+  if [[ -f $FREEZE_FILE ]]; then
+    say "0/5 lifting the deploy freeze: $(head -1 "$FREEZE_FILE")"
+    rm -f "$FREEZE_FILE"
+  fi
+
   say "1/5 reset the demo to its seeded baseline"
   local jar; jar=$(mktemp)
   curl -fsS -c "$jar" -X POST "$SITE/api/v1/auth/demo" \
@@ -200,6 +213,12 @@ cmd_fire() {
   scp -q "$SELF_DIR/atlas/kickoff-round.sh" "atlas:$KIT_ATLAS/kickoff-round.sh"
   atlas "chmod +x ~/$KIT_ATLAS/kickoff-round.sh && ~/$KIT_ATLAS/kickoff-round.sh $round $sha"
   set_state "round=$round" "runStamp=null"
+
+  # Declare the freeze only after the round is genuinely up: a marker left behind
+  # by a kickoff that refused would block the whole fleet for nothing.
+  printf 'round %s grading %s on Atlas since %s — auto-eval coordinator. Lifted by `loop.sh barrier`.\n' \
+    "$round" "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$FREEZE_FILE"
+  say "deploy freeze declared at $FREEZE_FILE"
 }
 
 case "${1:-status}" in

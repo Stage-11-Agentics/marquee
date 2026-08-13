@@ -39,6 +39,14 @@ costs the run more than a revert costs.
 - No dev-only flag flipped on: `INSECURE_LOCAL_COOKIES` and `LOCAL_UPLOAD_SHIM` must
   read `"0"` for anything deployed.
 
+## A freeze is not a stop-work order
+
+While a round is up there is a `.deploy-freeze` marker in the primary checkout and
+`check:deploy` reads `frozen`. That governs **deploying**, which was never yours. Keep
+merging straight through it — the whole design is that fixes accumulate on `main` during a
+round and ship in one step at the barrier. Never remove the marker; the coordinator's
+barrier is the only thing that lifts it.
+
 ## You do not deploy
 
 Merging is continuous; deploying happens only at the coordinator's barrier, once per
