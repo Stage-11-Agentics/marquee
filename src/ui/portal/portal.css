@@ -228,6 +228,7 @@
 .portal-submitter-action strong { color: var(--ink); display: block; font-size: 13px; margin-bottom: 10px; }
 .portal-submitter-action p, .portal-submitter-status-note { margin: 0; }
 .portal-submitter-status-note { color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
+.portal-submitter-seat .portal-panel-head > span { min-width: 0; overflow-wrap: anywhere; text-align: right; }
 .portal-seat-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .portal-seat-actions .portal-button { align-items: center; display: inline-flex; text-decoration: none; }
 .portal-submitted-row { align-items: center; border-bottom: 1px solid var(--rule-soft); display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) 104px; min-height: 60px; padding: 12px 0; }
@@ -235,5 +236,5 @@
 .portal-submitted-copy { min-width: 0; }
 .portal-submitted-copy strong { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .portal-submitted-copy span { color: var(--muted); font-size: 11px; }
-.portal-submitted-copy .portal-submitted-wave { color: var(--ink-soft); display: block; }
+.portal-submitted-copy .portal-submitted-wave { color: var(--ink-soft); display: block; overflow-wrap: anywhere; }
 .portal-submitted-status { color: var(--muted); font: 600 10px/1 var(--mono); letter-spacing: .08em; text-align: right; text-transform: uppercase; }

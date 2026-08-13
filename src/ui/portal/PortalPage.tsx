@@ -872,7 +872,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
       ? decisionCopy
       : submitterOutcomeCopy(lead.status);
   const progressCopy = submitterProgressCopy(lead.status, draftCallOpen);
-  return <div class="portal-shell">
+  return <div class="portal-shell portal-submitter-seat">
     <header class="portal-top">
       <span class="portal-brand">Marquee · Your submission</span>
       <button type="button" onClick={onSignOut}>Sign out</button>
