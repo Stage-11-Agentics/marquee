@@ -44,7 +44,7 @@ analysts run staggered while browsing continues.
 Analyst (one per area, ~10 min, suppressed — you own their completion):
 
 ```sh
-c11 launch-agent --type claude --model sonnet --workspace <ws> --suppressed \
+c11 launch-agent --type claude-code --model sonnet --workspace <ws> --suppressed \
   --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee \
   --prompt-file sequence/auto-eval/prompts/analyst.md \
   --env AE_AREA=<area> --env AE_RUN=<run-dir> --env AE_BASELINE=<prior-run-dir>
