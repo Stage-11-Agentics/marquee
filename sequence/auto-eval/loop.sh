@@ -256,6 +256,17 @@ cmd_fire() {
   round_running && die "REFUSING: a round is already in flight on Atlas. Two runs against
 one mutable site interleave their data and both become unreadable."
   local round=$(( $(jget round) + 1 ))
+
+  # An incomplete run directory on Atlas is a resume target. `plan` will pick up
+  # the newest unfinished run rather than starting a fresh one, and the new round
+  # inherits the old one's scenarios — browsed against a different build, before
+  # the barrier reset the demo. That is exactly how "round 7" spent thirteen
+  # minutes continuing voided round 6. Archive anything unfinished first: a run
+  # with no report.json never completed, and nothing may resume into it.
+  say "archiving unfinished runs on Atlas so plan cannot resume one"
+  atlas "cd ~/$KIT_ATLAS/runs 2>/dev/null && for d in 2*/; do d=\${d%/}; \
+    [ -f \"\$d/report.json\" ] || { mv \"\$d\" \"VOID-\$d\" && echo \"  archived \$d\"; }; done" || true
+
   say "firing round $round against $sha"
   # Push the kickoff script every time: the version that runs is the version in
   # this repo, not whatever was last hand-edited on the box.
