@@ -9,9 +9,10 @@
  * have papered over the gap and left the other three broken, so the row is
  * written where a person becomes a speaker of this conference:
  *
- *   - an organizer adding them to the roster (the only way a speaker with no
- *     session exists), and
- *   - the acceptance boundary, where the cascade already mints their tasks.
+ *   - an organizer adding them to the roster,
+ *   - the acceptance boundary, where the cascade already mints their tasks,
+ *   - and the Sessionize speakers import, which reconciles every speaker row
+ *     into the event even when the person's fields do not change.
  *
  * Duplicates are absorbed by the constraint, not by a read-then-write check:
  * `uq_memberships_event` already covers `(org_id, event_id, person_id, role)`
