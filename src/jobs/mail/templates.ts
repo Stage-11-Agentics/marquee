@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import type { EmailTemplateRow, Id } from "../../db/schema";
+import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../../lib/auth/draft-resume-copy";
 import { renderMail, type MergeData, type RenderedMail } from "./render";
 
 export const TRIGGER_TEMPLATE_KEYS = [
@@ -95,7 +96,7 @@ export const DEFAULT_TEMPLATES: Record<MailTemplateKey, DefaultTemplate> = {
   },
   draft_resume: {
     name: "Resume your draft",
-    subject: "Continue your Marquee submission",
+    subject: PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT,
     body_md: "Resume your draft here: {{auth.link}}",
   },
   task_link: {

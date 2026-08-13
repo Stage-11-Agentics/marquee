@@ -3,6 +3,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
+import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../../lib/auth/draft-resume-copy";
 import { apiFetch } from "../shell/api-client";
 import { isUploadAborted, putFileToR2, speakerUploadFailureMessage, type UploadProgressHandlers } from "../upload/upload-client";
 import { formatBytes, validateClientUpload } from "../upload/upload-policy";
@@ -791,7 +792,7 @@ function submitterStatusLabel(status: string): string {
 }
 
 function isSubmitterAwaitingDecision(status: string): boolean {
-  return status === "submitted" || status === "in_review" || status === "waitlisted";
+  return status === "submitted" || status === "in_review";
 }
 
 function isSubmitterAwaitingReview(status: string): boolean {
@@ -848,6 +849,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
   const decisionOn = lead.wave_decision_on;
   const waveName = lead.wave_name;
   const isDraft = lead.status === "draft";
+  const draftCallOpen = isDraft && Boolean(lead.form_slug);
   const isWaitlisted = lead.status === "waitlisted";
   const isAwaitingReview = isSubmitterAwaitingReview(lead.status);
   const decisionCopy = decisionOn
@@ -892,13 +894,15 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
       </div>
       <div class="portal-grid">
         {isDraft ? <section class="portal-panel portal-submitter-flow" aria-labelledby="next-heading">
-          <header class="portal-panel-head"><h2 id="next-heading">Your next step</h2><span>action needed</span></header>
+          <header class="portal-panel-head"><h2 id="next-heading">Your next step</h2><span>{draftCallOpen ? "action needed" : "call closed"}</span></header>
           <div class="portal-panel-body">
-            <div class="portal-submitter-action"><strong>Finish and submit your abstract.</strong><p>If you saved this draft through the public call, the email titled “Continue your conference abstract” includes a link that reopens it. You can finish and submit while the call is open.</p></div>
+            <div class="portal-submitter-action"><strong>{draftCallOpen ? "Finish and submit your abstract." : "Keep your draft link."}</strong><p>{draftCallOpen
+              ? <>If you saved this draft through the public call, the email titled “{PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT}” includes a link that reopens it. You can finish and submit while the call is open.</>
+              : <>The call for speakers is closed. If you saved this draft through the public call, keep the email titled “{PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT}” — its link will reopen the draft if the call opens again.</>}</p></div>
           </div>
         </section> : isWaitlisted ? <section class="portal-panel portal-submitter-flow" aria-labelledby="maybe-heading">
           <header class="portal-panel-head"><h2 id="maybe-heading">What happens next</h2><span>Maybe status</span></header>
-          <div class="portal-panel-body"><p class="portal-submitter-status-note">{decisionCopy} Any further update will appear here.</p></div>
+          <div class="portal-panel-body"><p class="portal-submitter-status-note">This abstract remains in consideration. Any further update will appear here.</p></div>
         </section> : isAwaitingReview ? <section class="portal-panel portal-submitter-flow" aria-labelledby="next-heading">
           <header class="portal-panel-head"><h2 id="next-heading">What happens next</h2><span>three steps</span></header>
           <div class="portal-panel-body">

@@ -75,6 +75,16 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).toContain('href="/signin?next=/portal"');
   });
 
+  test("CONTRACT · MRQ-150 · a closed draft does not promise that it can be submitted now", () => {
+    const html = render(snapshot({
+      submissions: [submission({ status: "draft", submitted_at: null, form_slug: null, wave_name: null, wave_decision_on: null })],
+    }));
+    expect(html).toContain("call closed");
+    expect(html).toContain("Keep your draft link");
+    expect(html).toContain("The call for speakers is closed");
+    expect(html).not.toContain("You can finish and submit while the call is open");
+  });
+
   test("CONTRACT · MRQ-150 · with no decision date it says so rather than inventing one", () => {
     const html = render(snapshot({ submissions: [submission({ wave_name: null, wave_decision_on: null })] }));
     expect(html).toContain("has not set a decision date");
@@ -125,8 +135,11 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).toContain("Your abstract is a Maybe");
     expect(html).toContain(">Maybe<");
     expect(html).toContain("still in consideration");
-    expect(html).toContain("September 21, 2026");
+    expect(html).toContain("remains in consideration");
     expect(html).toContain("What happens next");
+    expect(html).not.toContain("September 21, 2026");
+    expect(html).not.toContain("decision by");
+    expect(html).not.toContain("go out by");
     expect(html).not.toContain("Nothing else is needed from you here.");
   });
 
