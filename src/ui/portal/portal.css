@@ -213,11 +213,8 @@
    role yet. Same instruments as the speaker portal, fewer of them — nothing
    here promises a surface they do not have. */
 .portal-next-steps { counter-reset: step; display: grid; gap: 14px; list-style: none; margin: 0; padding: 0; }
-/* The step body is a run of inline nodes, not one element: a grid here would
-   make every text run its own item and drop half the sentence into the 22px
-   marker column, one word per line. The marker sits out of flow instead. */
-.portal-next-steps li { color: var(--ink-soft); font-size: 12px; line-height: 1.55; padding-left: 32px; position: relative; }
-.portal-next-steps li::before { color: var(--accent-dark); content: counter(step); counter-increment: step; font: 600 10px/22px var(--mono); left: 0; position: absolute; text-align: center; top: 0; width: 22px; }
+.portal-next-steps li { color: var(--ink-soft); display: grid; font-size: 12px; gap: 10px; grid-template-columns: 22px minmax(0, 1fr); line-height: 1.55; }
+.portal-next-steps li::before { color: var(--accent-dark); content: counter(step); counter-increment: step; font: 600 10px/22px var(--mono); text-align: center; }
 .portal-next-steps strong { color: var(--ink); }
 .portal-seat-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .portal-seat-actions .portal-button { align-items: center; display: inline-flex; text-decoration: none; }
