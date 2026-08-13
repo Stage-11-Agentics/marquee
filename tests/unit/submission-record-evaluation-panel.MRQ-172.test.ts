@@ -27,14 +27,14 @@ function render(evaluation: EvaluationPanelEvaluation): string {
 }
 
 describe("CONTRACT · MRQ-172 · organizer evaluation panel evidence", () => {
-  test("mounts result rows inside the evaluation panel instead of leaving only counts", () => {
+  test("CONTRACT · MRQ-172 — mounts result rows inside the evaluation panel instead of leaving only counts", () => {
     const panel = submissionRecordSource.slice(submissionRecordSource.indexOf('title="Evaluation panel"'));
 
     expect(panel).toContain('class="record-round-results"');
     expect(panel).toContain("<EvaluationPanelResult key=");
   });
 
-  test("keeps the reviewer's rating and comment together where the organizer looks for the review", () => {
+  test("CONTRACT · MRQ-172 — keeps the reviewer's rating and comment together where the organizer looks for the review", () => {
     const html = render(review());
 
     expect(html).toContain('data-evaluation-panel-result="evaluation_mrq172_1"');
@@ -45,7 +45,7 @@ describe("CONTRACT · MRQ-172 · organizer evaluation panel evidence", () => {
     expect(html).toContain("Read full comment");
   });
 
-  test("labels an organizer override separately from the reviewer's own judgment", () => {
+  test("CONTRACT · MRQ-172 — labels an organizer override separately from the reviewer's own judgment", () => {
     const html = render(review({ override_score: 2, override_comment: "Chair moved this to the backup track.", override_person_name: "Avery Chair" }));
 
     expect(html).toContain("Reviewer rating");
@@ -57,7 +57,7 @@ describe("CONTRACT · MRQ-172 · organizer evaluation panel evidence", () => {
     expect(html).toContain("Chair moved this to the backup track.");
   });
 
-  test("keeps a recusal honest instead of manufacturing a rating or comment", () => {
+  test("CONTRACT · MRQ-172 — keeps a recusal honest instead of manufacturing a rating or comment", () => {
     const html = render(review({ abstained: true, recommendation: null, score: null, comment: "" }));
 
     expect(html).toContain("Conflict declared");
