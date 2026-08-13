@@ -55,9 +55,41 @@ test("CONTRACT · every column in the header row states a width, whatever the te
   // not count — the header cell has to carry the class.
   assert.match(page, /<th scope="col" class="onboarding-task-column" key=\{task\.id\}>/);
   assert.match(page, /<th scope="col" class="onboarding-last-contact-column">Last contact<\/th>/);
-  assert.match(css, /\.onboarding-task-column, \.onboarding-last-contact-column \{[^}]*width: \d+px/);
+  // Stated separately: the task columns are narrower than the last-contact
+  // column so more of them fit before the wrap has to scroll.
+  assert.match(css, /\.onboarding-task-column \{[^}]*width: \d+px/);
+  assert.match(css, /\.onboarding-last-contact-column \{[^}]*width: \d+px/);
 
   // A flat pixel min-width does not grow with the column count, which is the
   // whole reason the columns were squeezed in the first place.
   assert.match(css, /\.onboarding-matrix \{[^}]*min-width: max-content/);
+});
+
+/**
+ * MRQ-164 · scrolling is how the matrix fits many templates, and silence about
+ * it is how a tracked task read as an untracked one: the newest column lands
+ * furthest right, so a speaker whose only work is new showed a row of em dashes
+ * with their real state off-screen. The grid has to say it has more, and the
+ * row's identity has to survive the scroll that reaches it.
+ */
+test("CONTRACT · the matrix declares its hidden columns and keeps the speaker pinned", async () => {
+  const css = await read("src/ui/onboarding/onboarding.css");
+  const page = await read("src/ui/onboarding/OnboardingPage.tsx");
+
+  // The strip states the count always and names the furthest column only when
+  // the grid actually overflows, measured rather than guessed.
+  assert.match(page, /onboarding-matrix-scroll-note/);
+  assert.match(page, /matrixOverflows/);
+  assert.match(page, /scrollWidth > element\.clientWidth/);
+  // Reserved height, so the grid does not jump as filters change what fits.
+  assert.match(css, /\.onboarding-matrix-scroll-note \{[^}]*min-height: \d+px/);
+
+  assert.match(css, /\.onboarding-matrix th\.onboarding-speaker-column \{[^}]*position: sticky/);
+  assert.match(css, /\.onboarding-matrix th\.onboarding-select-column[^{]*\{[^}]*position: sticky/);
+  // A pinned cell the rows travel under needs an opaque background.
+  assert.match(css, /\.onboarding-matrix tbody[^{]*onboarding-speaker-column \{[^}]*background: var\(--panel\)/);
+
+  // A row with no applicable task must not read like one whose tasks are merely
+  // unstarted — both are em dashes in the grid, so the row says which it is.
+  assert.match(page, /No tasks assigned/);
 });

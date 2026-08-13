@@ -87,6 +87,25 @@ describe("MRQ-21 agenda conflict computation", () => {
     }
   });
 
+  test("AC-77 · MRQ-164 · a Session whose only participant is its submitter is still double-booked", () => {
+    const personId = "person-submitter-only";
+    const conflicts = deriveConflicts([
+      session("first", "one", START, [participant(personId, "co_speaker"), participant("person-lead", "speaker")]),
+      // "+ Add session" records one participation, of role submitter. The tile
+      // names this person, so the panel must too.
+      session("second", "two", START, [participant(personId, "submitter")]),
+    ], rooms, "America/New_York");
+    expect(conflicts.filter((conflict) => conflict.kind === "person" && conflict.person_id === personId)).toHaveLength(1);
+  });
+
+  test("AC-77 · MRQ-164 · a submitter who is not presenting raises no conflict beside a real speaker", () => {
+    const conflicts = deriveConflicts([
+      session("first", "one", START, [participant("person-speaker", "speaker"), participant("person-desk", "submitter")]),
+      session("second", "two", START, [participant("person-desk", "submitter"), participant("person-other", "speaker")]),
+    ], rooms, "America/New_York");
+    expect(conflicts.some((conflict) => conflict.kind === "person" && conflict.person_id === "person-desk")).toBe(false);
+  });
+
   test("AC-77 · one person holding two roles still produces one person conflict", () => {
     const personId = "person-two-roles";
     const conflicts = deriveConflicts([

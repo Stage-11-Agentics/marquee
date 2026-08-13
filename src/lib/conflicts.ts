@@ -39,13 +39,26 @@ export function dedupeParticipants(
 /**
  * Project the participant set used by every computed agenda conflict class.
  * Older in-memory fixtures omit role; those rows remain speaker-compatible.
+ *
+ * A Session whose only participant is its `submitter` falls back to that
+ * person. The organizer's "+ Add session" records one participation, of role
+ * `submitter`, while the public form writes the same human twice — submitter
+ * and speaker. Every organizer surface prints the submitter either way, so
+ * without the fallback the agenda names a human on the tile and the conflict
+ * panel simultaneously believes nobody is on that stage. The fallback fires
+ * only when no participant holds an agenda role, so a Session someone
+ * submitted *on behalf of* a speaker keeps exactly the conflicts that speaker
+ * earns and gains none of the submitter's.
  */
 export function conflictParticipants(
   participants: readonly SubmissionSpeakerListItem[],
 ): SubmissionSpeakerListItem[] {
-  return dedupeParticipants(participants).filter((participant) =>
+  const deduped = dedupeParticipants(participants);
+  const onStage = deduped.filter((participant) =>
     participant.role === undefined || agendaRoles.has(participant.role),
   );
+  if (onStage.length) return onStage;
+  return deduped.filter((participant) => participant.role === "submitter");
 }
 
 export function sharedConflictParticipants(
