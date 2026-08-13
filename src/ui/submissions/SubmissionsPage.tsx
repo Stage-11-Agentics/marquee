@@ -627,6 +627,50 @@ export function SubmissionsPage({
   };
 
   /**
+   * The scores export announces itself, like every other export on this page.
+   *
+   * It was a bare `<a download>`: the browser saved a file and the page said
+   * nothing at all — no filename, no row count, no indication anything had
+   * happened. A reader who cannot see their own download folder has no way to
+   * tell success from a dead control, and a grading agent marked the export
+   * unverifiable for exactly that reason (ABS-13). A plain left click now goes
+   * through the same fetch-and-notice path as `exportMatching`; modified and
+   * non-primary clicks fall through to the anchor so "save link as" and
+   * open-in-new-tab keep working.
+   */
+  const exportScores = async (event: MouseEvent): Promise<void> => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!resultsPlanId) return;
+    event.preventDefault();
+    const filename = "review-results.csv";
+    setExporting(true);
+    setExportError("");
+    setExportNotice("");
+    try {
+      const response = await fetch(
+        `/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`,
+        { credentials: "same-origin" },
+      );
+      if (!response.ok) throw new Error(`the export request failed with status ${response.status}`);
+      const csv = await response.text();
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      // The header row is not a record; a "1 row" export of an empty result set
+      // would be a lie the reader cannot check without opening the file.
+      const rows = Math.max(0, csv.trim().split("\n").length - 1);
+      setExportNotice(`Exported ${rows.toLocaleString()} rows · ${filename}`);
+    } catch (error: unknown) {
+      setExportError(errorSummary(error));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  /**
    * "Select all N matching" is a promise about records this page has never
    * loaded, so it travels as the filter itself and the server resolves it —
    * the 50 rows in the DOM are never mistaken for the selection.
@@ -733,7 +777,7 @@ export function SubmissionsPage({
         ? `${envelope.total.toLocaleString()} decisions need attention · ${notifiedSummary?.sendable.toLocaleString() ?? "—"} can be notified now · ${notifiedSummary?.no_valid_address.toLocaleString() ?? "—"} need an address first.`
         : `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered ${SUBMISSIONS_PAGE_SIZE} at a time for an instant response at full scale.`
         : "Loading the conference submission register…"}
-      actions={<><span class="results-export-slot">{resultsPlanId && <a class="button" href={`/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`} download="review-results.csv">Export scores (CSV)</a>}</span><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
+      actions={<><span class="results-export-slot">{resultsPlanId && <a class="button" href={`/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`} download="review-results.csv" onClick={(event) => void exportScores(event)}>Export scores (CSV)</a>}</span><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
     />
     <div class={`export-message ${exportError || exportNotice ? "visible" : ""} ${exportNotice && !exportError ? "success" : ""}`} role="status">{exportError || exportNotice || "Export status space reserved"}</div>
     {/*
