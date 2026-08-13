@@ -18,13 +18,21 @@ listed scenarios and screenshotted the result, would a strict judge call this `p
 The bar is explicit — a form existing proves nothing; the harness wants confirmation
 states, persisted data, the record visible in a list.
 
-## Working rules
+## Your first command, before you read another line of code
 
 ```sh
+cd /Users/atin/Projects/Stage11/deployments/Marquee
 git worktree add ../Marquee-worktrees/<branch> -b <branch> main
+cd ../Marquee-worktrees/<branch>
 ```
 
-Never work in the primary checkout — it is the board's home and it stays on `main`.
+**Check where you actually are before you trust it.** `pwd` and `git branch --show-current`.
+Whatever directory you were launched into is not yours unless you just made it — an agent
+that inherits a cwd and starts committing puts its work on someone else's branch and into
+someone else's PR. That has already happened here once.
+
+Never work in the primary checkout — it is the board's home and it stays on `main`. Never
+work in `Marquee-worktrees/mrq-auto-eval`, which is the loop's own machinery.
 
 - `npm test` (45s budget), `npm run pr-gate` (120s) before the PR.
 - **The gate is load-sensitive.** Same branch, same night: load 14 → 78s, load 164 →

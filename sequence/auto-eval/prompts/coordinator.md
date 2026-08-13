@@ -67,6 +67,7 @@ Analyst (one per area, ~10 min, suppressed — you own their completion):
 
 ```sh
 c11 launch-agent --type claude-code --model sonnet --workspace <ws> --suppressed \
+  --cwd /Users/atin/Projects/Stage11/deployments/Marquee \
   --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee \
   --prompt-file sequence/auto-eval/prompts/analyst.md \
   --env AE_AREA=<area> --env AE_RUN=<run-dir> --env AE_BASELINE=<prior-run-dir>
@@ -77,11 +78,22 @@ Implementer (one per ticket, own worktree — build work is codex per CLAUDE.md)
 ```sh
 c11 launch-agent --type codex --model gpt-5.6-luna --effort max \
   --workspace <ws> --suppressed \
+  --cwd /Users/atin/Projects/Stage11/deployments/Marquee \
   --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee \
   --prompt-file sequence/auto-eval/prompts/implementer.md --env AE_TICKET=<MRQ-N>
 ```
 
-`--effort max`, always `--model`, always `--suppressed`. See CLAUDE.md's three footguns.
+**Always pass `--cwd`.** Without it a launched agent inherits *your* working directory,
+and every agent you spawn ends up committing into whatever tree you happen to be sitting
+in. Point implementers at the primary checkout so their first act — creating their own
+worktree — starts from a known place. This has already gone wrong once: two implementers
+launched without it committed onto the auto-eval machinery branch and contaminated its PR.
+
+`--effort max`, always `--model`, always `--suppressed`, always `--cwd`. See CLAUDE.md's
+three footguns.
+
+**Nobody works in the auto-eval worktree.** You run `loop.sh` from it; no agent commits
+product code in it. Its branch is under review and anything landing there rides along.
 
 ## Ticket shape
 
