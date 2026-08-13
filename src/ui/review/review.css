@@ -63,9 +63,11 @@
 .review-comment textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .reviewer-save { justify-content: center; margin-top: 12px; width: 100%; }
 .review-save-actions { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; margin-top: 12px; }
-/* Revision adds a third control; the primary keeps the full first column so
-   entering and leaving revision never resizes the button under the pointer. */
-.review-save-actions:has(.reviewer-leave-revision) { grid-template-columns: minmax(0, 1fr) auto auto; }
+/* Revision adds a third control. A third grid column squeezed the primary until
+   "Update review" was clipped mid-word, so the revision row lays out as a wrap
+   flex line instead: every label stays whole at any width. */
+.review-save-actions:has(.reviewer-leave-revision) { display: flex; flex-wrap: wrap; }
+.review-save-actions:has(.reviewer-leave-revision) .reviewer-save { flex: 1 1 auto; white-space: nowrap; }
 .reviewer-leave-revision { white-space: nowrap; }
 .review-save-actions .reviewer-save { margin-top: 0; }
 .reviewer-conflict { white-space: nowrap; }

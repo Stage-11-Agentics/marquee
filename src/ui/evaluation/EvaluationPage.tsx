@@ -213,7 +213,9 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
   const [scorecardRoundId, setScorecardRoundId] = useState<string | null>(null);
   const [roundErrors, setRoundErrors] = useState<Record<string, string>>({});
   const [roundDrafts, setRoundDrafts] = useState<Record<string, string>>({});
-  const [committeeName, setCommitteeName] = useState("Program reviewers");
+  // Empty by default: the pools surface is a list first and a form second, and
+  // a prefilled name is how a second "Program reviewers" gets created by reflex.
+  const [committeeName, setCommitteeName] = useState("");
   const [assignmentMode, setAssignmentMode] = useState<"everyone" | "n_per_submission">("n_per_submission");
   const [assignmentRoundId, setAssignmentRoundId] = useState<string | null>(null);
   const [reviewerTarget, setReviewerTarget] = useState(3);
@@ -945,7 +947,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
             <code class="invite-link-readable" aria-label="Full reviewer sign-in link">{inviteResult.magic_link}</code>
           </div> : null}
         </div> : <>
-          <label class="field">Reviewer pool<select aria-label="Reviewer pool" value={invitePool?.id ?? ""} onChange={(event) => setInvitePoolId((event.currentTarget as HTMLSelectElement).value)}>{plan.committees.map((pool) => <option key={pool.id} value={pool.id}>{pool.name}</option>)}</select></label>
+          <label class="field">Reviewer pool<select aria-label="Reviewer pool" value={invitePool?.id ?? ""} onChange={(event) => setInvitePoolId((event.currentTarget as HTMLSelectElement).value || null)}>{plan.committees.map((pool) => <option key={pool.id} value={pool.id}>{pool.name}</option>)}</select></label>
           <label class="field">Name<input aria-label="Reviewer name" value={inviteName} placeholder="Nora Vale" onInput={(event) => setInviteName((event.currentTarget as HTMLInputElement).value)} /></label>
           <label class="field">Email<input aria-label="Reviewer email" type="email" value={inviteEmail} placeholder="nora@example.org" onInput={(event) => setInviteEmail((event.currentTarget as HTMLInputElement).value)} /></label>
           <fieldset class="field invite-tracks">
@@ -981,7 +983,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
       <header><span class="eyebrow">{invitePool?.name ?? "Program committee"}</span><h2>Add Agent evaluator</h2></header>
       <div class="eval-dialog-body">
         {agentResult ? <div class="invite-result" aria-live="polite"><strong>{agentResult.person.name} is on the committee as an Agent evaluator.</strong><span class="subtle">The credential is in the shown-once panel above. Assign this seat through the existing round controls.</span><span class="subtle">Responsible for {agentResult.track_ids.length === tracks.length ? "every track" : tracks.filter((track) => agentResult.track_ids.includes(track.id)).map((track) => track.name).join(", ")}.</span></div> : <>
-          <label class="field">Reviewer pool<select aria-label="Agent evaluator pool" value={invitePool?.id ?? ""} onChange={(event) => setInvitePoolId((event.currentTarget as HTMLSelectElement).value)}>{plan.committees.map((pool) => <option key={pool.id} value={pool.id}>{pool.name}</option>)}</select></label>
+          <label class="field">Reviewer pool<select aria-label="Agent evaluator pool" value={invitePool?.id ?? ""} onChange={(event) => setInvitePoolId((event.currentTarget as HTMLSelectElement).value || null)}>{plan.committees.map((pool) => <option key={pool.id} value={pool.id}>{pool.name}</option>)}</select></label>
           <label class="field">Name<input aria-label="Agent evaluator name" value={agentName} placeholder="Triage agent" onInput={(event) => setAgentName((event.currentTarget as HTMLInputElement).value)} /></label>
           <fieldset class="field invite-tracks"><legend>Track responsibilities</legend><div class="scope-checks">{tracks.map((track) => <label class="scope-check" key={track.id}><input type="checkbox" aria-label={track.name} checked={agentTrackIds.includes(track.id)} onChange={(event) => setAgentTrackIds((current) => event.currentTarget.checked ? [...current, track.id] : current.filter((id) => id !== track.id))} /><span>{track.name}</span></label>)}</div><small class="subtle">The Agent seat only sees assigned reviews whose abstracts intersect these responsibilities.</small></fieldset>
           <div class="message-preview">One transaction creates the Agent person, reviewer seat, pool membership, track scope, and its narrowly scoped credential.</div>

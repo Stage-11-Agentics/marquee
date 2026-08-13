@@ -33,7 +33,9 @@ test("CONTRACT · MRQ-169 · distribution answers in numbers, and refuses inside
   expect(evaluationPage).toContain("setDialogError");
   expect((evaluationPage.match(/class="eval-dialog-error"/g) ?? []).length).toBeGreaterThanOrEqual(3);
   expect(evaluationStyles).toMatch(/\.eval-dialog-error \{[^}]*min-height/);
-  expect(evaluationStyles).toMatch(/\.distribution-outcome \{[^}]*min-height/);
+  // The outcome slot is a fixed box measured live in the browser: the report and
+  // the refusal both land without moving the footer buttons (MRQ-169 validation).
+  expect(evaluationStyles).toMatch(/\.distribution-outcome \{[^}]*height: 186px/);
 });
 
 test("CONTRACT · MRQ-169 · pools can be read, created, and trimmed, and an invitation names its pool", () => {
