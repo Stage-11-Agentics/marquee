@@ -131,7 +131,7 @@ type PortalSubmission = {
   }>;
 };
 
-export type PortalPerson = {
+type PortalPerson = {
   id: string;
   name: string;
   email: string;
