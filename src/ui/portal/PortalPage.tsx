@@ -806,7 +806,7 @@ function submitterOutcomeCopy(status: string): string {
 function submitterOutcomeDetail(status: string): string {
   if (status === "accepted") return "This page becomes your speaker portal. Tasks and session details will arrive here.";
   if (status === "rejected") return "The program team has finished reviewing this abstract.";
-  if (status === "withdrawn") return "This abstract will not be considered for the conference.";
+  if (status === "withdrawn") return "You withdrew this abstract. No further review will happen.";
   return submitterOutcomeCopy(status);
 }
 

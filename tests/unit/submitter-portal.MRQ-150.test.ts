@@ -127,6 +127,7 @@ describe("MRQ-150 the submitter's empty state", () => {
         : status === "rejected"
           ? "The program team did not select this abstract for the conference."
           : "This abstract is no longer in consideration.");
+      if (status === "withdrawn") expect(html).toContain("You withdrew this abstract. No further review will happen.");
       expect(html.toLowerCase()).not.toContain("next decision");
       expect(html.toLowerCase()).not.toContain("go out by");
       expect(html.toLowerCase()).not.toContain("has not set a decision date");

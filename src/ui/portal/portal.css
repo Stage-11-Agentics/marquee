@@ -11,7 +11,7 @@
 .portal-status-hero.secondary { min-height: 154px; margin-top: 12px; padding: 22px; }
 .portal-status-hero.secondary h2 { color: #f4fbff; font: 500 clamp(21px, 3vw, 30px)/1.08 var(--sans); letter-spacing: -.025em; margin: 0; max-width: 100%; overflow-wrap: anywhere; }
 .portal-status-meta { align-items: end; display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
-.portal-status-copy { color: #b6cbd5; font-size: 12px; line-height: 1.55; max-width: 580px; }
+.portal-status-copy { color: #b6cbd5; font-size: 12px; line-height: 1.55; max-width: 580px; overflow-wrap: anywhere; }
 .portal-status-copy strong { color: #edf8fb; font-weight: 600; }
 .portal-slot { color: #d9edf1; display: grid; gap: 3px; font: 500 11px/1.25 var(--mono); min-width: 180px; }
 .portal-slot small { color: #8aa6b5; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; }
@@ -216,6 +216,7 @@
 .portal-next-steps li { color: var(--ink-soft); display: grid; font-size: 12px; gap: 10px; grid-template-columns: 22px minmax(0, 1fr); line-height: 1.55; }
 .portal-next-steps li::before { color: var(--accent-dark); content: counter(step); counter-increment: step; font: 600 10px/22px var(--mono); text-align: center; }
 .portal-next-steps li > strong, .portal-next-steps li > span { grid-column: 2; }
+.portal-next-steps li > span { overflow-wrap: anywhere; }
 .portal-next-steps strong { color: var(--ink); }
 /* Reserve the height of the three-step review flow for every status, including
    long recipient addresses and wave names from real conferences. */
