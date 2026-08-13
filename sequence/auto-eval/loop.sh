@@ -2,8 +2,8 @@
 # loop.sh — the auto-eval spine. A verb toolbox, not a daemon.
 #
 # Shell owns mechanism and guards; the coordinator agent owns judgement and calls
-# these verbs. Everything durable lives in files, so a coordinator that dies at
-# 04:00 is replaced by reading state, not by remembering it.
+# these verbs. Everything durable lives in files, so a coordinator that dies
+# mid-run is replaced by reading state, not by remembering it.
 #
 #   loop.sh status | sync | watch | mine | guard | barrier | fire <sha>
 #
@@ -56,12 +56,17 @@ live_sha() { curl -fsS --max-time 15 "$SITE/health" | python3 -c 'import sys,jso
 # The newest run directory on Atlas, whether or not it has been synced yet.
 atlas_run_stamp() { atlas "ls -1t ~/$KIT_ATLAS/runs | head -1"; }
 
+# Job names follow the round: sbek-round5, sbek-round6, ... Round 0 means nothing
+# has been fired through this spine yet, so fall back to the round-4 job that
+# seeded it.
+job_name() { local r; r=$(jget round); [[ -n $r && $r != 0 ]] && echo "sbek-round$r" || echo "sbek-round4"; }
+
 # --- verbs -----------------------------------------------------------------
 
 cmd_status() {
   local stamp; stamp=$(jget runStamp); [[ -n $stamp ]] || stamp=$(atlas_run_stamp)
   local judged; judged=$(atlas "ls -1 ~/$KIT_ATLAS/runs/$stamp/judgements 2>/dev/null | wc -l" | tr -d ' ')
-  local job; job=$(atlas "~/bin/atlas-job status sbek-round4 2>/dev/null | head -1" || echo "unknown")
+  local job; job=$(atlas "~/bin/atlas-job status $(job_name) 2>/dev/null | head -1" || echo "unknown")
   printf 'round      %s%s\n' "$(jget round)" "$([[ $(jget halted) == True ]] && echo '  [HALTED]' || true)"
   printf 'live sha   %s\n' "$(live_sha)"
   printf 'anchor     %s (%s%%)\n' "$(jget anchor)" "$(jget anchorPct)"
@@ -96,7 +101,7 @@ cmd_watch() {
       printf 'JUDGEMENT %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$area" "$KIT_LOCAL/runs/$stamp"
     done
     # Run over? one last sync, then stop.
-    if ! atlas "~/bin/atlas-job status sbek-round4 2>/dev/null" | grep -q RUNNING; then
+    if ! atlas "~/bin/atlas-job status $(job_name) 2>/dev/null" | grep -q RUNNING; then
       cmd_sync "$stamp" >/dev/null
       printf 'RUN-COMPLETE %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$stamp"
       return 0

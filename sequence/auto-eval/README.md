@@ -1,4 +1,4 @@
-# Auto-Eval — the 24-hour scoring loop
+# Autonomous Eval Execution
 
 Runs in the c11 workspace **M: Auto Eval**. Its job is to close the distance
 between the current sbek score and 100% while a second lane keeps the product
@@ -37,7 +37,7 @@ caused by improving itself.
 ## Structure
 
 The spine is a **verb toolbox**, not a daemon. Shell owns mechanism and guards;
-agents own judgement. A coordinator that dies mid-night is replaceable because
+agents own judgement. A coordinator that dies mid-run is replaceable because
 every verb reads and writes files rather than the coordinator's context.
 
 ```
@@ -52,11 +52,11 @@ loop.sh fire <sha>        kick the next round on Atlas against a known sha
 
 | role | count | life | owns |
 |---|---|---|---|
-| coordinator | 1 | all night | round clock, ticket minting (single-writer), calls the verbs |
-| merge warden | 1 | all night | the gate, serialized; the only thing that touches `main` |
+| coordinator | 1 | whole run | round clock, ticket minting (single-writer), calls the verbs |
+| merge warden | 1 | whole run | the gate, serialized; the only thing that touches `main` |
 | area analyst | 6/round | ~10 min | item-level diff + (a)/(b)/(c) classification for one area |
 | implementer | K | ~40 min | one ticket, own worktree, PR |
-| craft critic | 1 | all night | the axis sbek cannot see — `DESIGN.md`, `PHILOSOPHY.md` |
+| craft critic | 1 | whole run | the axis sbek cannot see — `DESIGN.md`, `PHILOSOPHY.md` |
 
 ## Rules that are not negotiable
 
@@ -69,7 +69,7 @@ loop.sh fire <sha>        kick the next round on Atlas against a known sha
   load 48 → 135s, load 164 → 276s against a 120s budget. Under fleet load the
   gate false-fails and the warden will believe it. Lockfile, no exceptions.
 - **Deadline barrier, not completion barrier.** Never wait on "all tickets done" —
-  one stuck implementer ends the night. At T+window, deploy what merged and fire.
+  one stuck implementer ends the run. At T+window, deploy what merged and fire.
   Unfinished tickets roll forward.
 - **Do not ticket judge variance on one sighting.** An item that moves backward
   with no matching code change, whose evidence shows the control was never

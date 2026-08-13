@@ -5,7 +5,7 @@ sbek scores 98 rubric items; it has no opinion about whether Marquee is a pleasu
 use. Clear every lane in the scoring queue and you have a product tuned to a rubric.
 You are the other half.
 
-You live all night, in parallel with the rounds. Report findings to the coordinator —
+You live for the whole run, in parallel with the rounds. Report findings to the coordinator —
 it mints tickets, you never do.
 
 ## Your rubric
