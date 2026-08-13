@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { BOUND_SOURCE_LABELS, boundSourceOf } from "../../../lib/bound-options";
 import { isFieldApplicable, projectApplicableAnswers } from "../../../lib/form-conditions";
 import { putFileToR2 } from "../../upload/upload-client";
+import { reconcileEchoedAnswers } from "./echo";
 import { apiFetch, errorSummary, MarqueeApiError } from "../../shell/api-client";
 import type { PublicFormField, PublicFormState } from "../../../routes/public-form.types";
 import { removeTurnstileWidget, renderTurnstileWidget, resetTurnstileWidget, type TurnstileApi } from "./turnstile";
@@ -145,6 +146,9 @@ function publicValidationIssues(error: unknown): Array<{ fieldKey?: string; mess
 export function PublicForm({ initial }: PublicFormProps) {
   const [state, setState] = useState(initial);
   const [answers, setAnswers] = useState<Record<string, unknown>>(initial.answers);
+  /* The latest answers, readable synchronously by an in-flight request that has
+     to know what the person typed while it was away. */
+  const answersRef = useRef<Record<string, unknown>>(initial.answers);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pageError, setPageError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -310,8 +314,13 @@ export function PublicForm({ initial }: PublicFormProps) {
     return () => window.clearTimeout(timer);
   }, [answers, dirty, state.resume_token, state.state]);
 
+  function writeAnswers(next: Record<string, unknown>) {
+    answersRef.current = next;
+    setAnswers(next);
+  }
+
   function setAnswer(key: string, value: unknown) {
-    setAnswers((current) => ({ ...current, [key]: value }));
+    writeAnswers({ ...answersRef.current, [key]: value });
     setErrors((current) => { const next = { ...current }; delete next[key]; return next; });
     setDirty(true);
     setPageError(null);
@@ -332,7 +341,7 @@ export function PublicForm({ initial }: PublicFormProps) {
 
   async function ensureDraft(): Promise<PublicFormState | null> {
     if (state.resume_token && state.draft_id) return state;
-    const email = answerEmail(answers);
+    const email = answerEmail(answersRef.current);
     if (!email) {
       setDraftEmailPrompt(true);
       // Revealing a field at the foot of a long form and focusing it is not
@@ -350,16 +359,16 @@ export function PublicForm({ initial }: PublicFormProps) {
         setPageError(SECURITY_CHECK_UNFINISHED);
         return null;
       }
+      const sent = answersRef.current;
       const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answers, email, turnstileToken: token }),
+        body: JSON.stringify({ answers: sent, email, turnstileToken: token }),
         route: "/api/v1/public/forms/{slug}/drafts",
       });
       if (!payload || !("state" in payload)) throw new Error("The draft response was unreadable.");
       setState(payload);
-      setAnswers(payload.answers);
-      setDirty(false);
+      adoptEcho(sent, payload.answers);
       resetTurnstile();
       return payload;
     } catch (error: unknown) {
@@ -380,17 +389,27 @@ export function PublicForm({ initial }: PublicFormProps) {
     await ensureDraft();
   }
 
+  /**
+   * Adopt a server echo without discarding answers written while it was in
+   * flight, and leave the form dirty when it kept any so autosave carries them.
+   */
+  function adoptEcho(sent: Record<string, unknown>, echoed: Record<string, unknown>) {
+    const result = reconcileEchoedAnswers(sent, echoed, answersRef.current);
+    writeAnswers(result.answers);
+    setDirty(result.edited);
+  }
+
   async function autosave() {
     if (!state.resume_token || !state.draft_id || busy) return;
+    const sent = answersRef.current;
     try {
       const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts/${encodeURIComponent(state.resume_token)}`, {
-        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }),
+        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers: sent }),
         route: "/api/v1/public/forms/{slug}/drafts/{token}",
       });
       if (!payload || !("state" in payload)) throw new Error("The autosave response was unreadable.");
       setState(payload);
-      setAnswers(payload.answers);
-      setDirty(false);
+      adoptEcho(sent, payload.answers);
     } catch (error: unknown) {
       resetTurnstile();
       setPageError(publicErrorMessage(error));
@@ -510,7 +529,7 @@ export function PublicForm({ initial }: PublicFormProps) {
       if (!payload || !("state" in payload)) throw new Error("The submission response was unreadable.");
       removeTurnstile();
       setState(payload);
-      setAnswers(payload.answers);
+      writeAnswers(payload.answers);
       setDirty(false);
     } catch (error: unknown) {
       resetTurnstile();

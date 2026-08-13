@@ -78,7 +78,18 @@
 .override-chip, .override-chip-placeholder { align-items: center; display: inline-flex; font: 600 9px/1 var(--mono); justify-content: center; min-height: 18px; min-width: 70px; }
 .override-chip-placeholder { visibility: hidden; }
 .record-evaluation small { align-items: center; display: flex; flex-wrap: wrap; gap: 4px; }
+/* A declined action, said where the record is still readable behind it. */
+.record-refusal { align-items: baseline; border: 1px solid var(--warning-line, var(--line)); border-left-width: 3px; border-radius: 3px; display: flex; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 10px; padding: 9px 12px; }
+.record-refusal strong { font-size: 11.5px; }
+.record-refusal span { color: var(--muted); font-size: 10.5px; }
 .evaluation-superseded { color: var(--muted); }
+/* The rubric the reviewer answered, under the aggregate that summarised it.
+   Prose first — it is the reasoning — then the weighted numbers as one line. */
+.evaluation-scorecard { border-left: 2px solid var(--line); display: grid; gap: 7px; margin-top: 7px; padding-left: 9px; }
+.evaluation-criterion-note { display: grid; gap: 2px; }
+.evaluation-criterion-note small { color: var(--muted); font: 600 9px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.evaluation-criterion-note span { color: var(--ink); font-size: 11px; line-height: 1.5; }
+.evaluation-criterion-scores { color: var(--muted); display: flex; flex-wrap: wrap; font-size: 10px; gap: 4px 12px; }
 .evaluation-override-controls { margin-top: 3px; min-height: 26px; }
 .evaluation-override-form { display: grid; gap: 6px; }
 .evaluation-override-form .field span { font-size: 10px; }
