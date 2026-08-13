@@ -94,6 +94,7 @@ describe("MRQ-150 the submitter's empty state", () => {
     }));
     expect(html).toContain("Your draft is saved, not yet submitted");
     expect(html).toContain("Finish and submit your abstract");
+    expect(html).toContain("If you saved this draft through the public call");
     expect(html).toContain("Continue your conference abstract");
     expect(html).toContain("reopens it");
     expect(html).not.toContain("Nothing is waiting on you");
@@ -107,6 +108,7 @@ describe("MRQ-150 the submitter's empty state", () => {
       const html = render(snapshot({ submissions: [submission({ status })] }));
       expect(html).not.toContain("What happens next");
       expect(html).not.toContain("portal-next-steps");
+      expect(html).toContain("Nothing else is needed from you here.");
       expect(html.toLowerCase()).not.toContain("next decision");
       expect(html.toLowerCase()).not.toContain("go out by");
       expect(html.toLowerCase()).not.toContain("has not set a decision date");
@@ -115,7 +117,7 @@ describe("MRQ-150 the submitter's empty state", () => {
 
   test("CONTRACT · MRQ-150 · the submitter chip uses Maybe for a waitlisted abstract", () => {
     const html = render(snapshot({ submissions: [submission({ status: "waitlisted" })] }));
-    expect(html).toContain("Your abstract is Maybe");
+    expect(html).toContain("Your abstract is a Maybe");
     expect(html).toContain(">Maybe<");
   });
 

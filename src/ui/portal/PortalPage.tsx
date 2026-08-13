@@ -777,7 +777,7 @@ function formatCalendarDay(value: string): string {
 function submitterHeadline(status: string): string {
   if (status === "draft") return "Your draft is saved, not yet submitted";
   if (status === "accepted") return "Your abstract was accepted";
-  if (status === "waitlisted") return "Your abstract is Maybe";
+  if (status === "waitlisted") return "Your abstract is a Maybe";
   if (status === "rejected") return "Your abstract was not selected";
   if (status === "withdrawn") return "You withdrew this abstract";
   if (status === "in_review") return "Your abstract is under review";
@@ -800,6 +800,10 @@ function submitterOutcomeCopy(status: string): string {
   if (status === "rejected") return "The program team did not select this abstract for the conference.";
   if (status === "withdrawn") return "This abstract is no longer in consideration.";
   return "This abstract's current status is recorded here.";
+}
+
+function submitterTerminalCopy(): string {
+  return "Nothing else is needed from you here.";
 }
 
 function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX.Element {
@@ -876,7 +880,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
         {isDraft ? <section class="portal-panel portal-submitter-flow" aria-labelledby="next-heading">
           <header class="portal-panel-head"><h2 id="next-heading">Your next step</h2><span>action needed</span></header>
           <div class="portal-panel-body">
-            <div class="portal-submitter-action"><strong>Finish and submit your abstract.</strong><p>The email titled “Continue your conference abstract” includes a link that reopens it when you are ready to finish and submit.</p></div>
+            <div class="portal-submitter-action"><strong>Finish and submit your abstract.</strong><p>If you saved this draft through the public call, the email titled “Continue your conference abstract” includes a link that reopens it when you are ready to finish and submit.</p></div>
           </div>
         </section> : isAwaitingDecision ? <section class="portal-panel portal-submitter-flow" aria-labelledby="next-heading">
           <header class="portal-panel-head"><h2 id="next-heading">What happens next</h2><span>three steps</span></header>
@@ -889,7 +893,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
           </div>
         </section> : <section class="portal-panel portal-submitter-flow" aria-labelledby="status-update-heading">
           <header class="portal-panel-head"><h2 id="status-update-heading">Submission update</h2><span>status recorded</span></header>
-          <div class="portal-panel-body"><p class="portal-submitter-status-note">{submitterOutcomeCopy(lead.status)}</p></div>
+          <div class="portal-panel-body"><p class="portal-submitter-status-note">{submitterTerminalCopy()}</p></div>
         </section>}
         <section class="portal-panel" aria-labelledby="reach-heading">
           <header class="portal-panel-head"><h2 id="reach-heading">Getting back here</h2><span>{snapshot.person.email}</span></header>
