@@ -51,11 +51,17 @@ implementer as its first act, verified with `pwd` and `git branch --show-current
 the primary checkout — it is the board's home. Never `mrq-auto-eval` — it is the loop's
 machinery and its branch is under review.
 
-## Two things you may not do
+## The one agreement, and the one thing that is not yours
 
-- **Deploy.** Merging is continuous; deploying happens only at the Runner's barrier, once
-  per round. Deploy mid-round and the round stops being comparable to the next one, which
-  is the entire value the eval produces.
+**Nobody deploys while the eval is running.** That is the whole contract the operator has
+made with the fleet — not "do not code", not "do not merge", not "do not touch anything".
+Fix issues as you find them, merge them as they pass, and let the Runner's barrier ship the
+lot in one step at the end of the round. A `.deploy-freeze` marker sits at the primary
+checkout for the duration; never remove it.
+
+Deploying mid-round is not a small violation. It splits the round across two builds and its
+score stops being a number about anything — which is exactly how round 4, the only complete
+round anyone has, ended up ungraded against a single commit.
 - **Apply a migration.** Anything touching `migrations/` — flag the operator and stop. A
   revert undoes a merge; nothing undoes a migration applied to the live D1.
 
