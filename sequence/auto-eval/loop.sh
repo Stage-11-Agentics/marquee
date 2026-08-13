@@ -65,6 +65,13 @@ atlas_run_stamp() { atlas "ls -1t ~/$KIT_ATLAS/runs | head -1"; }
 # seeded it.
 job_name() { local r; r=$(jget round); [[ -n $r && $r != 0 ]] && echo "sbek-round$r" || echo "sbek-round4"; }
 
+# Ground truth for "is a round in flight", asked of Atlas rather than inferred from
+# our own state. A round fired by another agent — which is exactly how round 5
+# started — is invisible to state.json but very much real.
+round_running() {
+  atlas "~/bin/atlas-job status 2>/dev/null" | grep -qE '^sbek-round[0-9]+ +RUNNING'
+}
+
 # --- verbs -----------------------------------------------------------------
 
 cmd_status() {
@@ -150,6 +157,17 @@ Then raise a flag for the operator."
 cmd_barrier() {
   [[ $(jget halted) == True ]] && die "loop is halted; clear state.halted after an operator call"
 
+  # The hard gate. Everything below this line mutates the thing a running round is
+  # measuring: the reset wipes its data, the deploy moves its target. The freeze
+  # marker is a convention between agents and can be stale or absent; the job
+  # status cannot. Ask Atlas, always, and refuse.
+  if [[ ${1:-} != --force ]] && round_running; then
+    die "REFUSING: a round is in flight on Atlas.
+The barrier resets the demo and deploys — both destroy a measurement in progress.
+Wait for RUN-COMPLETE (loop.sh watch), then run this again.
+  ssh atlas '~/bin/atlas-job status'"
+  fi
+
   # The barrier is the only thing that lifts the freeze. `fire` declares it, and
   # between those two points every other agent's check:deploy reads "frozen, do
   # not deploy" — which is what stops a well-behaved sibling from destroying a
@@ -206,6 +224,8 @@ cmd_barrier() {
 cmd_fire() {
   local sha=${1:?usage: loop.sh fire <sha-12>}
   [[ $(jget halted) == True ]] && die "loop is halted"
+  round_running && die "REFUSING: a round is already in flight on Atlas. Two runs against
+one mutable site interleave their data and both become unreadable."
   local round=$(( $(jget round) + 1 ))
   say "firing round $round against $sha"
   # Push the kickoff script every time: the version that runs is the version in
