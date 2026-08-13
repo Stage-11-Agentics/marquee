@@ -42,6 +42,31 @@ is stale.
 **Anything that grades or demos the live site should run `check:deploy` first.** A score taken
 against a stale build measures work the fleet already finished, and costs the whole run.
 
+## While an eval run is up, the build is frozen
+
+An eval round grades one build for its whole duration. **Deploying mid-run corrupts the
+measurement** — the headline stops being a number for any single build, and every
+cross-area comparison in the report inherits a caveat. One round already paid this twice
+in a single run.
+
+So before deploying, ask whether a run is in flight, and if one is, **do not deploy**. The
+agent running the round owns the call: it either holds the deploy until the run ends or
+stops the run. Nobody else decides that, and an operator asking for a deploy is usually not
+aware a run is up — surface it rather than assuming the instruction already accounts for it.
+
+**Merging stays safe during a freeze. Only deploying is unsafe.**
+
+The trap worth naming: merging a PR that touches `src/`, `migrations/`, or build config
+while the build is frozen makes `check:deploy` read **`stale`**, exit 1, and report that
+live is a different product. All of that is true and all of it is intended — live is pinned
+behind `main` on purpose. An agent that sees that red and helpfully closes the gap has just
+destroyed the run *while correctly following this document*. During a freeze, `stale` is the
+expected reading and is not an instruction to deploy.
+
+The clean way to keep the queue moving without arming that trap is to hold product PRs until
+the freeze lifts and land only docs-only ones, which grade `cosmetic` and leave the check
+green.
+
 ---
 
 ## Redeploy
