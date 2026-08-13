@@ -67,10 +67,7 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare("INSERT INTO evaluation_plans (id, event_id, name, instructions, scale_min, scale_max, status, created_at, updated_at) VALUES (?, ?, 'Program review', 'Read it, then recommend.', 1, 5, 'open', ?, ?)").bind(PLAN_ID, EVENT_ID, now, now),
     env.DB.prepare("INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, target_reviews_per_submission, created_at, updated_at) VALUES (?, ?, 0, 'Initial screen', 'scorecard', 1, 1, ?, ?)").bind(ROUND_ID, PLAN_ID, now, now),
     env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, 'Program reviewers', ?, ?)").bind(COMMITTEE_ID, EVENT_ID, now, now),
-    // Committee-level assignments: both submissions are the committee's work, so
-    // the only thing that can narrow an invited reviewer's queue is their scope.
-    env.DB.prepare("INSERT INTO round_assignments (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at) VALUES ('ra-mrq107-a', ?, ?, NULL, ?, 'assigned', ?, ?)").bind(ROUND_ID, SUBMISSION_IN_SCOPE, COMMITTEE_ID, now, now),
-    env.DB.prepare("INSERT INTO round_assignments (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at) VALUES ('ra-mrq107-b', ?, ?, NULL, ?, 'assigned', ?, ?)").bind(ROUND_ID, SUBMISSION_OUT_OF_SCOPE, COMMITTEE_ID, now, now),
+    env.DB.prepare("UPDATE evaluation_rounds SET committee_id = ? WHERE id = ?").bind(COMMITTEE_ID, ROUND_ID),
   ]);
 }
 
@@ -142,6 +139,19 @@ describe("MRQ-107 reviewer provisioning", () => {
     );
     expect(me.person_id).toBe(body.person.id);
     expect(me.memberships.map((membership) => membership.role)).toEqual(["reviewer"]);
+
+    // MRQ-169: a pool is not an assignment. Distribution is what turns the
+    // reviewer's committee seat into rows, and it writes only the in-scope one
+    // rather than refusing the whole run over the abstract they cannot review.
+    const distribution = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/assignments`, {
+      method: "POST",
+      body: JSON.stringify({ committee_id: COMMITTEE_ID, mode: "everyone", submission_ids: [SUBMISSION_IN_SCOPE, SUBMISSION_OUT_OF_SCOPE] }),
+    });
+    expect(distribution.status).toBe(200);
+    expect(await json<{ assigned_new: number; uncovered: number; uncovered_tracks: string[] }>(distribution))
+      .toMatchObject({ assigned_new: 1, uncovered: 1, uncovered_tracks: ["Security"] });
+    const written = await env.DB.prepare("SELECT submission_id, reviewer_person_id FROM round_assignments WHERE round_id = ?").bind(ROUND_ID).all<{ reviewer_person_id: string | null; submission_id: string }>();
+    expect(written.results).toEqual([{ submission_id: SUBMISSION_IN_SCOPE, reviewer_person_id: body.person.id }]);
 
     const queue = await request(`/api/v1/events/${EVENT_ID}/reviewer/queue`, {}, cookie);
     expect(queue.status).toBe(200);

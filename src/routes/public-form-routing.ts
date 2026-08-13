@@ -241,6 +241,15 @@ export async function assertRoutingPoolAllowed(
   if (checks.some((allowed) => !allowed)) throw routingFailure();
 }
 
+/**
+ * Routing hands the abstract to a pool by writing the pool's rows.
+ *
+ * An assignment is a (round, submission, reviewer) row everywhere in the
+ * product, so a routed submission materializes one row per pool member rather
+ * than a single blanket row nobody's queue, dashboard, or reminder could see.
+ * `assertRoutingPoolAllowed` has already proved every member is in scope, so
+ * this writes the whole pool or the route would not have been taken.
+ */
 export async function writeRoutingPoolAssignment(
   db: D1Database,
   submissionId: string,
@@ -248,9 +257,11 @@ export async function writeRoutingPoolAssignment(
   now: number,
 ): Promise<void> {
   if (routing.committeeId === null || routing.roundId === null) return;
-  await db.prepare(
+  const reviewerIds = await committeeReviewerIds(db, routing.committeeId);
+  if (reviewerIds.length === 0) return;
+  await db.batch(reviewerIds.map((reviewerId) => db.prepare(
     `INSERT OR IGNORE INTO round_assignments
       (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, ?, 'assigned', ?, ?)`,
-  ).bind(crypto.randomUUID(), routing.roundId, submissionId, routing.committeeId, now, now).run();
+     VALUES (?, ?, ?, ?, NULL, 'assigned', ?, ?)`,
+  ).bind(crypto.randomUUID(), routing.roundId, submissionId, reviewerId, now, now)));
 }

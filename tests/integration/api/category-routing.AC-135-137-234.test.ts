@@ -221,7 +221,9 @@ describe.sequential("MRQ-35 category routing", () => {
     expect(acceptedId).toBeTruthy();
     expect(await count("round_assignments")).toBe(before.assignments + 1);
     const assignment = await env.DB.prepare("SELECT committee_id, reviewer_person_id FROM round_assignments WHERE submission_id = ?").bind(acceptedId).first<{ committee_id: string; reviewer_person_id: string | null }>();
-    expect(assignment).toEqual({ committee_id: COMMITTEE_WORKSHOP, reviewer_person_id: null });
+    // MRQ-169: routing materializes the pool into per-reviewer rows, so the
+    // routed abstract lands in a real queue rather than a blanket nobody counts.
+    expect(assignment).toEqual({ committee_id: null, reviewer_person_id: REVIEWER_WORKSHOP });
     const stored = await env.DB.prepare("SELECT applied_rule_id, vendor_affiliation, primary_track_id FROM submissions WHERE id = ?").bind(acceptedId).first<{ applied_rule_id: string; vendor_affiliation: string; primary_track_id: string }>();
     expect(stored).toEqual({ applied_rule_id: RULE_VENDOR_GOOD, vendor_affiliation: "vendor_to_fi", primary_track_id: TRACK_VENDOR });
 

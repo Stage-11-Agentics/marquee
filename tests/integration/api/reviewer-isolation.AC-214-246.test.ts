@@ -122,12 +122,13 @@ function directAssignment(id: string, roundId: string, submissionId: string, rev
   `).bind(id, roundId, submissionId, reviewerId, NOW, NOW);
 }
 
-function committeeAssignment(id: string, roundId: string, submissionId: string, committeeId: string) {
-  return env.DB.prepare(`
-    INSERT INTO round_assignments
-      (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at)
-    VALUES (?, ?, ?, NULL, ?, 'assigned', ?, ?)
-  `).bind(id, roundId, submissionId, committeeId, NOW, NOW);
+/**
+ * MRQ-169: a pool becomes rows. Work handed to a committee is materialized per
+ * member, so these two cards prove that track scope still governs even when the
+ * row exists — the assignment alone never opens an out-of-scope abstract.
+ */
+function pooledAssignment(id: string, roundId: string, submissionId: string, reviewerId: string) {
+  return directAssignment(id, roundId, submissionId, reviewerId);
 }
 
 async function seedFixture(): Promise<void> {
@@ -201,8 +202,8 @@ async function seedFixture(): Promise<void> {
     `).bind(EVENT_A, SUBMISSION_A_IN, NOW, NOW, EVENT_A, SUBMISSION_A_OUT, NOW, NOW, EVENT_B, SUBMISSION_B[0], NOW, NOW),
     directAssignment("assignment-a-in", ROUND_A_ONE, SUBMISSION_A_IN, REVIEWER_A),
     directAssignment("assignment-a-out", ROUND_A_ONE, SUBMISSION_A_OUT, REVIEWER_A),
-    committeeAssignment("assignment-a-committee-in", ROUND_A_ONE, SUBMISSION_A_COMMITTEE_IN, COMMITTEE_A),
-    committeeAssignment("assignment-a-committee-out", ROUND_A_ONE, SUBMISSION_A_COMMITTEE_OUT, COMMITTEE_A),
+    pooledAssignment("assignment-a-committee-in", ROUND_A_ONE, SUBMISSION_A_COMMITTEE_IN, REVIEWER_A),
+    pooledAssignment("assignment-a-committee-out", ROUND_A_ONE, SUBMISSION_A_COMMITTEE_OUT, REVIEWER_A),
     ...SUBMISSION_A_COMPARISONS.map((id, index) => directAssignment(`assignment-a-comparison-${index}`, ROUND_A_TWO, id, REVIEWER_A)),
     ...SUBMISSION_A_OUT_COMPARISONS.map((id, index) => directAssignment(`assignment-a-out-comparison-${index}`, ROUND_A_TWO, id, REVIEWER_A)),
     ...SUBMISSION_B.map((id, index) => directAssignment(`assignment-b-one-${index}`, ROUND_B_ONE, id, REVIEWER_B)),

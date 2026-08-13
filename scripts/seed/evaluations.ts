@@ -338,7 +338,9 @@ export function run(ctx: SeedContext): void {
     eligible,
     existing: new Map(),
     load: new Map(reviewerIds.map((reviewerId) => [reviewerId, 0])),
-    reviewersPerSubmission: 2,
+    // The round asks for three reviews per abstract and the pool holds three
+    // reviewers, so the seeded state is exactly what Distribute would produce.
+    reviewersPerSubmission: 3,
     maxPerReviewer: null,
   });
   for (const [submissionId, reviewerId] of distribution.pairs) {

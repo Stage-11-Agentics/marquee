@@ -35,7 +35,9 @@ const SEEDED_COUNTS: Record<string, number> = {
   participations: 1025,
   evaluations: 62,
   comparisons: 0,
-  round_assignments: 202,
+  // 102 organizer/agent rows plus the committee's 100 abstracts materialized at
+  // the round's three reviews each (MRQ-169: pools produce rows, never blankets).
+  round_assignments: 402,
   round_promotions: 0,
   rubric_criteria: 7,
   evaluation_rounds: 2,

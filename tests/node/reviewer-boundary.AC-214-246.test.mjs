@@ -171,7 +171,11 @@ test("CONTRACT · the manifest has one guarded reviewer inventory and guarded wr
 
   const scopeSource = await readFile(resolve(root, "src/lib/reviewer-scope.ts"), "utf8");
   assert.match(scopeSource, /scope\.event_id\s*=\s*submission\.event_id/);
-  assert.match(scopeSource, /committee\.event_id\s*=\s*submission\.event_id/);
+  // MRQ-169: an assignment is a (round, submission, reviewer) row, so the scope
+  // predicate reads that row and nothing else. A committee join here would
+  // re-open the blanket arm the queue and the dashboard disagreed about.
+  assert.match(scopeSource, /assignment\.reviewer_person_id\s*=\s*\?/);
+  assert.doesNotMatch(scopeSource, /committee_members/);
   assert.match(scopeSource, /submission\.event_id\s*=\s*\?/);
   assert.match(scopeSource, /reviewerCanBeAssignedToSubmission/);
   const migration = await readFile(resolve(root, "migrations/0001_init.sql"), "utf8");
@@ -195,8 +199,10 @@ test("CONTRACT · the manifest has one guarded reviewer inventory and guarded wr
     const sourceFile = ts.createSourceFile(module.path, module.source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     return callSites(sourceFile, "reviewerCanBeAssignedToSubmission").map(({ line }) => ({ file: module.path, line }));
   });
+  // One per-pair guard call remains — the direct assignment an organizer makes
+  // by hand. Bulk distribution proves the same intersection set-wise in SQL
+  // (MRQ-169), because per-pair checking a 1,000-abstract round cannot be done.
   assert.deepEqual(assignmentGuardCalls.map(({ file }) => file).sort(), [
-    "src/routes/evaluation.routes.ts",
     "src/routes/evaluation.routes.ts",
     "src/routes/public-form-routing.ts",
   ]);

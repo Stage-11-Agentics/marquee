@@ -328,13 +328,17 @@ describe.sequential("MRQ-17 evaluation plan and centralized reviewer authorizati
     expect((await json<{ round: { mode: string } }>(switched)).round.mode).toBe("comparison");
   });
 
-  test("AC-98 · round-two assignment reuses the track guard and writes no out-of-scope row", async () => {
+  test("AC-98 · round-two distribution reports what no reviewer can cover and writes no out-of-scope row", async () => {
     const before = await env.DB.prepare("SELECT COUNT(*) AS count FROM round_assignments WHERE round_id = ? AND submission_id = ?").bind(ROUND_TWO_ID, SUBMISSION_OUT_OF_SCOPE).first<{ count: number }>();
-    const rejected = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_TWO_ID}/assignments`, {
+    // MRQ-169: an abstract nobody in the pool is responsible for is a coverage
+    // fact the organizer needs, not an error that discards the whole run.
+    const uncoverable = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_TWO_ID}/assignments`, {
       method: "POST",
       body: JSON.stringify({ committee_id: COMMITTEE_ID, mode: "everyone", submission_ids: [SUBMISSION_OUT_OF_SCOPE] }),
     });
-    expect(rejected.status).toBe(422);
+    expect(uncoverable.status).toBe(200);
+    expect(await json<{ assigned_new: number; uncovered: number; uncovered_tracks: string[] }>(uncoverable))
+      .toMatchObject({ assigned_new: 0, uncovered: 1, uncovered_tracks: ["Security"] });
     const after = await env.DB.prepare("SELECT COUNT(*) AS count FROM round_assignments WHERE round_id = ? AND submission_id = ?").bind(ROUND_TWO_ID, SUBMISSION_OUT_OF_SCOPE).first<{ count: number }>();
     expect(Number(after?.count)).toBe(Number(before?.count ?? 0));
 
