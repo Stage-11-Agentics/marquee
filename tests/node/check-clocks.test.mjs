@@ -18,7 +18,7 @@ import { clockFindings } from "../../scripts/checks/clock-policy.mjs";
 
 const rules = (source) => clockFindings("tests/fixture.test.ts", source).map((finding) => finding.rule);
 
-test("the session that took the suite red on 2026-08-13 is caught", () => {
+test("CONTRACT · the session that took the suite red on 2026-08-13 is caught", () => {
   // Verbatim from people.MRQ-131.test.ts at 17242b06: the column is on one line
   // and its binding on the next, which is the whole of why this was missed.
   const source = `
@@ -34,7 +34,7 @@ await env.DB.batch([
   );
 });
 
-test("a template-literal INSERT split over three lines is caught too", () => {
+test("CONTRACT · a template-literal INSERT split over three lines is caught too", () => {
   const source = `
 const now = Date.UTC(2026, 7, 12, 12, 0, 0);
 env.DB.prepare(
@@ -45,7 +45,7 @@ env.DB.prepare(
   assert.ok(rules(source).includes("auth-session-expiry-from-literal-date"));
 });
 
-test("a date reached through Date.parse is still a date", () => {
+test("CONTRACT · a date reached through Date.parse is still a date", () => {
   const source = `
 const now = Date.parse("2026-08-11T12:00:00.000Z");
 env.DB.prepare("INSERT INTO auth_sessions (id, person_id, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
@@ -54,7 +54,7 @@ env.DB.prepare("INSERT INTO auth_sessions (id, person_id, expires_at, created_at
   assert.ok(rules(source).includes("auth-session-expiry-from-literal-date"));
 });
 
-test("createSession handed a pinned clock is the same defect, and is caught", () => {
+test("CONTRACT · createSession handed a pinned clock is the same defect, and is caught", () => {
   const source = `
 const NOW = Date.parse("2026-08-10T12:00:00.000Z");
 env.DB.prepare("SELECT 1");
@@ -63,7 +63,7 @@ const session = await createSession(env.DB, { personId: "per_mail", roleHint: "o
   assert.ok(rules(source).includes("auth-session-expiry-from-literal-date"));
 });
 
-test("a session minted from the real clock is not a finding", () => {
+test("CONTRACT · a session minted from the real clock is not a finding", () => {
   const source = `
 const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
 const SESSION_EXPIRES_AT = Date.now() + 86_400_000;
@@ -73,7 +73,7 @@ env.DB.prepare("INSERT INTO auth_sessions (id, person_id, expires_at, created_at
   assert.deepEqual(rules(source), []);
 });
 
-test("a fixture date that never reaches a time-compared column is left alone", () => {
+test("CONTRACT · a fixture date that never reaches a time-compared column is left alone", () => {
   const source = `
 const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
 env.DB.prepare("INSERT INTO people (id, org_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
@@ -82,7 +82,7 @@ env.DB.prepare("INSERT INTO people (id, org_id, name, created_at, updated_at) VA
   assert.deepEqual(rules(source), []);
 });
 
-test("the escape hatch exempts the statement, and only with a reason", () => {
+test("CONTRACT · the escape hatch exempts the statement, and only with a reason", () => {
   const armed = `
 const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
 env.DB.prepare("INSERT INTO auth_sessions (id, person_id, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
@@ -101,7 +101,7 @@ env.DB.prepare("INSERT INTO auth_sessions (id, person_id, expires_at, created_at
   assert.ok(rules(bare).length > 0, "a marker with no reason is not a marker");
 });
 
-test("SQL parentheses do not end a statement early", () => {
+test("CONTRACT · SQL parentheses do not end a statement early", () => {
   // `COUNT(*)` and `VALUES (?, ?)` live inside the string; a naive paren counter
   // closes the statement mid-SQL and reads the offset as belonging to nothing.
   const source = `
