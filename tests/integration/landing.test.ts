@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from "vitest";
 
 import { loadLandingData, renderLandingDocument } from "../../src/routes/landing.route";
-import { THEMES } from "../../src/ui/shell/theme";
+import { LANDING_THEMES, THEMES } from "../../src/ui/shell/theme";
 import { applyMigrations, env } from "./apply-migrations";
 
 // Anchored to the real clock: the fixtures below are offsets ("due yesterday"),
@@ -86,16 +86,22 @@ test("CONTRACT · CFP-03 landing brand copy follows the current conference name"
   expect(html).not.toContain("populated AIE NYC 2026 workspaces");
 });
 
-test("CONTRACT · the landing offers every registered theme, previewed, before the role doors", async () => {
+test("CONTRACT · the landing offers the four front-door themes, previewed, before the role doors", async () => {
   const html = renderLandingDocument(SHELL, await loadLandingData(env.DB));
 
-  // Every theme in the registry gets a card and a real preview image; the
-  // registry is the source of truth, so a sixth theme fails here until the
-  // landing shows it.
-  for (const theme of THEMES) {
+  // The front door shows four cards, each with a real preview image.
+  expect(LANDING_THEMES).toHaveLength(4);
+  for (const theme of LANDING_THEMES) {
     expect(html).toContain(`data-theme-choice="${theme.id}"`);
     expect(html).toContain(`/themes/${theme.id}.webp`);
     expect(html).toContain(theme.label);
+  }
+
+  // The picker is curated, not a catalogue: a theme the registry carries but
+  // the landing set omits must not appear on the front door. It stays reachable
+  // from the top-bar switcher, which still offers every registered theme.
+  for (const theme of THEMES.filter((registered) => !LANDING_THEMES.includes(registered))) {
+    expect(html).not.toContain(`data-theme-choice="${theme.id}"`);
   }
 
   // The ask ordering is the feature: the look is chosen before the role. The
@@ -111,4 +117,27 @@ test("CONTRACT · the landing offers every registered theme, previewed, before t
   // The choice must persist into the app: the picker writes the same storage
   // key the shell's switcher and the pre-paint script read.
   expect(html).toContain("marquee-theme");
+});
+
+test("CONTRACT · picking a theme enters the hero outright, and never by scrolling", async () => {
+  const html = renderLandingDocument(SHELL, await loadLandingData(env.DB));
+
+  // Two screens, one document: the picker and the hero both ship, and the stage
+  // attribute decides which one is showing.
+  expect(html).toContain('html[data-landing-stage="choose"] .hero { display: none; }');
+  expect(html).toContain('html[data-landing-stage="enter"] .theme-choose { display: none; }');
+
+  // The stage is resolved in the head, ahead of the markup it governs — a
+  // visitor deep-linked past the picker must not see it flash by first.
+  const stageScript = html.indexOf("data-marquee-landing-stage");
+  expect(stageScript).toBeGreaterThan(-1);
+  expect(stageScript).toBeLessThan(html.indexOf("data-theme-choice"));
+
+  // Choosing is arriving. The old behaviour slid the hero up under a picker
+  // that stayed on screen; nothing on this page scrolls the visitor anywhere.
+  expect(html).not.toContain("scrollIntoView");
+  expect(html).toContain('history.pushState(null, "", "#choose-role")');
+
+  // And it is not a one-way door.
+  expect(html).toContain("data-landing-back");
 });
