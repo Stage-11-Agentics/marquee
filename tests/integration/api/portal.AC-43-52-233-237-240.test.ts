@@ -99,6 +99,9 @@ async function seedFixture(): Promise<void> {
        VALUES (?, ?, ?, 'speaker', 0, 'pending', ?, ?)`,
     ).bind(id, submissionId, personId, NOW, NOW)),
     env.DB.prepare(
+      "UPDATE participations SET confirmation_status = 'confirmed', confirmed_at = ?, updated_at = ? WHERE id = ?",
+    ).bind(NOW, NOW, "part-portal-other"),
+    env.DB.prepare(
       `INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, access_note, created_at, updated_at)
        VALUES ('building-portal', ?, 'North Hall', '1 Conference Way', 0, 40.7625, -73.9814, 5, 'operator secret — never public', ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW),
