@@ -136,6 +136,6 @@ test("CONTRACT · MRQ-168 — media remains isolated to its origin and the decla
   const mediaDescription = document.paths["/api/v1/media/{key}"].get?.description ?? "";
   const filesDescription = document.paths["/api/v1/events/{eventId}/files"].get?.description ?? "";
   expect(mediaDescription).toContain("short-lived signed URL");
-  expect(mediaDescription).toContain("15 minutes");
+  expect(mediaDescription).toContain("24 hours");
   expect(filesDescription).toContain("short-lived signed capability");
 });

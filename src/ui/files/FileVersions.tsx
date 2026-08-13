@@ -20,7 +20,7 @@ import "./files.css";
 
 /** The caveat is stated at the control, not hidden in a tooltip. */
 export const CAPABILITY_LINK_NOTE =
-  "Anyone with this link can open the file — it is not signed in to the conference. Share it the way you would share the file itself.";
+  "Anyone with this link can open the file — it is not signed in to the conference. It expires 24 hours after this page loaded, and stops working sooner if the speaker leaves the conference.";
 
 function formatUploaded(value: number): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })

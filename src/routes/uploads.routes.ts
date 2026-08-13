@@ -769,7 +769,7 @@ const uploadCompleteResponseSchema = z
   .object({
     attachmentId: z.string(),
     status: z.literal("ready"),
-    url: z.string().describe("A short-lived signed URL on the separate media origin; it expires after 15 minutes."),
+    url: z.string().describe("A short-lived signed URL on the separate media origin; it expires 24 hours after it is issued."),
     contentType: z.string(),
     sizeBytes: z.number(),
   })
@@ -993,7 +993,7 @@ const serveMedia = defineApiRoute(
     operationId: "serveMedia",
     summary: "Serve a verified upload",
     description:
-      "Serves a ready upload only from the configured separate media origin when presented with its short-lived signed URL. The link expires after 15 minutes and is rejected when its attachment or owning speaker participation is revoked; downloads remain attachments with nosniff protection.",
+      "Serves a ready upload only from the configured separate media origin when presented with its short-lived signed URL. The link expires 24 hours after it is issued and is rejected immediately when its attachment or owning speaker participation is revoked; downloads remain attachments with nosniff protection.",
     tags: ["Uploads"],
     request: { params: mediaParamsSchema },
     policy: {

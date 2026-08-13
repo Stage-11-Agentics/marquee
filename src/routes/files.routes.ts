@@ -33,7 +33,7 @@ const listFilesRoute = defineApiRoute(
     operationId: "listConferenceFiles",
     summary: "Read the conference files library",
     description:
-      "One row per requested deliverable — filled or empty — with the speaker, session, upload date, size, and full version history of each file. Version numbers and the current version are derived from the deliverable's latest-pointer, never stored. Every returned file URL is a short-lived signed capability on the separate media origin; it expires after 15 minutes and is invalidated when its attachment or owning participation is revoked.",
+      "One row per requested deliverable — filled or empty — with the speaker, session, upload date, size, and full version history of each file. Version numbers and the current version are derived from the deliverable's latest-pointer, never stored. Every returned file URL is a short-lived signed capability on the separate media origin; it expires 24 hours after it is issued and is invalidated immediately when its attachment or owning participation is revoked.",
     tags: ["Files"],
     request: { params: eventParams, query: filesQuery },
     policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },

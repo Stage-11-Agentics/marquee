@@ -6,11 +6,19 @@
  * session cookie across origins. The signature makes the capability bounded,
  * while the media route re-checks the attachment's current ownership before
  * it serves any bytes.
+ *
+ * Revocation, not expiry, is what closes the defect: `mediaAttachmentIsActive`
+ * runs on every fetch, so a link dies the moment the speaker leaves regardless
+ * of how much of its lifetime is left. The TTL is therefore set long enough
+ * that it never expires under an organizer who is simply reading the page —
+ * the URL is baked into the download anchor when the snapshot renders and
+ * nothing refetches it, so a minutes-long TTL turns an open tab into a dead
+ * download button.
  */
 
 import type { D1Database } from "@cloudflare/workers-types";
 
-export const MEDIA_LINK_TTL_MS = 15 * 60_000;
+export const MEDIA_LINK_TTL_MS = 24 * 60 * 60_000;
 const MEDIA_LINK_CLOCK_SKEW_MS = 60_000;
 
 export const MEDIA_LINK_POLICY = "short-lived-revocable-capability-url" as const;

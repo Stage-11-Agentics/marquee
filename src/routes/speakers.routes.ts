@@ -220,7 +220,7 @@ const readSpeakerFiles = defineApiRoute(
     operationId: "listEventSpeakerFiles",
     summary: "List everything one speaker has sent the conference",
     description:
-      "The speaker's profile photo and every requested deliverable, each with filename, upload date, size, and full version history. Version numbers and the current version are derived from the owner's latest-pointer, never stored. Every returned file URL is a short-lived signed capability on the separate media origin; it expires after 15 minutes and is invalidated when its attachment or owning participation is revoked.",
+      "The speaker's profile photo and every requested deliverable, each with filename, upload date, size, and full version history. Version numbers and the current version are derived from the owner's latest-pointer, never stored. Every returned file URL is a short-lived signed capability on the separate media origin; it expires 24 hours after it is issued and is invalidated immediately when its attachment or owning participation is revoked.",
     tags: ["Speakers", "Files"],
     request: { params: speakerParams },
     policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
