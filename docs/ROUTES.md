@@ -40,7 +40,8 @@ everything else is drawn inside the organizer shell.
 | `/roster` | Speakers | organizer | yes | client push |
 | `/forms` | CFP forms | organizer | yes | client push |
 | `/evaluation` | Evaluation plan | organizer | yes | client push |
-| `/reviewer` | Review queue | reviewer | yes | client push |
+| `/reviewer` | Reviewer home | reviewer | yes | client push |
+| `/reviewer/queue` | Reviewer queue | reviewer | — | client push |
 | `/agenda-builder` | Agenda | organizer | yes | client push |
 | `/files` | Files | organizer | yes | client push |
 | `/communications` | Communications | organizer | yes | client push |
@@ -98,7 +99,8 @@ routes — the text to hand any agent or reader that needs to know what exists.
 ROUTES (real paths, not hash routes):
   Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /claim/:token /embed/:slug /embed/config /f/:slug /join/:token /login /p/:slug /s/:slug /sign-in /signin /site /speakers
   Organizer (admin shell): /people /lists /pipeline /crm /directory /contacts /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /roster /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /settings/webhooks /import
-  Review queue: /reviewer
+  Reviewer home: /reviewer
+  Reviewer queue: /reviewer/queue
   Speaker portal: /portal
   Co-speaker confirmation: /co-speaker
   API & CLI: /api/docs

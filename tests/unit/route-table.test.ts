@@ -18,10 +18,14 @@ test("CONTRACT · the sidebar reproduces the binding prototype navigation order"
   expect([...routesFor("home"), ...routesFor("pipeline"), ...routesFor("modules")].map((route) => route.label)).toEqual([
     "Program home", "Program board", "Abstracts & sessions", "Add a session",
     "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published",
-    "Speakers", "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Files", "Communications", "Tasks", "Speaker portal", "Conference site",
+    "Speakers", "CFP forms", "Evaluation plan", "Reviewer home", "Agenda", "Files", "Communications", "Tasks", "Speaker portal", "Conference site",
     "Embeds", "Conference settings",
     "Speaker follow-ups",
   ]);
+});
+
+test("CONTRACT · MRQ-171 · the reviewer queue is a real route outside the organizer shell", () => {
+  expect(matchRoute("/reviewer/queue")).toMatchObject({ id: "reviewer-queue", label: "Reviewer queue", group: "utility" });
 });
 
 test("CONTRACT · MRQ-115 — the files library is reachable by the noun an organizer searches for", () => {

@@ -131,7 +131,7 @@ type PortalSubmission = {
   }>;
 };
 
-type PortalPerson = {
+export type PortalPerson = {
   id: string;
   name: string;
   email: string;
@@ -516,7 +516,7 @@ function initialSocialDraft(links: readonly string[]): { handles: Record<string,
   };
 }
 
-function ProfileForm({ eventId, person, platforms, onSaved, compact = false }: { eventId: string; person: PortalPerson; platforms: SocialPlatformId[]; onSaved: () => Promise<void>; compact?: boolean }): JSX.Element {
+export function ProfileForm({ eventId, person, platforms, onSaved, compact = false }: { eventId: string; person: PortalPerson; platforms: SocialPlatformId[]; onSaved: (person: PortalPerson) => Promise<void>; compact?: boolean }): JSX.Element {
   const [draft, setDraft] = useState({ title: person.title ?? "", company: person.company ?? "", bio: person.bio ?? "", ...initialSocialDraft(person.social_links) });
   const [socialErrors, setSocialErrors] = useState<Record<string, string>>({});
   const [headshot, setHeadshot] = useState<File | null>(null);
@@ -590,10 +590,10 @@ function ProfileForm({ eventId, person, platforms, onSaved, compact = false }: {
         const other = draft.other.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
         body = { title: draft.title || null, company: draft.company || null, bio: draft.bio || null, social_links: composeSocialLinks(handles, other), headshot_attachment_id: headshotAttachmentId };
       }
-      await requestJson("/api/v1/me/profile", { method: "PATCH", body: JSON.stringify(body) });
+      const response = await requestJson<{ person: PortalPerson }>("/api/v1/me/profile", { method: "PATCH", body: JSON.stringify(body) });
       setHeadshot(null);
       setPreview(null);
-      await onSaved();
+      await onSaved(response.person);
     } catch (caught) {
       setError((caught as Error).message);
     } finally {

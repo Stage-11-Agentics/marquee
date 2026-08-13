@@ -137,7 +137,8 @@ async function adminContext(browser: Browser, runtimeBaseUrl: string, cookie: st
 }
 
 async function reviewAdvanceSamples(page: Page, baseUrl: string): Promise<number[]> {
-  await loadPage(page, baseUrl, "/reviewer", "[data-reviewer-surface]");
+  // The home is the reviewer seat; this gate measures the working surface.
+  await loadPage(page, baseUrl, "/reviewer/queue", "[data-reviewer-surface]");
   const values: number[] = [];
   for (let index = 0; index < SAMPLE_COUNTS.review; index += 1) {
     const currentId = await page.locator("[data-queue-id]").getAttribute("data-queue-id");
