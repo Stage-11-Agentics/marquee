@@ -1,6 +1,7 @@
 /** Deliberate edge cases and accepted-speaker onboarding workload. */
 
 import { seedId, syntheticEmail } from "../../src/lib/ids.ts";
+import { scheduledSessions } from "./accepted-core.ts";
 import type { SeedContext, SeedModule, SeedRow } from "./_sql.ts";
 import { EVENT_ID, ORG_ID, TEMPLATE_IDS } from "./event.ts";
 import { poolSubmissionId } from "./pool.ts";
@@ -73,12 +74,16 @@ export function run(ctx: SeedContext): void {
   const acceptedIds = new Set(
     table(ctx, "submissions").filter((row) => row.status === "accepted").map((row) => String(row.id)),
   );
-  // Agenda deliberately schedules the first 24 accepted rows. The next
-  // Wave-1 row is therefore a real accepted Session with a sent wave, no
-  // agenda slot, and no pending wave; closing its seeded tasks makes the
-  // derived Ready to place stage genuinely reachable.
+  // The agenda schedules a fixed, format-spanning set of accepted rows
+  // (`scheduledSessions`). The first accepted row it leaves out is therefore a
+  // real accepted Session with a sent wave, no agenda slot, and no pending
+  // wave; closing its seeded tasks makes the derived Ready to place stage
+  // genuinely reachable.
   const acceptedRows = table(ctx, "submissions").filter((row) => row.status === "accepted");
-  const readyToPlaceSubmissionId = String(acceptedRows[24]?.id ?? "");
+  const scheduledIds = new Set(scheduledSessions().map((session) => seedId("sub", session.slug)));
+  const readyToPlaceSubmissionId = String(
+    acceptedRows.find((row) => !scheduledIds.has(String(row.id)))?.id ?? "",
+  );
   const acceptedParticipations = table(ctx, "participations").filter(
     (row) => acceptedIds.has(String(row.submission_id)),
   );

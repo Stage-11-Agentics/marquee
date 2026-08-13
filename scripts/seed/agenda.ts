@@ -1,6 +1,7 @@
 /** Published agenda density, multi-track scheduled sessions, and conflicts. */
 
 import { seedId } from "../../src/lib/ids.ts";
+import { scheduledSessions } from "./accepted-core.ts";
 import type { SeedContext, SeedModule, SeedRow } from "./_sql.ts";
 import { EVENT_ID, TRACK_IDS } from "./event.ts";
 
@@ -12,6 +13,34 @@ const ROOM_IDS = [
   "metropolitan-ballroom", "central-park-ballroom", "new-york-ballroom", "expo-stage",
   "marquis-room-a", "marquis-room-b", "marquis-room-c", "marquis-room-d", "marquis-room-e",
 ].map((name) => seedId("rm", name));
+const EXPO_ROOM_ID = ROOM_IDS[3]!;
+const ONLINE_ROOM_ID = seedId("rm", "online");
+
+/**
+ * Where each scheduled session lands, by its position in the grid order
+ * `scheduledSessions()` fixes. Day one opens on the two conflict pairs: the
+ * first crosses Sheraton → Marriott so the seed carries a live Transit
+ * conflict, the second is a same-building double-booking. Day two runs the five
+ * parallel Workshop rooms, then the Expo Stage's Lightning block straight
+ * through the mainstage coffee break, the two Online sessions in the virtual
+ * room, and the remaining mainstage talks across the three ballrooms.
+ */
+function placement(index: number): { startsAt: number; roomId: string } {
+  if (index < 4) {
+    return {
+      startsAt: Date.UTC(2026, 9, 12, index < 2 ? 13 : 14),
+      roomId: [ROOM_IDS[0]!, ROOM_IDS[4]!, ROOM_IDS[2]!, ROOM_IDS[3]!][index]!,
+    };
+  }
+  if (index < 9) return { startsAt: Date.UTC(2026, 9, 13, 17), roomId: ROOM_IDS[index]! };
+  if (index < 14) return { startsAt: Date.UTC(2026, 9, 13, 18, (index - 9) * 15), roomId: EXPO_ROOM_ID };
+  if (index < 16) return { startsAt: Date.UTC(2026, 9, 13, 18, (index - 14) * 30), roomId: ONLINE_ROOM_ID };
+  const slot = index - 16;
+  return {
+    startsAt: Date.UTC(2026, 9, 13, 18, 30 + Math.floor(slot / 3) * 30),
+    roomId: ROOM_IDS[slot % 3]!,
+  };
+}
 
 function addConflictParticipation(
   ctx: SeedContext,
@@ -98,8 +127,19 @@ function addConfirmationCoverage(ctx: SeedContext, accepted: SeedRow["row"][]): 
 }
 
 export function run(ctx: SeedContext): void {
-  const accepted = table(ctx, "submissions").filter((row) => row.status === "accepted").slice(0, 24);
-  if (accepted.length < 24) throw new Error("agenda needs at least 24 accepted submissions");
+  const acceptedById = new Map(
+    table(ctx, "submissions").filter((row) => row.status === "accepted").map((row) => [String(row.id), row]),
+  );
+  const accepted = scheduledSessions().map((session) => {
+    const submission = acceptedById.get(seedId("sub", session.slug));
+    if (!submission) throw new Error(`scheduled session ${session.slug} is not an accepted submission`);
+    return submission;
+  });
+
+  // AC-74: an item's duration defaults from its submission's format.
+  const defaultDurations = new Map(
+    table(ctx, "formats").map((row) => [String(row.id), Number(row.default_duration_min)]),
+  );
 
   const trackIds = Object.values(TRACK_IDS);
   for (const submission of accepted.slice(0, 3)) {
@@ -114,31 +154,18 @@ export function run(ctx: SeedContext): void {
     });
   }
 
-  // Two pairs begin together in different rooms. The first pair now crosses
-  // Sheraton → Marriott so the seeded data produces a live Transit conflict;
-  // the second remains a same-building person double-booking.
-  const starts = [
-    Date.UTC(2026, 9, 12, 13), Date.UTC(2026, 9, 12, 13),
-    Date.UTC(2026, 9, 12, 14), Date.UTC(2026, 9, 12, 14),
-  ];
-  for (let index = 4; index < accepted.length; index += 1) {
-    // Five sessions run in Workshop Rooms A–E at 13:00 on day two. The rest
-    // form a dense, deterministic grid across the verified rooms.
-    if (index < 9) starts.push(Date.UTC(2026, 9, 13, 17));
-    else starts.push(Date.UTC(2026, 9, 13, 18 + Math.floor((index - 9) / 5)));
-  }
-
   accepted.forEach((submission, index) => {
-    const workshopParallel = index >= 4 && index < 9;
-    const roomId = workshopParallel ? ROOM_IDS[index]! : index === 1 ? ROOM_IDS[4]! : ROOM_IDS[index % 4]!;
+    const { startsAt, roomId } = placement(index);
+    const duration = defaultDurations.get(String(submission.format_id));
+    if (!duration) throw new Error(`scheduled submission ${submission.id} has no format duration`);
     ctx.add("agenda_items", {
       id: seedId("agi", String(submission.id)),
       event_id: EVENT_ID,
       submission_id: submission.id,
       kind: "session",
       title: null,
-      starts_at: starts[index]!,
-      duration_min: workshopParallel ? 90 : 45,
+      starts_at: startsAt,
+      duration_min: duration,
       room_id: roomId,
       track_id: submission.primary_track_id,
       // Leave one scheduled Session unpublished so the record exposes the
