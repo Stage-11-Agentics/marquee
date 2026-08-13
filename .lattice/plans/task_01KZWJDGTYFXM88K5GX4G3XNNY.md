@@ -23,3 +23,26 @@ Acceptance criteria:
 Files: src/ui/portal/PortalPage.tsx (:806-811, :921), tests/unit/submitter-portal.MRQ-150.test.ts.
 
 Severity note: the branch is rare, so this is not judge-facing and must not hold a deploy. main e29d4bd8 gates clean (pr-gate pass, 59.5s/120s) and should ship as-is; this is follow-up work.
+
+## Product decision and implementation plan
+
+Keep the submitter and speaker seats distinct and fix the copy. A membership
+bridge would be the wrong contract: the acceptance cascade only creates a
+speaker membership for `speaker`/`co_speaker` participations, while the
+submitter-only path intentionally has no membership, no tasks, and no handbook.
+The existing MRQ-150 integration test treats that absence as a requirement. A
+submitter-only acceptance therefore cannot truthfully promise that this page
+will become a speaker portal or receive speaker tasks/session details.
+
+Restore a record-backed accepted detail (the accepted-outcome sentence already
+used by the submitter hero), and add a unit test that renders an accepted
+submitter seat and rejects claims about a speaker portal, tasks, or session
+details. The PR body will carry this decision before the code change is
+described as complete.
+
+## Verification
+
+- Run the focused submitter-portal unit test and confirm the new negative
+  assertion fails against pre-fix code and passes after the copy change.
+- Run `npm test` and `npm run pr-gate`; compare failures with the known 22
+  stale-clock 401 failures on MRQ-139/MRQ-131.

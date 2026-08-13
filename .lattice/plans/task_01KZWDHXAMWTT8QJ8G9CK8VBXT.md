@@ -17,3 +17,27 @@ Acceptance criteria:
 Files: src/routes/portal.routes.ts (findSubmitterEvent, :327-346), src/ui/portal/PortalPage.tsx (:891 and the SubmitterPortal shell), src/routes/public-form.routes.ts (portal_url construction, :489).
 
 Provenance: finding 7 of the 8-finding post-merge review on MRQ-150. Note findings 1,2,3,4,8 are in open PR #160 and finding 5 shipped in PR #158 — this is the remainder.
+
+## Implementation plan
+
+- Keep the submitter/speaker seat boundary from SPEC §10. Resolve the submitter
+  seat from the public-form participation rows, choosing the latest conference
+  explicitly (`starts_on DESC`, deterministic `id DESC`) because a submitter's
+  newest/future conference is the one they mean when no event is requested.
+- Carry the event ID through the demo CFP confirmation magic-link redirect so a
+  fresh submission opens its own conference. Return the submitter's authorized
+  event set in the submitter snapshot, and render those events as honest portal
+  links. The browser will request `/api/v1/me/portal?eventId=...` through the
+  link, while the resolver still provides a deterministic fallback for older
+  links without the query.
+- Add a two-conference integration test that submits through both real public
+  form endpoints, follows the confirmation exchange, verifies the later event,
+  and verifies that each event can be requested without leaking submissions.
+- Add a submitter-seat unit assertion for the rendered event links and keep the
+  existing single-event fixture behavior unchanged.
+
+## Verification
+
+- Run the focused unit and submitter-portal integration tests.
+- Run `npm test` and `npm run pr-gate`; compare failures with the known 22
+  stale-clock 401 failures on MRQ-139/MRQ-131.
