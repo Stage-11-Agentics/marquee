@@ -22,6 +22,7 @@ SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 STATE_DIR=${STATE_DIR:-$SELF_DIR/run}
 STATE="$STATE_DIR/state.json"
 GATE_LOCK=${GATE_LOCK:-/tmp/marquee-gate.lock}
+CREDENTIALS_ENV=${CREDENTIALS_ENV:-$HOME/Projects/Stage11/code/platform/.credentials/.env}
 DEMO_HEADER=${DEMO_HEADER:-AI Engineer New York 2026}
 # Score-floor: a round may lose this many points before the loop stops deploying.
 FLOOR_DROP=${FLOOR_DROP:-2.0}
@@ -163,10 +164,15 @@ cmd_barrier() {
 
   if [[ ${1:-} != --no-deploy ]]; then
     say "3/5 deploy main from the clean tree"
-    ( cd "$DEPLOY_TREE" \
+    # The token is sourced inside this subshell and nowhere else. DEPLOY.md keeps it
+    # under MARQUEE_CLOUDFLARE_API_TOKEN precisely so a bare CLOUDFLARE_API_TOKEN
+    # never leaks to every tool that sources the platform env; the rename happens on
+    # the wrangler line, at the last possible moment.
+    ( set -a; . "$CREDENTIALS_ENV"; set +a
+      cd "$DEPLOY_TREE" \
       && git fetch github main --quiet && git checkout --quiet main && git reset --hard --quiet github/main \
       && npx vite build >/dev/null \
-      && CLOUDFLARE_API_TOKEN="${MARQUEE_CLOUDFLARE_API_TOKEN:?export it in this shell only}" npx wrangler deploy )
+      && CLOUDFLARE_API_TOKEN="${MARQUEE_CLOUDFLARE_API_TOKEN:?not in $CREDENTIALS_ENV}" npx wrangler deploy )
 
     say "4/5 verify by build hash, not by the page loading"
     local want got
@@ -184,7 +190,10 @@ cmd_fire() {
   [[ $(jget halted) == True ]] && die "loop is halted"
   local round=$(( $(jget round) + 1 ))
   say "firing round $round against $sha"
-  atlas "~/$KIT_ATLAS/kickoff-round4.sh $sha"
+  # Push the kickoff script every time: the version that runs is the version in
+  # this repo, not whatever was last hand-edited on the box.
+  scp -q "$SELF_DIR/atlas/kickoff-round.sh" "atlas:$KIT_ATLAS/kickoff-round.sh"
+  atlas "chmod +x ~/$KIT_ATLAS/kickoff-round.sh && ~/$KIT_ATLAS/kickoff-round.sh $round $sha"
   set_state "round=$round" "runStamp=null"
 }
 
