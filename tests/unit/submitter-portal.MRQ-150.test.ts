@@ -32,6 +32,7 @@ function snapshot(overrides: Partial<SubmitterSnapshot> = {}): SubmitterSnapshot
   return {
     seat: "submitter",
     event: { id: "evt", name: "AI Engineer New York 2026", slug: "aie-ny-2026", timezone: "America/New_York", status: "live" },
+    available_events: [{ id: "evt", name: "AI Engineer New York 2026" }],
     person: { id: "per", name: "Avery Okonkwo", email: "avery.okonkwo@example.com" },
     submissions: [submission()],
     ...overrides,
@@ -108,6 +109,27 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(render(snapshot({ submissions: [submission({ status: "in_review" })] }))).toContain("under review");
     expect(render(snapshot({ submissions: [submission({ status: "withdrawn" })] }))).toContain("You withdrew this abstract");
     expect(render(snapshot({ submissions: [submission({ status: "rejected" })] }))).toContain("was not selected");
+  });
+
+  test("CONTRACT · MRQ-162 · an accepted submitter gets no speaker-seat promise", () => {
+    const html = render(snapshot({ submissions: [submission({ status: "accepted" })] })).toLowerCase();
+    expect(html).toContain("the program team accepted this abstract for the conference.");
+    expect(html).not.toContain("speaker portal");
+    expect(html).not.toContain("tasks");
+    expect(html).not.toContain("session details");
+  });
+
+  test("CONTRACT · MRQ-160 · multiple conferences are explicit and each has a portal link", () => {
+    const html = render(snapshot({
+      available_events: [
+        { id: "evt", name: "AI Engineer New York 2026" },
+        { id: "evt-next", name: "AI Engineer New York 2027" },
+      ],
+    }));
+    expect(html).toContain("You have submissions in 2 conferences. Choose one to view its abstracts.");
+    expect(html).toContain('href="/portal?eventId=evt"');
+    expect(html).toContain('href="/portal?eventId=evt-next"');
+    expect(html).toContain('aria-current="page"');
   });
 
   test("CONTRACT · MRQ-150 · a draft names the submitter's next action and makes no review promise", () => {

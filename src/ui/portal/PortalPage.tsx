@@ -171,6 +171,7 @@ type SubmitterSubmission = {
 type SubmitterSnapshot = {
   seat: "submitter";
   event: { id: string; name: string; slug: string; timezone: string; status: string };
+  available_events: Array<{ id: string; name: string }>;
   person: { id: string; name: string; email: string };
   submissions: SubmitterSubmission[];
 };
@@ -804,7 +805,7 @@ function submitterOutcomeCopy(status: string): string {
 }
 
 function submitterOutcomeDetail(status: string): string {
-  if (status === "accepted") return "This page becomes your speaker portal. Tasks and session details will arrive here.";
+  if (status === "accepted") return "The program team accepted this abstract for the conference.";
   if (status === "rejected") return "The program team has finished reviewing this abstract.";
   if (status === "withdrawn") return "You withdrew this abstract. No further review will happen.";
   return submitterOutcomeCopy(status);
@@ -864,6 +865,15 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
     .filter((submission) => submission.status !== "draft")
     .map((submission) => submission.form_slug)
     .find((value): value is string => Boolean(value)) ?? null;
+  const conferenceLinks = snapshot.available_events.map((event) => (
+    <a
+      class="portal-button secondary"
+      href={`/portal?eventId=${encodeURIComponent(event.id)}`}
+      aria-current={event.id === snapshot.event.id ? "page" : undefined}
+    >
+      {event.name}
+    </a>
+  ));
   const heroCopy = isDraft
     ? "This abstract is saved as a draft, not yet submitted."
     : isWaitlisted
@@ -941,8 +951,12 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
         </div>
       </section>
       <section class="portal-panel" aria-labelledby="conference-heading">
-        <header class="portal-panel-head"><h2 id="conference-heading">{snapshot.event.name}</h2><span>public pages</span></header>
+        <header class="portal-panel-head"><h2 id="conference-heading">Conferences on file</h2><span>{snapshot.available_events.length} conference{snapshot.available_events.length === 1 ? "" : "s"}</span></header>
         <div class="portal-panel-body">
+          <p class="portal-empty">{snapshot.available_events.length > 1
+            ? `You have submissions in ${snapshot.available_events.length} conferences. Choose one to view its abstracts.`
+            : "This is the only conference with a submission on file."}</p>
+          <nav class="portal-seat-actions" aria-label="Conferences with submissions">{conferenceLinks}</nav>
           <div class="portal-seat-actions">
             <a class="portal-button secondary" href="/">Return to conference</a>
             <a class="portal-button secondary" href="/agenda">View the agenda</a>
@@ -954,12 +968,15 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
 }
 
 function PortalPage(): JSX.Element {
-  const viewingAsSpeaker = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("viewing_as") === "speaker";
+  const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const viewingAsSpeaker = query?.get("viewing_as") === "speaker";
+  const requestedEventId = query?.get("eventId");
   const [snapshot, setSnapshot] = useState<AnyPortalSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiFailure | null>(null);
   const refresh = async () => {
-    try { setLoading(true); setError(null); const next = await requestJson<AnyPortalSnapshot>("/api/v1/me/portal"); setSnapshot(next); }
+    const path = requestedEventId ? `/api/v1/me/portal?eventId=${encodeURIComponent(requestedEventId)}` : "/api/v1/me/portal";
+    try { setLoading(true); setError(null); const next = await requestJson<AnyPortalSnapshot>(path); setSnapshot(next); }
     catch (caught) { setError(caught as ApiFailure); } finally { setLoading(false); }
   };
   useEffect(() => { void refresh(); }, []);

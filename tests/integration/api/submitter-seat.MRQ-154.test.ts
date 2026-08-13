@@ -78,7 +78,7 @@ async function submitAndExchange(input: { title: string; name: string; email: st
   const exchangeUrl = new URL(portalUrl);
   const exchanged = await request(`${exchangeUrl.pathname}${exchangeUrl.search}`);
   expect(exchanged.status).toBe(302);
-  expect(exchanged.headers.get("location")).toBe("/portal");
+  expect(exchanged.headers.get("location")).toBe(`/portal?eventId=${EVENT_ID}`);
   const cookie = (exchanged.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
   expect(cookie).toContain("mq_session=");
   return cookie;

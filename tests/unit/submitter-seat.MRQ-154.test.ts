@@ -25,6 +25,7 @@ function snapshot(overrides: Partial<SubmitterSnapshot> = {}): SubmitterSnapshot
   return {
     seat: "submitter",
     event: { id: "evt_mrq154", name: "CFP-05 Conference", slug: "cfp-05-conference", timezone: "America/New_York", status: "live" },
+    available_events: [{ id: "evt_mrq154", name: "CFP-05 Conference" }],
     person: { id: "per_mrq154", name: "Avery Submitter", email: "avery@example.com" },
     submissions: [submission()],
     ...overrides,

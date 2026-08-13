@@ -90,6 +90,9 @@ const portalResponseSchema = z
     tasks: z.array(z.any()),
     handbook: z.object({ markdown: z.string() }),
     venue: z.object({ pinned_building_count: z.number().int().nonnegative() }),
+    // Submitter seats expose only conferences reached through this person's
+    // own submissions; speaker seats do not need this switcher.
+    available_events: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
   })
   .openapi("SpeakerPortal");
 
@@ -112,6 +115,8 @@ type EventProjection = {
   timezone: string;
   status: string;
 };
+
+type SubmitterEventOption = Pick<EventProjection, "id" | "name">;
 
 type PersonProjection = {
   id: string;
@@ -333,18 +338,37 @@ async function findSubmitterEvent(
 ): Promise<EventProjection | null> {
   const predicate = requestedEventId ? "AND e.id = ?" : "";
   const bindings = requestedEventId ? [auth.personId, auth.orgId, requestedEventId] : [auth.personId, auth.orgId];
+  // A submitter with an older participation and a fresh public submission
+  // means the newest/future conference. Keep this choice explicit for the
+  // submitter seat instead of inheriting the speaker resolver's oldest-event
+  // ordering or relying on database row order.
   return db
     .prepare(
-      `SELECT e.id, e.name, e.slug, e.starts_on, e.ends_on, e.timezone, e.status
+      `SELECT DISTINCT e.id, e.name, e.slug, e.starts_on, e.ends_on, e.timezone, e.status
        FROM events e
        JOIN submissions s ON s.event_id = e.id
        JOIN participations p ON p.submission_id = s.id AND p.person_id = ?
        WHERE e.org_id = ? ${predicate}
-       ORDER BY e.starts_on ASC, e.id ASC
+       ORDER BY e.starts_on DESC, e.id DESC
        LIMIT 1`,
     )
     .bind(...bindings)
     .first<EventProjection>();
+}
+
+async function findSubmitterEvents(db: D1Database, auth: SessionAuth): Promise<SubmitterEventOption[]> {
+  const rows = await db
+    .prepare(
+      `SELECT DISTINCT e.id, e.name
+       FROM events e
+       JOIN submissions s ON s.event_id = e.id
+       JOIN participations p ON p.submission_id = s.id AND p.person_id = ?
+       WHERE e.org_id = ?
+       ORDER BY e.starts_on DESC, e.id DESC`,
+    )
+    .bind(auth.personId, auth.orgId)
+    .all<SubmitterEventOption>();
+  return rows.results;
 }
 
 type SpeakerParticipationRow = {
@@ -986,7 +1010,10 @@ type SubmitterSubmissionRow = {
  * handbook, no schedule), because they do not hold one yet.
  */
 async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: EventProjection) {
-  const person = await personFor(db, auth.personId);
+  const [person, availableEvents] = await Promise.all([
+    personFor(db, auth.personId),
+    findSubmitterEvents(db, auth),
+  ]);
   const rows = await db
     .prepare(
       // One row per submission, never per participation. The public form writes
@@ -1034,6 +1061,7 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
   return {
     seat: "submitter" as const,
     event,
+    available_events: availableEvents,
     person: { id: person.id, name: person.name, email: person.email },
     submissions: submissions.map((row) => ({
       id: row.id,

@@ -794,7 +794,15 @@ async function handlePublicSubmission(
 
   let portalUrl: string | null = null;
   if (event.demo_mode === 1) {
-    const portal = await mintMagicLink(context.env.DB, { personId: person.id, purpose: "login", redirectTo: "/portal", now });
+    // The submission already names the conference. Carry that identity through
+    // the confirmation link so a multi-event submitter does not have to trust a
+    // later fallback ordering to find the conference they just used.
+    const portal = await mintMagicLink(context.env.DB, {
+      personId: person.id,
+      purpose: "login",
+      redirectTo: `/portal?eventId=${encodeURIComponent(event.id)}`,
+      now,
+    });
     portalUrl = `${publicOrigin(context.req.url)}/api/v1/auth/exchange?token=${encodeURIComponent(portal.token)}`;
   }
   return formResponse(context, slug, rawResumeToken, email!, portalUrl);

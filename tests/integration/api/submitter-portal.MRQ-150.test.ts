@@ -21,8 +21,10 @@ import { applyMigrations, env } from "../apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
 const EVENT_ID = "evt_submitter_portal";
+const LATER_EVENT_ID = "evt_submitter_portal_later";
 const ORG_ID = "org_submitter_portal";
 const FORM_ID = "form_submitter_cfp";
+const LATER_FORM_ID = "form_submitter_cfp_later";
 const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
 
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
@@ -45,6 +47,9 @@ async function seed(): Promise<void> {
     env.DB.prepare(`INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'live', 1, ?, ?)`)
       .bind(EVENT_ID, ORG_ID, "Walkthrough Conference", "walkthrough-conference", "2026-10-12", "2026-10-14", "America/New_York", NOW, NOW),
+    env.DB.prepare(`INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'live', 1, ?, ?)`)
+      .bind(LATER_EVENT_ID, ORG_ID, "Future Walkthrough Conference", "future-walkthrough-conference", "2027-10-12", "2027-10-14", "America/New_York", NOW, NOW),
     env.DB.prepare("INSERT INTO formats (id, event_id, name, default_duration_min, min_duration_min, max_duration_min, position, created_at, updated_at) VALUES (?, ?, ?, 20, 15, 30, 0, ?, ?)")
       .bind("format_stage", EVENT_ID, "Stage Talk", NOW, NOW),
     env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)")
@@ -71,12 +76,40 @@ async function seed(): Promise<void> {
         FORM_ID, NOW, NOW,
         FORM_ID, JSON.stringify({ options: ["Agents"] }), NOW, NOW,
       ),
+    env.DB.prepare("INSERT INTO formats (id, event_id, name, default_duration_min, min_duration_min, max_duration_min, position, created_at, updated_at) VALUES (?, ?, ?, 20, 15, 30, 0, ?, ?)")
+      .bind("format_stage_later", LATER_EVENT_ID, "Stage Talk", NOW, NOW),
+    env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)")
+      .bind("track_agents_later", LATER_EVENT_ID, "Agents", "#db4c3f", NOW, NOW),
+    env.DB.prepare(`INSERT INTO waves (id, event_id, name, decision_on, target_count, sent_at, position, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, 0, ?, ?)`)
+      .bind("wave_submitter_next_later", LATER_EVENT_ID, "Wave 1", "2027-09-21", 20, NOW, NOW),
+    env.DB.prepare(`INSERT INTO forms
+      (id, event_id, name, slug, kind, status, opens_at, closes_at, welcome_md,
+       per_submitter_limit, min_speakers, max_speakers, max_sponsors,
+       admin_notify_person_ids, turnstile_required, created_at, updated_at)
+      VALUES (?, ?, 'Call for Speakers', 'submitter-cfp-later', 'abstract', 'open', ?, ?, '', 3, 1, 4, 0, '[]', 0, ?, ?)`).bind(
+        LATER_FORM_ID, LATER_EVENT_ID, 0, Date.UTC(2099, 0, 1), NOW, NOW,
+      ),
+    env.DB.prepare(`INSERT INTO form_fields
+      (id, form_id, key, label, help_text, type, required, position, config, condition, created_at, updated_at)
+      VALUES
+      ('field_sp_title_later', ?, 'title', 'Session title', NULL, 'short_text', 1, 0, '{"maxLength":80}', NULL, ?, ?),
+      ('field_sp_name_later', ?, 'speaker_name', 'Primary speaker name', NULL, 'short_text', 1, 1, '{}', NULL, ?, ?),
+      ('field_sp_email_later', ?, 'speaker_email', 'Primary speaker email', NULL, 'email', 1, 2, '{}', NULL, ?, ?),
+      ('field_sp_tracks_later', ?, 'tracks', 'Tracks', NULL, 'multi_select', 1, 3, ?, NULL, ?, ?)`)
+      .bind(
+        LATER_FORM_ID, NOW, NOW,
+        LATER_FORM_ID, NOW, NOW,
+        LATER_FORM_ID, NOW, NOW,
+        LATER_FORM_ID, JSON.stringify({ options: ["Agents"] }), NOW, NOW,
+      ),
   ]);
 }
 
 /** Walk the public form exactly as the confirmation page's visitor does. */
-async function submitAndFollowPortalLink(input: { title: string; name: string; email: string }): Promise<{ cookie: string; portalUrl: string }> {
-  const submitted = await request("/api/v1/public/forms/submitter-cfp/submissions", {
+async function submitAndFollowPortalLink(input: { title: string; name: string; email: string; slug?: string; eventId?: string }): Promise<{ cookie: string; portalUrl: string; redirectLocation: string | null }> {
+  const slug = input.slug ?? "submitter-cfp";
+  const submitted = await request(`/api/v1/public/forms/${slug}/submissions`, {
     method: "POST",
     body: JSON.stringify({
       answers: {
@@ -94,10 +127,9 @@ async function submitAndFollowPortalLink(input: { title: string; name: string; e
 
   const exchanged = await request(new URL(portalUrl).pathname + new URL(portalUrl).search);
   expect(exchanged.status).toBe(302);
-  expect(exchanged.headers.get("location")).toBe("/portal");
   const setCookie = exchanged.headers.get("set-cookie") ?? "";
   expect(setCookie).toContain("mq_session=");
-  return { cookie: setCookie.split(";")[0], portalUrl };
+  return { cookie: setCookie.split(";")[0], portalUrl, redirectLocation: exchanged.headers.get("location") };
 }
 
 describe.sequential("MRQ-150 the submitter's portal", () => {
@@ -106,11 +138,12 @@ describe.sequential("MRQ-150 the submitter's portal", () => {
   });
 
   test("CONTRACT · MRQ-150 · the confirmation link lands on a real portal, not a 404", async () => {
-    const { cookie } = await submitAndFollowPortalLink({
+    const { cookie, redirectLocation } = await submitAndFollowPortalLink({
       title: "Shipping agents that answer the phone",
       name: "Avery Example",
       email: "avery@example.com",
     });
+    expect(redirectLocation).toBe(`/portal?eventId=${EVENT_ID}`);
 
     const portal = await request("/api/v1/me/portal", { headers: { cookie } });
     // The defect: this answered 404 "conference not found" because the person
@@ -245,5 +278,40 @@ describe.sequential("MRQ-150 the submitter's portal", () => {
 
     expect(await seen(first.cookie)).toEqual(["Avery's abstract"]);
     expect(await seen(second.cookie)).toEqual(["Robin's abstract"]);
+  });
+
+  test("CONTRACT · MRQ-160 · a fresh public submission selects the later conference and both remain reachable", async () => {
+    const email = "multi-event@example.com";
+    await submitAndFollowPortalLink({
+      title: "The earlier conference abstract",
+      name: "Multi Event Example",
+      email,
+    });
+    const later = await submitAndFollowPortalLink({
+      title: "The later conference abstract",
+      name: "Multi Event Example",
+      email,
+      slug: "submitter-cfp-later",
+      eventId: LATER_EVENT_ID,
+    });
+
+    const latest = await json<{
+      seat: string;
+      event: { id: string; name: string };
+      available_events: Array<{ id: string; name: string }>;
+      submissions: Array<{ title: string }>;
+    }>(await request("/api/v1/me/portal", { headers: { cookie: later.cookie } }));
+    expect(latest.seat).toBe("submitter");
+    expect(latest.event).toMatchObject({ id: LATER_EVENT_ID, name: "Future Walkthrough Conference" });
+    expect(latest.submissions.map((submission) => submission.title)).toEqual(["The later conference abstract"]);
+    expect(latest.available_events.map((event) => event.id)).toEqual([LATER_EVENT_ID, EVENT_ID]);
+    expect(later.redirectLocation).toBe(`/portal?eventId=${LATER_EVENT_ID}`);
+
+    const earlier = await json<{
+      event: { id: string };
+      submissions: Array<{ title: string }>;
+    }>(await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, { headers: { cookie: later.cookie } }));
+    expect(earlier.event.id).toBe(EVENT_ID);
+    expect(earlier.submissions.map((submission) => submission.title)).toEqual(["The earlier conference abstract"]);
   });
 });
