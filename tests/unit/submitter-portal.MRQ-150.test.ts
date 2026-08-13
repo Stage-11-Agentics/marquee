@@ -52,10 +52,20 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).not.toContain("Speaker portal");
   });
 
+  test("CONTRACT · MRQ-150 · a long submitter email remains contained in the return panel", () => {
+    const html = render(snapshot({ person: {
+      id: "per",
+      name: "Avery Okonkwo",
+      email: "verylongindividualname1234567890@somecompanydomainname.com",
+    }, submissions: [submission({ status: "accepted" })] }));
+    expect(html.match(/verylongindividualname1234567890@somecompanydomainname\.com/g)).toHaveLength(2);
+  });
+
   test("CONTRACT · MRQ-150 · it names when a decision arrives and where it will be sent", () => {
     const html = render(snapshot());
     expect(html).toContain("September 21, 2026");
     expect(html).toContain("Wave 1");
+    expect(html).toContain("Next decision · Wave 1 · decision by September 21, 2026");
     expect(html).toContain("avery.okonkwo@example.com");
   });
 
@@ -80,8 +90,10 @@ describe("MRQ-150 the submitter's empty state", () => {
       submissions: [submission({ status: "draft", submitted_at: null, form_slug: null, wave_name: null, wave_decision_on: null })],
     }));
     expect(html).toContain("call closed");
+    expect(html).toContain("Draft saved · call closed");
     expect(html).toContain("Keep your draft link");
     expect(html).toContain("The call for speakers is closed");
+    expect(html).not.toContain("Finish and submit your abstract");
     expect(html).not.toContain("You can finish and submit while the call is open");
   });
 
@@ -124,6 +136,7 @@ describe("MRQ-150 the submitter's empty state", () => {
         : status === "rejected"
           ? "The program team did not select this abstract for the conference."
           : "This abstract is no longer in consideration.");
+      if (status === "withdrawn") expect(html).toContain("You withdrew this abstract. No further review will happen.");
       expect(html.toLowerCase()).not.toContain("next decision");
       expect(html.toLowerCase()).not.toContain("go out by");
       expect(html.toLowerCase()).not.toContain("has not set a decision date");

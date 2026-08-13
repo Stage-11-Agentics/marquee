@@ -791,10 +791,6 @@ function submitterStatusLabel(status: string): string {
   return status.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
-function isSubmitterAwaitingDecision(status: string): boolean {
-  return status === "submitted" || status === "in_review";
-}
-
 function isSubmitterAwaitingReview(status: string): boolean {
   return status === "submitted" || status === "in_review";
 }
@@ -807,8 +803,15 @@ function submitterOutcomeCopy(status: string): string {
   return "The program team has not shared a more specific update for this abstract yet.";
 }
 
-function submitterProgressCopy(status: string): string {
-  if (status === "draft") return "Finish and submit your abstract";
+function submitterOutcomeDetail(status: string): string {
+  if (status === "accepted") return "This page becomes your speaker portal. Tasks and session details will arrive here.";
+  if (status === "rejected") return "The program team has finished reviewing this abstract.";
+  if (status === "withdrawn") return "You withdrew this abstract. No further review will happen.";
+  return submitterOutcomeCopy(status);
+}
+
+function submitterProgressCopy(status: string, draftCallOpen: boolean): string {
+  if (status === "draft") return draftCallOpen ? "Finish and submit your abstract" : "Draft saved · call closed";
   if (status === "waitlisted") return "Maybe · still in consideration";
   if (isSubmitterAwaitingReview(status)) return "Nothing is waiting on you";
   if (status === "accepted") return "Accepted";
@@ -818,17 +821,18 @@ function submitterProgressCopy(status: string): string {
 }
 
 function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX.Element {
-  const decisionDetails = isSubmitterAwaitingDecision(submission.status)
+  const decisionDetails = isSubmitterAwaitingReview(submission.status)
     ? [
       submission.wave_name,
       submission.wave_decision_on ? `decision by ${formatCalendarDay(submission.wave_decision_on)}` : null,
     ].filter((value): value is string => Boolean(value)).join(" · ")
     : null;
+  const decisionLabel = decisionDetails ? `Next decision · ${decisionDetails}` : null;
   return <article class="portal-submitted-row" data-submission-id={submission.id} data-submission-status={submission.status}>
     <div class="portal-submitted-copy">
       <strong title={submission.title}>{submission.title}</strong>
       <span>{submission.format ?? "Format not set"} · {submission.submitted_at === null ? "Not yet submitted" : `Submitted ${formatDate(submission.submitted_at)}`}</span>
-      {decisionDetails ? <span class="portal-submitted-wave">{decisionDetails}</span> : null}
+      {decisionLabel ? <span class="portal-submitted-wave">{decisionLabel}</span> : null}
     </div>
     <span class="portal-submitted-status">{submitterStatusLabel(submission.status)}</span>
   </article>;
@@ -867,8 +871,8 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
       : isAwaitingReview
       ? decisionCopy
       : submitterOutcomeCopy(lead.status);
-  const progressCopy = submitterProgressCopy(lead.status);
-  return <div class="portal-shell">
+  const progressCopy = submitterProgressCopy(lead.status, draftCallOpen);
+  return <div class="portal-shell portal-submitter-seat">
     <header class="portal-top">
       <span class="portal-brand">Marquee · Your submission</span>
       <button type="button" onClick={onSignOut}>Sign out</button>
@@ -914,7 +918,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
           </div>
         </section> : <section class="portal-panel portal-submitter-flow" aria-labelledby="status-update-heading">
           <header class="portal-panel-head"><h2 id="status-update-heading">Submission update</h2><span>current outcome</span></header>
-          <div class="portal-panel-body"><p class="portal-submitter-status-note">{submitterOutcomeCopy(lead.status)}</p></div>
+          <div class="portal-panel-body"><p class="portal-submitter-status-note">{submitterOutcomeDetail(lead.status)}</p></div>
         </section>}
         <section class="portal-panel" aria-labelledby="reach-heading">
           <header class="portal-panel-head"><h2 id="reach-heading">Getting back here</h2><span>{snapshot.person.email}</span></header>
