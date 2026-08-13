@@ -11,12 +11,16 @@ import { enqueuePublicFormConfirmation, enqueueOutbox } from "../jobs/mail/outbo
 import { escapeHtml } from "../jobs/mail/render";
 import { findTemplate } from "../jobs/mail/templates";
 import { enqueueAuthMail } from "../lib/auth/auth-mail";
+import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../lib/auth/draft-resume-copy";
 import { mintMagicLink, mintMagicLink as issueParticipantMagicLink } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { verifyTurnstile } from "../lib/r2/turnstile";
+import { boundSourceOf } from "../lib/bound-options";
 import {
   answerAttachmentId,
+  advertisedMaxSpeakers,
   answerText,
+  collectableParticipantSlots,
   countFormForPerson,
   emailFromAnswers,
   findEventContext,
@@ -59,7 +63,7 @@ const publicFieldSchema = z.object({
   key: z.string(),
   label: z.string(),
   help_text: z.string().nullable(),
-  type: z.enum(["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number"]),
+  type: z.enum(["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number", "date"]),
   required: z.boolean(),
   position: z.number().int().nonnegative(),
   config: z.record(z.string(), z.unknown()),
@@ -141,14 +145,34 @@ async function requireTurnstile(context: { env: ApiEnv["Bindings"]; req: { heade
   await context.env.CACHE.put(tokenKey, "1", { expirationTtl: 300 });
 }
 
+/**
+ * Autosave rate limit: a fixed window keyed on the wall-clock minute.
+ *
+ * The limit and the key builder are exported so a test can seed the counter
+ * instead of trying to spend it. Spending it means issuing DRAFT_AUTOSAVE_LIMIT
+ * + 1 requests inside one window, which is a race against the window boundary:
+ * a boundary landing mid-run resets the count and neither side reaches the
+ * limit, and on a loaded machine — where the requests take longer than the
+ * window is wide — no window can ever fill, so the limiter becomes untestable
+ * rather than merely flaky.
+ */
+export const DRAFT_AUTOSAVE_LIMIT = 30;
+export const DRAFT_AUTOSAVE_WINDOW_SECONDS = 60;
+
+export async function draftAutosaveRateKey(token: string, now = Date.now()): Promise<string> {
+  const window = Math.floor(now / 1000 / DRAFT_AUTOSAVE_WINDOW_SECONDS);
+  return `public-form:autosave:${await sha256Hex(token)}:${window}`;
+}
+
 async function draftTokenAllowed(cache: KVNamespace, token: string, now = Date.now()): Promise<void> {
-  const limit = 30;
-  const windowSeconds = 60;
-  const window = Math.floor(now / 1000 / windowSeconds);
-  const key = `public-form:autosave:${await sha256Hex(token)}:${window}`;
+  const key = await draftAutosaveRateKey(token, now);
   const current = Number((await cache.get(key)) ?? "0");
-  if (current >= limit) throw ApiError.rateLimited(windowSeconds - Math.floor((now / 1000) % windowSeconds));
-  await cache.put(key, String(current + 1), { expirationTtl: windowSeconds + 10 });
+  if (current >= DRAFT_AUTOSAVE_LIMIT) {
+    throw ApiError.rateLimited(
+      DRAFT_AUTOSAVE_WINDOW_SECONDS - Math.floor((now / 1000) % DRAFT_AUTOSAVE_WINDOW_SECONDS),
+    );
+  }
+  await cache.put(key, String(current + 1), { expirationTtl: DRAFT_AUTOSAVE_WINDOW_SECONDS + 10 });
 }
 
 function answerMap(body: { answers?: Record<string, unknown> }): Record<string, unknown> {
@@ -160,8 +184,7 @@ function requiredSubmissionIssues(
   answers: Record<string, unknown>,
   form: { min_speakers: number; max_speakers: number },
 ): Array<{ fieldKey: string; message: string }> {
-  const hasParticipantSchema = fields.some((field) => field.key === "speaker_name" || field.key === "speaker_email");
-  if (!hasParticipantSchema) return [];
+  if (collectableParticipantSlots(fields) === null) return [];
   const primaryPresent = Boolean(answerText(answers, "speaker_name") || normalisePublicEmail(answers.speaker_email));
   const coName = answerText(answers, "co_speaker_name");
   const coEmail = normalisePublicEmail(answers.co_speaker_email);
@@ -169,7 +192,9 @@ function requiredSubmissionIssues(
   if (participantCount < Number(form.min_speakers)) {
     return [{ fieldKey: "speaker_name", message: "Add at least one participant before sending this abstract, then try again." }];
   }
-  if (participantCount > Number(form.max_speakers)) {
+  // The same ceiling the form advertises. Enforcing the raw configured number
+  // here would let the two disagree the moment either one moves.
+  if (participantCount > advertisedMaxSpeakers(Number(form.max_speakers), fields)) {
     return [{ fieldKey: "speaker_name", message: "Remove an extra participant so the conference limit is respected, then try again." }];
   }
   if (answers.co_speaker_name && !answers.co_speaker_email) {
@@ -194,20 +219,30 @@ async function referenceId(
 async function resolveDomainReferences(
   db: D1Database,
   eventId: string,
+  fields: readonly FormFieldView[],
   answers: Record<string, unknown>,
 ): Promise<{ formatId: string | null; trackIds: string[]; issues: Array<{ fieldKey: string; message: string }> }> {
   const issues: Array<{ fieldKey: string; message: string }> = [];
   let formatId: string | null = null;
-  const format = answerText(answers, "format");
+  // Bound fields are the source of truth even when an organizer gives the
+  // field a human key such as `session_format`. The canonical keys remain the
+  // compatibility fallback for older/custom forms that predate `source`.
+  const formatField = fields.find((field) => boundSourceOf(field) === "formats")
+    ?? fields.find((field) => field.key === "format");
+  const formatKey = formatField?.key ?? "format";
+  const format = answerText(answers, formatKey);
   if (format) {
     formatId = await referenceId(db, "formats", eventId, format);
-    if (!formatId) issues.push({ fieldKey: "format", message: "Choose a format from the list, then try again." });
+    if (!formatId) issues.push({ fieldKey: formatKey, message: "Choose a format from the list, then try again." });
   }
-  const tracks = Array.isArray(answers.tracks) ? answers.tracks.filter((value): value is string => typeof value === "string") : [];
+  const tracksField = fields.find((field) => boundSourceOf(field) === "tracks")
+    ?? fields.find((field) => field.key === "tracks");
+  const tracksKey = tracksField?.key ?? "tracks";
+  const tracks = Array.isArray(answers[tracksKey]) ? answers[tracksKey].filter((value): value is string => typeof value === "string") : [];
   const trackIds: string[] = [];
   for (const track of tracks) {
     const id = await referenceId(db, "tracks", eventId, track);
-    if (!id) issues.push({ fieldKey: "tracks", message: "Choose conference tracks from the list, then try again." });
+    if (!id) issues.push({ fieldKey: tracksKey, message: "Choose conference tracks from the list, then try again." });
     else trackIds.push(id);
   }
   return { formatId, trackIds, issues };
@@ -448,7 +483,9 @@ async function formResponse(
   if (!record) throw ApiError.notFound("This conference form is not available.");
   const state = toPublicFormState(record, {
     origin: publicOrigin(context.req.url),
-    turnstileSiteKey: workerSecrets(context).TURNSTILE_SITE_KEY,
+    turnstileSiteKey: (await publicTurnstileExempt(context.env.DB, record.form.event_id))
+      ? null
+      : workerSecrets(context).TURNSTILE_SITE_KEY,
   });
   if (portalUrl && state.confirmation) state.confirmation.portal_url = portalUrl;
   return state;
@@ -512,9 +549,9 @@ async function createDraft(
     toEmail: email,
     templateKey: "draft_resume",
     entityId: submissionId,
-    subject: "Continue your conference abstract",
-    text: `Continue your conference abstract here: ${resumeUrl}`,
-    html: `<p><a href="${resumeUrl}">Continue your conference abstract</a></p>`,
+    subject: PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT,
+    text: `${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT} here: ${resumeUrl}`,
+    html: `<p><a href="${resumeUrl}">${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT}</a></p>`,
     now,
   });
   await enqueueMailMessage(context.env.MAIL_QUEUE, mail);
@@ -597,7 +634,7 @@ async function handlePublicSubmission(
   ];
   const event = await findEventContext(context.env.DB, base.form.event_id);
   if (!event) throw ApiError.notFound("This conference is no longer available.");
-  const references = await resolveDomainReferences(context.env.DB, base.form.event_id, projected.projected.answers);
+  const references = await resolveDomainReferences(context.env.DB, base.form.event_id, base.fields, projected.projected.answers);
   domainIssues.push(...publicIssues(references.issues));
   const email = emailFromAnswers(projected.projected.answers) ?? normalisePublicEmail(body.email);
   if (!email) domainIssues.push({ fieldKey: "speaker_email", message: "Enter an address where the conference team can reach you, then try again." });

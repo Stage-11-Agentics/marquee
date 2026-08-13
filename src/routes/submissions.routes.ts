@@ -2,15 +2,15 @@ import { z } from "@hono/zod-openapi";
 
 import { createListQuerySchema, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { SUBMISSION_LIST_STATUSES } from "../api/submissions";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import {
   listSubmissions,
   SUBMISSION_SORTS,
-  SUBMISSION_STATUS_FILTERS,
   submissionFilterSchema,
 } from "./submissions.queries";
 
-const submissionStatusSchema = z.enum(SUBMISSION_STATUS_FILTERS);
+const submissionListItemStatusSchema = z.enum(SUBMISSION_LIST_STATUSES);
 const submissionTrackSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -43,16 +43,28 @@ const submissionNotificationSchema = z.object({
   sent_at: z.number().int().nullable(),
   outbox_status: z.enum(["queued", "sent", "suppressed", "failed"]).nullable(),
 });
+const submissionAgentReviewSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  score: z.number().nullable(),
+  /** The chair's value when one governs; the seat's own `score` stands otherwise. */
+  override_score: z.number().nullable(),
+  recommendation: z.string().nullable(),
+  comment: z.string().nullable(),
+});
 const submissionListItemSchema = z.object({
   id: z.string(),
   kind: z.enum(["abstract", "session"]),
   title: z.string(),
-  status: submissionStatusSchema,
+  status: submissionListItemStatusSchema,
   format_id: z.string().nullable(),
   format: z.string().nullable(),
   speakers: z.array(submissionSpeakerSchema),
   tracks: z.array(submissionTrackSchema),
   score: z.number().nullable(),
+  review_count: z.number().int(),
+  score_is_weighted: z.boolean(),
+  agent_reviews: z.array(submissionAgentReviewSchema),
   submitted_at: z.number().int().nullable(),
   last_saved_at: z.number().int().nullable(),
   updated_at: z.number().int(),

@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-94",
+  "owns": [],
+  "exercises": ["AC-83", "AC-84", "AC-85", "AC-86", "AC-87", "AC-88", "AC-89", "AC-90", "AC-240", "AC-252", "AC-253"],
+  "notes": "MRQ-94 owns no new evaluation criterion; it repairs the public agenda's default scope, recovery path, and navigation while preserving the existing anonymous public-site and embed contracts."
+}

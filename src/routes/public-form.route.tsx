@@ -4,12 +4,13 @@ import { Hono } from "hono";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { ICON_LINKS } from "../lib/head-icons";
 import { notFoundDocument } from "./public-agenda.route";
-import { loadPublicForm, toPublicFormState } from "./public-form.shared";
+import { loadPublicForm, publicTurnstileExempt, toPublicFormState } from "./public-form.shared";
 import { PublicForm } from "../ui/public/form/PublicForm";
 import { PUBLIC_FORM_STYLES } from "../ui/public/form/styles";
 
-const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Call for speakers</title></head><body><div id="app"></div></body></html>`;
+const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Call for speakers</title>${ICON_LINKS}</head><body><div id="app"></div></body></html>`;
 
 async function assetShell(assets: Fetcher, request: Request): Promise<string> {
   if (!assets || typeof assets.fetch !== "function") return FALLBACK_DOCUMENT;
@@ -45,7 +46,9 @@ publicFormRoutes.get("/f/:slug", async (context) => {
   if (!record) return notFoundDocument(await assetShell(context.env.ASSETS, context.req.raw));
   const state = toPublicFormState(record, {
     origin: new URL(context.req.url).origin,
-    turnstileSiteKey: context.env.TURNSTILE_SITE_KEY,
+    turnstileSiteKey: (await publicTurnstileExempt(context.env.DB, record.form.event_id))
+      ? null
+      : context.env.TURNSTILE_SITE_KEY,
   });
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(await assetShell(context.env.ASSETS, context.req.raw), state));

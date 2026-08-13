@@ -17,7 +17,9 @@ import { getCookie } from "hono/cookie";
 import { ApiError } from "../api/errors";
 import type { ApiEnv } from "../api/runtime";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { getAuth } from "../lib/auth/auth-middleware";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
+import { authHasRole } from "../lib/auth/scope-resolution";
 import { SESSION_COOKIE_NAME } from "../lib/cookies";
 import { isPreviewableImage } from "../lib/file-answers";
 import { uploadError } from "../lib/r2/errors";
@@ -118,6 +120,22 @@ async function draftFieldConfig(
  */
 function localUploadShimEnabled(env: UploadsEnv): boolean {
   return env.LOCAL_UPLOAD_SHIM === "1";
+}
+
+function acceptedTaskTypes(config: UploadOwnerConfig | undefined, policy: ReturnType<typeof policyFor>): string[] {
+  const values = config?.accept && config.accept.length > 0
+    ? config.accept
+    : policy?.rules.map((rule) => rule.extension) ?? [];
+  return [...new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean))]
+    .map((value) => value.includes("/") || value.startsWith(".") ? value : `.${value}`);
+}
+
+function taskUploadRejection(violation: string, config: UploadOwnerConfig | undefined, policy: ReturnType<typeof policyFor>): string {
+  if (violation !== "extension") return `rejected: ${violation}`;
+  const accepted = acceptedTaskTypes(config, policy);
+  if (accepted.length === 0) return "That file type is not accepted.";
+  if (accepted.length === 1) return `That file type is not accepted. Choose a ${accepted[0]} file.`;
+  return `That file type is not accepted. Choose one of ${accepted.slice(0, -1).join(", ")}, or ${accepted[accepted.length - 1]}.`;
 }
 
 const LOCAL_PUT_TTL_MS = 600_000;
@@ -403,7 +421,11 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
   const policy = policyFor(ownerType, ownerConfig);
   if (!policy) return uploadError(context, "invalid_request", "owner type not presignable");
   const decision = validateDeclared(policy, { filename, contentType, sizeBytes });
-  if (!decision.ok) return uploadError(context, "invalid_request", `rejected: ${decision.violation}`);
+  if (!decision.ok) return uploadError(
+    context,
+    "invalid_request",
+    ownerType === "task_upload" ? taskUploadRejection(decision.violation, ownerConfig, policy) : `rejected: ${decision.violation}`,
+  );
 
   const attachmentId = crypto.randomUUID();
   const nowMs = Date.now();
@@ -521,7 +543,10 @@ async function handleComplete(context: Context<ApiEnv>) {
 
   const outcome = await verifyAndComplete(env.MEDIA, row, ownerConfig);
   if (!outcome.ok) {
-    return uploadError(context, "conflict", `completion failed: ${outcome.reason}`);
+    const message = row.owner_type === "task_upload" && outcome.reason === "type_mismatch"
+      ? `completion failed: ${taskUploadRejection("extension", ownerConfig, policyFor("task_upload", ownerConfig))}`
+      : `completion failed: ${outcome.reason}`;
+    return uploadError(context, "conflict", message);
   }
 
   if (row.status !== "ready") {
@@ -609,6 +634,53 @@ async function handleAttachmentPreview(context: Context<ApiEnv>) {
   return response;
 }
 
+/**
+ * A speaker's profile headshot has no submission answer to join through. Keep
+ * it behind the same event-scoped organizer read, while allowing the owning
+ * speaker's portal session to render its own photo after a profile save.
+ * The pointer and owner type are both checked here so an attachment id or
+ * person id from another conference cannot turn this into an object oracle.
+ */
+async function handlePersonHeadshot(context: Context<ApiEnv>) {
+  const eventId = context.req.param("eventId") ?? "";
+  const personId = context.req.param("personId") ?? "";
+  const auth = getAuth(context);
+  if (!auth) throw ApiError.unauthenticated();
+
+  const speakerOwnsRequest = auth.kind === "session"
+    && auth.personId === personId
+    && authHasRole(auth, "speaker", eventId);
+  if (!speakerOwnsRequest) await requireSubmissionRead(context, eventId);
+
+  const env = uploadsEnv(context);
+  const row = await env.DB.prepare(
+    `SELECT attachment.status, attachment.r2_key, attachment.r2_etag,
+            attachment.content_type, attachment.filename
+       FROM people person
+       JOIN events event ON event.id = ?1 AND event.org_id = person.org_id
+       JOIN attachments attachment
+         ON attachment.id = person.headshot_attachment_id
+        AND attachment.event_id = event.id
+        AND attachment.owner_type = 'person_headshot'
+        AND attachment.owner_id = person.id
+      WHERE person.id = ?2
+      LIMIT 1`,
+  )
+    .bind(eventId, personId)
+    .first<{
+      status: "pending" | "ready";
+      r2_key: string;
+      r2_etag: string | null;
+      content_type: string;
+      filename: string;
+    }>();
+
+  if (!row) throw ApiError.notFound("headshot not found");
+  const response = await serveInlineImageObject(env.MEDIA, row.r2_key, row, isPreviewableImage);
+  if (!response) throw ApiError.notFound("headshot not found");
+  return response;
+}
+
 const uploadErrorEnvelopeSchema = z
   .object({
     error: z.object({
@@ -689,6 +761,15 @@ const attachmentPreviewParamsSchema = z.object({
   eventId: z.string().min(1),
   attachmentId: z.string().min(1),
 });
+const personHeadshotParamsSchema = z.object({
+  eventId: z.string().min(1),
+  personId: z.string().min(1),
+});
+const organizerHeadshotSignBodySchema = z.object({
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(120),
+  sizeBytes: z.number().int().positive(),
+});
 
 const signPublicUpload = defineApiRoute(
   {
@@ -738,6 +819,98 @@ const signTaskUpload = defineApiRoute(
     },
   },
   handleAuthenticatedSign as never,
+);
+
+const signOrganizerHeadshot = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/people/{personId}/headshot/sign",
+    operationId: "signOrganizerPersonHeadshot",
+    summary: "Create an organizer headshot upload presign",
+    description:
+      "Creates a person-owned headshot upload only for an organizer who can edit the conference speaker record. Completion uses the shared authenticated upload verifier.",
+    tags: ["Uploads", "Speaker roster"],
+    request: {
+      params: personHeadshotParamsSchema,
+      body: { content: { "application/json": { schema: organizerHeadshotSignBodySchema } } },
+    },
+    policy: {
+      auth: { kind: "grants", grants: ["program:write"] },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(uploadPresignResponseSchema, "A presigned R2 PUT and completion token."),
+      ...uploadErrorResponses,
+    },
+  },
+  (async (context: Context<ApiEnv>) => {
+    const eventId = context.req.param("eventId") ?? "";
+    const personId = context.req.param("personId") ?? "";
+    const body = await context.req.json<z.infer<typeof organizerHeadshotSignBodySchema>>();
+    const auth = getAuth(context);
+    if (!auth || !authHasRole(auth, "program_lead", eventId)) {
+      return uploadError(context, "forbidden", "organizer access is required for a headshot upload");
+    }
+
+    const speaker = await context.env.DB.prepare(
+      `SELECT person.id
+       FROM people person
+       JOIN events conference ON conference.id = ?1 AND conference.org_id = person.org_id
+       WHERE person.id = ?2
+         AND (
+           EXISTS (
+             SELECT 1 FROM memberships membership
+             WHERE membership.org_id = person.org_id AND membership.event_id = conference.id
+               AND membership.person_id = person.id AND membership.role = 'speaker'
+           )
+           OR EXISTS (
+             SELECT 1 FROM participations participation
+             JOIN submissions submission ON submission.id = participation.submission_id
+             WHERE submission.event_id = conference.id AND participation.person_id = person.id
+           )
+         )
+       LIMIT 1`,
+    ).bind(eventId, personId).first<{ id: string }>();
+    if (!speaker) return uploadError(context, "not_found", "speaker not found");
+
+    const env = uploadsEnv(context);
+    const policy = policyFor("person_headshot");
+    if (!policy) return uploadError(context, "invalid_request", "headshot uploads are not configured");
+    const decision = validateDeclared(policy, body);
+    if (!decision.ok) return uploadError(context, "invalid_request", `rejected: ${decision.violation}`);
+
+    const attachmentId = crypto.randomUUID();
+    const nowMs = Date.now();
+    const r2Key = objectKeyFor({ eventId, ownerType: "person_headshot", attachmentId, extension: extensionOf(body.filename) });
+    await insertPendingAttachment(env.DB, {
+      id: attachmentId,
+      eventId,
+      ownerType: "person_headshot",
+      ownerId: personId,
+      filename: sanitizeFilename(body.filename),
+      contentType: body.contentType,
+      sizeBytes: body.sizeBytes,
+      r2Key,
+      nowMs,
+    });
+
+    try {
+      const presigned = await signUpload(env, { attachmentId, key: r2Key, contentType: body.contentType, nowMs });
+      const completionToken = await hmacHex(env.UPLOAD_TOKEN_SECRET, `${attachmentId}:person_headshot:${personId}`);
+      return context.json({
+        attachmentId,
+        putUrl: presigned.url,
+        requiredHeaders: presigned.requiredHeaders,
+        expiresAt: presigned.expiresAt,
+        completionToken,
+        maxBytes: policy.maxBytes,
+      }, 200);
+    } catch (error) {
+      await env.DB.prepare("DELETE FROM attachments WHERE id = ?1").bind(attachmentId).run();
+      return uploadError(context, "invalid_request", `signing failed: ${(error as Error).message}`);
+    }
+  }) as never,
 );
 
 const completePublicUpload = defineApiRoute(
@@ -871,12 +1044,40 @@ const previewAttachment = defineApiRoute(
   handleAttachmentPreview as never,
 );
 
+const previewPersonHeadshot = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/people/{personId}/headshot",
+    operationId: "previewPersonHeadshot",
+    summary: "Render a speaker headshot inline",
+    description:
+      "Serves the ready raster headshot currently attached to a speaker profile. Organizers need program read access; a speaker session may read only its own event-scoped headshot.",
+    tags: ["Uploads"],
+    request: { params: personHeadshotParamsSchema },
+    policy: {
+      auth: { kind: "authenticated" },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: {
+        content: { "image/*": { schema: z.any() } },
+        description: "The speaker's ready raster headshot, inline and sandboxed.",
+      },
+      ...errorResponses([400, 401, 403, 404, 429, 500]),
+    },
+  },
+  handlePersonHeadshot as never,
+);
+
 export const apiRoutes = [
   signPublicUpload,
   signTaskUpload,
+  signOrganizerHeadshot,
   completePublicUpload,
   completeTaskUpload,
   localUploadPut,
   serveMedia,
   previewAttachment,
+  previewPersonHeadshot,
 ];

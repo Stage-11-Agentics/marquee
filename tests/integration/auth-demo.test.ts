@@ -327,6 +327,7 @@ async function readMe(cookie: string) {
   const response = await app.request("/api/v1/auth/me", { headers: { cookie } }, env);
   return { status: response.status, body: await response.json<{
     person_id?: string;
+    demo_event_name?: string | null;
     person_name?: string | null;
     person_email?: string | null;
     memberships?: { role: string }[];
@@ -342,6 +343,7 @@ test("CONTRACT · /auth/me names the person behind a session, not just their id"
   // An id is not an answer to "which hat am I wearing".
   expect(body.person_name).toBe("Demo Organizer");
   expect(body.person_email).toBe("organizer@demo.marquee.example");
+  expect(body.demo_event_name).toBe("AIE NYC 2026");
   expect(body.memberships?.[0]?.role).toBe("owner");
 });
 
@@ -368,4 +370,62 @@ test("CONTRACT · signing out ends the session, so the shell's exit is a real ex
 
   // The same cookie the browser still holds must no longer buy anything.
   expect((await readMe(cookie)).status).toBe(401);
+});
+
+/**
+ * MRQ-107 (eval §T-A): the seeded program staffer holds `reviewer` alongside
+ * `owner` and `program_lead`. A reviewer door that resolves to that person hands
+ * the visitor full organizer navigation — the exact failure CFP-10 scores.
+ */
+test("CONTRACT · the reviewer demo door never opens a program-staff seat", async () => {
+  await seedDemoFixture();
+  const now = Date.now();
+  await env.DB.batch([
+    // The organizer persona gains `reviewer` too, reproducing the seeded staffer.
+    env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'reviewer', ?, ?)")
+      .bind("mem-mrq107-staff-reviewer", DEMO_ORGANIZATION_ID, DEMO_EVENT_ID, DEMO_ORGANIZER_PERSON_ID, now, now),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, '[]', 1, 'marquee', ?, ?)")
+      .bind("per_mrq107_reviewer", DEMO_ORGANIZATION_ID, "reviewer@demo.marquee.example", "Nora Vale", now + 1, now + 1),
+    env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'reviewer', ?, ?)")
+      .bind("mem-mrq107-reviewer", DEMO_ORGANIZATION_ID, DEMO_EVENT_ID, "per_mrq107_reviewer", now, now),
+  ]);
+
+  const response = await app.request("/api/v1/auth/demo", {
+    method: "POST",
+    body: JSON.stringify({ role: "reviewer" }),
+    headers: { "content-type": "application/json" },
+  }, env);
+  expect(response.status).toBe(200);
+  const body = await response.json<{ person: { id: string; name: string }; role: string }>();
+  expect(body.role).toBe("reviewer");
+  expect(body.person.id).toBe("per_mrq107_reviewer");
+  expect(body.person.id).not.toBe(DEMO_ORGANIZER_PERSON_ID);
+});
+
+test("CONTRACT · the organizer and speaker doors still open their named personas", async () => {
+  await seedDemoFixture();
+  for (const [role, expected] of [["organizer", DEMO_ORGANIZER_PERSON_ID], ["speaker", DEMO_SPEAKER_PERSON_ID]] as const) {
+    const response = await app.request("/api/v1/auth/demo", {
+      method: "POST",
+      body: JSON.stringify({ role }),
+      headers: { "content-type": "application/json" },
+    }, env);
+    expect(response.status, role).toBe(200);
+    expect((await response.json<{ person: { id: string } }>()).person.id, role).toBe(expected);
+  }
+});
+
+test("CONTRACT · a demo reviewer door with no non-staff reviewer refuses rather than opening the organizer's seat", async () => {
+  await seedDemoFixture();
+  const now = Date.now();
+  await env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'reviewer', ?, ?)")
+    .bind("mem-mrq107-only-staff", DEMO_ORGANIZATION_ID, DEMO_EVENT_ID, DEMO_ORGANIZER_PERSON_ID, now, now)
+    .run();
+  const response = await app.request("/api/v1/auth/demo", {
+    method: "POST",
+    body: JSON.stringify({ role: "reviewer" }),
+    headers: { "content-type": "application/json" },
+  }, env);
+  expect(response.status).toBe(403);
+  expect((await response.json<{ error: { code: string } }>()).error.code).toBe("demo_persona_missing");
 });

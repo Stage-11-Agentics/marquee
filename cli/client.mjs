@@ -12,9 +12,15 @@ export function baseUrl(value) {
   if (!/^https?:$/.test(parsed.protocol)) throw new Error("--url must be an absolute http(s) URL");
   return parsed.toString().replace(/\/$/, "");
 }
-export function bearerToken(value) {
+export function bearerToken(value, { required = true } = {}) {
   const token = value ?? process.env.MARQUEE_TOKEN;
-  if (!token) throw new Error("a scoped API token is required; pass --token or set MARQUEE_TOKEN");
+  // The setup commands run against an instance that has no credential yet —
+  // that is the entire point of a claim link — so they ask for a client that
+  // does not demand one. Every other command still fails loudly without it.
+  if (!token) {
+    if (!required) return null;
+    throw new Error("a scoped API token is required; pass --token or set MARQUEE_TOKEN");
+  }
   if (/\s/.test(token)) throw new Error("--token must not contain whitespace");
   return token;
 }
@@ -29,13 +35,13 @@ function errorMessage(payload, status) {
 }
 
 export class MarqueeClient {
-  constructor({ url, token, fetchImpl = fetch } = {}) {
+  constructor({ url, token, fetchImpl = fetch, requireToken = true } = {}) {
     this.url = baseUrl(url);
-    this.token = bearerToken(token);
+    this.token = bearerToken(token, { required: requireToken });
     this.fetchImpl = fetchImpl;
   }
 
-  async request(path, { method = "GET", query, body } = {}) {
+  async request(path, { method = "GET", query, body, headers } = {}) {
     const target = new URL(apiPath(path), `${this.url}/`);
     if (query) {
       for (const [key, value] of Object.entries(query)) {
@@ -47,8 +53,9 @@ export class MarqueeClient {
       method,
       headers: {
         accept: "application/json",
-        authorization: `Bearer ${this.token}`,
+        ...(this.token === null ? {} : { authorization: `Bearer ${this.token}` }),
         ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...headers,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
@@ -72,5 +79,15 @@ export class MarqueeClient {
 
   post(path, body, options) {
     return this.request(path, { ...options, method: "POST", body });
+  }
+
+  patch(path, body, options) {
+    return this.request(path, { ...options, method: "PATCH", body });
+  }
+
+  // `delete` is a reserved word, so the method that issues one is named for the
+  // verb rather than spelled like it.
+  remove(path, options) {
+    return this.request(path, { ...options, method: "DELETE" });
   }
 }

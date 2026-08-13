@@ -1,10 +1,10 @@
 # Marquee
 
-Open-source speaker/session-management platform for conference organizers — Stage 11's entry in swyx's "$10,000 Kill My SaaS" hackathon (deadline **Wed 2026-08-12 22:00 PT**), built to actually run AIE NYC 2026 afterward. Replaces Sessionboard; competes against Sessionize's scope with the post-acceptance workflow neither ships.
+Open-source speaker/session-management platform for conference organizers, built to run AIE NYC 2026. Replaces Sessionboard; competes against Sessionize's scope with the post-acceptance workflow neither ships. It began as Stage 11's entry in swyx's "$10,000 Kill My SaaS" hackathon.
 
 ## Orient here first
 
-- `sequence/run-state.md` — the arc's resume anchor: current stage/phase, decisions, active agents, open touchpoints. **Read this first on every session.**
+- `sequence/run-state.md` — where the work stands: current focus, decisions, active agents, open touchpoints. **Read this first on every session.**
 - `DESIGN.md` — the binding design language: Flight Deck aesthetic (tokens in `prototypes/skins/skin-c.html`), voice, craft rules, and the pointer to the binding prototype. The build reproduces the prototype one-to-one.
 - `PHILOSOPHY.md` — the one thing (fantastic conferences, effortlessly), the principles (respect the operator; the system does the chase work; agent-native by design; whole loop or nothing; own your conference; the organizer's language), and the taste rules. Binds every design and copy decision.
 - `DEPLOY.md` — how the site gets built and shipped, and how to check what is actually live. **There is no auto-deploy: merging does not ship.** Read it before deploying, and improve it there rather than rediscovering the same gotchas per-run.
@@ -15,13 +15,21 @@ Open-source speaker/session-management platform for conference organizers — St
 
 - The Tone workflow governs this project (tone-initiation → tone-prototype → tone-architect → lattice-orchestrator). Pipeline norms: living artifacts, AC lineage, one run-state.
 - Requirements trace to R-numbers; stories to US-numbers; stable AC IDs are minted only at consolidation.
-- The walkthrough video is the evaluation rubric: the 11-step loop must complete with zero dead ends.
-- Speed is a graded feature (R7). Treat any slow list or transition as a defect.
-- This repo will be **public open source** (competition requirement). Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
+- The 11-step walkthrough loop is the product's spine: it must complete with zero dead ends. A dead end anywhere in it is a defect, whoever finds it.
+- Speed is a feature (R7). Treat any slow list or transition as a defect.
+- This repo is **public open source**. Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
 - **Do not report subscription usage, limits, or glideslope position unless asked.** The operator can see it and has it under control. It is visible in every agent's status line, which makes it tempting to volunteer — and with a fleet this size, one mention per agent becomes a stream of noise about a number nobody needs. Answer if asked; otherwise leave it alone.
 - **The suite budget is 45s and the gate budget is 120s** (`scripts/checks/run-test.mjs`, `pr-gate.mjs`). Several agents build and test here at once, so the budgets are set to survive contention: a red suite must mean a real defect, never a busy machine. If a run fails on time alone, check the load before believing it.
+- Speaker records are `people` rows (org-scoped); never add a parallel per-event `speakers` table.
+- Keep human properties (bio, headshot, title, company, socials, pronouns, dietary/accessibility) on `people`; keep this event's participation (Invited/Confirmed workflow status, travel, honorarium, session assignment) on `participations` or an event-scoped join.
+- Never put workflow status on `people`: one person must be Confirmed at one conference and Invited at another; this is the one error that cannot be undone.
+- Attach notes, tags, and custom values to org-level `person_id`, never to an event-scoped roster row.
+- Use one list query with optional `event_id`; do not maintain separate directory and roster implementations.
+- Keep search, filter, sort, and pagination server-side; lean on `idx_people_org_name` (R7: speed is a feature).
+- Do not deepen the `attachments.event_id` wart: a person's headshot is org-level while the attachment row it points at is event-scoped.
+- Full reasoning: `sequence/research/speaker-crm-scope.md` §2.
 
-## Source control: GitHub is canonical for Marquee (operator ruling, 2026-08-11)
+## Source control: GitHub is canonical for Marquee
 
 **`Stage-11-Agentics/marquee` on GitHub — private — is the single home for this project.**
 A collaborator works through it, so it is where the work has to live.
@@ -35,11 +43,70 @@ A collaborator works through it, so it is where the work has to live.
   there too.
 - PRs via `gh pr create --repo Stage-11-Agentics/marquee --base main`. No token handling —
   `gh` is already authenticated.
-- **Private stays private.** The competition needs a *public* repo, and that is a separate,
-  curated artifact: the orphan branch `mrq-42-assembly` (tip `f4240644`), which carries the
-  app tree without `sequence/` internals, `OPERATOR-PRECONDITIONS.md`, or the `.lattice`
-  board. **Never push `main` to a public repo, and never merge the orphan into `main`** — it
-  would delete everything the orphan omits, including the whole board.
+- **A reviewed, green PR should be merged — by you, now.** Once a code review has happened
+  and the gate is green, merging is the expected next step, not a decision to escalate. Do
+  not park finished work behind a human who has not been asked for anything. Merging does
+  not deploy (`DEPLOY.md`), so the cost of merging is low and the cost of parking is not:
+  an open PR rots against a `main` that several agents are moving, and the agent who
+  rebases it later is rarely the one who understood it.
+  - "Reviewed" means someone other than the author actually read the diff — a review agent
+    or a human. Your own confidence is not a review, and neither is a green gate.
+  - Merge your own PR once that review exists. Waiting for the reviewer to also press the
+    button just adds a second round trip.
+  - Do not merge on a red gate, on unresolved review comments, or when the PR says it is
+    waiting on something. Say what is blocking it instead.
+- **This repository goes public as it stands, history and all** (Atin, 2026-08-12). The
+  competition requires an open-source repo, and the answer is to flip this one rather than
+  push a curated artifact: `sequence/` and the `.lattice` board are the record of how the
+  product was actually built, which is worth more to a reader than a tidy tree. The earlier
+  plan — publishing the orphan branch `mrq-42-assembly` — is superseded. That branch is
+  still not to be merged into `main`; the merge would delete everything it omits.
+- **Write every commit as if it were already public, because it is.** All 820-odd commits
+  are readable, so deleting a file at `HEAD` hides nothing that was there before. No
+  credential value has ever been committed (gitleaks, full history, 2026-08-12) and it must
+  stay that way: secrets are Wrangler secrets and `.dev.vars`, never a commit.
+
+## The primary checkout is the Lattice board's home, never a workspace
+
+`/Users/atin/Projects/Stage11/deployments/Marquee` holds the one Lattice board.
+Every linked worktree resolves to it — Lattice's `find_root()` deliberately jumps to
+the primary worktree so the fleet shares one board instead of diverging copies. That
+design holds only while the primary checkout is a stable anchor.
+
+**So: no code work in the primary checkout.** No branching, no `git stash`, no
+`git checkout <branch>`, no `git clean`, no rebasing, no editing source. It stays
+parked on `main`. All work happens in a linked worktree:
+
+```sh
+git worktree add ../Marquee-worktrees/<branch> <branch>
+```
+
+- **Launch agents with the board pinned:** `c11 launch-agent … --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee`.
+  Board resolution then never depends on cwd or on what branch anything is on.
+- **Minting tickets is single-writer** — the orchestrator/intake agent only. Lattice's
+  CLI has an unlocked read-decide-write window, and concurrent `lattice create` calls
+  are how the ID counter corrupts and starts re-minting `MRQ-1`. Delegators updating
+  their *own* task's status, plan, and comments is fine; those touch disjoint files.
+- **Never "clean up" state you cannot attribute.** In a multi-agent tree, unfamiliar
+  uncommitted changes are almost always a sibling agent's live work. Ask, or leave it.
+  If the tree looks broken, raise a c11 flag rather than reaching for `stash` or
+  `reset` — recovering a stash nobody knew to look in costs far more than waiting.
+- **Never `git stash` anywhere in this repo — the stash stack is shared by every
+  worktree.** Linked worktrees keep their own index and HEAD but share one `.git`,
+  and `refs/stash` lives there. Two agents who stash at the same moment swap
+  stacks: the second `git stash pop` takes the first agent's entry into the wrong
+  worktree, and each of them silently loses their own work while acquiring a
+  stranger's. This is not hypothetical — it happened twice in one minute on
+  2026-08-12 (MRQ-136 and MRQ-138), and both agents had to recover from dangling
+  commits found with `git fsck`.
+  - Need a clean tree to test a before-and-after? **Commit to your branch and use
+    `git checkout <sha> -- <paths>`**, or a scratch worktree. A branch costs nothing.
+  - If you have already popped someone else's stash: their content is still a
+    reachable commit. `git log -g refs/stash` lists live entries; a dropped one is
+    dangling and findable with `git fsck --dangling`. `git stash apply <sha>` restores
+    it. Tell the owning agent the sha rather than trying to push it back on the stack.
+- The board is committed to `main` on purpose. Conflicts in `.lattice/events/*.jsonl`
+  and `ids.json` are survivable and visible; uncommitted board state disappears silently.
 
 ## The primary checkout is the Lattice board's home, never a workspace
 

@@ -20,7 +20,7 @@ export interface SessionizePreview {
 }
 
 export interface SessionizeManifest {
-  sessions_csv: string;
+  sessions_csv?: string;
   speakers_csv: string;
 }
 
@@ -288,6 +288,12 @@ function csvRow(line: string): string[] {
 
 /** Parse RFC-4180-style CSV, including quoted commas, newlines and quotes. */
 export function parseCsv(text: string): CsvTable {
+  // A document with nothing in it has no header row. Without this, the empty
+  // string parsed to a single nameless column, which read downstream as "this
+  // export has one header I cannot recognise" rather than "there is no export
+  // here" — and the sessions half of a speakers-only import is exactly that
+  // empty string. See the mapping step's required-field check.
+  if (text.trim() === "") return { headers: [], rows: [] };
   const rows: string[][] = [];
   let current = "";
   let quoted = false;
@@ -860,7 +866,7 @@ async function cleanupImportSetup(db: D1Database, eventId: string): Promise<void
 
 export function manifestPreview(manifest: SessionizeManifest, mapping?: SessionizeMapping): { sessions: SessionizePreview; speakers: SessionizePreview } {
   return {
-    sessions: previewCsv("sessions", manifest.sessions_csv, mapping?.sessions),
+    sessions: previewCsv("sessions", manifest.sessions_csv ?? "", mapping?.sessions),
     speakers: previewCsv("speakers", manifest.speakers_csv, mapping?.speakers),
   };
 }
@@ -888,7 +894,7 @@ export async function runSessionizeImport(
       await saveImportRow(db, { importId, rowIndex: 1_000_000 + index, entity: "speaker", outcome: "failed", reason: error instanceof Error ? error.message : "speaker row failed", targetId: null, before: null });
     }
   }
-  const sessionRows = mappedRows("sessions", manifest.sessions_csv, mapping.sessions);
+  const sessionRows = mappedRows("sessions", manifest.sessions_csv ?? "", mapping.sessions);
   for (const [index, row] of sessionRows.entries()) {
     counts.sessions += 1;
     try {
@@ -945,13 +951,14 @@ export async function readImportManifest(media: R2Bucket, fileKey: string): Prom
   const parsed: unknown = JSON.parse(await object.text());
   if (!parsed || typeof parsed !== "object") throw new Error("import manifest is malformed");
   const manifest = parsed as Partial<SessionizeManifest>;
-  if (typeof manifest.sessions_csv !== "string" || typeof manifest.speakers_csv !== "string") throw new Error("import manifest is incomplete");
-  return { sessions_csv: manifest.sessions_csv, speakers_csv: manifest.speakers_csv };
+  if (manifest.sessions_csv !== undefined && typeof manifest.sessions_csv !== "string") throw new Error("import manifest sessions CSV is malformed");
+  if (typeof manifest.speakers_csv !== "string") throw new Error("import manifest is incomplete");
+  return { ...(manifest.sessions_csv === undefined ? {} : { sessions_csv: manifest.sessions_csv }), speakers_csv: manifest.speakers_csv };
 }
 
-export function normalizeMapping(value: Partial<SessionizeMapping> | undefined, sessionsCsv: string, speakersCsv: string): SessionizeMapping {
+export function normalizeMapping(value: Partial<SessionizeMapping> | undefined, sessionsCsv: string | undefined, speakersCsv: string): SessionizeMapping {
   return {
-    sessions: { ...defaultMapping("sessions", parseCsv(sessionsCsv).headers), ...(value?.sessions ?? {}) },
+    sessions: { ...defaultMapping("sessions", parseCsv(sessionsCsv ?? "").headers), ...(value?.sessions ?? {}) },
     speakers: { ...defaultMapping("speakers", parseCsv(speakersCsv).headers), ...(value?.speakers ?? {}) },
   };
 }

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Marquee">
+  <!--
+    The Marquee mark: the Flight Deck M, knocked out of an instrument-teal tile.
+
+    The 16-unit viewBox IS the design grid. A favicon lives at 16-20px, so every
+    vertical edge here sits on a whole unit: at 16px the stems land on whole
+    device pixels and stay razor-sharp instead of smearing into grey. The
+    diagonals antialias, as diagonals must, and the V is cut deep (a 1-unit
+    vertex) so it survives that blur. Corner radius is 1.5 — machined, not
+    rounded, matching the radius token.
+
+    The M is four overlapping subpaths (two stems, two diagonals) unioned by the
+    nonzero fill rule. All four are wound the same direction on purpose: reverse
+    one and the diagonals cancel where they meet, slitting the vertex open.
+  -->
+  <style>
+    .tile { fill: #0b6a72; }
+    .mark { fill: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      /* #0b6a72 sinks into dark browser chrome. This keeps the same
+         white-on-teal relationship at a luminance that separates from it. */
+      .tile { fill: #1a8f99; }
+    }
+  </style>
+  <rect class="tile" width="16" height="16" rx="1.5"/>
+  <path class="mark" d="M2 2H4V13H2ZM4 2H6L8.5 13H7.5ZM10 2H12L8.5 13H7.5ZM12 2H14V13H12Z"/>
+</svg>

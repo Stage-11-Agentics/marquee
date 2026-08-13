@@ -10,6 +10,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { requireSubmissionRead } from "../lib/auth/program-access";
 import { rankSearchCandidates } from "../lib/quick-search";
+import { SPEAKER_ROSTER_PERSON_SOURCE } from "./speakers.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const searchQuery = z.object({ q: z.string().trim().max(200).optional() });
@@ -33,7 +34,9 @@ interface SubmissionSearchRow {
 
 interface SpeakerSearchRow {
   id: string;
+  on_roster: 0 | 1;
   name: string;
+  email: string;
   title: string | null;
   company: string | null;
 }
@@ -86,13 +89,22 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
        ORDER BY s.title COLLATE NOCASE ASC, s.id ASC`,
     ).bind(eventId, ...submissionsScope.bindings).all<SubmissionSearchRow>(),
     database.prepare(
-      `SELECT DISTINCT p.id, p.name, p.title, p.company
-       FROM people p
-       JOIN participations participation ON participation.person_id = p.id
-       JOIN submissions s ON s.id = participation.submission_id
-       WHERE s.event_id = ?${submissionsScope.clause}
-       ORDER BY p.name COLLATE NOCASE ASC, p.id ASC`,
-    ).bind(eventId, ...submissionsScope.bindings).all<SpeakerSearchRow>(),
+      `SELECT id, name, email, title, company,
+              CASE WHEN id IN (${SPEAKER_ROSTER_PERSON_SOURCE}) THEN 1 ELSE 0 END AS on_roster
+       FROM (
+         SELECT p.id, p.name, p.email, p.title, p.company
+         FROM participations participation
+         JOIN submissions s ON s.id = participation.submission_id
+         JOIN people p ON p.id = participation.person_id
+         WHERE s.event_id = ?${submissionsScope.clause}
+         UNION
+         SELECT p.id, p.name, p.email, p.title, p.company
+         FROM submissions s
+         JOIN people p ON p.id = s.submitter_person_id
+         WHERE s.event_id = ?${submissionsScope.clause}
+       )
+       ORDER BY name COLLATE NOCASE ASC, id ASC`,
+    ).bind(eventId, eventId, eventId, ...submissionsScope.bindings, eventId, ...submissionsScope.bindings).all<SpeakerSearchRow>(),
     database.prepare(
       `SELECT f.id, f.name, f.slug, f.kind, f.status
        FROM forms f
@@ -100,6 +112,9 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
        ORDER BY f.name COLLATE NOCASE ASC, f.id ASC`,
     ).bind(eventId, ...formsScope.bindings).all<FormSearchRow>(),
   ]);
+
+  const people = new Map<string, SpeakerSearchRow>();
+  for (const person of speakers.results) people.set(person.id, person);
 
   return [
     ...submissions.results.map((row) => {
@@ -113,13 +128,20 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
         searchText: [row.title, row.id, row.search_blob, row.abstract ?? ""],
       } satisfies SearchCandidate;
     }),
-    ...speakers.results.map((row) => ({
+    ...[...people.values()].map((row) => ({
       type: "Speaker" as const,
       id: row.id,
       title: row.name,
-      subtitle: [row.title, row.company].filter(Boolean).join(" · ") || "Conference speaker",
-      href: `/onboarding?person=${encodeURIComponent(row.id)}`,
-      searchText: [row.name, row.title ?? "", row.company ?? "", row.id],
+      subtitle: [row.title, row.company].filter(Boolean).join(" · ") || "Conference person",
+      // MRQ-127 widened these candidates to submitters so its person picker can
+      // find them; MRQ-111 added a speaker record they have no row on. So the
+      // destination follows the person: someone on the roster opens their
+      // record, and anyone else keeps the chase-board link they had before.
+      // Sending a non-roster person to the roster would 404 in the drawer.
+      href: row.on_roster === 1
+        ? `/roster?person=${encodeURIComponent(row.id)}`
+        : `/onboarding?person=${encodeURIComponent(row.id)}`,
+      searchText: [row.name, row.email, row.title ?? "", row.company ?? "", row.id],
     } satisfies SearchCandidate)),
     ...forms.results.map((row) => ({
       type: "Form" as const,

@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marquee — Multi-event · switcher + create flow</title>
+<!--
+  Multi-event design prototype — 2026-08-12.
+  Companion to sequence/multi-event-design.md. Extends the v1.11 cold-start
+  switcher (pipeline-v1.1 index.html:1811, DECISIONS.md D3/D7) from "the one
+  other conference" to the serial-conference list, and designs the
+  create-from-existing flow (the copy contract as a legible checklist).
+  Flight Deck tokens verbatim from prototypes/skins/skin-c.html.
+  Static, self-contained, file:// friendly. No server.
+-->
+<style>
+  :root {
+    --bg:#eaeef2; --surface:#ffffff; --surface-sunk:#f4f7f9; --graph:#e3e9ee;
+    --ink:#101820; --ink-soft:#2c3a46; --muted:#57646f;
+    --rule:#c8d2da; --rule-soft:#dde4ea;
+    --accent:#0b6a72; --accent-ink:#084f55; --accent-wash:#e2f0f1;
+    --ok:#0f7a4a; --warn:#8a5c00; --alarm:#b02a1f; --alarm-wash:#fbe9e7;
+    --mono: ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --radius:3px; --hair:1px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; }
+  body { margin:0; min-width:900px; }
+  button,input,select { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  a { color:inherit; text-decoration:none; }
+  .num { font-family:var(--mono); font-variant-numeric:tabular-nums lining-nums; font-feature-settings:"tnum" 1; }
+  .microlabel { font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+
+  .prototype-badge { position:fixed; right:14px; bottom:14px; z-index:99; font:600 9.5px/1 var(--mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--accent-ink); background:var(--accent-wash);
+    border:var(--hair) solid var(--accent); border-radius:var(--radius); padding:6px 9px; }
+
+  /* ── App frame ─────────────────────────────────────────────────────── */
+  .app { display:grid; grid-template-columns:236px 1fr; min-height:100vh; }
+  .sidebar { background:var(--surface); border-right:var(--hair) solid var(--rule); padding:14px 10px; position:relative; }
+  .brand { display:flex; align-items:center; gap:8px; margin:2px 4px 16px; font-weight:700; font-size:14px; }
+  .brand-mark { display:grid; place-items:center; width:22px; height:22px; border:var(--hair) solid var(--ink);
+    border-radius:var(--radius); font:700 12px/1 var(--mono); }
+
+  /* Switcher row — geometry identical to v1.11 (block + ＋), block opens popover */
+  .switcher-row { display:grid; grid-template-columns:1fr auto; gap:4px; align-items:stretch; margin:0 4px 6px; }
+  .event-switcher { border:var(--hair) solid var(--rule); border-radius:var(--radius); padding:9px 10px;
+    background:var(--surface-sunk); text-align:left; transition:border-color 110ms, background 110ms;
+    display:grid; grid-template-columns:1fr 12px; align-items:center; gap:4px; }
+  .event-switcher:hover, .event-switcher[aria-expanded="true"] { border-color:var(--accent); background:var(--accent-wash); }
+  .event-switcher small { display:block; color:var(--muted); font:600 9px/1 var(--mono); text-transform:uppercase; letter-spacing:.16em; margin-bottom:5px; }
+  .event-switcher strong { display:block; font:600 12px/1.2 var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .event-switcher .caret { color:var(--muted); font-size:9px; align-self:center; }
+  .event-add { display:grid; place-items:center; width:30px; border:var(--hair) solid var(--rule); border-radius:var(--radius);
+    background:var(--surface-sunk); font:600 13px/1 var(--mono); color:var(--ink-soft); }
+  .event-add:hover { border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
+
+  /* Popover — a compact instrument list */
+  .switcher-pop { position:absolute; left:10px; top:96px; width:264px; z-index:40; background:var(--surface);
+    border:var(--hair) solid var(--accent); border-radius:var(--radius); box-shadow:none; padding:4px; display:none; }
+  .switcher-pop.open { display:block; }
+  .pop-label { padding:6px 8px 4px; }
+  .pop-item { display:grid; grid-template-columns:1fr auto; gap:2px 8px; width:100%; text-align:left; padding:7px 8px;
+    border:var(--hair) solid transparent; border-radius:var(--radius); background:none; }
+  .pop-item:hover, .pop-item.kbd-focus { border-color:var(--accent); background:var(--accent-wash); }
+  .pop-item .name { font:600 11.5px/1.25 var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pop-item .dates { grid-row:2; font:400 10px/1.2 var(--mono); color:var(--muted); }
+  .pop-item .gauge { grid-row:2; grid-column:2; font:400 10px/1.2 var(--mono); color:var(--muted); text-align:right; }
+  .pop-item.past .name { color:var(--muted); font-weight:400; }
+  .pop-item.current { background:var(--surface-sunk); }
+  .pop-item.current .name::after { content:" ·"; color:var(--accent); }
+  .chip { justify-self:end; font:600 8px/1 var(--mono); letter-spacing:.12em; padding:3px 5px;
+    border:var(--hair) solid var(--rule); border-radius:2px; color:var(--ink-soft); background:var(--surface);
+    min-width:44px; text-align:center; }
+  .chip.live  { color:var(--ok); border-color:var(--ok); }
+  .chip.draft { color:var(--warn); border-color:var(--warn); }
+  .chip.demo  { color:var(--accent-ink); border-color:var(--accent); }
+  .pop-rule { border:0; border-top:var(--hair) solid var(--rule-soft); margin:4px 0; }
+  .pop-create { display:block; width:100%; text-align:left; padding:8px; border:var(--hair) solid transparent;
+    border-radius:var(--radius); background:none; font:600 11px/1 var(--mono); color:var(--accent-ink); }
+  .pop-create:hover, .pop-create.kbd-focus { border-color:var(--accent); background:var(--accent-wash); }
+  .pop-hint { padding:5px 8px 4px; font:400 9px/1.4 var(--mono); color:var(--muted); border-top:var(--hair) solid var(--rule-soft); margin-top:2px; }
+
+  .nav { display:flex; flex-direction:column; gap:1px; margin-top:10px; }
+  .nav-label { margin:12px 8px 4px; }
+  .nav a { display:flex; gap:8px; align-items:center; padding:6px 8px; border-radius:var(--radius); font-size:12.5px; color:var(--ink-soft); }
+  .nav a:hover { background:var(--surface-sunk); }
+  .nav a.active { background:var(--accent-wash); color:var(--accent-ink); font-weight:600; }
+  .nav .icon { width:14px; text-align:center; font-size:11px; color:var(--muted); }
+  .nav .count { margin-left:auto; }
+
+  /* ── Main ──────────────────────────────────────────────────────────── */
+  .main { padding:22px 28px 64px; max-width:960px; }
+  .crumb { margin-bottom:14px; }
+  .crumb strong { font:600 11px/1 var(--mono); }
+  h1 { font-size:19px; margin:0 0 4px; letter-spacing:-.01em; }
+  .page-copy { color:var(--muted); font-size:12.5px; margin:0 0 20px; max-width:64ch; }
+
+  .card { background:var(--surface); border:var(--hair) solid var(--rule); border-radius:var(--radius); margin-bottom:16px; }
+  .card-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:11px 14px; border-bottom:var(--hair) solid var(--rule-soft); }
+  .card-head h2 { font-size:13px; margin:0; }
+  .card-body { padding:14px; }
+  .subtle { color:var(--muted); font-size:11.5px; }
+
+  /* Dashboard demo (scoping observability) */
+  .gauges { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--rule-soft); border:var(--hair) solid var(--rule); border-radius:var(--radius); overflow:hidden; margin-bottom:16px; }
+  .gauge-cell { background:var(--surface); padding:12px 14px; }
+  .gauge-cell .val { font:600 22px/1.1 var(--mono); font-variant-numeric:tabular-nums; }
+  .gauge-cell .lbl { margin-top:4px; }
+  .empty { border:var(--hair) dashed var(--rule); border-radius:var(--radius); padding:26px; text-align:center; background:var(--surface-sunk); }
+  .empty strong { display:block; font-size:13px; margin-bottom:4px; }
+
+  /* Create screen */
+  .choice-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px; }
+  .choice-card { text-align:left; padding:12px; border:var(--hair) solid var(--rule); border-radius:var(--radius); background:var(--surface); }
+  .choice-card strong { display:block; font-size:12.5px; margin-bottom:4px; }
+  .choice-card span { display:block; color:var(--muted); font-size:11px; line-height:1.5; }
+  .choice-card[aria-pressed="true"] { border-color:var(--accent); background:var(--accent-wash); }
+  .choice-card[aria-pressed="true"] strong { color:var(--accent-ink); }
+
+  .stack { display:flex; flex-direction:column; gap:12px; }
+  .field label { display:block; font-size:11.5px; font-weight:600; margin-bottom:4px; }
+  .field input, .field select { width:100%; padding:7px 9px; border:var(--hair) solid var(--rule); border-radius:var(--radius); background:var(--surface); font-size:12.5px; }
+  .field input:focus, .field select:focus { outline:none; border-color:var(--accent); }
+  .field-note { display:block; margin-top:4px; color:var(--muted); font-size:10.5px; }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+  /* Copy contract */
+  .copy-source { display:grid; grid-template-columns:auto 1fr; gap:10px; align-items:center; margin-bottom:2px; }
+  .copy-list { display:flex; flex-direction:column; }
+  .copy-row { display:grid; grid-template-columns:18px 1fr auto; gap:10px; align-items:center; padding:8px 4px; border-bottom:var(--hair) solid var(--rule-soft); min-height:36px; }
+  .copy-row:last-child { border-bottom:none; }
+  .copy-row input[type=checkbox] { width:13px; height:13px; accent-color:var(--accent); }
+  .copy-row .what { font-size:12.5px; }
+  .copy-row .what .why { display:block; color:var(--muted); font-size:10.5px; margin-top:1px; }
+  .copy-row .count { font:400 11px/1 var(--mono); color:var(--ink-soft); min-width:110px; text-align:right; }
+  .copy-row.off .what, .copy-row.off .count { color:var(--muted); }
+  .never { margin-top:12px; padding:10px 12px; background:var(--surface-sunk); border:var(--hair) solid var(--rule-soft); border-radius:var(--radius); font-size:11px; color:var(--ink-soft); line-height:1.6; }
+  .never strong { font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:3px; }
+
+  .actions { display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:4px; }
+  .actions .subtle { margin-right:auto; }
+  .button { display:inline-block; padding:8px 14px; border:var(--hair) solid var(--rule); border-radius:var(--radius); background:var(--surface); font-size:12.5px; font-weight:600; }
+  .button:hover { border-color:var(--accent); }
+  .button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .button.primary:hover { background:var(--accent-ink); }
+
+  .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:18px; z-index:80; background:var(--ink); color:#fff;
+    font-size:12px; padding:9px 14px; border-radius:var(--radius); opacity:0; transition:opacity 140ms; pointer-events:none; max-width:70ch; }
+  .toast.show { opacity:1; }
+
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="#dashboard"><span class="brand-mark">M</span>Marquee</a>
+
+    <div class="switcher-row">
+      <button class="event-switcher" id="switcher" aria-expanded="false" aria-haspopup="listbox" title="Switch conference">
+        <span><small>Conference</small><strong id="switcher-name">AIE NYC 2026</strong></span>
+        <span class="caret">▾</span>
+      </button>
+      <a class="event-add" href="#conferences/new" id="event-add" title="Create conference" aria-label="Create conference">＋</a>
+    </div>
+
+    <div class="switcher-pop" id="pop" role="listbox" aria-label="Conferences">
+      <div class="pop-label microlabel">Upcoming</div>
+      <div id="pop-upcoming"></div>
+      <hr class="pop-rule">
+      <div class="pop-label microlabel">Past</div>
+      <div id="pop-past"></div>
+      <hr class="pop-rule">
+      <button class="pop-create" id="pop-create">＋ Create conference</button>
+      <div class="pop-hint">↑↓ select · ⏎ switch · esc close · also in ⌘K search</div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <a href="#dashboard" class="active"><span class="icon">⌂</span>Program home</a>
+      <a href="#"><span class="icon">▥</span>Program board</a>
+      <div class="nav-label microlabel">Pipeline</div>
+      <a href="#"><span class="icon">1</span>Submitted<span class="count num" data-gauge="submitted">96</span></a>
+      <a href="#"><span class="icon">2</span>In review<span class="count num" data-gauge="review">214</span></a>
+      <a href="#"><span class="icon">5</span>Onboarding<span class="count num" data-gauge="onboarding">41</span></a>
+      <div class="nav-label microlabel">Modules</div>
+      <a href="#"><span class="icon">□</span>CFP forms</a>
+      <a href="#"><span class="icon">◇</span>Evaluation plan</a>
+      <a href="#"><span class="icon">▦</span>Agenda</a>
+      <a href="#"><span class="icon">⚙</span>Conference settings</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <!-- ── Dashboard: scoping is observable — every gauge changes on switch ── -->
+    <section id="view-dashboard">
+      <div class="crumb microlabel"><strong class="num" id="crumb-event">AIE NYC 2026</strong> / Program home</div>
+      <h1 id="dash-title">AIE NYC 2026</h1>
+      <p class="page-copy" id="dash-copy">October 19–21, 2026 · Javits Center · America/New_York</p>
+
+      <div class="gauges">
+        <div class="gauge-cell"><div class="val num" data-gauge="submissions">351</div><div class="lbl microlabel">Submissions</div></div>
+        <div class="gauge-cell"><div class="val num" data-gauge="accepted">128</div><div class="lbl microlabel">Accepted</div></div>
+        <div class="gauge-cell"><div class="val num" data-gauge="speakers">167</div><div class="lbl microlabel">Speakers</div></div>
+        <div class="gauge-cell"><div class="val num" data-gauge="scheduled">96</div><div class="lbl microlabel">Scheduled</div></div>
+      </div>
+
+      <div id="dash-program" class="card">
+        <div class="card-head"><h2>Pipeline</h2><span class="subtle">Wave 2 closes Friday — 214 abstracts still need review in Agents.</span></div>
+        <div class="card-body subtle">— seeded program surfaces render here exactly as today —</div>
+      </div>
+
+      <div id="dash-empty" class="empty hidden">
+        <strong>Your program starts here</strong>
+        <span class="subtle" id="empty-copy">The pipeline is ready. 12 formats, 7 tracks, 2 CFP forms, and 9 task templates carried over from AIE NYC 2026.</span>
+      </div>
+    </section>
+
+    <!-- ── Create conference ─────────────────────────────────────────────── -->
+    <section id="view-create" class="hidden">
+      <div class="crumb microlabel"><strong class="num">AI ENGINEER</strong> / Create conference</div>
+      <h1>Create conference</h1>
+      <p class="page-copy">One record, created once. Forms, portals, agenda times, and calendar invites all inherit it.</p>
+
+      <div class="choice-row" role="group" aria-label="How to start">
+        <button class="choice-card" data-source="scratch" aria-pressed="false">
+          <strong>Start from scratch</strong><span>Name the conference and configure tracks, formats, and rooms here.</span>
+        </button>
+        <button class="choice-card" data-source="existing" aria-pressed="true">
+          <strong>Start from an existing conference</strong><span>Carry the structure — formats, tracks, forms, chase tasks — never the people or their data.</span>
+        </button>
+        <button class="choice-card" data-source="sessionize" aria-pressed="false">
+          <strong>Import from Sessionize</strong><span>Create the conference, then bring an open CFP across with its review history.</span>
+        </button>
+      </div>
+
+      <section class="card">
+        <div class="card-head"><h2>Conference details</h2><span class="subtle">Everything here is editable later in Conference settings.</span></div>
+        <div class="card-body stack">
+          <div class="field"><label for="new-name">Conference name</label>
+            <input id="new-name" value="AIE NYC 2027" autocomplete="off">
+            <span class="field-note">Used in the sidebar, every email subject, the public site, and calendar invites. Public address: <span class="num" id="slug-preview">marquee.stage11.dev/agenda?event=aie-nyc-2027</span></span></div>
+          <div class="grid-2">
+            <div class="field"><label for="new-start">Starts</label><input id="new-start" type="date" value="2027-10-18"></div>
+            <div class="field"><label for="new-end">Ends</label><input id="new-end" type="date" value="2027-10-20"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label for="new-venue">Venue</label><input id="new-venue" value="" placeholder="Javits Center" autocomplete="off"></div>
+            <div class="field"><label for="new-tz">Timezone</label><select id="new-tz"><option>America/New_York</option><option>America/Los_Angeles</option><option>Europe/London</option><option>UTC</option></select></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="copy-card">
+        <div class="card-head">
+          <h2>Clone from existing event</h2>
+          <span class="copy-source subtle"><span>from</span>
+            <select id="copy-from"><option>AIE NYC 2026</option><option>AIE Code Summit 2026</option><option>AIE NYC 2025</option></select>
+          </span>
+        </div>
+        <div class="card-body">
+          <div class="copy-list">
+            <label class="copy-row"><input type="checkbox" checked><span class="what">Formats<span class="why">Durations carry — a 25-minute talk stays 25 minutes.</span></span><span class="count num">12 formats</span></label>
+            <label class="copy-row"><input type="checkbox" checked><span class="what">Tracks<span class="why">Names and colors; reorder any time.</span></span><span class="count num">7 tracks</span></label>
+            <label class="copy-row"><input type="checkbox" checked><span class="what">CFP forms<span class="why">Structure only. Copied forms arrive closed — opening intake is its own decision.</span></span><span class="count num">2 forms · 31 fields</span></label>
+            <label class="copy-row"><input type="checkbox" checked><span class="what">Task templates<span class="why">The chase work: bio, headshot, slides, travel.</span></span><span class="count num">9 templates</span></label>
+            <label class="copy-row"><input type="checkbox" checked><span class="what">Email templates<span class="why">Subjects and bodies; the conference name re-binds.</span></span><span class="count num">6 templates</span></label>
+            <label class="copy-row"><input type="checkbox" checked><span class="what">Evaluation plan<span class="why">Rounds and scorecard. No committees, no scores — reviewers are re-invited each year.</span></span><span class="count num">2 rounds · 4 criteria</span></label>
+            <label class="copy-row off"><input type="checkbox"><span class="what">Venues<span class="why">Buildings and rooms — carry them only if you're returning.</span></span><span class="count num">2 buildings · 9 rooms</span></label>
+          </div>
+          <div class="never"><strong>Never copies</strong>
+            Submissions, speakers' event data, reviews and scores, the agenda, decision waves, uploads, messages, and the audit log stay with AIE NYC 2026. People aren't copied because they don't need to be — a returning speaker is already the same person in your organization.</div>
+        </div>
+      </section>
+
+      <div class="actions">
+        <span class="subtle">You'll land on the new conference's empty program home.</span>
+        <a class="button" href="#dashboard">Cancel</a>
+        <button class="button primary" id="create-btn">Create AIE NYC 2027</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="prototype-badge">Prototype · multi-event · static data</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── Data ─────────────────────────────────────────────────────────── */
+  var EVENTS = [
+    { id:"evt_aie-ny-2026", name:"AIE NYC 2026", dates:"Oct 19–21 2026", meta:"October 19–21, 2026 · Javits Center · America/New_York",
+      chip:"LIVE", cls:"live", past:false,
+      gauges:{ submissions:351, accepted:128, speakers:167, scheduled:96, submitted:96, review:214, onboarding:41 } },
+    { id:"evt_aie-code-2026", name:"AIE Code Summit 2026", dates:"Dec 8–9 2026", meta:"December 8–9, 2026 · Draft · America/New_York",
+      chip:"DRAFT", cls:"draft", past:false,
+      gauges:{ submissions:0, accepted:0, speakers:0, scheduled:0, submitted:0, review:0, onboarding:0 },
+      emptyCopy:"The pipeline is ready. Add the first session or open the CFP." },
+    { id:"evt_aie-ny-2025", name:"AIE NYC 2025", dates:"Oct 6–8 2025", meta:"October 6–8, 2025 · Javits Center · closed",
+      chip:"LIVE", cls:"live", past:true,
+      gauges:{ submissions:517, accepted:141, speakers:152, scheduled:141, submitted:0, review:0, onboarding:0 } }
+  ];
+  var current = EVENTS[0];
+  var created = null;
+
+  /* ── Helpers ──────────────────────────────────────────────────────── */
+  function $(s){ return document.querySelector(s); }
+  function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
+  var toastTimer = null;
+  function toast(msg){
+    var t = $("#toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 3400);
+  }
+
+  /* ── Switcher popover ─────────────────────────────────────────────── */
+  var pop = $("#pop"), switcher = $("#switcher");
+  var kbdIndex = -1;
+
+  function popItems(){ return $all(".pop-item, .pop-create"); }
+
+  function renderPop(){
+    function row(ev){
+      var currentCls = ev.id === current.id ? " current" : "";
+      var pastCls = ev.past ? " past" : "";
+      return '<button class="pop-item' + currentCls + pastCls + '" role="option" data-id="' + ev.id + '" aria-selected="' + (ev.id === current.id) + '">' +
+        '<span class="name">' + ev.name + '</span>' +
+        '<span class="chip ' + ev.cls + '">' + ev.chip + '</span>' +
+        '<span class="dates num">' + ev.dates + '</span>' +
+        '<span class="gauge num">' + ev.gauges.submissions + ' subs</span>' +
+      '</button>';
+    }
+    $("#pop-upcoming").innerHTML = EVENTS.filter(function(e){ return !e.past; }).map(row).join("");
+    $("#pop-past").innerHTML = EVENTS.filter(function(e){ return e.past; }).map(row).join("");
+    $all(".pop-item").forEach(function(el){
+      el.addEventListener("click", function(){ switchTo(el.getAttribute("data-id")); });
+    });
+  }
+
+  function openPop(){ renderPop(); pop.classList.add("open"); switcher.setAttribute("aria-expanded","true"); kbdIndex = -1; }
+  function closePop(){ pop.classList.remove("open"); switcher.setAttribute("aria-expanded","false"); kbdIndex = -1; }
+
+  switcher.addEventListener("click", function(){
+    pop.classList.contains("open") ? closePop() : openPop();
+  });
+  document.addEventListener("click", function(e){
+    if (pop.classList.contains("open") && !pop.contains(e.target) && e.target !== switcher && !switcher.contains(e.target)) closePop();
+  });
+  document.addEventListener("keydown", function(e){
+    if (!pop.classList.contains("open")) return;
+    var items = popItems();
+    if (e.key === "Escape"){ closePop(); switcher.focus(); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault();
+      kbdIndex = e.key === "ArrowDown" ? Math.min(kbdIndex + 1, items.length - 1) : Math.max(kbdIndex - 1, 0);
+      items.forEach(function(el,i){ el.classList.toggle("kbd-focus", i === kbdIndex); });
+      items[kbdIndex].focus();
+    }
+    else if (e.key === "Enter" && kbdIndex >= 0){ e.preventDefault(); items[kbdIndex].click(); }
+  });
+  $("#pop-create").addEventListener("click", function(){ closePop(); location.hash = "#conferences/new"; });
+
+  /* ── Switching: the whole panel re-reads — scoping is observable ──── */
+  function switchTo(id){
+    var target = EVENTS.filter(function(e){ return e.id === id; })[0];
+    if (!target) return;
+    var switched = target.id !== current.id;
+    current = target;
+    closePop();
+    location.hash = "#dashboard";
+    renderDashboard();
+    if (switched) toast("Switched to " + current.name + " — every list, count, and search is now scoped to it.");
+  }
+
+  function renderDashboard(){
+    $("#switcher-name").textContent = current.name;
+    $("#crumb-event").textContent = current.name.toUpperCase();
+    $("#dash-title").textContent = current.name;
+    $("#dash-copy").textContent = current.meta;
+    $all("[data-gauge]").forEach(function(el){
+      var key = el.getAttribute("data-gauge");
+      el.textContent = current.gauges[key] != null ? current.gauges[key] : 0;
+    });
+    var isEmpty = current.gauges.submissions === 0;
+    $("#dash-program").classList.toggle("hidden", isEmpty);
+    $("#dash-empty").classList.toggle("hidden", !isEmpty);
+    if (isEmpty && current.emptyCopy) $("#empty-copy").textContent = current.emptyCopy;
+  }
+
+  /* ── Create screen ────────────────────────────────────────────────── */
+  $all(".choice-card").forEach(function(card){
+    card.addEventListener("click", function(){
+      $all(".choice-card").forEach(function(c){ c.setAttribute("aria-pressed", String(c === card)); });
+      var src = card.getAttribute("data-source");
+      $("#copy-card").classList.toggle("hidden", src !== "existing");
+      $(".actions .subtle").textContent =
+        src === "sessionize" ? "You'll land in the Sessionize importer next." :
+        src === "scratch"    ? "You'll add tracks, formats, and rooms next." :
+                               "You'll land on the new conference's empty program home.";
+    });
+  });
+
+  $("#new-name").addEventListener("input", function(){
+    var slug = this.value.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"") || "conference";
+    $("#slug-preview").textContent = "marquee.stage11.dev/agenda?event=" + slug;
+    $("#create-btn").textContent = "Create " + (this.value.trim() || "conference");
+  });
+
+  $("#create-btn").addEventListener("click", function(){
+    var name = $("#new-name").value.trim() || "New conference";
+    var from = $("#copy-from").value;
+    var mode = $(".choice-card[aria-pressed='true']").getAttribute("data-source");
+    var checked = $all("#copy-card .copy-row input:checked").length;
+    if (!created){
+      created = { id:"evt_created", name:name, dates:"Oct 18–20 2027", meta:"October 18–20, 2027 · Draft · America/New_York",
+        chip:"DRAFT", cls:"draft", past:false,
+        gauges:{ submissions:0, accepted:0, speakers:0, scheduled:0, submitted:0, review:0, onboarding:0 },
+        emptyCopy: mode === "existing"
+          ? "The pipeline is ready. 12 formats, 7 tracks, 2 CFP forms (closed), 9 task templates, 6 email templates, and the 2-round evaluation plan carried over from " + from + "."
+          : "The pipeline is ready. Add formats and tracks in Conference settings, then open the CFP." };
+      EVENTS.splice(EVENTS.length - 1, 0, created); // before past events
+    } else { created.name = name; }
+    switchTo(created.id);
+    toast(mode === "existing"
+      ? name + " created from " + from + " — " + checked + " structure sets copied, nothing personal traveled."
+      : name + " created — a blank shell with honest empty states, no 500s.");
+  });
+
+  /* ── Hash routing ─────────────────────────────────────────────────── */
+  function route(){
+    var isCreate = location.hash === "#conferences/new";
+    $("#view-create").classList.toggle("hidden", !isCreate);
+    $("#view-dashboard").classList.toggle("hidden", isCreate);
+  }
+  window.addEventListener("hashchange", route);
+
+  renderDashboard();
+  route();
+})();
+</script>
+</body>
+</html>

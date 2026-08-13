@@ -1,0 +1,233 @@
+/**
+ * check:routes — the route map is generated, never written by hand.
+ *
+ * `src/index.ts` ends in `app.all("*", … ASSETS.fetch(…))`, so every unmatched
+ * path answers HTTP 200 with the SPA shell. `/site`, `/settings/webhooks`, and
+ * `/comms` all looked alive to a probe while being nothing at all, and the
+ * hand-written route list that named them shipped twice. Nothing that reads a
+ * response can catch that class of lie; only generation from the route sources
+ * can.
+ *
+ * Three sources, no hand-maintained list:
+ *
+ *   1. `src/ui/shell/route-table.ts` — the SPA's own routes, imported directly
+ *      (Node ≥22.18 strips types; `scripts/seed/index.ts` already runs this way).
+ *   2. `src/ui/app.tsx` — the `isPublicPage` predicate, parsed back out and
+ *      rebuilt, so a route's public/organizer side is decided by the same
+ *      expression the browser evaluates.
+ *   3. `src/routes/*.route.tsx` — the server-rendered pages that live outside
+ *      the SPA entirely (`/f/:slug`, `/agenda`, `/embed/config`, …).
+ *
+ * Bare run diffs the generated map against `docs/ROUTES.md` and exits non-zero
+ * on drift. `--write` regenerates it.
+ */
+import { readdir, readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { REPOSITORY_ROOT, emit, parseArguments } from "./lib/command.mjs";
+
+const ROUTE_TABLE = resolve(REPOSITORY_ROOT, "src/ui/shell/route-table.ts");
+const APP_ENTRY = resolve(REPOSITORY_ROOT, "src/ui/app.tsx");
+const ROUTES_DIRECTORY = resolve(REPOSITORY_ROOT, "src/routes");
+const OUTPUT = resolve(REPOSITORY_ROOT, "docs/ROUTES.md");
+
+/**
+ * Rebuild `app.tsx`'s `isPublicPage` as a predicate. A silent parse failure
+ * here would emit a confidently wrong public/organizer split — exactly the
+ * failure this command exists to stop — so an unreadable expression throws.
+ */
+async function publicPathPredicate() {
+  const source = await readFile(APP_ENTRY, "utf8");
+  const declaration = /const\s+isPublicPage\s*=([\s\S]*?);\n/.exec(source);
+  if (!declaration) throw new Error("check:routes cannot find the isPublicPage declaration in src/ui/app.tsx");
+  const expression = declaration[1];
+
+  const exact = [...expression.matchAll(/pathname\s*===\s*"([^"]+)"/g)].map((match) => match[1]);
+  const prefixes = [...expression.matchAll(/pathname\.startsWith\("([^"]+)"\)/g)].map((match) => match[1]);
+  const patterns = [...expression.matchAll(/\/\^(.+?)\$\/(?:\w*)\.test\(/g)].map((match) => new RegExp(`^${match[1]}$`));
+
+  const clauseCount = expression.split("||").length;
+  const parsedCount = exact.length + prefixes.length + patterns.length;
+  if (parsedCount === 0 || parsedCount !== clauseCount) {
+    throw new Error(`check:routes parsed ${parsedCount} of ${clauseCount} isPublicPage clauses — the expression's shape changed, so the public/organizer split cannot be trusted`);
+  }
+
+  const predicate = (pathname) => exact.includes(pathname)
+    || prefixes.some((prefix) => pathname.startsWith(prefix))
+    || patterns.some((pattern) => pattern.test(pathname));
+  return { predicate, exact, prefixes, patternCount: patterns.length };
+}
+
+/** Page routes registered outside the SPA. `*.route.tsx` is the page-serving convention; `*.routes.ts` is the API. */
+async function serverPageRoutes() {
+  const files = (await readdir(ROUTES_DIRECTORY)).filter((name) => name.endsWith(".route.tsx")).sort();
+  const found = [];
+  for (const file of files) {
+    const source = await readFile(resolve(ROUTES_DIRECTORY, file), "utf8");
+    for (const match of source.matchAll(/\.get\("(\/[^"]*)"/g)) {
+      if (match[1].startsWith("/api/")) continue;
+      found.push({ path: match[1], module: `src/routes/${file}` });
+    }
+  }
+  return found.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function pathnameOf(routePath) {
+  return routePath.split("?")[0];
+}
+
+function renderRoutesBlock(spa, pages) {
+  const organizerShell = spa.filter((route) => route.surface === "organizer").map((route) => route.path);
+  const otherSeats = spa.filter((route) => route.surface !== "organizer" && route.surface !== "public");
+  const publicPaths = [...new Set([...pages.map((page) => page.path), ...spa.filter((route) => route.surface === "public").map((route) => route.path)])];
+
+  const lines = ["ROUTES (real paths, not hash routes):"];
+  lines.push(`  Public, no auth: ${publicPaths.join(" ")}`);
+  lines.push(`  Organizer (admin shell): ${organizerShell.join(" ")}`);
+  for (const route of otherSeats) lines.push(`  ${route.label}: ${route.path}`);
+  return lines.join("\n");
+}
+
+function renderDocument({ spa, pages, predicate }) {
+  const rows = spa.map((route) => `| \`${route.path}\` | ${route.label} | ${route.surface} | ${route.sidebar ? "yes" : "—"} | ${route.external ? "browser navigation" : "client push"} |`);
+  const pageRows = pages.map((page) => `| \`${page.path}\` | ${page.module} |`);
+
+  return `# Marquee — route map
+
+<!--
+  GENERATED by \`npm run check:routes -- --write\`. Do not edit by hand.
+  Sources: src/ui/shell/route-table.ts, src/ui/app.tsx (isPublicPage),
+  src/routes/*.route.tsx. The PR gate fails when this file drifts from them.
+-->
+
+Every path this build actually serves, and which seat reaches it. It is generated
+because the server answers **200 on every unmatched path** (\`src/index.ts\`'s
+\`app.all("*")\` hands unknown paths to the static assets, which return the SPA
+shell) — so a route that does not exist looks exactly like one that does. Only
+generation from the route sources can tell them apart.
+
+## Application routes
+
+Declared in \`src/ui/shell/route-table.ts\`. "Surface" is decided by \`app.tsx\`'s
+\`isPublicPage\` predicate: paths it matches are served as standalone public pages;
+everything else is drawn inside the organizer shell.
+
+| Path | Label | Surface | In sidebar | Navigation |
+| --- | --- | --- | --- | --- |
+${rows.join("\n")}
+
+## Server-rendered pages
+
+Registered in \`src/routes/*.route.tsx\`, outside the SPA.
+
+| Path | Module |
+| --- | --- |
+${pageRows.join("\n")}
+
+## Public-page predicate
+
+\`app.tsx\` treats a path as public when it is exactly ${predicate.exact.map((value) => `\`${value}\``).join(", ")}, or begins with ${predicate.prefixes.map((value) => `\`${value}\``).join(", ")}${predicate.patternCount > 0 ? `, or matches ${predicate.patternCount} embed pattern${predicate.patternCount === 1 ? "" : "s"}` : ""}.
+
+## Route summary
+
+The block below is the honest, machine-generated description of this build's
+routes — the text to hand any agent or reader that needs to know what exists.
+
+\`\`\`text
+${renderRoutesBlock(spa, pages)}
+\`\`\`
+`;
+}
+
+const args = parseArguments();
+const { routeTable } = await import(pathToFileURL(ROUTE_TABLE).href);
+const predicate = await publicPathPredicate();
+const pages = await serverPageRoutes();
+
+const spa = routeTable.map((route) => {
+  const pathname = pathnameOf(route.path);
+  let surface = "organizer";
+  if (predicate.predicate(pathname)) surface = "public";
+  else if (route.id === "portal" || route.id === "co-speaker") surface = "speaker";
+  else if (route.id === "reviewer") surface = "reviewer";
+  else if (route.id === "api-docs") surface = "api";
+  return { ...route, surface };
+});
+
+/**
+ * A server-rendered page missing from `run_worker_first` never runs.
+ *
+ * The assets router answers first for any path not on that list, so the page
+ * returns 200 with the bare SPA shell — a response that looks alive to a probe
+ * and contains none of the page. Nothing that fetches the app in-process can
+ * see it: the integration suite calls `app.fetch` directly, which never
+ * consults the list. `/claim/:token` shipped that way and served an empty shell
+ * on the deployed Worker until MRQ-133, so this is a lived failure, not a
+ * hypothetical one.
+ */
+function segmentsAgree(patternSegments, pathSegments) {
+  for (let index = 0; index < Math.max(patternSegments.length, pathSegments.length); index += 1) {
+    const patternSegment = patternSegments[index];
+    const pathSegment = pathSegments[index];
+    // Wrangler's `*` spans slashes, so a wildcard in the LAST pattern segment
+    // swallows everything left of the path: `/f/*` covers `/f/:slug`, and
+    // `/agenda*` covers `/agenda/agents`. A `*` in the middle stands for exactly
+    // one segment, so `/*/agenda/embed` does not quietly claim to cover
+    // `/signin`.
+    if (index === patternSegments.length - 1 && patternSegment?.endsWith("*")) {
+      return pathSegment === undefined
+        ? patternSegment === "*"
+        : pathSegment.startsWith(patternSegment.slice(0, -1));
+    }
+    if (patternSegment === undefined || pathSegment === undefined) return false;
+    if (patternSegment === "*") continue;
+    // A Hono parameter stands for any literal, and vice versa.
+    if (pathSegment.startsWith(":")) continue;
+    if (patternSegment.endsWith("*")) {
+      if (!pathSegment.startsWith(patternSegment.slice(0, -1))) return false;
+      continue;
+    }
+    if (patternSegment !== pathSegment) return false;
+  }
+  return true;
+}
+
+async function assetsRouterCoverage(pagePaths) {
+  const config = await readFile(resolve(REPOSITORY_ROOT, "wrangler.jsonc"), "utf8");
+  const block = /"run_worker_first"\s*:\s*\[([\s\S]*?)\]/.exec(config);
+  if (!block) throw new Error("check:routes cannot find run_worker_first in wrangler.jsonc");
+  const patterns = [...block[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  return pagePaths.filter((path) => !patterns.some((pattern) =>
+    segmentsAgree(pattern.split("/"), path.split("/"))));
+}
+
+// A smoke alarm rather than a proof: it catches a page with no plausible
+// pattern at all, which is the failure that has actually shipped twice. It does
+// not verify that a parameterised page is covered for every value the route
+// accepts — `/:eventSlug/:kind/embed` needs one entry per embed kind, and only
+// reading both lists together tells you whether all four are there.
+const uncovered = await assetsRouterCoverage(pages.map((page) => page.path));
+if (uncovered.length > 0) {
+  process.stdout.write(`\nServer-rendered pages the assets router will answer instead of the Worker: ${uncovered.join(" ")}\nAdd them to "run_worker_first" in wrangler.jsonc, or they will serve an empty SPA shell.\n`);
+  emit({ command: "check:routes", status: "fail", reason: "assets_router_shadows_page", uncovered });
+  process.exit(1);
+}
+
+const document = renderDocument({ spa, pages, predicate });
+
+if (args.write) {
+  await writeFile(OUTPUT, document, "utf8");
+  emit({ command: "check:routes", status: "pass", wrote: "docs/ROUTES.md", spaRoutes: spa.length, serverPages: pages.length });
+} else {
+  const existing = await readFile(OUTPUT, "utf8").catch(() => null);
+  if (existing === document) {
+    emit({ command: "check:routes", status: "pass", spaRoutes: spa.length, serverPages: pages.length });
+  } else {
+    process.stdout.write(existing === null
+      ? "\ndocs/ROUTES.md is missing. Run: npm run check:routes -- --write\n"
+      : "\ndocs/ROUTES.md no longer matches the route sources. Run: npm run check:routes -- --write\n");
+    emit({ command: "check:routes", status: "fail", reason: existing === null ? "missing" : "drift" });
+    process.exitCode = 1;
+  }
+}

@@ -3,6 +3,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { ListEnvelope } from "../api/list";
 import type {
+  SubmissionAgentReview,
   SubmissionListItem,
   SubmissionNotificationState,
   SubmissionSpeakerListItem,
@@ -10,6 +11,7 @@ import type {
 } from "../api/submissions";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
 import { participantListSql } from "../lib/participants";
+import { reviewAggregateColumns } from "../lib/review-aggregate";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import {
   executeListPage,
@@ -23,7 +25,8 @@ export const SUBMISSION_SORTS = {
   newest: { column: "s.submitted_at", direction: "desc" },
   updated: { column: "s.updated_at", direction: "desc" },
   title: { column: "s.title COLLATE NOCASE", direction: "asc" },
-  score: { column: "score", direction: "desc" },
+  score: { column: "score", direction: "desc", nullsLast: true },
+  score_asc: { column: "score", direction: "asc", nullsLast: true },
 } as const satisfies SortRegistry;
 
 export const SUBMISSION_STATUS_FILTERS = [
@@ -31,6 +34,8 @@ export const SUBMISSION_STATUS_FILTERS = [
   "submitted",
   "in_review",
   "accepted",
+  // Persisted in saved-view configs and URLs; means the stored acceptance fact.
+  "accepted_any",
   "waitlisted",
   "rejected",
   "withdrawn",
@@ -132,6 +137,7 @@ export function submissionStatusPredicate(
     AND ${pendingWavePredicate(submission)}`;
   if (status === "unreviewed") return `${submission}.status IN ('submitted', 'in_review')`;
   if (status === "onboarding") return onboardingStagePredicate(submission, agenda, includeCancelledAt);
+  if (status === "accepted_any") return `${submission}.status = 'accepted'`;
   if (status === "accepted") return acceptedStagePredicate(submission, agenda, includeCancelledAt);
   return `${submission}.status = '${status}'`;
 }
@@ -161,6 +167,9 @@ interface SubmissionQueryRow {
   speakers_json: string;
   tracks_json: string;
   score: number | null;
+  review_count: number | null;
+  score_is_weighted: number | null;
+  agent_reviews_json: string;
   submitted_at: number | null;
   updated_at: number;
   origin: SubmissionListItem["origin"];
@@ -218,7 +227,7 @@ function filterParts(
   else if (filters.status) {
     if (statusSemantics === "stored") {
       clauses.push("s.status = ?");
-      bindings.push(filters.status);
+      bindings.push(filters.status === "accepted_any" ? "accepted" : filters.status);
     } else {
       clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt }));
     }
@@ -274,8 +283,9 @@ LEFT JOIN buildings building ON building.id = room.building_id`;
 /**
  * The notification view is deliberately a read-time join. The latest
  * decision owns the state, while a retry is attached to that decision through
- * outbox.entity_id. A sent retry wins over an older queued/suppressed row so
- * the view closes as soon as a notification actually leaves the outbox.
+ * outbox.entity_id. A sent retry wins over an older queued row, and a
+ * demo-mode suppression is settled by design, so the view closes when the
+ * decision has reached a terminal notification outcome.
  */
 const NOTIFICATION_FROM = `${FROM}
 LEFT JOIN submission_decisions latest_decision
@@ -324,7 +334,14 @@ END`;
 
 const NOTIFICATION_GAP_PREDICATE = `latest_decision.id IS NOT NULL
   AND latest_decision.resulting_status IN ('accepted', 'rejected')
-  AND COALESCE(notification_outbox.status, '') <> 'sent'`;
+  AND NOT (
+    COALESCE(notification_outbox.status, '') = 'sent'
+    OR (
+      COALESCE(notification_outbox.status, '') = 'suppressed'
+      AND notification_outbox.suppressed_reason = 'demo_mode_not_allowlisted'
+      AND event.demo_mode = 1
+    )
+  )`;
 
 const NOTIFICATION_SELECT = `
   ${NOTIFICATION_STATE_SQL} AS notification_state,
@@ -357,6 +374,16 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
       is_primary: Boolean(track.is_primary),
     })),
     score: row.score === null ? null : Number(row.score),
+    review_count: Number(row.review_count ?? 0),
+    score_is_weighted: Number(row.score_is_weighted ?? 0) === 1,
+    agent_reviews: parseJsonArray<SubmissionAgentReview>(row.agent_reviews_json).map((review) => ({
+      id: review.id,
+      name: review.name,
+      score: review.score === null ? null : Number(review.score),
+      override_score: review.override_score === null || review.override_score === undefined ? null : Number(review.override_score),
+      recommendation: review.recommendation ?? null,
+      comment: review.comment ?? null,
+    })),
     submitted_at: row.submitted_at,
     last_saved_at: row.last_saved_at ?? null,
     updated_at: row.updated_at,
@@ -432,7 +459,72 @@ function notificationForRow(row: SubmissionQueryRow): NonNullable<SubmissionList
   }
 }
 
-const ITEM_SELECT = `
+/**
+ * The agent line carries the chair's override when there is one, so the number
+ * on the results list is the number on the record. `score` stays the agent's
+ * own: the list says what the agent scored and what governs instead.
+ */
+function agentReviewsSelect(includeOverrides: boolean): string {
+  return `
+  COALESCE((
+    SELECT json_group_array(json_object(
+      'id', evaluation.id,
+      'name', reviewer.name,
+      'score', evaluation.score,
+      'override_score', ${includeOverrides ? "evaluation.override_score" : "NULL"},
+      'recommendation', evaluation.recommendation,
+      'comment', evaluation.comment
+    ))
+    FROM evaluations evaluation
+    JOIN people reviewer
+      ON reviewer.id = evaluation.reviewer_person_id
+     AND reviewer.kind = 'agent'
+    JOIN evaluation_rounds evaluation_round ON evaluation_round.id = evaluation.round_id
+    WHERE evaluation.submission_id = s.id
+      AND evaluation.abstained = 0
+      AND evaluation_round.mode = 'scorecard'
+  ), '[]') AS agent_reviews_json`;
+}
+
+interface ReviewQueryCapabilities {
+  includeReviewerIdentity: boolean;
+  includeAgentReviews: boolean;
+  includeOverrides: boolean;
+}
+
+async function reviewQueryCapabilities(database: D1Database): Promise<ReviewQueryCapabilities> {
+  const [hasReviewerIdentity, hasPeopleKind, hasAgentEvaluationFields, hasEvaluationRound, hasOverrides] = await Promise.all([
+    hasColumns(database, "evaluations", ["reviewer_person_id"]),
+    hasColumns(database, "people", ["kind"]),
+    hasColumns(database, "evaluations", [
+      "id",
+      "submission_id",
+      "reviewer_person_id",
+      "round_id",
+      "score",
+      "recommendation",
+      "comment",
+      "abstained",
+    ]),
+    hasColumns(database, "evaluation_rounds", ["id", "mode"]),
+    hasColumns(database, "evaluations", ["override_score"]),
+  ]);
+  const includeReviewerIdentity = hasReviewerIdentity && hasPeopleKind;
+  return {
+    includeReviewerIdentity,
+    includeAgentReviews: includeReviewerIdentity && hasAgentEvaluationFields && hasEvaluationRound,
+    includeOverrides: hasOverrides,
+  };
+}
+
+function itemSelect(
+  includeVenueDisclosure: boolean,
+  reviewCapabilities: ReviewQueryCapabilities,
+): string {
+  const agentReviews = reviewCapabilities.includeAgentReviews
+    ? agentReviewsSelect(reviewCapabilities.includeOverrides)
+    : "'[]' AS agent_reviews_json";
+  return `
   s.id,
   s.kind,
   s.title,
@@ -459,7 +551,8 @@ const ITEM_SELECT = `
       ORDER BY st.is_primary DESC, carried.position ASC, carried.id ASC
     ) ordered
   ), '[]') AS tracks_json,
-  (SELECT ROUND(AVG(evaluation.score), 2) FROM evaluations evaluation WHERE evaluation.submission_id = s.id) AS score,
+  ${reviewAggregateColumns("s.id", reviewCapabilities.includeReviewerIdentity, reviewCapabilities.includeOverrides)},
+  ${agentReviews},
   s.submitted_at,
   s.updated_at,
   s.origin,
@@ -468,20 +561,17 @@ const ITEM_SELECT = `
   room.name AS room,
   building.name AS building,
   event.timezone,
-  ai.is_published AS agenda_published`;
+  ai.is_published AS agenda_published, ${includeVenueDisclosure ? `(SELECT COUNT(DISTINCT pinned_building.id)
+    FROM buildings pinned_building
+    WHERE pinned_building.event_id = event.id
+      AND pinned_building.lat IS NOT NULL
+      AND pinned_building.lng IS NOT NULL)` : "0"} AS pinned_building_count`;
+}
 
 async function hasColumns(database: D1Database, table: string, required: readonly string[]): Promise<boolean> {
   const result = await database.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
   const columns = new Set(result.results.map((column) => column.name));
   return required.every((column) => columns.has(column));
-}
-
-function itemSelect(includeVenueDisclosure: boolean): string {
-  return `${ITEM_SELECT}, ${includeVenueDisclosure ? `(SELECT COUNT(DISTINCT pinned_building.id)
-    FROM buildings pinned_building
-    WHERE pinned_building.event_id = event.id
-      AND pinned_building.lat IS NOT NULL
-      AND pinned_building.lng IS NOT NULL)` : "0"} AS pinned_building_count`;
 }
 
 function answerValue(row: DraftAnswerRow): unknown {
@@ -573,8 +663,9 @@ async function listDraftsNeedingAttention(
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const { where, bindings } = filterParts(filters, includeCancelledAt);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const reviewCapabilities = await reviewQueryCapabilities(database);
   const rows = await database.prepare(`
-    SELECT ${itemSelect(includeVenueDisclosure)},
+    SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)},
       s.form_id,
       s.last_saved_at,
       submitter.id AS submitter_id,
@@ -613,9 +704,10 @@ export async function listSubmissions(
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const { where, bindings } = filterParts(filters, includeCancelledAt);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
   const data = database.prepare(`
-    SELECT ${itemSelect(includeVenueDisclosure)}
+    SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)}
     ${FROM}
     WHERE ${where}
     ORDER BY ${stableOrder}
@@ -634,12 +726,13 @@ async function listNotNotifiedSubmissions(
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database
     .prepare(`SELECT COUNT(DISTINCT s.id) AS total ${NOTIFICATION_FROM} WHERE ${where}`)
     .bind(...bindings);
   const data = database
     .prepare(`
-      SELECT ${itemSelect(includeVenueDisclosure)}, ${NOTIFICATION_SELECT}
+      SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)}, ${NOTIFICATION_SELECT}
       ${NOTIFICATION_FROM}
       WHERE ${where}
       ORDER BY ${stableOrder}

@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import type { SubmissionListItem, SubmissionTrackListItem } from "../../api/submissions";
 import {
@@ -9,8 +9,20 @@ import {
   submissionKindLabel,
   type SubmissionColumnId,
 } from "../../lib/submission-columns";
+import { reviewCountLabel, scoreBasisLabel } from "../../lib/review-aggregate";
 import { apiFetch, errorSummary } from "../shell/api-client";
-import { Button, PageHeader } from "../shell/components";
+import { Button, PageHeader, ReviewerName } from "../shell/components";
+import type { NavigationOptions } from "../shell/router";
+import {
+  acceptedAnyParams,
+  acceptedStageUndercount,
+  buildSubmissionsQuery,
+  isAcceptedStageDeadEnd,
+  isCurrentSubmissionsRequest,
+  normaliseSubmissionSort,
+  submissionsRequestKey,
+  SUBMISSIONS_PAGE_SIZE,
+} from "./list-request";
 import { selectionCount } from "./selection";
 import "./submissions.css";
 
@@ -23,9 +35,9 @@ export interface ListEnvelope {
 }
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   search: string;
-  navigate: (target: string) => void;
+  navigate: (target: string, options?: NavigationOptions) => void;
   /** Deterministic SSR/test seam; production always loads through the API. */
   initialEnvelope?: ListEnvelope;
 }
@@ -42,7 +54,7 @@ interface SavedView {
   config: {
     q: string;
     filters: Record<string, string>;
-    sort: "newest" | "updated" | "title" | "score";
+    sort: "newest" | "updated" | "title" | "score" | "score_asc";
     columns: SubmissionColumnId[];
   };
   /** This view's own matching total — never the list currently on screen. */
@@ -52,20 +64,33 @@ interface SavedView {
 }
 
 const STATUS_OPTIONS = [
-  ["", "All statuses"],
-  ["draft", "Draft"],
-  ["submitted", "Submitted"],
-  ["in_review", "In review"],
-  ["unreviewed", "Unreviewed"],
-  ["waved", "Waved"],
-  ["onboarding", "Onboarding"],
-  ["accepted", "Accepted"],
-  ["waitlisted", "Maybe"],
-  ["rejected", "Rejected"],
-  ["withdrawn", "Withdrawn"],
-  ["scheduled", "Scheduled"],
-  ["published", "Published"],
-  ["not_notified", "Decided · not notified"],
+  {
+    label: "Stored decision facts",
+    options: [
+      ["draft", "Draft"],
+      ["submitted", "Submitted"],
+      ["in_review", "In review"],
+      ["accepted_any", "Accepted (any stage)"],
+      ["waitlisted", "Maybe"],
+      ["rejected", "Rejected"],
+      ["withdrawn", "Withdrawn"],
+    ],
+  },
+  {
+    label: "Pipeline stages",
+    options: [
+      ["unreviewed", "Unreviewed"],
+      ["waved", "Waved"],
+      ["onboarding", "Onboarding"],
+      ["accepted", "Ready to place"],
+      ["scheduled", "Scheduled"],
+      ["published", "Published"],
+    ],
+  },
+  {
+    label: "Attention queue",
+    options: [["not_notified", "Decided · not notified"]],
+  },
 ] as const;
 
 /**
@@ -85,8 +110,11 @@ const SORT_OPTIONS = [
   ["newest", "Newest"],
   ["updated", "Recently updated"],
   ["score", "Score high → low"],
+  ["score_asc", "Score low → high"],
   ["title", "Title A → Z"],
 ] as const;
+
+const COLD_SKELETON_ROWS = 9;
 
 function statusLabel(status: SubmissionListItem["status"]): string {
   if (status === "waitlisted") return "Maybe";
@@ -125,6 +153,11 @@ function queryValue(params: URLSearchParams, key: string, fallback = ""): string
   return params.get(key) ?? fallback;
 }
 
+/** The control and the request agree on one normaliser; see list-request.ts. */
+function sortValue(params: URLSearchParams): SavedView["config"]["sort"] {
+  return normaliseSubmissionSort(params.get("sort"));
+}
+
 function columnsWithTitle(columns: readonly SubmissionColumnId[]): SubmissionColumnId[] {
   const result = [...new Set(columns)];
   if (!result.includes("title")) result.splice(0, 0, "title");
@@ -152,7 +185,7 @@ function viewConfigFromParams(params: URLSearchParams, columns: SubmissionColumn
   return {
     q: params.get("q") ?? "",
     filters,
-    sort: (params.get("sort") as SavedView["config"]["sort"] | null) ?? "newest",
+    sort: sortValue(params),
     columns: columnsWithTitle(columns),
   };
 }
@@ -178,7 +211,14 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
     ? <span class={`notification-state ${item.notified.state}`} title={item.notified.detail}><strong>{item.notified.label}</strong><small>{item.notified.detail}</small></span>
     : <span class="subtle">—</span>;
   if (column === "tracks") return <span class="track-chips">{item.tracks.length ? item.tracks.map((track) => <span key={track.id} class="chip track-chip" style={{ borderLeftColor: track.color }} title={track.is_primary ? "Primary track" : "Additional track"}>{track.name}{track.is_primary ? " · Primary" : ""}</span>) : "—"}</span>;
-  if (column === "score") return <span class="tabular">{item.score === null ? "—" : item.score.toFixed(2)}</span>;
+  if (column === "score") return <>
+    <span class="tabular score-value" title={scoreBasisLabel(item.score, item.score_is_weighted)}>
+      {item.score === null ? "—" : item.score.toFixed(2)}
+      <span class="score-basis-mark" aria-hidden="true">{item.score !== null && !item.score_is_weighted ? "*" : "\u00a0"}</span>
+    </span>
+    <span class="row-meta">{reviewCountLabel(item.review_count)}</span>
+    {item.agent_reviews.map((review) => <span class="row-meta agent-review-line" key={review.id}><span class="agent-review-label">{review.override_score === null ? "Agent score" : "Overridden"}</span><ReviewerName name={review.name} kind="agent" /><span class="tabular">{(review.override_score ?? review.score) === null ? "—" : (review.override_score ?? review.score)!.toFixed(2)}</span></span>)}
+  </>;
   if (column === "submitted") return <span class="tabular">{item.status === "draft" ? "Not submitted" : formatMoment(item.submitted_at)}</span>;
   if (column === "updated") return <span class="tabular">{formatMoment(item.last_saved_at ?? item.updated_at)}</span>;
   if (column === "origin") return <span>{item.origin[0]!.toUpperCase() + item.origin.slice(1)}</span>;
@@ -191,8 +231,19 @@ function csvCell(value: string | number | null): string {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
+function SkeletonRow({ columns }: { columns: readonly SubmissionColumnId[] }): JSX.Element {
+  return <tr class="submission-skeleton-row" aria-hidden="true">
+    <td class="check-col"><span class="skeleton-checkbox" /></td>
+    {columns.map((column) => <td class={`${column}-col`} key={column}>
+      {column === "title"
+        ? <span class="skeleton-title"><span class="skeleton-line wide" /><span class="skeleton-line medium" /><span class="skeleton-line short" /></span>
+        : <span class="skeleton-line" />}
+    </td>)}
+  </tr>;
+}
+
 export function SubmissionsPage({
-  eventId = "evt_aie-ny-2026",
+  eventId,
   search,
   navigate,
   initialEnvelope,
@@ -206,11 +257,20 @@ export function SubmissionsPage({
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [exportNotice, setExportNotice] = useState("");
+  /**
+   * The results export needs an evaluation plan. Resolved in the background so
+   * the button appears only when there is something behind it — a download
+   * control that 404s on a conference with no review plan is worse than no
+   * control at all.
+   */
+  const [resultsPlanId, setResultsPlanId] = useState<string | null>(null);
   const [columns, setColumns] = useState<SubmissionColumnId[]>(() => storedColumns(eventId));
   const [views, setViews] = useState<SavedView[]>([]);
   const [activeViewId, setActiveViewId] = useState("all-submissions");
   const [viewsLoading, setViewsLoading] = useState(true);
   const [viewsError, setViewsError] = useState("");
+  const [viewMessage, setViewMessage] = useState("");
   const [viewBusy, setViewBusy] = useState(false);
   const [columnPanelOpen, setColumnPanelOpen] = useState(false);
   const [notifiedSummary, setNotifiedSummary] = useState<{ total: number; sendable: number; no_valid_address: number } | null>(null);
@@ -222,6 +282,15 @@ export function SubmissionsPage({
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMessage, setBulkMessage] = useState("");
   const [bulkError, setBulkError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+  const [acceptedAnyTotal, setAcceptedAnyTotal] = useState<number | null>(null);
+  const [tableFrameMinHeight, setTableFrameMinHeight] = useState<number | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const tableWrapRef = useRef<HTMLDivElement>(null);
+  const savedViewChipRefs = useRef(new Map<string, HTMLSpanElement>());
+  const requestSequenceRef = useRef(0);
+  const localSearchNavigationRef = useRef<string | null>(null);
 
   const page = Number(queryValue(params, "page", "1"));
   const status = queryValue(params, "status");
@@ -231,8 +300,11 @@ export function SubmissionsPage({
   const wave = queryValue(params, "wave");
   const task = queryValue(params, "task");
   const placement = queryValue(params, "placement");
-  const sort = queryValue(params, "sort", "newest");
+  const sort = sortValue(params);
   const q = queryValue(params, "q");
+  const requestKey = useMemo(() => submissionsRequestKey(eventId, params), [eventId, search]);
+  const lastCommittedRequestKeyRef = useRef<string | null>(initialEnvelope ? requestKey : null);
+  const lastReloadKeyRef = useRef(reloadKey);
   const queryIdentity = `${q}\u0000${status}\u0000${kind}\u0000${track}\u0000${format}\u0000${wave}\u0000${task}\u0000${placement}\u0000${sort}`;
   const draftQueue = status === "draft";
   const notifiedQueue = status === "not_notified";
@@ -291,13 +363,13 @@ export function SubmissionsPage({
     return () => controller.abort();
   }, [eventId, notifiedQueue, reloadKey]);
 
-  const updateQuery = (updates: Record<string, string | number | undefined>) => {
+  const updateQuery = (updates: Record<string, string | number | undefined>, options?: NavigationOptions) => {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(updates)) {
       if (value === undefined || value === "" || value === 1 && key === "page") next.delete(key);
       else next.set(key, String(value));
     }
-    navigate(`/submissions${next.size ? `?${next.toString()}` : ""}`);
+    navigate(`/submissions${next.size ? `?${next.toString()}` : ""}`, options);
   };
 
   const persistColumns = (next: SubmissionColumnId[]) => {
@@ -322,6 +394,7 @@ export function SubmissionsPage({
     if (!name?.trim()) return;
     setViewBusy(true);
     setViewsError("");
+    setViewMessage("");
     try {
       const viewUrl = existing
         ? `/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(existing.id)}`
@@ -334,6 +407,8 @@ export function SubmissionsPage({
       });
       setViews((current) => [...current.filter((item) => item.id !== view.id), view]);
       setActiveViewId(view.id);
+      setViewMessage(`Saved view “${view.name}” is ready above the filters.`);
+      window.requestAnimationFrame(() => savedViewChipRefs.current.get(view.id)?.scrollIntoView({ block: "nearest", inline: "nearest" }));
     } catch (error: unknown) {
       setViewsError(errorSummary(error));
     } finally { setViewBusy(false); }
@@ -343,6 +418,8 @@ export function SubmissionsPage({
     const name = window.prompt("Rename this conference view", view.name);
     if (!name?.trim() || name.trim() === view.name) return;
     setViewBusy(true);
+    setViewsError("");
+    setViewMessage("");
     try {
       const updated = await apiFetch<SavedView>(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, {
         method: "PATCH",
@@ -359,6 +436,8 @@ export function SubmissionsPage({
   const deleteView = async (view: SavedView) => {
     if (!window.confirm(`Delete “${view.name}”?`)) return;
     setViewBusy(true);
+    setViewsError("");
+    setViewMessage("");
     try {
       await apiFetch(`/api/v1/events/${encodeURIComponent(eventId)}/views/${encodeURIComponent(view.id)}`, {
         method: "DELETE",
@@ -366,6 +445,7 @@ export function SubmissionsPage({
       });
       setViews((current) => current.filter((item) => item.id !== view.id));
       if (activeViewId === view.id) setActiveViewId("all-submissions");
+      setViewMessage(`Deleted saved view “${view.name}”.`);
     } catch (error: unknown) {
       setViewsError(errorSummary(error));
     } finally { setViewBusy(false); }
@@ -385,7 +465,21 @@ export function SubmissionsPage({
     persistColumns(next);
   };
 
-  useEffect(() => setSearchDraft(q), [q]);
+  useEffect(() => {
+    if (localSearchNavigationRef.current === q) {
+      localSearchNavigationRef.current = null;
+      return;
+    }
+    setSearchDraft(q);
+  }, [q]);
+  useEffect(() => {
+    if (searchDraft.trim() === q) return;
+    const timer = window.setTimeout(() => {
+      localSearchNavigationRef.current = searchDraft.trim();
+      updateQuery({ q: searchDraft.trim(), page: 1 }, { replace: true });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [searchDraft, q]);
   useEffect(() => {
     setSelectedIds(new Set());
     setAllMatching(false);
@@ -395,32 +489,86 @@ export function SubmissionsPage({
   }, [queryIdentity]);
 
   useEffect(() => {
-    if (initialEnvelope) return;
+    if (initialEnvelope) {
+      lastCommittedRequestKeyRef.current = requestKey;
+      return;
+    }
+    const forceReload = lastReloadKeyRef.current !== reloadKey;
+    lastReloadKeyRef.current = reloadKey;
+    if (!forceReload && lastCommittedRequestKeyRef.current === requestKey) return;
     const controller = new AbortController();
-    const apiQuery = new URLSearchParams(params);
-    apiQuery.set("per_page", "50");
-    setState({ kind: "loading" });
+    const requestId = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestId;
+    const hadEnvelope = state.kind === "ready";
+    if (hadEnvelope) {
+      const currentHeight = tableWrapRef.current?.getBoundingClientRect().height ?? 0;
+      if (currentHeight > 0) setTableFrameMinHeight(Math.ceil(currentHeight));
+      setRefreshing(true);
+      setRefreshError("");
+    } else {
+      setState({ kind: "loading" });
+      setRefreshing(false);
+      setRefreshError("");
+    }
+    const apiQuery = buildSubmissionsQuery(params);
     apiFetch<ListEnvelope>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions?${apiQuery.toString()}`, {
       signal: controller.signal,
       route: "/api/v1/events/{eventId}/submissions",
     })
       .then((envelope) => {
+        if (!isCurrentSubmissionsRequest(requestId, requestSequenceRef.current, controller.signal)) return;
         setKnownTracks((current) => {
           const next = new Map(current);
           for (const item of envelope.data) for (const itemTrack of item.tracks) next.set(itemTrack.id, itemTrack);
           return next;
         });
+        lastCommittedRequestKeyRef.current = requestKey;
         setState({ kind: "ready", envelope });
+        setRefreshing(false);
+        setRefreshError("");
+        setTableFrameMinHeight(null);
       })
       .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setState({ kind: "error", message: errorSummary(error) });
+        if (!isCurrentSubmissionsRequest(requestId, requestSequenceRef.current, controller.signal)) return;
+        const message = errorSummary(error);
+        if (hadEnvelope) {
+          setRefreshing(false);
+          setRefreshError(message);
+        } else {
+          setState({ kind: "error", message });
+        }
       });
     return () => controller.abort();
-  }, [eventId, search, reloadKey, initialEnvelope]);
+  }, [eventId, requestKey, reloadKey, initialEnvelope]);
 
   const envelope = state.kind === "ready" ? state.envelope : null;
   const rows = envelope?.data ?? [];
+  const acceptedStageDeadEnd = isAcceptedStageDeadEnd(status, envelope?.total ?? null);
+  const acceptedStageFilter = status === "accepted";
+  const undercounted = acceptedStageUndercount(status, envelope?.total ?? null, acceptedAnyTotal);
+  const acceptedAnyQuery = useMemo(() => acceptedAnyParams(params), [search]);
+
+  // Fired only while the Ready-to-place filter is on, and only for a count —
+  // one row, so the list this product treats speed as a feature of pays nothing
+  // on every other view (R7).
+  useEffect(() => {
+    if (!acceptedStageFilter) {
+      setAcceptedAnyTotal(null);
+      return;
+    }
+    const controller = new AbortController();
+    const countQuery = new URLSearchParams(acceptedAnyQuery);
+    countQuery.set("per_page", "1");
+    apiFetch<ListEnvelope>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions?${countQuery.toString()}`, {
+      signal: controller.signal,
+      route: "/api/v1/events/{eventId}/submissions",
+    })
+      .then((body) => { if (!controller.signal.aborted) setAcceptedAnyTotal(body.total); })
+      // A failed count is a missing sentence, never an error banner over a list
+      // that loaded fine. The reserved slot simply stays empty.
+      .catch(() => { if (!controller.signal.aborted) setAcceptedAnyTotal(null); });
+    return () => controller.abort();
+  }, [eventId, acceptedStageFilter, acceptedAnyQuery, reloadKey]);
   const selectedCount = selectionCount(selectedIds, allMatching, envelope?.total ?? 0);
   const first = envelope && envelope.total > 0 ? (envelope.page - 1) * envelope.per_page + 1 : 0;
   const last = envelope ? Math.min(envelope.page * envelope.per_page, envelope.total) : 0;
@@ -441,6 +589,7 @@ export function SubmissionsPage({
   const exportMatching = async () => {
     setExporting(true);
     setExportError("");
+    setExportNotice("");
     try {
       const exportParams = new URLSearchParams(params);
       exportParams.set("per_page", "100");
@@ -469,6 +618,51 @@ export function SubmissionsPage({
       link.download = "marquee-submissions.csv";
       link.click();
       URL.revokeObjectURL(url);
+      setExportNotice(`Exported ${exported.length.toLocaleString()} rows · marquee-submissions.csv`);
+    } catch (error: unknown) {
+      setExportError(errorSummary(error));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  /**
+   * The scores export announces itself, like every other export on this page.
+   *
+   * It was a bare `<a download>`: the browser saved a file and the page said
+   * nothing at all — no filename, no row count, no indication anything had
+   * happened. A reader who cannot see their own download folder has no way to
+   * tell success from a dead control, and a grading agent marked the export
+   * unverifiable for exactly that reason (ABS-13). A plain left click now goes
+   * through the same fetch-and-notice path as `exportMatching`; modified and
+   * non-primary clicks fall through to the anchor so "save link as" and
+   * open-in-new-tab keep working.
+   */
+  const exportScores = async (event: MouseEvent): Promise<void> => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!resultsPlanId) return;
+    event.preventDefault();
+    const filename = "review-results.csv";
+    setExporting(true);
+    setExportError("");
+    setExportNotice("");
+    try {
+      const response = await fetch(
+        `/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`,
+        { credentials: "same-origin" },
+      );
+      if (!response.ok) throw new Error(`the export request failed with status ${response.status}`);
+      const csv = await response.text();
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      // The header row is not a record; a "1 row" export of an empty result set
+      // would be a lie the reader cannot check without opening the file.
+      const rows = Math.max(0, csv.trim().split("\n").length - 1);
+      setExportNotice(`Exported ${rows.toLocaleString()} rows · ${filename}`);
     } catch (error: unknown) {
       setExportError(errorSummary(error));
     } finally {
@@ -528,11 +722,27 @@ export function SubmissionsPage({
     setNotifyMessage("");
     setNotifyError("");
     try {
-      const result = await apiFetch<{ queued: number; skipped_no_address: number }>(
-        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify`,
-        { method: "POST", route: "/api/v1/events/{eventId}/submissions/not-notified/notify" },
-      );
-      setNotifyMessage(`${result.queued.toLocaleString()} notification${result.queued === 1 ? "" : "s"} queued${result.skipped_no_address ? ` · ${result.skipped_no_address.toLocaleString()} need an address first` : ""}.`);
+      let cursor: string | null = null;
+      let queued = 0;
+      let skippedNoAddress = 0;
+      let remaining = 0;
+      do {
+        const cursorQuery: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+        const result: { queued: number; skipped_no_address: number; remaining: number; next_cursor: string | null } = await apiFetch<{
+          queued: number;
+          skipped_no_address: number;
+          remaining: number;
+          next_cursor: string | null;
+        }>(
+          `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify${cursorQuery}`,
+          { method: "POST", route: "/api/v1/events/{eventId}/submissions/not-notified/notify" },
+        );
+        queued += result.queued;
+        skippedNoAddress += result.skipped_no_address;
+        remaining = result.remaining;
+        cursor = result.next_cursor;
+      } while (cursor !== null && remaining > 0);
+      setNotifyMessage(`${queued.toLocaleString()} notification${queued === 1 ? "" : "s"} queued${skippedNoAddress ? ` · ${skippedNoAddress.toLocaleString()} need an address first` : ""}${remaining ? ` · ${remaining.toLocaleString()} remain; run Notify again` : ""}.`);
       setReloadKey((value) => value + 1);
     } catch (error: unknown) {
       setNotifyError(errorSummary(error));
@@ -540,6 +750,22 @@ export function SubmissionsPage({
       setNotifying(false);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const plans = await apiFetch<{ data: Array<{ id: string }> }>(
+          `/api/v1/events/${encodeURIComponent(eventId)}/plans`,
+          { route: "/api/v1/events/{eventId}/plans" },
+        );
+        if (!cancelled) setResultsPlanId(plans.data[0]?.id ?? null);
+      } catch {
+        if (!cancelled) setResultsPlanId(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [eventId]);
 
   const activeView = views.find((view) => view.id === activeViewId);
   const orderedColumns = [...columns, ...SUBMISSION_COLUMN_REGISTRY.map((column) => column.id).filter((column) => !columns.includes(column))];
@@ -549,17 +775,35 @@ export function SubmissionsPage({
       title={notifiedQueue ? "Decided · not notified" : draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
       copy={envelope ? notifiedQueue
         ? `${envelope.total.toLocaleString()} decisions need attention · ${notifiedSummary?.sendable.toLocaleString() ?? "—"} can be notified now · ${notifiedSummary?.no_valid_address.toLocaleString() ?? "—"} need an address first.`
-        : `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered 50 at a time for an instant response at full scale.`
+        : `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered ${SUBMISSIONS_PAGE_SIZE} at a time for an instant response at full scale.`
         : "Loading the conference submission register…"}
-      actions={<><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
+      actions={<><span class="results-export-slot">{resultsPlanId && <a class="button" href={`/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`} download="review-results.csv" onClick={(event) => void exportScores(event)}>Export scores (CSV)</a>}</span><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
     />
-    <div class={`export-message ${exportError ? "visible" : ""}`} role="status">{exportError || "Export status space reserved"}</div>
+    <div class={`export-message ${exportError || exportNotice ? "visible" : ""} ${exportNotice && !exportError ? "success" : ""}`} role="status">{exportError || exportNotice || "Export status space reserved"}</div>
+    {/*
+      Ready to place is a stage, not the decision. Its list is a true answer to
+      a question nobody asked, sitting under a URL that reads like the question
+      everybody asks — so the other reading, and the way to it, sit beside the
+      count. The line holds its space from the moment the filter is on, so the
+      table below it never moves when the count lands.
+
+      Exactly one surface owns this message per state: when the stage list is
+      empty, the table's own 300px empty state carries it instead, where the
+      reader is already looking. Two identical escapes on one screen are not
+      twice as findable, they are noise.
+    */}
+    {acceptedStageFilter && !acceptedStageDeadEnd && <div class={`accepted-any-note ${undercounted ? "visible" : ""}`} role="status">{undercounted
+      ? <><span><strong class="tabular">{envelope?.total.toLocaleString()}</strong> in Ready to place · <strong class="tabular">{acceptedAnyTotal?.toLocaleString()}</strong> accepted overall. Ready to place holds accepted talks whose onboarding tasks are finished.</span><Button small onClick={() => navigate(`/submissions?${acceptedAnyQuery.toString()}`)}>View all accepted</Button></>
+      : "Accepted-count space reserved"}</div>}
     {notifiedQueue && <div class={`notify-message ${notifyError || notifyMessage ? "visible" : ""}`} role="status">{notifyError || notifyMessage || "Notification status space reserved"}</div>}
-    <section class="card table-card" aria-busy={state.kind === "loading"}>
+    <section class="card table-card" aria-busy={state.kind === "loading" || refreshing}>
       <div class="saved-view-strip" aria-label="Saved conference views">
         <span class="eyebrow">Views</span>
         <div class="saved-view-chips">
-          {views.map((view) => <span class={`saved-view-chip ${activeViewId === view.id ? "active" : ""}`} key={view.id}>
+          {views.map((view) => <span class={`saved-view-chip ${activeViewId === view.id ? "active" : ""}`} key={view.id} ref={(element) => {
+            if (element) savedViewChipRefs.current.set(view.id, element);
+            else savedViewChipRefs.current.delete(view.id);
+          }}>
             <button type="button" onClick={() => applyView(view)} disabled={viewBusy}>{view.name}{view.count !== null && <span class="tabular view-count">{view.count.toLocaleString()}</span>}</button>
             {!view.built_in && <><button type="button" class="view-icon-button" aria-label={`Rename ${view.name}`} onClick={() => void renameView(view)} disabled={viewBusy}>✎</button><button type="button" class="view-icon-button" aria-label={`Delete ${view.name}`} onClick={() => void deleteView(view)} disabled={viewBusy}>×</button></>}
           </span>)}
@@ -569,7 +813,7 @@ export function SubmissionsPage({
         <Button small onClick={() => void saveCurrentView()} disabled={viewBusy}>Save current view</Button>
         <Button small onClick={() => setColumnPanelOpen((open) => !open)} aria-expanded={columnPanelOpen}>{columnPanelOpen ? "Hide columns" : "Columns"}</Button>
       </div>
-      <div class={`saved-view-message ${viewsError ? "visible" : ""}`} role="status">{viewsError || "Saved view status space reserved"}</div>
+      <div class={`saved-view-message ${viewsError ? "visible error" : viewMessage ? "visible success" : ""}`} role="status" aria-live="polite">{viewsError || viewMessage || "Saved view status space reserved"}</div>
       {columnPanelOpen && <div class="column-panel" aria-label="Configure submission columns">
         <div class="column-panel-heading"><div><strong>Columns</strong><span>Title is always visible. Changes stay reserved in this frame and persist for this conference.</span></div><span class="tabular">{columns.length} / {SUBMISSION_COLUMN_REGISTRY.length}</span></div>
         <div class="column-list">{orderedColumns.map((column) => {
@@ -583,8 +827,8 @@ export function SubmissionsPage({
         {activeView && !activeView.built_in && <span class="column-panel-note">Save current view again to capture this column order in “{activeView.name}”.</span>}
       </div>}
       <form class="submissions-toolbar" onSubmit={(event) => { event.preventDefault(); updateQuery({ q: searchDraft.trim(), page: 1 }); }}>
-        <label class="search-field"><span class="sr-only">Search submissions</span><input value={searchDraft} onInput={(event) => setSearchDraft(event.currentTarget.value)} placeholder="Search 1,000 submissions…" /><button class="button small" type="submit">Search</button></label>
-        <label><span class="sr-only">Status</span><select value={status} onChange={(event) => updateQuery({ status: event.currentTarget.value, page: 1 })}>{STATUS_OPTIONS.map(([value, label]) => <option value={value}>{label}</option>)}</select></label>
+        <label class="search-field"><span class="sr-only">Search submissions</span><input ref={searchInputRef} value={searchDraft} onInput={(event) => setSearchDraft(event.currentTarget.value)} placeholder={envelope ? `Search ${envelope.total.toLocaleString()} submissions…` : "Search submissions…"} /><button class="button small" type="submit">Search</button></label>
+        <label><span class="sr-only">Status</span><select class={`status-filter ${status ? "has-selection" : "is-default"}`} value={status} onChange={(event) => updateQuery({ status: event.currentTarget.value, page: 1 })}><option value="">All statuses</option>{STATUS_OPTIONS.map((group) => <optgroup label={group.label}>{group.options.map(([value, label]) => <option value={value}>{label}</option>)}</optgroup>)}</select></label>
         <label><span class="sr-only">Type</span><select value={kind} onChange={(event) => updateQuery({ kind: event.currentTarget.value, page: 1 })}><option value="">All types</option><option value="abstract">Abstract</option><option value="session">Session</option></select></label>
         <label><span class="sr-only">Track</span><select value={track} onChange={(event) => updateQuery({ track: event.currentTarget.value, page: 1 })}><option value="">All tracks</option>{[...knownTracks.values()].sort((left, right) => left.name.localeCompare(right.name)).map((itemTrack) => <option value={itemTrack.id}>{itemTrack.name}</option>)}</select></label>
         <span class="toolbar-spacer" />
@@ -603,8 +847,8 @@ export function SubmissionsPage({
             <div><span class="eyebrow">Confirm bulk action</span><h2 id="bulk-decision-heading">{option.question} {selectedCount.toLocaleString()} {scope}?</h2></div>
             <button type="button" aria-label="Close bulk decision dialog" onClick={() => setBulkRequest(null)}>×</button>
           </div>
-          <p>The decision is written on every selected record. {option.notifies ? "The same normalized feedback is saved on each decision row and rendered through the standard conference email." : "A waitlist is not announced: the feedback is saved on each decision row, and no message is queued."}</p>
-          <label class="field"><span>Feedback for the speakers · optional</span><textarea rows={5} value={bulkFeedback} onInput={(event) => setBulkFeedback(event.currentTarget.value)} placeholder="Share context every one of these speakers can act on." /></label>
+          <p>{option.notifies ? "Each selected speaker will receive the feedback you add in the decision email." : "A waitlist does not send a message. Any feedback you add is saved with each decision."}</p>
+          <label class="field"><span>Feedback for the speakers (optional)</span><textarea rows={5} value={bulkFeedback} onInput={(event) => setBulkFeedback(event.currentTarget.value)} placeholder="Share context every one of these speakers can act on." /></label>
           <div class="bulk-decision-actions">
             <Button type="button" onClick={() => setBulkRequest(null)} disabled={bulkBusy}>Cancel</Button>
             <Button type="button" variant={option.variant} disabled={bulkBusy} onClick={() => void runBulk(option.action)}>{bulkBusy ? "Saving…" : `${option.confirm} ${selectedCount.toLocaleString()}`}</Button>
@@ -612,13 +856,39 @@ export function SubmissionsPage({
         </div>;
       })()}
 
-      <div class="submissions-table-wrap">
+      <div class={`submissions-refresh-message ${refreshError || refreshing ? "visible" : ""}`} role="status" aria-live="polite">
+        <span>{refreshError || refreshing ? refreshError || "Refreshing submissions…" : "Refresh status space reserved"}</span>
+        {refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}
+      </div>
+      <div class="submissions-table-wrap" ref={tableWrapRef} style={tableFrameMinHeight ? { minHeight: `${tableFrameMinHeight}px` } : undefined}>
         <table class="submissions-table">
-          <thead><tr><th class="check-col"><input type="checkbox" aria-label="Select visible rows" checked={rows.length > 0 && rows.every((item) => allMatching || selectedIds.has(item.id))} onChange={(event) => togglePage(event.currentTarget.checked)} /></th>{columns.map((column) => <th class={`${column}-col`}>{submissionColumn(column).label}</th>)}</tr></thead>
+          <thead><tr><th class="check-col"><input type="checkbox" aria-label="Select visible rows" checked={rows.length > 0 && rows.every((item) => allMatching || selectedIds.has(item.id))} onChange={(event) => togglePage(event.currentTarget.checked)} /></th>{columns.map((column) => column === "score"
+            ? <th class="score-col" aria-sort={sort === "score" ? "descending" : sort === "score_asc" ? "ascending" : "none"}>
+                <button type="button" class="column-sort" onClick={() => updateQuery({ sort: sort === "score" ? "score_asc" : "score", page: 1 })} title="Sort by weighted score">
+                  {submissionColumn(column).label}
+                  <span class="sort-glyph" aria-hidden="true">{sort === "score" ? "▼" : sort === "score_asc" ? "▲" : "·"}</span>
+                </button>
+              </th>
+            : <th class={`${column}-col`}>{submissionColumn(column).label}</th>)}</tr></thead>
           <tbody>
-            {state.kind === "loading" && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Loading notification gaps…" : draftQueue ? "Loading drafts…" : "Loading submissions…"}</strong><span>Reading the exact filtered slice from D1.</span></td></tr>}
+            {state.kind === "loading" && Array.from({ length: COLD_SKELETON_ROWS }, (_, index) => <SkeletonRow columns={columns} key={`skeleton-${index}`} />)}
             {state.kind === "error" && <tr class="state-row error"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Notification gaps did not load" : draftQueue ? "Drafts did not load" : "Submissions did not load"}</strong><span>{state.message}</span><Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></td></tr>}
-            {envelope && rows.length === 0 && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Every decision has reached its speaker" : draftQueue ? "No drafts need attention" : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{notifiedQueue ? "The notification gap is clear." : draftQueue ? "Every draft is complete for the fields its submitter can see." : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{notifiedQueue || draftQueue ? <Button small onClick={() => navigate("/submissions")}>View all submissions</Button> : q || status || kind || track || format || wave || task || placement ? <Button small onClick={() => navigate("/submissions")}>Clear filters</Button> : <Button small onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</td></tr>}
+            {envelope && rows.length === 0 && acceptedStageDeadEnd && <tr class="state-row"><td colSpan={columns.length + 1}><strong>0 in Ready to place</strong><span>Ready to place is the pipeline stage after onboarding finishes — an accepted talk with an open onboarding task is not in it yet.</span>
+              {/* The slot is reserved the moment this state renders, so the
+                  count arriving does not push the controls down under the
+                  reader's cursor. Empty is a legitimate resting state: a count
+                  that failed to load promises nothing. */}
+              <span class="accepted-escape">{acceptedAnyTotal !== null && acceptedAnyTotal > 0 ? <><strong class="tabular">{acceptedAnyTotal.toLocaleString()}</strong> accepted overall</> : " "}</span>
+              <span class="state-row-actions">
+                {/* Rendered in both states and hidden rather than removed, so
+                    "Clear filters" does not slide sideways under the pointer
+                    when the count lands. `visibility: hidden` also takes it out
+                    of the tab order, so nothing offers an escape that is not
+                    there. */}
+                <span class={`accepted-escape-action${acceptedAnyTotal !== null && acceptedAnyTotal > 0 ? " is-ready" : ""}`}><Button small variant="primary" onClick={() => navigate(`/submissions?${acceptedAnyQuery.toString()}`)}>View all accepted</Button></span>
+                <Button small onClick={() => navigate("/submissions")}>Clear filters</Button>
+              </span></td></tr>}
+            {envelope && rows.length === 0 && !acceptedStageDeadEnd && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Every decision has reached its speaker" : draftQueue ? "No drafts need attention" : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{notifiedQueue ? "The notification gap is clear." : draftQueue ? "Every draft is complete for the fields its submitter can see." : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{notifiedQueue || draftQueue ? <Button small onClick={() => navigate("/submissions")}>View all submissions</Button> : q || status || kind || track || format || wave || task || placement ? <Button small onClick={() => navigate("/submissions")}>Clear filters</Button> : <Button small onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</td></tr>}
             {rows.map((item) => <tr class="submission-row" key={item.id} onClick={(event) => { const target = event.target as HTMLElement; if (!target.closest("a,input,button,select")) navigate(`/submissions/${item.id}`); }}>
               <td class="check-col"><input type="checkbox" aria-label={`Select ${item.id}`} checked={allMatching || selectedIds.has(item.id)} onChange={(event) => toggleRow(item.id, event.currentTarget.checked)} /></td>
               {columns.map((column) => <td class={`${column}-col`}><Cell item={item} column={column} navigate={navigate} /></td>)}

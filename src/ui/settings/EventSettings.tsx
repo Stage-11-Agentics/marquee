@@ -3,7 +3,9 @@ import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
-import { DEFAULT_EVENT_ID, loadVenueModel } from "../venues/venue-writer";
+import { EVENT_NAME_CHANGED } from "../shell/identity";
+import { OrganizersCard } from "../setup/OrganizersCard";
+import { loadVenueModel } from "../venues/venue-writer";
 import type { VenueModel } from "../../lib/venues";
 import "./settings.css";
 
@@ -52,7 +54,7 @@ type LoadState =
   | { kind: "error"; model: SettingsModel | null; message: string };
 
 interface Props {
-  eventId?: string;
+  eventId: string;
   navigate: (target: string) => void;
 }
 
@@ -165,7 +167,7 @@ function TrackRow({
   </article>;
 }
 
-export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): JSX.Element {
+export function EventSettings({ eventId, navigate }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", model: null });
   const [venueCounts, setVenueCounts] = useState<VenueCounts | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -228,6 +230,7 @@ export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
         else await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/tracks/${encodeURIComponent(track.id)}`, "/api/v1/events/{eventId}/tracks/{trackId}", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       }
       const response = await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, "/api/v1/events/{eventId}");
+      window.dispatchEvent(new CustomEvent(EVENT_NAME_CHANGED, { detail: response.data.event.name }));
       setState({ kind: "ready", model: response.data });
       setRemovedFormats([]);
       setRemovedTracks([]);
@@ -262,19 +265,28 @@ export function EventSettings({ eventId = DEFAULT_EVENT_ID, navigate }: Props): 
           </div>
         </section>
 
-        <section class="card settings-list-card">
+        <section class="card settings-list-card" id="formats">
           <header class="card-head"><div><h2>Formats</h2><span class="subtle">Duration ranges feed forms and the agenda</span></div><button class="button small" type="button" onClick={() => updateModel((current) => ({ ...current, formats: [...current.formats, { id: temporaryId("format"), event_id: eventId, name: "New format", default_duration_min: 30, min_duration_min: 15, max_duration_min: 60, position: current.formats.length, updated_at: 0 }] }))}>+ Add format</button></header>
           <div class="card-body settings-list">{model.formats.length ? model.formats.map((format, index) => <FormatRow key={format.id} format={format} index={index} count={model.formats.length} onChange={(patch) => updateModel((current) => ({ ...current, formats: current.formats.map((item) => item.id === format.id ? { ...item, ...patch } : item) }))} onRemove={() => { setRemovedFormats((current) => [...current, format.id]); updateModel((current) => ({ ...current, formats: current.formats.filter((item) => item.id !== format.id) })); }} onMove={(delta) => updateModel((current) => reorderFormats(current, moveBy(current.formats, format.id, delta)))} onDrop={(sourceId) => updateModel((current) => reorderFormats(current, moveItem(current.formats, sourceId, format.id)))} />) : <div class="settings-list-empty"><strong>No formats yet</strong><span>Add the first format to give the conference forms and agenda a duration range.</span></div>}</div>
         </section>
 
-        <section class="card settings-list-card">
+        <section class="card settings-list-card" id="tracks">
           <header class="card-head"><div><h2>Tracks</h2><span class="subtle">Colors and order carry through the program</span></div><button class="button small" type="button" onClick={() => updateModel((current) => ({ ...current, tracks: [...current.tracks, { id: temporaryId("track"), event_id: eventId, name: "New track", color: "#7C5CFC", position: current.tracks.length, updated_at: 0 }] }))}>+ Add track</button></header>
           <div class="card-body settings-list">{model.tracks.length ? model.tracks.map((track, index) => <TrackRow key={track.id} track={track} index={index} count={model.tracks.length} onChange={(patch) => updateModel((current) => ({ ...current, tracks: current.tracks.map((item) => item.id === track.id ? { ...item, ...patch } : item) }))} onRemove={() => { setRemovedTracks((current) => [...current, track.id]); updateModel((current) => ({ ...current, tracks: current.tracks.filter((item) => item.id !== track.id) })); }} onMove={(delta) => updateModel((current) => reorderTracks(current, moveBy(current.tracks, track.id, delta)))} onDrop={(sourceId) => updateModel((current) => reorderTracks(current, moveItem(current.tracks, sourceId, track.id)))} />) : <div class="settings-list-empty"><strong>No tracks yet</strong><span>Add the first track to carry color and order through the conference program.</span></div>}</div>
         </section>
 
+        {/* Organizers are instance-level people, surfaced here because this is
+            where an organizer already looks for "who else can get in". */}
+        <div class="settings-organizers span-2"><OrganizersCard /></div>
+
         <section class="card settings-venue-link">
           <div><span class="eyebrow">Venues and rooms</span><h2>One place for every door</h2><p class="subtle tabular">{venueCounts ? `${venueCounts.buildings} buildings · ${venueCounts.rooms} rooms` : "Venue counts unavailable"}</p></div>
           <button class="button primary" type="button" onClick={() => navigate("/settings/venues")}>Open Venues →</button>
+        </section>
+
+        <section class="card settings-venue-link">
+          <div><span class="eyebrow">Speaker tasks</span><h2>What every speaker owes</h2><p class="subtle">Author slide uploads, bios, and release forms, then assign them to speakers.</p></div>
+          <button class="button primary" type="button" onClick={() => navigate("/tasks")}>Open Tasks →</button>
         </section>
       </div>
       <footer class="settings-savebar"><span class="subtle">Changes apply to the conference record after saving.</span><button class="button primary" type="submit" disabled={!dirty}>{dirty ? "Save event settings" : "Event settings saved"}</button></footer>

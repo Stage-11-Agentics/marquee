@@ -16,11 +16,15 @@ import { BUILD_INFO } from "./lib/observability/build-info";
 import { recordCronHeartbeat } from "./lib/observability/heartbeat";
 import { errorFields, loggerForEnv } from "./lib/observability/log";
 import { correlateQueue, instrumentBindings } from "./lib/observability/request-instrumentation";
+import { claimRoutes } from "./routes/claim.route";
 import { landingRoutes } from "./routes/landing.route";
+import { signinRoutes } from "./routes/signin.route";
 import { publicFormRoutes } from "./routes/public-form.route";
 import { publicAgendaRoutes } from "./routes/public-agenda.route";
 import { embedRoutes } from "./routes/embed.route";
 import { calendarRoutes } from "./routes/calendar.route";
+import skill from "../SKILL.md?raw";
+import { serveAssetOrNotFound } from "./routes/not-found.route";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -33,6 +37,7 @@ export interface Env {
   CLIENT_TELEMETRY?: string;
   MAIL_QUEUE: Queue<unknown>;
   RESEND_API_KEY?: string;
+  RESEND_WEBHOOK_SECRET?: string;
   MEDIA: R2Bucket;
   MIRROR_QUEUE: Queue<unknown>;
   OPERATIONS_QUEUE: Queue<unknown>;
@@ -132,10 +137,20 @@ app.get("/__validation/session-cookie", (context) => {
 });
 
 app.route("/", landingRoutes);
+app.route("/", claimRoutes);
+app.route("/", signinRoutes);
 app.route("/", publicFormRoutes);
 app.route("/", publicAgendaRoutes);
 app.route("/", embedRoutes);
 app.route("/", calendarRoutes);
+// Keep the canonical repository skill fetchable by agents; the assets router
+// would otherwise turn this unknown path into the SPA shell.
+app.get("/SKILL.md", () => new Response(skill, {
+  headers: {
+    "Cache-Control": "public, max-age=300",
+    "Content-Type": "text/markdown; charset=utf-8",
+  },
+}));
 // The API app is built from the generated route manifest. Assembly digests the
 // OpenAPI document, which is async, so it is memoized on first request rather
 // than awaited at module scope.
@@ -160,7 +175,11 @@ app.all("/api/*", async (context) => {
   return api.fetch(context.req.raw, instrumented);
 });
 
-app.all("*", (context) => context.env.ASSETS.fetch(context.req.raw));
+// Not `ASSETS.fetch` alone. With `not_found_handling: "none"` in wrangler.jsonc
+// an asset miss reaches this Worker instead of being answered with the SPA
+// shell under a 200, and this handler is where the site finally decides whether
+// a path is a page. See src/routes/not-found.route.tsx.
+app.all("*", serveAssetOrNotFound);
 
 const worker: ExportedHandler<Env> = {
   fetch: app.fetch,

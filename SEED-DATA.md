@@ -45,6 +45,22 @@ submission outside the accepted core — is **invented for demonstration**.
   A real person is never attached to a fabricated submission, and a fabricated
   abstract is never attributed to a real person.
 
+## Demo workflow coverage
+
+The synthetic pool retains its 1,000 deterministic submission rows while making
+the complete organizer pipeline reachable: one existing pool record is `submitted`,
+one is `withdrawn`, and the accepted core contains an unscheduled Wave-1 Session
+whose required speaker tasks are complete. The latter is intentionally a genuine
+**Ready to place** row — it has no agenda slot, no open speaker task, and no
+pending acceptance wave.
+
+Confirmation responses are also deliberately mixed for the walkthrough. The
+seed includes `confirmed`, `pending`, and two `declined` participations. One
+scheduled Session carries two roles for the same person — one confirmed and one
+declined — plus a pending co-speaker role, so the agenda's derived
+`has_declined_participant` flag is true and the submission record can show all
+three response states.
+
 ## Notice
 
 This seed is **derived from the publicly published AI Engineer Summit February

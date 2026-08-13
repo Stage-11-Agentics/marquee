@@ -19,13 +19,15 @@ const tokenScopes = z.object({
 const tokenInput = z.object({
   name: z.string().trim().min(1).max(120),
   scopes: tokenScopes,
-});
+}).strict();
 
 const tokenScopeResponse = z.object({
   permissions: z.array(z.enum(apiGrantSchemaValues)),
   event_ids: z.array(z.string()),
 });
 const tokenSummary = z.object({
+  acts_as_person_id: z.string().nullable(),
+  acting_person_name: z.string().nullable(),
   id: z.string(),
   org_id: z.string(),
   event_id: z.string().nullable(),
@@ -95,6 +97,8 @@ function parseScopes(value: ApiTokenRow["scopes"]): ApiTokenScopes {
 
 function summarizeToken(row: ApiTokenRow) {
   return {
+    acts_as_person_id: (row as ApiTokenRow & { acts_as_person_id?: string | null }).acts_as_person_id ?? null,
+    acting_person_name: (row as ApiTokenRow & { acting_person_name?: string | null }).acting_person_name ?? null,
     id: row.id,
     org_id: row.org_id,
     event_id: row.event_id,
@@ -123,7 +127,13 @@ const listTokens = defineApiRoute(
   async (context) => {
     const auth = requireTokenAdmin(context);
     const rows = await context.env.DB
-      .prepare("SELECT * FROM api_tokens WHERE org_id = ? ORDER BY created_at DESC, id DESC")
+      .prepare(`
+        SELECT token.*, person.name AS acting_person_name
+        FROM api_tokens token
+        LEFT JOIN people person ON person.id = token.acts_as_person_id
+        WHERE token.org_id = ?
+        ORDER BY token.created_at DESC, token.id DESC
+      `)
       .bind(auth.orgId)
       .all<ApiTokenRow>();
     return context.json({ data: rows.results.map(summarizeToken) }, 200);

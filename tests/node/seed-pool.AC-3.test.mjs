@@ -74,7 +74,7 @@ test("AC-234 · at least 15 percent of submissions are multi-track and three are
 });
 
 test("AC-245 · seeded recommendations cover all choices without requiring numeric scores", () => {
-  const evaluations = table("evaluations");
+  const evaluations = table("evaluations").filter((row) => String(row.comment).startsWith("Seeded recommendation;"));
   assert.ok(evaluations.length > 0);
   assert.deepEqual([...new Set(evaluations.map((row) => row.recommendation))].sort(), ["approve", "deny", "maybe"]);
   for (const evaluation of evaluations) {

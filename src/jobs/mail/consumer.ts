@@ -141,15 +141,29 @@ async function allowlistFor(db: D1Database, eventId: string): Promise<Set<string
   }
 }
 
-async function shouldSuppress(db: D1Database, row: OutboxRow): Promise<boolean> {
-  if (row.send_policy === "always_live") return false;
+/**
+ * Exported so a route can tell an operator the truth at the moment they act.
+ * A UI that says "invitation sent" while the consumer will suppress it is a
+ * label that lies, and the operator only finds out when nobody replies.
+ */
+export async function demoMailWouldBeSuppressed(
+  db: D1Database,
+  eventId: string,
+  toEmail: string,
+  sendPolicy: string = "demo_safe",
+): Promise<boolean> {
+  if (sendPolicy === "always_live") return false;
   const event = await db
     .prepare("SELECT demo_mode FROM events WHERE id = ?")
-    .bind(row.event_id)
+    .bind(eventId)
     .first<{ demo_mode: 0 | 1 }>();
   if (!event || event.demo_mode !== 1) return false;
-  const allowlist = await allowlistFor(db, row.event_id);
-  return !allowlist.has(row.to_email.trim().toLowerCase());
+  const allowlist = await allowlistFor(db, eventId);
+  return !allowlist.has(toEmail.trim().toLowerCase());
+}
+
+async function shouldSuppress(db: D1Database, row: OutboxRow): Promise<boolean> {
+  return demoMailWouldBeSuppressed(db, row.event_id, row.to_email, row.send_policy);
 }
 
 async function claimRow(db: D1Database, id: string, now: number): Promise<OutboxRow | null> {
@@ -176,11 +190,14 @@ async function suppressRow(db: D1Database, row: OutboxRow, now: number): Promise
     .run();
 }
 
-async function markSent(db: D1Database, row: OutboxRow, providerMessageId: string, now: number): Promise<void> {
+async function markSent(db: D1Database, row: OutboxRow, providerMessageId: string | null, now: number): Promise<void> {
   await db
     .prepare(
       `UPDATE outbox
-       SET status = 'sent', provider_message_id = ?, error = NULL, sent_at = ?, updated_at = ?
+       SET status = 'sent', provider_message_id = ?, delivery_state = 'unknown',
+           bounce_type = NULL, bounce_subtype = NULL, delivered_at = NULL,
+           delivery_event_id = NULL, delivery_event_created_at = NULL,
+           error = NULL, sent_at = ?, updated_at = ?
        WHERE id = ? AND error = ?`,
     )
     .bind(providerMessageId, now, now, row.id, PROCESSING_SENTINEL)
@@ -234,7 +251,11 @@ export async function processMailOutbox(
       if (!provider) throw new Error("mail provider is unavailable");
       const providerIds = await provider.sendBatch(plain);
       for (const [index, row] of plain.entries()) {
-        await markSent(db, row, providerIds[index] ?? providerIds[0] ?? `batch:${row.idempotency_key}`, now);
+        // A batch response must never borrow another row's id. A synthetic or
+        // first-row fallback would make an inbound bounce land on the wrong
+        // speaker; a missing id stays unknown and the health surface says so.
+        const providerId = providerIds[index]?.trim() || null;
+        await markSent(db, row, providerId, now);
         sent += 1;
       }
     } catch (error) {

@@ -32,11 +32,14 @@ const SORT_REGISTRY = {
 test("AC-108 · the list query defaults, caps, and validates every shared parameter", () => {
   expect(submissionQuery.parse({})).toMatchObject({ page: 1, per_page: 50, sort: "created_at" });
   expect(submissionQuery.parse({ page: "3", per_page: "100" })).toMatchObject({ page: 3, per_page: 100 });
-  expect(submissionQuery.safeParse({ per_page: "101" }).success).toBe(false);
-  expect(submissionQuery.safeParse({ per_page: "0" }).success).toBe(false);
-  expect(submissionQuery.safeParse({ page: "0" }).success).toBe(false);
-  expect(submissionQuery.safeParse({ page: "1.5" }).success).toBe(false);
-  expect(submissionQuery.safeParse({ sort: "secret_column" }).success).toBe(false);
+  // Navigation degrades to the defaults; the caps still bind, so an
+  // out-of-range per_page can never widen a page beyond maxPerPage (MRQ-137).
+  expect(submissionQuery.parse({ per_page: "101" }).per_page).toBe(LIST_DEFAULTS.perPage);
+  expect(submissionQuery.parse({ per_page: "0" }).per_page).toBe(LIST_DEFAULTS.perPage);
+  expect(submissionQuery.parse({ page: "0" }).page).toBe(LIST_DEFAULTS.page);
+  expect(submissionQuery.parse({ page: "1.5" }).page).toBe(LIST_DEFAULTS.page);
+  expect(submissionQuery.parse({ sort: "secret_column" }).sort).toBe("created_at");
+  // Endpoint-owned filters stay strict: an unknown status is still refused.
   expect(submissionQuery.safeParse({ status: "deleted" }).success).toBe(false);
   expect(LIST_DEFAULTS.maxPerPage).toBe(100);
 });

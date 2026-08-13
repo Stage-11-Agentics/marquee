@@ -34,6 +34,14 @@ jobs:
       - run: npx tsc -p tsconfig.test.json --noEmit
       - run: npx vite build
       - run: npm run check:design
+      - run: npm run check:clocks
+      - run: npm run check:schema
       - run: npm test
-        timeout-minutes: 5
+        # Hang detector, not a speed gate — same reasoning as the job-level
+        # limit above. The runner is far smaller than a dev machine, so 5
+        # minutes measured the hardware rather than the change: it failed
+        # main at 1058ed23 with 855 tests passing and nothing broken.
+        # Suite speed stays an objective, reported every run by
+        # scripts/checks/run-test.mjs against its 45s budget.
+        timeout-minutes: 12
       - run: npm run trace:ac -- --scope=merged

@@ -3,21 +3,28 @@ import { Hono } from "hono";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { ICON_LINKS } from "../lib/head-icons";
 import {
   loadPublicAgenda,
+  loadPublicEvent,
   loadPublicSession,
   loadPublicSpeaker,
+  loadPublicSpeakerDirectory,
 } from "../lib/public-site";
+import { PUBLIC_SCHEDULE_SCRIPT } from "../ui/public/agenda/schedule-script";
 import {
   PUBLIC_AGENDA_SCRIPT,
   PUBLIC_SITE_STYLES,
+  PUBLIC_SPEAKER_SCRIPT,
   PublicAgendaPage,
+  PublicAgentsPage,
   PublicNotFoundPage,
   PublicSessionPage,
   PublicSpeakerPage,
+  PublicSpeakerDirectoryPage,
 } from "../ui/public/agenda/PublicAgendaPage";
 
-const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Public program</title></head><body><div id="app"></div><script type="module" src="/src/ui/app.tsx"></script></body></html>`;
+const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Public program</title>${ICON_LINKS}</head><body><div id="app"></div><script type="module" src="/src/ui/app.tsx"></script></body></html>`;
 
 async function assetShell(assets: Fetcher | undefined, request: Request): Promise<string> {
   if (!assets || typeof assets.fetch !== "function") return FALLBACK_DOCUMENT;
@@ -59,21 +66,74 @@ export function notFoundDocument(shell: string): Response {
 
 export const publicAgendaRoutes = new Hono<{ Bindings: Env }>();
 
+/**
+ * "The conference site" is what people call this page, and /site is the address
+ * they try — including anyone reading it off our own published route list.
+ * Without this it falls through to the app shell, whose router has no /site and
+ * renders "Route not found": a dead end on a page that is very much alive at
+ * /agenda. Redirect rather than double-render, so the agenda keeps one address.
+ */
+publicAgendaRoutes.get("/site", (context) => {
+  const url = new URL(context.req.url);
+  return context.redirect(`/agenda${url.search}`, 302);
+});
+
+/**
+ * `?view=mine` is the same page with a different question asked of it, so it is
+ * a URL rather than a client-only mode: linkable, back-button-correct, and
+ * server-rendered with the WHOLE program. The starred set is on the device, so
+ * the server cannot filter it — and a facet-filtered itinerary would count and
+ * chart a fraction of the attendee's picks while claiming to be their schedule.
+ */
 publicAgendaRoutes.get("/agenda", async (context) => {
   const query = context.req.query();
+  const view = query.view === "mine" ? "mine" : "agenda";
   const data = await loadPublicAgenda(context.env.DB, {
     eventSlug: query.event ?? query.event_slug,
-    day: query.day,
-    track: query.track,
-    q: query.q,
+    day: view === "mine" ? undefined : query.day,
+    allDays: view === "mine",
+    track: view === "mine" ? undefined : query.track,
+    format: view === "mine" ? undefined : query.format,
+    room: view === "mine" ? undefined : query.room,
+    q: view === "mine" ? undefined : query.q,
   });
   const shell = await assetShell(context.env.ASSETS, context.req.raw);
   if (!data) return notFoundDocument(shell);
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(
     shell,
-    renderToString(<PublicAgendaPage data={data} />),
-    { title: "Agenda", script: PUBLIC_AGENDA_SCRIPT },
+    renderToString(<PublicAgendaPage data={data} view={view} />),
+    { title: view === "mine" ? "My schedule" : "Agenda", script: `${PUBLIC_AGENDA_SCRIPT}\n${PUBLIC_SCHEDULE_SCRIPT}` },
+  ));
+});
+
+publicAgendaRoutes.get("/agenda/agents", async (context) => {
+  const query = context.req.query();
+  const event = await loadPublicEvent(context.env.DB, query.event ?? query.event_slug);
+  const shell = await assetShell(context.env.ASSETS, context.req.raw);
+  if (!event) return notFoundDocument(shell);
+  context.header("Cache-Control", "public, max-age=300");
+  return context.html(renderPublicDocument(
+    shell,
+    renderToString(<PublicAgentsPage event={event} origin={new URL(context.req.url).origin} />),
+    { title: "For agents", script: PUBLIC_SCHEDULE_SCRIPT },
+  ));
+});
+
+publicAgendaRoutes.get("/speakers", async (context) => {
+  const query = context.req.query();
+  const data = await loadPublicSpeakerDirectory(context.env.DB, {
+    eventSlug: query.event ?? query.event_slug,
+    q: query.q,
+    view: query.view,
+  });
+  const shell = await assetShell(context.env.ASSETS, context.req.raw);
+  if (!data) return notFoundDocument(shell);
+  context.header("Cache-Control", "no-store");
+  return context.html(renderPublicDocument(
+    shell,
+    renderToString(<PublicSpeakerDirectoryPage data={data} />),
+    { title: "Speakers", script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });
 
@@ -85,8 +145,8 @@ publicAgendaRoutes.get("/s/:slug", async (context) => {
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(
     shell,
-    renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} />),
-    { title: result.session.title },
+    renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} origin={new URL(context.req.url).origin} />),
+    { title: result.session.title, script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });
 
@@ -99,6 +159,6 @@ publicAgendaRoutes.get("/p/:slug", async (context) => {
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicSpeakerPage event={result.event} venue={result.venue} speaker={result.speaker} />),
-    { title: result.speaker.name },
+    { title: result.speaker.name, script: `${PUBLIC_SCHEDULE_SCRIPT}\n${PUBLIC_SPEAKER_SCRIPT}` },
   ));
 });

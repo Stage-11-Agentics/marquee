@@ -22,13 +22,22 @@ test("AC-35 + AC-36 + AC-155 + AC-156 + AC-157 · the public form has a 375px fi
   assert.match(component, /scrollWidth > root\.clientWidth/);
   assert.match(component, /data-field-type=\{field\.type\}/);
   assert.match(component, /state\.resume_token/);
+  assert.match(component, /Save draft/);
+  assert.match(component, /draftEmailPrompt/);
+  assert.match(component, /Contact address for your resume link/);
+  assert.match(component, /Copy resume link/);
+  assert.match(component, /navigator\.clipboard/);
+  assert.doesNotMatch(component, /Draft saved locally/);
+  assert.match(component, /one optional co-speaker slot/);
+  assert.match(styles, /\.public-save-status \{[^}]*min-width: 15ch/);
+  assert.match(styles, /\.public-form-actions/);
   // The confirmation's resume link stays on the origin the submitter is looking
   // at; an absolute href sends a local validation run to the deployed host.
   assert.match(component, /href=\{resumeLinkPath\(state\.resume_url\)\}/);
   assert.doesNotMatch(component, /href=\{state\.resume_url\}/);
   assert.match(component, /PATCH/);
   assert.match(component, /Submit abstract/);
-  for (const type of ["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number"]) {
+  for (const type of ["short_text", "long_text", "single_select", "multi_select", "url", "email", "file", "number", "date"]) {
     assert.match(routes, new RegExp(`\\"${type}\\"`));
   }
 });

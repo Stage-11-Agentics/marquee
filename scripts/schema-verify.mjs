@@ -103,11 +103,13 @@ function findSqliteFiles(directory) {
 function parseMirrorColumns(source) {
   const interfaces = new Map();
   for (const match of source.matchAll(
-    /export interface (\w+Row) extends (MutableRecord|ImmutableRecord) \{([\s\S]*?)\n\}/g,
+    /export interface (\w+Row)(?: extends (MutableRecord|ImmutableRecord))? \{([\s\S]*?)\n\}/g,
   )) {
     const columns = names(/^\s{2}(\w+):/gm, match[3]);
-    columns.push("id", "created_at");
-    if (match[2] === "MutableRecord") columns.push("updated_at");
+    if (match[2]) {
+      columns.push("id", "created_at");
+      if (match[2] === "MutableRecord") columns.push("updated_at");
+    }
     interfaces.set(match[1], sorted(columns));
   }
 
@@ -125,9 +127,15 @@ function parseMirrorColumns(source) {
 }
 
 const initialTables = names(/^CREATE TABLE (\w+) \(/gm, initialMigration);
-const expectedTables = names(/^CREATE TABLE (\w+) \(/gm, migration);
-const expectedIndexes = names(/^CREATE (?:UNIQUE )?INDEX (\w+)/gm, migration);
-const expectedTriggers = names(/^CREATE TRIGGER (\w+)/gm, migration);
+// Rebuild migrations create transient *_new tables before dropping and
+// renaming them. They are not part of the final product table registry.
+const expectedTables = names(/^CREATE TABLE (\w+) \(/gm, migration)
+  .filter((name) => !name.endsWith("_new"));
+// A rebuild recreates the original named indexes after dropping the old
+// table. The final schema has one of each, even though the migration history
+// contains the declaration twice.
+const expectedIndexes = [...new Set(names(/^CREATE (?:UNIQUE )?INDEX (?:IF NOT EXISTS )?(\w+)/gm, migration))];
+const expectedTriggers = [...new Set(names(/^CREATE TRIGGER (\w+)/gm, migration))];
 const mirrorColumns = parseMirrorColumns(typeMirror);
 const requiredIndexes = [
   "idx_agenda_event_published_starts",
@@ -166,8 +174,8 @@ const requiredIndexes = [
 
 assert.equal(initialTables.length, 46, "0001 must define exactly 46 product tables");
 assert.equal(new Set(initialTables).size, 46, "0001 contains duplicate table names");
-assert.equal(expectedTables.length, 48, "Applied migrations must define exactly 48 product tables");
-assert.equal(new Set(expectedTables).size, 48, "Applied migrations contain duplicate table names");
+assert.equal(expectedTables.length, 53, "Applied migrations must define exactly 53 product tables");
+assert.equal(new Set(expectedTables).size, 53, "Applied migrations contain duplicate table names");
 for (const index of requiredIndexes) {
   assert.ok(expectedIndexes.includes(index), `Required schema index is missing: ${index}`);
 }
@@ -204,6 +212,13 @@ try {
   assert.match(firstApply.stdout, /0003_building_access_note\.sql/);
   assert.match(firstApply.stdout, /0004_calendar_reversal\.sql/);
   assert.match(firstApply.stdout, /0005_task_cancellation_webhooks\.sql/);
+  assert.match(firstApply.stdout, /0006_audit_log_request_id\.sql/);
+  assert.match(firstApply.stdout, /0007_embed_widget_kinds\.sql/);
+  assert.match(firstApply.stdout, /0008_form_field_dates\.sql/);
+  assert.match(firstApply.stdout, /0009_criterion_kinds\.sql/);
+  assert.match(firstApply.stdout, /0010_bound_form_options\.sql/);
+  assert.match(firstApply.stdout, /0010_saved_embeds\.sql/);
+  assert.match(firstApply.stdout, /0010_evaluation_round_committees\.sql/);
 
   const secondApply = runWrangler([
     "d1",
@@ -291,7 +306,7 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 91, "Expected the exact foreign-key graph");
+  assert.equal(foreignKeyRows.length, 105, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 
@@ -328,8 +343,10 @@ try {
     INSERT INTO people
       (id,org_id,email,name,social_links,is_demo,last_write_source,created_at,updated_at)
       VALUES ('person2','org2','one@example.test','Two','[]',0,'marquee',1,1);
-    INSERT INTO memberships VALUES ('membership1','org1','event1','person1','owner',1,1);
-    INSERT INTO memberships VALUES ('membership2','org1','event1','person1','reviewer',1,1);
+    INSERT INTO memberships (id,org_id,event_id,person_id,role,created_at,updated_at)
+      VALUES ('membership1','org1','event1','person1','owner',1,1);
+    INSERT INTO memberships (id,org_id,event_id,person_id,role,created_at,updated_at)
+      VALUES ('membership2','org1','event1','person1','reviewer',1,1);
     INSERT INTO forms
       (id,event_id,name,slug,kind,status,opens_at,closes_at,welcome_md,per_submitter_limit,
        min_speakers,max_speakers,max_sponsors,password_hash,reminder_offset_hours,
@@ -366,17 +383,21 @@ try {
       ('view1','event1','person1','Mine','{"q":"","filters":{},"sort":[],"columns":["title"]}',1,1);
     INSERT INTO evaluation_plans VALUES
       ('plan1','event1','Plan','',NULL,NULL,'open',1,1);
-    INSERT INTO evaluation_rounds VALUES
-      ('round1','plan1',0,'Round 1','scorecard',0,1,NULL,NULL,1,1);
-    INSERT INTO evaluation_rounds VALUES
-      ('round2','plan1',1,'Round 2','comparison',0,1,NULL,NULL,1,1);
+    INSERT INTO evaluation_rounds
+      (id,plan_id,position,name,mode,anonymized,target_reviews_per_submission,opens_at,closes_at,created_at,updated_at,committee_id)
+      VALUES ('round1','plan1',0,'Round 1','scorecard',0,1,NULL,NULL,1,1,NULL);
+    INSERT INTO evaluation_rounds
+      (id,plan_id,position,name,mode,anonymized,target_reviews_per_submission,opens_at,closes_at,created_at,updated_at,committee_id)
+      VALUES ('round2','plan1',1,'Round 2','comparison',0,1,NULL,NULL,1,1,NULL);
     INSERT INTO reviewer_track_scopes VALUES ('scope1','event1','person1','track1',1,1);
     INSERT INTO committees VALUES ('committee1','event1','Committee',1,1);
     INSERT INTO round_assignments VALUES
       ('assignment1','round1','submission1','person1',NULL,'open',1,1);
-    INSERT INTO evaluations VALUES
+    INSERT INTO evaluations
+      (id,round_id,submission_id,reviewer_person_id,recommendation,score,criteria_scores,comment,abstained,created_at,updated_at) VALUES
       ('evaluation1','round1','submission1','person1','approve',NULL,NULL,'',0,1,1);
-    INSERT INTO evaluations VALUES
+    INSERT INTO evaluations
+      (id,round_id,submission_id,reviewer_person_id,recommendation,score,criteria_scores,comment,abstained,created_at,updated_at) VALUES
       ('evaluation2','round2','submission1','person1','maybe',NULL,NULL,'',0,1,1);
     INSERT INTO comparisons VALUES
       ('comparison1','round2','person1','["submission1","s2","s3"]',
@@ -540,11 +561,11 @@ try {
   );
   expectConstraint(
     "AC-214 reviewer event requirement",
-    "INSERT INTO memberships VALUES ('bad-membership','org1',NULL,'person1','reviewer',1,1)",
+    "INSERT INTO memberships (id,org_id,event_id,person_id,role,created_at,updated_at) VALUES ('bad-membership','org1',NULL,'person1','reviewer',1,1)",
   );
   expectConstraint(
     "membership exact uniqueness",
-    "INSERT INTO memberships VALUES ('duplicate-membership','org1','event1','person1','reviewer',1,1)",
+    "INSERT INTO memberships (id,org_id,event_id,person_id,role,created_at,updated_at) VALUES ('duplicate-membership','org1','event1','person1','reviewer',1,1)",
   );
   expectConstraint(
     "AC-222 participation triple",
@@ -591,7 +612,7 @@ try {
   );
   expectConstraint(
     "round-aware evaluation uniqueness",
-    "INSERT INTO evaluations VALUES " +
+    "INSERT INTO evaluations (id,round_id,submission_id,reviewer_person_id,recommendation,score,criteria_scores,comment,abstained,created_at,updated_at) VALUES " +
       "('duplicate-evaluation','round1','submission1','person1','deny',NULL,NULL,'',0,1,1)",
   );
   expectConstraint(

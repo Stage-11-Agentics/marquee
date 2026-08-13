@@ -62,11 +62,19 @@ async function buildFixture(): Promise<void> {
       wave_id TEXT, origin TEXT NOT NULL, submitted_at INTEGER, updated_at INTEGER NOT NULL,
       search_blob TEXT NOT NULL DEFAULT ''
     );
-    CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, org_id TEXT NOT NULL, name TEXT NOT NULL, company TEXT);
+    CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, org_id TEXT NOT NULL, name TEXT NOT NULL, company TEXT, kind TEXT NOT NULL DEFAULT 'human');
     CREATE TABLE IF NOT EXISTS participations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, person_id TEXT NOT NULL, role TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS tracks (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS submission_tracks (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, track_id TEXT NOT NULL, is_primary INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS evaluations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, score REAL);
+    CREATE TABLE IF NOT EXISTS evaluations (
+      id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, round_id TEXT,
+      reviewer_person_id TEXT, recommendation TEXT, score REAL, criteria_scores TEXT,
+      comment TEXT NOT NULL DEFAULT '', abstained INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS evaluation_rounds (id TEXT PRIMARY KEY, mode TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS rubric_criteria (
+      id TEXT PRIMARY KEY, round_id TEXT NOT NULL, name TEXT NOT NULL, weight_pct REAL NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS buildings (id TEXT PRIMARY KEY, name TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, building_id TEXT NOT NULL, name TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS agenda_items (
@@ -82,8 +90,8 @@ async function buildFixture(): Promise<void> {
     DELETE FROM buildings; DELETE FROM events;
     INSERT INTO events VALUES ('${EVENT_ID}', 'America/New_York');
     INSERT INTO formats VALUES ('fmt-stage', 'Stage Talk');
-    INSERT INTO people VALUES ('person-zoe', 'org-list', 'Zoë Łukaszewicz-García', 'Société Générale');
-    INSERT INTO people VALUES ('person-reviewer', 'org-list', 'Different Event Reviewer', 'Other Org');
+    INSERT INTO people (id, org_id, name, company) VALUES ('person-zoe', 'org-list', 'Zoë Łukaszewicz-García', 'Société Générale');
+    INSERT INTO people (id, org_id, name, company) VALUES ('person-reviewer', 'org-list', 'Different Event Reviewer', 'Other Org');
     INSERT INTO memberships VALUES ('membership-other-event', 'org-list', 'evt-other', 'person-reviewer', 'reviewer', 1700000000000, 1700000000000);
     INSERT INTO auth_sessions VALUES ('${DIFFERENT_EVENT_SESSION}', 'person-reviewer', 'reviewer', 4102444800000, 'fixture', NULL, 1700000000000, 1700000000000);
     INSERT INTO tracks VALUES ('track-agents', 'Agents', '#db4c3f', 1), ('track-evals', 'Evals', '#0d9488', 2);
@@ -189,7 +197,7 @@ describe.sequential("MRQ-9 submissions list", () => {
 
   test("CONTRACT · the fixed column registry is complete and Title cannot be removed", () => {
     expect(SUBMISSION_COLUMN_REGISTRY.map((column) => column.label)).toEqual([
-      "Type", "ID", "Title", "Speakers", "Status", "Notified", "Tracks", "Score",
+      "Type", "ID", "Title", "Speakers", "Status", "Notified", "Tracks", "Weighted score",
       "Submitted", "Last updated", "Origin", "Missing fields",
     ]);
     expect(SUBMISSION_COLUMN_REGISTRY.find((column) => column.id === "title")?.required).toBe(true);

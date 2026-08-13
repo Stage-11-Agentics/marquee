@@ -5,18 +5,18 @@
  *
  * The mail provider answers a send with *accepted*, not *delivered*. Whether a
  * message actually reached a mailbox is reported later, asynchronously, over a
- * provider webhook Marquee does not yet receive. So `outbox.error` never holds a
- * bounce — it holds the reasons a message never left the building at all. This
- * module classifies those reasons, and only those.
+ * provider webhook. The structured provider state is stored beside the outbox
+ * row; `outbox.error` still holds only the reasons a message never left the
+ * building at all. This module classifies those send failures, and only those.
  *
  * Two consequences the screens above this module have to honour:
  *
  *   1. Nothing here may say **delivered**. Past a successful send, delivery is
  *      genuinely unknown, and a screen that claims otherwise is lying to someone
  *      who is trying to find out whether a speaker was told.
- *   2. A hard bounce on a first send is invisible to this classifier — the row
- *      stays `sent` with no error at all. The one bounce it can see is a *repeat*
- *      send to an address the provider has since suppressed.
+ *   2. A provider bounce never enters this classifier. Delivery state has its
+ *      own structured path so provider prose cannot be mistaken for a send
+ *      failure.
  *
  * ## Why scope is the distinction that earns its keep
  *

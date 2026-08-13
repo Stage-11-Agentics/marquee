@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marquee — Kill My SaaS submission</title>
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* latent.space register — tokens and tropes duplicated inline because this is
+   a standalone static asset with no runtime dependency on the app bundle.
+   Source of truth: src/styles/themes/latent-space.css (measured contrast in
+   its header) and prototypes/themes/latent-space.html (design contract).
+   One two-stop gradient carries all chroma on near-black; body sets in the
+   Substack serif stack; Syncopate is the display face; figures and
+   micro-labels stay mono; labels are lowercase (data keeps its case). */
+  :root {
+    --bg:#0b0b0e; --surface:#131318; --surface-sunk:#0f0f13;
+    --ink:#f2f0f5; --ink-soft:#c7c4cf; --muted:#8b8896;
+    --rule:#26262e; --rule-soft:#1d1d24;
+    --accent:#e56eff; --accent-ink:#e56eff;
+    --success-soft:#1a1a21; --warning-soft:#2a1f16; --alarm-wash:#2a1626;
+    --success-ink:#c9cdd4; --success-line:#33333c;
+    --warning-ink:#ffc890; --warning-line:#5c4122;
+    --danger-ink:#f0a0ff; --danger-line:#5c2a52;
+    --ls-grad-from:#ffa363; --ls-grad-to:#e56eff;
+    --ls-grad:linear-gradient(92deg, var(--ls-grad-from) 0%, var(--ls-grad-to) 100%);
+    --ls-grad-wash:linear-gradient(92deg, rgba(255,163,99,.14), rgba(229,110,255,.14));
+    --ls-ink-on-grad:#0b0b0e;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --display:"Syncopate","Arial Black",sans-serif;
+    --radius:3px; --hair:1px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { color-scheme:dark; }
+  /* The day skin's 8px graph paper is invisible on near-black, so the ground
+     is plain and the masthead's bottleneck silhouette carries the decoration. */
+  body {
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    font-size:15.5px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:960px; margin:0 auto; padding:32px 24px 64px; }
+  a { color:var(--accent-ink); }
+  code, .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  code { background:var(--surface-sunk); border:var(--hair) solid var(--rule-soft);
+         border-radius:var(--radius); padding:1px 5px; font-size:12.5px;
+         overflow-wrap:anywhere; }
+  pre { background:var(--surface-sunk); border:var(--hair) solid var(--rule-soft);
+        border-radius:var(--radius); padding:10px 12px; overflow-x:auto;
+        font-family:var(--mono); font-size:12.5px; line-height:1.5; }
+  pre code { background:none; border:none; padding:0; }
+  .micro { font-family:var(--mono); font-size:10.5px; letter-spacing:.14em;
+           text-transform:lowercase; color:var(--muted); }
+
+  /* Masthead — the register's poster: hex mark, gradient wordmark, and the
+     VAE-bottleneck silhouette drawn behind it. */
+  header.mast { background:var(--surface); border:var(--hair) solid var(--rule);
+    border-radius:var(--radius); padding:28px 28px 24px; margin-bottom:24px;
+    position:relative; overflow:hidden; }
+  .bottleneck { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  /* At phone widths the mast is far taller than the silhouette's 1200×170 box
+     and preserveAspectRatio:none stretches the strokes into stray diagonals —
+     the trope only earns its place at desktop proportions. */
+  @media (max-width:720px){ .bottleneck { display:none; } }
+  .mark svg { pointer-events:none; user-select:none; -webkit-user-select:none; }
+  .mast > :not(.bottleneck) { position:relative; }
+  .markrow { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .mark { display:flex; align-items:center; gap:12px;
+    font-family:var(--display); font-weight:700; font-size:26px;
+    letter-spacing:.06em; text-transform:lowercase;
+    background:var(--ls-grad); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  h1.oneliner { font-size:19px; font-weight:500; color:var(--ink-soft); margin-top:14px; max-width:44em; }
+  .mastmeta { margin-top:18px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .btn { display:inline-block; font-family:var(--mono); font-size:13px; text-decoration:none;
+    text-transform:lowercase; border-radius:var(--radius); padding:8px 14px;
+    border:var(--hair) solid var(--rule); }
+  .btn.primary { background:var(--ls-grad); color:var(--ls-ink-on-grad);
+    border-color:transparent; font-weight:700; }
+  .btn.quiet   { background:var(--surface); color:var(--accent); }
+  .stamp { font-family:var(--mono); font-size:11.5px; color:var(--muted); }
+
+  section { background:var(--surface); border:var(--hair) solid var(--rule);
+    border-radius:var(--radius); padding:24px 28px; margin-bottom:24px; }
+  h2 { font-family:var(--display); font-weight:400; font-size:15px;
+    letter-spacing:.1em; text-transform:lowercase; margin-bottom:4px; }
+  h2 .micro { display:block; margin-bottom:8px; font-family:var(--mono);
+    letter-spacing:.14em; }
+  .lede { color:var(--ink-soft); margin-bottom:14px; max-width:52em; font-style:italic; }
+
+  /* Seats */
+  .seats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  @media (max-width:720px){ .seats { grid-template-columns:1fr; } }
+  .seat { border:var(--hair) solid var(--rule-soft); border-radius:var(--radius);
+    background:var(--surface-sunk); padding:14px 16px; }
+  .seat b { display:block; margin-bottom:4px; }
+  .seat p { font-size:13.5px; color:var(--ink-soft); }
+
+  /* Stations */
+  ol.stations { list-style:none; counter-reset:st; }
+  ol.stations li { counter-increment:st; display:grid;
+    grid-template-columns:44px 1fr; gap:0 14px; padding:13px 0;
+    border-top:var(--hair) solid var(--rule-soft); }
+  ol.stations li:first-child { border-top:none; }
+  ol.stations li::before { content:counter(st,decimal-leading-zero);
+    font-family:var(--mono); font-size:20px; color:var(--muted); padding-top:1px; }
+  .st-head { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:baseline; }
+  .st-head b { font-size:14.5px; }
+  .st-link { font-family:var(--mono); font-size:12px; white-space:nowrap; }
+  .st-body { font-size:13.5px; color:var(--ink-soft); margin-top:2px; max-width:56em; }
+
+  /* Brief table */
+  .tscroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  td { overflow-wrap:anywhere; }
+  th { text-align:left; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em;
+    text-transform:lowercase; color:var(--muted); font-weight:500;
+    padding:6px 10px 6px 0; border-bottom:var(--hair) solid var(--rule); }
+  td { padding:9px 10px 9px 0; border-bottom:var(--hair) solid var(--rule-soft);
+    vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  /* Status is position on the gradient: orange end = warn, pink end = the
+     loud one; ok carries no chroma in this register. */
+  .chip { display:inline-block; font-family:var(--mono); font-size:10.5px;
+    letter-spacing:.08em; text-transform:lowercase; border-radius:var(--radius);
+    padding:2px 7px; white-space:nowrap; border:var(--hair) solid var(--rule); }
+  .chip.ok    { background:var(--success-soft); color:var(--success-ink); border-color:var(--success-line); }
+  .chip.part  { background:var(--warning-soft); color:var(--warning-ink); border-color:var(--warning-line); }
+  .chip.no    { background:var(--surface-sunk); color:var(--muted); border-color:var(--rule-soft); }
+  .chip.extra { background:var(--alarm-wash); color:var(--danger-ink); border-color:var(--danger-line); }
+
+  /* Differentiator cards */
+  .cards { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:720px){ .cards { grid-template-columns:1fr; } }
+  .card { border:var(--hair) solid var(--rule-soft); border-radius:var(--radius);
+    padding:14px 16px; background:var(--surface); }
+  .card b { display:block; font-size:14px; margin-bottom:4px; }
+  .card p { font-size:13px; color:var(--ink-soft); }
+  .card .check { margin-top:8px; font-size:12px; font-family:var(--mono); }
+  .card .check a { text-decoration-thickness:1px; }
+
+  /* Two-col bonus */
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media (max-width:720px){ .split { grid-template-columns:1fr; } }
+  ul.flat { list-style:none; }
+  ul.flat li { padding:8px 0; border-top:var(--hair) solid var(--rule-soft);
+    font-size:13.5px; color:var(--ink-soft); }
+  ul.flat li:first-child { border-top:none; }
+  ul.flat b { color:var(--ink); }
+
+  footer { text-align:center; color:var(--muted); font-size:12.5px; padding-top:8px; }
+  footer .mono { font-size:11.5px; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="ls-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffa363"/>
+      <stop offset="1" stop-color="#e56eff"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+<header class="mast">
+  <svg class="bottleneck" viewBox="0 0 1200 170" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0,14 C 320,14 420,68 600,68 C 780,68 880,14 1200,14 L1200,156 C 880,156 780,102 600,102 C 420,102 320,156 0,156 Z"
+          fill="url(#ls-grad)" opacity="0.055"/>
+    <path d="M0,14 C 320,14 420,68 600,68 C 780,68 880,14 1200,14" fill="none" stroke="url(#ls-grad)" stroke-width="1" opacity="0.35"/>
+    <path d="M0,156 C 320,156 420,102 600,102 C 780,102 880,156 1200,156" fill="none" stroke="url(#ls-grad)" stroke-width="1" opacity="0.35"/>
+  </svg>
+  <div class="markrow">
+    <div class="mark"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,1.5 29,9 29,23 16,30.5 3,23 3,9" fill="url(#ls-grad)"/><text x="16" y="21" text-anchor="middle" style="font:700 13px var(--display);fill:#0b0b0e">m</text></svg>marquee</div>
+    <div class="micro"><span style="text-transform:none">Kill My SaaS 1</span> · submission · <span style="text-transform:none">Stage 11</span></div>
+  </div>
+  <h1 class="oneliner">Open-source conference program operations — CFP, review,
+  acceptance, speaker onboarding, agenda, publish. One loop, no dead ends, on
+  infrastructure you own.</h1>
+  <div class="mastmeta">
+    <a class="btn primary" href="https://marquee.stage11.dev/submissions?demo=organizer">enter as organizer</a>
+    <a class="btn primary" href="https://marquee.stage11.dev/reviewer?demo=reviewer">enter as reviewer</a>
+    <a class="btn primary" href="https://marquee.stage11.dev/portal?demo=speaker">enter as speaker</a>
+    <a class="btn quiet" href="https://github.com/Stage-11-Agentics/marquee">Source · Apache-2.0</a>
+  </div>
+  <div class="mastmeta">
+    <span class="stamp">one click each, no signup, no password — every seat is a real session ·
+    populated with AI Engineer NYC 2026, 1,001 seeded submissions ·
+    <code>curl marquee.stage11.dev/health</code> names the deployed build</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="micro">No signup · no password</span>Three seats, one click each</h2>
+  <p class="lede">Each button above (and here) opens a real session against the same
+  data — not a preview mode. Prefer typing? <code>organizer@demo.com</code>,
+  <code>reviewer@demo.com</code>, and <code>speaker@demo.com</code> entered in the
+  <a href="https://marquee.stage11.dev/signin">/signin</a> email form open the same
+  seats. Sign out there to switch.</p>
+  <div class="seats">
+    <div class="seat"><b><a href="https://marquee.stage11.dev/submissions?demo=organizer">Organizer →</a></b>
+      <p>The whole program: pipeline dashboard, 1,000-row submissions register,
+      form builder, evaluation plans, agenda builder, onboarding chase board, comms.</p></div>
+    <div class="seat"><b><a href="https://marquee.stage11.dev/reviewer?demo=reviewer">Reviewer →</a></b>
+      <p>A scoped evaluation queue — only this reviewer's authorized tracks, enforced
+      at the API. Approve / Maybe / Deny, anonymous by default.</p></div>
+    <div class="seat"><b><a href="https://marquee.stage11.dev/portal?demo=speaker">Speaker →</a></b>
+      <p>An accepted speaker's portal: status with its wave, the scheduled slot with
+      an arrival plan, onboarding tasks, self-managed bio and files.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="micro">The walkthrough, station by station</span>Test it in ten minutes</h2>
+  <p class="lede">The same loop as the briefing video, in its order. Each station
+  links straight to the surface.</p>
+  <ol class="stations">
+    <li><div>
+      <div class="st-head"><b>Event settings</b>
+        <span class="st-link"><a href="https://marquee.stage11.dev/settings">/settings</a> · organizer</span></div>
+      <div class="st-body">Conference details, timezone (agenda and calendar invites
+      inherit it), session formats with duration ranges, tracks. Edits save as you make them.</div>
+    </div></li>
+    <li><div>
+      <div class="st-head"><b>Build a form</b>
+        <span class="st-link"><a href="https://marquee.stage11.dev/forms">/forms</a> · organizer</span></div>
+      <div class="st-body">Five build steps, nine field types, conditional visibility,
+      track routing. Abstracts and Sessions are distinct form kinds — Sessions bypass
+      evaluation. Options bind to Settings, not hand-typed lists.</div>
+    </div></li>
+    <li><div>
+      <div class="st-head"><b>Open the CFP logged out</b>
+        <span class="st-link"><a href="https://marquee.stage11.dev/f/cfp">/f/cfp</a> · no seat</span></div>
+      <div class="st-body">A real server-rendered page — the form is in the HTML.
+      Try it in a private window.</div>
+    </div></li>
+    <li><div>
+      <div class="st-head"><b>Submit as a speaker</b>
+        <span class="st-link">same page</span></div>
+      <div class="st-body">Validation fires on blur and again on the server; drafts
+      autosave with a private resume link; the headshot shows a crop preview before
+      submit. The confirmation keeps the resume link and offers the speaker portal.</div>
+    </div></li>
+    <li><div>
+      <div class="st-head"><b>See the speaker's side</b>
+        <span class="st-link"><a href="https://marquee.stage11.dev/portal?demo=speaker">enter as speaker</a></span></div>
+      <div class="st-body">Acceptance status ("Accepted · Wave 1"), the scheduled slot
+      with room, building, address and an arrival plan, per-role confirmation,
+      self-managed bio, and the onboarding task list — hotel &amp; travel first.</div>
+    </div></li>
+    <li><div>
+      <div class="st-head"><b>Set up evaluation</b>
+        <span class="st-link"><a href="https://marquee.stage11.dev/evaluation">/evaluation</a> · organizer</span></div>
+      <div class="st-body">Rounds each with their own scorecard, reviewer pools,
+      3-per-submission distribution, anonymous toggles, results with per-criterion CSV
+      export — and Agent evaluator seats: a reviewer identity you can hand to an AI,
+      with its own credential, prompt, and rubric.</div>
+    </div></li>
+    <li><div>
+      <div class="st-head"><b>Evaluate</b>
+        <span class="st-link"><a href="https://marquee.stage11.dev/reviewer?demo=reviewer">enter as reviewer</a></span></div>
+      <div class="st-body">A track-scoped queue. Approve / Maybe / Deny is the primary
+      path (keyboard: A M D, 1–5, Enter); the weighted scorecard is optional depth.
+      Declare-conflict recuses. Out-of-scope requests 403 — the scoping is real.</div>
+    </div></li>
+    <li><div>
+      <div class="st-head"><b>Push accepted sessions to the agenda</b>
+        <span class="st-link"><a href="https://marquee.stage11.dev/agenda-builder">/agenda-builder</a> · organizer</span></div>
+      <div class="st-body">Drag from the unscheduled tray; format defaults set duration;
+      no save button. List, day, week, <b>track</b>, room views. Room, double-booking,
+      and building-transit conflicts warn live. Publishing is a review gate that lists
+      exactly what goes public.</div>
+    </div></li>
+    <li><div>
+      <div class="st-head"><b>View the public program</b>
+        <span class="st-link"><a href="https://marquee.stage11.dev/agenda">/agenda</a> ·
+        <a href="https://marquee.stage11.dev/speakers">/speakers</a> · no seat</span></div>
+      <div class="st-body">Day tabs, filters, session pages with add-to-calendar,
+      the speaker directory, an <a href="https://marquee.stage11.dev/embed/config">embed
+      builder</a> with copyable code — and attendees can star sessions into
+      <a href="https://marquee.stage11.dev/agenda?view=mine">a personal schedule</a>
+      with a shareable link and calendar feed. No account.</div>
+    </div></li>
+  </ol>
+</section>
+
+<section>
+  <h2><span class="micro">The brief, item by item</span>Six asked, three struck — honestly graded</h2>
+  <div class="tscroll"><table>
+    <thead><tr><th style="width:46%">Brief item</th><th style="width:14%">Status</th><th>See it / the honest note</th></tr></thead>
+    <tbody>
+      <tr><td>1 · CFP forms with conditional logic &amp; category routing</td>
+        <td><span class="chip ok">SHIPPED</span></td>
+        <td><a href="https://marquee.stage11.dev/forms">/forms</a> ·
+            <a href="https://marquee.stage11.dev/f/cfp">/f/cfp</a>. Gaps: no WYSIWYG,
+            no section headers — plain fields with character budgets.</td></tr>
+      <tr><td>2 · Self-service speaker portal</td>
+        <td><span class="chip ok">SHIPPED</span></td>
+        <td><a href="https://marquee.stage11.dev/signin">speaker seat</a>. Gaps: no
+            pronouns field, no admin↔portal impersonation.</td></tr>
+      <tr><td>3 · Templated comms + calendar invites (Gmail/Outlook/iCal)</td>
+        <td><span class="chip ok">SHIPPED</span></td>
+        <td><a href="https://marquee.stage11.dev/communications">/communications</a>.
+            13 lifecycle templates; ICS with request, update (SEQUENCE), and cancel.
+            Demo mail is sandboxed by design — full renders visible, nobody real gets mailed.</td></tr>
+      <tr><td>4 · Evaluation &amp; scoring, multi-round</td>
+        <td><span class="chip ok">SHIPPED</span></td>
+        <td><a href="https://marquee.stage11.dev/evaluation">/evaluation</a>. Rounds with
+            per-round scorecards, committees, pools, blind review, comparison mode,
+            track scoping. AI-assisted review deliberately not built.</td></tr>
+      <tr><td>5 · Drag-and-drop agenda, conflict detection, five views</td>
+        <td><span class="chip ok">SHIPPED</span></td>
+        <td><a href="https://marquee.stage11.dev/agenda-builder">/agenda-builder</a>.
+            All five views including track — the one the incumbent lacks. Three conflict
+            classes: room, speaker, building transit.</td></tr>
+      <tr><td>6 · Real-time dashboard of outstanding speaker tasks</td>
+        <td><span class="chip ok">SHIPPED</span></td>
+        <td><a href="https://marquee.stage11.dev/onboarding">/onboarding</a>. Speaker ×
+            task matrix, severity-ordered, nudge in place. The incumbent's answer is a
+            weekly digest email; the other tool has no task system at all.</td></tr>
+      <tr><td>7 · <s>Accelevents integration</s></td>
+        <td><span class="chip no">NOT BUILT</span></td>
+        <td>Skipped per the ruling. The seam (REST API + import boundary) is documented
+            as an extension point.</td></tr>
+      <tr><td>8 · <s>Portal resource / wiki pages</s></td>
+        <td><span class="chip no">NOT BUILT</span></td>
+        <td>Struck in the brief; not built.</td></tr>
+      <tr><td>9 · <s>Embeddable gallery &amp; schedule</s></td>
+        <td><span class="chip extra">BUILT ANYWAY</span></td>
+        <td>Struck, but the video wants it — so:
+            <a href="https://marquee.stage11.dev/embed/config">an embed builder</a>,
+            saved embeds with a kill switch, 30-second freshness (the incumbent refreshes hourly).</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="micro">The bonuses</span>Three claimed, two forfeited on purpose</h2>
+  <div class="split">
+    <div>
+      <ul class="flat">
+        <li><b>Cloudflare</b> — one Worker: D1 source of truth, R2 uploads, KV cache,
+            four Queues. The live site is the README's own deploy sequence.</li>
+        <li><b>API</b> — 195 operations the admin UI itself runs on; live
+            <a href="https://marquee.stage11.dev/api/openapi.json">OpenAPI 3.1</a> +
+            <a href="https://marquee.stage11.dev/api/docs">rendered reference</a>;
+            scoped tokens; a 48-command CLI and an agent skill file in the repo.</li>
+        <li><b>Speed</b> — server-rendered public pages answer in ~a quarter second;
+            the register renders ~1,000 real rows. Measure it:
+            <code>curl -so /dev/null -w '%{time_starttransfer}\n' https://marquee.stage11.dev/agenda</code></li>
+      </ul>
+    </div>
+    <div>
+      <ul class="flat">
+        <li><b>Airtable — not claimed.</b> D1 stays the source of truth at 1,000+
+            submissions; an async Airtable mirror is a designed extension point,
+            not a shipped feature. We forfeit the bonus rather than fake it.</li>
+        <li><b>Forge hosting — not claimed.</b> The repo is on GitHub.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="micro">Beyond the brief</span>Eight things nobody asked for</h2>
+  <p class="lede">Each checkable in under a minute.</p>
+  <div class="cards">
+    <div class="card"><b>The UI is a client of its own API</b>
+      <p>A route can only exist with its OpenAPI contract attached — a UI-only feature
+      is structurally unwritable. 195 operations, none privileged.</p>
+      <p class="check"><a href="https://marquee.stage11.dev/api/docs">/api/docs</a></p></div>
+    <div class="card"><b>Content-addressed API docs</b>
+      <p>The OpenAPI document's ETag is the SHA-256 of its own bytes — docs-match-code,
+      provable with curl.</p>
+      <p class="check"><code>curl -s …/api/openapi.json | shasum -a 256</code> vs the ETag header</p></div>
+    <div class="card"><b>A 48-command CLI + agent skill file</b>
+      <p>The whole operating loop as dependency-free commands; <code>SKILL.md</code> is
+      generated from the CLI and gated by a test that fails if it ever needs curl.
+      Four operator screens carry a "Hand this to your agent" brief.</p>
+      <p class="check"><code>node cli/marquee.mjs --help</code></p></div>
+    <div class="card"><b>Demo-safe mail</b>
+      <p>Press Send anywhere — bulk included. Non-allowlisted addresses render and log
+      but are never delivered. Judging a comms product shouldn't require restraint.</p>
+      <p class="check"><a href="https://marquee.stage11.dev/communications">/communications</a></p></div>
+    <div class="card"><b>The "decided but not told" number</b>
+      <p>The dashboard counts decisions whose speakers haven't heard yet — hundreds in
+      the demo — one click from the compose flow that fixes it. Nobody else computes this.</p>
+      <p class="check"><a href="https://marquee.stage11.dev/dashboard">/dashboard</a></p></div>
+    <div class="card"><b>Reversal is designed</b>
+      <p>Un-accepting enumerates everything it touches — tasks, queued mail, calendar
+      invites — cancel-or-retain per item, attributed history, real ICS CANCEL.</p>
+      <p class="check">accept → un-accept any submission as organizer</p></div>
+    <div class="card"><b>Transit conflicts</b>
+      <p>The venue model knows buildings as places. "Leave by 4:00 PM" is computed from
+      the speaker's own previous session — a third conflict class no competitor models.</p>
+      <p class="check"><a href="https://marquee.stage11.dev/agenda-builder">/agenda-builder</a> · speaker portal arrival plan</p></div>
+    <div class="card"><b>Never phones home</b>
+      <p>No vendor SDK, no analytics, no telemetry. A speaker's email cannot be logged —
+      the log builder has no field for it. Allowlist, not scrubbing.</p>
+      <p class="check"><code>docs/OBSERVABILITY.md</code> — every event, every field, three off switches</p></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="micro">For the technical judge</span>Numbers you can check</h2>
+  <div class="tscroll"><table>
+    <thead><tr><th style="width:44%">Claim</th><th>Check</th></tr></thead>
+    <tbody>
+      <tr><td>195 API operations · 154 paths · OpenAPI 3.1</td>
+        <td><code>curl -s https://marquee.stage11.dev/api/openapi.json</code></td></tr>
+      <tr><td>Docs are content-addressed</td>
+        <td>ETag header equals <code>shasum -a 256</code> of the body</td></tr>
+      <tr><td>388 node + 855 worker tests, hermetic</td>
+        <td><code>npm test</code> in the repo — no network, no live services</td></tr>
+      <tr><td>Public pages are server-rendered</td>
+        <td><code>curl https://marquee.stage11.dev/agenda</code> — the program is in the HTML</td></tr>
+      <tr><td>Every test names its acceptance criterion</td>
+        <td>test titles carry AC-ids, enforced by an AST-parsing gate (<code>scripts/checks/trace-ac.mjs</code>)</td></tr>
+      <tr><td>What build is live right now</td>
+        <td><code>curl https://marquee.stage11.dev/health</code></td></tr>
+    </tbody>
+  </table></div>
+  <p class="lede" style="margin-top:14px">Stack, in one breath: one Cloudflare Worker —
+  Hono routes it, Preact renders it, Zod validates every boundary, TypeScript throughout.
+  D1 is the source of truth (18 migrations with constraints in the database), R2 holds
+  uploads, KV caches, four Queues keep mail and bulk work off the request path.</p>
+</section>
+
+<section>
+  <h2><span class="micro">Stated, not discovered</span>What we didn't build</h2>
+  <ul class="flat">
+    <li>No Airtable persistence (forfeited, above) · no AI-assisted review (taken at your
+        word) · no Accelevents · no wiki pages · no XLSX (CSV opens in Excel) ·
+        English only · no payments.</li>
+    <li>No WYSIWYG editor, no admin↔portal impersonation, no pronouns field, no outbound
+        webhook delivery (contract defined, writer not built — the README says so).</li>
+    <li>Calendar OAuth write is an extension point; invites are full-lifecycle ICS with
+        Google/Outlook links, per the ruling that ICS is enough.</li>
+  </ul>
+</section>
+
+<footer>
+  <p><b>Marquee</b> · built by Stage 11 for Kill My SaaS 1 ·
+  <a href="https://github.com/Stage-11-Agentics/marquee">github.com/Stage-11-Agentics/marquee</a> ·
+  Apache-2.0</p>
+  <p class="mono" style="margin-top:6px">four days · an agent fleet in 89 worktrees ·
+  ~140 merged PRs · the agents' coordination board ships in the repo, history and all</p>
+  <p class="mono" style="margin-top:6px">this page wears the latent.space register —
+  a nod to its readers; the product underneath is all Marquee</p>
+</footer>
+
+</div>
+</body>
+</html>

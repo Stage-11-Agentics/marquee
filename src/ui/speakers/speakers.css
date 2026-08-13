@@ -1,0 +1,115 @@
+.speakers-page { display: grid; gap: 16px; }
+/* Declared here rather than borrowed from whichever screen happens to be in the
+   same bundle; a label that goes unstyled is a label that becomes visible. */
+.speakers-page .sr-only { border: 0; clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
+
+/* The header action keeps one width across "Add speaker" / "Close form": a
+   control that resizes when you press it moves everything beside it. */
+.speaker-fixed-action { align-items: center; background: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius); color: #fff; display: inline-flex; flex: 0 0 132px; font: 600 10px/1 var(--mono); justify-content: center; min-height: 34px; padding: 8px 10px; white-space: nowrap; width: 132px; }
+.speaker-fixed-action:hover { background: var(--accent-dark); }
+.speaker-fixed-action:disabled { cursor: default; opacity: .45; }
+
+.speaker-add { display: grid; gap: 12px; padding: 16px; }
+.speaker-add-head { display: grid; gap: 4px; }
+.speaker-add-head h2 { font: 500 16px/1.2 var(--display); }
+.speaker-add-head span { color: var(--muted); font: 10px/1.4 var(--mono); }
+.speaker-add-foot { display: flex; gap: 8px; justify-content: flex-end; }
+
+.speaker-form-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.speaker-field, .speaker-board-filters label { color: var(--muted); display: grid; font: 600 9px/1.2 var(--mono); gap: 5px; letter-spacing: .1em; text-transform: uppercase; }
+.speaker-field-wide { margin-top: 10px; }
+.speaker-field input, .speaker-field select, .speaker-field textarea, .speaker-search input, .speaker-board-filters select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font: 12px/1.4 var(--sans); min-height: 34px; outline: none; padding: 8px 9px; text-transform: none; width: 100%; }
+.speaker-field textarea { resize: vertical; }
+.speaker-field input:focus, .speaker-field select:focus, .speaker-field textarea:focus, .speaker-search input:focus, .speaker-board-filters select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.speaker-inline-error { color: var(--alarm); font: 10px/1.4 var(--mono); }
+
+.speaker-board { min-width: 0; overflow: hidden; }
+.speaker-board-tools { align-items: center; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; gap: 12px; justify-content: space-between; padding: 10px 12px; }
+.speaker-filter-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.speaker-filter-chip { align-items: center; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 2px; color: var(--muted); display: inline-flex; font: 600 10px/1 var(--mono); gap: 7px; min-height: 28px; padding: 5px 8px; }
+.speaker-filter-chip strong { align-items: center; background: var(--sunk); border: 1px solid var(--line); color: var(--ink-soft); display: inline-flex; font-size: 9px; font-variant-numeric: tabular-nums; height: 17px; justify-content: center; min-width: 22px; padding: 0 4px; }
+.speaker-filter-chip.active { border-color: var(--accent); color: var(--accent-dark); }
+.speaker-filter-chip.active strong { background: var(--accent-wash); border-color: var(--accent); color: var(--accent-dark); }
+.speaker-search { min-width: min(320px, 34vw); }
+.speaker-board-filters { align-items: end; border-bottom: 1px solid var(--line); display: flex; gap: 10px; padding: 10px 12px; }
+.speaker-board-filters select { font-family: var(--mono); font-size: 10px; min-width: 190px; }
+.speaker-filter-count { color: var(--muted); font: 500 10px/1 var(--mono); font-variant-numeric: tabular-nums; margin-left: auto; padding-bottom: 10px; }
+
+.speaker-table-wrap { overflow-x: auto; }
+.speaker-table { border-collapse: collapse; min-width: 860px; width: 100%; }
+.speaker-table th, .speaker-table td { border-bottom: 1px solid var(--line); font: 12px/1.4 var(--sans); padding: 10px 10px; text-align: left; vertical-align: middle; }
+.speaker-table thead th { background: var(--sunk); color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .1em; position: sticky; text-transform: uppercase; top: 0; z-index: 2; }
+.speaker-table tbody tr:last-child th, .speaker-table tbody tr:last-child td { border-bottom: 0; }
+.speaker-table tbody tr:hover { background: color-mix(in srgb, var(--accent-wash) 42%, transparent); }
+.speaker-status-column { width: 116px; }
+.speaker-tasks-column { font-variant-numeric: tabular-nums; width: 74px; }
+.speaker-action-column { text-align: right !important; width: 84px; }
+.speaker-muted { color: var(--muted); font: 10px/1.25 var(--mono); }
+.speaker-session-titles { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.speaker-link { align-items: center; background: transparent; border: 0; color: inherit; display: flex; gap: 9px; min-width: 180px; padding: 0; text-align: left; width: 100%; }
+.speaker-link > span:last-child { display: grid; gap: 3px; min-width: 0; }
+.speaker-link strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.speaker-link small { color: var(--muted); display: block; font: 10px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.speaker-avatar { align-items: center; background: var(--accent-wash); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; flex-grow: 0; flex-shrink: 0; font-family: var(--mono); font-weight: 600; justify-content: center; overflow: hidden; }
+.speaker-avatar img { display: block; height: 100%; object-fit: cover; width: 100%; }
+
+/* One width for every status, so the column beside it never moves when a
+   speaker goes from Pending to Confirmed. */
+.speaker-status { align-items: center; border: 1px solid var(--line-strong); border-radius: 2px; display: inline-flex; font: 600 9px/1 var(--mono); justify-content: center; letter-spacing: .08em; min-height: 22px; padding: 4px 6px; text-transform: uppercase; width: 92px; }
+.speaker-status.status-confirmed { background: color-mix(in srgb, var(--ok) 14%, transparent); border-color: var(--ok); color: var(--ok); }
+.speaker-status.status-declined { background: color-mix(in srgb, var(--alarm) 12%, transparent); border-color: var(--alarm); color: var(--alarm); }
+.speaker-status.status-invited { background: var(--accent-wash); border-color: var(--accent); color: var(--accent-dark); }
+.speaker-status.status-pending { color: var(--muted); }
+
+.speaker-board-state { align-items: center; color: var(--muted); display: grid; gap: 6px; min-height: 180px; padding: 24px; place-items: center; text-align: center; }
+.speaker-board-state.error { color: var(--alarm); }
+
+/* Above the sticky topbar (z-index 50), matching the drawer layer convention
+   in components.css and the onboarding board. At 40 the topbar painted over the
+   record's own title and close button. */
+.speaker-record-layer { inset: 0; position: fixed; z-index: 500; }
+.speaker-record-backdrop { background: rgba(12, 14, 18, .38); border: 0; inset: 0; position: absolute; width: 100%; }
+.speaker-record { background: var(--panel); border-left: 1px solid var(--line-strong); display: grid; grid-template-rows: auto 1fr auto; height: 100%; margin-left: auto; max-width: 620px; position: relative; width: min(620px, 100%); }
+.speaker-record-head { align-items: start; border-bottom: 1px solid var(--line-strong); display: flex; gap: 12px; justify-content: space-between; padding: 14px 16px; }
+.speaker-record-head-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.speaker-record-head h2 { font: 500 17px/1.2 var(--display); }
+.speaker-kicker { color: var(--muted); display: block; font: 600 9px/1.2 var(--mono); letter-spacing: .12em; margin-bottom: 4px; text-transform: uppercase; }
+.speaker-record-body { display: grid; gap: 18px; overflow-y: auto; padding: 16px; }
+.speaker-record-state { align-items: center; color: var(--muted); display: grid; min-height: 160px; place-items: center; }
+.speaker-record-state.error { color: var(--alarm); }
+.speaker-record-foot { align-items: center; border-top: 1px solid var(--line-strong); display: flex; gap: 10px; justify-content: flex-end; min-height: 56px; padding: 10px 16px; }
+.speaker-upload-note { color: var(--muted); font: 9px/1.4 var(--mono); letter-spacing: 0; text-transform: none; }
+.speaker-headshot-preview { border: 1px solid var(--line-strong); display: block; height: 96px; margin-top: 4px; overflow: hidden; width: 96px; }
+.speaker-headshot-preview img { display: block; height: 100%; object-fit: cover; width: 100%; }
+/* Reserved so "Saved" appearing never nudges the button beside it. */
+.speaker-save-state { color: var(--muted); font: 10px/1.2 var(--mono); margin-right: auto; min-height: 14px; }
+.speaker-save-state em { font-style: normal; }
+
+.speaker-identity { align-items: center; background: var(--sunk); border: 1px solid var(--line); display: flex; gap: 12px; padding: 12px; }
+.speaker-identity > div { display: grid; gap: 3px; min-width: 0; }
+.speaker-identity strong { font: 500 15px/1.2 var(--display); }
+.speaker-identity span { color: var(--muted); font: 10px/1.3 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.speaker-identity .speaker-status { margin-left: auto; }
+
+.speaker-section { display: grid; gap: 10px; }
+.speaker-section h3 { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.speaker-note { color: var(--muted); font: 10px/1.5 var(--mono); }
+.speaker-empty-line { color: var(--muted); font: 11px/1.5 var(--sans); }
+.speaker-list { display: grid; gap: 6px; }
+.speaker-list-row { align-items: center; border: 1px solid var(--line); display: flex; gap: 10px; justify-content: space-between; padding: 9px 10px; }
+.speaker-list-row > div { display: grid; gap: 3px; min-width: 0; }
+.speaker-list-row strong { font: 500 12px/1.3 var(--sans); }
+.speaker-list-row span { color: var(--muted); font: 10px/1.2 var(--mono); }
+
+.speaker-files-groups { display: grid; gap: 8px; }
+.speaker-files-group { border: 1px solid var(--line); display: grid; gap: 6px; min-width: 0; padding: 9px 10px; }
+.speaker-files-group-head { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; min-width: 0; }
+.speaker-files-group-head strong { font: 500 12px/1.3 var(--sans); }
+.speaker-files-group-meta { color: var(--muted); font: 10px/1.2 var(--mono); text-align: right; white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .speaker-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .speaker-board-tools { align-items: stretch; flex-direction: column; }
+  .speaker-search { min-width: 0; }
+}

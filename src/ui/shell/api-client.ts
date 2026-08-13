@@ -66,8 +66,11 @@ export const ERROR_TREATMENTS: Readonly<Record<MarqueeErrorCode, ErrorTreatment>
     retryable: false,
   },
   unauthenticated: {
+    // The wall raised over the screen carries the sign-in action and says the
+    // same sentence. A panel behind it repeating the instruction is two answers
+    // to one question, and only one of them has a button.
     sentence: "Your session has expired.",
-    recovery: "Sign in again to pick up where you left off.",
+    recovery: "Nothing you were working on has been lost.",
     retryable: false,
   },
   forbidden: {
@@ -204,6 +207,32 @@ export function errorSummary(error: unknown): string {
   return `${described.sentence} ${described.recovery} · ref ${described.reference}`;
 }
 
+interface FieldDetail {
+  field?: unknown;
+  fieldKey?: unknown;
+  message?: unknown;
+}
+
+function detailIssues(details: unknown): FieldDetail[] {
+  if (Array.isArray(details)) return details.filter((item): item is FieldDetail => Boolean(item) && typeof item === "object");
+  if (!details || typeof details !== "object") return [];
+  const issues = (details as { issues?: unknown }).issues;
+  return Array.isArray(issues)
+    ? issues.filter((item): item is FieldDetail => Boolean(item) && typeof item === "object")
+    : [];
+}
+
+/** Return the API's own 422 detail for one or more controls on a screen. */
+export function fieldError(error: unknown, fields: readonly string[]): string | undefined {
+  if (!(error instanceof MarqueeApiError) || !["unprocessable", "malformed_request"].includes(error.code)) return undefined;
+  if (error.field && fields.includes(error.field)) return error.message;
+  const issue = detailIssues(error.details).find((candidate) => {
+    const field = typeof candidate.field === "string" ? candidate.field : candidate.fieldKey;
+    return typeof field === "string" && fields.includes(field);
+  });
+  return typeof issue?.message === "string" && issue.message.length > 0 ? issue.message : undefined;
+}
+
 function isOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
@@ -263,6 +292,54 @@ export function onForbidden(listener: () => void): () => void {
   return () => { forbiddenListeners.delete(listener); };
 }
 
+/**
+ * Every request in flight belongs to the conference that was on screen when it
+ * was sent. Switching conferences ends that generation.
+ *
+ * Remounting the page tree makes a late response *invisible*, not *cancelled* —
+ * the request still lands, still costs the origin a round trip, and on a slow
+ * connection still holds a connection open for a screen nobody is looking at.
+ * So the switch says so out loud, and every caller's own AbortController still
+ * composes on top of this one.
+ */
+// Created on first use, never at module scope: this module is reachable from
+// the Worker bundle, and workerd refuses constructor work in global scope —
+// the whole deployment fails to start rather than one request failing.
+let requestGeneration: AbortController | null = null;
+
+function currentGeneration(): AbortController {
+  requestGeneration ??= new AbortController();
+  return requestGeneration;
+}
+
+export function abortInFlightRequests(): void {
+  requestGeneration?.abort(new DOMException("the conference on screen changed", "AbortError"));
+  requestGeneration = null;
+}
+
+function scopedSignal(callerSignal: AbortSignal | null | undefined): AbortSignal {
+  const generation = currentGeneration().signal;
+  if (!callerSignal) return generation;
+  // `AbortSignal.any` is the composition primitive; a runtime without it keeps
+  // the caller's own signal rather than losing it.
+  return typeof AbortSignal.any === "function"
+    ? AbortSignal.any([callerSignal, generation])
+    : callerSignal;
+}
+
+const unauthenticatedListeners = new Set<() => void>();
+
+/**
+ * Fires when a route says this browser has no session left. The shell listens
+ * so it can raise one wall over the work already on screen rather than letting
+ * every panel fail on its own — the refusal is still thrown to the caller that
+ * asked, exactly as `onForbidden` leaves it.
+ */
+export function onUnauthenticated(listener: () => void): () => void {
+  unauthenticatedListeners.add(listener);
+  return () => { unauthenticatedListeners.delete(listener); };
+}
+
 export async function apiFetch<Result>(
   path: string,
   options: ApiFetchOptions = {},
@@ -270,7 +347,7 @@ export async function apiFetch<Result>(
   const { route = path, ...init } = options;
   let response: Response;
   try {
-    response = await fetch(path, init);
+    response = await fetch(path, { ...init, signal: scopedSignal(init.signal) });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     // A dropped connection and a broken server are different problems with
@@ -288,6 +365,7 @@ export async function apiFetch<Result>(
     const envelope = (await response.json().catch(() => null)) as EnvelopeShape | null;
     const code = codeFromEnvelope(envelope?.error?.code, response.status);
     if (code === "forbidden") for (const listener of forbiddenListeners) listener();
+    if (code === "unauthenticated") for (const listener of unauthenticatedListeners) listener();
     throw noted(new MarqueeApiError({
       code,
       message: asString(envelope?.error?.message) ?? `the request failed with status ${response.status}`,

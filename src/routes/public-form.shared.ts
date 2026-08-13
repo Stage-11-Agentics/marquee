@@ -89,6 +89,30 @@ export function publicField(field: FormFieldView): PublicFormField {
   };
 }
 
+/**
+ * How many people this form's fields can actually collect.
+ *
+ * The participant schema is a fixed pair of slots — `speaker_*` and one
+ * optional `co_speaker_*` — while `max_speakers` is a number an organizer types
+ * into the form builder. A form advertising four speakers through a shape that
+ * can only ever hold two is a contract nobody can satisfy, and the applicant
+ * reads the shortfall as a bug in the form rather than a limit of it.
+ *
+ * A form with no participant fields at all collects its people some other way
+ * (or not at all); it declares no capacity here and is left alone.
+ */
+export function collectableParticipantSlots(fields: readonly FormFieldView[]): number | null {
+  const has = (key: string): boolean => fields.some((field) => field.key === key);
+  if (!has("speaker_name") && !has("speaker_email")) return null;
+  return 1 + (has("co_speaker_name") && has("co_speaker_email") ? 1 : 0);
+}
+
+/** What the form may promise: never more than its fields can take. */
+export function advertisedMaxSpeakers(configured: number, fields: readonly FormFieldView[]): number {
+  const slots = collectableParticipantSlots(fields);
+  return slots === null ? configured : Math.min(configured, slots);
+}
+
 function answerValue(valueJson: string | null, valueText: string | null): unknown {
   if (valueJson !== null) return parseJson(valueJson, null);
   return valueText;
@@ -143,6 +167,25 @@ async function findResumeSubmission(
     .first<SubmissionRow>();
 }
 
+/**
+ * "Submissions per person" caps the abstracts someone puts in front of the
+ * committee. A draft is not one of those — it is the work in progress on the
+ * way to one, and it is created server-side by the ordinary act of pressing
+ * Save draft or attaching a file.
+ *
+ * Counting drafts made the cap self-inflicting: three Save draft presses on a
+ * three-abstract form exhausted the allowance without a single abstract ever
+ * being submitted, and every later draft, file attach, and submit for that
+ * address returned "Your abstract limit is full" forever. Withdrawn rows are
+ * excluded for the same reason — they are not in front of anyone either.
+ */
+const PER_SUBMITTER_LIMIT_CLAUSES = [
+  "form_id = ?",
+  "submitter_person_id = ?",
+  "status <> 'withdrawn'",
+  "status <> 'draft'",
+];
+
 async function countForEmail(
   db: D1Database,
   formId: string,
@@ -159,7 +202,7 @@ async function countForEmail(
     .bind(formId, email)
     .first<{ id: string }>();
   if (!person) return 0;
-  const clauses = ["form_id = ?", "submitter_person_id = ?", "status <> 'withdrawn'"];
+  const clauses = [...PER_SUBMITTER_LIMIT_CLAUSES];
   const bindings: Array<string> = [formId, person.id];
   if (excludeSubmissionId) {
     clauses.push("id <> ?");
@@ -285,7 +328,7 @@ export function toPublicFormState(
       closes_at: asNumber(record.form.closes_at),
       per_submitter_limit: Number(record.form.per_submitter_limit),
       min_speakers: Number(record.form.min_speakers),
-      max_speakers: Number(record.form.max_speakers),
+      max_speakers: advertisedMaxSpeakers(Number(record.form.max_speakers), record.fields),
       max_sponsors: Number(record.form.max_sponsors),
     },
     state: record.state,
@@ -310,6 +353,7 @@ export function publicIssueMessage(issue: FormValidationIssue): string {
   if (message.includes("email")) return "Enter an address where the conference team can reach you, then try again.";
   if (message.includes("url")) return "Add a web address beginning with https://, then try again.";
   if (message.includes("number")) return "Enter a number in the range shown, then try again.";
+  if (message.includes("date")) return "Choose a valid date, then try again.";
   if (message.includes("option")) return "Choose an option from the list, then try again.";
   if (message.includes("file")) return "Choose a file of the accepted size and format, then try again.";
   if (message.includes("characters")) return `${issue.message} Then try again.`;
@@ -453,7 +497,7 @@ export async function countFormForPerson(
   personId: string,
   excludeSubmissionId?: string,
 ): Promise<number> {
-  const predicates = ["form_id = ?", "submitter_person_id = ?", "status <> 'withdrawn'"];
+  const predicates = [...PER_SUBMITTER_LIMIT_CLAUSES];
   const args: string[] = [formId, personId];
   if (excludeSubmissionId) {
     predicates.push("id <> ?");

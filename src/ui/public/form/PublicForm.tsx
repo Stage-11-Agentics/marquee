@@ -1,8 +1,10 @@
 /** @jsxImportSource preact */
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { BOUND_SOURCE_LABELS, boundSourceOf } from "../../../lib/bound-options";
 import { isFieldApplicable, projectApplicableAnswers } from "../../../lib/form-conditions";
 import { putFileToR2 } from "../../upload/upload-client";
+import { reconcileEchoedAnswers } from "./echo";
 import { apiFetch, errorSummary, MarqueeApiError } from "../../shell/api-client";
 import type { PublicFormField, PublicFormState } from "../../../routes/public-form.types";
 import { removeTurnstileWidget, renderTurnstileWidget, resetTurnstileWidget, type TurnstileApi } from "./turnstile";
@@ -23,6 +25,21 @@ const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api
 const TURNSTILE_WAIT_MS = 20_000;
 
 const SECURITY_CHECK_UNFINISHED = "The security check did not finish. Complete it at the bottom of this form, then try again; your answers are still here.";
+
+/**
+ * A saved draft can hold a choice that has since been renamed or removed in
+ * Conference settings. The select simply drops it, so without this the
+ * submitter sees an empty answer they know they filled in, and a validation
+ * error against a list that no longer mentions their choice.
+ */
+function retiredAnswers(field: PublicFormField, value: unknown): string[] {
+  if (!boundSourceOf(field)) return [];
+  const options = optionsFor(field);
+  const chosen = Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : typeof value === "string" && value ? [value] : [];
+  return chosen.filter((entry) => !options.includes(entry));
+}
 
 function optionsFor(field: PublicFormField): string[] {
   return Array.isArray(field.config.options)
@@ -75,22 +92,41 @@ function publicIssueMessage(issue: { message: string }): string {
   if (message.includes("email")) return "Enter an address where the conference team can reach you, then try again.";
   if (message.includes("url")) return "Add a web address beginning with https://, then try again.";
   if (message.includes("number")) return "Enter a number in the range shown, then try again.";
+  if (message.includes("date")) return "Choose a valid date, then try again.";
   if (message.includes("option")) return "Choose an option from the list, then try again.";
   if (message.includes("file")) return "Choose a file of the accepted size and format, then try again.";
   if (message.includes("characters")) return `${issue.message} Then try again.`;
   return "Add the requested detail, then try again.";
 }
 
+/**
+ * A 409, a bare 422, or a 404 carries the one sentence that actually tells the
+ * person what to do — "Your abstract limit is full. Use a saved resume link…",
+ * "This call for speakers is closed…" — and that sentence is already written
+ * for them, not for a log. Replacing it with house copy costs the speaker the
+ * only actionable thing in the response, so those three statuses pass the
+ * server's own words through and keep the house copy as the fallback for a
+ * response that carries no sentence. The rest stay generic because their
+ * server-side text is diagnostic rather than speaker-facing.
+ *
+ * Safe because every 409/422/404 the public form can raise is hand-written
+ * speaker-facing prose (`public-form.routes.ts`); schema validation failures
+ * arrive as 400 from the router's `defaultHook`, and 400 still falls through to
+ * `errorSummary`.
+ */
 function publicErrorMessage(error: unknown): string {
   if (!(error instanceof MarqueeApiError)) return errorSummary(error);
   const message = error.message.toLowerCase();
+  const served = error.message.trim();
   let sentence: string;
   if (error.status === 403 && message.includes("resume")) sentence = "Use the resume link from your email, then try again; your answers are still here.";
   else if (error.status === 403) sentence = "We could not verify the security check. Complete it, then choose Submit again; your answers are still here.";
   else if (error.status === 429) sentence = "This form needs a short pause before another try. Wait a moment, then choose Submit again; your draft is saved.";
   else if (error.status >= 500) sentence = "The conference could not save this submission. Your answers are saved here; try Submit again in a moment.";
-  else if (error.status === 409) sentence = "The conference cannot accept this submission right now. Keep your answers here, then try again after following the message above.";
-  else if (error.status === 404) sentence = "This conference form is no longer available. Return to the conference page and choose the form again.";
+  else if (error.status === 409 || error.status === 422) {
+    sentence = served || "The conference cannot accept this submission right now. Keep your answers here and try again in a moment.";
+  }
+  else if (error.status === 404) sentence = served || "This conference form is no longer available. Return to the conference page and choose the form again.";
   else return errorSummary(error);
   return `${sentence} · ref ${error.reference}`;
 }
@@ -110,14 +146,21 @@ function publicValidationIssues(error: unknown): Array<{ fieldKey?: string; mess
 export function PublicForm({ initial }: PublicFormProps) {
   const [state, setState] = useState(initial);
   const [answers, setAnswers] = useState<Record<string, unknown>>(initial.answers);
+  /* The latest answers, readable synchronously by an in-flight request that has
+     to know what the person typed while it was away. */
+  const answersRef = useRef<Record<string, unknown>>(initial.answers);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pageError, setPageError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [dirty, setDirty] = useState(false);
   const [filePreviews, setFilePreviews] = useState<Record<string, string>>({});
+  const [draftEmailPrompt, setDraftEmailPrompt] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const firstRender = useRef(true);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const draftEmailRef = useRef<HTMLInputElement | null>(null);
+  const preserveDraftOnBlur = useRef(false);
   const turnstileHost = useRef<HTMLElement | null>(null);
   const turnstileWidget = useRef<string | null>(null);
   const turnstileTokenRef = useRef("");
@@ -271,8 +314,13 @@ export function PublicForm({ initial }: PublicFormProps) {
     return () => window.clearTimeout(timer);
   }, [answers, dirty, state.resume_token, state.state]);
 
+  function writeAnswers(next: Record<string, unknown>) {
+    answersRef.current = next;
+    setAnswers(next);
+  }
+
   function setAnswer(key: string, value: unknown) {
-    setAnswers((current) => ({ ...current, [key]: value }));
+    writeAnswers({ ...answersRef.current, [key]: value });
     setErrors((current) => { const next = { ...current }; delete next[key]; return next; });
     setDirty(true);
     setPageError(null);
@@ -293,13 +341,17 @@ export function PublicForm({ initial }: PublicFormProps) {
 
   async function ensureDraft(): Promise<PublicFormState | null> {
     if (state.resume_token && state.draft_id) return state;
-    const email = answerEmail(answers);
+    const email = answerEmail(answersRef.current);
     if (!email) {
-      setPageError("Enter your contact address before saving a draft; the conference team uses it for your resume link.");
-      const field = fieldRefs.current.speaker_email;
-      field?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setDraftEmailPrompt(true);
+      // Revealing a field at the foot of a long form and focusing it is not
+      // enough on its own — on a nineteen-field call for speakers the reveal
+      // happens off-screen. Say what is needed where the person is looking.
+      setPageError("Add a contact address at the bottom of this form so your draft has somewhere to send its resume link, then choose Save draft again. Your answers are still here.");
+      window.setTimeout(() => draftEmailRef.current?.focus(), 0);
       return null;
     }
+    setDraftEmailPrompt(false);
     setBusy(true);
     try {
       const token = await requestTurnstileToken();
@@ -307,16 +359,16 @@ export function PublicForm({ initial }: PublicFormProps) {
         setPageError(SECURITY_CHECK_UNFINISHED);
         return null;
       }
+      const sent = answersRef.current;
       const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answers, email, turnstileToken: token }),
+        body: JSON.stringify({ answers: sent, email, turnstileToken: token }),
         route: "/api/v1/public/forms/{slug}/drafts",
       });
       if (!payload || !("state" in payload)) throw new Error("The draft response was unreadable.");
       setState(payload);
-      setAnswers(payload.answers);
-      setDirty(false);
+      adoptEcho(sent, payload.answers);
       resetTurnstile();
       return payload;
     } catch (error: unknown) {
@@ -326,20 +378,65 @@ export function PublicForm({ initial }: PublicFormProps) {
     } finally { setBusy(false); }
   }
 
+  async function saveDraft() {
+    preserveDraftOnBlur.current = true;
+    window.setTimeout(() => { preserveDraftOnBlur.current = false; }, 500);
+    setPageError(null);
+    if (state.resume_token && state.draft_id) {
+      await autosave();
+      return;
+    }
+    await ensureDraft();
+  }
+
+  /**
+   * Adopt a server echo without discarding answers written while it was in
+   * flight, and leave the form dirty when it kept any so autosave carries them.
+   */
+  function adoptEcho(sent: Record<string, unknown>, echoed: Record<string, unknown>) {
+    const result = reconcileEchoedAnswers(sent, echoed, answersRef.current);
+    writeAnswers(result.answers);
+    setDirty(result.edited);
+  }
+
   async function autosave() {
     if (!state.resume_token || !state.draft_id || busy) return;
+    const sent = answersRef.current;
     try {
       const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts/${encodeURIComponent(state.resume_token)}`, {
-        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }),
+        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers: sent }),
         route: "/api/v1/public/forms/{slug}/drafts/{token}",
       });
       if (!payload || !("state" in payload)) throw new Error("The autosave response was unreadable.");
       setState(payload);
-      setAnswers(payload.answers);
-      setDirty(false);
+      adoptEcho(sent, payload.answers);
     } catch (error: unknown) {
       resetTurnstile();
       setPageError(publicErrorMessage(error));
+    }
+  }
+
+  async function copyResumeLink() {
+    if (!state.resume_url) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(state.resume_url);
+      } else {
+        const input = document.createElement("textarea");
+        input.value = state.resume_url;
+        input.setAttribute("readonly", "true");
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        const copied = document.execCommand("copy");
+        input.remove();
+        if (!copied) throw new Error("Clipboard copy was not available.");
+      }
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 2500);
+    } catch {
+      setCopyState("failed");
     }
   }
 
@@ -356,17 +453,38 @@ export function PublicForm({ initial }: PublicFormProps) {
     if (previous) URL.revokeObjectURL(previous);
   }
 
+  /** Say, on the field itself, why the file the person just chose is not attached. */
+  function setFileError(field: PublicFormField, message: string) {
+    setErrors((current) => ({ ...current, [field.key]: message }));
+  }
+
   async function handleFile(field: PublicFormField, file: File | undefined) {
     if (!file) return;
     setPageError(null);
+    setErrors((current) => {
+      if (!(field.key in current)) return current;
+      const next = { ...current };
+      delete next[field.key];
+      return next;
+    });
     showLocalPreview(field, file);
+    // A file lives on a draft, so a file cannot be attached before one exists.
+    // When the draft cannot be created the person is left holding a filename, a
+    // crop preview, and a status line still reading "No file attached yet." —
+    // so every path out of here has to say what happened, on this field.
     const draftState = await ensureDraft();
-    if (!draftState?.resume_token || !draftState.draft_id) return;
+    if (!draftState?.resume_token || !draftState.draft_id) {
+      setFileError(field, answerEmail(answers)
+        ? "This file was not attached because the draft holding it could not be saved. Read the message at the top of the form, then choose the file again."
+        : "Add your contact address at the bottom of this form first — a file is kept with your draft, and the draft needs somewhere to send your resume link. Then choose the file again.");
+      return;
+    }
     setBusy(true);
     try {
       const token = await requestTurnstileToken();
       if (turnstileRequired() && !token) {
         setPageError("The security check did not finish, so the file was not attached. Complete it at the bottom of this form, then choose the file again; your draft is saved.");
+        setFileError(field, "Not attached — finish the security check at the bottom of this form, then choose the file again.");
         return;
       }
       const signed = await apiFetch<{ attachmentId?: string; completionToken?: string; putUrl?: string; requiredHeaders?: Record<string, string> }>("/api/v1/public/uploads/sign", {
@@ -385,6 +503,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     } catch (error: unknown) {
       resetTurnstile();
       setPageError(publicErrorMessage(error));
+      setFileError(field, "This file was not attached. Read the message at the top of the form, then choose the file again.");
     } finally { setBusy(false); }
   }
 
@@ -410,7 +529,7 @@ export function PublicForm({ initial }: PublicFormProps) {
       if (!payload || !("state" in payload)) throw new Error("The submission response was unreadable.");
       removeTurnstile();
       setState(payload);
-      setAnswers(payload.answers);
+      writeAnswers(payload.answers);
       setDirty(false);
     } catch (error: unknown) {
       resetTurnstile();
@@ -424,11 +543,29 @@ export function PublicForm({ initial }: PublicFormProps) {
     } finally { setBusy(false); }
   }
 
+  function handleFieldBlur(event: FocusEvent) {
+    const next = event.relatedTarget;
+    if (next instanceof HTMLElement && next.closest("[data-save-draft]")) {
+      preserveDraftOnBlur.current = true;
+      return;
+    }
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      const draftSave = preserveDraftOnBlur.current
+        || (active instanceof HTMLElement && Boolean(active.closest("[data-save-draft]")));
+      preserveDraftOnBlur.current = false;
+      if (draftSave || !dirty) return;
+      validate();
+    }, 0);
+  }
+
   function renderField(field: PublicFormField) {
     const value = answers[field.key];
     const error = errors[field.key];
+    const retired = retiredAnswers(field, value);
     const ref = (node: HTMLElement | null) => { fieldRefs.current[field.key] = node; };
     const options = optionsFor(field);
+    const boundSource = boundSourceOf(field);
     const maxLength = maxLengthFor(field);
     const characterCount = typeof value === "string" ? value.length : 0;
     const label = <label for={`public-${field.key}`}>{field.label} {field.required ? <em>required</em> : <em>optional</em>}</label>;
@@ -436,7 +573,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     const counter = maxLength !== undefined ? <div class="public-field-counter" aria-live="polite">{characterCount}/{maxLength} characters</div> : null;
     let control;
     if (field.type === "long_text") {
-      control = <textarea id={`public-${field.key}`} ref={ref as never} maxLength={maxLength} value={typeof value === "string" ? value : ""} onBlur={() => { if (dirty) validate(); }} onInput={(event) => setAnswer(field.key, (event.currentTarget as HTMLTextAreaElement).value)} aria-invalid={Boolean(error)} />;
+      control = <textarea id={`public-${field.key}`} ref={ref as never} maxLength={maxLength} value={typeof value === "string" ? value : ""} onBlur={handleFieldBlur} onInput={(event) => setAnswer(field.key, (event.currentTarget as HTMLTextAreaElement).value)} aria-invalid={Boolean(error)} />;
     } else if (field.type === "single_select") {
       control = <select id={`public-${field.key}`} ref={ref as never} value={typeof value === "string" ? value : ""} onChange={(event) => setAnswer(field.key, (event.currentTarget as HTMLSelectElement).value)} aria-invalid={Boolean(error)}><option value="">Choose one</option>{options.map((option) => <option value={option}>{option}</option>)}</select>;
     } else if (field.type === "multi_select") {
@@ -452,20 +589,45 @@ export function PublicForm({ initial }: PublicFormProps) {
       // not, so choosing a file never shifts the rows underneath it.
       control = <div class="public-file"><input id={`public-${field.key}`} ref={ref as never} type="file" accept={accept} onChange={(event) => { void handleFile(field, (event.currentTarget as HTMLInputElement).files?.[0]); }} />{takesImage && <div class="public-file-preview"><div class="public-file-crop">{preview ? <img src={preview} alt={`${field.label} crop preview`} /> : null}</div><span class="public-file-crop-note">{preview ? "Crop preview · the square the conference programme shows." : "Choose an image to see its crop preview here."}</span></div>}<span class={`public-file-existing${existing ? " has-file" : ""}`}>{existing ? `Saved file: ${existing}` : "No file attached yet."}</span></div>;
     } else {
-      const inputType = field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "number" ? "number" : "text";
-      control = <input id={`public-${field.key}`} ref={ref as never} type={inputType} maxLength={maxLength} value={value === undefined || value === null ? "" : String(value)} onBlur={() => { if (dirty) validate(); }} onInput={(event) => { const text = (event.currentTarget as HTMLInputElement).value; setAnswer(field.key, field.type === "number" && text ? Number(text) : text); }} aria-invalid={Boolean(error)} />;
+      const inputType = field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
+      control = <input id={`public-${field.key}`} ref={ref as never} type={inputType} maxLength={maxLength} value={value === undefined || value === null ? "" : String(value)} onBlur={handleFieldBlur} onInput={(event) => { const text = (event.currentTarget as HTMLInputElement).value; setAnswer(field.key, field.type === "number" && text ? Number(text) : text); }} aria-invalid={Boolean(error)} />;
     }
-    return <div class={`public-field${error ? " has-error" : ""}`} data-field-key={field.key} data-field-type={field.type} key={field.key}>{label}{note}{control}{counter}<div class={`public-field-error${error ? " has-message" : ""}`} role={error ? "alert" : undefined} aria-hidden={!error}>{error ?? " "}</div></div>;
+    const retiredNote = retired.length
+      ? <div class="public-field-retired" role="status">{retired.length === 1 ? `"${retired[0]}" is no longer offered` : `${retired.map((entry) => `"${entry}"`).join(", ")} are no longer offered`} — choose from the current list.</div>
+      : boundSource && options.length === 0
+        ? <div class="public-field-retired" role="status">No {BOUND_SOURCE_LABELS[boundSource].toLowerCase()} are configured for this conference yet. Contact the conference team.</div>
+        : null;
+    return <div class={`public-field${error ? " has-error" : ""}`} data-field-key={field.key} data-field-type={field.type} key={field.key}>{label}{note}{control}{retiredNote}{counter}<div class={`public-field-error${error ? " has-message" : ""}`} role={error ? "alert" : undefined} aria-hidden={!error}>{error ?? " "}</div></div>;
   }
 
   const closed = state.state === "closed" || state.state === "at_limit" || state.state === "submitted";
   if (state.state === "submitted" && state.confirmation) {
-    return <div class="public-form"><PublicHeader state={state} /><main class="public-form-main"><section class="public-confirmation" aria-live="polite"><div class="public-brand-mark">✓</div><h2>{state.confirmation.title}</h2><p>{state.confirmation.message}</p><p>We will write to <strong>{state.confirmation.email}</strong>.</p>{state.resume_url && <p class="public-resume">Save this link to reopen this confirmation later; the same link is in your confirmation email. <a class="public-resume-link" href={resumeLinkPath(state.resume_url)}>{resumeLinkPath(state.resume_url)}</a></p>}{state.confirmation.portal_url && <p><a href={state.confirmation.portal_url}>Open your speaker portal →</a></p>}</section></main><PublicFooter /></div>;
+    return <div class="public-form"><PublicHeader state={state} /><main class="public-form-main"><section class="public-confirmation" aria-live="polite"><div class="public-brand-mark">✓</div><h2>{state.confirmation.title}</h2><p>{state.confirmation.message}</p><p>We will write to <strong>{state.confirmation.email}</strong>.</p>{state.resume_url && <p class="public-resume">Save this link to reopen this confirmation later; the same link is in your confirmation email. <a class="public-resume-link" href={resumeLinkPath(state.resume_url)}>{resumeLinkPath(state.resume_url)}</a></p>}{state.confirmation.portal_url && <p>This link is your sign-in. <a href={state.confirmation.portal_url}>Track your submission →</a></p>}</section></main><PublicFooter /></div>;
   }
 
   const minimumParticipants = state.form.min_speakers === 1 ? "one participant" : `${state.form.min_speakers} participants`;
-  const maximumParticipants = state.form.max_speakers === 1 ? "one participant" : `${state.form.max_speakers} participants`;
-  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && <span>{state.state === "closed" ? `Closed ${new Date(state.form.closes_at).toLocaleDateString()}` : `Closes ${new Date(state.form.closes_at).toLocaleDateString()}`}</span>}<span class="public-save-status" aria-live="polite">{state.resume_token ? (dirty ? "Saving…" : state.last_saved_at ? `Saved ${new Date(state.last_saved_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Draft linked") : "Draft saved locally · just now"}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}<div class={`public-error${pageError ? " has-message" : ""}`} role={pageError ? "alert" : undefined} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div><p class="public-participant-limit">Include at least {minimumParticipants}; this conference can review up to {maximumParticipants} on one abstract.</p><fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset><div class="public-form-footer"><span class="public-security">{closed ? "This form is not accepting answers right now, so its fields are closed for editing." : "Your answers stay here while you work. A resume link goes to the address you enter."}</span><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : "Submit abstract"}</button></div></form></main><PublicFooter /></div>;
+  // Read from the form rather than written by hand: the advertised maximum is
+  // already clamped to the slots these fields can hold, and a sentence that
+  // states the number itself cannot drift away from the fields below it.
+  //
+  // A form with no participant fields at all declares no capacity for the
+  // server to clamp, so the configured number reaches this line unchecked —
+  // and a sentence counting co-speaker slots above zero participant fields is
+  // exactly the kind of promise this ticket exists to stop making.
+  const collectsParticipants = state.fields.some((field) => field.key === "speaker_name" || field.key === "speaker_email");
+  const additionalSlots = Math.max(0, state.form.max_speakers - 1);
+  const coSpeakerSlots = additionalSlots === 0
+    ? "no co-speaker slot"
+    : additionalSlots === 1
+      ? "one optional co-speaker slot"
+      : `${additionalSlots} optional co-speaker slots`;
+  const saveStatus = busy
+    ? "Saving…"
+    : state.resume_token
+      ? (dirty ? "Saving…" : state.last_saved_at ? `Saved ${new Date(state.last_saved_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Draft linked")
+      : "";
+  const resumePath = state.resume_url ? resumeLinkPath(state.resume_url) : null;
+  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at && state.state !== "closed" && <span>Closes {new Date(state.form.closes_at).toLocaleDateString()}</span>}<span class={`public-save-status${saveStatus ? " has-value" : ""}`} aria-live="polite" aria-hidden={!saveStatus}>{saveStatus}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}<div class={`public-error${pageError ? " has-message" : ""}`} role={pageError ? "alert" : undefined} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div>{collectsParticipants && <p class="public-participant-limit">Include at least {minimumParticipants}; this form has {coSpeakerSlots}.</p>}<fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset>{state.resume_url && <div class="public-draft-resume" role="status"><strong>Private resume link</strong><span>Keep this link to return to this draft. It is also sent to your contact address.</span><div class="public-draft-resume-actions"><a class="public-resume-link" href={resumePath ?? "#"}>{resumePath}</a><button class="public-copy-link" type="button" onClick={() => { void copyResumeLink(); }}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy resume link"}</button></div></div>}<div class="public-form-footer"><div class="public-form-footer-copy">{draftEmailPrompt && !state.resume_token && !closed && <div class="public-draft-email"><label for="public-draft-email">Contact address for your resume link</label><input id="public-draft-email" ref={draftEmailRef} type="email" value={answerEmail(answers)} onInput={(event) => setAnswer("speaker_email", (event.currentTarget as HTMLInputElement).value)} /><span>We will send a private link here so you can return to this draft.</span></div>}<span class="public-security">{closed ? "This form is not accepting answers right now, so its fields are closed for editing." : "Your answers stay here while you work. A resume link goes to the address you enter."}</span></div><div class="public-form-actions"><button class="public-save-draft" type="button" data-save-draft onMouseDown={() => { preserveDraftOnBlur.current = true; }} onClick={() => { void saveDraft(); }} disabled={busy || closed}>Save draft</button><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : "Submit abstract"}</button></div></div></form></main><PublicFooter /></div>;
 }
 
 function PublicHeader({ state }: { state: PublicFormState }) {

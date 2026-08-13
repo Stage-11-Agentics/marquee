@@ -1,0 +1,34 @@
+.files-export-backdrop { align-items: center; background: rgb(7 18 22 / 58%); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 20; }
+.files-export-dialog { background: var(--panel); border: 1px solid var(--line-strong); box-shadow: 0 22px 80px rgb(0 0 0 / 24%); display: grid; max-height: min(720px, calc(100vh - 40px)); max-width: 620px; overflow: hidden; width: 100%; }
+.files-export-head { align-items: start; border-bottom: 1px solid var(--line); display: flex; gap: 18px; justify-content: space-between; padding: 20px 22px 16px; }
+.files-export-head h2 { font: 500 25px/1.1 var(--display); margin: 4px 0 6px; }
+.files-export-head p, .files-export-status small, .files-export-selection small { color: var(--muted); font: 11px/1.45 var(--mono); margin: 0; }
+.files-export-close { background: transparent; border: 0; color: var(--muted); cursor: pointer; font: 24px/1 var(--sans); min-height: 32px; min-width: 32px; }
+.files-export-close:hover { color: var(--ink); }
+.files-export-body { display: grid; gap: 16px; min-height: 360px; overflow: auto; padding: 18px 22px; }
+.files-export-grouping { border: 1px solid var(--line); display: grid; gap: 8px; margin: 0; padding: 12px; }
+.files-export-grouping legend { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .1em; padding: 0 4px; text-transform: uppercase; }
+.files-export-grouping label { align-items: center; display: grid; grid-template-columns: 18px 1fr; gap: 2px 7px; padding: 5px 2px; }
+.files-export-grouping label span { font: 600 12px/1.2 var(--sans); }
+.files-export-grouping label small { color: var(--muted); font: 10px/1.2 var(--mono); grid-column: 2; }
+.files-export-selection-head { align-items: center; display: flex; justify-content: space-between; }
+.files-export-selection-head strong { font: 600 11px/1 var(--mono); text-transform: uppercase; }
+.files-export-selection-head span { color: var(--muted); font: 11px/1 var(--mono); }
+.files-export-selection { border-top: 1px solid var(--line); display: grid; list-style: none; margin: 0; max-height: 190px; overflow: auto; padding: 0; }
+.files-export-selection li { align-items: center; border-bottom: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto auto; min-height: 48px; padding: 7px 0; }
+.files-export-selection li > div { display: grid; gap: 3px; min-width: 0; }
+.files-export-selection strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-export-selection .tabular { color: var(--muted); font: 10px/1 var(--mono); }
+.files-export-remove { background: transparent; border: 0; color: var(--muted); cursor: pointer; font: 10px/1 var(--mono); padding: 6px 0 6px 6px; }
+.files-export-remove:hover { color: var(--alarm); }
+.files-export-status { align-items: center; border: 1px solid var(--line-strong); display: flex; gap: 12px; min-height: 78px; padding: 12px 14px; }
+.files-export-status > div { display: grid; gap: 4px; }
+.files-export-status-mark { align-items: center; border: 1px solid var(--accent); color: var(--accent-ink); display: inline-flex; flex: 0 0 30px; font: 18px/1 var(--mono); height: 30px; justify-content: center; }
+.files-export-status-mark.is-ready { border-color: var(--ok); color: var(--ok); }
+.files-export-status-mark.is-error { border-color: var(--alarm); color: var(--alarm); }
+.files-export-download { justify-self: start; margin-top: 4px; text-decoration: none; }
+.files-export-foot { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; padding: 14px 22px; }
+.files-export-foot > div { display: flex; gap: 8px; }
+.files-export-foot > div button { min-width: 108px; }
+.files-export-foot-note { color: var(--muted); font: 10px/1.3 var(--mono); }
+@media (max-width: 620px) { .files-export-backdrop { padding: 8px; } .files-export-dialog { max-height: calc(100vh - 16px); } .files-export-head, .files-export-body, .files-export-foot { padding-left: 14px; padding-right: 14px; } .files-export-foot { align-items: stretch; flex-direction: column; } .files-export-foot > div { justify-content: flex-end; } }

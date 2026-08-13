@@ -5,6 +5,7 @@ import { newUlid } from "../../api/ids";
 import { auditStatement, writeAudit as writeAuditRow, type AuditEntry } from "../../lib/audit";
 import type { Decision, Id } from "../../db/schema";
 import { sha256Hex } from "../../lib/auth/random-token";
+import { acceptedSpeakerMembershipStatements } from "../../lib/speaker-membership";
 import { cancelCalendarInvites } from "../calendar/invites";
 import { enqueueMailMessage } from "../mail/consumer";
 import { enqueueTrigger } from "../mail/triggers";
@@ -312,6 +313,13 @@ export async function reconcileTaskSet(
   const created = new Map<Id, number>();
   const restoredCounts = new Map<Id, number>();
   if (submissionIds.length === 0) return counts;
+  // Acceptance is where the conference commits to a person, so it is where the
+  // person becomes a speaker *of this event* — the membership row the roster,
+  // the portal sign-in, headshot ownership, and the comms audience all read.
+  // Before this, the only writer of `memberships` was the demo reseeder, and
+  // every speaker the product created at runtime was invisible to all four.
+  const memberships = await acceptedSpeakerMembershipStatements(db, eventId, submissionIds, now);
+  if (memberships.length > 0) await db.batch(memberships);
   const idsJson = JSON.stringify([...new Set(submissionIds)]);
   const candidates = await db
     .prepare(
@@ -441,10 +449,44 @@ async function enqueueDecisionMail(
   return { id: result?.id ?? null, inserted: result?.inserted ?? false };
 }
 
+/**
+ * A deliberate retry is a new send attempt for the same recorded decision.
+ * Its business entity stays the decision id, while the fresh key keeps this
+ * attempt distinct from both the original decision mail and earlier retries.
+ */
+async function enqueueDecisionRetry(input: {
+  db: D1Database;
+  queue: Queue<unknown>;
+  eventId: Id;
+  submission: SubmissionContext;
+  decisionId: Id;
+  decision: Decision;
+  resultingStatus: "accepted" | "rejected";
+  feedbackMd: string | null;
+  now: number;
+}): Promise<{ id: Id | null; inserted: boolean }> {
+  const templateKey = input.resultingStatus === "accepted" ? "acceptance" : "rejection";
+  const retryKey = await sha256Hex(`${templateKey}:${input.decisionId}:${newUlid(input.now)}`);
+  return enqueueDecisionMail({
+    db: input.db,
+    queue: input.queue,
+    eventId: input.eventId,
+    submission: input.submission,
+    status: input.resultingStatus,
+    decision: input.decision,
+    feedbackMd: input.feedbackMd,
+    entityId: input.decisionId,
+    idempotencyKey: retryKey,
+    now: input.now,
+  });
+}
+
 export interface NotifyNotifiedResult {
   selected: number;
   queued: number;
   skippedNoAddress: number;
+  remaining: number;
+  nextCursor: string | null;
   outboxIds: Id[];
 }
 
@@ -454,34 +496,152 @@ interface ExistingDecisionCandidate {
   decision: Decision;
   resulting_status: "accepted" | "rejected";
   feedback_md: string | null;
+  candidate_count: number;
+}
+
+/**
+ * One decision mail performs two template reads, an outbox write, and a queue
+ * send. Keep the request comfortably below Workers' 1,000-subrequest ceiling;
+ * callers use the cursor in the response to drain the rest.
+ */
+export const NOTIFY_DECISIONS_BATCH_SIZE = 200;
+
+export interface ResendDecisionInput {
+  db: D1Database;
+  queue: Queue<unknown>;
+  eventId: Id;
+  submissionId: Id;
+  actor: DecisionActor;
+  now?: number;
+}
+
+export interface ResendDecisionResult {
+  id: Id;
+  outcome: "succeeded" | "failed";
+  decisionId?: Id;
+  resultingStatus?: "accepted" | "rejected";
+  outboxId?: Id | null;
+  outboxInserted: boolean;
+  error?: string;
+}
+
+interface ResendDecisionCandidate {
+  id: Id;
+  decision: Decision;
+  resulting_status: "accepted" | "rejected";
+  feedback_md: string | null;
+}
+
+/**
+ * Queue one named decision resend. This deliberately does not consult the
+ * bulk-notify eligibility query: a person asked for this record by name, so a
+ * prior provider acceptance must not prevent the new attempt.
+ */
+export async function resendSubmissionDecision(input: ResendDecisionInput): Promise<ResendDecisionResult> {
+  const now = input.now ?? Date.now();
+  const failed = (error: string): ResendDecisionResult => ({
+    id: input.submissionId,
+    outcome: "failed",
+    outboxInserted: false,
+    error,
+  });
+  const submission = await loadSubmission(input.db, input.eventId, input.submissionId);
+  if (!submission) return failed("submission not found");
+  if (submission.status !== "accepted" && submission.status !== "rejected") {
+    return failed("only accepted or rejected decisions can be resent");
+  }
+
+  const decision = await input.db
+    .prepare(
+      `SELECT id, decision, resulting_status, feedback_md
+       FROM submission_decisions
+       WHERE event_id = ? AND submission_id = ? AND resulting_status = ?
+       ORDER BY decided_at DESC, id DESC
+       LIMIT 1`,
+    )
+    .bind(input.eventId, input.submissionId, submission.status)
+    .first<ResendDecisionCandidate>();
+  if (!decision) return failed("no accepted or rejected decision exists to resend");
+  if (!isValidEmail(submission.person_email)) {
+    return failed("speaker has no valid email address; correct the address before resending");
+  }
+
+  const outbox = await enqueueDecisionRetry({
+    db: input.db,
+    queue: input.queue,
+    eventId: input.eventId,
+    submission,
+    decisionId: decision.id,
+    decision: decision.decision,
+    resultingStatus: decision.resulting_status,
+    feedbackMd: decision.feedback_md,
+    now,
+  });
+  if (!outbox.id) return failed("the decision email template is disabled");
+
+  await writeAudit(input.db, {
+    eventId: input.eventId,
+    actor: input.actor,
+    action: "submission.decision_resent",
+    entityType: "submission",
+    entityId: submission.id,
+    before: {
+      decision_id: decision.id,
+      resulting_status: decision.resulting_status,
+      to_email: submission.person_email,
+    },
+    after: {
+      decision_id: decision.id,
+      outbox_id: outbox.id,
+      outbox_inserted: outbox.inserted,
+      resulting_status: decision.resulting_status,
+      to_email: submission.person_email,
+    },
+    now,
+  });
+
+  return {
+    id: submission.id,
+    outcome: "succeeded",
+    decisionId: decision.id,
+    resultingStatus: decision.resulting_status,
+    outboxId: outbox.id,
+    outboxInserted: outbox.inserted,
+  };
 }
 
 /**
  * Re-send a decision without touching the decision record. The decision id is
  * the retry's business entity, while a fresh key makes every deliberate retry
- * a new outbox row rather than a duplicate of the automatic send.
+ * a new outbox row rather than a duplicate of the automatic send. A cursor
+ * lets one bounded operation move past queued rows without making pending
+ * messages ineligible for a later deliberate retry.
  */
 export async function notifyExistingDecisions(input: {
   db: D1Database;
   queue: Queue<unknown>;
   eventId: Id;
   submissionIds: readonly Id[];
+  cursor?: string | null;
   now?: number;
 }): Promise<NotifyNotifiedResult> {
   const ids = [...new Set(input.submissionIds)];
-  if (ids.length === 0) return { selected: 0, queued: 0, skippedNoAddress: 0, outboxIds: [] };
+  if (ids.length === 0) return { selected: 0, queued: 0, skippedNoAddress: 0, remaining: 0, nextCursor: null, outboxIds: [] };
   const now = input.now ?? Date.now();
+  const cursor = input.cursor?.trim() || null;
   const submissions = await loadSubmissions(input.db, input.eventId, ids);
   const submissionsById = new Map(submissions.map((submission) => [submission.id, submission]));
   const idsJson = JSON.stringify(ids);
   const candidates = await input.db
     .prepare(
       `SELECT decision.id AS decision_id, decision.submission_id, decision.decision,
-              decision.resulting_status, decision.feedback_md
+              decision.resulting_status, decision.feedback_md,
+              COUNT(*) OVER () AS candidate_count
        FROM submission_decisions decision
        WHERE decision.event_id = ?
          AND decision.resulting_status IN ('accepted', 'rejected')
          AND decision.submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+         AND (? IS NULL OR decision.id > ?)
          AND NOT EXISTS (
            SELECT 1
            FROM submission_decisions newer
@@ -492,16 +652,27 @@ export async function notifyExistingDecisions(input: {
          )
          AND NOT EXISTS (
            SELECT 1
-           FROM outbox sent
-           WHERE sent.event_id = decision.event_id
-             AND sent.status = 'sent'
-             AND (sent.id = decision.outbox_id OR sent.entity_id = decision.id)
+           FROM outbox settled
+           JOIN events settled_event ON settled_event.id = settled.event_id
+           WHERE settled.event_id = decision.event_id
+             AND (settled.id = decision.outbox_id OR settled.entity_id = decision.id)
+             AND (
+               settled.status = 'sent'
+               OR (
+                 settled.status = 'suppressed'
+                 AND settled.suppressed_reason = 'demo_mode_not_allowlisted'
+                 AND settled_event.demo_mode = 1
+               )
+             )
          )
-       ORDER BY decision.submission_id ASC, decision.id ASC`,
+       ORDER BY decision.id ASC
+       LIMIT ?`,
     )
-    .bind(input.eventId, idsJson)
+    .bind(input.eventId, idsJson, cursor, cursor, NOTIFY_DECISIONS_BATCH_SIZE)
     .all<ExistingDecisionCandidate>();
 
+  const remaining = Math.max(Number(candidates.results[0]?.candidate_count ?? 0) - candidates.results.length, 0);
+  const nextCursor = remaining > 0 ? candidates.results[candidates.results.length - 1]?.decision_id ?? null : null;
   let skippedNoAddress = 0;
   let selected = 0;
   let queued = 0;
@@ -530,7 +701,7 @@ export async function notifyExistingDecisions(input: {
     if (result.id) outboxIds.push(result.id);
     if (result.inserted) queued += 1;
   }
-  return { selected, queued, skippedNoAddress, outboxIds };
+  return { selected, queued, skippedNoAddress, remaining, nextCursor, outboxIds };
 }
 
 async function updateSubmissionStatus(

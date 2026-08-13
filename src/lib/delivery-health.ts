@@ -16,8 +16,8 @@
  *      mail back exactly as configured) stays green and says so plainly.
  *
  *   3. A successful send means the message was accepted by the mail provider,
- *      not that it arrived. Nothing on this screen says "delivered" about a
- *      message past that point, because nothing here knows.
+ *      not that it arrived. The screen says "delivered" only when the provider's
+ *      signed delivery event has actually recorded that fact.
  */
 import { classifySendFailure } from "./mail-failure";
 
@@ -52,6 +52,8 @@ export type OwedState =
   | "waiting_too_long"
   | "held_back_demo"
   | "held_back"
+  /** The provider is still retrying delivery; it is not a hard failure yet. */
+  | "delivery_retrying"
   /** The send failed for a reason that lives on this speaker's address. */
   | "undelivered"
   /** The send failed for a reason that has nothing to do with this speaker. */
@@ -69,6 +71,8 @@ export interface OwedFact {
   outbox_created_at: number | null;
   suppressed_reason: string | null;
   has_error: boolean;
+  /** The latest provider fact, or `unknown` before a provider webhook arrives. */
+  delivery_state?: "unknown" | "delivered" | "bounced_hard" | "bounced_soft" | "complained" | null;
   /**
    * The provider's own words for why the send failed. Never rendered — it is
    * classified into an organizer sentence by `classifySendFailure`. Absent on a
@@ -102,6 +106,15 @@ export interface OutboxFacts {
   stuck_queued: number;
   sent_last_7_days: number;
   last_sent_at: number | null;
+}
+
+/** Counts of provider delivery facts, kept separate from transport status. */
+export interface DeliverySignalFacts {
+  delivered: number;
+  bounced_hard: number;
+  bounced_soft: number;
+  complained: number;
+  unknown: number;
 }
 
 export interface QuotaFacts {
@@ -139,6 +152,8 @@ export interface WebhookFacts {
   endpoints: number;
   failed: number;
   retrying: number;
+  /** Inbound provider delivery facts; outbound endpoint counts remain above. */
+  delivery?: DeliverySignalFacts;
 }
 
 export interface CronFact {
@@ -206,6 +221,11 @@ export interface DeliveryHealthSnapshot {
   generated_at: number;
   event_id: string;
   demo_mode: boolean;
+  /**
+   * Kept in the response for API compatibility. The speaker page uses the
+   * explicit `summarizeSpeakerFollowups` derivation and the system page uses
+   * `summarizeSystemHealth`; neither page races these two domains together.
+   */
   summary: { level: HealthLevel; headline: string; detail: string };
   capabilities: readonly CapabilityStatus[];
   quota: SendQuota;
@@ -238,12 +258,13 @@ const STATE_RANK: Record<OwedState, number> = {
   undelivered: 0,
   no_address: 1,
   send_blocked: 2,
-  held_back: 3,
-  never_prepared: 4,
-  changed_elsewhere: 5,
-  waiting_too_long: 6,
-  held_back_demo: 7,
-  waiting: 8,
+  delivery_retrying: 3,
+  held_back: 4,
+  never_prepared: 5,
+  changed_elsewhere: 6,
+  waiting_too_long: 7,
+  held_back_demo: 8,
+  waiting: 9,
 };
 
 function plural(count: number, one: string, many: string): string {
@@ -285,6 +306,30 @@ interface OwedVerdict {
 /** One owed row's meaning. The ordering is deliberate: a hard failure outranks an expected hold. */
 export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: boolean }): OwedVerdict {
   const { now, demoMode } = options;
+  if (fact.delivery_state === "bounced_hard") {
+    return {
+      state: "undelivered",
+      level: "alarm",
+      reason: "The mail service rejected this message after it was sent.",
+      what_to_do: "Correct the address on this speaker's record, then send the decision again.",
+    };
+  }
+  if (fact.delivery_state === "complained") {
+    return {
+      state: "undelivered",
+      level: "alarm",
+      reason: "The recipient marked this message as unwanted.",
+      what_to_do: "Confirm the address with this speaker before sending the decision again.",
+    };
+  }
+  if (fact.delivery_state === "bounced_soft") {
+    return {
+      state: "delivery_retrying",
+      level: "warn",
+      reason: "The mail service is still trying to deliver this message.",
+      what_to_do: "Nothing to do yet — we will tell you if it stops.",
+    };
+  }
   if (fact.outbox_status === "failed" || (fact.outbox_status === null && fact.has_error)) {
     // The provider's text says which of these it was; the organizer never sees
     // that text, only the sentence it maps to and the action that follows.
@@ -301,7 +346,7 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
       state: "no_address",
       level: "alarm",
       reason: "There is no usable email address on file.",
-      what_to_do: "Add an address to this speaker's record, then send the decision.",
+      what_to_do: "Add an address to this speaker's record, then open the record and choose Send decision again.",
     };
   }
   if (fact.outbox_status === "suppressed") {
@@ -311,14 +356,14 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
         state: "held_back_demo",
         level: "ok",
         reason: "Held back on purpose — this conference is in demo mode.",
-        what_to_do: "Turn demo mode off in Conference settings when you are ready to send for real.",
+        what_to_do: "Nothing to do. Open the message in Communications to read exactly what this speaker would have received.",
       };
     }
     return {
       state: "held_back",
       level: "alarm",
       reason: heldBackReason(fact.suppressed_reason),
-      what_to_do: "Open the record and send the decision again once the reason no longer applies.",
+      what_to_do: "Open the record and choose Send decision again once the reason no longer applies.",
     };
   }
   if (fact.outbox_status === "queued") {
@@ -328,7 +373,7 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
         state: "waiting_too_long",
         level: "warn",
         reason: "Written and waiting longer than it should be.",
-        what_to_do: "Give it a few minutes. If it is still here, send it again from the record.",
+        what_to_do: "Give it a few minutes. If it is still here, open the record and choose Send decision again.",
       };
     }
     return {
@@ -343,14 +388,14 @@ export function owedVerdict(fact: OwedFact, options: { now: number; demoMode: bo
       state: "changed_elsewhere",
       level: "warn",
       reason: "The record changed in Airtable after the decision was made.",
-      what_to_do: "Open the record, confirm the decision still stands, then send it.",
+      what_to_do: "Open the record, confirm the decision still stands, then choose Send decision again.",
     };
   }
   return {
     state: "never_prepared",
     level: "alarm",
     reason: "The decision is recorded but no message was ever written.",
-    what_to_do: "Open the record and send the decision — this speaker does not know yet.",
+    what_to_do: "Open the record and choose Send decision again — this speaker does not know yet.",
   };
 }
 
@@ -411,6 +456,7 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
   const remaining = Math.max(0, limit - sentToday);
   const shortfall = Math.max(0, waiting - remaining);
   const detailTail = `${count(sentToday)} of ${count(limit)} sent today · ${count(remaining)} left`;
+  const sourceNote = "This allowance comes from your connected email configuration. A conference using its own production Resend key sets its own ceiling.";
 
   if (remaining === 0) {
     return {
@@ -421,8 +467,8 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
       level: "alarm",
       headline: "Today's send allowance is used up.",
       detail: waiting > 0
-        ? `${count(waiting)} ${plural(waiting, "message is", "messages are")} waiting and none can go out until tomorrow. ${detailTail}.`
-        : `Anything sent now waits until tomorrow. ${detailTail}.`,
+        ? `${count(waiting)} ${plural(waiting, "message is", "messages are")} waiting and none can go out until tomorrow. ${detailTail}. ${sourceNote}`
+        : `Anything sent now waits until tomorrow. ${detailTail}. ${sourceNote}`,
     };
   }
   if (shortfall > 0) {
@@ -433,7 +479,7 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
       remaining,
       level: "alarm",
       headline: `${count(shortfall)} ${plural(shortfall, "speaker would not", "speakers would not")} hear from you today.`,
-      detail: `${count(waiting)} ${plural(waiting, "message is", "messages are")} waiting and only ${count(remaining)} can go out. Send the rest tomorrow, or split the wave. ${detailTail}.`,
+      detail: `${count(waiting)} ${plural(waiting, "message is", "messages are")} waiting and only ${count(remaining)} can go out. Send the rest tomorrow, or split the wave. ${detailTail}. ${sourceNote}`,
     };
   }
   if (sentToday + waiting >= limit * 0.8) {
@@ -444,7 +490,7 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
       remaining,
       level: "warn",
       headline: "Today's send allowance is nearly spent.",
-      detail: `A wave larger than ${count(remaining)} ${plural(remaining, "message", "messages")} will not finish today. ${detailTail}.`,
+      detail: `A wave larger than ${count(remaining)} ${plural(remaining, "message", "messages")} will not finish today. ${detailTail}. ${sourceNote}`,
     };
   }
   return {
@@ -454,7 +500,7 @@ export function deriveQuota(facts: QuotaFacts, limit = DAILY_SEND_LIMIT): SendQu
     remaining,
     level: "ok",
     headline: "There is room to send today.",
-    detail: `A wave of up to ${count(remaining)} ${plural(remaining, "message", "messages")} goes out today. ${detailTail}.`,
+    detail: `A wave of up to ${count(remaining)} ${plural(remaining, "message", "messages")} goes out today. ${detailTail}. ${sourceNote}`,
   };
 }
 
@@ -572,7 +618,13 @@ function submissionsCapability(facts: DeliveryHealthFacts): CapabilityStatus {
 
 function emailCapability(facts: DeliveryHealthFacts): CapabilityStatus {
   const base = { id: "email", label: "Sending email", href: "/communications" as string | null };
-  const owedAlarms = facts.owed.filter((fact) => owedVerdict(fact, { now: facts.now, demoMode: facts.demo_mode }).level === "alarm").length;
+  const delivery = facts.webhooks.delivery ?? {
+    delivered: 0,
+    bounced_hard: 0,
+    bounced_soft: 0,
+    complained: 0,
+    unknown: 0,
+  };
   if (facts.outbox.failed > 0) {
     return {
       ...base,
@@ -581,15 +633,32 @@ function emailCapability(facts: DeliveryHealthFacts): CapabilityStatus {
       // left. What came back after a successful send is not something this
       // screen is told.
       headline: `${count(facts.outbox.failed)} ${plural(facts.outbox.failed, "message", "messages")} could not be sent.`,
-      detail: "Those people were never told. Work the ledger below — each row names the reason and opens the record it belongs to.",
+      detail: "Those messages never left the connected mail account. Check the mail configuration before trying again.",
     };
   }
-  if (owedAlarms > 0) {
+  const addressFailures = delivery.bounced_hard + delivery.complained;
+  if (addressFailures > 0) {
     return {
       ...base,
       level: "alarm",
-      headline: `${count(owedAlarms)} ${plural(owedAlarms, "speaker is", "speakers are")} owed a message that never arrived.`,
-      detail: "Their decision is recorded but nothing reached them. The ledger below has each one.",
+      headline: `${count(addressFailures)} ${plural(addressFailures, "message did not", "messages did not")} reach the recipient.`,
+      detail: "Those messages were rejected after sending. Work the follow-up list to confirm the address before trying again.",
+    };
+  }
+  if (delivery.bounced_soft > 0) {
+    return {
+      ...base,
+      level: "warn",
+      headline: `${count(delivery.bounced_soft)} ${plural(delivery.bounced_soft, "message is", "messages are")} still being tried by the mail service.`,
+      detail: "Nothing is wrong yet. We will tell you if the service stops trying to deliver them.",
+    };
+  }
+  if (delivery.unknown > 0) {
+    return {
+      ...base,
+      level: "unknown",
+      headline: "Your mail provider does not report delivery.",
+      detail: `${count(delivery.unknown)} ${plural(delivery.unknown, "message was", "messages were")} accepted for sending, but no arrival signal has come back yet.`,
     };
   }
   if (facts.outbox.stuck_queued > 0) {
@@ -605,7 +674,7 @@ function emailCapability(facts: DeliveryHealthFacts): CapabilityStatus {
       ...base,
       level: "ok",
       headline: "Email is held back on purpose — this conference is in demo mode.",
-      detail: `${count(facts.outbox.suppressed)} ${plural(facts.outbox.suppressed, "message is", "messages are")} written and waiting. Turn demo mode off in Conference settings to send for real.`,
+      detail: `${count(facts.outbox.suppressed)} ${plural(facts.outbox.suppressed, "message is", "messages are")} written and logged in Communications, where you can read exactly what each one would have said.`,
     };
   }
   return {
@@ -842,33 +911,75 @@ function readCrons(source: Record<string, unknown>): CronFact[] {
   });
 }
 
-function summarize(
-  capabilities: readonly CapabilityStatus[],
-  urgent: number,
+export interface HealthSummary {
+  level: HealthLevel;
+  headline: string;
+  detail: string;
+}
+
+/**
+ * The people page has one job: show who has not heard from the organizer and
+ * whether the connected mail account can carry the next wave. Capability rows
+ * are intentionally absent from this derivation.
+ */
+export function summarizeSpeakerFollowups(
+  owedTotal: number,
+  owedUrgent: number,
   waitingCount: number,
   quota: SendQuota,
-  facts: DeliveryHealthFacts,
-): { level: HealthLevel; headline: string; detail: string } {
-  if (urgent > 0) {
+  sentLast7Days = 0,
+  delivery: DeliverySignalFacts = { delivered: 0, bounced_hard: 0, bounced_soft: 0, complained: 0, unknown: 0 },
+): HealthSummary {
+  if (owedTotal > 0) {
+    const level = owedUrgent > 0 || quota.level === "alarm"
+      ? "alarm"
+      : quota.level === "warn" || delivery.bounced_soft > 0 ? "warn" : "ok";
     return {
-      level: "alarm",
-      headline: `${count(urgent)} ${plural(urgent, "speaker has", "speakers have")} not heard from you.`,
-      detail: "Their decision is recorded and the message never reached them. Start at the top of the ledger — each row opens its record.",
+      level,
+      headline: `${count(owedTotal)} ${plural(owedTotal, "speaker has", "speakers have")} not heard from you.`,
+      detail: owedUrgent > 0
+        ? "Their decision is recorded and the message has not reached them. Open the follow-up list — each row opens its record."
+        : quota.level === "alarm"
+          ? "Today's send allowance will not carry these messages. See the allowance below, then open the follow-up list to see the exact state."
+          : delivery.bounced_soft > 0
+            ? "The mail service is still trying some of these messages. We will tell you if it stops."
+          : "These messages are still in flight or held on purpose. Open the follow-up list to see the exact state.",
     };
   }
-  const failing = capabilities.filter((capability) => capability.level === "alarm");
-  if (failing.length > 0) return { level: "alarm", headline: failing[0].headline, detail: failing[0].detail };
   if (quota.level === "alarm") return { level: "alarm", headline: quota.headline, detail: quota.detail };
-  const warning = capabilities.filter((capability) => capability.level === "warn");
-  if (warning.length > 0) return { level: "warn", headline: warning[0].headline, detail: warning[0].detail };
   if (quota.level === "warn") return { level: "warn", headline: quota.headline, detail: quota.detail };
-  const waiting = waitingCount;
+  if (delivery.unknown > 0) {
+    return {
+      level: "unknown",
+      headline: "Your mail provider does not report delivery.",
+      detail: "Messages have been accepted for sending, but this provider has not supplied an arrival signal. Nothing here claims they reached a mailbox.",
+    };
+  }
   return {
     level: "ok",
     headline: "Everyone who has been decided has been told.",
-    detail: waiting === 0
-      ? `${count(facts.outbox.sent_last_7_days)} ${plural(facts.outbox.sent_last_7_days, "message", "messages")} sent in the last seven days. Nothing is stuck.`
-      : `${count(waiting)} ${plural(waiting, "message is", "messages are")} in flight and nothing is stuck.`,
+    detail: waitingCount === 0
+      ? `${count(sentLast7Days)} ${plural(sentLast7Days, "message", "messages")} sent in the last seven days. Nothing is stuck.`
+      : `${count(waitingCount)} ${plural(waitingCount, "message is", "messages are")} in flight and nothing is stuck.`,
+  };
+}
+
+/**
+ * The system page has one job: report capability and infrastructure health.
+ * It never receives owed-speaker or quota facts, so a person-facing gap cannot
+ * become its headline.
+ */
+export function summarizeSystemHealth(capabilities: readonly CapabilityStatus[]): HealthSummary {
+  const failing = capabilities.find((capability) => capability.level === "alarm");
+  if (failing) return { level: "alarm", headline: failing.headline, detail: failing.detail };
+  const warning = capabilities.find((capability) => capability.level === "warn");
+  if (warning) return { level: "warn", headline: warning.headline, detail: warning.detail };
+  const unknown = capabilities.find((capability) => capability.level === "unknown");
+  if (unknown) return { level: "unknown", headline: `The ${unknown.label} check has not reported yet.`, detail: unknown.detail };
+  return {
+    level: "ok",
+    headline: "System health is clear.",
+    detail: "All eight capability checks are reporting normally.",
   };
 }
 
@@ -884,6 +995,7 @@ export function deriveDeliveryHealth(
   const urgent = judged.filter((row) => row.level === "alarm").length;
   const owed = judged.slice(0, ledgerLimit);
   const quota = deriveQuota(facts.quota);
+  const delivery = facts.webhooks.delivery ?? { delivered: 0, bounced_hard: 0, bounced_soft: 0, complained: 0, unknown: 0 };
   // Eight rows, always, in this order. The screen refreshes under the reader,
   // so a capability never appears or disappears — only its words change.
   const capabilities: readonly CapabilityStatus[] = [
@@ -900,7 +1012,7 @@ export function deriveDeliveryHealth(
     generated_at: facts.now,
     event_id: facts.event_id,
     demo_mode: facts.demo_mode,
-    summary: summarize(capabilities, urgent, judged.length, quota, facts),
+    summary: summarizeSpeakerFollowups(facts.owed_total, urgent, quota.waiting, quota, facts.outbox.sent_last_7_days, delivery),
     capabilities,
     quota,
     totals: {

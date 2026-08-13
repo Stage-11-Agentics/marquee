@@ -62,7 +62,7 @@ const PIPELINE_META: Readonly<Record<(typeof DASHBOARD_STAGE_IDS)[number], { lab
   submitted: { label: "Submitted", note: "Ready for review" },
   in_review: { label: "In review", note: "Committee work underway" },
   waved: { label: "Waved", note: "Decision wave prepared" },
-  accepted: { label: "Accepted", note: "Decision confirmed" },
+  accepted: { label: "Ready to place", note: "Accepted and ready for scheduling" },
   onboarding: { label: "Onboarding", note: "Speaker work underway" },
   scheduled: { label: "Scheduled", note: "placed on the working agenda" },
   published: { label: "Published", note: "live on the public site" },
@@ -162,7 +162,9 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       SELECT COUNT(DISTINCT s.id) AS count
       FROM submissions s
       LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
-      WHERE s.event_id = ? AND ${submissionStatusPredicate("accepted", { includeCancelledAt })}
+      WHERE s.event_id = ?
+        AND ${submissionStatusPredicate("accepted_any", { includeCancelledAt })}
+        AND ai.id IS NULL
     `).bind(eventId).first<{ count: number | null }>(),
     database.prepare(`
       SELECT person.name AS person_name, submission.id AS submission_id, submission.title AS submission_title,
@@ -236,8 +238,8 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     id: "unplaced",
     label: "Unscheduled",
     count: count(unplacedResult?.count),
-    href: submissionsHref({ status: "accepted", placement: "unplaced" }),
-    note: "accepted sessions",
+    href: submissionsHref({ status: "accepted_any", placement: "unplaced" }),
+    note: "accepted records not yet on the agenda",
   };
   const unreviewedTrack = trackPressure.find((item) => item.count > 0) ?? null;
   const visibleAgendaConflicts = visibleVenueConflicts(agendaConflicts, showBuildingComparison);

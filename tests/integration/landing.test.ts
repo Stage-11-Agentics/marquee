@@ -3,7 +3,9 @@ import { beforeEach, expect, test } from "vitest";
 import { loadLandingData, renderLandingDocument } from "../../src/routes/landing.route";
 import { applyMigrations, env } from "./apply-migrations";
 
-const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
+// Anchored to the real clock: the fixtures below are offsets ("due yesterday"),
+// and the server compares those columns against Date.now().
+const NOW = Date.now();
 const SHELL = `<!doctype html><html><head></head><body><div id="app"></div></body></html>`;
 
 beforeEach(async () => {
@@ -45,6 +47,10 @@ test("AC-1, AC-2 · the SSR landing exposes both reachable demo entries and live
   expect(html).toContain("Fantastic conferences, effortlessly.");
   expect(html).toContain('data-demo-role="organizer"');
   expect(html).toContain('data-demo-role="speaker"');
+  // MRQ-107: the third door. ABS-S3 step 1 starts by reaching a reviewer seat,
+  // and the reviewer queue is the only surface that answers it.
+  expect(html).toContain('data-demo-role="reviewer"');
+  expect(html).toContain("/reviewer?demo=reviewer");
   expect(html).toContain("Submitted");
   expect(html).toContain(">1</strong>");
   expect(html).toContain(">1</strong>");
@@ -66,4 +72,15 @@ test("AC-4 · the landing render has crawlable destinations and no placeholder c
   expect(html).toContain('href="/f/cfp"');
   expect(html).not.toMatch(/lorem|TODO|placeholder|coming soon|Tab \d/i);
   expect(html).not.toContain("No data");
+});
+
+test("CONTRACT · CFP-03 landing brand copy follows the current conference name", async () => {
+  await env.DB.prepare("UPDATE events SET name = ? WHERE id = ?").bind("Future Summit 2028", "evt_landing").run();
+  const html = renderLandingDocument(SHELL, await loadLandingData(env.DB));
+
+  expect(html).toContain("Future Summit 2028");
+  expect(html).toContain("Built for Future Summit 2028");
+  expect(html).toContain("the populated Future Summit 2028 workspace");
+  expect(html).not.toContain("Built for AIE NYC 2026");
+  expect(html).not.toContain("populated AIE NYC 2026 workspaces");
 });

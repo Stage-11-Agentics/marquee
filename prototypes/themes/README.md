@@ -1,0 +1,9 @@
+# Marquee — Theme round (program home)
+
+Three full-register visual languages, one screen. `index.html` is the picker (keys 1/2/3); each theme is self-contained and opens from `file://`. Content, hierarchy, and data are copied from `prototypes/pipeline-v1.1/index.html` `#dashboard` — the same screen the skin round used — so each register can be held against Flight Deck directly. Each file opens with a comment block stating its tokens and tropes.
+
+- **latent-space** — gradient-on-black: Syncopate standing in for Tachyon (the brief's "wide geometric techno" substitution), a Substack serif body, the single orange→pink gradient as the only chroma, a hex logomark, and the pipeline strip drawn over a VAE-bottleneck silhouette — wide in, pinch at the decision, wide out to the site. Lowercase everywhere.
+- **ai-engineer** — neutral high-contrast monochrome: Plus Jakarta Sans headings over Inter body. Terminal chrome does the personality work: the search field is a `>_` prompt, CTAs are bracketed shell tokens (`>work the pipeline<`), sections carry zero-padded indices, wave progress renders as ASCII bars, the chase queue renders as shell output, and a company logo wall closes the page.
+- **swyxy** — the swyx.io register, swyxkit minimalism: indigo-800 forward, all-lowercase single-word nav, dense lists over cards, and his signature post-index applied to ops data — every feed row is date · format emoji · title, so the chase queue self-classifies at a glance. The `dark` word in the topbar actually toggles dark mode (`#light` / `#dark` force it).
+
+Unlike the skin round these go past tokens: layout tropes move per register (stat blocks vs terminal vs index feed). The underlying information — seven stages, four attention items, pacing, waves, metrics, task rows — is identical across all three.

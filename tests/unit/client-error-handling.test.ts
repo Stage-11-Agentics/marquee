@@ -16,6 +16,8 @@ import {
   ERROR_TREATMENTS,
   MarqueeApiError,
   describeError,
+  fieldError,
+  onUnauthenticated,
   referenceCode,
 } from "../../src/ui/shell/api-client";
 import {
@@ -68,6 +70,28 @@ describe("the reference code", () => {
     const described = describeError(new Error("Cannot read properties of undefined"));
     expect(described.sentence).not.toContain("undefined");
     expect(described.retryable).toBe(false);
+  });
+
+  test("CONTRACT · MRQ-127 field detail maps to the named control and an unmapped field stays available globally", () => {
+    const direct = new MarqueeApiError({
+      code: "unprocessable",
+      message: "Choose a format from this conference's settings.",
+      status: 422,
+      field: "format_id",
+      route: "/api/v1/events/{eventId}/submissions",
+    });
+    expect(fieldError(direct, ["format_id"])).toBe("Choose a format from this conference's settings.");
+    expect(fieldError(direct, ["track_ids"])).toBeUndefined();
+
+    const details = new MarqueeApiError({
+      code: "malformed_request",
+      message: "The submission has invalid values.",
+      status: 422,
+      details: { issues: [{ fieldKey: "submitter.email", message: "Enter a reachable email address." }] },
+      route: "/api/v1/events/{eventId}/submissions",
+    });
+    expect(fieldError(details, ["submitter.email"])).toBe("Enter a reachable email address.");
+    expect(details.message).toBe("The submission has invalid values.");
   });
 });
 
@@ -217,6 +241,63 @@ describe("shared fetch client", () => {
       expect(fetchMock).toHaveBeenCalledOnce();
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+/**
+ * The wall's trigger. Getting this wrong is invisible in either direction: a
+ * listener that never fires leaves an operator clicking a dead screen, and one
+ * that fires on `forbidden` raises "your session ended" at somebody whose
+ * session is perfectly alive and merely lacks a permission.
+ */
+describe("the session-ended signal", () => {
+  async function failWith(code: string, status: number): Promise<void> {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      JSON.stringify({ error: { code, message: "no" } }),
+      { status, headers: { "content-type": "application/json" } },
+    )));
+    try {
+      await apiFetch("/api/v1/auth/me", { route: "/api/v1/auth/me" }).catch(() => undefined);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }
+
+  test("CONTRACT · it fires on unauthenticated and not on forbidden", async () => {
+    const fired = vi.fn();
+    const unsubscribe = onUnauthenticated(fired);
+    try {
+      await failWith("forbidden", 403);
+      expect(fired).not.toHaveBeenCalled();
+      await failWith("unauthenticated", 401);
+      expect(fired).toHaveBeenCalledOnce();
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  test("CONTRACT · unsubscribing actually detaches the listener", async () => {
+    const fired = vi.fn();
+    onUnauthenticated(fired)();
+    await failWith("unauthenticated", 401);
+    expect(fired).not.toHaveBeenCalled();
+  });
+
+  test("CONTRACT · a 401 stays a thrown error for the caller that asked", async () => {
+    const unsubscribe = onUnauthenticated(() => undefined);
+    try {
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(
+        JSON.stringify({ error: { code: "unauthenticated", message: "no" } }),
+        { status: 401, headers: { "content-type": "application/json" } },
+      )));
+      const failure = await apiFetch("/api/v1/auth/me", { route: "/api/v1/auth/me" })
+        .catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(MarqueeApiError);
+      expect((failure as MarqueeApiError).code).toBe("unauthenticated");
+    } finally {
+      vi.unstubAllGlobals();
+      unsubscribe();
     }
   });
 });

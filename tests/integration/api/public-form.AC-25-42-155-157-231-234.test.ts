@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { SELF } from "cloudflare:test";
 
 import { applyMigrations, env } from "../apply-migrations";
+import {
+  DRAFT_AUTOSAVE_LIMIT,
+  DRAFT_AUTOSAVE_WINDOW_SECONDS,
+  draftAutosaveRateKey,
+} from "../../../src/routes/public-form.routes";
 
 const ORIGIN = "https://marquee.stage11.dev";
 const EVENT_ID = "evt_public_form";
@@ -58,7 +63,8 @@ async function seedPublicForm(): Promise<void> {
       ('field_tracks', ?, 'tracks', 'Tracks', NULL, 'multi_select', 1, 3, ?, NULL, ?, ?),
       ('field_vendor', ?, 'vendor_content', 'Product discussion', NULL, 'single_select', 1, 4, ?, NULL, ?, ?),
       ('field_product', ?, 'vendor_product', 'Product or service', NULL, 'short_text', 1, 5, ?, ?, ?, ?),
-      ('field_file', ?, 'supporting_file', 'Supporting material', NULL, 'file', 0, 6, ?, NULL, ?, ?)`)
+      ('field_file', ?, 'supporting_file', 'Supporting material', NULL, 'file', 0, 6, ?, NULL, ?, ?),
+      ('field_arrival', ?, 'arrival_date', 'Arrival date', NULL, 'date', 0, 7, '{}', NULL, ?, ?)`)
       .bind(
         FORM_ID, NOW, NOW,
         FORM_ID, NOW, NOW,
@@ -67,6 +73,7 @@ async function seedPublicForm(): Promise<void> {
         FORM_ID, JSON.stringify({ options: ["No", "Yes"] }), NOW, NOW,
         FORM_ID, JSON.stringify({ minLength: 2 }), JSON.stringify({ all: [{ fieldKey: "vendor_content", op: "equals", value: "Yes" }] }), NOW, NOW,
         FORM_ID, JSON.stringify({ accept: ["application/pdf"], maxBytes: 100_000 }), NOW, NOW,
+        FORM_ID, NOW, NOW,
       ),
   ]);
 }
@@ -85,13 +92,28 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(body.conference.name).toBe("Walkthrough Conference");
     expect(body.form.min_speakers).toBe(1);
     expect(body.form.per_submitter_limit).toBe(3);
-    expect(body.fields.map((field) => field.key)).toEqual(["title", "speaker_name", "speaker_email", "tracks", "vendor_content", "vendor_product", "supporting_file"]);
+    expect(body.fields.map((field) => field.key)).toEqual(["title", "speaker_name", "speaker_email", "tracks", "vendor_content", "vendor_product", "supporting_file", "arrival_date"]);
 
     const html = await (await request("/f/public-cfp")).text();
     expect(html).toContain("Tell the conference what you are building.");
     expect(html).toContain("Submit abstract");
     expect(html).toContain("0/80 characters");
     expect(html.indexOf("Session title")).toBeLessThan(html.indexOf("Product or service"));
+  });
+
+  test("AC-231 · a demo conference withholds the Turnstile site key, so no widget mounts to block the client", async () => {
+    // Exempting the SERVER is not enough. The client mounts the widget whenever
+    // it is handed a site key, and then refuses to issue any public write until
+    // that widget returns a token — so an exempted server simply never gets
+    // called. Withholding the key is what actually opens the path.
+    const rendered = await request("/f/public-cfp", { method: "GET" });
+    expect(rendered.status).toBe(200);
+    // The site key vitest.worker.config.ts hands the Worker.
+    expect(await rendered.text()).not.toContain("1x00000000000000000000AA");
+
+    const asJson = await request("/api/v1/public/forms/public-cfp", { method: "GET" });
+    const state = await json<{ turnstile_site_key: string | null }>(asJson);
+    expect(state.turnstile_site_key).toBeNull();
   });
 
   test("AC-231 · a demo conference takes a draft and a submission with no Turnstile token at all", async () => {
@@ -243,6 +265,28 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(await rowCount("people")).toBe(0);
   });
 
+  test("CONTRACT · MRQ-95 rejects a malformed date submitted directly to the public API", async () => {
+    const response = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        turnstileToken: nextTurnstileToken(),
+        answers: {
+          title: "A valid travel date test",
+          speaker_name: "Date Speaker",
+          speaker_email: "date@example.com",
+          tracks: ["Agents"],
+          vendor_content: "No",
+          arrival_date: "2026-02-30",
+        },
+      }),
+    });
+    expect(response.status).toBe(422);
+    const body = await json<{ error: { details: { issues: Array<{ fieldKey: string; message: string }> } } }>(response);
+    expect(body.error.details.issues).toContainEqual({ fieldKey: "arrival_date", message: "Choose a valid date, then try again." });
+    expect(await rowCount("submissions")).toBe(0);
+    expect(await rowCount("submission_answers")).toBe(0);
+  });
+
   test("AC-40 · a resume link that resolves to nothing says so instead of rendering a blank form", async () => {
     const missed = await request("/api/v1/public/forms/public-cfp?resume=not-a-real-resume-token");
     expect(missed.status).toBe(200);
@@ -268,8 +312,9 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(created.status).toBe(201);
     const draft = await json<{ resume_token: string; draft_id: string; state: string }>(created);
     expect(draft.state).toBe("resumed");
-    const resumeMail = await env.DB.prepare("SELECT to_email, text FROM outbox WHERE template_key = 'draft_resume'").first<{ to_email: string; text: string }>();
+    const resumeMail = await env.DB.prepare("SELECT to_email, subject, text FROM outbox WHERE template_key = 'draft_resume'").first<{ to_email: string; subject: string; text: string }>();
     expect(resumeMail?.to_email).toBe("draft@example.com");
+    expect(resumeMail?.subject).toBe("Continue your conference abstract");
     expect(resumeMail?.text).toContain(`/f/public-cfp?resume=${draft.resume_token}`);
 
     await env.DB.prepare(
@@ -302,12 +347,24 @@ describe.sequential("MRQ-15 public conference form", () => {
     const stored = await env.DB.prepare("SELECT value_text FROM submission_answers WHERE submission_id = ? AND field_id = 'field_name'").bind(draft.draft_id).first<{ value_text: string }>();
     expect(stored?.value_text).toBe("Draft Speaker");
 
-    let rateLimited = false;
-    for (let index = 0; index < 35; index += 1) {
-      const response = await request(`/api/v1/public/forms/public-cfp/drafts/${draft.resume_token}`, { method: "PATCH", body: JSON.stringify({ answers: { speaker_name: "Draft Speaker" } }) });
-      if (response.status === 429) { rateLimited = true; break; }
+    // Seed the autosave counter to its limit rather than spending it with a
+    // burst. Spending it needs DRAFT_AUTOSAVE_LIMIT + 1 requests inside one
+    // fixed window, which races the window boundary: a boundary mid-burst
+    // resets the count so neither side trips, and on a loaded machine the burst
+    // outlasts the window and the limiter can never fire at all.
+    //
+    // Both the current and the next window are seeded, so a boundary crossing
+    // between seeding and the request lands on a window that is also at limit.
+    const now = Date.now();
+    for (const at of [now, now + DRAFT_AUTOSAVE_WINDOW_SECONDS * 1000]) {
+      await env.CACHE.put(
+        await draftAutosaveRateKey(draft.resume_token, at),
+        String(DRAFT_AUTOSAVE_LIMIT),
+        { expirationTtl: DRAFT_AUTOSAVE_WINDOW_SECONDS * 3 },
+      );
     }
-    expect(rateLimited).toBe(true);
+    const limited = await request(`/api/v1/public/forms/public-cfp/drafts/${draft.resume_token}`, { method: "PATCH", body: JSON.stringify({ answers: { speaker_name: "Draft Speaker" } }) });
+    expect(limited.status).toBe(429);
   });
 
   test("AC-34 + AC-37 + AC-38 + AC-39 + AC-234 · confirmation, tracks, participants, limit, close, and reopen are real states", async () => {
@@ -344,6 +401,19 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(Number(tracks?.total ?? 0)).toBe(1);
     const participants = await env.DB.prepare("SELECT role FROM participations WHERE submission_id = (SELECT id FROM submissions LIMIT 1) ORDER BY role").all<{ role: string }>();
     expect(participants.results.map((row) => row.role)).toEqual(["speaker", "submitter"]);
+  });
+
+  test("CONTRACT · MRQ-156 · a manually closed public form does not print its future close date", async () => {
+    await env.DB.prepare("UPDATE forms SET status = 'closed', closes_at = ? WHERE id = ?")
+      .bind(Date.UTC(2099, 0, 1), FORM_ID)
+      .run();
+
+    const response = await request("/f/public-cfp");
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain("Call for speakers · closed");
+    expect(body).toContain("This call for speakers is closed.");
+    expect(body).not.toMatch(/>Closed\s+\d[^<]*<\/span>/);
   });
 
   test("CONTRACT · public routes are present in the served OpenAPI document", async () => {

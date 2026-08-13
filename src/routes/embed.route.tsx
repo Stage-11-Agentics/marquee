@@ -2,8 +2,9 @@
 import { Hono } from "hono";
 import { renderToString } from "preact-render-to-string";
 
-import { EMBED_KINDS, type EmbedKind } from "../db/schema";
+import { EMBED_KINDS, EMBED_OUTPUT_FORMATS, type EmbedKind, type EmbedOutputFormat } from "../db/schema";
 import type { Env } from "../index";
+import { ICON_LINKS } from "../lib/head-icons";
 import {
   loadPublicEmbed,
   loadPublicEvent,
@@ -19,6 +20,7 @@ import {
   EmbedConfigPage,
   EmbedPage,
 } from "../ui/embeds/EmbedPage";
+import { buildPublicCalendarFeed } from "../lib/public-ics";
 import { PUBLIC_SITE_STYLES } from "../ui/public/agenda/PublicAgendaPage";
 import { renderPublicDocument } from "./public-agenda.route";
 
@@ -31,12 +33,14 @@ function safeAccent(value: string | undefined): string | null {
 async function readEmbed(
   database: D1Database,
   cache: PublicEmbedCache | undefined,
-  request: { slug: string; eventSlug?: string | null; kind?: EmbedKind; track?: string | null; status?: string | null; accent?: string | null; layout?: string | null },
+  request: { slug: string; eventSlug?: string | null; kind?: EmbedKind; track?: string | null; format?: string | null; room?: string | null; status?: string | null; accent?: string | null; layout?: string | null },
 ) {
   const resolved = await resolvePublicEmbed(database, request);
   if (!resolved) return null;
   const filters = {
     track: request.track ?? null,
+    format: request.format ?? null,
+    room: request.room ?? null,
     status: request.status ?? null,
     accent: safeAccent(request.accent ?? undefined),
     layout: request.layout === "list" ? "list" : null,
@@ -62,15 +66,18 @@ function renderEmbedDocument(shell: string, markup: string, script?: string): st
 async function shellFor(context: { env: Env; req: { raw: Request } }): Promise<string> {
   const response = await context.env.ASSETS.fetch(new Request(new URL("/index.html", context.req.raw.url), { method: "GET" }));
   if (response.ok) return response.text();
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Embed</title></head><body><div id="app"></div><script type="module" src="/src/ui/app.tsx"></script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Embed</title>${ICON_LINKS}</head><body><div id="app"></div><script type="module" src="/src/ui/app.tsx"></script></body></html>`;
 }
 
 embedRoutes.get("/embed/config", async (context) => {
   const query = context.req.query();
   const kind: EmbedKind = EMBED_KINDS.includes(query.kind as EmbedKind) ? (query.kind as EmbedKind) : "agenda";
+  const output: EmbedOutputFormat = EMBED_OUTPUT_FORMATS.includes(query.output as EmbedOutputFormat) ? (query.output as EmbedOutputFormat) : "html";
   const event = await loadPublicEvent(context.env.DB, query.event ?? query.event_slug);
   if (!event) return context.notFound();
   const track = query.track ?? "";
+  const format = query.format ?? "";
+  const room = query.room ?? "";
   const status = query.status ?? "";
   const layout = query.layout === "list" ? "list" : "cards";
   const accent = safeAccent(query.accent) ?? event.accent ?? "#0b6a72";
@@ -80,24 +87,34 @@ embedRoutes.get("/embed/config", async (context) => {
     kind,
   });
   if (!resolved) return context.notFound();
-  const preview = await loadPublicEmbed(context.env.DB, resolved, { track, status, accent, layout });
+  const preview = await loadPublicEmbed(context.env.DB, resolved, { track, format, room, status, accent, layout });
   const shell = await shellFor(context);
-  const markup = renderToString(<EmbedConfigPage event={event} tracks={preview.tracks} kind={kind} track={track} status={status} layout={layout} accent={accent} preview={preview} />);
+  const markup = renderToString(<EmbedConfigPage event={event} tracks={preview.tracks} kind={kind} track={track} status={status} layout={layout} accent={accent} output={output} preview={preview} />);
   return context.html(renderEmbedDocument(shell, markup, EMBED_CONFIG_SCRIPT));
 });
 
 embedRoutes.get("/embed/:slug", async (context) => {
   const query = context.req.query();
+  const rawSlug = context.req.param("slug") ?? "";
+  const isCalendarFeed = rawSlug.endsWith(".ics");
+  const slug = isCalendarFeed ? rawSlug.slice(0, -4) : rawSlug;
   const result = await readEmbed(context.env.DB, context.env.CACHE, {
-    slug: context.req.param("slug"),
+    slug,
     eventSlug: query.event ?? query.event_slug,
     track: query.track,
+    format: query.format,
+    room: query.room,
     status: query.status,
     accent: query.accent,
     layout: query.layout,
   });
   if (!result) return context.notFound();
   context.header("Cache-Control", "public, max-age=30, s-maxage=30");
+  if (isCalendarFeed) {
+    context.header("Content-Type", "text/calendar; charset=utf-8");
+    context.header("Content-Disposition", `inline; filename="${encodeURIComponent(slug)}.ics"`);
+    return context.body(buildPublicCalendarFeed(result.data, new URL(context.req.url).origin));
+  }
   const shell = await shellFor(context);
   return context.html(renderEmbedDocument(shell, renderToString(<EmbedPage data={result.data} />)));
 });
@@ -114,6 +131,8 @@ embedRoutes.get("/:eventSlug/:kind/embed", async (context) => {
     eventSlug: context.req.param("eventSlug"),
     kind,
     track: query.track,
+    format: query.format,
+    room: query.room,
     status: query.status,
     accent: query.accent,
     layout: query.layout,

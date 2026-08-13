@@ -21,8 +21,12 @@ export function PageHeader({ title, copy, actions }: { title: string; copy: stri
   return <header class="page-head"><div><h1>{title}</h1><p>{copy}</p></div><div class="head-actions">{actions}</div></header>;
 }
 
-export function Chip({ tone = "", children }: { tone?: "" | "success" | "warning" | "alarm"; children: ComponentChildren }): JSX.Element {
-  return <span class={`chip ${tone}`.trim()}>{children}</span>;
+export function Chip({ tone = "", class: className = "", children }: { tone?: "" | "success" | "warning" | "alarm"; class?: string; children: ComponentChildren }): JSX.Element {
+  return <span class={`chip ${tone} ${className}`.trim()}>{children}</span>;
+}
+
+export function ReviewerName({ name, kind }: { name: string; kind?: "human" | "agent" }): JSX.Element {
+  return <span class="reviewer-name"><span>{name}</span><span class="reviewer-badge-slot">{kind === "agent" ? <Chip class="agent-chip">Agent</Chip> : <span class="agent-chip-placeholder" aria-hidden="true" />}</span></span>;
 }
 
 export function EmptyState({ title, copy, action, class: className = "" }: { title: string; copy: string; action?: ComponentChildren; class?: string }): JSX.Element {

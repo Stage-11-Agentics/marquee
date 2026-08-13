@@ -4,9 +4,13 @@ import { seedId, syntheticEmail } from "../../src/lib/ids.ts";
 import type { SeedContext, SeedModule, SeedRow } from "./_sql.ts";
 import { EVENT_ID, ORG_ID, STAFF_PERSON_ID, TRACK_IDS } from "./event.ts";
 import { CODE_2025_ROSTER } from "./pool.ts";
+import { poolSubmissionId } from "./pool.ts";
 
 export const ROUND_ONE_ID = seedId("rnd", "initial-review");
 export const ORGANIZER_UNREVIEWED_ASSIGNMENTS = 40;
+export const AGENT_PERSON_ID = seedId("per", "evaluator-triage-agent");
+export const AGENT_TOKEN_ID = seedId("tok", "evaluator-triage-agent");
+export const AGENT_SUBMISSION_ID = poolSubmissionId(1);
 
 const PLAN_ID = seedId("evp", "program-review");
 const ROUND_TWO_ID = seedId("rnd", "final-selection");
@@ -93,8 +97,26 @@ export function run(ctx: SeedContext): void {
     membership(ctx, personId, "reviewer");
   }
 
+  ctx.add("people", {
+    id: AGENT_PERSON_ID,
+    org_id: ORG_ID,
+    email: "triage.agent@example.com",
+    name: "Triage agent",
+    kind: "agent",
+    title: "Agent evaluator",
+    company: null,
+    bio: "Seeded Agent evaluator seat for the evaluation walkthrough.",
+    headshot_attachment_id: null,
+    social_links: "[]",
+    is_demo: 1,
+    last_write_source: "marquee",
+    created_at: ctx.now,
+    updated_at: ctx.now,
+  });
+  membership(ctx, AGENT_PERSON_ID, "reviewer");
+
   const trackIds = Object.values(TRACK_IDS);
-  for (const reviewerId of [STAFF_PERSON_ID, ...reviewerIds]) {
+  for (const reviewerId of [STAFF_PERSON_ID, ...reviewerIds, AGENT_PERSON_ID]) {
     for (const trackId of trackIds) {
       ctx.add("reviewer_track_scopes", {
         id: seedId("rts", `${reviewerId}-${trackId}`),
@@ -106,6 +128,48 @@ export function run(ctx: SeedContext): void {
       });
     }
   }
+
+  ctx.add("committees", {
+    id: COMMITTEE_ID,
+    event_id: EVENT_ID,
+    name: "Program reviewers",
+    created_at: ctx.now,
+    updated_at: ctx.now,
+  });
+  reviewerIds.forEach((personId, index) => {
+    ctx.add("committee_members", {
+      id: seedId("cmm", `${COMMITTEE_ID}-${personId}`),
+      committee_id: COMMITTEE_ID,
+      person_id: personId,
+      role: index === 0 ? "chair" : "reviewer",
+      created_at: ctx.now,
+      updated_at: ctx.now,
+    });
+  });
+  ctx.add("committee_members", {
+    id: seedId("cmm", `${COMMITTEE_ID}-${AGENT_PERSON_ID}`),
+    committee_id: COMMITTEE_ID,
+    person_id: AGENT_PERSON_ID,
+    role: "reviewer",
+    created_at: ctx.now,
+    updated_at: ctx.now,
+  });
+
+  ctx.add("api_tokens", {
+    id: AGENT_TOKEN_ID,
+    org_id: ORG_ID,
+    event_id: EVENT_ID,
+    name: "Evaluator seat · Triage agent",
+    token_hash: "5d51377ad45aa39458876edf1016bf3f65dd8a22a3efdb922e30900f1fefb539",
+    prefix: "mq_demo",
+    scopes: JSON.stringify({ permissions: ["review:write"], event_ids: [EVENT_ID] }),
+    created_by: STAFF_PERSON_ID,
+    acts_as_person_id: AGENT_PERSON_ID,
+    last_used_at: null,
+    revoked_at: null,
+    created_at: ctx.now,
+    updated_at: ctx.now,
+  });
 
   ctx.add("evaluation_plans", {
     id: PLAN_ID,
@@ -125,6 +189,7 @@ export function run(ctx: SeedContext): void {
     name: "Initial review",
     mode: "scorecard",
     anonymized: 1,
+    committee_id: COMMITTEE_ID,
     target_reviews_per_submission: 3,
     opens_at: Date.UTC(2026, 7, 10, 16),
     closes_at: Date.UTC(2026, 7, 28, 16),
@@ -136,8 +201,9 @@ export function run(ctx: SeedContext): void {
     plan_id: PLAN_ID,
     position: 1,
     name: "Final selection",
-    mode: "comparison",
+    mode: "scorecard",
     anonymized: 0,
+    committee_id: COMMITTEE_ID,
     target_reviews_per_submission: 3,
     opens_at: Date.UTC(2026, 7, 29, 16),
     closes_at: Date.UTC(2026, 8, 8, 16),
@@ -145,41 +211,40 @@ export function run(ctx: SeedContext): void {
     updated_at: ctx.now,
   });
 
-  const criteria = [
-    ["Program fit", 40], ["Audience value", 35], ["Clarity", 25],
+  // Each round carries its own scorecard, and round one exercises all three
+  // criterion kinds: a chair opening the demo sees what the editor can build,
+  // not a bank of identical sliders.
+  const roundOneCriteria = [
+    { name: "Program fit", kind: "numeric", weight_pct: 40, scale_min: 1, scale_max: 5, options: null },
+    { name: "Audience value", kind: "numeric", weight_pct: 35, scale_min: 1, scale_max: 5, options: null },
+    { name: "Clarity", kind: "numeric", weight_pct: 25, scale_min: 1, scale_max: 5, options: null },
+    { name: "Recommendation", kind: "select", weight_pct: 0, scale_min: null, scale_max: null, options: JSON.stringify(["Accept", "Maybe", "Reject"]) },
+    { name: "Comments", kind: "text", weight_pct: 0, scale_min: null, scale_max: null, options: null },
   ] as const;
-  criteria.forEach(([name, weight], position) => {
-    ctx.add("rubric_criteria", {
-      id: seedId("rbc", name),
-      round_id: ROUND_ONE_ID,
-      name,
-      weight_pct: weight,
-      position,
-      created_at: ctx.now,
-      updated_at: ctx.now,
+  const roundTwoCriteria = [
+    { name: "Final score", kind: "numeric", weight_pct: 100, scale_min: 1, scale_max: 10, options: null },
+    { name: "Committee notes", kind: "text", weight_pct: 0, scale_min: null, scale_max: null, options: null },
+  ] as const;
+  for (const [roundId, criteria] of [[ROUND_ONE_ID, roundOneCriteria], [ROUND_TWO_ID, roundTwoCriteria]] as const) {
+    criteria.forEach((criterion, position) => {
+      ctx.add("rubric_criteria", {
+        id: seedId("rbc", `${roundId}-${criterion.name}`),
+        round_id: roundId,
+        name: criterion.name,
+        kind: criterion.kind,
+        options: criterion.options,
+        scale_min: criterion.scale_min,
+        scale_max: criterion.scale_max,
+        weight_pct: criterion.weight_pct,
+        position,
+        created_at: ctx.now,
+        updated_at: ctx.now,
+      });
     });
-  });
-
-  ctx.add("committees", {
-    id: COMMITTEE_ID,
-    event_id: EVENT_ID,
-    name: "Program reviewers",
-    created_at: ctx.now,
-    updated_at: ctx.now,
-  });
-  reviewerIds.forEach((personId, index) => {
-    ctx.add("committee_members", {
-      id: seedId("cmm", `${COMMITTEE_ID}-${personId}`),
-      committee_id: COMMITTEE_ID,
-      person_id: personId,
-      role: index === 0 ? "chair" : "reviewer",
-      created_at: ctx.now,
-      updated_at: ctx.now,
-    });
-  });
+  }
 
   const candidates = table(ctx, "submissions").filter((row) => row.status === "in_review");
-  const organizerQueue = candidates.slice(0, ORGANIZER_UNREVIEWED_ASSIGNMENTS);
+  const organizerQueue = candidates.slice(0, ORGANIZER_UNREVIEWED_ASSIGNMENTS + 1);
   for (const submission of organizerQueue) {
     ctx.add("round_assignments", {
       id: seedId("ras", `${ROUND_ONE_ID}-${submission.id}-${STAFF_PERSON_ID}`),
@@ -187,7 +252,7 @@ export function run(ctx: SeedContext): void {
       submission_id: submission.id,
       reviewer_person_id: STAFF_PERSON_ID,
       committee_id: null,
-      status: "assigned",
+      status: submission.id === AGENT_SUBMISSION_ID ? "complete" : "assigned",
       created_at: ctx.now,
       updated_at: ctx.now,
     });
@@ -234,6 +299,44 @@ export function run(ctx: SeedContext): void {
       updated_at: ctx.now,
     });
   }
+
+  ctx.add("evaluations", {
+    id: seedId("evl", `${ROUND_ONE_ID}-${AGENT_SUBMISSION_ID}-${STAFF_PERSON_ID}`),
+    round_id: ROUND_ONE_ID,
+    submission_id: AGENT_SUBMISSION_ID,
+    reviewer_person_id: STAFF_PERSON_ID,
+    recommendation: "approve",
+    score: 4.2,
+    criteria_scores: JSON.stringify({ "Program fit": 4.2, "Audience value": 4.3, Clarity: 4.1 }),
+    comment: "Human review: a clear monorepo CI case study with a credible build-caching path.",
+    abstained: 0,
+    created_at: ctx.now - 120_000,
+    updated_at: ctx.now - 120_000,
+  });
+
+  ctx.add("round_assignments", {
+    id: seedId("ras", `${ROUND_ONE_ID}-${AGENT_SUBMISSION_ID}-${AGENT_PERSON_ID}`),
+    round_id: ROUND_ONE_ID,
+    submission_id: AGENT_SUBMISSION_ID,
+    reviewer_person_id: AGENT_PERSON_ID,
+    committee_id: null,
+    status: "complete",
+    created_at: ctx.now,
+    updated_at: ctx.now,
+  });
+  ctx.add("evaluations", {
+    id: seedId("evl", `${ROUND_ONE_ID}-${AGENT_SUBMISSION_ID}-${AGENT_PERSON_ID}`),
+    round_id: ROUND_ONE_ID,
+    submission_id: AGENT_SUBMISSION_ID,
+    reviewer_person_id: AGENT_PERSON_ID,
+    recommendation: "maybe",
+    score: 4.5,
+    criteria_scores: JSON.stringify({ "Program fit": 4.5, "Audience value": 4.6, Clarity: 4.4 }),
+    comment: "Agent review: the 40-minute CI problem is concrete and the monorepo build-caching proposal is promising; ask for measurements across clean and incremental builds.",
+    abstained: 0,
+    created_at: ctx.now - 60_000,
+    updated_at: ctx.now - 60_000,
+  });
 }
 
 export const seed: SeedModule = { name: "evaluations", order: 40, run };

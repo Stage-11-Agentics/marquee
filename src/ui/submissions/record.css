@@ -10,10 +10,24 @@
 .record-meta-grid span { display: grid; gap: 4px; min-width: 0; }
 .record-meta-grid small { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
 .record-meta-grid strong { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.record-slot { align-items: center; background: var(--success-soft); border: 1px solid #b6dcc7; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding: 10px; }
+.record-slot { align-items: start; background: var(--success-soft); border: 1px solid #b6dcc7; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(220px, auto); margin-top: 16px; padding: 10px; }
+.record-slot-summary { align-content: center; display: grid; gap: 5px; min-width: 0; min-height: 56px; }
 .record-slot strong { font: 600 11px/1.2 var(--mono); }
 .record-slot span:not(.chip) { color: var(--muted); font-size: 11px; }
+.record-slot-publication { align-content: start; display: grid; gap: 7px; justify-items: end; min-width: 220px; }
+.record-publication-chip { justify-content: center; min-width: 164px; }
+.record-publication-action { align-items: center; display: flex; justify-content: flex-end; min-height: 32px; min-width: 220px; }
+.record-publication-trigger { min-width: 200px; }
+.record-publication-action-placeholder { display: block; min-height: 28px; }
+.record-publication-confirm { background: var(--sunk); border: 1px solid var(--accent); display: grid; gap: 8px; max-width: 340px; padding: 9px; text-align: right; }
+.record-publication-confirm strong { font: 600 11.5px/1.3 var(--sans); }
+.record-slot .record-publication-confirm > span { color: var(--muted); font: 400 10.5px/1.45 var(--sans); }
+.record-publication-confirm-actions { display: flex; gap: 7px; justify-content: flex-end; min-height: 28px; }
 .record-action-row { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+/* Same slot and font-size as the undecided `.subtle` caption it replaces —
+   only color and weight change — so naming a standing decision never grows
+   the fixed-height `.card-head` it lives in. */
+.record-decision-cue { color: var(--ink); font-size: 11.5px; font-variant-numeric: tabular-nums; font-weight: 600; }
 .record-draft-form { display: grid; gap: 14px; }
 .record-action-row .subtle { flex: 1 1 260px; }
 .record-decision-dialog { background: var(--sunk); border: 1px solid var(--accent); display: grid; gap: 12px; margin-top: 14px; padding: 14px; }
@@ -41,11 +55,49 @@
 .record-person strong { font-size: 12px; }
 .record-person span, .record-person small { color: var(--muted); font-size: 10.5px; }
 .record-person .chip { justify-self: start; margin-top: 3px; }
+/* The submitter row carries no Remove control. The reserved height keeps its
+   card exactly as tall as every other one, so the grid does not go ragged
+   the moment a record has one participant who cannot be detached. */
+.record-person-foot { align-items: center; display: flex; gap: 7px; justify-content: space-between; min-height: 25px; }
+.record-person-foot .chip { margin-top: 0; }
+.record-person-remove { flex: 0 0 auto; }
+.record-participant-add { display: grid; margin-top: 10px; }
+.record-participant-actions { align-items: end; display: flex; gap: 9px; justify-content: space-between; }
+.record-participant-actions .field { display: grid; gap: 4px; min-width: 0; }
+.record-participant-actions .field span { color: var(--muted); font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.record-participant-actions select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 10.5px; min-height: 30px; padding: 4px; }
 .record-answer-list, .record-history, .record-rounds { display: grid; gap: 8px; }
 .record-answer { border-bottom: 1px solid var(--line); display: grid; gap: 4px; padding: 3px 0 9px; }
 .record-answer:last-child { border-bottom: 0; }
 .record-answer small, .record-answer span { color: var(--muted); font-size: 10.5px; }
 .record-answer strong { font-size: 11.5px; overflow-wrap: anywhere; }
+.record-answer .reviewer-name { max-width: 100%; }
+/* The Override chip's slot is reserved whether or not a score is overridden,
+   so recording one never shifts the reasoning line beneath it. */
+.evaluation-override-slot { align-items: center; display: inline-flex; flex: 0 0 70px; justify-content: flex-start; min-height: 18px; }
+.override-chip, .override-chip-placeholder { align-items: center; display: inline-flex; font: 600 9px/1 var(--mono); justify-content: center; min-height: 18px; min-width: 70px; }
+.override-chip-placeholder { visibility: hidden; }
+.record-evaluation small { align-items: center; display: flex; flex-wrap: wrap; gap: 4px; }
+/* A declined action, said where the record is still readable behind it. */
+.record-refusal { align-items: baseline; border: 1px solid var(--warning-line, var(--line)); border-left-width: 3px; border-radius: 3px; display: flex; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 10px; padding: 9px 12px; }
+.record-refusal strong { font-size: 11.5px; }
+.record-refusal span { color: var(--muted); font-size: 10.5px; }
+.evaluation-superseded { color: var(--muted); }
+/* The rubric the reviewer answered, under the aggregate that summarised it.
+   Prose first — it is the reasoning — then the weighted numbers as one line. */
+.evaluation-scorecard { border-left: 2px solid var(--line); display: grid; gap: 7px; margin-top: 7px; padding-left: 9px; }
+.evaluation-criterion-note { display: grid; gap: 2px; }
+.evaluation-criterion-note small { color: var(--muted); font: 600 9px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.evaluation-criterion-note span { color: var(--ink); font-size: 11px; line-height: 1.5; }
+.evaluation-criterion-scores { color: var(--muted); display: flex; flex-wrap: wrap; font-size: 10px; gap: 4px 12px; }
+.evaluation-override-controls { margin-top: 3px; min-height: 26px; }
+.evaluation-override-form { display: grid; gap: 6px; }
+.evaluation-override-form .field span { font-size: 10px; }
+.evaluation-override-controls .record-action-row { display: flex; gap: 6px; justify-content: flex-start; }
+/* Same reserved-slot rule as the chip: Clear appears only when there is an
+   override to clear, and its absence must not move the Override button. */
+.override-clear-slot { align-items: center; display: inline-flex; flex: 0 0 auto; min-height: 26px; min-width: 96px; }
+.override-clear-placeholder { display: inline-flex; min-height: 26px; min-width: 96px; }
 .record-file { align-items: start; display: flex; gap: 9px; }
 /* Fixed 64px whatever the state: the crop holds its square before the image
    loads, while it loads, and when there is no image at all, so the record
@@ -67,8 +119,11 @@
 .record-assignment { background: var(--sunk); padding: 7px; }
 .record-assignment > span { display: grid; gap: 3px; min-width: 0; }
 .record-assignment strong { font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-assignment .reviewer-name { max-width: 100%; }
 .record-assignment small { color: var(--muted); font: 400 9.5px var(--mono); }
-.record-assignment-add select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 10.5px; min-height: 27px; min-width: 0; padding: 4px; width: 100%; }
+.record-assignment-picker { align-items: center; display: flex; flex: 1 1 auto; gap: 6px; min-width: 0; }
+.record-assignment-picker select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); flex: 1 1 auto; font-size: 10.5px; min-height: 27px; min-width: 0; padding: 4px; width: auto; }
+.assignment-agent-chip { flex: 0 0 auto; }
 .record-schedule-form { align-items: end; display: grid; gap: 9px; grid-template-columns: 1.5fr .6fr 1fr auto; }
 .record-schedule-form .field span { color: var(--muted); font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .record-state { align-items: center; color: var(--muted); display: grid; gap: 10px; min-height: 300px; place-items: center; text-align: center; }
@@ -78,6 +133,31 @@
 .record-form-grid { display: grid; gap: 14px; grid-template-columns: 180px minmax(0, 1fr); }
 .record-form-wide { grid-column: 1 / -1; }
 .record-form-grid textarea { resize: vertical; }
+.record-picker-state { align-items: center; color: var(--muted); display: flex; font: 400 10.5px/1.4 var(--mono); min-height: 45px; }
+.record-picker-state.error { color: var(--danger); }
+.record-person-picker { border: 1px solid var(--line); display: grid; gap: 9px; margin: 0; min-width: 0; padding: 12px; }
+.record-person-picker legend { color: var(--ink); font-size: 11.5px; font-weight: 700; padding: 0 5px; }
+.required-mark { color: var(--danger); font: 600 9px var(--mono); letter-spacing: .08em; margin-left: 5px; text-transform: uppercase; }
+.record-picker-tabs { display: flex; gap: 6px; }
+.record-picker-tabs button { background: var(--panel); border: 1px solid var(--line-strong); color: var(--muted); cursor: pointer; font: 600 9px var(--mono); letter-spacing: .04em; min-height: 30px; padding: 6px 9px; }
+.record-picker-tabs button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.record-picker-body { display: grid; gap: 7px; min-width: 0; }
+.record-picker-body > input, .record-new-person-grid input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font: 12px/1.4 var(--sans); min-height: 34px; outline: none; padding: 8px 9px; width: 100%; }
+.record-picker-body > input:focus, .record-new-person-grid input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.record-person-suggestions { border: 1px solid var(--line); min-height: 44px; }
+.record-picker-placeholder { align-items: center; color: var(--muted); display: flex; font: 400 10px/1.4 var(--mono); min-height: 42px; padding: 7px 9px; }
+.record-picker-placeholder.error { color: var(--danger); }
+.record-person-suggestion { align-items: center; background: var(--panel); border: 0; border-bottom: 1px solid var(--line); color: var(--ink); cursor: pointer; display: flex; gap: 8px; justify-content: space-between; min-height: 42px; padding: 7px 9px; text-align: left; width: 100%; }
+.record-person-suggestion:last-child { border-bottom: 0; }
+.record-person-suggestion:hover, .record-person-suggestion:focus-visible { background: var(--accent-soft); outline: none; }
+.record-person-suggestion strong, .record-selected-person strong { font-size: 11.5px; }
+.record-person-suggestion small, .record-selected-person small { color: var(--muted); font: 400 9.5px/1.3 var(--mono); }
+.record-selected-person { align-items: center; background: var(--accent-soft); border: 1px solid var(--accent); display: flex; gap: 10px; justify-content: space-between; min-height: 52px; padding: 8px 9px; }
+.record-selected-person span { display: grid; gap: 4px; min-width: 0; }
+.record-new-person-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.create-field-error { color: transparent; display: block; font: 400 10px/1.3 var(--mono); min-height: 13px; }
+.create-field-error.visible { color: var(--danger); }
+.record-form-grid select[multiple] { min-height: 88px; }
 .record-bypass-toggle { align-items: flex-start; background: var(--accent-soft); border: 1px solid var(--accent); display: flex; gap: 9px; grid-column: 1 / -1; padding: 10px; }
 .record-bypass-toggle span { display: grid; gap: 4px; }
 .record-bypass-toggle strong { font-size: 11.5px; }
@@ -95,7 +175,21 @@
   .record-summary { display: grid; }
   .record-summary-meta { align-items: flex-start; text-align: left; }
   .record-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .record-slot { grid-template-columns: 1fr; }
+  .record-slot-publication { justify-items: start; min-width: 0; }
+  .record-publication-action { justify-content: flex-start; min-width: 0; }
+  .record-publication-confirm { max-width: none; text-align: left; }
   .record-participants, .record-aside { display: grid; grid-template-columns: 1fr; }
-  .record-form-grid, .record-schedule-form { grid-template-columns: 1fr; }
+  .record-form-grid, .record-schedule-form, .record-new-person-grid { grid-template-columns: 1fr; }
   .record-form-wide { grid-column: auto; }
 }
+
+/* The save button relabels between "Save changes", "Confirm public update",
+   and "Saving…". A width that tracked the label would move the cue beside it
+   on every state change, so the width is pinned to the longest of the three. */
+.record-content-save { min-width: 172px; }
+
+/* Reserved height for the cue, which swaps between one and two lines of copy
+   depending on whether the record is live. Without it the card resizes as the
+   organizer moves through the confirm. */
+.record-content-cue { display: block; min-height: 30px; }

@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-146",
+  "owns": [],
+  "exercises": [],
+  "notes": "MRQ-146 corrects two agent-surface honesty defects without claiming a new EVALUATION acceptance criterion: the OpenAPI document now describes its two agenda-item concurrency routes truthfully and the canonical SKILL.md is fetchable from the Worker."
+}

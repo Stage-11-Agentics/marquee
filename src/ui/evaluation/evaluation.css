@@ -4,6 +4,16 @@
 .evaluation-plan-heading h2 { font-size: 15px; font-weight: 500; line-height: 1.45; margin: 6px 0 0; max-width: 760px; }
 .round-flow { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); margin-top: 18px; }
 .round-card { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 158px; padding: 15px; }
+.round-setting input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); font-size: 11px; min-height: 28px; padding: 5px 7px; width: 100%; }
+.round-name input { font-size: 13px; font-weight: 600; }
+.round-dates { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.round-dates .round-setting { display: grid; gap: 4px; margin: 8px 0 0; }
+/* Reserved height: a rejected date edit must not push the card's controls down. */
+.round-field-error { color: var(--danger); font-size: 10.5px; line-height: 1.35; min-height: 15px; padding: 3px 0 4px; }
+.round-toggle { align-items: center; color: var(--muted); display: flex; font-size: 10.5px; gap: 7px; line-height: 1.35; margin: 8px 0; }
+.round-toggle input { flex: none; margin: 0; }
+.round-scorecard-line { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: space-between; margin-top: 10px; padding-top: 10px; }
+.round-scorecard-line .subtle { font-size: 10.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .round-card strong { display: block; font-size: 13px; margin: 6px 0 9px; }
 .round-setting { align-items: center; display: flex; gap: 8px; margin: 8px 0; }
 .round-setting span { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
@@ -21,11 +31,17 @@
 .scorecard-line span { color: var(--muted); font-size: 11px; margin-top: 4px; }
 .evaluation-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .evaluation-metrics .metric { font-size: 26px; margin-top: 9px; }
+.evaluation-summary-note { align-items: center; color: var(--muted); display: flex; font: 10px/1.3 var(--mono); justify-content: space-between; margin-top: 12px; }
+.evaluation-summary-note strong { color: var(--ink-soft); font-size: 14px; }
 .spark { align-items: end; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; gap: 5px; height: 58px; margin-top: 18px; padding: 8px 10px 0; }
 .spark i { background: var(--accent); display: block; flex: 1; min-height: 4px; opacity: .78; }
 .committee-intro { color: var(--muted); display: flex; font: 10px/1.3 var(--mono); gap: 20px; justify-content: space-between; margin-bottom: 12px; }
+.committee-intro strong { color: var(--ink-soft); font-weight: 600; }
+.committee-round + .committee-round { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
 .committee-list { display: grid; gap: 0; }
-.committee-person { align-items: center; border-top: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 28px minmax(0, 1fr) 80px; min-height: 55px; }
+.committee-person { align-items: center; border-top: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 28px minmax(0, 1fr) 104px; min-height: 55px; }
+/* Fixed width and tabular numerals: 0/2 becoming 2/2 must not move the row. */
+.reviewer-progress { text-align: right; white-space: nowrap; }
 .mini-avatar { align-items: center; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: 2px; display: grid; font: 600 9px/1 var(--mono); height: 26px; justify-content: center; width: 26px; }
 .committee-person strong { display: block; font: 600 11px/1.2 var(--mono); }
 .scope-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
@@ -46,15 +62,39 @@
 .evaluation-alert.success { background: var(--success-soft); border-color: #b6dcc7; color: #0c6b41; }
 .evaluation-alert.alarm { background: var(--danger-soft); border-color: #e6b8b2; color: #8f2118; }
 .evaluation-alert button { background: none; border: 0; color: inherit; font-size: 17px; line-height: 1; }
+.round-recusal-status { color: var(--danger); font: 11px/1.4 var(--mono); min-height: 16px; }
+.committee-person-action { align-items: center; display: flex; justify-content: flex-end; min-height: 28px; min-width: 0; }
+/* Remind sits on every reviewer row, including the caught-up ones, so the
+   capability is discoverable on a fully-reviewed conference. A ghost button at
+   the global .45 disabled opacity nearly disappears against the panel, which
+   would trade one invisible control for another; it also must not light up
+   under the pointer and promise a click that does nothing. */
+.committee-person-action .button:disabled { border-color: var(--line); opacity: .6; }
+.committee-person-action .button:disabled:hover { background: transparent; border-color: var(--line); color: var(--ink-soft); }
 .inline-empty { align-items: start; color: var(--muted); display: grid; font-size: 12px; gap: 12px; min-height: 58px; padding: 10px 0; }
 .eval-dialog-backdrop { align-items: center; background: rgba(16, 24, 32, .46); display: grid; inset: 0; padding: 18px; place-items: center; position: fixed; z-index: 600; }
 .eval-dialog { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); max-height: calc(100vh - 36px); max-width: 620px; overflow: auto; width: 100%; }
+.eval-dialog-wide { max-width: 760px; }
 .eval-dialog > header { border-bottom: 1px solid var(--line); padding: 18px 20px 12px; }
 .eval-dialog > header h2 { font-size: 16px; margin: 6px 0 0; }
 .eval-dialog-body { display: grid; gap: 15px; padding: 16px 20px 20px; }
 .eval-dialog > footer { background: var(--sunk); border-top: 1px solid var(--line-strong); display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px; }
 .criterion-editor { display: grid; gap: 7px; }
-.criterion-row { align-items: center; display: grid; gap: 7px; grid-template-columns: 22px minmax(0, 1fr) 76px 16px; }
+.criterion-row-group { border: 1px solid var(--line); border-radius: var(--radius); display: grid; gap: 7px; padding: 9px; }
+.criterion-row { align-items: center; display: grid; gap: 7px; grid-template-columns: 22px minmax(0, 1fr) 104px 76px 16px 26px; }
+.criterion-row select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); font-size: 11px; min-height: 34px; padding: 5px 7px; width: 100%; }
+.criterion-row .criterion-weight { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.criterion-row input:disabled { color: var(--muted); opacity: .55; }
+.criterion-remove { background: none; border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; min-height: 26px; }
+.criterion-remove:hover { border-color: var(--danger); color: var(--danger); }
+/* Reserved height keeps the rows below still when a criterion's type changes. */
+.criterion-detail { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; min-height: 30px; padding-left: 29px; }
+.criterion-detail .field.inline { align-items: center; display: flex; flex-direction: row; gap: 6px; margin: 0; }
+.criterion-detail .field.inline span { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.criterion-detail .field.inline input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 28px; padding: 5px 7px; width: 72px; }
+.criterion-detail .criterion-options { flex: 1 1 260px; }
+.criterion-detail .criterion-options input { width: 100%; }
+.criterion-detail .subtle { font-size: 10.5px; }
 .criterion-row input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 34px; padding: 7px 9px; width: 100%; }
 .criterion-total { align-items: baseline; border-top: 1px solid var(--line); display: flex; gap: 10px; padding-top: 10px; }
 .criterion-total strong { font: 600 16px/1 var(--mono); }
@@ -63,7 +103,25 @@
 .criterion-total.invalid strong { color: var(--danger); }
 .message-preview { background: var(--sunk); border: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.55; padding: 10px 12px; }
 
+/* Invite reviewer — the provisioning dialog (MRQ-107). */
+.invite-tracks { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.invite-tracks legend { color: var(--muted); font: 600 10px/1.2 var(--mono); letter-spacing: .1em; padding: 0 4px; text-transform: uppercase; }
+.scope-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 6px; }
+.scope-check { align-items: center; color: var(--ink); display: flex; font-size: 12px; gap: 6px; }
+.scope-check input { min-height: 0; width: auto; }
+/* A floor, so a one-line confirmation does not collapse the dialog to a sliver. */
+.invite-result { background: var(--sunk); border: 1px solid var(--line); color: var(--muted); display: grid; font-size: 11px; gap: 6px; line-height: 1.55; min-height: 92px; padding: 10px 12px; }
+.invite-result strong { color: var(--ink); font-size: 12.5px; }
+.invite-link { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
+.invite-link input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font: 400 11px/1.4 var(--mono); min-height: 32px; padding: 6px 8px; width: 100%; }
+.invite-link-readable { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); display: block; font: 400 11px/1.4 var(--mono); grid-column: 1 / -1; overflow-wrap: anywhere; padding: 6px 8px; user-select: text; white-space: normal; }
+
 @media (max-width: 900px) {
+  .criterion-row { display: flex; flex-wrap: wrap; }
+  .criterion-row input:not(.criterion-weight) { flex: 1 1 160px; width: auto; }
+  .criterion-row select { flex: 0 0 104px; width: auto; }
+  .criterion-row .criterion-weight { flex: 0 0 76px; width: auto; }
+  .criterion-detail { padding-left: 0; }
   .evaluation-layout { grid-template-columns: 1fr; }
   .evaluation-plan-card, .committee-card { grid-column: auto; }
 }
@@ -74,5 +132,5 @@
   .evaluation-plan-heading, .scorecard-line { align-items: flex-start; flex-direction: column; }
   .committee-intro { display: grid; gap: 5px; }
   .committee-person { grid-template-columns: 28px minmax(0, 1fr); padding: 8px 0; }
-  .committee-person > .tabular { grid-column: 2; }
+  .committee-person > .committee-person-action { grid-column: 2; justify-content: flex-start; }
 }

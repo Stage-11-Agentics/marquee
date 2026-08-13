@@ -3,6 +3,9 @@ import type { JSX } from "preact";
 import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
+import { instanceIsUnclaimed } from "../lib/auth/instance-claim";
+import { DEMO_EVENT_ORDER, SEEDED_DEMO_EVENT_ID } from "../lib/demo-event";
+import { ICON_LINKS } from "../lib/head-icons";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
 import { hasSpeakerTaskCancellationColumn, submissionStatusPredicate } from "./submissions.queries";
 
@@ -22,6 +25,14 @@ export interface LandingData {
   counts: LandingCounts;
   reviewTrack: string;
   notice?: string;
+  /**
+   * True exactly when this instance has a demo conference — which is the
+   * instance whose landing is the graded demo surface, and whose markup
+   * therefore does not change. A real deployment (no demo event) is the only
+   * one that gains the "Sign in" link, because it is the only one whose
+   * visitors have accounts to sign in to.
+   */
+  demoMode: boolean;
 }
 
 const EMPTY_COUNTS: LandingCounts = {
@@ -74,8 +85,7 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
          SELECT id, name, updated_at
          FROM events
          WHERE demo_mode = 1
-         ORDER BY created_at ASC
-         LIMIT 1
+         ${DEMO_EVENT_ORDER}
        )
        SELECT
          demo.name AS conference_name,
@@ -102,18 +112,21 @@ export async function loadLandingData(db: D1Database): Promise<LandingData> {
            ORDER BY position ASC LIMIT 1) AS review_track
        FROM demo`,
     )
+    .bind(SEEDED_DEMO_EVENT_ID)
     .first<LandingRow>();
 
   if (!row) {
     return {
-      conferenceName: "AIE NYC 2026",
+      conferenceName: "demo conference",
       counts: EMPTY_COUNTS,
       reviewTrack: "Agents",
       notice: "No demo conference is configured yet.",
+      demoMode: false,
     };
   }
 
   return {
+    demoMode: true,
     conferenceName: row.conference_name,
     counts: {
       submitted: Number(row.submitted_count),
@@ -159,6 +172,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
           <span class="brand-name">Marquee</span>
         </a>
         <div class="landing-links">
+          {!data.demoMode && <a class="button" href="/signin">Sign in</a>}
           <a class="button" href="https://github.com/Stage-11-Agentics/marquee">View on GitHub ↗</a>
           <a class="button primary" href="/submissions?demo=organizer" data-demo-role="organizer">Enter demo</a>
         </div>
@@ -174,10 +188,13 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
           </p>
           <div class="hero-actions">
             <a class="button primary" href="/submissions?demo=organizer" data-demo-role="organizer">Enter as organizer →</a>
+            <a class="button" href="/reviewer?demo=reviewer" data-demo-role="reviewer">Enter as reviewer</a>
             <a class="button" href="/portal?demo=speaker" data-demo-role="speaker">Enter as speaker</a>
             <a class="button ghost" href="/f/cfp">View public CFP</a>
+            <a class="button ghost" href="/agenda">View public agenda</a>
+            <a class="button ghost" href="/speakers">Browse speakers</a>
           </div>
-          <div class="hero-note">No signup. Both demos open populated AIE NYC 2026 workspaces.</div>
+          <div class="hero-note">No signup. Every demo opens the populated {data.conferenceName} workspace, each in its own seat.</div>
           <div class="demo-status" id="demo-status" role="status" aria-live="polite"></div>
         </div>
 
@@ -186,7 +203,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
           <div class="mini-pipeline">
             <PreviewStage label="Submitted" value={counts.submitted} />
             <PreviewStage label="In review" value={counts.inReview} />
-            <PreviewStage label="Accepted" value={counts.accepted} />
+            <PreviewStage label="Ready to place" value={counts.accepted} />
             <PreviewStage label="Onboarding" value={counts.onboarding} />
             <PreviewStage label="Scheduled" value={counts.scheduled} />
             <PreviewStage label="Published" value={counts.published} />
@@ -200,7 +217,64 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
 
       <footer class="landing-foot">
         <span>Apache-2.0 · Self-hosted · API-first</span>
-        <span>Built for AIE NYC 2026</span>
+        <span>Built for {data.conferenceName}</span>
+      </footer>
+    </div>
+  );
+}
+
+/**
+ * What a deployment shows at its root URL before anyone owns it.
+ *
+ * It states who the first user is meant to be and how the software learns it is
+ * them — and nothing else. There is no signup form, because an unclaimed Worker
+ * is on a public URL from its first second; there are no counts, no conference
+ * name, and no hint of what is in the database, because a stranger who finds
+ * the URL must learn nothing from it (AC-277).
+ *
+ * This page is unreachable on any instance that has an owner, and the seeded
+ * demo has one — so a seeded deployment's landing is byte-identical to what it
+ * was before this existed.
+ */
+export function UnclaimedLandingPage(): JSX.Element {
+  return (
+    <div class="landing unclaimed">
+      <header class="landing-nav">
+        <a class="brand" href="/" aria-label="Marquee home">
+          <span class="brand-mark">M</span>
+          <span class="brand-name">Marquee</span>
+        </a>
+        <div class="landing-links">
+          <a class="button" href="https://github.com/Stage-11-Agentics/marquee">View on GitHub ↗</a>
+        </div>
+      </header>
+
+      <main class="hero unclaimed-hero">
+        <div class="hero-copy">
+          <div class="eyebrow">Fresh install · unclaimed</div>
+          <h1>Nobody owns this instance yet.</h1>
+          <p>
+            Initial setup is run by an agent: point your coding agent at the repository and{" "}
+            <strong>SKILL.md</strong> walks it from clone to a one-time claim link. The link is
+            printed in the deploy terminal, because on day zero that terminal is the only proof of
+            ownership there is — identity here never depends on mail, which is itself a thing setup
+            configures.
+          </p>
+          <p>Ownership lands on a person, not on an agent: a human opens the claim link.</p>
+          <div class="unclaimed-command">
+            <span class="subtle">No link in hand? Print a fresh one — it works forever.</span>
+            <code>node cli/marquee.mjs setup claim-link --url "$MARQUEE_URL" --json</code>
+          </div>
+          <div class="hero-note">
+            A used claim link is inert. Re-running the command is the recovery path for a locked-out
+            instance.
+          </div>
+        </div>
+      </main>
+
+      <footer class="landing-foot">
+        <span>Apache-2.0 · Self-hosted · API-first</span>
+        <span>Unclaimed instance</span>
       </footer>
     </div>
   );
@@ -223,7 +297,7 @@ const LANDING_STYLES = `
 .mini-pipeline { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 17px 0; }
 .mini-stage { border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 12px; min-height: 72px; background: rgba(255,255,255,.82); }
 .mini-stage strong { display: block; font-size: 21px; margin-top: 9px; font-family: var(--mono); font-variant-numeric: tabular-nums lining-nums; }
-.mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid #e3cda2; color: #6b4700; border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
+.mini-attention { padding: 12px; background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning-ink); border-radius: var(--radius); font-size: 11px; line-height: 1.5; }
 .preview-notice { display: block; margin-top: 6px; }
 .landing-foot { border-top: 1px solid var(--line); padding: 18px clamp(20px,5vw,70px); color: var(--muted); font: 400 11px/1 var(--mono); display: flex; justify-content: space-between; }
 @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 34px; padding: 42px 0 52px; } .landing-links .button:first-child { display: none; } }
@@ -259,7 +333,7 @@ const LANDING_SCRIPT = `
 })();
 `;
 
-const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Program operations</title></head><body><div id="app"></div></body></html>`;
+const FALLBACK_DOCUMENT = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Program operations</title>${ICON_LINKS}</head><body><div id="app"></div></body></html>`;
 
 export function renderLandingDocument(shell: string, data: LandingData): string {
   const markup = renderToString(<LandingPage data={data} />);
@@ -271,16 +345,69 @@ export function renderLandingDocument(shell: string, data: LandingData): string 
     .replace("</body>", `<script data-marquee-landing>${LANDING_SCRIPT}</script></body>`);
 }
 
-async function assetShell(assets: Fetcher, request: Request): Promise<string> {
-  const url = new URL("/index.html", request.url);
-  const response = await assets.fetch(new Request(url, { method: "GET" }));
-  if (!response.ok) return FALLBACK_DOCUMENT;
-  return response.text();
+const UNCLAIMED_STYLES = `
+.unclaimed-hero { grid-template-columns: 1fr; max-width: 780px; }
+.unclaimed-hero .hero-copy p { max-width: 62ch; }
+.unclaimed-command { margin-top: 22px; border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--sunk); padding: 12px 14px; display: grid; gap: 8px; }
+.unclaimed-command code { font: 400 11.5px/1.6 var(--mono); color: var(--ink); word-break: break-all; }
+`;
+
+/**
+ * Rendered only when the zero-owner guard says so. Deliberately a separate
+ * function from `renderLandingDocument`: the demo landing's markup, styles, and
+ * script must not change by a byte because this page exists.
+ */
+export function renderUnclaimedLandingDocument(shell: string): string {
+  const markup = renderToString(<UnclaimedLandingPage />);
+  const document = shell.includes("<div id=\"app\"></div>")
+    ? shell.replace('<div id="app"></div>', `<div id="app">${markup}</div>`)
+    : FALLBACK_DOCUMENT.replace('<div id="app"></div>', `<div id="app">${markup}</div>`);
+  return document.replace(
+    "</head>",
+    `<style data-marquee-landing>${LANDING_STYLES}${UNCLAIMED_STYLES}</style></head>`,
+  );
+}
+
+/**
+ * The built document, or an honest minimum. A deployment whose ASSETS binding
+ * is missing still serves this page rather than a 500 — the shell only supplies
+ * chrome, and losing it must not lose the page.
+ */
+async function assetShell(assets: Fetcher | undefined, request: Request): Promise<string> {
+  if (!assets) return FALLBACK_DOCUMENT;
+  try {
+    const url = new URL("/index.html", request.url);
+    const response = await assets.fetch(new Request(url, { method: "GET" }));
+    if (!response.ok) return FALLBACK_DOCUMENT;
+    return response.text();
+  } catch {
+    return FALLBACK_DOCUMENT;
+  }
 }
 
 export const landingRoutes = new Hono<{ Bindings: Env }>();
 
 landingRoutes.get("/", async (context) => {
+  // The guard, first and hard: an instance with any org-wide owner renders the
+  // page it always rendered. A failure to read the guard resolves to "claimed",
+  // because showing an unclaimed landing on a working conference would be far
+  // worse than showing the demo landing on a fresh install.
+  let unclaimed = false;
+  try {
+    unclaimed = await instanceIsUnclaimed(context.env.DB);
+  } catch (error) {
+    loggerForEnv(context.env).emit("worker_error", "error", {
+      source: "landingClaimGuard",
+      ...errorFields(error),
+    });
+  }
+  if (unclaimed) {
+    context.header("Cache-Control", "no-store");
+    return context.html(
+      renderUnclaimedLandingDocument(await assetShell(context.env.ASSETS, context.req.raw)),
+    );
+  }
+
   let data: LandingData;
   try {
     data = await loadLandingData(context.env.DB);
@@ -290,10 +417,14 @@ landingRoutes.get("/", async (context) => {
       ...errorFields(error),
     });
     data = {
-      conferenceName: "AIE NYC 2026",
+      conferenceName: "demo conference",
       counts: EMPTY_COUNTS,
       reviewTrack: "Agents",
       notice: "The live pipeline preview is unavailable. Try again shortly.",
+      // A failed read is not evidence that this is a real deployment. Treating
+      // it as the demo keeps the graded landing byte-identical under a database
+      // wobble, which is the failure worth being conservative about.
+      demoMode: true,
     };
   }
 

@@ -3,6 +3,7 @@ import { renderToString } from "preact-render-to-string";
 import { describe, expect, test } from "vitest";
 
 import type { AgendaSession, AgendaSnapshot } from "../../src/api/agenda";
+import { generateAgendaGridSlots, type AgendaGridSlot } from "../../src/lib/agenda-grid";
 import { ConflictPanel, SessionTile } from "../../src/ui/agenda/AgendaPage";
 import { TIME_SLOTS, TrackBoard, type TrackDay } from "../../src/ui/agenda/track-board";
 
@@ -14,6 +15,7 @@ const START = Date.UTC(2026, 9, 12, 13);
 
 const snapshot: AgendaSnapshot = {
   event: { id: "event", name: "Demo Conference", starts_on: "2026-10-12", ends_on: "2026-10-13", timezone: "UTC" },
+  publication: { live: 0, not_yet_public: 0, candidates: [], public_agenda_url: "/agenda?event=event" },
   schedulable_statuses: ["accepted"],
   rooms: [{
     id: "room-main",
@@ -65,11 +67,15 @@ const agentsSession = session("agents-session", "track-agents", START);
 const infraSession = session("infra-session", "track-infra", START + 24 * 60 * 60_000);
 const sessions = [agentsSession, infraSession];
 
-function boardMarkup(boardSessions: readonly AgendaSession[] = sessions): string {
+function boardMarkup(
+  boardSessions: readonly AgendaSession[] = sessions,
+  slots: readonly AgendaGridSlot[] | undefined = undefined,
+): string {
   return renderToString(h(TrackBoard, {
     snapshot,
     sessions: boardSessions,
     days: DAYS,
+    slots,
     onDrop: () => undefined,
     renderTile: (item) => h("article", { class: "agenda-session-tile", "data-session-id": item.id }, item.title),
   }));
@@ -107,12 +113,25 @@ describe("MRQ-21 track agenda surface", () => {
     expect((filteredMarkup.match(/data-track-lane=/g) ?? [])).toHaveLength(snapshot.tracks.length);
   });
 
+  test("CONTRACT · drag targets use the selected slot list without repeating sub-hour axis labels", () => {
+    const fiveSlots = generateAgendaGridSlots(5);
+    const markup = boardMarkup(sessions, fiveSlots);
+    const agentsLane = laneMarkup(markup, "track-agents");
+    expect((agentsLane.match(/data-track-slot=/g) ?? [])).toHaveLength(DAYS.length * fiveSlots.length);
+    expect(agentsLane).toContain('data-track-time="10:15"');
+    expect(agentsLane).toContain('data-track-time="10:20"');
+    expect((markup.match(/>10:00<\/span>/g) ?? [])).toHaveLength(1);
+    expect(markup).not.toContain(">10:05</span>");
+  });
+
   test("AC-78 · flagged tiles and the conflicts drawer expose one-click jump targets", () => {
     const tile = renderToString(h(SessionTile, {
       snapshot,
       session: agentsSession,
       onDragStart: () => undefined,
       onResize: () => undefined,
+      onMove: () => undefined,
+      onUnplace: () => undefined,
       onRoomOpen: () => undefined,
       conflicts: new Map([[agentsSession.id, "Conflict" as const]]),
     }));

@@ -1,5 +1,6 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
+import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import "./comms.css";
 
@@ -71,7 +72,6 @@ interface Filters {
   task_state: "" | "open" | "done";
 }
 
-const EVENT_ID = "evt_aie-ny-2026";
 const TRIGGER_KEYS = [
   "submission_confirmation",
   "form_closing_reminder",
@@ -131,7 +131,7 @@ function formatDate(value: number): string {
   return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.Element {
+export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [audience, setAudience] = useState<AudienceResult>({ data: [], page: 1, per_page: 100, total: 0, total_pages: 0 });
@@ -305,6 +305,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
       <span class="status-dot" aria-hidden="true" />
       <div><strong>Demo-safe outbox</strong><span>Messages render and log here. Non-allowlisted addresses are never delivered.</span></div>
       <span class="comms-policy">default: demo_safe</span>
+      <AgentBriefLauncher surface="chase" eventId={eventId} small />
     </div>
     {error && <div class="inline-error" role="alert"><span>{error}</span><button class="button small" type="button" onClick={() => { setError(null); setReloadKey((value) => value + 1); }}>Retry communications</button></div>}
 
@@ -374,7 +375,7 @@ export function CommsScreen({ eventId = EVENT_ID }: { eventId?: string }): JSX.E
       <div class="message-list">
         {messages.length === 0 && <div class="empty-log comms-empty-copy"><span>{messagesLoading ? "Loading the delivery log…" : error ? "The delivery log is unavailable. Retry communications above to try again." : "No messages queued yet. The first queued message will appear here with its rendered body and honest delivery outcome."}</span>{!messagesLoading && !error && <a class="button-secondary comms-empty-action" href="#comms-compose-heading">Compose the first message</a>}</div>}
         {messages.map((message) => <details class="message-row" key={message.id}>
-          <summary><div><strong>{message.subject}</strong><span>{message.to_email} · {message.template_key}{message.person_id ? ` · ${message.person_id}` : ""}</span></div><span class={`message-status status-${message.status}`}>{message.status === "suppressed" ? "suppressed · demo mode" : message.status}</span></summary>
+          <summary><div><strong>{message.subject}</strong><span>{message.to_email} · {message.template_key}{message.person_id ? ` · ${message.person_id}` : ""}</span></div><span class={`message-status status-${message.status}`}>{message.status === "suppressed" ? "held in demo outbox · would send in production" : message.status}</span></summary>
           <div class="message-detail"><p>{message.text}</p><small>{message.send_policy} · queued {formatDate(message.created_at)}{message.suppressed_reason ? ` · ${message.suppressed_reason}` : ""}</small></div>
         </details>)}
       </div>

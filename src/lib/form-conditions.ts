@@ -189,6 +189,21 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
+/** A calendar date has no time or zone; keep its persisted form exact. */
+export function isIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  if (year < 1) return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth[month - 1]!;
+}
+
+function normalizedValue(field: FormFieldAnswerInput, value: unknown): FormAnswerValue | null {
+  if (field.type === "date") return isIsoDate(value) ? value : null;
+  return isAnswerValue(value) ? value : null;
+}
+
 function validateField(field: FormFieldAnswerInput, value: unknown): string | null {
   const config = readConfig(field.config);
   if (emptyAnswer(value)) return field.required ? "This field is required." : null;
@@ -212,6 +227,9 @@ function validateField(field: FormFieldAnswerInput, value: unknown): string | nu
     case "number":
       if (asNumber(value) === null) return "Enter a number.";
       break;
+    case "date":
+      if (!isIsoDate(value)) return "Enter a valid date in YYYY-MM-DD format.";
+      break;
     case "single_select":
       if (typeof value !== "string") return "Choose one option.";
       break;
@@ -226,16 +244,17 @@ function validateField(field: FormFieldAnswerInput, value: unknown): string | nu
   }
 
   const text = typeof value === "string" ? value : null;
+  const supportsTextRules = field.type === "short_text" || field.type === "long_text" || field.type === "email" || field.type === "url";
   const minLength = asNumber(config.minLength);
   const maxLength = asNumber(config.maxLength);
-  if (text !== null && minLength !== null && text.length < minLength) return `Use at least ${minLength} characters.`;
-  if (text !== null && maxLength !== null && text.length > maxLength) return `Use no more than ${maxLength} characters.`;
+  if (supportsTextRules && text !== null && minLength !== null && text.length < minLength) return `Use at least ${minLength} characters.`;
+  if (supportsTextRules && text !== null && maxLength !== null && text.length > maxLength) return `Use no more than ${maxLength} characters.`;
   const number = asNumber(value);
   const min = asNumber(config.min);
   const max = asNumber(config.max);
   if (number !== null && min !== null && number < min) return `Use a number of at least ${min}.`;
   if (number !== null && max !== null && number > max) return `Use a number of no more than ${max}.`;
-  if (typeof config.pattern === "string") {
+  if (supportsTextRules && typeof config.pattern === "string") {
     try {
       if (text === null || !new RegExp(config.pattern).test(text)) return "Use the requested format.";
     } catch {
@@ -270,7 +289,10 @@ export function projectApplicableAnswers(
     const value = rawAnswers[field.key];
     const issue = validateField(field, value);
     if (issue) issues.push({ fieldKey: field.key, message: issue });
-    if (!emptyAnswer(value) && isAnswerValue(value)) answers[field.key] = value;
+    if (!emptyAnswer(value)) {
+      const normalized = normalizedValue(field, value);
+      if (normalized !== null) answers[field.key] = normalized;
+    }
   }
   return { answers, issues };
 }

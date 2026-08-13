@@ -9,6 +9,7 @@
 export type Id = string;
 export type EpochMilliseconds = number;
 export type CalendarDate = string;
+export type PersonKind = "human" | "agent";
 export type JsonPrimitive = boolean | number | string | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonText<T extends JsonValue = JsonValue> = string & {
@@ -33,7 +34,16 @@ export const MAGIC_LINK_PURPOSES = [
   "draft_resume",
   "cospeaker_profile",
   "task_link",
+  "claim",
+  "org_invite",
 ] as const;
+/**
+ * The two purposes that pre-date their person: a claim token is minted against
+ * a database with no people in it, and an organization invite is minted before
+ * the invited organizer exists. Both create their person at exchange, so both
+ * carry a null `person_id` — enforced in the schema by 0009's CHECK.
+ */
+export const PERSONLESS_MAGIC_LINK_PURPOSES = ["claim", "org_invite"] as const;
 export const FORM_KINDS = ["abstract", "session"] as const;
 export const FORM_STATUSES = ["draft", "open", "closed"] as const;
 export const FORM_FIELD_TYPES = [
@@ -45,6 +55,7 @@ export const FORM_FIELD_TYPES = [
   "email",
   "file",
   "number",
+  "date",
 ] as const;
 export const SUBMISSION_STATUSES = [
   "draft",
@@ -88,6 +99,17 @@ export const ATTACHMENT_OWNER_TYPES = [
 export const ATTACHMENT_STATUSES = ["pending", "ready"] as const;
 export const OUTBOX_STATUSES = ["queued", "sent", "suppressed", "failed"] as const;
 export const OUTBOX_SEND_POLICIES = ["demo_safe", "always_live"] as const;
+export const OUTBOX_DELIVERY_STATES = ["unknown", "delivered", "bounced_hard", "bounced_soft", "complained"] as const;
+export const OUTBOX_BOUNCE_TYPES = ["Permanent", "Transient", "Undetermined"] as const;
+export const OUTBOX_BOUNCE_SUBTYPES = [
+  "NoEmail",
+  "MailboxFull",
+  "Suppressed",
+  "MessageTooLarge",
+  "ContentRejected",
+  "AttachmentRejected",
+  "General",
+] as const;
 export const CALENDAR_METHODS = ["REQUEST", "CANCEL"] as const;
 export const WEBHOOK_EVENT_TYPES = [
   "submission.created",
@@ -102,6 +124,7 @@ export const MIRROR_OPERATIONS = ["upsert", "delete"] as const;
 export const IMPORT_OUTCOMES = ["created", "updated", "skipped", "failed"] as const;
 export const EMBED_KINDS = ["agenda", "sessions", "speakers", "cfp"] as const;
 export const EMBED_LAYOUTS = ["cards", "list"] as const;
+export const EMBED_OUTPUT_FORMATS = ["html", "json", "ical"] as const;
 export const AUDIT_ACTOR_KINDS = ["user", "api_token", "system", "airtable"] as const;
 
 export type EventStatus = (typeof EVENT_STATUSES)[number];
@@ -126,6 +149,9 @@ export type AttachmentOwnerType = (typeof ATTACHMENT_OWNER_TYPES)[number];
 export type AttachmentStatus = (typeof ATTACHMENT_STATUSES)[number];
 export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
 export type OutboxSendPolicy = (typeof OUTBOX_SEND_POLICIES)[number];
+export type OutboxDeliveryState = (typeof OUTBOX_DELIVERY_STATES)[number];
+export type OutboxBounceType = (typeof OUTBOX_BOUNCE_TYPES)[number];
+export type OutboxBounceSubtype = (typeof OUTBOX_BOUNCE_SUBTYPES)[number];
 export type CalendarMethod = (typeof CALENDAR_METHODS)[number];
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
 export type WebhookDeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
@@ -133,6 +159,7 @@ export type MirrorOperation = (typeof MIRROR_OPERATIONS)[number];
 export type ImportOutcome = (typeof IMPORT_OUTCOMES)[number];
 export type EmbedKind = (typeof EMBED_KINDS)[number];
 export type EmbedLayout = (typeof EMBED_LAYOUTS)[number];
+export type EmbedOutputFormat = (typeof EMBED_OUTPUT_FORMATS)[number];
 export type AuditActorKind = (typeof AUDIT_ACTOR_KINDS)[number];
 
 export interface MutableRecord {
@@ -225,12 +252,23 @@ export interface AttachmentRow extends MutableRecord {
   status: AttachmentStatus;
 }
 
+export interface FileCommentRow extends ImmutableRecord {
+  attachment_id: Id | null;
+  author_person_id: Id;
+  body: string;
+  event_id: Id;
+  owner_id: Id;
+  owner_type: "task_upload";
+}
+
 export interface PersonRow extends MutableRecord {
   bio: string | null;
   company: string | null;
+  custom_fields: JsonText;
   email: string;
   headshot_attachment_id: Id | null;
   is_demo: 0 | 1;
+  kind: PersonKind;
   last_write_source: LastWriteSource;
   name: string;
   org_id: Id;
@@ -238,8 +276,42 @@ export interface PersonRow extends MutableRecord {
   title: string | null;
 }
 
+export interface PersonEventRow extends ImmutableRecord {
+  actor_person_id: Id | null;
+  kind: "note" | "tag" | "stage";
+  org_id: Id;
+  person_id: Id;
+  value_json: JsonText;
+}
+
+export interface PersonListRow extends MutableRecord {
+  config_json: JsonText;
+  created_by: Id | null;
+  kind: "live" | "fixed";
+  name: string;
+  org_id: Id;
+}
+
+export interface PersonListMemberRow {
+  created_at: EpochMilliseconds;
+  list_id: Id;
+  person_id: Id;
+}
+
+export interface PublicScheduleRow {
+  code: string;
+  created_at: EpochMilliseconds;
+  event_id: Id;
+  session_ids: JsonText<Id[]>;
+  updated_at: EpochMilliseconds;
+  write_key_hash: string;
+}
+
 export interface MembershipRow extends MutableRecord {
+  confirmation_status: ConfirmationStatus;
+  confirmed_at: EpochMilliseconds | null;
   event_id: Id | null;
+  invited_at: EpochMilliseconds | null;
   org_id: Id;
   person_id: Id;
   role: MembershipRole;
@@ -255,7 +327,8 @@ export interface AuthSessionRow extends MutableRecord {
 
 export interface MagicLinkRow extends MutableRecord {
   expires_at: EpochMilliseconds;
-  person_id: Id;
+  /** Null exactly for `claim` and `org_invite`, whose person is created at exchange. */
+  person_id: Id | null;
   purpose: MagicLinkPurpose;
   redirect_to: string;
   token_hash: string;
@@ -263,6 +336,7 @@ export interface MagicLinkRow extends MutableRecord {
 }
 
 export interface ApiTokenRow extends MutableRecord {
+  acts_as_person_id: Id | null;
   created_by: Id;
   event_id: Id | null;
   last_used_at: EpochMilliseconds | null;
@@ -321,6 +395,12 @@ export interface EmailTemplateRow extends MutableRecord {
 }
 
 export interface OutboxRow extends MutableRecord {
+  bounce_subtype: OutboxBounceSubtype | null;
+  bounce_type: OutboxBounceType | null;
+  delivered_at: EpochMilliseconds | null;
+  delivery_event_created_at: EpochMilliseconds | null;
+  delivery_event_id: string | null;
+  delivery_state: OutboxDeliveryState;
   entity_id: Id | null;
   error: string | null;
   event_id: Id;
@@ -428,6 +508,7 @@ export interface EvaluationPlanRow extends MutableRecord {
 
 export interface EvaluationRoundRow extends MutableRecord {
   anonymized: 0 | 1;
+  committee_id: Id | null;
   closes_at: EpochMilliseconds | null;
   mode: EvaluationRoundMode;
   name: string;
@@ -438,9 +519,15 @@ export interface EvaluationRoundRow extends MutableRecord {
 }
 
 export interface RubricCriterionRow extends MutableRecord {
+  /** Weights are a numeric-only concept: select and text criteria carry weight 0. */
+  kind: "numeric" | "select" | "text";
   name: string;
+  /** JSON array of choice labels; set only when kind is 'select'. */
+  options: JsonText | null;
   position: number;
   round_id: Id;
+  scale_max: number | null;
+  scale_min: number | null;
   weight_pct: number;
 }
 
@@ -473,6 +560,11 @@ export interface EvaluationRow extends MutableRecord {
   abstained: 0 | 1;
   comment: string;
   criteria_scores: JsonText | null;
+  /** When a chair has overridden this score: when, why, whose, and what to. */
+  override_at: number | null;
+  override_comment: string | null;
+  override_person_id: Id | null;
+  override_score: number | null;
   recommendation: Decision | null;
   reviewer_person_id: Id;
   round_id: Id;
@@ -611,8 +703,10 @@ export interface ImportRowRow extends MutableRecord {
 
 export interface EmbedRow extends MutableRecord {
   config: JsonText;
+  enabled: 0 | 1;
   event_id: Id;
   kind: EmbedKind;
+  name: string;
   slug: string;
 }
 
@@ -686,12 +780,17 @@ export const CORE_TABLE_NAMES = [
   "embeds",
   "audit_log",
   "event_settings",
+  "file_comments",
+  "person_events",
+  "person_lists",
+  "person_list_members",
+  "public_schedules",
   "webhook_endpoints",
   "webhook_deliveries",
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 48 as const;
+export const CORE_TABLE_COUNT = 53 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -709,7 +808,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 48>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 53>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -728,6 +827,7 @@ export const CORE_TABLES = {
   evaluation_rounds: "evaluation_rounds",
   evaluations: "evaluations",
   event_settings: "event_settings",
+  file_comments: "file_comments",
   events: "events",
   form_admins: "form_admins",
   form_fields: "form_fields",
@@ -743,6 +843,10 @@ export const CORE_TABLES = {
   outbox: "outbox",
   participations: "participations",
   people: "people",
+  person_events: "person_events",
+  person_list_members: "person_list_members",
+  person_lists: "person_lists",
+  public_schedules: "public_schedules",
   reviewer_track_scopes: "reviewer_track_scopes",
   rooms: "rooms",
   round_assignments: "round_assignments",
@@ -779,6 +883,7 @@ export interface CoreTableRows {
   evaluation_rounds: EvaluationRoundRow;
   evaluations: EvaluationRow;
   event_settings: EventSettingRow;
+  file_comments: FileCommentRow;
   events: EventRow;
   form_admins: FormAdminRow;
   form_fields: FormFieldRow;
@@ -794,6 +899,10 @@ export interface CoreTableRows {
   outbox: OutboxRow;
   participations: ParticipationRow;
   people: PersonRow;
+  person_events: PersonEventRow;
+  person_list_members: PersonListMemberRow;
+  person_lists: PersonListRow;
+  public_schedules: PublicScheduleRow;
   reviewer_track_scopes: ReviewerTrackScopeRow;
   rooms: RoomRow;
   round_assignments: RoundAssignmentRow;
@@ -832,6 +941,7 @@ interface CoreDefaultColumns {
   evaluation_rounds: "anonymized" | "mode";
   evaluations: "abstained" | "comment";
   event_settings: never;
+  file_comments: never;
   events: "demo_mode" | "status";
   form_admins: never;
   form_fields: "config" | "required";
@@ -848,13 +958,17 @@ interface CoreDefaultColumns {
   import_rows: never;
   imports: never;
   magic_links: never;
-  memberships: never;
+  memberships: "confirmation_status";
   mirror_outbox: "attempts";
   mirror_state: "local_row_count" | "remote_row_count";
   organizations: never;
   outbox: "send_policy" | "status";
   participations: "confirmation_status";
-  people: "is_demo" | "last_write_source" | "social_links";
+  people: "custom_fields" | "is_demo" | "last_write_source" | "social_links";
+  person_events: never;
+  person_list_members: never;
+  person_lists: "config_json";
+  public_schedules: never;
   reviewer_track_scopes: never;
   rooms: "av_capabilities";
   round_assignments: never;
@@ -903,6 +1017,10 @@ export type RoomInsert = CoreInsert<"rooms">;
 export type WaveInsert = CoreInsert<"waves">;
 export type AttachmentInsert = CoreInsert<"attachments">;
 export type PersonInsert = CoreInsert<"people">;
+export type PersonEventInsert = CoreInsert<"person_events">;
+export type PersonListInsert = CoreInsert<"person_lists">;
+export type PersonListMemberInsert = CoreInsert<"person_list_members">;
+export type PublicScheduleInsert = CoreInsert<"public_schedules">;
 export type MembershipInsert = CoreInsert<"memberships">;
 export type AuthSessionInsert = CoreInsert<"auth_sessions">;
 export type MagicLinkInsert = CoreInsert<"magic_links">;
@@ -940,5 +1058,6 @@ export type ImportRowInsert = CoreInsert<"import_rows">;
 export type EmbedInsert = CoreInsert<"embeds">;
 export type AuditLogInsert = CoreInsert<"audit_log">;
 export type EventSettingInsert = CoreInsert<"event_settings">;
+export type FileCommentInsert = CoreInsert<"file_comments">;
 export type WebhookEndpointInsert = CoreInsert<"webhook_endpoints">;
 export type WebhookDeliveryInsert = CoreInsert<"webhook_deliveries">;

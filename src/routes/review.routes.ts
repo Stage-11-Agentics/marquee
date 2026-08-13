@@ -5,6 +5,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { Principal } from "../api/runtime";
 import { validateComparisonRanking } from "../lib/evaluation-comparisons";
 import { participantListSql } from "../lib/participants";
+import { parseCriterionOptions } from "../lib/rubric-criteria";
 import {
   authorizeReviewerScope,
   authorizeReviewerQueueScope,
@@ -18,10 +19,20 @@ const recommendation = z.enum(["approve", "maybe", "deny"]);
 const exportQuery = z.object({ format: z.literal("csv").default("csv") });
 
 const evaluationInput = z.object({
+  abstained: z.union([z.literal(0), z.literal(1)]).default(0),
   comment: z.string().max(20_000).default(""),
-  criteria_scores: z.record(z.string(), z.number().min(0)).nullable().optional(),
-  recommendation,
+  criteria_scores: z.record(z.string(), z.union([z.number(), z.string().max(20_000)]))
+    .refine((scores: Record<string, number | string>) => Object.keys(scores).length <= 40, "a scorecard carries at most 40 criteria")
+    .nullable().optional(),
+  recommendation: recommendation.nullable().optional(),
   score: z.number().nullable().optional(),
+}).superRefine((value: { abstained: 0 | 1; recommendation?: "approve" | "maybe" | "deny" | null }, context: z.RefinementCtx) => {
+  if (value.abstained === 0 && !value.recommendation) {
+    context.addIssue({ code: "custom", path: ["recommendation"], message: "recommendation is required unless declaring a conflict" });
+  }
+  if (value.abstained === 1 && value.recommendation) {
+    context.addIssue({ code: "custom", path: ["recommendation"], message: "a conflicted review cannot include a recommendation" });
+  }
 });
 
 const comparisonInput = z.object({
@@ -34,6 +45,7 @@ const errors = errorResponses([400, 401, 403, 404, 409, 422, 500]);
 
 interface RoundRow {
   anonymized: 0 | 1;
+  committee_id: string | null;
   closes_at: number | null;
   id: string;
   mode: "scorecard" | "comparison";
@@ -64,7 +76,23 @@ interface DetailRow extends QueueRow {
   vendor_affiliation: string;
 }
 
+interface CriterionRow {
+  id: string;
+  kind: "numeric" | "select" | "text";
+  name: string;
+  options: string | null;
+  position: number;
+  scale_max: number | null;
+  scale_min: number | null;
+  weight_pct: number;
+}
+
+interface CompletedRow extends ReviewRow {
+  submission_id: string;
+}
+
 interface ReviewRow {
+  abstained: 0 | 1;
   comment: string;
   created_at: number;
   criteria_scores: string | null;
@@ -113,7 +141,7 @@ function parseJsonArray(value: string | null | undefined): unknown[] {
 async function roundForEvent(db: D1Database, eventId: string, roundId: string): Promise<RoundRow> {
   const round = await db.prepare(`
     SELECT round.id, round.plan_id, plan.name AS plan_name, round.position, round.name, round.mode,
-      round.anonymized, round.target_reviews_per_submission, round.opens_at, round.closes_at
+      round.anonymized, round.committee_id, round.target_reviews_per_submission, round.opens_at, round.closes_at
     FROM evaluation_rounds round
     JOIN evaluation_plans plan ON plan.id = round.plan_id
     WHERE round.id = ? AND plan.event_id = ?
@@ -197,9 +225,6 @@ async function reviewerQueue(
 ): Promise<string[]> {
   const personId = reviewerPersonIdForEvent(principal, eventId);
   if (personId === null) {
-    await authorizeReviewerQueueScope({
-      db, principal, eventId, roundEventId: eventId, roundId: round.id, submissionIds: [], operation: "queue",
-    });
     return [];
   }
   const candidates = await assignedSubmissionIds(db, eventId, round.id, personId);
@@ -216,6 +241,72 @@ async function reviewerQueue(
   return candidates.filter((submissionId) => authorized.has(submissionId));
 }
 
+/**
+ * The mirror of `assignedSubmissionIds`: what this reviewer has already
+ * submitted. A finished review used to vanish from the queue, which left a
+ * reviewer no way to check what they recorded — and left an organizer's claim
+ * that the values were stored unverifiable from the reviewer's own surface.
+ */
+const COMPLETED_PAGE = 50;
+
+async function completedSubmissionIds(
+  db: D1Database,
+  eventId: string,
+  roundId: string,
+  personId: string,
+): Promise<string[]> {
+  const result = await db.prepare(`
+    SELECT DISTINCT assignment.submission_id
+    FROM round_assignments assignment
+    JOIN submissions submission ON submission.id = assignment.submission_id
+    LEFT JOIN committee_members member
+      ON member.committee_id = assignment.committee_id AND member.person_id = ?
+    LEFT JOIN committees committee ON committee.id = assignment.committee_id
+    JOIN evaluations evaluation
+      ON evaluation.round_id = assignment.round_id
+      AND evaluation.submission_id = assignment.submission_id
+      AND evaluation.reviewer_person_id = ?
+    WHERE assignment.round_id = ?
+      AND submission.event_id = ?
+      AND (assignment.reviewer_person_id = ? OR (member.person_id IS NOT NULL AND committee.event_id = ?))
+    ORDER BY evaluation.updated_at DESC, assignment.submission_id
+    LIMIT ?
+  `).bind(personId, personId, roundId, eventId, personId, eventId, COMPLETED_PAGE + 1).all<{ submission_id: string }>();
+  return result.results.map((row) => row.submission_id);
+}
+
+/** One query for every stored review in the completed set — never one per item. */
+async function reviewsForSubmissions(
+  db: D1Database,
+  roundId: string,
+  reviewerPersonId: string,
+  submissionIds: readonly string[],
+): Promise<Map<string, ReviewRow>> {
+  const reviews = new Map<string, ReviewRow>();
+  const uniqueIds = [...new Set(submissionIds)];
+  for (let offset = 0; offset < uniqueIds.length; offset += 80) {
+    const chunk = uniqueIds.slice(offset, offset + 80);
+    const result = await db.prepare(`
+      SELECT submission_id, recommendation, score, criteria_scores, comment, abstained, reviewer_person_id, created_at, updated_at
+      FROM evaluations
+      WHERE round_id = ? AND reviewer_person_id = ? AND submission_id IN (${chunk.map(() => "?").join(",")})
+    `).bind(roundId, reviewerPersonId, ...chunk).all<CompletedRow>();
+    for (const row of result.results) reviews.set(row.submission_id, row);
+  }
+  return reviews;
+}
+
+/** The round's scorecard, as the reviewer surface must render it. */
+async function criteriaForRound(db: D1Database, roundId: string): Promise<Array<Record<string, unknown>>> {
+  const result = await db.prepare(
+    "SELECT id, name, kind, options, scale_min, scale_max, weight_pct, position FROM rubric_criteria WHERE round_id = ? ORDER BY position, id",
+  ).bind(roundId).all<CriterionRow>();
+  return result.results.map((criterion) => ({
+    ...criterion,
+    options: criterion.options === null ? null : parseCriterionOptions(criterion.options),
+  }));
+}
+
 async function reviewerTrackScopes(db: D1Database, eventId: string, personId: string): Promise<ScopeRow[]> {
   const result = await db.prepare(`
     SELECT track.id, track.name, track.color
@@ -230,7 +321,7 @@ async function reviewerTrackScopes(db: D1Database, eventId: string, personId: st
 async function activeRoundForEvent(db: D1Database, eventId: string, principal: Principal): Promise<RoundRow> {
   const rounds = await db.prepare(`
     SELECT round.id, round.plan_id, plan.name AS plan_name, round.position, round.name, round.mode,
-      round.anonymized, round.target_reviews_per_submission, round.opens_at, round.closes_at
+      round.anonymized, round.committee_id, round.target_reviews_per_submission, round.opens_at, round.closes_at
     FROM evaluation_rounds round
     JOIN evaluation_plans plan ON plan.id = round.plan_id
     WHERE plan.event_id = ? AND plan.status = 'open'
@@ -375,7 +466,7 @@ async function reviewForReviewer(
   reviewerPersonId: string,
 ): Promise<ReviewRow | null> {
   const row = await db.prepare(`
-    SELECT recommendation, score, criteria_scores, comment, reviewer_person_id, created_at, updated_at
+    SELECT recommendation, score, criteria_scores, comment, abstained, reviewer_person_id, created_at, updated_at
     FROM evaluations
     WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?
   `).bind(roundId, submissionId, reviewerPersonId).first<ReviewRow>();
@@ -413,6 +504,7 @@ function reviewPayload(review: ReviewRow | null): Record<string, unknown> | null
   if (!review) return null;
   const proposal = review.recommendation ? proposalFor(review.recommendation) : null;
   return {
+    abstained: review.abstained === 1,
     actor_id: review.reviewer_person_id,
     comment: review.comment,
     created_at: review.created_at,
@@ -438,17 +530,65 @@ async function reviewerQueuePayload(
     const row = rows.get(submissionId) ?? null;
     if (row) data.push({ ...row, tracks: parseJsonArray(row.tracks), queue_id: row.id, position: index + 1 });
   }
+  const completed = personId === null ? [] : await completedQueue(db, principal, eventId, round, personId);
   return {
+    completed,
+    completed_truncated: completed.length >= COMPLETED_PAGE,
     current_id: data[0]?.id ?? null,
     current_index: data.length ? 0 : null,
     data,
     plan: { id: round.plan_id, name: round.plan_name },
     position: data.length ? 1 : 0,
     remaining: data.length,
-    round: { anonymized: Boolean(round.anonymized), id: round.id, mode: round.mode, name: round.name },
+    round: {
+      anonymized: Boolean(round.anonymized),
+      criteria: await criteriaForRound(db, round.id),
+      id: round.id,
+      mode: round.mode,
+      name: round.name,
+    },
     scopes: personId ? await reviewerTrackScopes(db, eventId, personId) : [],
     total: data.length,
   };
+}
+
+/**
+ * Completed items pass the same authorization seam as the open queue — a review
+ * a reviewer wrote before losing track scope is no longer theirs to reopen.
+ */
+async function completedQueue(
+  db: D1Database,
+  principal: Principal,
+  eventId: string,
+  round: RoundRow,
+  personId: string,
+): Promise<Array<Record<string, unknown>>> {
+  const found = await completedSubmissionIds(db, eventId, round.id, personId);
+  const candidates = found.slice(0, COMPLETED_PAGE);
+  if (candidates.length === 0) return [];
+  const authorizations = await authorizeReviewerQueueScope({
+    db, principal, eventId, roundEventId: eventId, roundId: round.id, submissionIds: candidates, operation: "queue",
+  });
+  const authorized = new Set(authorizations.map((authorization) => authorization.submissionId));
+  const ids = candidates.filter((submissionId) => authorized.has(submissionId));
+  const [rows, reviews] = await Promise.all([
+    queueRows(db, eventId, ids),
+    reviewsForSubmissions(db, round.id, personId, ids),
+  ]);
+  const completed: Array<Record<string, unknown>> = [];
+  for (const submissionId of ids) {
+    const row = rows.get(submissionId);
+    if (row) {
+      completed.push({
+        ...row,
+        position: completed.length + 1,
+        queue_id: row.id,
+        review: reviewPayload(reviews.get(submissionId) ?? null),
+        tracks: parseJsonArray(row.tracks),
+      });
+    }
+  }
+  return completed;
 }
 
 const reviewerQueueRoute = defineApiRoute(
@@ -734,34 +874,42 @@ const writeEvaluationRoute = defineApiRoute(
     const authorization = await authorizeReviewerScope({ db: context.env.DB, principal, eventId, roundId, submissionId, operation: "evaluation-write" });
     const body = context.req.valid("json");
     const now = Date.now();
-    const score = body.score ?? null;
-    const criteriaScores = body.criteria_scores === undefined || body.criteria_scores === null
+    const abstained = body.abstained === 1;
+    const recommendationValue = abstained ? null : body.recommendation;
+    const score = abstained ? null : body.score ?? null;
+    const criteriaScores = abstained || body.criteria_scores === undefined || body.criteria_scores === null
       ? null
       : JSON.stringify(body.criteria_scores);
     await context.env.DB.prepare(`
       INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      -- The four override_* columns are deliberately absent from this update: a
+      -- chair's override survives the reviewer revising their own score. The
+      -- chair judged the abstract, not one scoring run, and a reviewer must not
+      -- be able to lift an override by re-submitting. Clearing it stays the
+      -- chair's own gesture. MRQ-149's suite pins this both ways.
       ON CONFLICT(round_id, submission_id, reviewer_person_id) DO UPDATE SET
         recommendation = excluded.recommendation,
         score = excluded.score,
         criteria_scores = excluded.criteria_scores,
         comment = excluded.comment,
-        abstained = 0,
+        abstained = excluded.abstained,
         updated_at = excluded.updated_at
     `).bind(
-      crypto.randomUUID(), roundId, submissionId, authorization.personId, body.recommendation, score,
-      criteriaScores, body.comment, now, now,
+      crypto.randomUUID(), roundId, submissionId, authorization.personId, recommendationValue, score,
+      criteriaScores, body.comment, abstained ? 1 : 0, now, now,
     ).run();
     await context.env.DB.prepare(
       "UPDATE round_assignments SET status = 'complete', updated_at = ? WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?",
     ).bind(now, roundId, submissionId, authorization.personId).run();
-    const proposal = proposalFor(body.recommendation);
+    const proposal = recommendationValue ? proposalFor(recommendationValue) : null;
     return context.json({
+      abstained,
       actor_id: authorization.personId,
       criteria_scores: criteriaScores === null ? null : body.criteria_scores,
       decision_proposal: proposal,
       lifecycle_status_changed: false,
-      recommendation: body.recommendation,
+      recommendation: recommendationValue,
       saved_at: now,
       score,
     }, 200);

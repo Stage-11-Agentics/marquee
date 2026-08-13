@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
-import { COMMAND_REGISTRY, commandsUnder, renderHelp } from "./registry.mjs";
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
+
+import { COMMAND_REGISTRY, COPY_SETS, commandsUnder, renderHelp } from "./registry.mjs";
 import { MarqueeClient } from "./client.mjs";
 import { renderDiagnosticBundle, tailLogs } from "./diagnostics.mjs";
 
@@ -19,6 +22,16 @@ const VALUE_OPTIONS = new Set([
   "--request-id",
   "--level",
   "--event",
+  "--set",
+  "--query",
+  "--if-match",
+  "--from",
+  "--copy",
+  "--file",
+  "--score",
+  "--recommendation",
+  "--comment",
+  "--criteria",
 ]);
 const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle"]);
 const LIST_FILTER_KEYS = new Set(["kind", "status", "track", "format", "wave", "task", "placement", "q"]);
@@ -119,9 +132,62 @@ function parseFilters(values, allowed, label) {
   return result;
 }
 
+/**
+ * Body fields for a `--set` command. Values parse as JSON where they can, so
+ * `30` is a number and `null` is null, while an unparseable value like
+ * `Workshop` stays the string it looks like. A string that would parse as
+ * something else is quoted through: `--set name='"2026"'`.
+ */
+function parseSetValues(command, options) {
+  const allowed = new Set(command.set ?? []);
+  const body = {};
+  for (const value of optionValues(options, "--set")) {
+    const separator = value.indexOf("=");
+    if (separator < 1) usageError("--set must use key=value");
+    const key = value.slice(0, separator);
+    if (!allowed.has(key)) {
+      usageError(`unsupported --set key: ${key}\n\nlegal keys: ${[...allowed].join(", ")}`);
+    }
+    const raw = value.slice(separator + 1);
+    try {
+      body[key] = JSON.parse(raw);
+    } catch {
+      body[key] = raw;
+    }
+  }
+  return body;
+}
+
+/**
+ * `--from` and `--copy` in the shape the endpoint wants.
+ *
+ * An unknown set name fails here, with the legal list, rather than as a 400
+ * from the server: the agent is usually mid-loop and a local error names the
+ * fix. `--copy` without `--from` is a typo worth catching too — it reads as if
+ * something was going to be carried, and nothing would be.
+ */
+function copyRequest(options) {
+  const from = option(options, "--from");
+  const sets = option(options, "--copy");
+  if (!from && !sets) return {};
+  if (!from) usageError("--copy needs --from: name the conference the structure comes from");
+  if (!sets) return { copy_from: from };
+  const chosen = sets.split(",").map((value) => value.trim()).filter(Boolean);
+  const unknown = chosen.filter((value) => !COPY_SETS.includes(value));
+  if (unknown.length > 0) {
+    usageError(`unsupported --copy set: ${unknown.join(", ")}\n\nlegal sets: ${COPY_SETS.join(", ")}`);
+  }
+  return { copy_from: from, copy: Object.fromEntries(COPY_SETS.map((set) => [set, chosen.includes(set)])) };
+}
+
+function requireSetValues(command, options) {
+  const body = parseSetValues(command, options);
+  if (Object.keys(body).length === 0) usageError(`${command.usage} requires --set`);
+  return body;
+}
+
 function eventIdFrom(command, arguments_, options) {
-  const expected = command.path.at(-1) === "show" || command.path[0] !== "event" || command.path[0] === "tasks" || command.path[0] === "remind" || command.path[0] === "agenda";
-  if (!expected) return undefined;
+  if (!command.event) return undefined;
   const positional = arguments_[0];
   const selected = positional ?? option(options, "--event-id") ?? process.env.MARQUEE_EVENT_ID;
   if (!selected) usageError(`${command.usage} requires an event ID (or MARQUEE_EVENT_ID)`);
@@ -168,6 +234,24 @@ function csvRows(value) {
   return [keys.join(","), ...rows.map((row) => keys.map((key) => csvCell(row?.[key])).join(","))].join("\n");
 }
 
+/**
+ * The strong ETag for one placed agenda item. `updateAgendaItem` and
+ * `removeAgendaItem` are the only two If-Match routes in the product, and the
+ * agenda snapshot already carries each session's tag — so the caller states an
+ * item ID and the CLI supplies the precondition, rather than making a human
+ * carry a version string between two commands. `--if-match` stays available for
+ * a script that already holds one.
+ */
+async function agendaItemEtag(client, eventId, itemId, options) {
+  const supplied = option(options, "--if-match");
+  if (supplied) return supplied;
+  const agenda = await client.get(`/api/v1/events/${encodeURIComponent(eventId)}/agenda`);
+  const item = (agenda?.sessions ?? []).find((session) => session.id === itemId);
+  if (!item) usageError(`no agenda item ${itemId} is placed on this conference's agenda`);
+  if (!item.etag) throw new Error(`the agenda returned item ${itemId} without an ETag`);
+  return item.etag;
+}
+
 async function waitForReset(client, jobId) {
   const deadline = Date.now() + 30_000;
   let last;
@@ -180,8 +264,95 @@ async function waitForReset(client, jobId) {
   throw new Error(`the event seed reset did not finish within 30 seconds (last status: ${last?.status ?? "unknown"})`);
 }
 
+async function reviewerRound(client, eventId) {
+  const queue = await client.get(`/api/v1/events/${encodeURIComponent(eventId)}/reviewer/queue`);
+  if (!queue?.round?.id) throw new Error("the API did not return an active review round");
+  return queue.round.id;
+}
+
+const PEOPLE_FILTER_KEYS = new Set(["q", "company", "title", "tag", "stage", "list_id", "event_id"]);
+const AUDIENCE_FILTER_KEYS = new Set(["person_ids", "list_id"]);
+
+function requirePersonId(command, arguments_) {
+  const personId = arguments_[0];
+  if (!personId) usageError(`${command.usage} requires a person ID`);
+  return personId;
+}
+
+/** The organization-level half of the CLI: People, Lists, and the pipeline. */
+async function executeOrgCommand(command, verb, arguments_, options, client) {
+  const [root] = command.path;
+  if (root === "people" && verb === "list") {
+    const filters = parseFilters(optionValues(options, "--filter"), PEOPLE_FILTER_KEYS, "filter");
+    return client.get("/api/v1/org/people", { query: queryFromListFilters(filters, options) });
+  }
+  if (root === "people" && verb === "show") {
+    return client.get(`/api/v1/org/people/${encodeURIComponent(requirePersonId(command, arguments_))}`);
+  }
+  if (root === "people" && verb === "note") {
+    const personId = requirePersonId(command, arguments_);
+    return client.post(`/api/v1/org/people/${encodeURIComponent(personId)}/notes`, requireSetValues(command, options));
+  }
+  if (root === "people" && verb === "tag") {
+    const personId = requirePersonId(command, arguments_);
+    return client.post(`/api/v1/org/people/${encodeURIComponent(personId)}/tags`, requireSetValues(command, options));
+  }
+  if (root === "people" && verb === "import") {
+    const path = option(options, "--file");
+    if (!path) usageError(`${command.usage} requires --file`);
+    const csv = await readFile(path, "utf8");
+    return client.post("/api/v1/org/imports", { csv, filename: basename(path) });
+  }
+  if (root === "people" && verb === "email") {
+    const audience = requireFilters(command, options, AUDIENCE_FILTER_KEYS);
+    const subject = option(options, "--subject");
+    const body = option(options, "--body");
+    if (subject === undefined || body === undefined) usageError("people email requires both --subject and --body");
+    const personIds = audience.person_ids === undefined
+      ? undefined
+      : Array.isArray(audience.person_ids) ? audience.person_ids : [audience.person_ids];
+    return client.post("/api/v1/org/comms/send", {
+      ...(personIds ? { person_ids: personIds } : {}),
+      ...(audience.list_id ? { list_id: audience.list_id } : {}),
+      subject,
+      body,
+    });
+  }
+  if (root === "lists" && verb === "list") return client.get("/api/v1/org/lists");
+  if (root === "lists" && verb === "save") return client.post("/api/v1/org/lists", requireSetValues(command, options));
+  if (root === "pipeline" && verb === "board") return client.get("/api/v1/org/pipeline");
+  if (root === "pipeline" && verb === "move") {
+    const personId = requirePersonId(command, arguments_);
+    return client.post(`/api/v1/org/people/${encodeURIComponent(personId)}/stage`, requireSetValues(command, options));
+  }
+  usageError(`unsupported command: ${command.path.join(" ")}`);
+}
+
 async function execute(command, arguments_, options, flags, client) {
   const [root, verb] = command.path;
+  // Setup runs against an instance that has no credential yet, so these come
+  // before anything that resolves a token or an event.
+  if (root === "setup" && verb === "claim-link") {
+    return client.post("/api/v1/setup/claim-link");
+  }
+  if (root === "setup" && verb === "health") {
+    return client.get("/health");
+  }
+  if (root === "setup" && verb === "instance") {
+    return client.get("/api/v1/instance/status");
+  }
+  if (root === "organizers" && verb === "list") {
+    return client.get("/api/v1/org/members");
+  }
+  if (root === "organizers" && verb === "invite") {
+    return client.post("/api/v1/org/invites");
+  }
+  if (root === "event" && verb === "list") {
+    return client.get("/api/v1/events");
+  }
+  if (root === "event" && verb === "create") {
+    return client.post("/api/v1/events", { ...requireSetValues(command, options), ...copyRequest(options) });
+  }
   if (root === "event" && verb === "seed") {
     const current = await client.get("/api/v1/auth/me");
     // The demo reset is destructive to credential rows. A token that already
@@ -200,6 +371,10 @@ async function execute(command, arguments_, options, flags, client) {
   if (root === "event" && verb === "show") {
     const eventId = await resolveEventId(client, command, arguments_, options);
     return client.get(`/api/v1/events/${encodeURIComponent(eventId)}`);
+  }
+  if (root === "event" && verb === "set") {
+    const eventId = await resolveEventId(client, command, arguments_, options);
+    return client.patch(`/api/v1/events/${encodeURIComponent(eventId)}`, requireSetValues(command, options));
   }
 
   // Diagnostics and logs are about the deployment, not about one conference,
@@ -220,6 +395,14 @@ async function execute(command, arguments_, options, flags, client) {
       event: option(options, "--event"),
     });
     return { streamed: true };
+  }
+
+  // People, Lists, and the pipeline are organization-level. They run before the
+  // event id is resolved because they do not have one — asking the API for a
+  // conference in order not to use it would be a wasted request and a confusing
+  // failure when a token is scoped to no single conference.
+  if (root === "people" || root === "lists" || root === "pipeline") {
+    return executeOrgCommand(command, verb, arguments_, options, client);
   }
 
   const eventId = await resolveEventId(client, command, arguments_, options);
@@ -244,6 +427,15 @@ async function execute(command, arguments_, options, flags, client) {
     if (!["all", "overdue", "incomplete", "risk"].includes(filter)) usageError("--filter must be all, overdue, incomplete, or risk");
     return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/onboarding`, { query: { filter } });
   }
+  if (root === "files" && verb === "list") {
+    const state = option(options, "--state") ?? "all";
+    if (!["all", "uploaded", "missing", "overdue"].includes(state)) usageError("--state must be all, uploaded, missing, or overdue");
+    const task = option(options, "--task");
+    const search = option(options, "--search");
+    return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/files`, {
+      query: { state, ...(task ? { task_type: task } : {}), ...(search ? { q: search } : {}) },
+    });
+  }
   if (root === "remind") {
     const selector = reminderSelector(requireFilters(command, options, REMINDER_FILTER_KEYS));
     const template = option(options, "--template");
@@ -256,9 +448,90 @@ async function execute(command, arguments_, options, flags, client) {
       ...(template ? { template_key: template } : { subject, body }),
     });
   }
+  if (root === "submissions" && (verb === "schedule" || verb === "publish")) {
+    const submissionId = arguments_[1];
+    if (!submissionId) usageError(`${command.usage} requires a submission ID`);
+    const base = `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`;
+    return verb === "schedule"
+      ? client.post(`${base}/schedule`, requireSetValues(command, options))
+      : client.post(`${base}/publish`);
+  }
+  if (root === "review") {
+    const submissionId = arguments_[1];
+    if (verb === "queue") {
+      return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/reviewer/queue`);
+    }
+    if (!submissionId) usageError(`${command.usage} requires a submission ID`);
+    const roundId = await reviewerRound(client, eventId);
+    const base = `/api/v1/events/${encodeURIComponent(eventId)}/rounds/${encodeURIComponent(roundId)}/submissions/${encodeURIComponent(submissionId)}`;
+    if (verb === "show") return client.get(base);
+    if (verb === "submit") {
+      const scoreText = option(options, "--score");
+      const recommendationValue = option(options, "--recommendation");
+      const comment = option(options, "--comment");
+      if (scoreText === undefined) usageError(`${command.usage} requires --score`);
+      if (recommendationValue === undefined || !["approve", "maybe", "deny"].includes(recommendationValue)) {
+        usageError(`${command.usage} requires --recommendation approve|maybe|deny`);
+      }
+      if (comment === undefined || comment.trim() === "") usageError(`${command.usage} requires a non-empty --comment`);
+      const score = Number(scoreText);
+      if (!Number.isFinite(score)) usageError("--score must be a finite number");
+      const criteriaText = option(options, "--criteria");
+      const criteriaScores = criteriaText === undefined ? undefined : parseJsonValue(criteriaText, "--criteria");
+      if (criteriaScores !== undefined && (criteriaScores === null || Array.isArray(criteriaScores) || typeof criteriaScores !== "object")) {
+        usageError("--criteria must be a JSON object");
+      }
+      return client.post(`${base}/evaluations`, {
+        comment,
+        recommendation: recommendationValue,
+        score,
+        ...(criteriaScores === undefined ? {} : { criteria_scores: criteriaScores }),
+      });
+    }
+  }
+  if (root === "forms" && verb === "list") {
+    return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/forms`);
+  }
+  if (root === "forms" && verb === "create") {
+    return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/forms`, requireSetValues(command, options));
+  }
+  if (root === "evaluation" && verb === "plan") {
+    return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/plans`, requireSetValues(command, options));
+  }
+  if (root === "tracks" || root === "formats") {
+    const collection = `/api/v1/events/${encodeURIComponent(eventId)}/${root}`;
+    if (verb === "list") return client.get(collection);
+    if (verb === "add") return client.post(collection, requireSetValues(command, options));
+    const id = arguments_[1];
+    if (!id) usageError(`${command.usage} requires a ${root.slice(0, -1)} ID`);
+    return client.remove(`${collection}/${encodeURIComponent(id)}`);
+  }
+  if (root === "search") {
+    const query = option(options, "--query");
+    if (!query) usageError(`${command.usage} requires --query`);
+    return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/search`, { query: { q: query } });
+  }
   if (root === "agenda" && verb === "export") {
     const agenda = await client.get(`/api/v1/events/${encodeURIComponent(eventId)}/agenda`);
     return option(options, "--format") === "csv" ? { __csv: csvRows(agenda), __value: agenda } : agenda;
+  }
+  if (root === "agenda" && verb === "place") {
+    return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/agenda/items`, requireSetValues(command, options));
+  }
+  if (root === "agenda" && (verb === "move" || verb === "remove")) {
+    const itemId = arguments_[1];
+    if (!itemId) usageError(`${command.usage} requires an agenda item ID`);
+    const path = `/api/v1/events/${encodeURIComponent(eventId)}/agenda/items/${encodeURIComponent(itemId)}`;
+    // The body is parsed before the ETag is read so a bad --set key fails
+    // without spending a request on the agenda.
+    const body = verb === "move" ? requireSetValues(command, options) : undefined;
+    const headers = { "if-match": await agendaItemEtag(client, eventId, itemId, options) };
+    if (verb === "move") return client.patch(path, body, { headers });
+    // The API answers a removal with 204 and no body, which is right for HTTP
+    // and useless on stdout: a bare `null` cannot be told from a command that
+    // did nothing. The CLI states what it did instead of echoing the silence.
+    await client.remove(path, { headers });
+    return { removed: itemId, event_id: eventId };
   }
   usageError(`unsupported command: ${command.path.join(" ")}`);
 }
@@ -292,12 +565,26 @@ export async function main(argv = process.argv.slice(2)) {
   // API, so it must not demand a URL and a token it will not use.
   const client = command.local
     ? undefined
-    : new MarqueeClient({ url: option(parsed.options, "--url"), token: option(parsed.options, "--token") });
+    : new MarqueeClient({
+        url: option(parsed.options, "--url"),
+        token: option(parsed.options, "--token"),
+        requireToken: command.unauthenticated !== true,
+      });
   const result = await execute(command, arguments_, parsed.options, parsed.flags, client);
   output(result, parsed.flags.has("--json"));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // `marquee submissions list … | head` closes stdout early. Node's default is
+  // to raise EPIPE as an unhandled error event and print a stack trace, which
+  // is the wrong answer for a command built to be piped: the reader got what it
+  // asked for, so the writer exits quietly.
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on("error", (error) => {
+      if (error.code === "EPIPE") process.exit(0);
+      throw error;
+    });
+  }
   main().catch((error) => {
     process.stderr.write(`marquee: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;

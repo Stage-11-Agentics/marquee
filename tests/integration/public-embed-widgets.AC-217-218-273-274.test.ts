@@ -90,7 +90,7 @@ beforeEach(async () => {
   await purgePublicEmbedCache(env.CACHE, { eventId: EVENT_ID });
 });
 
-test("AC-273 · the sessions embed is a flat title/track/time list, filterable by track and status on the agenda's KV path", async () => {
+test("AC-273 · the sessions embed is a flat title/track/time card list with public card details, filterable by track and status on the agenda's KV path", async () => {
   const all = await request(`/embed/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}`);
   const allBody = await all.text();
   expect(all.status).toBe(200);
@@ -98,9 +98,14 @@ test("AC-273 · the sessions embed is a flat title/track/time list, filterable b
   expect(allBody).toContain("Reliable multi-agent systems");
   expect(allBody).toContain("Evaluation infrastructure at scale");
   expect(allBody).toContain('<section class="embed-flat-list"');
-  // Sessions kind omits room and speaker detail present on the agenda kind's cards.
-  expect(allBody).not.toContain("Main Stage");
-  expect(allBody).not.toContain("Agents Speaker");
+  // MRQ-120 keeps the sessions surface flat while giving it the same public
+  // card anatomy: room, speaker credits, and the explicit format/track row.
+  expect(allBody).toContain("Main Stage");
+  expect(allBody).toContain("Agents Speaker");
+  expect(allBody).toContain("Principal Engineer");
+  expect(allBody).toContain("Format");
+  expect(allBody).toContain("Track");
+  expect(allBody).toContain('class="embed-format">—</span>');
 
   const filtered = await request(`/embed/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}&track=track-agents`);
   const filteredBody = await filtered.text();
@@ -154,10 +159,69 @@ test("AC-274 · the speakers embed offers cards and list layouts carried in the 
   expect(configBody).toContain("layout=list");
   expect(configBody).toContain('data-embed-layout="cards"');
   expect(configBody).toContain('data-embed-layout="list"');
+  expect(configBody).toContain('data-embed-output="html"');
+  expect(configBody).toContain('data-embed-output="json"');
+  expect(configBody).toContain('data-embed-output="ical"');
 
   const configDefault = await request(`/embed/config?event=${EVENT_SLUG}&kind=speakers`);
   const configDefaultBody = await configDefault.text();
   expect(configDefaultBody).not.toContain("layout=list");
+});
+
+// An embedded speaker list is the public directory on someone else's page
+// (EMB-04, EMB-12), and the two read as one product only if they order the
+// same way. The directory moved to surname order; the embed kept sorting on
+// the full name, so the same conference read "Aparna, Barr, Zoë" in one place
+// and "Zoë, Aparna, Barr" in the other.
+test("AC-274 · the speakers embed orders by surname, matching the public directory", async () => {
+  const seedSpeaker = (key: string, name: string, title: string, startsAt: number) => [
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)")
+      .bind(`person-${key}`, "org_embed_widgets", `${key}@example.com`, name, "Engineer", "Ordering Co", `${name} biography`, NOW, NOW),
+    env.DB.prepare(`INSERT INTO submissions (id, event_id, kind, title, abstract, status, primary_track_id, origin, submitter_person_id, search_blob, created_at, updated_at)
+      VALUES (?, ?, 'abstract', ?, ?, 'accepted', 'track-agents', 'public', ?, ?, ?, ?)`)
+      .bind(`sub-${key}`, EVENT_ID, title, `An abstract by ${name}`, `person-${key}`, `${title} ${name}`, NOW, NOW),
+    env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, 'track-agents', 1, ?, ?)")
+      .bind(`st-${key}`, `sub-${key}`, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, 'confirmed', ?, ?)")
+      .bind(`par-${key}`, `sub-${key}`, `person-${key}`, NOW, NOW),
+    env.DB.prepare(`INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
+      VALUES (?, ?, ?, 'session', ?, 45, 'room-widget', 'track-agents', 1, ?, ?)`)
+      .bind(`agenda-${key}`, EVENT_ID, `sub-${key}`, startsAt, NOW, NOW),
+  ];
+
+  await env.DB.batch([
+    // Three orders that disagree, so only surname order satisfies the assertion:
+    // by first name this is Aparna → Barr → Zoë, by session time it is Aparna →
+    // Barr → Zoë as well, and by surname it is the reverse of both.
+    ...seedSpeaker("zoe", "Zoë Abernathy", "Retrieval at the edge", Date.UTC(2026, 9, 12, 18)),
+    ...seedSpeaker("barr", "Barr Mikkelsen", "Budgets for eval suites", Date.UTC(2026, 9, 12, 17)),
+    ...seedSpeaker("aparna", "Aparna Yardley", "Latency as a feature", Date.UTC(2026, 9, 12, 16)),
+  ]);
+  await purgePublicEmbedCache(env.CACHE, { eventId: EVENT_ID });
+
+  const list = await request(`/embed/${EVENT_SLUG}-speakers?event=${EVENT_SLUG}&layout=list`);
+  expect(list.status).toBe(200);
+  const body = await list.text();
+  const seeded = ["Zoë Abernathy", "Barr Mikkelsen", "Aparna Yardley"];
+  // Presence first: `indexOf` answers -1 for a name that never rendered, and a
+  // comparator of all -1s is a no-op on a stable sort — so without this the
+  // ordering assertion passes green against an embed carrying no speakers.
+  for (const name of seeded) expect(body).toContain(name);
+  expect(seeded.toSorted((left, right) => body.indexOf(left) - body.indexOf(right))).toEqual(seeded);
+});
+
+test("CONTRACT · EMB-15 · the public iCal output is a published-only calendar feed", async () => {
+  const response = await request(`/embed/${EVENT_SLUG}-sessions.ics?event=${EVENT_SLUG}`);
+  const body = await response.text();
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toContain("text/calendar");
+  expect(response.headers.get("content-disposition")).toContain("widget-conf-sessions.ics");
+  expect(body).toContain("BEGIN:VCALENDAR");
+  expect(body).toContain("METHOD:PUBLISH");
+  expect(body).toContain("Reliable multi-agent systems");
+  expect(body).toContain("Evaluation infrastructure at scale");
+  expect(body).toContain("Main Stage");
+  expect(body).not.toContain("PRIVATE");
 });
 
 test("AC-217 · the cfp embed renders the open deadline, formats, and a link to the public form; track/layout disable rather than disappear", async () => {

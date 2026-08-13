@@ -23,6 +23,8 @@ import {
   type ArrivalSession,
 } from "../lib/venue-geometry";
 import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
+import { listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
+import { readTaskFileConfig } from "../lib/task-template-config";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import { firstName } from "../jobs/mail/merge-data";
@@ -32,6 +34,13 @@ import {
 } from "../lib/form-conditions";
 import { listFormFields, type FormFieldView } from "./forms.queries";
 import { auditStatement, writeAudit } from "../lib/audit";
+import { contentHistoryFor } from "../lib/history";
+import {
+  parseSocialLinks,
+  personProfilePatchShape,
+  personProfileUpdateStatement,
+  resolvePersonProfile,
+} from "../lib/person-profile";
 
 const eventQuery = z.object({ eventId: z.string().min(1).optional() });
 const taskParams = z.object({ taskId: z.string().min(1) });
@@ -39,13 +48,9 @@ const submissionParams = z.object({ submissionId: z.string().min(1) });
 const participationParams = z.object({ participationId: z.string().min(1) });
 const eventSubmissionParams = z.object({ eventId: z.string().min(1), submissionId: z.string().min(1) });
 
-const profileBody = z.object({
-  title: z.string().trim().max(200).nullable().optional(),
-  company: z.string().trim().max(200).nullable().optional(),
-  bio: z.string().max(20_000).nullable().optional(),
-  social_links: z.array(z.string().url()).max(12).optional(),
-  headshot_attachment_id: z.string().min(1).nullable().optional(),
-});
+// The organizer roster (`speakers.routes.ts`) accepts the same fields through
+// the same shape, so a field added on one surface cannot go missing on the other.
+const profileBody = z.object({ ...personProfilePatchShape });
 
 const coSpeakerProfileBody = z.object({
   bio: z.string().max(20_000).nullable().optional(),
@@ -66,8 +71,19 @@ const talkBody = z.object({
 const talkEditingBody = z.object({ enabled: z.boolean() });
 const declineBody = z.object({ note: z.string().trim().max(10_000).nullable().optional() }).strict();
 
+/** Statuses that still have a decision coming, so a wave date is worth showing. */
+const AWAITING_DECISION = ["draft", "submitted", "in_review"];
+/** Submitter drafts are unfinished work; Maybe has no promised decision date. */
+const SUBMITTER_AWAITING_DECISION = ["submitted", "in_review"];
+
 const portalResponseSchema = z
   .object({
+    /**
+     * Which seat the session holds. `speaker` carries tasks, handbook, and
+     * schedule; `submitter` is a person who submitted an abstract and holds no
+     * speaker role yet, and carries only their own submissions and their status.
+     */
+    seat: z.enum(["speaker", "submitter"]),
     event: z.any(),
     person: z.any(),
     submissions: z.array(z.any()),
@@ -167,15 +183,6 @@ type TaskProjection = {
   file_config: string | null;
 };
 
-type HistoryProjection = {
-  id: string;
-  actor_person_id: string | null;
-  actor_name: string | null;
-  created_at: number;
-  before_json: string | null;
-  after_json: string | null;
-};
-
 const HANDBOOKS: Record<string, string> = {
   "aie-nyc-2026": `# Speaker handbook
 
@@ -219,11 +226,6 @@ function parseObject(value: string | null | undefined): Record<string, unknown> 
     : {};
 }
 
-function parseSocialLinks(value: string | null | undefined): string[] {
-  const parsed = parseJson<unknown>(value, []);
-  return Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed : [];
-}
-
 function readStoredAnswer(row: { value_json: string | null; value_text: string | null }): unknown {
   if (row.value_json !== null) return parseJson<unknown>(row.value_json, row.value_text ?? "");
   return row.value_text ?? "";
@@ -244,6 +246,14 @@ function statusLabel(status: string): string {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+/**
+ * The media origin is a Worker binding rather than an API binding, exactly as
+ * `uploads.routes.ts` treats it.
+ */
+function portalMediaOrigin(context: import("hono").Context<ApiEnv>): string {
+  return (context.env as unknown as { MEDIA_PUBLIC_ORIGIN?: string }).MEDIA_PUBLIC_ORIGIN ?? "";
 }
 
 function isSessionAuth(auth: AuthContext | null): auth is SessionAuth {
@@ -276,14 +286,14 @@ function requireCoSpeakerSession(context: import("hono").Context<ApiEnv>): { aut
   return { auth, participationId };
 }
 
-async function speakerEvent(
+async function findSpeakerEvent(
   db: D1Database,
   auth: SessionAuth,
   requestedEventId?: string,
-): Promise<EventProjection> {
+): Promise<EventProjection | null> {
   const predicate = requestedEventId ? "AND e.id = ?" : "";
   const bindings = requestedEventId ? [auth.personId, auth.orgId, requestedEventId] : [auth.personId, auth.orgId];
-  const event = await db
+  return db
     .prepare(
       `SELECT e.id, e.name, e.slug, e.starts_on, e.ends_on, e.timezone, e.status
        FROM events e
@@ -294,8 +304,47 @@ async function speakerEvent(
     )
     .bind(...bindings)
     .first<EventProjection>();
+}
+
+async function speakerEvent(
+  db: D1Database,
+  auth: SessionAuth,
+  requestedEventId?: string,
+): Promise<EventProjection> {
+  const event = await findSpeakerEvent(db, auth, requestedEventId);
   if (!event) throw ApiError.notFound("conference not found");
   return event;
+}
+
+/**
+ * The conference a person reaches through a submission rather than a speaker role.
+ *
+ * SPEC §10 (Amendment 15) rules the submitter and the speaker distinct, and rules
+ * the fix for a submitter opening the portal to be one honest empty state rather
+ * than a state-model change. So this resolver deliberately does *not* look at
+ * `memberships`: it reaches the event through the `participations` row the public
+ * form writes for whoever submitted (role `submitter`), which is exactly the seat
+ * that holds no speaker role.
+ */
+async function findSubmitterEvent(
+  db: D1Database,
+  auth: SessionAuth,
+  requestedEventId?: string,
+): Promise<EventProjection | null> {
+  const predicate = requestedEventId ? "AND e.id = ?" : "";
+  const bindings = requestedEventId ? [auth.personId, auth.orgId, requestedEventId] : [auth.personId, auth.orgId];
+  return db
+    .prepare(
+      `SELECT e.id, e.name, e.slug, e.starts_on, e.ends_on, e.timezone, e.status
+       FROM events e
+       JOIN submissions s ON s.event_id = e.id
+       JOIN participations p ON p.submission_id = s.id AND p.person_id = ?
+       WHERE e.org_id = ? ${predicate}
+       ORDER BY e.starts_on ASC, e.id ASC
+       LIMIT 1`,
+    )
+    .bind(...bindings)
+    .first<EventProjection>();
 }
 
 type SpeakerParticipationRow = {
@@ -699,6 +748,7 @@ function taskPayload(
   task: TaskProjection,
   fields: FormFieldView[],
   answers: Record<string, unknown>,
+  versions: FileVersionList | null,
 ): Record<string, unknown> {
   if (task.kind === "acknowledge") {
     return { kind: task.kind, acknowledged: parseObject(task.response_json).acknowledged === true };
@@ -706,12 +756,19 @@ function taskPayload(
   if (task.kind === "file") {
     const config = parseUploadOwnerConfig(task.file_config);
     const policy = policyFor("task_upload", config);
-    const accept = policy?.rules.map((rule) => rule.extension) ?? [];
+    const editedConfig = readTaskFileConfig(task.file_config);
+    const accept = editedConfig?.accept ?? policy?.rules.map((rule) => rule.extension) ?? [];
+    // The speaker needs to see WHAT they uploaded, not just that something
+    // happened: a bare checkmark is indistinguishable from a lost file.
     return {
       kind: task.kind,
       attachment_id: task.attachment_id,
       accept,
-      max_bytes: policy?.maxBytes ?? null,
+      max_bytes: editedConfig?.maxBytes ?? policy?.maxBytes ?? null,
+      versions: versions?.versions ?? [],
+      latest: versions?.latest ?? null,
+      version_count: versions?.version_count ?? 0,
+      latest_source: versions?.latest_source ?? "pointer",
     };
   }
   const projection = projectApplicableAnswers(fields, answers);
@@ -735,7 +792,7 @@ function taskPayload(
   };
 }
 
-async function listTasks(db: D1Database, event: EventProjection, personId: string): Promise<Record<string, unknown>[]> {
+async function listTasks(db: D1Database, event: EventProjection, personId: string, mediaPublicOrigin: string): Promise<Record<string, unknown>[]> {
   const [rows, cancellationAudits] = await Promise.all([
     db
       .prepare(
@@ -769,6 +826,14 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
     if (typeof reason === "string" && reason.length > 0) cancellationReasons.set(audit.submission_id, reason);
   }
 
+  // One batched read for every file task on the page rather than one per row.
+  const versionsByTask = await listVersionsForOwners(
+    db,
+    "task_upload",
+    rows.results.filter((task) => task.kind === "file").map((task) => task.id),
+    mediaPublicOrigin,
+  );
+
   return Promise.all(rows.results.map(async (task) => {
     const fields = task.kind === "form" && task.form_id ? await listFormFields(db, task.form_id) : [];
     const submissionAnswers = await readSubmissionAnswers(db, task.submission_id);
@@ -783,6 +848,7 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
       id: task.id,
       submission_id: task.submission_id,
       submission_title: task.submission_title,
+      template_id: task.template_id,
       title: task.title,
       kind: task.kind,
       description: task.description,
@@ -792,7 +858,7 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
       cancelled_at: task.cancelled_at,
       cancelled_reason: cancelled ? cancelledReason : null,
       overdue: !cancelled && task.status === "open" && task.due_at < Date.now(),
-      payload: taskPayload(task, fields, answers),
+      payload: taskPayload(task, fields, answers, versionsByTask.get(task.id) ?? null),
     };
   }));
 }
@@ -862,26 +928,24 @@ function submissionView(event: EventProjection, row: SubmissionProjection, showB
   };
 }
 
+/**
+ * The speaker's view of their own talk's history.
+ *
+ * Reads through the shared projection, which widens this from the portal's own
+ * `speaker_talk_updated` rows to every content action — so an organizer editing
+ * the talk from the record page shows up here, by name, rather than the speaker
+ * finding their title silently changed with nothing to explain it.
+ */
 async function historyFor(db: D1Database, eventId: string, submissionId: string): Promise<Record<string, unknown>[]> {
-  const rows = await db
-    .prepare(
-      `SELECT audit.id, audit.actor_person_id, person.name AS actor_name, audit.created_at,
-         audit.before_json, audit.after_json
-       FROM audit_log audit
-       LEFT JOIN people person ON person.id = audit.actor_person_id
-       WHERE audit.event_id = ? AND audit.entity_type = 'submission' AND audit.entity_id = ?
-         AND audit.action = 'speaker_talk_updated'
-       ORDER BY audit.created_at DESC, audit.id DESC`,
-    )
-    .bind(eventId, submissionId)
-    .all<HistoryProjection>();
-  return rows.results.map((row) => ({
-    id: row.id,
-    actor_person_id: row.actor_person_id,
-    actor_name: row.actor_name,
-    created_at: row.created_at,
-    before: parseJson<Record<string, unknown> | null>(row.before_json, null),
-    after: parseJson<Record<string, unknown> | null>(row.after_json, null),
+  const entries = await contentHistoryFor(db, eventId, "submission", submissionId);
+  return entries.map((entry) => ({
+    id: entry.id,
+    action: entry.action,
+    actor_person_id: entry.actor_person_id,
+    actor_name: entry.actor_name,
+    created_at: entry.created_at,
+    before: entry.before,
+    after: entry.after,
   }));
 }
 
@@ -902,12 +966,106 @@ async function talkIsEditable(db: D1Database, eventId: string, submissionId: str
   return row.form_status === "open" && (row.closes_at === null || row.closes_at > Date.now());
 }
 
-async function portalSnapshot(db: D1Database, auth: SessionAuth, requestedEventId?: string) {
-  const event = await speakerEvent(db, auth, requestedEventId);
+type SubmitterSubmissionRow = {
+  id: string;
+  title: string;
+  status: string;
+  submitted_at: number | null;
+  updated_at: number;
+  format_name: string | null;
+  wave_name: string | null;
+  wave_decision_on: string | null;
+  participation_role: string;
+  form_slug: string | null;
+};
+
+/**
+ * What the portal owes a person who submitted an abstract and holds no speaker
+ * role: the truth, not a 404. Their own submissions, their status, and the date
+ * a decision is expected — nothing that belongs to a speaker seat (no tasks, no
+ * handbook, no schedule), because they do not hold one yet.
+ */
+async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: EventProjection) {
+  const person = await personFor(db, auth.personId);
+  const rows = await db
+    .prepare(
+      // One row per submission, never per participation. The public form writes
+      // this person *two* participations on their own abstract — `submitter` and
+      // `speaker` (SPEC §10: the two are the same person until two addresses
+      // ship) — so a join here would show every abstract twice.
+      `SELECT s.id, s.title, s.status, s.submitted_at, s.updated_at,
+         format.name AS format_name, wave.name AS wave_name, wave.decision_on AS wave_decision_on,
+         form.slug AS form_slug,
+         (SELECT p.role FROM participations p
+           WHERE p.submission_id = s.id AND p.person_id = ?
+           ORDER BY CASE p.role WHEN 'submitter' THEN 0 ELSE 1 END, p.position ASC, p.id ASC
+           LIMIT 1) AS participation_role
+       FROM submissions s
+       LEFT JOIN formats format ON format.id = s.format_id AND format.event_id = s.event_id
+       LEFT JOIN waves wave ON wave.id = s.wave_id AND wave.event_id = s.event_id
+       LEFT JOIN forms form ON form.id = s.form_id AND form.event_id = s.event_id AND form.status = 'open'
+       WHERE s.event_id = ?
+         AND EXISTS (SELECT 1 FROM participations p WHERE p.submission_id = s.id AND p.person_id = ?)
+       ORDER BY s.updated_at DESC, s.id ASC`,
+    )
+    .bind(auth.personId, event.id, auth.personId)
+    .all<SubmitterSubmissionRow>();
+  const submissions = [...rows.results];
+  // A submitted or in-review abstract not yet assigned to a wave still
+  // deserves a real "you will hear by" date. Drafts are unfinished work, so
+  // they must not inherit a decision date from the next wave.
+  if (submissions.some((row) => row.wave_name === null && SUBMITTER_AWAITING_DECISION.includes(row.status))) {
+    const nextWave = await db
+      .prepare(
+        `SELECT name AS wave_name, decision_on AS wave_decision_on FROM waves
+         WHERE event_id = ? AND sent_at IS NULL ORDER BY position ASC, id ASC LIMIT 1`,
+      )
+      .bind(event.id)
+      .first<{ wave_name: string; wave_decision_on: string }>();
+    if (nextWave) {
+      for (const row of submissions) {
+        if (row.wave_name === null && SUBMITTER_AWAITING_DECISION.includes(row.status)) {
+          row.wave_name = nextWave.wave_name;
+          row.wave_decision_on = nextWave.wave_decision_on;
+        }
+      }
+    }
+  }
+  return {
+    seat: "submitter" as const,
+    event,
+    person: { id: person.id, name: person.name, email: person.email },
+    submissions: submissions.map((row) => ({
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      format: row.format_name,
+      submitted_at: row.submitted_at,
+      updated_at: row.updated_at,
+      wave_name: row.wave_name,
+      wave_decision_on: row.wave_decision_on,
+      role: row.participation_role,
+      // Only set while the form is still open — an expired call is not a way back.
+      form_slug: row.form_slug,
+    })),
+    tasks: [] as never[],
+    handbook: { markdown: "" },
+    venue: { pinned_building_count: 0 },
+  };
+}
+
+async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrigin: string, requestedEventId?: string) {
+  const speakerSeat = await findSpeakerEvent(db, auth, requestedEventId);
+  if (!speakerSeat) {
+    const submitterSeat = await findSubmitterEvent(db, auth, requestedEventId);
+    if (submitterSeat) return submitterSnapshot(db, auth, submitterSeat);
+    throw ApiError.notFound("conference not found");
+  }
+  const event = speakerSeat;
   const person = await personFor(db, auth.personId);
   const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount] = await Promise.all([
     listSubmissions(db, event, auth.personId),
-    listTasks(db, event, auth.personId),
+    listTasks(db, event, auth.personId, mediaPublicOrigin),
     primaryBuildingFor(db, event.id),
     pinnedBuildingCountFor(db, event.id),
   ]);
@@ -922,7 +1080,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, requestedEventI
       timezone: event.timezone,
     });
   }
-  if (submissions.some((row) => row.wave_name === null && ["draft", "submitted", "in_review"].includes(row.status))) {
+  if (submissions.some((row) => row.wave_name === null && AWAITING_DECISION.includes(row.status))) {
     const nextWave = await db
       .prepare(
         `SELECT name AS wave_name, decision_on AS wave_decision_on FROM waves
@@ -932,7 +1090,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, requestedEventI
       .first<{ wave_name: string; wave_decision_on: string }>();
     if (nextWave) {
       for (const row of submissions) {
-        if (row.wave_name === null && ["draft", "submitted", "in_review"].includes(row.status)) {
+        if (row.wave_name === null && AWAITING_DECISION.includes(row.status)) {
           row.wave_name = nextWave.wave_name;
           row.wave_decision_on = nextWave.wave_decision_on;
         }
@@ -947,6 +1105,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, requestedEventI
     return { ...submissionView(event, row, showBuildingComparison), history, talk_editable };
   }));
   return {
+    seat: "speaker" as const,
     event,
     person: {
       id: person.id,
@@ -1145,22 +1304,16 @@ async function updateProfile(context: import("hono").Context<ApiEnv>, body: z.in
     }
   }
   const now = Date.now();
-  await context.env.DB
-    .prepare(
-      `UPDATE people
-       SET title = ?, company = ?, bio = ?, social_links = ?, headshot_attachment_id = ?, last_write_source = 'marquee', updated_at = ?
-       WHERE id = ?`,
-    )
-    .bind(
-      body.title === undefined ? current.title : body.title,
-      body.company === undefined ? current.company : body.company,
-      body.bio === undefined ? current.bio : body.bio,
-      JSON.stringify(body.social_links ?? parseSocialLinks(current.social_links)),
-      headshot,
-      now,
-      auth.personId,
-    )
-    .run();
+  // The organizer roster writes the same person through the same normalizer:
+  // two of them is how the speaker's bio comes back different on the screen
+  // that did not save it.
+  await personProfileUpdateStatement(
+    context.env.DB,
+    auth.personId,
+    resolvePersonProfile(current, body),
+    headshot,
+    now,
+  ).run();
   const person = await personFor(context.env.DB, auth.personId);
   return context.json({
     person: {
@@ -1217,7 +1370,7 @@ const getPortal = defineApiRoute(
     path: "/api/v1/me/portal",
     operationId: "getSpeakerPortal",
     summary: "Read the authenticated speaker portal",
-    description: "Returns only the current session speaker's conference status, submissions, tasks, profile, schedule, and handbook.",
+    description: "Returns only the current session's own conference status, submissions, tasks, profile, schedule, and handbook. A session holding no speaker role but carrying a submission answers with `seat: \"submitter\"` and that person's submissions alone.",
     tags: ["Speaker portal"],
     request: { query: eventQuery },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
@@ -1226,7 +1379,7 @@ const getPortal = defineApiRoute(
   async (context) => {
     const auth = requireUnscopedSpeakerSession(context);
     const query = context.req.valid("query");
-    return context.json(await portalSnapshot(context.env.DB, auth, query.eventId), 200);
+    return context.json(await portalSnapshot(context.env.DB, auth, portalMediaOrigin(context), query.eventId), 200);
   },
 );
 

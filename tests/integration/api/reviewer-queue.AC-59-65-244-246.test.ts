@@ -30,11 +30,13 @@ const SPEED_IDS = Array.from({ length: 20 }, (_, index) => `submission-mrq-18-sp
 const ORIGIN = "https://marquee.stage11.dev";
 
 interface QueueEnvelope {
+  completed?: Array<{ id: string; review: { criteria_scores: Record<string, number | string> | null; recommendation: string | null } | null }>;
   current_id: string | null;
   current_index: number | null;
   data: Array<{ id: string; queue_id: string }>;
   plan: { id: string; name: string };
   remaining: number;
+  round?: { criteria?: Array<{ kind: string; name: string; options: string[] | null }> };
   scopes: Array<{ name: string }>;
   total: number;
 }
@@ -257,5 +259,65 @@ describe.sequential("MRQ-18 reviewer queue", () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/submissions?per_page=100`, {}, ORGANIZER_SESSION_ID);
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("Demo Organizer");
+  });
+  test("CONTRACT · MRQ-108 · the queue carries the round's scorecard, and a submitted review moves to Completed with its stored values", async () => {
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM rubric_criteria WHERE round_id = ?").bind(ROUND_ID),
+      env.DB.prepare("INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES ('crit-mrq-108-originality', ?, 'Originality', 'numeric', NULL, 1, 5, 60, 0, ?, ?)").bind(ROUND_ID, now, now),
+      env.DB.prepare("INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES ('crit-mrq-108-relevance', ?, 'Relevance', 'numeric', NULL, 1, 5, 40, 1, ?, ?)").bind(ROUND_ID, now, now),
+      env.DB.prepare("INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES ('crit-mrq-108-recommendation', ?, 'Recommendation', 'select', '[\"Accept\",\"Maybe\",\"Reject\"]', NULL, NULL, 0, 2, ?, ?)").bind(ROUND_ID, now, now),
+      env.DB.prepare("INSERT INTO rubric_criteria (id, round_id, name, kind, options, scale_min, scale_max, weight_pct, position, created_at, updated_at) VALUES ('crit-mrq-108-comments', ?, 'Comments', 'text', NULL, NULL, NULL, 0, 3, ?, ?)").bind(ROUND_ID, now, now),
+    ]);
+
+    const before = await json<QueueEnvelope>(await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/queue`));
+    expect(before.round?.criteria?.map((criterion) => [criterion.name, criterion.kind])).toEqual([
+      ["Originality", "numeric"], ["Relevance", "numeric"], ["Recommendation", "select"], ["Comments", "text"],
+    ]);
+    expect(before.round?.criteria?.[2]?.options).toEqual(["Accept", "Maybe", "Reject"]);
+    expect(before.data.some((item) => item.id === A_ONLY_ID)).toBe(true);
+    expect(before.completed?.some((item) => item.id === A_ONLY_ID)).toBe(false);
+
+    const saved = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/submissions/${A_ONLY_ID}/evaluations`, {
+      method: "POST",
+      body: JSON.stringify({
+        comment: "Strong fit for the track.",
+        criteria_scores: {
+          "crit-mrq-108-originality": 4,
+          "crit-mrq-108-relevance": 2,
+          "crit-mrq-108-recommendation": "Accept",
+          "crit-mrq-108-comments": "Clear worked examples throughout.",
+        },
+        recommendation: "approve",
+      }),
+    });
+    expect(saved.status).toBe(200);
+
+    const after = await json<QueueEnvelope>(await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/queue`));
+    expect(after.data.some((item) => item.id === A_ONLY_ID)).toBe(false);
+    const reopened = after.completed?.find((item) => item.id === A_ONLY_ID);
+    expect(reopened).toBeDefined();
+    // Numbers stay numbers and strings stay strings — the reopened review is the
+    // evidence that the values were stored, not merely that a badge turned green.
+    expect(reopened?.review?.criteria_scores).toEqual({
+      "crit-mrq-108-originality": 4,
+      "crit-mrq-108-relevance": 2,
+      "crit-mrq-108-recommendation": "Accept",
+      "crit-mrq-108-comments": "Clear worked examples throughout.",
+    });
+    expect(reopened?.review?.recommendation).toBe("approve");
+
+    const detail = await json<SubmissionDetail & { review: { criteria_scores: Record<string, number | string> | null } | null }>(
+      await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/submissions/${A_ONLY_ID}`),
+    );
+    expect(detail.review?.criteria_scores?.["crit-mrq-108-recommendation"]).toBe("Accept");
+
+    // Completed items are scoped exactly like open ones: an out-of-scope reviewer
+    // sees nothing of another reviewer's finished work.
+    const organizerQueue = await request(`/api/v1/events/${EVENT_ID}/rounds/${ROUND_ID}/queue`, {}, ORGANIZER_SESSION_ID);
+    if (organizerQueue.status === 200) {
+      const body = await json<QueueEnvelope>(organizerQueue);
+      expect(body.completed?.some((item) => item.id === A_ONLY_ID)).toBe(false);
+    }
   });
 });

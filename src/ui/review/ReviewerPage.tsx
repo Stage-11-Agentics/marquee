@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { formatFileSize, readStoredFileAnswer } from "../../lib/file-answers";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
+import { useIdentity } from "../shell/identity";
 import "./review.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 
 interface Scope {
   color: string;
@@ -24,7 +24,26 @@ interface QueueItem {
   tracks: Array<{ color: string; id: string; is_primary: number; name: string }>;
 }
 
+type CriterionKind = "numeric" | "select" | "text";
+
+interface Criterion {
+  id: string;
+  kind: CriterionKind;
+  name: string;
+  options: string[] | null;
+  position: number;
+  scale_max: number | null;
+  scale_min: number | null;
+  weight_pct: number;
+}
+
+interface CompletedItem extends QueueItem {
+  review: DetailReview | null;
+}
+
 interface QueueEnvelope {
+  completed?: CompletedItem[];
+  completed_truncated?: boolean;
   current_id?: string | null;
   current_index?: number | null;
   data: QueueItem[];
@@ -32,7 +51,7 @@ interface QueueEnvelope {
   plan: { id: string; name: string };
   position?: number;
   remaining?: number;
-  round: { anonymized: boolean; id: string; mode: "scorecard" | "comparison"; name: string; position?: number };
+  round: { anonymized: boolean; criteria?: Criterion[]; id: string; mode: "scorecard" | "comparison"; name: string; position?: number };
   scopes: Scope[];
   total?: number;
 }
@@ -52,7 +71,10 @@ interface ReviewerPlan {
 }
 
 interface ReviewState {
+  abstained: boolean;
   comment: string;
+  /** Keyed by criterion id; a rating is a number, a dropdown or free text a string. */
+  criteria: Record<string, number | string>;
   recommendation: "approve" | "maybe" | "deny" | null;
   score: number | null;
 }
@@ -75,10 +97,11 @@ interface DetailFile {
 }
 
 interface DetailReview {
+  abstained: boolean;
   actor_id: string;
   comment: string;
   created_at: number;
-  criteria_scores: Record<string, number> | null;
+  criteria_scores: Record<string, number | string> | null;
   decision_proposal: { decision: "approve" | "maybe" | "deny"; resulting_status: string } | null;
   recommendation: "approve" | "maybe" | "deny" | null;
   score: number | null;
@@ -113,7 +136,20 @@ interface SubmissionDetail {
   vendor_affiliation: string;
 }
 
-const EMPTY_REVIEW: ReviewState = { comment: "", recommendation: null, score: null };
+const EMPTY_REVIEW: ReviewState = { abstained: false, comment: "", criteria: {}, recommendation: null, score: null };
+
+const DEFAULT_SCALE_MIN = 1;
+const DEFAULT_SCALE_MAX = 5;
+
+/** A rating renders as the buttons the organizer's scale actually asks for. */
+function scaleSteps(criterion: Criterion): number[] {
+  const min = Math.round(criterion.scale_min ?? DEFAULT_SCALE_MIN);
+  const max = Math.round(criterion.scale_max ?? DEFAULT_SCALE_MAX);
+  if (max <= min) return [min];
+  const steps: number[] = [];
+  for (let value = min; value <= max && steps.length < 20; value += 1) steps.push(value);
+  return steps;
+}
 
 /**
  * The reviewer surface's one API call. It goes through the shared client, so a
@@ -152,10 +188,18 @@ function recommendationLabel(value: ReviewState["recommendation"]): string {
   return "Choose one recommendation";
 }
 
-export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string }): JSX.Element {
+export function ReviewerPage({ eventId }: { eventId: string }): JSX.Element {
+  // Anonymity runs one way: the reviewer must not see the speaker. Hiding the
+  // reviewer from themselves buys nothing and costs attribution — every review
+  // recorded here lands under this name on the organizer's record, so the name
+  // belongs on screen while the review is being written.
+  const identity = useIdentity();
   const [plan, setPlan] = useState<ReviewerPlan | null>(null);
   const [roundId, setRoundId] = useState<string | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [completed, setCompleted] = useState<CompletedItem[]>([]);
+  const [completedTruncated, setCompletedTruncated] = useState(false);
+  const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [roundName, setRoundName] = useState("Initial review");
   const [roundMode, setRoundMode] = useState<"scorecard" | "comparison">("scorecard");
@@ -191,6 +235,9 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
       setRoundMode(queueResponse.round.mode);
       setBlindMode(queueResponse.round.anonymized);
       setScopes(queueResponse.scopes);
+      setCriteria(queueResponse.round.criteria ?? []);
+      setCompleted(queueResponse.completed ?? []);
+      setCompletedTruncated(Boolean(queueResponse.completed_truncated));
       setQueue(queueResponse.data);
       setCurrentId(queueResponse.current_id ?? queueResponse.data[0]?.id ?? null);
       if (queueResponse.round.mode === "comparison") {
@@ -228,7 +275,26 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
 
   const updateReview = (patch: Partial<ReviewState>): void => {
     if (!current) return;
-    setDrafts((previous) => ({ ...previous, [current.id]: { ...(previous[current.id] ?? EMPTY_REVIEW), ...patch } }));
+    setDrafts((previous) => ({
+      ...previous,
+      [current.id]: {
+        ...(previous[current.id] ?? EMPTY_REVIEW),
+        ...patch,
+        ...(patch.recommendation ? { abstained: false } : {}),
+      },
+    }));
+  };
+
+  /** An emptied dropdown or textarea records nothing rather than an empty string. */
+  const setCriterion = (criterionId: string, value: number | string): void => {
+    if (!current) return;
+    setDrafts((previous) => {
+      const draft = previous[current.id] ?? EMPTY_REVIEW;
+      const next = { ...draft.criteria };
+      if (value === "") delete next[criterionId];
+      else next[criterionId] = value;
+      return { ...previous, [current.id]: { ...draft, criteria: next } };
+    });
   };
 
   const openDetailFor = async (submissionId: string): Promise<void> => {
@@ -258,30 +324,58 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     requestAnimationFrame(() => cardRef.current?.focus());
   };
 
-  const saveNext = async (): Promise<void> => {
-    if (!current || !roundId || !currentReview.recommendation || saving) return;
+  const commitReview = async (review: ReviewState): Promise<void> => {
+    if (!current || !roundId || saving) return;
     setSaving(true);
     setError(null);
     try {
       await api(`/api/v1/events/${eventId}/rounds/${roundId}/submissions/${current.id}/evaluations`, {
         method: "POST",
         body: JSON.stringify({
-          comment: currentReview.comment,
-          criteria_scores: null,
-          recommendation: currentReview.recommendation,
-          score: currentReview.score,
+          comment: review.comment,
+          criteria_scores: Object.keys(review.criteria).length ? review.criteria : null,
+          recommendation: review.abstained ? null : review.recommendation,
+          score: review.abstained ? null : review.score,
+          abstained: review.abstained ? 1 : 0,
         }),
       });
+      // Keep a failed write from erasing the reviewer's in-progress scorecard.
+      // The draft becomes the submitted state only after the server accepts it.
+      setDrafts((previous) => ({ ...previous, [current.id]: review }));
       const oldIndex = currentIndex;
       const nextQueue = queue.filter((item) => item.id !== current.id);
+      const saved = current;
+      const now = Date.now();
+      const optimisticReview: DetailReview = {
+        abstained: review.abstained,
+        actor_id: "",
+        comment: review.comment,
+        created_at: now,
+        criteria_scores: Object.keys(review.criteria).length ? review.criteria : null,
+        decision_proposal: null,
+        recommendation: review.abstained ? null : review.recommendation,
+        score: review.abstained ? null : review.score,
+        updated_at: now,
+      };
       setQueue(nextQueue);
+      setCompleted((previous) => [{ ...saved, review: optimisticReview }, ...previous.filter((item) => item.id !== saved.id)]);
       setCurrentId(nextQueue[oldIndex]?.id ?? nextQueue[oldIndex - 1]?.id ?? null);
-      setNotice(`${recommendationLabel(currentReview.recommendation)} saved · next submission ready`);
+      setNotice(review.abstained ? "Conflict recorded · reopen it any time from Completed" : `${recommendationLabel(review.recommendation)} saved · reopen it any time from Completed`);
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveNext = async (): Promise<void> => {
+    if (!currentReview.recommendation || currentReview.abstained) return;
+    await commitReview(currentReview);
+  };
+
+  const saveRecusal = async (): Promise<void> => {
+    if (!current) return;
+    await commitReview({ ...(drafts[current.id] ?? EMPTY_REVIEW), abstained: true, criteria: {}, recommendation: null, score: null });
   };
 
   const saveComparison = async (): Promise<void> => {
@@ -355,10 +449,10 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
     <div class="reviewer-frame">
       <header class="reviewer-topline">
         <div class="reviewer-brand"><span class="brand-mark" aria-hidden="true">M</span><span>Marquee</span><span class="reviewer-slash">/</span><strong>Reviewer</strong></div>
-        <div class="reviewer-top-meta"><span class="chip">{roundName}</span><span class="chip">{roundMode === "comparison" ? "Comparison mode" : "Scorecard mode"}</span><span class="chip success">{blindMode ? "Anonymous review" : "Identity visible"}</span><button type="button" class="reviewer-exit" onClick={exitQueue}>Exit queue</button></div>
+        <div class="reviewer-top-meta"><span class="chip reviewer-whoami" title="The reviewer this queue belongs to">{identity ? `Reviewing as ${identity.name}` : "Reviewing as you"}</span><span class="chip">{roundName}</span><span class="chip">{roundMode === "comparison" ? "Comparison mode" : "Scorecard mode"}</span><span class="chip success">{blindMode ? "Anonymous review" : "Identity visible"}</span><button type="button" class="reviewer-exit" onClick={exitQueue}>Exit queue</button></div>
       </header>
       <header class="reviewer-heading">
-        <div><span class="eyebrow">{plan.name}</span><h1>{roundMode === "comparison" ? "Comparison queue" : "Reviewer queue"}</h1><p>{roundMode === "comparison" ? <><span class="tabular">{Math.min(3, queue.length)}</span> submissions loaded · rank ties are allowed</> : <><span class="tabular">{queue.length ? currentIndex + 1 : 0}</span> of <span class="tabular">{queue.length}</span> in your authorized tracks · <span class="tabular">{Math.max(0, queue.length - currentIndex - 1)}</span> remaining</>}</p></div>
+        <div><span class="eyebrow">{plan.name}</span><h1>{roundMode === "comparison" ? "Comparison queue" : "Reviewer queue"}</h1><p>{roundMode === "comparison" ? <><span class="tabular">{Math.min(3, queue.length)}</span> submissions loaded · rank ties are allowed</> : <><span class="tabular">{queue.length ? currentIndex + 1 : 0}</span> of <span class="tabular">{queue.length}</span> assigned to you · <span class="tabular">{Math.max(0, queue.length - currentIndex - 1)}</span> remaining</>}</p></div>
         <button type="button" class="reviewer-refresh" onClick={() => void load()} disabled={loading}>Refresh queue</button>
       </header>
       <section class="reviewer-feedback-slot" data-reviewer-feedback aria-live="polite">
@@ -366,9 +460,9 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
       </section>
       <section class="reviewer-responsibility" aria-label="Your track responsibility">
         <div><span class="eyebrow">Your responsibility</span><div class="scope-row">{scopes.length ? scopes.map((scope) => <Chip key={scope.id}><span class="scope-dot" style={{ background: scope.color }} />{scope.name}</Chip>) : <span class="subtle">No track scope is assigned.</span>}</div></div>
-        <p>A submission appears when any carried track intersects your scope. Record, file, export, and review access use the same rule.</p>
+        <p>A submission appears when it is assigned to you — directly or through your committee — and carries a track in your scope. Record, file, export, and review access use the same rule.</p>
       </section>
-      {!current ? <section class="reviewer-empty instrument"><span class="empty-mark" aria-hidden="true">✓</span><h2>{roundMode === "comparison" ? "Comparison queue clear" : "Queue clear"}</h2><p>{roundMode === "comparison" ? "There are not three authorized submissions waiting for comparison." : "There are no unreviewed submissions in your authorized tracks."}</p><button type="button" class="button" onClick={() => void load()}>Check again</button></section> : roundMode === "comparison" ? <div class="comparison-board" data-comparison-round={roundId} data-mobile-review="comparison">
+      {!current ? <section class="reviewer-empty instrument"><span class="empty-mark" aria-hidden="true">✓</span><h2>{roundMode === "comparison" ? "Comparison queue clear" : "Queue clear"}</h2><p>{roundMode === "comparison" ? "There are not three submissions assigned to you within your track responsibility waiting for comparison." : "There are no unreviewed submissions assigned to you within your track responsibility."}</p><button type="button" class="button" onClick={() => void load()}>Check again</button></section> : roundMode === "comparison" ? <div class="comparison-board" data-comparison-round={roundId} data-mobile-review="comparison">
         {queue.slice(0, 3).map((item, index) => <article class="card comparison-card" key={item.id}>
           <CardBody>
             <div class="review-card-chips"><span class="chip">Card {index + 1}</span><span class="chip">{item.format ?? "Abstract"}</span><span class="chip tabular">{item.id}</span></div>
@@ -398,16 +492,40 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
             <div class="decision-buttons" data-reviewer-controls="recommendation" role="group" aria-label="Recommendation">
               {["approve", "maybe", "deny"].map((value) => <button type="button" class={`decision-button ${currentReview.recommendation === value ? "active" : ""}`} aria-pressed={currentReview.recommendation === value} onClick={() => updateReview({ recommendation: value as ReviewState["recommendation"] })}>{recommendationLabel(value as ReviewState["recommendation"])}</button>)}
             </div>
-            <div class="review-choice"><strong>{recommendationLabel(currentReview.recommendation)}</strong><span>{currentReview.recommendation ? `${recommendationLabel(currentReview.recommendation)} saves a proposal; only a program lead changes lifecycle status.` : "Approve, Maybe, and Deny are independent of the optional scorecard."}</span></div>
+            <div class="review-choice"><strong>{recommendationLabel(currentReview.recommendation)}</strong><span>{currentReview.recommendation ? `${recommendationLabel(currentReview.recommendation)} saves a proposal; only a program lead changes lifecycle status.` : "Approve, Maybe, and Deny do not require a scorecard."}</span></div>
             <div class="divider" />
-            <div class="score-heading"><span class="subtle">Optional scorecard · keys 1–5</span><button type="button" class="clear-score" onClick={() => updateReview({ score: null })} disabled={currentReview.score === null}>Clear</button></div>
-            <div class="score-buttons" data-reviewer-controls="score" role="group" aria-label="Optional numeric score">{[1, 2, 3, 4, 5].map((score) => <button type="button" class={currentReview.score === score ? "active" : ""} aria-pressed={currentReview.score === score} onClick={() => updateReview({ score })}>{score}</button>)}</div>
-            <label class="review-comment"><span>Committee note</span><textarea data-reviewer-control="comment" value={currentReview.comment} placeholder="Optional context for the committee" onInput={(event) => updateReview({ comment: (event.currentTarget as HTMLTextAreaElement).value })} /></label>
-            <button type="button" class="button primary reviewer-save" data-reviewer-control="save-next" disabled={!currentReview.recommendation || saving} onClick={() => void saveNext()}>{saving ? "Saving…" : "Save recommendation & next →"}</button>
+            <div class="score-heading"><span class="subtle">Overall score (optional) · keys 1–5</span><button type="button" class="clear-score" onClick={() => updateReview({ score: null })} disabled={currentReview.score === null}>Clear</button></div>
+            <div class="score-buttons" data-reviewer-controls="score" role="group" aria-label="Numeric score (optional)">{[1, 2, 3, 4, 5].map((score) => <button type="button" class={currentReview.score === score ? "active" : ""} aria-pressed={currentReview.score === score} onClick={() => updateReview({ score })}>{score}</button>)}</div>
+            {criteria.length > 0 && <div class="review-criteria" data-reviewer-controls="criteria">
+              <div class="divider" />
+              <span class="subtle">{roundName} scorecard</span>
+              {criteria.map((criterion) => <div class="review-criterion" key={criterion.id}>
+                <span class="review-criterion-name">{criterion.name}{criterion.kind === "numeric" && criterion.weight_pct > 0 ? <span class="subtle tabular"> · {criterion.weight_pct}%</span> : null}</span>
+                {criterion.kind === "numeric" && <div class="score-buttons" role="group" aria-label={criterion.name}>{scaleSteps(criterion).map((step) => <button type="button" key={step} class={currentReview.criteria[criterion.id] === step ? "active" : ""} aria-pressed={currentReview.criteria[criterion.id] === step} onClick={() => setCriterion(criterion.id, step)}>{step}</button>)}</div>}
+                {criterion.kind === "select" && <select aria-label={criterion.name} value={String(currentReview.criteria[criterion.id] ?? "")} onChange={(event) => setCriterion(criterion.id, (event.currentTarget as HTMLSelectElement).value)}><option value="">Not answered</option>{(criterion.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select>}
+                {criterion.kind === "text" && <textarea aria-label={criterion.name} rows={3} value={String(currentReview.criteria[criterion.id] ?? "")} onInput={(event) => setCriterion(criterion.id, (event.currentTarget as HTMLTextAreaElement).value)} />}
+              </div>)}
+            </div>}
+            <label class="review-comment"><span>Committee note (optional)</span><textarea data-reviewer-control="comment" value={currentReview.comment} placeholder="Context for the committee" onInput={(event) => updateReview({ comment: (event.currentTarget as HTMLTextAreaElement).value })} /></label>
+            <div class="review-save-actions"><button type="button" class="button primary reviewer-save" data-reviewer-control="save-next" disabled={!currentReview.recommendation || saving} onClick={() => void saveNext()}>{saving ? "Saving…" : "Save recommendation & next →"}</button><button type="button" class="button reviewer-conflict" data-reviewer-control="declare-conflict" disabled={saving} onClick={() => void saveRecusal()}>Declare conflict</button></div>
             <p class="review-shortcuts">Keyboard: <span class="tabular">A M D</span> recommendation · <span class="tabular">1–5</span> score · <span class="tabular">Enter</span> save &amp; next</p>
           </CardBody>
         </Card>
       </div>}
+      {completed.length > 0 && <section class="reviewer-completed" aria-label="Completed reviews">
+        <header class="reviewer-completed-head">
+          <div><span class="eyebrow">Completed</span><h2><span class="tabular">{completed.length}</span> review{completed.length === 1 ? "" : "s"} submitted</h2></div>
+          <span class="subtle">{completedTruncated ? "Your most recent reviews. Reopen any of them to see exactly what was recorded." : "Reopen any of them to see exactly what was recorded."}</span>
+        </header>
+        <div class="reviewer-completed-list">
+          {completed.map((item) => <button type="button" class="reviewer-completed-row" key={item.id} onClick={() => void openDetailFor(item.id)}>
+            <span class="completed-mark" aria-hidden="true">✓</span>
+            <span class="completed-title">{item.title}</span>
+            <span class="chip">{item.review?.abstained ? "Conflict" : item.review ? recommendationLabel(item.review.recommendation) : "Recorded"}</span>
+            <span class="completed-open">Reopen →</span>
+          </button>)}
+        </div>
+      </section>}
     </div>
     {detailOpen && <div class="reviewer-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
       <section ref={(element) => { detailRef.current = element; }} class="reviewer-detail" role="dialog" aria-modal="true" aria-labelledby="reviewer-detail-title" tabIndex={-1} data-reviewer-detail data-mobile-review="detail">
@@ -417,9 +535,22 @@ export function ReviewerPage({ eventId = DEFAULT_EVENT_ID }: { eventId?: string 
             <div class="review-card-chips"><span class="chip">{detail.format ?? "Abstract"}</span>{detail.tracks.map((track, index) => <span class="chip" key={track.id} style={{ borderLeft: `3px solid ${track.color}` }}>{track.name}{index === 0 ? " · Primary" : ""}</span>)}<span class="chip tabular">{detail.id}</span></div>
             <section class="reviewer-detail-section"><h3>Full abstract</h3><p class="detail-copy">{detail.abstract ?? "No abstract was submitted."}</p></section>
             <section class="reviewer-detail-section"><h3>Evaluator-visible submission fields</h3>{detail.fields.length ? <dl class="review-field-grid">{detail.fields.map((field) => <div class="review-field" key={field.key}><dt>{field.label}</dt><dd>{displayField(field)}</dd></div>)}</dl> : <p class="subtle">No additional conference fields were submitted.</p>}</section>
-            <section class="reviewer-detail-section"><h3>Speaker details · blind mode</h3><dl class="review-field-grid"><div class="review-field"><dt>Speaker name</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></div><div class="review-field"><dt>Email</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></div><div class="review-field"><dt>Company / affiliation</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></div><div class="review-field"><dt>Biography</dt><dd><span class="blind-redaction">Redacted in anonymous review</span></dd></div></dl></section>
+            <section class="reviewer-detail-section"><h3>Speaker details{detail.blind_mode ? " · blind mode" : ""}</h3><dl class="review-field-grid">
+              <div class="review-field"><dt>Speaker name</dt><dd>{detail.blind_mode ? <span class="blind-redaction">Redacted in anonymous review</span> : detail.identity?.name ?? "Not recorded"}</dd></div>
+              <div class="review-field"><dt>Email</dt><dd>{detail.blind_mode ? <span class="blind-redaction">Redacted in anonymous review</span> : detail.identity?.email ?? "Not recorded"}</dd></div>
+              <div class="review-field"><dt>Company / affiliation</dt><dd>{detail.blind_mode ? <span class="blind-redaction">Redacted in anonymous review</span> : detail.identity?.company ?? "Not recorded"}</dd></div>
+              <div class="review-field"><dt>Biography</dt><dd>{detail.blind_mode ? <span class="blind-redaction">Redacted in anonymous review</span> : detail.identity?.bio ?? "Not recorded"}</dd></div>
+            </dl></section>
             <section class="reviewer-detail-section"><h3>Attached files · {detail.files.length}</h3>{detail.files.length ? <div class="review-file-list">{detail.files.map((file) => <div class="review-file-row" key={file.id}><span class="review-file-icon">{file.content_type.split("/").pop()?.toUpperCase() ?? "FILE"}</span><div><strong>{file.filename}</strong><span>{file.content_type} · {formatFileSize(file.size_bytes)}</span></div><Chip tone={file.status === "ready" ? "success" : "warning"}>{file.status === "ready" ? "Available" : "Processing"}</Chip></div>)}</div> : <p class="subtle">No files attached to this submission.</p>}</section>
-            {detail.review && <section class="reviewer-detail-section"><h3>Your saved recommendation</h3><div class="saved-review"><strong>{recommendationLabel(detail.review.recommendation)}</strong><span>{detail.review.comment || "No committee note."}</span><small>Saved by reviewer <span class="tabular">{detail.review.actor_id}</span> · {new Date(detail.review.updated_at).toLocaleString()}</small></div></section>}
+            {detail.review && <section class="reviewer-detail-section"><h3>{detail.review.abstained ? "Conflict recorded" : "Your saved review"}</h3><div class="saved-review"><strong>{detail.review.abstained ? "Declared conflict" : recommendationLabel(detail.review.recommendation)}</strong><span>{detail.review.comment || "No committee note."}</span><small>Saved by reviewer <span class="tabular">{detail.review.actor_id}</span> · {new Date(detail.review.updated_at).toLocaleString()}</small></div>
+              {detail.review.criteria_scores && Object.keys(detail.review.criteria_scores).length > 0 && <dl class="review-field-grid saved-criteria" data-saved-criteria>
+                {Object.entries(detail.review.criteria_scores).map(([criterionId, value]) => <div class="review-field" key={criterionId}>
+                  <dt>{criteria.find((criterion) => criterion.id === criterionId)?.name ?? criterionId}</dt>
+                  <dd class="tabular">{String(value)}</dd>
+                </div>)}
+              </dl>}
+              {detail.review.score !== null && <p class="subtle">Overall score <span class="tabular">{detail.review.score}</span></p>}
+            </section>}
           </div>
           <footer class="reviewer-detail-actions"><span class="subtle">Queue ID <span class="tabular">{detail.id}</span> · position <span class="tabular">{currentIndex + 1}</span> preserved</span><Button variant="primary" onClick={closeDetail}>Close &amp; return to queue</Button></footer>
         </>}

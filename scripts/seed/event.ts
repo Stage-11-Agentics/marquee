@@ -240,7 +240,7 @@ export function run(ctx: SeedContext): void {
   ctx.add("forms", {
     id: FORM_IDS.cfp,
     event_id: EVENT_ID,
-    name: "2026 CFP",
+    name: "Call for Speakers",
     slug: "cfp",
     kind: "abstract",
     status: "open",
@@ -264,8 +264,8 @@ export function run(ctx: SeedContext): void {
     { key: "title", label: "Session title", help_text: "Make the promise to attendees clear.", type: "short_text", required: 1, config: { minLength: 8, maxLength: 120 }, condition: null },
     { key: "abstract", label: "Abstract", help_text: "What will you cover, and why does it matter now?", type: "long_text", required: 1, config: { minLength: 40, maxLength: 1200 }, condition: null },
     { key: "audience_outcome", label: "What will attendees be able to do after your session?", help_text: "Name one concrete outcome for the audience.", type: "long_text", required: 1, config: { minLength: 20, maxLength: 500 }, condition: null },
-    { key: "format", label: "Format", help_text: "Choose the format you want to present.", type: "single_select", required: 1, config: { options: ["Stage Talk", "Workshop", "Lightning", "Online"] }, condition: null },
-    { key: "tracks", label: "Tracks", help_text: "Choose one or more. The first selected track is primary for agenda placement.", type: "multi_select", required: 1, config: { options: ["AI in Financial Services", "Agents", "Evals", "Infra", "Open Models", "RAG/Retrieval", "Security", "Leadership"], minItems: 1 }, condition: null },
+    { key: "format", label: "Format", help_text: "Choose the format you want to present.", type: "single_select", required: 1, config: { source: "formats" }, condition: null },
+    { key: "tracks", label: "Tracks", help_text: "Choose one or more. The first selected track is primary for agenda placement.", type: "multi_select", required: 1, config: { source: "tracks", minItems: 1 }, condition: null },
     { key: "speaker_name", label: "Primary speaker name", help_text: null, type: "short_text", required: 1, config: {}, condition: null },
     { key: "speaker_email", label: "Primary speaker email", help_text: null, type: "email", required: 1, config: {}, condition: null },
     { key: "speaker_role", label: "Primary speaker role", help_text: null, type: "short_text", required: 1, config: {}, condition: null },
@@ -313,8 +313,8 @@ export function run(ctx: SeedContext): void {
 
   const hotelFields: Array<[string, string, string, number, number]> = [
     // [key, label, type, required, position]
-    ["arrival_date", "Arrival date", "short_text", 1, 0],
-    ["departure_date", "Departure date", "short_text", 1, 1],
+    ["arrival_date", "Arrival date", "date", 1, 0],
+    ["departure_date", "Departure date", "date", 1, 1],
     ["notes", "Anything we should know?", "long_text", 0, 2],
   ];
   for (const [key, label, type, required, position] of hotelFields) {

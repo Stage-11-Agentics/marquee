@@ -163,4 +163,28 @@ describe.sequential("MRQ-31 Sessionize import", () => {
       env.DB.prepare("SELECT * FROM evaluations WHERE id = ?").bind(SEEDED_EVALUATION_ID).first(),
     ])).toEqual(beforeUndoControl);
   }, 20_000);
+
+  test("AC-110 + AC-113 · speakers-only CSV accepts no external_ref and makes the person durable", async () => {
+    const speakersOnlyCsv = [
+      "Name,Email,Job Title,Company,Bio",
+      'Dana Kowalski,dana-only@example.test,Conference operator,Open Programs,"Keeps speaker rosters coherent."',
+    ].join("\n");
+    const uploaded = await request(`/api/v1/events/${EVENT_ID}/imports`, { method: "POST", body: JSON.stringify({ source: "sessionize", speakers_csv: speakersOnlyCsv }) });
+    expect(uploaded.status).toBe(201);
+    const uploadBody = await uploaded.json<{ id: string; mapping: { sessions: Record<string, string | null>; speakers: Record<string, string | null> }; preview: { sessions: { rows: unknown[] }; speakers: { missing: string[] } } }>();
+    expect(uploadBody.preview.sessions.rows).toEqual([]);
+    expect(uploadBody.preview.speakers.missing).toContain("external_ref");
+    expect(uploadBody.mapping.speakers.external_ref).toBeNull();
+
+    const mapped = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/mapping`, { method: "POST", body: JSON.stringify(uploadBody.mapping) });
+    expect(mapped.status).toBe(200);
+    const run = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/run`, { method: "POST" });
+    expect(run.status).toBe(200);
+    expect(await run.json<{ counts: { created: number; speakers: number; sessions: number; failed: number } }>()).toMatchObject({ counts: { created: 1, speakers: 1, sessions: 0, failed: 0 } });
+    expect(await env.DB.prepare("SELECT name, email FROM people WHERE email = 'dana-only@example.test'").first()).toMatchObject({ name: "Dana Kowalski", email: "dana-only@example.test" });
+
+    const undone = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/undo`, { method: "POST" });
+    expect(undone.status).toBe(200);
+    expect(await env.DB.prepare("SELECT id FROM people WHERE email = 'dana-only@example.test'").first()).toBeNull();
+  }, 20_000);
 });

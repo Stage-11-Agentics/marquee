@@ -22,7 +22,7 @@ const mappingSchema = z.object({
 });
 const uploadSchema = z.object({
   source: z.literal("sessionize").default("sessionize"),
-  sessions_csv: z.string().min(1).max(5_000_000),
+  sessions_csv: z.string().max(5_000_000).optional(),
   speakers_csv: z.string().min(1).max(5_000_000),
 });
 const previewSchema = z.object({
@@ -124,7 +124,7 @@ const createImport = defineApiRoute(
     const body = context.req.valid("json");
     const importId = crypto.randomUUID();
     const fileKey = `imports/${eventId}/${importId}.json`;
-    const manifest: SessionizeManifest = { sessions_csv: body.sessions_csv, speakers_csv: body.speakers_csv };
+    const manifest: SessionizeManifest = { ...(body.sessions_csv === undefined ? {} : { sessions_csv: body.sessions_csv }), speakers_csv: body.speakers_csv };
     const mapping = normalizeMapping(undefined, body.sessions_csv, body.speakers_csv);
     await bindings(context).MEDIA.put(fileKey, JSON.stringify(manifest), {
       httpMetadata: { contentType: "application/json" },

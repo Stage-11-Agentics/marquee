@@ -7,6 +7,19 @@ import calendarReversalMigrationSql from "../../migrations/0004_calendar_reversa
 import taskCancellationWebhooksMigrationSql from "../../migrations/0005_task_cancellation_webhooks.sql?raw";
 import auditRequestIdMigrationSql from "../../migrations/0006_audit_log_request_id.sql?raw";
 import embedWidgetKindsMigrationSql from "../../migrations/0007_embed_widget_kinds.sql?raw";
+import formFieldDatesMigrationSql from "../../migrations/0008_form_field_dates.sql?raw";
+import personCustomFieldsMigrationSql from "../../migrations/0009_person_custom_fields.sql?raw";
+import fileCommentsMigrationSql from "../../migrations/0009_file_comments.sql?raw";
+import criterionKindsMigrationSql from "../../migrations/0009_criterion_kinds.sql?raw";
+import boundFormOptionsMigrationSql from "../../migrations/0010_bound_form_options.sql?raw";
+import savedEmbedsMigrationSql from "../../migrations/0010_saved_embeds.sql?raw";
+import evaluationRoundCommitteesMigrationSql from "../../migrations/0010_evaluation_round_committees.sql?raw";
+import coldStartMigrationSql from "../../migrations/0011_cold_start.sql?raw";
+import publicSchedulesMigrationSql from "../../migrations/0011_public_schedules.sql?raw";
+import peopleAnnotationsMigrationSql from "../../migrations/0012_people_annotations.sql?raw";
+import agentEvaluatorSeatsMigrationSql from "../../migrations/0013_agent_evaluator_seats.sql?raw";
+import inboundDeliveryStateMigrationSql from "../../migrations/0014_inbound_delivery_state.sql?raw";
+import evaluationOverridesMigrationSql from "../../migrations/0015_evaluation_overrides.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -72,6 +85,19 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(taskCancellationWebhooksMigrationSql),
     ...splitStatements(auditRequestIdMigrationSql),
     ...splitStatements(embedWidgetKindsMigrationSql),
+    ...splitStatements(formFieldDatesMigrationSql),
+    ...splitStatements(personCustomFieldsMigrationSql),
+    ...splitStatements(fileCommentsMigrationSql),
+    ...splitStatements(criterionKindsMigrationSql),
+    ...splitStatements(boundFormOptionsMigrationSql),
+    ...splitStatements(savedEmbedsMigrationSql),
+    ...splitStatements(evaluationRoundCommitteesMigrationSql),
+    ...splitStatements(coldStartMigrationSql),
+    ...splitStatements(publicSchedulesMigrationSql),
+    ...splitStatements(peopleAnnotationsMigrationSql),
+    ...splitStatements(agentEvaluatorSeatsMigrationSql),
+    ...splitStatements(inboundDeliveryStateMigrationSql),
+    ...splitStatements(evaluationOverridesMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

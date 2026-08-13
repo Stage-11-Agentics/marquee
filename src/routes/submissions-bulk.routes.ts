@@ -33,10 +33,13 @@ const notifiedSummarySchema = z.object({
   sendable: z.number().int().nonnegative(),
   no_valid_address: z.number().int().nonnegative(),
 });
+const notifyQuerySchema = z.object({ cursor: z.string().min(1).max(200).optional() });
 const notifyNotifiedResultSchema = z.object({
   selected: z.number().int().nonnegative(),
   queued: z.number().int().nonnegative(),
   skipped_no_address: z.number().int().nonnegative(),
+  remaining: z.number().int().nonnegative(),
+  next_cursor: z.string().nullable(),
   outbox_ids: z.array(z.string()),
 });
 
@@ -169,9 +172,9 @@ const notifyNotifiedSubmissions = defineApiRoute(
     path: "/api/v1/events/{eventId}/submissions/not-notified/notify",
     operationId: "notifyDecidedSubmissions",
     summary: "Queue notifications for decided submissions",
-    description: "Queue a new message for each sendable decision while preserving the existing decision rows byte-for-byte.",
+    description: "Queue a bounded batch of messages for sendable decisions while preserving the existing decision rows byte-for-byte; use next_cursor while remaining is non-zero.",
     tags: ["Submissions"],
-    request: { params: eventParams },
+    request: { params: eventParams, query: notifyQuerySchema },
     policy: {
       auth: { kind: "grants", grants: ["program:write"] },
       rateLimit: { bucket: "write" },
@@ -184,17 +187,21 @@ const notifyNotifiedSubmissions = defineApiRoute(
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
+    const { cursor } = context.req.valid("query");
     const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" });
     const result = await notifyExistingDecisions({
       db: context.env.DB,
       queue: context.env.MAIL_QUEUE,
       eventId,
       submissionIds: ids,
+      cursor,
     });
     return context.json({
       selected: result.selected,
       queued: result.queued,
       skipped_no_address: result.skippedNoAddress,
+      remaining: result.remaining,
+      next_cursor: result.nextCursor,
       outbox_ids: result.outboxIds,
     }, 202);
   },

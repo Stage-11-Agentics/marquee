@@ -11,7 +11,12 @@ import { applyMigrations, env } from "../apply-migrations";
  * and the authorization on the thumbnail those views point at.
  */
 
-const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
+// Anchored to the real clock. Fixtures here are written as offsets from NOW
+// ("expires in a day", "due tomorrow") but the code under test reads the real
+// Date.now(), so a hardcoded anchor silently changes what those offsets mean as
+// the wall clock passes them — sessions expire and windows close with no commit
+// behind the failure. Only the anchor moves.
+const NOW = Date.now();
 const ORG_ID = "org_mrq88";
 const EVENT_ID = "evt_mrq88";
 const ORIGIN = "https://marquee.stage11.dev";
@@ -21,6 +26,7 @@ const HEADSHOT_FIELD = "field_mrq88_headshot";
 const SLIDES_FIELD = "field_mrq88_slides";
 const UNANSWERED_FIELD = "field_mrq88_unanswered";
 const HEADSHOT_ATTACHMENT = "att_mrq88_headshot";
+const PERSON_HEADSHOT_ATTACHMENT = "att_mrq112_person_headshot";
 const SLIDES_ATTACHMENT = "att_mrq88_slides";
 const PENDING_ATTACHMENT = "att_mrq88_pending";
 const ORGANIZER = "per_mrq88_organizer";
@@ -97,6 +103,16 @@ async function storeAttachment(
   ).run();
 }
 
+async function storePersonHeadshotAttachment(id: string, personId: string): Promise<void> {
+  const key = `uploads/${EVENT_ID}/person_headshot/${id}.png`;
+  const object = await env.MEDIA.put(key, PNG_BYTES);
+  await env.DB.prepare(
+    `INSERT INTO attachments (id, event_id, owner_type, owner_id, filename, content_type, size_bytes, r2_key, r2_etag, sha256, status, created_at, updated_at)
+     VALUES (?, ?, 'person_headshot', ?, 'headshot.png', 'image/png', ?, ?, ?, NULL, 'ready', ?, ?)`,
+  ).bind(id, EVENT_ID, personId, PNG_BYTES.byteLength, key, object?.etag ?? null, NOW, NOW).run();
+  await env.DB.prepare("UPDATE people SET headshot_attachment_id = ? WHERE id = ?").bind(id, personId).run();
+}
+
 function fileAnswerValue(attachmentId: string, filename: string, contentType: string): string {
   return JSON.stringify({ attachmentId, filename, contentType, sizeBytes: PNG_BYTES.byteLength });
 }
@@ -124,6 +140,7 @@ beforeEach(async () => {
   ]);
 
   await storeAttachment(HEADSHOT_ATTACHMENT, "headshot.png", "image/png", "ready");
+  await storePersonHeadshotAttachment(PERSON_HEADSHOT_ATTACHMENT, SPEAKER);
   await storeAttachment(SLIDES_ATTACHMENT, "deck.pdf", "application/pdf", "ready");
   await storeAttachment(PENDING_ATTACHMENT, "never-arrived.png", "image/png", "pending");
 
@@ -198,4 +215,19 @@ test("CONTRACT · the thumbnail refuses anything that is not a ready raster imag
   await env.DB.prepare("UPDATE attachments SET content_type = 'image/svg+xml' WHERE id = ?").bind(HEADSHOT_ATTACHMENT).run();
   const svg = await request(`/api/v1/events/${EVENT_ID}/attachments/${HEADSHOT_ATTACHMENT}/preview`, ORGANIZER_SESSION);
   expect(svg.status).toBe(404);
+});
+
+test("CONTRACT · SPK-08 · a speaker headshot serves through the person pointer for the organizer", async () => {
+  const response = await request(`/api/v1/events/${EVENT_ID}/people/${SPEAKER}/headshot`, ORGANIZER_SESSION);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("image/png");
+  expect(response.headers.get("content-disposition")).toBe('inline; filename="headshot.png"');
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(PNG_BYTES);
+});
+
+test("CONTRACT · SPK-08 · a person headshot does not become a cross-speaker object oracle", async () => {
+  const anonymous = await request(`/api/v1/events/${EVENT_ID}/people/${SPEAKER}/headshot`);
+  expect(anonymous.status).toBe(401);
+  const otherSpeaker = await request(`/api/v1/events/${EVENT_ID}/people/${SPEAKER}/headshot`, OUTSIDER_SESSION);
+  expect(otherSpeaker.status).toBe(403);
 });

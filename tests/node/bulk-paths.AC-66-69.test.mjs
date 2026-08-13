@@ -172,11 +172,53 @@ function nonMapPlaceholderSites(modules) {
 
 const EXPECTED_PLACEHOLDER_SITES = [
   {
+    file: "src/lib/auth/demo-seat.ts",
+    owner: "findDemoPersona",
+    binding: "preferenceOrder",
+    expression: 'preferred.map(() => "?")',
+    classification: "at most two ids, from the module-level DEMO_PERSONA_PREFERENCE table; no caller-supplied list reaches it",
+  },
+  {
+    file: "src/lib/auth/demo-seat.ts",
+    owner: "findDemoPersona",
+    binding: "staffExclusion",
+    expression: 'DEMO_STAFF_ROLES.map(() => "?")',
+    classification: "one placeholder per role in the three-value DEMO_STAFF_ROLES taxonomy",
+  },
+  {
+    file: "src/lib/events/copy-event.ts",
+    owner: "planEventCopy",
+    binding: null,
+    expression: 'columns.map(() => "?")',
+    classification: "one placeholder per COLUMN of a single-row INSERT; the column list comes from the source row, so it is bounded by the widest table in the copy manifest (forms, ~20) and cannot approach D1's binding cap",
+  },
+  {
+    file: "src/lib/files/versions.ts",
+    owner: "readAttachments",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk families; version-history read in explicit 80-owner chunks, plus one owner_type binding, stays below D1's binding cap",
+  },
+  {
+    file: "src/lib/files/versions.ts",
+    owner: "readPointers",
+    binding: "rows",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk families; latest-pointer read in explicit 80-owner chunks stays below D1's binding cap",
+  },
+  {
     file: "src/lib/reset-demo/demo-fixture.ts",
     owner: "shippedDemoFixtureRows",
     binding: null,
     expression: 'columns.map(() => "?")',
     classification: "one placeholder per COLUMN of a single-row INSERT; bounded by the table schema, not by any caller-supplied list, so it cannot approach D1's binding cap",
+  },
+  {
+    file: "src/lib/history.ts",
+    owner: "contentHistoryFor",
+    binding: "placeholders",
+    expression: 'CONTENT_ACTIONS.map(() => "?")',
+    classification: "bounded by the three-value CONTENT_ACTIONS taxonomy; no caller-supplied list reaches it",
   },
   {
     file: "src/lib/reviewer-scope.ts",
@@ -201,10 +243,10 @@ const EXPECTED_PLACEHOLDER_SITES = [
   },
   {
     file: "src/routes/evaluation.routes.ts",
-    owner: "replaceReviewerScopes",
+    owner: "ownedTrackIds",
     binding: "placeholders",
     expression: 'trackIds.map(() => "?")',
-    classification: "outside the named assignment-distribution path; reviewer-scope read; no explicit track-ID max",
+    classification: "outside the named assignment-distribution path; reviewer-scope read shared by the scopes PUT (no track-ID max) and the reviewer invite (track_ids.max(50))",
   },
   {
     file: "src/routes/evaluation.routes.ts",
@@ -219,6 +261,20 @@ const EXPECTED_PLACEHOLDER_SITES = [
     binding: "tracks",
     expression: 'input.trackIds.map(() => "?")',
     classification: "NAMED_FINDING: category routing expands one D1 placeholder per track; no input max",
+  },
+  {
+    file: "src/routes/files-export.routes.ts",
+    owner: "attachmentObjectsFor",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; explicit 80-ID export-read chunks stay below D1's binding cap",
+  },
+  {
+    file: "src/routes/files-export.routes.ts",
+    owner: "taskRowsFor",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; explicit 80-ID export-read chunks stay below D1's binding cap",
   },
   {
     file: "src/routes/public-form.routes.ts",
@@ -240,6 +296,13 @@ const EXPECTED_PLACEHOLDER_SITES = [
     binding: "result",
     expression: 'chunk.map(() => "?")',
     classification: "outside named bulk writes; explicit 80-ID queue-read chunks stay below D1's binding cap",
+  },
+  {
+    file: "src/routes/review.routes.ts",
+    owner: "reviewsForSubmissions",
+    binding: "result",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; reads one reviewer's stored reviews in the same explicit 80-ID chunks as queueRows, over a completed set the queue caps at 50",
   },
   {
     file: "src/routes/submission-record.routes.ts",

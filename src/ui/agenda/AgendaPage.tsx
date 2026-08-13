@@ -5,26 +5,40 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preac
 import type {
   AgendaConflict,
   AgendaPoolItem,
+  AgendaPublication,
+  AgendaPublishCandidate,
   AgendaRoom,
   AgendaSession,
   AgendaSnapshot,
   AgendaView,
 } from "../../api/agenda";
-import { AGENDA_VIEWS, durationIsAllowed, viewNames } from "../../api/agenda";
+import { AGENDA_VIEWS, durationIsAllowed, MAX_BATCH_PUBLISH_IDS, viewNames } from "../../api/agenda";
+import { autoPlaceSummary, planAutoPlacements, type AutoPlaceSlot } from "../../lib/auto-place";
+import {
+  AGENDA_GRID_OPTIONS,
+  agendaGridPosition,
+  DEFAULT_AGENDA_GRID_GRANULARITY,
+  generateAgendaGridSlots,
+  readAgendaGridGranularity,
+  writeAgendaGridGranularity,
+  type AgendaGridGranularity,
+  type AgendaGridSlot,
+} from "../../lib/agenda-grid";
 import { displayRoomLabel, showsBuildingComparison, showsBuildingComparisonCount, visibleVenueConflicts } from "../../lib/venue-disclosure";
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
-import { localParts, sessionDay, sessionTime, TIME_SLOTS, TrackBoard } from "./track-board";
+import { localParts, sessionDay, sessionTime, TrackBoard } from "./track-board";
 import "./agenda.css";
 
-const DEFAULT_EVENT_ID = "evt_aie-ny-2026";
 const DAY_MS = 86_400_000;
 const AGENDA_ROUTE = "/api/v1/events/{eventId}/agenda";
 const AGENDA_ITEMS_ROUTE = "/api/v1/events/{eventId}/agenda/items";
 const AGENDA_ITEM_ROUTE = "/api/v1/events/{eventId}/agenda/items/{itemId}";
+const AGENDA_PUBLISH_ROUTE = "/api/v1/events/{eventId}/agenda/publish";
 
 interface Props {
-  eventId?: string;
+  eventId: string;
 }
 
 interface DayOption {
@@ -37,9 +51,35 @@ type LoadState =
   | { kind: "ready"; snapshot: AgendaSnapshot }
   | { kind: "error"; snapshot: AgendaSnapshot | null; message: string };
 
-type DragPayload =
+interface PublicationNotice {
+  count: number;
+  publicAgendaUrl: string;
+}
+
+export type AgendaPlacementPayload =
   | { kind: "pool"; id: string }
   | { kind: "session"; id: string };
+
+type DragPayload = AgendaPlacementPayload;
+
+export interface AgendaPlacementTarget {
+  day: string;
+  time: string;
+  roomId: string;
+  trackId?: string;
+}
+
+export interface AgendaPlacementRequest {
+  path: string;
+  init: RequestInit;
+  message: string;
+  route: string;
+}
+
+interface ArmedPlacement {
+  payload: AgendaPlacementPayload;
+  title: string;
+}
 
 function dateAtNoon(value: string): Date {
   return new Date(`${value}T12:00:00Z`);
@@ -82,8 +122,86 @@ export function zonedStart(date: string, time: string, timezone: string): number
   return candidate;
 }
 
+/**
+ * The API write behind both drag-and-drop and click-to-place. Keeping this
+ * conversion independent of the gesture means both paths retain the agenda
+ * route's persistence, conflict, audit, and optimistic-concurrency behaviour.
+ */
+export function agendaPlacementRequest(
+  snapshot: AgendaSnapshot,
+  payload: AgendaPlacementPayload,
+  target: AgendaPlacementTarget,
+  eventId: string,
+): AgendaPlacementRequest | null {
+  const startsAt = zonedStart(target.day, target.time, snapshot.event.timezone);
+  if (payload.kind === "pool") {
+    const item = snapshot.unscheduled.find((candidate) => candidate.submission_id === payload.id);
+    if (!item) return null;
+    const primaryTrack = item.tracks.find((candidate) => candidate.is_primary)?.id ?? item.tracks[0]?.id ?? null;
+    return {
+      path: `/api/v1/events/${encodeURIComponent(eventId)}/agenda/items`,
+      init: {
+        method: "POST",
+        body: JSON.stringify({
+          submission_id: item.submission_id,
+          starts_at: startsAt,
+          room_id: target.roomId,
+          track_id: target.trackId ?? primaryTrack,
+        }),
+      },
+      message: `${item.format ?? "Session"} placed · changes persist immediately`,
+      route: AGENDA_ITEMS_ROUTE,
+    };
+  }
+
+  const session = snapshot.sessions.find((candidate) => candidate.id === payload.id);
+  if (!session) return null;
+  const body: Record<string, unknown> = { starts_at: startsAt, room_id: target.roomId };
+  if (target.trackId) body.track_id = target.trackId;
+  return {
+    path: `/api/v1/events/${encodeURIComponent(eventId)}/agenda/items/${encodeURIComponent(session.id)}`,
+    init: {
+      method: "PATCH",
+      headers: { "If-Match": session.etag },
+      body: JSON.stringify(body),
+    },
+    message: "Placement updated · no save button needed",
+    route: AGENDA_ITEM_ROUTE,
+  };
+}
+
+/** Every opening the organizer could drag into, in the order the board lays them out. */
+export function autoPlaceSlots(
+  snapshot: AgendaSnapshot,
+  granularity: unknown = DEFAULT_AGENDA_GRID_GRANULARITY,
+): AutoPlaceSlot[] {
+  const slots: AutoPlaceSlot[] = [];
+  const gridSlots = generateAgendaGridSlots(granularity);
+  for (const day of dayOptions(snapshot)) {
+    for (const slot of gridSlots) {
+      slots.push({ day: day.value, time: slot.time, starts_at: zonedStart(day.value, slot.time, snapshot.event.timezone) });
+    }
+  }
+  return slots;
+}
+
 function speakerLine(session: AgendaSession): string {
   return session.speakers.length ? session.speakers.map((speaker) => speaker.name).join(" · ") : "No speakers listed";
+}
+
+function publicationDateTime(candidate: AgendaPublishCandidate, timezone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  }).format(new Date(candidate.starts_at));
+}
+
+function publicationSpeakerLine(candidate: AgendaPublishCandidate): string {
+  return candidate.speakers.length ? candidate.speakers.map((speaker) => speaker.name).join(" · ") : "No speakers listed";
 }
 
 function trackColor(snapshot: AgendaSnapshot, session: AgendaSession): string {
@@ -173,6 +291,8 @@ export function SessionTile({
   session,
   onDragStart,
   onResize,
+  onMove,
+  onUnplace,
   onRoomOpen,
   conflicts,
 }: {
@@ -180,6 +300,8 @@ export function SessionTile({
   session: AgendaSession;
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
+  onMove: (session: AgendaSession) => void;
+  onUnplace: (session: AgendaSession) => void;
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
 }): JSX.Element {
@@ -191,7 +313,8 @@ export function SessionTile({
     class={`agenda-session-tile${hasConflict ? " has-conflict" : ""}${hasDeclined ? " has-declined" : ""}`}
     draggable={session.kind !== "break"}
     data-session-id={session.id}
-    style={{ borderLeftColor: session.kind === "break" ? "#64748b" : trackColor(snapshot, session) }}
+    aria-label={`${session.title} · ${sessionTime(session, snapshot.event.timezone)} · ${location}`}
+    style={{ borderLeftColor: session.kind === "break" ? "var(--break-tint)" : trackColor(snapshot, session) }}
     onDragStart={(event) => onDragStart({ kind: "session", id: session.id }, event as unknown as DragEvent)}
   >
     <strong title={session.title}>{session.title}</strong>
@@ -209,6 +332,10 @@ export function SessionTile({
       <span class="tabular">{session.duration_min}m</span>
       <button type="button" aria-label={`Lengthen ${session.title}`} disabled={Boolean(format && !durationIsAllowed(session.duration_min + 5, format))} onClick={(event) => { event.stopPropagation(); onResize(session, 5); }}>+</button>
     </span>}
+    {session.kind !== "break" && session.submission_id !== null && <span class="agenda-tile-placement-actions">
+      <button type="button" aria-label={`Move ${session.title}`} onClick={(event) => { event.stopPropagation(); onMove(session); }}>Move…</button>
+      <button type="button" aria-label={`Unplace ${session.title}`} onClick={(event) => { event.stopPropagation(); onUnplace(session); }}>Unplace</button>
+    </span>}
     <button type="button" class="agenda-tile-room-link" onClick={() => onRoomOpen(session.room_id)}>{session.room}</button>
   </article>;
 }
@@ -216,19 +343,70 @@ export function SessionTile({
 function DropCell({
   children,
   class: className = "",
+  ariaLabel,
   onDrop,
+  placementLabel,
+  onPlace,
+  placementBusy = false,
 }: {
   children?: ComponentChildren;
   class?: string;
+  ariaLabel: string;
   onDrop: (event: DragEvent) => void;
+  placementLabel?: string;
+  onPlace?: () => void;
+  placementBusy?: boolean;
 }): JSX.Element {
   const [over, setOver] = useState(false);
   return <div
-    class={`agenda-drop-cell ${over ? "drag-over" : ""} ${className}`.trim()}
+    class={`agenda-drop-cell ${over ? "drag-over" : ""}${placementLabel ? " is-placement-target" : ""} ${className}`.trim()}
+    role="group"
+    aria-label={ariaLabel}
+    data-agenda-drop-target="true"
     onDragOver={(event) => { event.preventDefault(); setOver(true); }}
     onDragLeave={() => setOver(false)}
     onDrop={(event) => { event.preventDefault(); setOver(false); onDrop(event as unknown as DragEvent); }}
+  >{placementLabel && onPlace
+    ? <button type="button" class="agenda-place-cell" aria-label={placementLabel} disabled={placementBusy} onClick={onPlace}>{placementBusy ? "Placing…" : placementLabel}</button>
+    : children}</div>;
+}
+
+function PositionedSession({
+  session,
+  timezone,
+  slots,
+  children,
+}: {
+  session: AgendaSession;
+  timezone: string;
+  slots: readonly AgendaGridSlot[];
+  children: ComponentChildren;
+}): JSX.Element | null {
+  const position = agendaGridPosition(sessionTime(session, timezone), slots);
+  if (!position) return null;
+  return <div
+    class="agenda-session-position"
+    style={{ top: `${position.offsetRatio * 100}%` }}
   >{children}</div>;
+}
+
+function roomSlotIsFree(
+  snapshot: AgendaSnapshot,
+  day: string,
+  time: string,
+  roomId: string,
+  slots: readonly AgendaGridSlot[],
+): boolean {
+  const targetStart = zonedStart(day, time, snapshot.event.timezone);
+  return !snapshot.sessions.some((session) =>
+    session.room_id === roomId
+    && (
+      (sessionDay(session, snapshot.event.timezone) === day
+        && agendaGridPosition(sessionTime(session, snapshot.event.timezone), slots)?.slot.time === time)
+      || (session.starts_at <= targetStart
+        && session.starts_at + session.duration_min * 60_000 > targetStart)
+    ),
+  );
 }
 
 function AgendaList({
@@ -297,22 +475,34 @@ function BuildingBand({ rooms }: { rooms: readonly AgendaRoom[] }): JSX.Element 
   </>;
 }
 
-function DayBoard({
+export function DayBoard({
   snapshot,
   sessions,
   day,
+  slots = generateAgendaGridSlots(),
   onDrop,
+  onPlace,
+  armedPlacement,
+  placementBusy,
   onDragStart,
   onResize,
+  onMove,
+  onUnplace,
   onRoomOpen,
   conflicts,
 }: {
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
   day: string;
+  slots?: readonly AgendaGridSlot[];
   onDrop: (event: DragEvent, day: string, time: string, roomId: string) => void;
+  onPlace: (target: AgendaPlacementTarget) => void;
+  armedPlacement: ArmedPlacement | null;
+  placementBusy: boolean;
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
+  onMove: (session: AgendaSession) => void;
+  onUnplace: (session: AgendaSession) => void;
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
 }): JSX.Element {
@@ -321,33 +511,59 @@ function DayBoard({
     {showBuildingBand && <BuildingBand rooms={snapshot.rooms} />}
     <div class="agenda-grid-head agenda-time-head" />
     {snapshot.rooms.map((room) => <div class="agenda-grid-head" key={room.id}><RoomHead room={room} bare={showBuildingBand} showBuildingComparison={showBuildingBand} onOpen={onRoomOpen} /></div>)}
-    {TIME_SLOTS.map((time) => <>
-      <div class="agenda-time tabular" key={`${time}-label`}>{time}</div>
-      {snapshot.rooms.map((room) => <DropCell
-        class="agenda-day-cell"
-        key={`${time}-${room.id}`}
-        onDrop={(event) => onDrop(event, day, time, room.id)}
-      >{sessions.filter((session) => session.room_id === room.id && sessionTime(session, snapshot.event.timezone) === time).map((session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={onRoomOpen} conflicts={conflicts} />)}</DropCell>)}
+    {slots.map((slot) => <>
+      <div class={`agenda-time tabular${slot.isHour ? "" : " is-micro"}`} key={`${slot.time}-label`} aria-label={slot.time}>
+        {slot.isHour ? slot.time : <span class="agenda-time-micro-tick" aria-hidden="true" />}
+      </div>
+      {snapshot.rooms.map((room) => {
+        const cellSessions = sessions.filter((session) => session.room_id === room.id && agendaGridPosition(sessionTime(session, snapshot.event.timezone), slots)?.slot.time === slot.time);
+        const placementLabel = armedPlacement && roomSlotIsFree(snapshot, day, slot.time, room.id, slots)
+          ? `Place at ${slot.time} · ${room.name}`
+          : undefined;
+        return <DropCell
+          class="agenda-day-cell"
+          key={`${slot.time}-${room.id}`}
+          ariaLabel={`Place Session on ${day} at ${slot.time} in ${room.name}`}
+          onDrop={(event) => onDrop(event, day, slot.time, room.id)}
+          placementLabel={placementLabel}
+          placementBusy={placementBusy}
+          onPlace={placementLabel ? () => onPlace({ day, time: slot.time, roomId: room.id }) : undefined}
+        >{cellSessions.map((session) => <PositionedSession key={session.id} session={session} timezone={snapshot.event.timezone} slots={slots}>
+          <SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />
+        </PositionedSession>)}</DropCell>;
+      })}
     </>)}
   </div>;
 }
 
-function WeekBoard({
+export function WeekBoard({
   snapshot,
   sessions,
   days,
+  slots = generateAgendaGridSlots(),
   onDrop,
+  onPlace,
+  armedPlacement,
+  placementBusy,
   onDragStart,
   onResize,
+  onMove,
+  onUnplace,
   onRoomOpen,
   conflicts,
 }: {
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
   days: DayOption[];
+  slots?: readonly AgendaGridSlot[];
   onDrop: (event: DragEvent, day: string, time: string, roomId: string) => void;
+  onPlace: (target: AgendaPlacementTarget) => void;
+  armedPlacement: ArmedPlacement | null;
+  placementBusy: boolean;
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
+  onMove: (session: AgendaSession) => void;
+  onUnplace: (session: AgendaSession) => void;
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
 }): JSX.Element {
@@ -355,31 +571,59 @@ function WeekBoard({
   return <div class="agenda-week-grid" style={{ gridTemplateColumns: `68px repeat(${Math.max(days.length, 1)}, minmax(240px, 1fr))` }}>
     <div class="agenda-grid-head agenda-time-head" />
     {days.map((day) => <div class="agenda-grid-head" key={day.value}>{day.label}</div>)}
-    {TIME_SLOTS.map((time) => <>
-      <div class="agenda-time tabular" key={`${time}-label`}>{time}</div>
-      {days.map((day) => <DropCell key={`${day.value}-${time}`} class="agenda-week-cell" onDrop={(event) => { if (fallbackRoom) onDrop(event, day.value, time, fallbackRoom.id); }}>
-        {sessions.filter((session) => sessionDay(session, snapshot.event.timezone) === day.value && sessionTime(session, snapshot.event.timezone) === time).map((session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={onRoomOpen} conflicts={conflicts} />)}
-      </DropCell>)}
+    {slots.map((slot) => <>
+      <div class={`agenda-time tabular${slot.isHour ? "" : " is-micro"}`} key={`${slot.time}-label`} aria-label={slot.time}>
+        {slot.isHour ? slot.time : <span class="agenda-time-micro-tick" aria-hidden="true" />}
+      </div>
+      {days.map((day) => {
+        const cellSessions = sessions.filter((session) => sessionDay(session, snapshot.event.timezone) === day.value && agendaGridPosition(sessionTime(session, snapshot.event.timezone), slots)?.slot.time === slot.time);
+        const placementLabel = armedPlacement && fallbackRoom && roomSlotIsFree(snapshot, day.value, slot.time, fallbackRoom.id, slots)
+          ? `Place at ${slot.time} · ${fallbackRoom.name}`
+          : undefined;
+        return <DropCell
+          key={`${day.value}-${slot.time}`}
+          class="agenda-week-cell"
+          ariaLabel={`Place Session on ${day.label} at ${slot.time}${fallbackRoom ? ` in ${fallbackRoom.name}` : ""}`}
+          onDrop={(event) => { if (fallbackRoom) onDrop(event, day.value, slot.time, fallbackRoom.id); }}
+          placementLabel={placementLabel}
+          placementBusy={placementBusy}
+          onPlace={placementLabel && fallbackRoom ? () => onPlace({ day: day.value, time: slot.time, roomId: fallbackRoom.id }) : undefined}
+        >{cellSessions.map((session) => <PositionedSession key={session.id} session={session} timezone={snapshot.event.timezone} slots={slots}>
+          <SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />
+        </PositionedSession>)}</DropCell>;
+      })}
     </>)}
   </div>;
 }
 
-function RoomBoard({
+export function RoomBoard({
   snapshot,
   sessions,
   days,
+  slots = generateAgendaGridSlots(),
   onDrop,
+  onPlace,
+  armedPlacement,
+  placementBusy,
   onDragStart,
   onResize,
+  onMove,
+  onUnplace,
   onRoomOpen,
   conflicts,
 }: {
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
   days: DayOption[];
+  slots?: readonly AgendaGridSlot[];
   onDrop: (event: DragEvent, day: string, time: string, roomId: string) => void;
+  onPlace: (target: AgendaPlacementTarget) => void;
+  armedPlacement: ArmedPlacement | null;
+  placementBusy: boolean;
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
+  onMove: (session: AgendaSession) => void;
+  onUnplace: (session: AgendaSession) => void;
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
 }): JSX.Element {
@@ -389,8 +633,23 @@ function RoomBoard({
       <header><RoomHead room={room} showBuildingComparison={showBuildingComparison} onOpen={onRoomOpen} /></header>
       {days.map((day) => <div class="agenda-room-day" key={day.value}>
         <div class="agenda-day-label">{day.label}</div>
-        {sessions.filter((session) => session.room_id === room.id && sessionDay(session, snapshot.event.timezone) === day.value).sort((left, right) => left.starts_at - right.starts_at).map((session) => <div key={session.id} class="agenda-room-session-wrap"><span class="tabular">{sessionTime(session, snapshot.event.timezone)}</span><SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={onRoomOpen} conflicts={conflicts} /></div>)}
-        <DropCell class="agenda-room-empty" onDrop={(event) => onDrop(event, day.value, "16:00", room.id)}>Drop at 16:00</DropCell>
+        {sessions.filter((session) => session.room_id === room.id && sessionDay(session, snapshot.event.timezone) === day.value).sort((left, right) => left.starts_at - right.starts_at).map((session) => <div key={session.id} class="agenda-room-session-wrap"><span class="tabular">{sessionTime(session, snapshot.event.timezone)}</span><SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} /></div>)}
+        <div class="agenda-room-slots" aria-label={`Available times in ${room.name} on ${day.label}`}>
+          {slots.map((slot) => {
+            const placementLabel = armedPlacement && roomSlotIsFree(snapshot, day.value, slot.time, room.id, slots)
+              ? `Place at ${slot.time} · ${room.name}`
+              : undefined;
+            return <DropCell
+              class="agenda-room-empty"
+              key={slot.time}
+              ariaLabel={`Place Session on ${day.label} in ${room.name} at ${slot.time}`}
+              onDrop={(event) => onDrop(event, day.value, slot.time, room.id)}
+              placementLabel={placementLabel}
+              placementBusy={placementBusy}
+              onPlace={placementLabel ? () => onPlace({ day: day.value, time: slot.time, roomId: room.id }) : undefined}
+            >{slot.isHour ? `Drop at ${slot.time}` : <span class="agenda-room-micro-tick" aria-hidden="true" />}</DropCell>;
+          })}
+        </div>
       </div>)}
     </section>)}
   </div>;
@@ -420,13 +679,15 @@ export function ConflictPanel({ conflicts, sessions, showBuildingComparison = tr
   </aside>;
 }
 
-function Pool({
+export function Pool({
   snapshot,
   query,
   setQuery,
   track,
   onDragStart,
   onDrop,
+  onArm,
+  armedPlacement,
 }: {
   snapshot: AgendaSnapshot;
   query: string;
@@ -434,22 +695,142 @@ function Pool({
   track: string;
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onDrop: (event: DragEvent) => void;
+  onArm: (item: AgendaPoolItem) => void;
+  armedPlacement: ArmedPlacement | null;
 }): JSX.Element {
   const pool = snapshot.unscheduled.filter((item) =>
     (!track || item.tracks.some((candidate) => candidate.id === track))
     && (!query.trim() || [item.title, item.format ?? "", ...item.speakers.map((speaker) => speaker.name)].some((value) => value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))),
   );
-  return <aside class="card agenda-pool" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop(event as unknown as DragEvent); }}>
-    <header class="card-head"><div><h2>Unscheduled</h2><span class="subtle"><span class="tabular">{snapshot.unscheduled.length}</span> schedulable Sessions ready to place</span></div><Chip>Drag back here to unplace</Chip></header>
+  return <aside class="card agenda-pool" aria-label="Unscheduled sessions to place" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop(event as unknown as DragEvent); }}>
+    <header class="card-head"><div><h2>Unscheduled</h2><span class="subtle"><span class="tabular">{snapshot.unscheduled.length}</span> schedulable Sessions ready to place</span></div><Chip>{armedPlacement ? "Choose an open cell" : "Drag back here to unplace"}</Chip></header>
     <div class="agenda-pool-search"><input aria-label="Filter Sessions" value={query} placeholder="Filter Sessions" onInput={(event) => setQuery((event.currentTarget as HTMLInputElement).value)} /></div>
-    <div class="agenda-pool-list">{pool.length ? pool.map((item) => <article key={item.submission_id} class="agenda-pool-item" draggable data-pool-id={item.submission_id} style={{ borderLeftColor: poolTrackColor(snapshot, item) }} onDragStart={(event) => onDragStart({ kind: "pool", id: item.submission_id }, event as unknown as DragEvent)}>
-      <strong title={item.title}>{item.title}</strong><span>{item.format ?? "Session"} · {item.default_duration_min}m · {item.speakers[0]?.name ?? "No speaker"}</span><span class="agenda-track-chips">{item.tracks.map((candidate) => <Chip key={candidate.id}>{candidate.name}</Chip>)}</span>
-    </article>) : <span class="subtle">Everything matching is scheduled.</span>}</div>
-    <footer><span><span class="tabular">{pool.length}</span> matching Sessions</span><span>Drag →</span></footer>
+    <div class="agenda-pool-list" role="list" aria-label="Accepted sessions not yet placed">{pool.length ? pool.map((item) => {
+      const isArmed = armedPlacement?.payload.kind === "pool" && armedPlacement.payload.id === item.submission_id;
+      return <article key={item.submission_id} class={`agenda-pool-item${isArmed ? " is-armed" : ""}`} role="listitem" aria-label={`${item.title} · ${item.format ?? "Session"} · ${item.speakers[0]?.name ?? "No speaker"}`} draggable data-pool-id={item.submission_id} style={{ borderLeftColor: poolTrackColor(snapshot, item) }} onDragStart={(event) => onDragStart({ kind: "pool", id: item.submission_id }, event as unknown as DragEvent)}>
+        <button type="button" class="agenda-pool-place" aria-label={isArmed ? `Placing ${item.title}` : `Place ${item.title}`} aria-pressed={isArmed} onClick={() => onArm(item)}>
+          <strong title={item.title}>{item.title}</strong><span>{item.format ?? "Session"} · {item.default_duration_min}m · {item.speakers[0]?.name ?? "No speaker"}</span><span class="agenda-track-chips">{item.tracks.map((candidate) => <Chip key={candidate.id}>{candidate.name}</Chip>)}</span>
+        </button>
+      </article>;
+    }) : <span class="subtle">Everything matching is scheduled.</span>}</div>
+    <footer><span><span class="tabular">{pool.length}</span> matching Sessions</span><span>Drag or select →</span></footer>
   </aside>;
 }
 
-export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
+type PublicationStep = "select" | "review";
+
+export function PublicationCandidateRow({
+  candidate,
+  timezone,
+  selected,
+  disabled = false,
+  onToggle,
+  review = false,
+}: {
+  candidate: AgendaPublishCandidate;
+  timezone: string;
+  selected?: boolean;
+  disabled?: boolean;
+  onToggle?: (id: string) => void;
+  review?: boolean;
+}): JSX.Element {
+  const detail = `${publicationDateTime(candidate, timezone)} · ${candidate.room} · ${candidate.building}`;
+  const speakers = publicationSpeakerLine(candidate);
+  // Review mode drops the checkbox, so the copy would otherwise land in the
+  // checkbox column and ellipsise to a character or two — unreadable on the one
+  // step whose whole job is letting the organizer read what is about to go public.
+  return <div class={`agenda-publication-candidate${review ? " is-review" : ""}`} role="listitem">
+    {!review && <input
+      type="checkbox"
+      checked={selected === true}
+      disabled={disabled}
+      aria-label={`Select ${candidate.title} for publication`}
+      onChange={() => onToggle?.(candidate.submission_id)}
+    />}
+    <div class="agenda-publication-candidate-copy">
+      <strong title={candidate.title}>{candidate.title}</strong>
+      <span>{detail}</span>
+      <span>{speakers}</span>
+    </div>
+  </div>;
+}
+
+function PublicationPanel({
+  publication,
+  timezone,
+  selectedIds,
+  step,
+  busy,
+  onToggle,
+  onSelectAll,
+  onReview,
+  onBack,
+  onPublish,
+  error,
+}: {
+  publication: AgendaPublication;
+  timezone: string;
+  selectedIds: readonly string[];
+  step: PublicationStep;
+  busy: boolean;
+  onToggle: (id: string) => void;
+  onSelectAll: (ids: readonly string[]) => void;
+  onReview: () => void;
+  onBack: () => void;
+  onPublish: () => void;
+  error: string;
+}): JSX.Element {
+  const selected = new Set(selectedIds);
+  const selectedCandidates = publication.candidates.filter((candidate) => selected.has(candidate.submission_id));
+  const selectableCandidates = publication.candidates.slice(0, MAX_BATCH_PUBLISH_IDS);
+  const allSelectableSelected = selectableCandidates.length > 0 && selectableCandidates.every((candidate) => selected.has(candidate.submission_id));
+  const selectAllLabel = `Select all ${selectableCandidates.length} ${selectableCandidates.length === 1 ? "Session" : "Sessions"}`;
+  const toggleAll = () => onSelectAll(allSelectableSelected ? [] : selectableCandidates.map((candidate) => candidate.submission_id));
+  return <section class="card agenda-publication-panel" aria-labelledby="agenda-publication-title">
+    <header class="agenda-publication-head">
+      <div>
+        <span class="eyebrow">Public agenda</span>
+        <h2 id="agenda-publication-title">Publish the program</h2>
+        <p class="agenda-publication-counter" aria-live="polite"><strong class="tabular">{publication.live}</strong> live <span aria-hidden="true">·</span> <strong class="tabular">{publication.not_yet_public}</strong> not yet public</p>
+      </div>
+      <a class="button ghost small" href={publication.public_agenda_url}>View public agenda ↗</a>
+    </header>
+    {step === "select" ? <>
+      <div class="agenda-publication-intro">Select scheduled accepted Sessions to make their title, time, room, and speakers visible on the public agenda.</div>
+      {publication.candidates.length ? <div class="agenda-publication-list" role="list" aria-label="Scheduled Sessions not yet public">
+        <div class="agenda-publication-select-all">
+          <label><input type="checkbox" checked={allSelectableSelected} aria-label={selectAllLabel} onChange={toggleAll} />{selectAllLabel}</label>
+          {publication.candidates.length > MAX_BATCH_PUBLISH_IDS && <span class="subtle">Publish in batches of up to {MAX_BATCH_PUBLISH_IDS} Sessions.</span>}
+        </div>
+        {publication.candidates.map((candidate) => <PublicationCandidateRow
+          key={candidate.submission_id}
+          candidate={candidate}
+          timezone={timezone}
+          selected={selected.has(candidate.submission_id)}
+          disabled={!selected.has(candidate.submission_id) && selectedCandidates.length >= MAX_BATCH_PUBLISH_IDS}
+          onToggle={onToggle}
+        />)}
+      </div> : <div class="agenda-publication-empty" role="status"><strong>Everything scheduled is public.</strong><span>Accepted Sessions will appear here after they are placed on the agenda.</span></div>}
+      {error && <div class="agenda-publication-error" role="alert">{error}</div>}
+      <footer class="agenda-publication-actions">
+        <span class="subtle"><span class="tabular">{selectedCandidates.length}</span> selected</span>
+        <Button variant="primary" disabled={!selectedCandidates.length || busy} onClick={onReview}>Review publication</Button>
+      </footer>
+    </> : <>
+      <div class="agenda-publication-intro"><strong>About to publish {selectedCandidates.length} Session{selectedCandidates.length === 1 ? "" : "s"}.</strong> Review the exact public fields below. Nothing is visible until you confirm.</div>
+      <div class="agenda-publication-list" role="list" aria-label="Publication preview">
+        {selectedCandidates.map((candidate) => <PublicationCandidateRow key={candidate.submission_id} candidate={candidate} timezone={timezone} review />)}
+      </div>
+      {error && <div class="agenda-publication-error" role="alert">{error}</div>}
+      <footer class="agenda-publication-actions">
+        <Button variant="ghost" disabled={busy} onClick={onBack}>Back to selection</Button>
+        <Button variant="primary" disabled={!selectedCandidates.length || busy} onClick={onPublish}>{busy ? "Publishing…" : `Publish ${selectedCandidates.length} to public agenda`}</Button>
+      </footer>
+    </>}
+  </section>;
+}
+
+export function AgendaPage({ eventId }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", snapshot: null });
   const [view, setView] = useState<AgendaView>("day");
   const [day, setDay] = useState("");
@@ -458,6 +839,15 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
   const [roomPanelId, setRoomPanelId] = useState<string | null>(null);
   const [conflictsOpen, setConflictsOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [publicationError, setPublicationError] = useState("");
+  const [publicationNotice, setPublicationNotice] = useState<PublicationNotice | null>(null);
+  const [publishSelection, setPublishSelection] = useState<string[]>([]);
+  const [publicationStep, setPublicationStep] = useState<PublicationStep>("select");
+  const [publicationBusy, setPublicationBusy] = useState(false);
+  const [autoPlaceBusy, setAutoPlaceBusy] = useState(false);
+  const [armedPlacement, setArmedPlacement] = useState<ArmedPlacement | null>(null);
+  const [placementBusy, setPlacementBusy] = useState(false);
+  const [gridGranularity, setGridGranularity] = useState<AgendaGridGranularity>(() => readAgendaGridGranularity(eventId));
   const [reloadKey, setReloadKey] = useState(0);
   const boardRef = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef<Partial<Record<AgendaView, { top: number; left: number }>>>({});
@@ -467,6 +857,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     try {
       const snapshot = await apiFetch<AgendaSnapshot>(`/api/v1/events/${encodeURIComponent(eventId)}/agenda`, { signal, route: AGENDA_ROUTE });
       setState({ kind: "ready", snapshot });
+      setPublishSelection((current) => current.filter((id) => snapshot.publication.candidates.some((candidate) => candidate.submission_id === id)));
       setDay((current) => current || dayOptions(snapshot)[0]?.value || "all");
     } catch (error: unknown) {
       if (signal?.aborted) return;
@@ -480,6 +871,21 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     return () => controller.abort();
   }, [load, reloadKey]);
 
+  useEffect(() => {
+    setGridGranularity(readAgendaGridGranularity(eventId));
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!armedPlacement) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setArmedPlacement(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [armedPlacement]);
+
   useLayoutEffect(() => {
     const position = scrollPositions.current[view];
     if (boardRef.current && position) {
@@ -490,6 +896,19 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
 
   const rememberScroll = () => {
     if (boardRef.current) scrollPositions.current[view] = { top: boardRef.current.scrollTop, left: boardRef.current.scrollLeft };
+  };
+
+  const armPlacement = (payload: AgendaPlacementPayload, title: string, placementDay?: string) => {
+    setNotice("");
+    setArmedPlacement({ payload, title });
+    // Track is a time × track view, not a time × room view. Move the organizer
+    // to the nearest actionable board rather than offering a selected Session
+    // with no room target.
+    if (view === "track") {
+      rememberScroll();
+      setView("day");
+      if (placementDay) setDay(placementDay);
+    }
   };
 
   const mutate = async (path: string, init: RequestInit, message: string, route = AGENDA_ITEM_ROUTE) => {
@@ -515,36 +934,55 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     return dragPayload.current;
   };
 
-  const onDrop = async (event: DragEvent, targetDay: string, targetTime: string, roomId: string, trackId?: string) => {
+  const place = async (payload: AgendaPlacementPayload, target: AgendaPlacementTarget) => {
     const current = state.kind === "ready" ? state.snapshot : null;
-    const payload = readDragPayload(event);
-    if (!current || !payload) return;
+    if (!current || placementBusy || autoPlaceBusy) return;
+    const request = agendaPlacementRequest(current, payload, target, eventId);
+    if (!request) {
+      setArmedPlacement(null);
+      setNotice("That Session is no longer available to place. Refresh the agenda and try again.");
+      return;
+    }
+    setPlacementBusy(true);
     rememberScroll();
     try {
-      const startsAt = zonedStart(targetDay, targetTime, current.event.timezone);
-      if (payload.kind === "pool") {
-        const item = current.unscheduled.find((candidate) => candidate.submission_id === payload.id);
-        if (!item) return;
-        const primaryTrack = item.tracks.find((candidate) => candidate.is_primary)?.id ?? item.tracks[0]?.id ?? null;
-        await mutate(`/api/v1/events/${encodeURIComponent(eventId)}/agenda/items`, {
-          method: "POST",
-          body: JSON.stringify({ submission_id: item.submission_id, starts_at: startsAt, room_id: roomId, track_id: trackId ?? primaryTrack }),
-        }, `${item.format ?? "Session"} placed · changes persist immediately`, AGENDA_ITEMS_ROUTE);
-      } else {
-        const session = current.sessions.find((candidate) => candidate.id === payload.id);
-        if (!session) return;
-        const body: Record<string, unknown> = { starts_at: startsAt, room_id: roomId };
-        if (trackId) body.track_id = trackId;
-        await mutate(`/api/v1/events/${encodeURIComponent(eventId)}/agenda/items/${encodeURIComponent(session.id)}`, {
-          method: "PATCH",
-          headers: { "If-Match": session.etag },
-          body: JSON.stringify(body),
-        }, "Placement updated · no save button needed");
-      }
+      await mutate(request.path, request.init, request.message, request.route);
+      setArmedPlacement((armed) => armed?.payload.kind === payload.kind && armed.payload.id === payload.id ? null : armed);
     } catch (error: unknown) {
       setNotice(errorSummary(error));
     } finally {
+      setPlacementBusy(false);
+    }
+  };
+
+  const placeArmed = (target: AgendaPlacementTarget) => {
+    if (armedPlacement) void place(armedPlacement.payload, target);
+  };
+
+  const onDrop = async (event: DragEvent, targetDay: string, targetTime: string, roomId: string, trackId?: string) => {
+    const payload = readDragPayload(event);
+    if (!payload) return;
+    try {
+      await place(payload, { day: targetDay, time: targetTime, roomId, trackId });
+    } finally {
       dragPayload.current = null;
+    }
+  };
+
+  const unplace = async (session: AgendaSession) => {
+    if (session.submission_id === null || placementBusy) return;
+    setPlacementBusy(true);
+    rememberScroll();
+    try {
+      await mutate(`/api/v1/events/${encodeURIComponent(eventId)}/agenda/items/${encodeURIComponent(session.id)}`, {
+        method: "DELETE",
+        headers: { "If-Match": session.etag },
+      }, "Session returned to the unscheduled pool");
+      setArmedPlacement((armed) => armed?.payload.kind === "session" && armed.payload.id === session.id ? null : armed);
+    } catch (error: unknown) {
+      setNotice(errorSummary(error));
+    } finally {
+      setPlacementBusy(false);
     }
   };
 
@@ -555,12 +993,7 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     const session = current.sessions.find((candidate) => candidate.id === payload.id);
     if (!session || session.submission_id === null) return;
     try {
-      await mutate(`/api/v1/events/${encodeURIComponent(eventId)}/agenda/items/${encodeURIComponent(session.id)}`, {
-        method: "DELETE",
-        headers: { "If-Match": session.etag },
-      }, "Session returned to the unscheduled pool");
-    } catch (error: unknown) {
-      setNotice(errorSummary(error));
+      await unplace(session);
     } finally {
       dragPayload.current = null;
     }
@@ -583,11 +1016,88 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
     }
   };
 
+  /**
+   * One action, ordinary writes: the plan is arithmetic over the snapshot, but
+   * every placement lands through the same route a drag uses, so what the pass
+   * produces is indistinguishable from hand-placed work — and survives reload.
+   */
+  const autoPlace = async () => {
+    const current = state.kind === "ready" ? state.snapshot : null;
+    if (!current || autoPlaceBusy || placementBusy) return;
+    const plan = planAutoPlacements({
+      sessions: current.sessions,
+      rooms: current.rooms,
+      unscheduled: current.unscheduled,
+      slots: autoPlaceSlots(current, gridGranularity),
+    });
+    if (!plan.placements.length) {
+      setNotice(autoPlaceSummary(plan));
+      return;
+    }
+    setAutoPlaceBusy(true);
+    rememberScroll();
+    let placed = 0;
+    try {
+      for (const placement of plan.placements) {
+        await apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/agenda/items`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            submission_id: placement.submission_id,
+            starts_at: placement.starts_at,
+            room_id: placement.room_id,
+            track_id: placement.track_id,
+            duration_min: placement.duration_min,
+          }),
+          route: AGENDA_ITEMS_ROUTE,
+        });
+        placed += 1;
+      }
+      setNotice(autoPlaceSummary({ placements: plan.placements.slice(0, placed), remaining: plan.remaining }));
+    } catch (error: unknown) {
+      // A partial pass is still real work; say how much landed before the stop.
+      setNotice(placed
+        ? `Auto-placed ${placed} before stopping · ${errorSummary(error)}`
+        : errorSummary(error));
+    } finally {
+      setAutoPlaceBusy(false);
+      await load();
+    }
+  };
+
+  const publishSelected = async () => {
+    if (!publishSelection.length) return;
+    setPublicationBusy(true);
+    setNotice("");
+    setPublicationError("");
+    try {
+      const result = await apiFetch<{ published_count: number; public_agenda_url: string }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/agenda/publish`,
+        {
+          method: "POST",
+          body: JSON.stringify({ submission_ids: publishSelection }),
+          headers: { "content-type": "application/json" },
+          route: AGENDA_PUBLISH_ROUTE,
+        },
+      );
+      setPublicationNotice({ count: result.published_count, publicAgendaUrl: result.public_agenda_url });
+      setPublishSelection([]);
+      setPublicationStep("select");
+      await load();
+    } catch (error: unknown) {
+      setPublicationError(errorSummary(error));
+      await load();
+    } finally {
+      setPublicationBusy(false);
+    }
+  };
+
   if (state.kind === "loading" && !state.snapshot) return <div class="agenda-page"><PageHeader title="Agenda builder" copy="Place accepted Sessions directly into the conference schedule." /><div class="agenda-loading instrument" aria-busy="true"><span class="eyebrow">Agenda</span><strong>Reading the working schedule…</strong><span class="subtle">Loading Sessions, rooms, and placement metadata.</span></div></div>;
   if (!state.snapshot) return <div class="agenda-page"><PageHeader title="Agenda builder" copy="Place accepted Sessions directly into the conference schedule." /><EmptyState title="Agenda data unavailable" copy={state.message} action={<Button variant="primary" onClick={() => { setState({ kind: "loading", snapshot: null }); setReloadKey((value) => value + 1); }}>Try again</Button>} /></div>;
 
   const snapshot = state.snapshot;
   const days = dayOptions(snapshot);
+  const gridSlots = generateAgendaGridSlots(gridGranularity);
   const selectedDay = day || days[0]?.value || "all";
   const visibleSessions = sessionsFor(snapshot, selectedDay, track);
   const conflicts = conflictMarkers(snapshot.conflicts);
@@ -596,6 +1106,12 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
   const presentationConflicts = showBuildingComparison ? conflicts : conflictMarkers(visibleConflictData);
   const headerBuilding = agendaBuildingHeader(snapshot);
   const activeRoom = roomPanelId ? roomFor(snapshot, roomPanelId) : undefined;
+  const armPoolItem = (item: AgendaPoolItem) => armPlacement({ kind: "pool", id: item.submission_id }, item.title);
+  const moveSession = (session: AgendaSession) => armPlacement(
+    { kind: "session", id: session.id },
+    session.title,
+    sessionDay(session, snapshot.event.timezone),
+  );
   const jumpToSession = (sessionId: string) => {
     const target = snapshot.sessions.find((session) => session.id === sessionId);
     if (!target) return;
@@ -611,33 +1127,59 @@ export function AgendaPage({ eventId = DEFAULT_EVENT_ID }: Props): JSX.Element {
   };
   const renderBoard = () => {
     if (view === "list") return <AgendaList snapshot={snapshot} sessions={visibleSessions} conflicts={presentationConflicts} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} onClearFilters={() => { setDay("all"); setTrack(""); }} />;
-    if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
-    if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
+    if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
+    if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
     if (view === "track") return <TrackBoard
       snapshot={snapshot}
       sessions={sessionsFor(snapshot, "all", track)}
       days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)}
+      slots={gridSlots}
       onDrop={onDrop}
-      renderTile={(session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />}
+      renderTile={(session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />}
     />;
     const dayForBoard = selectedDay === "all" ? days[0]?.value ?? selectedDay : selectedDay;
-    return <DayBoard snapshot={snapshot} sessions={sessionsFor(snapshot, dayForBoard, track)} day={dayForBoard} onDrop={onDrop} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
+    return <DayBoard snapshot={snapshot} sessions={sessionsFor(snapshot, dayForBoard, track)} day={dayForBoard} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
   };
 
   return <div class="agenda-page">
-    <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Drag accepted Sessions into a day, time, and room. Format defaults set duration; live conflicts warn without blocking.`} actions={<Button variant="danger" onClick={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</Button>} />
+    <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Place accepted Sessions by drag or selection. Format defaults set duration; live conflicts warn without blocking.`} actions={<><AgentBriefLauncher surface="agenda" eventId={eventId} /><Button variant="danger" onClick={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</Button></>} />
+    {publicationNotice && <div class="agenda-notice agenda-publication-success" role="status"><span>Published <strong class="tabular">{publicationNotice.count}</strong> Session{publicationNotice.count === 1 ? "" : "s"} to the public agenda.</span><span class="agenda-notice-actions"><a href={publicationNotice.publicAgendaUrl}>View public agenda ↗</a><button type="button" onClick={() => setPublicationNotice(null)} aria-label="Dismiss publication confirmation">×</button></span></div>}
+    <PublicationPanel
+      publication={snapshot.publication}
+      timezone={snapshot.event.timezone}
+      selectedIds={publishSelection}
+      step={publicationStep}
+      busy={publicationBusy}
+      error={publicationError}
+      onToggle={(id) => { setPublicationError(""); setPublishSelection((current) => current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id]); }}
+      onSelectAll={(ids) => { setPublicationError(""); setPublishSelection([...ids]); }}
+      onReview={() => { setPublicationError(""); setPublicationStep("review"); }}
+      onBack={() => { setPublicationError(""); setPublicationStep("select"); }}
+      onPublish={() => void publishSelected()}
+    />
     <div class="agenda-toolbar card">
-      <div class="segment agenda-view-tabs" role="tablist" aria-label="Agenda views">{viewNames().map((candidate) => <button type="button" role="tab" aria-selected={view === candidate} class={view === candidate ? "active" : ""} key={candidate} onClick={() => { rememberScroll(); setView(candidate); }}>{candidate[0]!.toUpperCase() + candidate.slice(1)}</button>)}</div>
+      <div class="segment agenda-view-tabs" role="tablist" aria-label="Agenda views">{viewNames().map((candidate) => <button type="button" role="tab" aria-selected={view === candidate} disabled={candidate === "track" && Boolean(armedPlacement)} title={candidate === "track" && armedPlacement ? "Choose a time and room before returning to the track view." : undefined} class={view === candidate ? "active" : ""} key={candidate} onClick={() => { rememberScroll(); setView(candidate); }}>{candidate[0]!.toUpperCase() + candidate.slice(1)}</button>)}</div>
       <label class="agenda-filter"><span class="eyebrow">Day</span><select value={selectedDay} onChange={(event) => { rememberScroll(); setDay((event.currentTarget as HTMLSelectElement).value); }}><option value="all">All days</option>{days.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
       <label class="agenda-filter"><span class="eyebrow">Track</span><select value={track} onChange={(event) => { rememberScroll(); setTrack((event.currentTarget as HTMLSelectElement).value); }}><option value="">All tracks</option>{snapshot.tracks.map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select></label>
+      <label class="agenda-filter"><span class="eyebrow">Placement grid</span><select aria-label="Placement grid increment" value={gridGranularity} onChange={(event) => { rememberScroll(); setGridGranularity(writeAgendaGridGranularity(eventId, (event.currentTarget as HTMLSelectElement).value)); }}>{AGENDA_GRID_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
+      <Button
+        class="agenda-auto-place"
+        data-auto-place="true"
+        disabled={autoPlaceBusy || placementBusy || snapshot.unscheduled.length === 0}
+        title={snapshot.unscheduled.length === 0
+          ? "Nothing to auto-place — every schedulable Session is already on the agenda."
+          : "Fill open room and time slots with unscheduled Sessions. Deterministic, not AI — it seats what fits and leaves the judgement to you."}
+        onClick={() => void autoPlace()}
+      >{autoPlaceBusy ? "Placing…" : "Auto-place"}</Button>
       <span class="toolbar-spacer" />
       <span class="subtle agenda-status-note">No save button · changes persist as you place</span>
     </div>
+    <div class={`agenda-placement-status${armedPlacement ? " is-active" : ""}`} role="status" aria-live="polite" aria-atomic="true">{armedPlacement ? `Placing: ${armedPlacement.title}. Choose an open time and room, or press Escape to cancel.` : ""}</div>
     {notice && <div class="agenda-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
     {snapshot.sessions.length === 0 && snapshot.unscheduled.length === 0
-      ? <EmptyState title="No Sessions are ready for the agenda" copy="Accepted Sessions will appear here when the conference is ready to place them. Open the submission list to check the next candidates." action={<Button variant="primary" onClick={() => window.location.assign("/submissions?status=accepted")}>Open accepted submissions</Button>} />
+      ? <EmptyState title="No Sessions are ready for the agenda" copy="Accepted Sessions will appear here when the conference is ready to place them. Open the submission list to check the next candidates." action={<Button variant="primary" onClick={() => window.location.assign("/submissions?status=accepted_any&placement=unplaced")}>Open accepted submissions</Button>} />
       : <div class="agenda-layout">
-        <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} />
+        <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} onArm={armPoolItem} armedPlacement={armedPlacement} />
         <section class="card agenda-board" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
       </div>}
     {activeRoom && <RoomPanel room={activeRoom} showBuildingComparison={showBuildingComparison} onClose={() => setRoomPanelId(null)} />}

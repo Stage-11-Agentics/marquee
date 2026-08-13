@@ -18,8 +18,8 @@
  * captured non-GET request exists in the public schema (AC-105's UI-only write
  * set). This command owns generation parity; that one owns traffic parity.
  */
-import { spawn } from "node:child_process";
-import { access } from "node:fs/promises";
+import { spawn, spawnSync } from "node:child_process";
+import { access, readdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
@@ -44,13 +44,53 @@ function run(binary, args) {
   });
 }
 
+/** Newest mtime under a directory, or 0 when it does not exist. */
+async function newestMtimeMs(directory) {
+  let newest = 0;
+  const walk = async (path) => {
+    let entries;
+    try {
+      entries = await readdir(path, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const child = resolve(path, entry.name);
+      if (entry.isDirectory()) await walk(child);
+      else {
+        const info = await stat(child).catch(() => null);
+        if (info && info.mtimeMs > newest) newest = info.mtimeMs;
+      }
+    }
+  };
+  await walk(directory);
+  return newest;
+}
+
+/**
+ * Freshness is decided by INPUTS, never by existence.
+ *
+ * "Rebuild only if the bundle is missing" is right exactly once — on a clean
+ * checkout, which is why CI never saw this. In a worktree that survives a
+ * merge, the bundle is present and describes the API as it was several commits
+ * ago, and `dist/` is ignored so git cannot correct it. Both outcomes are
+ * wrong and one of them is silent: the loud one reports operations "missing"
+ * that are sitting in the tree, and the quiet one validates an API surface
+ * nobody is shipping and calls it a pass. A check that answers about the wrong
+ * artifact is worse than no check, because it is believed.
+ */
+async function bundleIsStale() {
+  const bundle = await stat(BUNDLE).catch(() => null);
+  if (!bundle) return { stale: true, reason: "no build found" };
+  const newestSource = await newestMtimeMs(resolve(REPOSITORY_ROOT, "src"));
+  if (newestSource > bundle.mtimeMs) return { stale: true, reason: "src/ is newer than the build" };
+  return { stale: false };
+}
+
 async function loadWorker() {
-  const exists = await access(BUNDLE).then(
-    () => true,
-    () => false,
-  );
-  if (!exists) {
-    process.stdout.write("[check:api] no build found; running vite build\n");
+  const { stale, reason } = await bundleIsStale();
+  if (stale) {
+    process.stdout.write(`[check:api] ${reason}; running vite build\n`);
     const code = await run(resolve(REPOSITORY_ROOT, "node_modules/.bin/vite"), ["build"]);
     if (code !== 0) throw new Error("check:api could not build the Worker bundle");
   }
@@ -160,6 +200,29 @@ if (!cliExists) {
   process.stdout.write(`[check:api] ${notice}\n`);
 } else {
   const registryPath = resolve(cliDirectory, "api-registry.json");
+  // The registry is a build artifact, not source: it is generated from the
+  // served OpenAPI document and is deliberately not tracked in git. A tracked
+  // copy conflicts on every concurrent branch — its documentSha256 changes
+  // whenever any route does — which serialises an otherwise parallel fleet.
+  // Generate it on demand instead. The build must already exist; pr-gate runs
+  // the production build before this check.
+  //
+  // Regenerated whenever it is older than the bundle it describes, for the same
+  // reason the bundle is rebuilt from source mtimes: an ignored artifact that
+  // outlives a merge cannot be corrected by git, and the stale one reports every
+  // route added in between as missing from a registry that would list them the
+  // moment it was rewritten.
+  const registryStat = await stat(registryPath).catch(() => null);
+  const bundleStat = await stat(BUNDLE).catch(() => null);
+  if (!registryStat || (bundleStat && bundleStat.mtimeMs > registryStat.mtimeMs)) {
+    const generated = spawnSync(process.execPath, [resolve(cliDirectory, "generate-api-registry.mjs")], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+    });
+    if (generated.status !== 0) {
+      findings.push({ code: "cli-registry-ungeneratable", detail: generated.stderr?.trim() || "generator failed" });
+    }
+  }
   try {
     const registry = JSON.parse(
       await (await import("node:fs/promises")).readFile(registryPath, "utf8"),

@@ -1,16 +1,20 @@
-export type SubmissionListStatus =
-  | "draft"
-  | "submitted"
-  | "in_review"
-  | "accepted"
-  | "waitlisted"
-  | "rejected"
-  | "withdrawn"
-  | "waved"
-  | "unreviewed"
-  | "onboarding"
-  | "scheduled"
-  | "published";
+/** Row statuses are derived output; filter-only tokens such as accepted_any stay out. */
+export const SUBMISSION_LIST_STATUSES = [
+  "draft",
+  "submitted",
+  "in_review",
+  "accepted",
+  "waitlisted",
+  "rejected",
+  "withdrawn",
+  "waved",
+  "unreviewed",
+  "onboarding",
+  "scheduled",
+  "published",
+] as const;
+
+export type SubmissionListStatus = (typeof SUBMISSION_LIST_STATUSES)[number];
 
 export interface SubmissionTrackListItem {
   id: string;
@@ -65,6 +69,17 @@ export interface SubmissionNotification {
   outbox_status: "queued" | "sent" | "suppressed" | "failed" | null;
 }
 
+export interface SubmissionAgentReview {
+  id: string;
+  name: string;
+  /** What the Agent seat itself recorded, kept even when a chair overrode it. */
+  score: number | null;
+  /** The chair's value, when one governs; null when the agent's own stands. */
+  override_score: number | null;
+  recommendation: string | null;
+  comment: string | null;
+}
+
 export interface SubmissionListItem {
   id: string;
   kind: "abstract" | "session";
@@ -75,6 +90,12 @@ export interface SubmissionListItem {
   speakers: SubmissionSpeakerListItem[];
   tracks: SubmissionTrackListItem[];
   score: number | null;
+  /** Non-abstained evaluations behind `score`. "4.7 from 1 review" is not 4.7. */
+  review_count: number;
+  /** False when `score` fell back to a pre-criteria scalar and is not weighted. */
+  score_is_weighted: boolean;
+  /** Agent evidence is deliberately separate from the human aggregate. */
+  agent_reviews: SubmissionAgentReview[];
   submitted_at: number | null;
   last_saved_at: number | null;
   updated_at: number;

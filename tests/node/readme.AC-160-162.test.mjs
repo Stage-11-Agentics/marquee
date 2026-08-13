@@ -16,7 +16,13 @@ test("AC-160 · the README exposes a numbered clean-checkout deploy path", () =>
   assert.match(readme, /wrangler dev/);
   assert.match(readme, /curl -fsS http:\/\/127\.0\.0\.1:8787\/health/);
   assert.match(readme, /api\/v1\/events\/evt_aie-ny-2026\/submissions/);
-  assert.match(readme, /Deploying to a real Cloudflare account is not\s+covered in this checkout/);
+  // This guard used to assert the README said the hosted path was "not covered
+  // in this checkout". That sentence became false the day we deployed, and a
+  // reader who believed it never opened the running site. The honest form of
+  // the same guard is the opposite one: the README must name the deployment and
+  // route the reader to the sequence that produced it.
+  assert.match(readme, /marquee\.stage11\.dev/);
+  assert.match(readme, /\[Deploy to Cloudflare\]\(#deploy-to-cloudflare\)/);
   assert.doesNotMatch(readme, /\bMRQ-\d+\b/);
   assert.match(readme, /\/api\/docs/);
   assert.match(readme, /named bearer tokens/);

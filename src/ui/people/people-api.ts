@@ -1,0 +1,286 @@
+/**
+ * The People screens' side of the org API.
+ *
+ * Every read and write here goes to the server. Nothing about a person — a
+ * note, a tag, a stage move — is ever "saved" in the browser and shown as
+ * saved: the composer clears after the write lands, so a reload shows what the
+ * screen said it did.
+ */
+import { apiFetch } from "../shell/api-client";
+
+export interface Person {
+  id: string;
+  name: string;
+  email: string;
+  title: string | null;
+  company: string | null;
+  bio: string | null;
+  headshot_attachment_id: string | null;
+  tags: string[];
+  stage: string | null;
+  conference_count: number;
+  last_contact_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface Facet {
+  value: string;
+  count: number;
+}
+
+export interface PeoplePage {
+  data: Person[];
+  page: number;
+  per_page: number;
+  total: number;
+  total_pages: number;
+  facets: { company: Facet[]; title: Facet[]; tag: Facet[] };
+}
+
+export interface PersonNote {
+  id: string;
+  body: string;
+  actor_person_id: string | null;
+  actor_name: string | null;
+  created_at: number;
+}
+
+export interface StageEntry {
+  id: string;
+  stage: string;
+  stage_name: string;
+  score: number | null;
+  rationale: string | null;
+  actor_person_id: string | null;
+  actor_name: string | null;
+  created_at: number;
+}
+
+export interface PersonConnection {
+  submission_id: string;
+  title: string;
+  status: string;
+  role: string;
+  event_id: string;
+  event_name: string;
+}
+
+export interface PersonActivity {
+  id: string;
+  kind: string;
+  summary: string;
+  actor_name: string | null;
+  created_at: number;
+}
+
+export interface PersonRecord {
+  person: Person;
+  notes: PersonNote[];
+  connections: PersonConnection[];
+  activity: PersonActivity[];
+  stage_history: StageEntry[];
+  card: StageEntry | null;
+}
+
+export interface OrgSummary {
+  people: number;
+  conferences: number;
+  returning_speakers: number;
+  in_pipeline: number;
+  top_companies: Facet[];
+}
+
+export interface PersonListConfig {
+  q: string;
+  company?: string;
+  title?: string;
+  tag?: string;
+  stage?: string;
+}
+
+export interface SavedPersonList {
+  id: string;
+  name: string;
+  kind: "live" | "fixed";
+  config: PersonListConfig;
+  member_count: number;
+  created_by_name: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface PipelineStage {
+  id: string;
+  name: string;
+  kind: string;
+}
+
+export interface PipelineCard {
+  person_id: string;
+  name: string;
+  company: string | null;
+  stage: string;
+  score: number | null;
+  rationale: string | null;
+  moved_at: number;
+}
+
+export interface PeopleFilters {
+  q: string;
+  company: string;
+  title: string;
+  tag: string;
+  listId: string;
+}
+
+export const EMPTY_FILTERS: PeopleFilters = { q: "", company: "", title: "", tag: "", listId: "" };
+
+export function activeCriteria(filters: PeopleFilters): Array<{ key: keyof PeopleFilters; label: string; value: string }> {
+  const criteria: Array<{ key: keyof PeopleFilters; label: string; value: string }> = [];
+  if (filters.company) criteria.push({ key: "company", label: "company", value: filters.company });
+  if (filters.title) criteria.push({ key: "title", label: "job title", value: filters.title });
+  if (filters.tag) criteria.push({ key: "tag", label: "tag", value: filters.tag });
+  if (filters.listId) criteria.push({ key: "listId", label: "list", value: filters.listId });
+  return criteria;
+}
+
+export function hasFilters(filters: PeopleFilters): boolean {
+  return filters.q.trim().length > 0 || activeCriteria(filters).length > 0;
+}
+
+/**
+ * The save control's two states. With nothing ticked, an organizer is saving
+ * the search they are looking at, and a saved search is normally meant to stay
+ * current — so Live. With rows ticked they picked those people by hand, and
+ * Fixed is what they meant.
+ */
+export function saveControl(selectedCount: number): { label: string; kind: "live" | "fixed" } {
+  return selectedCount > 0
+    ? { label: "Save selected as list", kind: "fixed" }
+    : { label: "Save filter as list", kind: "live" };
+}
+
+const PEOPLE_ROUTE = "/api/v1/org/people";
+
+export function peopleQuery(filters: PeopleFilters, page: number, perPage: number): string {
+  const params = new URLSearchParams();
+  if (filters.q.trim()) params.set("q", filters.q.trim());
+  if (filters.company) params.set("company", filters.company);
+  if (filters.title) params.set("title", filters.title);
+  if (filters.tag) params.set("tag", filters.tag);
+  if (filters.listId) params.set("list_id", filters.listId);
+  params.set("page", String(page));
+  params.set("per_page", String(perPage));
+  return params.toString();
+}
+
+export function fetchPeople(filters: PeopleFilters, page: number, perPage: number, signal?: AbortSignal): Promise<PeoplePage> {
+  return apiFetch<PeoplePage>(`${PEOPLE_ROUTE}?${peopleQuery(filters, page, perPage)}`, { route: PEOPLE_ROUTE, ...(signal ? { signal } : {}) });
+}
+
+export function fetchSummary(signal?: AbortSignal): Promise<OrgSummary> {
+  return apiFetch<OrgSummary>("/api/v1/org/summary", { route: "/api/v1/org/summary", ...(signal ? { signal } : {}) });
+}
+
+export function fetchPerson(personId: string, signal?: AbortSignal): Promise<PersonRecord> {
+  return apiFetch<PersonRecord>(`${PEOPLE_ROUTE}/${encodeURIComponent(personId)}`, {
+    route: "/api/v1/org/people/{personId}",
+    ...(signal ? { signal } : {}),
+  });
+}
+
+function write<Result>(path: string, route: string, body: unknown, method = "POST"): Promise<Result> {
+  return apiFetch<Result>(path, {
+    route,
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function addNote(personId: string, body: string): Promise<{ note: PersonNote }> {
+  return write(`${PEOPLE_ROUTE}/${encodeURIComponent(personId)}/notes`, "/api/v1/org/people/{personId}/notes", { body });
+}
+
+export function addTag(personId: string, tag: string): Promise<{ tags: string[] }> {
+  return write(`${PEOPLE_ROUTE}/${encodeURIComponent(personId)}/tags`, "/api/v1/org/people/{personId}/tags", { tag });
+}
+
+export function removeTag(personId: string, tag: string): Promise<{ tags: string[] }> {
+  return apiFetch(`${PEOPLE_ROUTE}/${encodeURIComponent(personId)}/tags/${encodeURIComponent(tag)}`, {
+    route: "/api/v1/org/people/{personId}/tags/{tag}",
+    method: "DELETE",
+  });
+}
+
+export function setStage(personId: string, input: { stage: string; score?: number; rationale?: string }): Promise<{ card: StageEntry; stage_history: StageEntry[] }> {
+  return write(`${PEOPLE_ROUTE}/${encodeURIComponent(personId)}/stage`, "/api/v1/org/people/{personId}/stage", input);
+}
+
+export function fetchPipeline(signal?: AbortSignal): Promise<{ stages: PipelineStage[]; cards: PipelineCard[] }> {
+  return apiFetch("/api/v1/org/pipeline", { route: "/api/v1/org/pipeline", ...(signal ? { signal } : {}) });
+}
+
+export function fetchLists(signal?: AbortSignal): Promise<{ data: SavedPersonList[] }> {
+  return apiFetch("/api/v1/org/lists", { route: "/api/v1/org/lists", ...(signal ? { signal } : {}) });
+}
+
+export function createList(input: {
+  name: string;
+  kind: "live" | "fixed";
+  config?: PersonListConfig;
+  person_ids?: string[];
+}): Promise<{ list: SavedPersonList }> {
+  return write("/api/v1/org/lists", "/api/v1/org/lists", input);
+}
+
+export function deleteList(listId: string): Promise<{ deleted: boolean }> {
+  return apiFetch(`/api/v1/org/lists/${encodeURIComponent(listId)}`, {
+    route: "/api/v1/org/lists/{listId}",
+    method: "DELETE",
+  });
+}
+
+export function previewOrgMail(input: { person_ids: string[]; subject: string; body: string }): Promise<{
+  to_email: string;
+  subject: string;
+  text: string;
+  html: string;
+  recipients: number;
+}> {
+  return write("/api/v1/org/comms/preview", "/api/v1/org/comms/preview", input);
+}
+
+export function sendOrgMail(input: { person_ids: string[]; subject: string; body: string }): Promise<{
+  selected: number;
+  queued: number;
+  duplicate: number;
+}> {
+  return write("/api/v1/org/comms/send", "/api/v1/org/comms/send", input);
+}
+
+export function importPeople(input: { csv: string; filename?: string }): Promise<{
+  import_id: string;
+  created: number;
+  updated: number;
+  skipped: number;
+  unmapped: string[];
+}> {
+  return write("/api/v1/org/imports", "/api/v1/org/imports", input);
+}
+
+export function createPerson(input: { name: string; email: string; title?: string; company?: string }): Promise<{ person: Person }> {
+  return write(PEOPLE_ROUTE, PEOPLE_ROUTE, input);
+}
+
+/** A date an organizer reads, not a timestamp an engineer reads. */
+export function formatDay(value: number | null): string {
+  if (value === null) return "—";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+export function formatMoment(value: number): string {
+  const stamp = new Date(value).toISOString();
+  return `${stamp.slice(0, 10)} ${stamp.slice(11, 16)}`;
+}

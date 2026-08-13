@@ -35,16 +35,22 @@ async function jsonRequest<T>(path: string, route: string, init: RequestInit): P
   return apiFetch<T>(path, { ...init, route });
 }
 
-function MappingPanel({ title, preview, mapping, labels, onChange }: {
+function MappingPanel({ title, preview, mapping, labels, onChange, note }: {
   title: string;
   preview: Preview;
   mapping: Record<string, string | null>;
   labels: Record<string, string>;
   onChange: (field: string, value: string | null) => void;
+  note?: string;
 }): JSX.Element {
+  // An export that was never supplied has no fields to review. Counting its
+  // unmapped fields warns about a file the organizer deliberately left out, and
+  // reads as a problem to fix right beside the note saying it is not one.
+  const supplied = preview.headers.length > 0;
   return <Card class="sessionize-mapping-card">
-    <CardHeader title={title}><Chip tone={preview.missing.length ? "warning" : "success"}>{preview.missing.length ? `${preview.missing.length} fields to review` : "Mapped"}</Chip></CardHeader>
+    <CardHeader title={title}><Chip tone={!supplied ? "" : preview.missing.length ? "warning" : "success"}>{!supplied ? "Not supplied" : preview.missing.length ? `${preview.missing.length} fields to review` : "Mapped"}</Chip></CardHeader>
     <CardBody>
+      {note ? <p class="field-note">{note}</p> : null}
       <div class="sessionize-mapping-fields">
         {Object.keys(mapping).map((field) => <label class="field" key={field}>
           <span>{labels[field] ?? field}</span>
@@ -64,7 +70,7 @@ function MappingPanel({ title, preview, mapping, labels, onChange }: {
   </Card>;
 }
 
-export function SessionizeImportPage({ eventId = "evt_aie-ny-2026" }: { eventId?: string }): JSX.Element {
+export function SessionizeImportPage({ eventId, navigate }: { eventId: string; navigate?: (target: string) => void }): JSX.Element {
   const [step, setStep] = useState<ImportStep>("upload");
   const [sessionsFile, setSessionsFile] = useState<File | null>(null);
   const [speakersFile, setSpeakersFile] = useState<File | null>(null);
@@ -78,20 +84,21 @@ export function SessionizeImportPage({ eventId = "evt_aie-ny-2026" }: { eventId?
   const speakerPreview = current?.preview?.speakers;
   const hasMissing = useMemo(() => {
     const requiredSessions = ["external_ref", "title", "speaker_emails"];
-    const requiredSpeakers = ["external_ref", "name", "email"];
+    const requiredSpeakers = ["name", "email"];
+    const hasSessions = Boolean(sessionPreview?.headers.length);
     return Boolean(
-      sessionPreview?.missing.some((field) => requiredSessions.includes(field))
+      (hasSessions && sessionPreview?.missing.some((field) => requiredSessions.includes(field)))
       || speakerPreview?.missing.some((field) => requiredSpeakers.includes(field)),
     );
   }, [sessionPreview, speakerPreview]);
 
   const upload = async () => {
-    if (!sessionsFile || !speakersFile) return;
+    if (!speakersFile) return;
     setBusy(true); setError(null);
     try {
       const result = await jsonRequest<ImportSummary>(`/api/v1/events/${encodeURIComponent(eventId)}/imports`, "/api/v1/events/{eventId}/imports", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ source: "sessionize", sessions_csv: await sessionsFile.text(), speakers_csv: await speakersFile.text() }),
+        body: JSON.stringify({ source: "sessionize", ...(sessionsFile ? { sessions_csv: await sessionsFile.text() } : {}), speakers_csv: await speakersFile.text() }),
       });
       setCurrent(result); setMapping(result.mapping); setStep("mapping");
     } catch (reason) { setError(errorSummary(reason)); }
@@ -131,19 +138,19 @@ export function SessionizeImportPage({ eventId = "evt_aie-ny-2026" }: { eventId?
   };
 
   return <div class="sessionize-import-page">
-    <PageHeader title="Sessionize import" copy="Bring a conference export into the program with a stable mapping preview, reversible outcomes, and no duplicate sessions." />
+    <PageHeader title="Sessionize import" copy="Bring a conference export into the program with a stable mapping preview, reversible outcomes, and no duplicate sessions." actions={<Button small onClick={() => navigate?.("/import")}>Import speakers</Button>} />
     <div class="sessionize-import-steps" aria-label="Import steps">
-      {(["upload", "mapping", "results"] as ImportStep[]).map((name, index) => <div class={`sessionize-import-step ${step === name ? "active" : ""}`} key={name}><span>0{index + 1}</span><strong>{name === "upload" ? "Choose export" : name === "mapping" ? "Map columns" : "Review outcomes"}</strong><small>{name === "upload" ? "Sessions + speakers CSV" : name === "mapping" ? "Preview before writing" : "Run or batch undo"}</small></div>)}
+      {(["upload", "mapping", "results"] as ImportStep[]).map((name, index) => <div class={`sessionize-import-step ${step === name ? "active" : ""}`} key={name}><span>0{index + 1}</span><strong>{name === "upload" ? "Choose export" : name === "mapping" ? "Map columns" : "Review outcomes"}</strong><small>{name === "upload" ? "Sessions optional · speakers required" : name === "mapping" ? "Preview before writing" : "Run or batch undo"}</small></div>)}
     </div>
     {error && <div class="sessionize-import-error" role="alert"><strong>Import needs attention</strong><span>{error}</span></div>}
     {step === "upload" && <Card class="sessionize-import-stage"><CardHeader title="Choose a Sessionize export"><Chip>Fixture-backed until operator export arrives</Chip></CardHeader><CardBody><div class="sessionize-upload-grid">
-      <label class="field"><span>Sessions CSV</span><input type="file" accept=".csv,text/csv" onChange={(event) => setSessionsFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)} /><small class="field-note">Talks, statuses, tracks, speakers, and evaluation columns.</small></label>
-      <label class="field"><span>Speakers CSV</span><input type="file" accept=".csv,text/csv" onChange={(event) => setSpeakersFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)} /><small class="field-note">Names, normalized email, profile, and optional headshot URL.</small></label>
-    </div><div class="sessionize-stage-actions"><Button variant="primary" disabled={!sessionsFile || !speakersFile || busy} onClick={() => void upload()}>Upload and preview →</Button></div></CardBody></Card>}
+      <label class="field"><span>Sessions CSV <small>(optional)</small></span><input type="file" accept=".csv,text/csv" onChange={(event) => setSessionsFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)} /><small class="field-note">Talks, statuses, tracks, speakers, and evaluation columns. Leave blank for a speakers-only import.</small></label>
+      <label class="field"><span>Speakers CSV <small>(required)</small></span><input type="file" accept=".csv,text/csv" onChange={(event) => setSpeakersFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)} /><small class="field-note">Names, normalized email, profile, and optional headshot URL.</small></label>
+    </div><div class="sessionize-stage-actions"><Button variant="primary" disabled={!speakersFile || busy} onClick={() => void upload()}>Upload and preview →</Button></div></CardBody></Card>}
     {step === "mapping" && sessionPreview && speakerPreview && mapping && <div class="sessionize-import-stage"><div class="sessionize-mapping-grid">
-      <MappingPanel title="Sessions" preview={sessionPreview} mapping={mapping.sessions} labels={SESSION_LABELS} onChange={(field, value) => setMapping({ ...mapping, sessions: { ...mapping.sessions, [field]: value } })} />
-      <MappingPanel title="Speakers" preview={speakerPreview} mapping={mapping.speakers} labels={SPEAKER_LABELS} onChange={(field, value) => setMapping({ ...mapping, speakers: { ...mapping.speakers, [field]: value } })} />
+      <MappingPanel title="Sessions" preview={sessionPreview} mapping={mapping.sessions} labels={SESSION_LABELS} onChange={(field, value) => setMapping({ ...mapping, sessions: { ...mapping.sessions, [field]: value } })} note={sessionPreview.headers.length ? undefined : "No Sessions CSV supplied. This import will create or update speakers only."} />
+      <MappingPanel title="Speakers" preview={speakerPreview} mapping={mapping.speakers} labels={SPEAKER_LABELS} onChange={(field, value) => setMapping({ ...mapping, speakers: { ...mapping.speakers, [field]: value } })} note="External reference is optional. When it is absent, Marquee matches repeat imports by normalized email." />
     </div><div class="sessionize-stage-actions"><Button onClick={() => setStep("upload")}>Back</Button><Button variant="primary" disabled={busy || hasMissing} onClick={() => void saveMapping().then((saved) => { if (saved) void run(); })}>Map, import, and review →</Button></div></div>}
-    {step === "results" && <div class="sessionize-import-stage"><Card><CardHeader title="Import outcomes"><div class="head-actions"><Chip tone={current?.status === "undone" ? "warning" : "success"}>{current?.status === "undone" ? "Undone" : "Completed"}</Chip>{current?.status !== "undone" && <Button variant="danger" small disabled={busy} onClick={() => void undo()}>Batch undo</Button>}</div></CardHeader><CardBody><div class="sessionize-count-grid">{counts && Object.entries({ Created: counts.created, Updated: counts.updated, Skipped: counts.skipped, Failed: counts.failed, Evaluations: counts.evaluations }).map(([label, value]) => <div class="sessionize-count" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><p class="subtle">The R2 manifest is retained for audit. A repeated export matches by external reference and normalized email.</p></CardBody></Card><Card class="sessionize-results-card"><CardHeader title="Row detail"><Chip>{rows.length} durable outcomes</Chip></CardHeader><CardBody>{rows.length ? <div class="sessionize-results-table"><table><thead><tr><th>Row</th><th>Entity</th><th>Outcome</th><th>Reason</th></tr></thead><tbody>{rows.map((row) => <tr key={`${row.entity}-${row.row_index}`}><td>{row.row_index}</td><td>{row.entity}</td><td><Chip tone={row.outcome === "failed" ? "alarm" : row.outcome === "created" ? "success" : row.outcome === "updated" ? "warning" : ""}>{row.outcome}</Chip></td><td>{row.reason ?? "—"}</td></tr>)}</tbody></table></div> : <div class="sessionize-results-empty"><strong>No durable outcomes remain</strong><span>This import is empty or has been undone. Choose another export to continue.</span><Button small variant="primary" onClick={() => setStep("upload")}>Choose another export</Button></div>}</CardBody></Card></div>}
+    {step === "results" && <div class="sessionize-import-stage"><Card><CardHeader title="Import outcomes"><div class="head-actions"><Chip tone={current?.status === "undone" ? "warning" : "success"}>{current?.status === "undone" ? "Undone" : "Completed"}</Chip>{current?.status !== "undone" && <Button variant="danger" small disabled={busy} onClick={() => void undo()}>Batch undo</Button>}</div></CardHeader><CardBody><div class="sessionize-count-grid">{counts && Object.entries({ Created: counts.created, Updated: counts.updated, Skipped: counts.skipped, Failed: counts.failed, Evaluations: counts.evaluations }).map(([label, value]) => <div class="sessionize-count" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><p class="subtle">The R2 manifest is retained for audit. A repeated export matches by external reference when present, otherwise normalized email.</p></CardBody></Card><Card class="sessionize-results-card"><CardHeader title="Row detail"><Chip>{rows.length} durable outcomes</Chip></CardHeader><CardBody>{rows.length ? <div class="sessionize-results-table"><table><thead><tr><th>Row</th><th>Entity</th><th>Outcome</th><th>Reason</th></tr></thead><tbody>{rows.map((row) => <tr key={`${row.entity}-${row.row_index}`}><td>{row.row_index}</td><td>{row.entity}</td><td><Chip tone={row.outcome === "failed" ? "alarm" : row.outcome === "created" ? "success" : row.outcome === "updated" ? "warning" : ""}>{row.outcome}</Chip></td><td>{row.reason ?? "—"}</td></tr>)}</tbody></table></div> : <div class="sessionize-results-empty"><strong>No durable outcomes remain</strong><span>This import is empty or has been undone. Choose another export to continue.</span><Button small variant="primary" onClick={() => setStep("upload")}>Choose another export</Button></div>}</CardBody></Card></div>}
   </div>;
 }

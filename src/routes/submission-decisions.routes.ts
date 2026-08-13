@@ -5,7 +5,7 @@ import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
-import { writeSubmissionDecision } from "../jobs/cascade/decisions";
+import { resendSubmissionDecision, writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
 
 const eventSubmissionParams = z.object({
@@ -31,6 +31,16 @@ const decisionResponseSchema = z
     tasks_assigned: z.number().int().min(0),
   })
   .openapi("SubmissionDecisionResult");
+
+const resendDecisionResponseSchema = z
+  .object({
+    submission_id: z.string(),
+    decision_id: z.string(),
+    resulting_status: z.enum(["accepted", "rejected"]),
+    outbox_id: z.string().nullable(),
+    outbox_inserted: z.boolean(),
+  })
+  .openapi("SubmissionDecisionResendResult");
 
 async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   const auth = getAuth(context);
@@ -102,4 +112,54 @@ const decideSubmission = defineApiRoute(
   },
 );
 
-export const apiRoutes = [decideSubmission];
+const resendDecision = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}/decision/resend",
+    operationId: "resendSubmissionDecision",
+    summary: "Send one recorded decision again",
+    description:
+      "Queues a deliberate per-record retry using the current speaker address without changing the decision or bulk-notify eligibility.",
+    tags: ["Submissions"],
+    request: { params: eventSubmissionParams },
+    policy: {
+      auth: { kind: "grants", grants: ["program:write"] },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      202: jsonResponse(resendDecisionResponseSchema, "The deliberate resend was queued."),
+      ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId, submissionId } = context.req.valid("param");
+    const actor = await actorFor(context);
+    const result = await resendSubmissionDecision({
+      db: context.env.DB,
+      queue: context.env.MAIL_QUEUE,
+      eventId,
+      submissionId,
+      actor,
+    });
+    if (result.outcome === "failed") {
+      if (result.error === "submission not found") throw ApiError.notFound("submission not found");
+      if (result.error === "only accepted or rejected decisions can be resent" || result.error === "no accepted or rejected decision exists to resend") {
+        throw ApiError.conflict(result.error);
+      }
+      throw ApiError.unprocessable(result.error ?? "the decision could not be resent");
+    }
+    if (!result.decisionId || !result.resultingStatus) {
+      throw new Error("resend completed without a durable decision row");
+    }
+    return context.json({
+      submission_id: result.id,
+      decision_id: result.decisionId,
+      resulting_status: result.resultingStatus,
+      outbox_id: result.outboxId ?? null,
+      outbox_inserted: result.outboxInserted,
+    }, 202);
+  },
+);
+
+export const apiRoutes = [decideSubmission, resendDecision];

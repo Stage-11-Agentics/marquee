@@ -15,6 +15,13 @@ export interface RecipientMergeContext {
   taskDueAt?: number | null;
 }
 
+export interface ReviewerReminderMergeContext {
+  email: string;
+  name: string;
+  outstanding: number;
+  roundName: string;
+}
+
 export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;
 }
@@ -57,5 +64,15 @@ export function mergeDataForRecipient(recipient: RecipientMergeContext): MergeDa
     "session.leaveBy": mergeTime(recipient.leaveBy, recipient.timezone),
     "task.title": recipient.taskTitle ?? "—",
     "task.due_date": taskDueAt,
+  };
+}
+
+export function mergeDataForReviewerReminder(reviewer: ReviewerReminderMergeContext): MergeData {
+  return {
+    "reviewer.first_name": firstName(reviewer.name),
+    "reviewer.name": reviewer.name,
+    "reviewer.email": reviewer.email,
+    "review.outstanding": reviewer.outstanding,
+    "round.name": reviewer.roundName,
   };
 }

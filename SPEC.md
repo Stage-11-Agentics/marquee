@@ -334,6 +334,18 @@ An allowlisted edit applies within one webhook cycle; **an edit to any other fie
 
 **`event_settings`** — key/value JSON per event: `schedulable_statuses`, `demo_safe_allowlist`, `ai_assist_enabled` (**default false**, AC-167), `anonymized_default`, `airtable`, `search_weights`. Writer: settings screens + seed. Reader: the code paths named above.
 
+> **`demo_safe_allowlist` has no writer.** Nothing in `src/`, no route, and not the
+> seed ever sets this key; its only appearance in the codebase is the `SELECT` in
+> `src/jobs/mail/consumer.ts`. It is therefore always empty in every deployment, and
+> in demo mode every `demo_safe` message is written `suppressed` rather than sent.
+> The outbox, the queued counts and the per-recipient log all render correctly while
+> nothing leaves — the confirmations describe the queue, not delivery. `always_live`
+> messages (the public CFP confirmation) are unaffected and do dispatch, which is how
+> we know the credential and payload are sound and only the gate is closed.
+> One query settles it for any deployment:
+> `SELECT count(*) FROM outbox WHERE provider_message_id IS NOT NULL` — zero means
+> nothing has ever left. See `code/platform/resend.md` for the general pattern.
+
 ---
 
 ## 4. API surface
@@ -829,3 +841,32 @@ Delivery is unchanged: `HMAC-SHA256` over `id.timestamp.body`, retried with back
 **Reserved, untouched.** AC-270–AC-272 (the drafted submitter/speaker split) are not minted here. This amendment mints from AC-273 precisely so a later if-capacity opening does not collide with it; next mint after this ticket is AC-275.
 
 **Build:** MRQ-75, on top of merged MRQ-22 (`src/routes/embed.route.tsx`, `src/ui/embeds/EmbedPage.tsx`, `src/lib/public-site.ts`). No new remote/mirror/queue surface — `cfp` reads `forms`/`formats`, already-modeled tables.
+
+## Amendment 19 — the cold start, from the true step zero (client-directed, 2026-08-12)
+
+*Folds `USER_STORIES.md` Amendment 19 (US-83 – US-86, AC-275 – AC-287). Binding surfaces: prototype **v1.11** (`prototypes/pipeline-v1.1/index.html`, cold-start flow), `docs/GETTING-STARTED.md` (human-side contract), `prototypes/cold-start/SKILL-SETUP-CHAPTER.md` (agent-side contract, folds into `renderSkill()`). Rulings D1–D8 in `prototypes/cold-start/DECISIONS.md`. **Post-deadline scope** — `EVALUATION.md` §2.4; nothing here joins the Wednesday gate.*
+
+**Why.** Every event route is `/events/:eventId/…` and no route creates an event; the magic-link handler answers unknown addresses with a polite no-op; the only path from empty DB to usable app is a seed that hardcodes someone else's demo conference. A fresh installer cannot become a user. The design ruling that resolves it: initial setup is run by the operator's own agent, identity bootstraps through a one-time claim link printed by the deploy (mail cannot be a dependency of the flow that configures mail), and ownership lands on a person.
+
+**§3.2 deltas.**
+- `magic_links.purpose` widens to `login|draft_resume|cospeaker_profile|task_link|claim|org_invite`; `person_id` becomes NULLABLE, non-null exactly when purpose is a person-bound one — `claim` and `org_invite` tokens pre-date their person, who is created at exchange. Same hashing, same single-statement consumption, same 15-minute/therein expiries (claim: 24 h; invite: 7 d).
+- `organizations` gains writer "claim exchange (created if absent)". `people` and `memberships` gain writers "claim exchange" and "invite exchange"; `memberships` gains remover "organizer removal (revokes the person's `auth_sessions` in the same transaction)". The last remaining `owner` membership is undeletable, enforced server-side.
+- No new token table, no new token kind: the post-claim agent token is an ordinary `api_tokens` row.
+
+**§4.2 route additions** (all appear in the OpenAPI document; `check:api` registry parity applies):
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/claim/:token` · `/join/:token` | server-rendered exchange pages; inert page on used/expired/unknown (AC-276, AC-282) |
+| POST | `/api/v1/claim` | token + name + email → org-if-absent, owner person, membership, session (AC-276) |
+| POST | `/api/v1/events` | owner/program_lead; name, dates, timezone, venue → event with generated slug (AC-279) |
+| GET | `/api/v1/instance/status` | admin; mail/uploads/spam/domain derived from real binding+secret presence, never a stored flag (AC-284) |
+| GET/POST | `/api/v1/org/invites` · DELETE `/org/invites/:id` | mint/list/revoke one-time org invites (AC-282) |
+| GET | `/api/v1/org/members` · DELETE `/org/members/:personId` | organizer list/removal (AC-283) |
+| POST | `/api/v1/admin/remove-demo` | deletes `is_demo` scope only, idempotent, flips `demo_mode` 0 (AC-286) |
+
+**§4.3 delta.** The CLI gains `setup claim-link` (works unauthenticated against the local config/deploy context, since it exists precisely when no credential does) and the setup verbs — event create, taxonomy set, form draft, evaluation plan — each a thin wrapper over the routes above and §4.2's existing admin routes. `SKILL.md` gains the setup chapter through `cli/generate-skill.mjs`; the byte-equality test is unchanged and binding.
+
+**§5 deltas.** §5.1: an instance with no owner membership renders the **unclaimed landing** in place of the demo landing — agent-run setup stated, claim-link story stated, nothing else revealed. New screens per prototype v1.11: claim (`/claim/:token`), handoff (token offer + three doors), Instance panel on the setup dashboard, Organizers card in settings, invite modal. §5.4: publish on a mail-less instance interposes the AC-285 acknowledgment. All markup questions resolve to prototype v1.11, per the standing rule.
+
+**Guardrails.** Claim and invite links ride G6's cookie discipline; the unclaimed landing and inert pages leak no instance state (AC-277); demo removal is scoped by `is_demo` exactly as `reset:demo` is, in reverse.

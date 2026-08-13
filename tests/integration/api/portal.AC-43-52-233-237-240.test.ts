@@ -17,7 +17,15 @@ const OWNER_ID = "per_demo_organizer";
 const FORM_ID = "form-portal";
 const SUBMISSION_ID = "sub-portal-talk";
 const REVIEW_SUBMISSION_ID = "sub-portal-review";
-const NOW = Date.UTC(2026, 7, 11, 15, 0, 0);
+// Anchored to the real clock, not to a calendar date. Task state and form
+// windows are derived from Date.now() in production, so every fixture here
+// means "a day before now" or "a day after now" — relative offsets. Pinned to
+// an absolute date, those offsets silently change meaning as the wall clock
+// passes them: this file's `NOW + 86_400_000` fixtures were written as "due
+// tomorrow", and on 2026-08-12T15:00Z they became "due in the past", flipping
+// a task from risk to overdue and closing a form window that a test expects
+// open. The suite went red with no commit behind it. Only the anchor moves.
+const NOW = Date.now();
 
 let speakerCookie = "";
 let otherSpeakerCookie = "";
@@ -112,6 +120,8 @@ async function seedFixture(): Promise<void> {
       ["template-portal-ack", "acknowledge", "Read the speaker agreement", null, NOW - 86_400_000],
       ["template-portal-file", "file", "Upload your deck", null, NOW + 86_400_000],
       ["template-portal-form", "form", "Complete speaker details", FORM_ID, NOW + 172_800_000],
+      ["template-portal-finalize-talk", "acknowledge", "Finalize talk description", null, NOW + 259_200_000],
+      ["template-portal-finalize-bio", "acknowledge", "Finalize bio & photos", null, NOW + 345_600_000],
     ].map(([id, kind, name, formId, dueAt]) => env.DB.prepare(
       `INSERT INTO task_templates (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 0, ?, ?)`,
@@ -121,17 +131,26 @@ async function seedFixture(): Promise<void> {
        VALUES ('task-portal-ack', ?, ?, ?, 'template-portal-ack', 'Read the speaker agreement', 'acknowledge', 'Acknowledge the current speaker agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?),
               ('task-portal-file', ?, ?, ?, 'template-portal-file', 'Upload your deck', 'file', 'Upload the requested deck file.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?),
               ('task-portal-form', ?, ?, ?, 'template-portal-form', 'Complete speaker details', 'form', 'Answer the visible conditional fields.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?),
+              ('task-portal-subject-talk', ?, ?, ?, 'template-portal-finalize-talk', 'Finalize talk description', 'acknowledge', 'Confirm the title and abstract before publication.', ?, 'done', ?, '{"acknowledged":true}', NULL, 'marquee', ?, ?),
+              ('task-portal-subject-bio', ?, ?, ?, 'template-portal-finalize-bio', 'Finalize bio & photos', 'acknowledge', 'Review your bio and add a headshot for the speaker gallery.', ?, 'done', ?, '{"acknowledged":true}', NULL, 'marquee', ?, ?),
               ('task-portal-other', ?, ?, ?, 'template-portal-ack', 'Other speaker private task', 'acknowledge', 'This belongs only to another speaker.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?)`,
     ).bind(
       EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW - 86_400_000, NOW, NOW,
       EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 86_400_000, NOW, NOW,
       EVENT_ID, SPEAKER_ID, REVIEW_SUBMISSION_ID, NOW + 172_800_000, NOW, NOW,
+      EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 259_200_000, NOW, NOW, NOW,
+      EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 345_600_000, NOW, NOW, NOW,
       EVENT_ID, OTHER_PERSON_ID, "sub-portal-other", NOW + 86_400_000, NOW, NOW,
     ),
     env.DB.prepare(
       `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, r2_etag, created_at, updated_at)
        VALUES ('attachment-portal-file', ?, 'task_upload', 'task-portal-file', 'uploads/portal/deck.pdf', 'deck.pdf', 'application/pdf', 10, 'ready', 'etag', ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, r2_etag, created_at, updated_at)
+       VALUES ('attachment-portal-headshot', ?, 'person_headshot', ?, 'uploads/portal/headshot.png', 'robin-headshot.png', 'image/png', 12, 'ready', 'headshot-etag', ?, ?)`,
+    ).bind(EVENT_ID, SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("UPDATE people SET headshot_attachment_id = 'attachment-portal-headshot' WHERE id = ?").bind(SPEAKER_ID),
   ]);
 
   const speakerSession = await createSession(env.DB, { personId: SPEAKER_ID, roleHint: "speaker", userAgent: "portal-test", now: NOW });
@@ -183,6 +202,26 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(body.tasks[0]).toMatchObject({ title: "Read the speaker agreement", kind: "acknowledge", status: "open", due_at: NOW - 86_400_000 });
   });
 
+  test("CONTRACT · MRQ-93 · subject-bearing acknowledgement tasks retain their template identity while generic acknowledgement stays generic", async () => {
+    const { body } = await portal();
+    expect(body.tasks.find((task: { id: string }) => task.id === "task-portal-subject-talk")).toMatchObject({
+      template_id: "template-portal-finalize-talk",
+      submission_id: SUBMISSION_ID,
+      kind: "acknowledge",
+      payload: { kind: "acknowledge", acknowledged: true },
+    });
+    expect(body.tasks.find((task: { id: string }) => task.id === "task-portal-subject-bio")).toMatchObject({
+      template_id: "template-portal-finalize-bio",
+      submission_id: SUBMISSION_ID,
+      kind: "acknowledge",
+    });
+    expect(body.tasks.find((task: { id: string }) => task.id === "task-portal-ack")).toMatchObject({
+      template_id: "template-portal-ack",
+      kind: "acknowledge",
+      payload: { kind: "acknowledge", acknowledged: false },
+    });
+  });
+
   test("AC-47 · acknowledge, file, and form task registry entries open real payload surfaces and validate completion", async () => {
     const ack = await request("/api/v1/me/tasks/task-portal-ack/complete", { method: "POST", body: JSON.stringify({ acknowledged: false }) });
     expect(ack.status).toBe(422);
@@ -194,6 +233,14 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(form.status).toBe(200);
     const { body } = await portal();
     expect(body.tasks.filter((task: { id: string }) => task.id.startsWith("task-portal-") && task.id !== "task-portal-other").every((task: { status: string }) => task.status === "done")).toBe(true);
+  });
+
+  test("CONTRACT · SPK-10 · the speaker record returns pointer-based profile and task file histories", async () => {
+    const response = await request(`/api/v1/events/${EVENT_ID}/onboarding/speakers/${SPEAKER_ID}`, {}, ownerCookie);
+    expect(response.status).toBe(200);
+    const body = await response.json<{ files: { profile: { latest: { filename: string; is_latest: boolean } | null; version_count: number }; tasks: Array<{ task_id: string; list: { latest: { filename: string; is_latest: boolean } | null } }> } }>();
+    expect(body.files.profile).toMatchObject({ version_count: 1, latest: { filename: "robin-headshot.png", is_latest: true } });
+    expect(body.files.tasks.find((task) => task.task_id === "task-portal-file")?.list.latest).toMatchObject({ filename: "deck.pdf", is_latest: true });
   });
 
   test("AC-48, AC-91, AC-92, AC-94, AC-148 · completed portal work updates organizer attention and the chase matrix", async () => {
@@ -215,8 +262,14 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(afterBody.attention.overdue_submissions.count).toBeLessThan(beforeBody.attention.overdue_submissions.count);
     const chaseAfter = await request(`/api/v1/events/${EVENT_ID}/onboarding`, {}, ownerCookie);
     const chaseAfterBody = await chaseAfter.json<{ rows: Array<{ cells: Record<string, { state: string; glyph: string }>; person: { id: string; name: string } }> }>();
-    expect(chaseAfterBody.rows.find((row) => row.person.id === SPEAKER_ID)).toBeUndefined();
-    expect(chaseAfterBody.rows.find((row) => row.person.id === OTHER_PERSON_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "risk", glyph: "×" });
+    // MRQ-111: a speaker who has finished everything stays on the board with a
+    // clear row rather than disappearing from the only screen that claims to
+    // list speakers. "Still owes something" is the `incomplete` filter's job.
+    expect(chaseAfterBody.rows.find((row) => row.person.id === SPEAKER_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "done", glyph: "\u2713" });
+    expect(chaseAfterBody.rows.find((row) => row.person.id === OTHER_PERSON_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "risk", glyph: "\u00d7" });
+    const chaseIncomplete = await request(`/api/v1/events/${EVENT_ID}/onboarding?filter=incomplete`, {}, ownerCookie);
+    const chaseIncompleteBody = await chaseIncomplete.json<{ rows: Array<{ person: { id: string } }> }>();
+    expect(chaseIncompleteBody.rows.find((row) => row.person.id === SPEAKER_ID)).toBeUndefined();
   });
 
   test("AC-49 · overdue tasks carry a textual marker and a distinct overdue data state", async () => {
