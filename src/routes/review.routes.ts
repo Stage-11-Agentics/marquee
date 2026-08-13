@@ -883,6 +883,11 @@ const writeEvaluationRoute = defineApiRoute(
     await context.env.DB.prepare(`
       INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      -- The four override_* columns are deliberately absent from this update: a
+      -- chair's override survives the reviewer revising their own score. The
+      -- chair judged the abstract, not one scoring run, and a reviewer must not
+      -- be able to lift an override by re-submitting. Clearing it stays the
+      -- chair's own gesture. MRQ-149's suite pins this both ways.
       ON CONFLICT(round_id, submission_id, reviewer_person_id) DO UPDATE SET
         recommendation = excluded.recommendation,
         score = excluded.score,
