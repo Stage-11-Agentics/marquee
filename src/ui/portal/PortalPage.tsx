@@ -154,6 +154,7 @@ type PortalSnapshot = {
 type SubmitterSubmission = {
   id: string;
   title: string;
+  description?: string | null;
   status: string;
   format: string | null;
   submitted_at: number | null;
@@ -162,6 +163,7 @@ type SubmitterSubmission = {
   wave_decision_on: string | null;
   role: string;
   form_slug: string | null;
+  edit?: { enabled: boolean; reason: string | null };
 };
 
 /**
@@ -824,6 +826,12 @@ function submitterProgressCopy(status: string, draftCallOpen: boolean): string {
 }
 
 function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX.Element {
+  const [title, setTitle] = useState(submission.title);
+  const [description, setDescription] = useState(submission.description ?? "");
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const edit = submission.edit ?? { enabled: false, reason: "Editing availability is not available for this abstract." };
   const decisionDetails = isSubmitterAwaitingReview(submission.status)
     ? [
       submission.wave_name,
@@ -831,13 +839,43 @@ function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX
     ].filter((value): value is string => Boolean(value)).join(" · ")
     : null;
   const decisionLabel = decisionDetails ? `Next decision · ${decisionDetails}` : null;
+  useEffect(() => {
+    setTitle(submission.title);
+    setDescription(submission.description ?? "");
+    if (!edit.enabled) setEditing(false);
+  }, [submission.id, submission.title, submission.description, edit.enabled]);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await requestJson<{ submission: { title: string; abstract?: string | null; description?: string | null } }>(`/api/v1/me/submissions/${encodeURIComponent(submission.id)}/talk`, {
+        method: "PATCH",
+        body: JSON.stringify({ title, description }),
+      });
+      setTitle(response.submission.title);
+      setDescription(response.submission.description ?? response.submission.abstract ?? "");
+      setEditing(false);
+    } catch (caught) {
+      setError((caught as ApiFailure).message || "The conference could not save this abstract. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return <article class="portal-submitted-row" data-submission-id={submission.id} data-submission-status={submission.status}>
     <div class="portal-submitted-copy">
-      <strong title={submission.title}>{submission.title}</strong>
+      <strong title={title}>{title}</strong>
       <span>{submission.format ?? "Format not set"} · {submission.submitted_at === null ? "Not yet submitted" : `Submitted ${formatDate(submission.submitted_at)}`}</span>
       {decisionLabel ? <span class="portal-submitted-wave">{decisionLabel}</span> : null}
+      <p class="portal-submitted-abstract">{description || "No abstract text recorded."}</p>
+      <form class={`portal-submitter-editor${editing ? "" : " is-hidden"}`} aria-hidden={!editing} onSubmit={(event) => { event.preventDefault(); void save(); }}>
+        <label><span>Title</span><input disabled={!editing || busy} value={title} onInput={(event) => setTitle(event.currentTarget.value)} /></label>
+        <label><span>Abstract</span><textarea disabled={!editing || busy} rows={6} value={description} onInput={(event) => setDescription(event.currentTarget.value)} /></label>
+        <div class="portal-submitter-editor-actions"><span class="portal-submitter-edit-error" role={error ? "alert" : undefined}>{error ?? " "}</span><button class="portal-button secondary" type="button" disabled={!editing || busy} onClick={() => setEditing(false)}>Cancel</button><button class="portal-button" type="submit" disabled={!editing || busy}>{busy ? "Saving…" : "Save changes"}</button></div>
+      </form>
     </div>
-    <span class="portal-submitted-status">{submitterStatusLabel(submission.status)}</span>
+    <div class="portal-submitted-actions"><span class="portal-submitted-status">{submitterStatusLabel(submission.status)}</span><button class="portal-task-action" type="button" disabled={!edit.enabled || busy} aria-describedby={`submitter-edit-reason-${submission.id}`} onClick={() => { setError(null); setEditing((current) => !current); }}>{editing ? "Close editor" : "Edit abstract"}</button><span class="portal-submitter-edit-reason" id={`submitter-edit-reason-${submission.id}`}>{edit.reason ?? "You can edit this abstract while the call for speakers is open."}</span></div>
   </article>;
 }
 
