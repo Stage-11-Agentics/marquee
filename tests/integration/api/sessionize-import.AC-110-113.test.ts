@@ -19,7 +19,9 @@ let ownerCookie = "";
 
 async function seedFixture(): Promise<void> {
   await applyMigrations();
-  const now = Date.parse("2026-08-11T12:00:00.000Z");
+  // Nothing here asserts a calendar date, and the session row below is a
+  // credential: pinned to 2026-08-11 it expired on the 12th and stayed expired.
+  const now = Date.now();
   await env.DB.batch([
     env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(ORG_ID, "MRQ-31 Import", "mrq-31-import", now, now),
     env.DB.prepare("INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at) VALUES (?, ?, 'Import Conference', 'mrq-31-import', '2026-10-01', '2026-10-03', 'UTC', 'live', 0, ?, ?)").bind(EVENT_ID, ORG_ID, now, now),

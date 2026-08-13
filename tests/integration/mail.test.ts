@@ -21,6 +21,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at) VALUES ('evt_mail', 'org_mail', 'Mail Conference', 'mail', '2026-10-01', '2026-10-02', 'UTC', 'live', 1, ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail', 'org_mail', 'speaker@example.com', 'Ada Lovelace', ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_mail', 'org_mail', 'evt_mail', 'per_mail', 'owner', ?, ?)").bind(NOW, NOW),
+    // clock-check: allow — this window is read only by enqueuePreCloseReminders(env.DB, NOW + n), which takes its clock as an argument
     env.DB.prepare("INSERT INTO forms (id, event_id, name, slug, kind, status, closes_at, reminder_offset_hours, created_at, updated_at) VALUES ('form_mail', 'evt_mail', 'CFP', 'cfp', 'abstract', 'open', ?, 24, ?, ?)").bind(NOW + 48 * 60 * 60_000, NOW, NOW),
     env.DB.prepare("INSERT INTO submissions (id, event_id, form_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES ('sub_mail', 'evt_mail', 'form_mail', 'abstract', 'Reliable email', 'submitted', 'public', 'per_mail', ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_mail', 'sub_mail', 'per_mail', 'speaker', 0, ?, ?)").bind(NOW, NOW),
@@ -104,7 +105,7 @@ test("AC-117, AC-93 · the same bulk action twice relies on the UNIQUE idempoten
   expect(fake.batches).toHaveLength(1);
   expect(fake.singles).toHaveLength(0);
 
-  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-empty-selection", now: NOW });
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-empty-selection" });
   await env.DB.prepare("DELETE FROM outbox WHERE event_id = 'evt_mail'").run();
   const emptyResponse = await app.request("/api/v1/events/evt_mail/comms/send", {
     method: "POST",
@@ -121,10 +122,12 @@ test("AC-93 · exact person selection can queue a demo-safe reminder for a roste
   await env.DB.batch([
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_roster', 'org_mail', 'roster@example.com', 'Roster Speaker', ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_mail_roster', 'org_mail', 'evt_mail', 'per_mail_roster', 'speaker', ?, ?)").bind(NOW, NOW),
+    // clock-check: allow — the assertion here is which recipients get selected; no path in it compares a due date to the clock
     env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at) VALUES ('template_mail_roster', 'evt_mail', 'Upload slides', 'file', 'Upload the deck.', ?, 0, 0, ?, ?)").bind(NOW + 86_400_000, NOW, NOW),
+    // clock-check: allow — as above: the task exists to be selectable, and its due date is never read against the clock
     env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mail_roster', 'evt_mail', 'per_mail_roster', NULL, 'template_mail_roster', 'Upload slides', 'file', 'Upload the deck.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(NOW + 86_400_000, NOW, NOW),
   ]);
-  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-person-selection", now: NOW });
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-person-selection" });
   const response = await app.request("/api/v1/events/evt_mail/comms/send", {
     method: "POST",
     headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
@@ -142,7 +145,7 @@ test("AC-93 · exact recipient pairs do not cross-multiply co-speaking selection
     env.DB.prepare("INSERT INTO submissions (id, event_id, form_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES ('sub_mail_panel', 'evt_mail', 'form_mail', 'session', 'Panel session', 'submitted', 'public', 'per_mail', ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_mail_panel_a', 'sub_mail_panel', 'per_mail', 'speaker', 0, ?, ?), ('part_mail_panel_b', 'sub_mail_panel', 'per_mail_co', 'speaker', 1, ?, ?)").bind(NOW, NOW, NOW, NOW),
   ]);
-  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-pair-selection", now: NOW });
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-pair-selection" });
   const response = await app.request("/api/v1/events/evt_mail/comms/send", {
     method: "POST",
     headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
@@ -168,7 +171,7 @@ test("AC-93 · exact recipient pairs do not cross-multiply co-speaking selection
 
 test("AC-93 · preview does not resolve a person outside the requested event", async () => {
   await env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_other_event', 'org_mail', 'other@example.com', 'Other Event Speaker', ?, ?)").bind(NOW, NOW).run();
-  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-preview-scope", now: NOW });
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-preview-scope" });
   const response = await app.request("/api/v1/events/evt_mail/comms/preview", {
     method: "POST",
     headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
@@ -272,10 +275,11 @@ test("AC-114 · AC-115 · AC-116 · AC-129 · AC-131 · the audience read path u
     env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES ('st_mail', 'sub_mail', 'track_mail', 1, ?, ?), ('st_mail_2', 'sub_mail_2', 'track_mail', 1, ?, ?)").bind(NOW, NOW, NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_mail_2', 'sub_mail_2', 'per_mail_2', 'speaker', 0, ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('task_template_mail', 'evt_mail', 'Speaker task', 'acknowledge', 'Acknowledge', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    // clock-check: allow — deliberately already past, and a moment pinned in the past stays past; the overdue count cannot change with the date
     env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, due_at, status, created_at, updated_at, cancelled_at) VALUES ('task_mail_overdue', 'evt_mail', 'per_mail_2', 'sub_mail_2', 'task_template_mail', 'Speaker agreement', 'acknowledge', ?, 'open', ?, ?, NULL), ('task_mail_cancelled', 'evt_mail', 'per_mail', 'sub_mail', 'task_template_mail', 'Cancelled task', 'acknowledge', ?, 'open', ?, ?, ?)").bind(NOW - 60 * 60_000, NOW, NOW, NOW - 60 * 60_000, NOW, NOW, NOW),
   ]);
 
-  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-audience-test", now: NOW });
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-audience-test" });
   const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
   const response = await app.request(
     "/api/v1/events/evt_mail/comms/audience?status=accepted&track=track_mail&format=fmt_mail&per_page=10",

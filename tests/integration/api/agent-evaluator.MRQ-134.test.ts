@@ -137,6 +137,7 @@ async function seedFixture(): Promise<void> {
       `INSERT INTO evaluation_plans (id, event_id, name, instructions, scale_min, scale_max, status, created_at, updated_at)
        VALUES (?, ?, 'Agent evaluation plan', 'Read the record, then recommend.', 1, 5, 'open', ?, ?)`,
     ).bind(PLAN_ID, EVENT_ID, NOW, NOW),
+    // clock-check: allow — no code compares evaluation_rounds.opens_at/closes_at to a clock; the round window is stored and echoed, never enforced
     env.DB.prepare(
       `INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, committee_id, target_reviews_per_submission, opens_at, closes_at, created_at, updated_at)
        VALUES (?, ?, 0, 'Initial screen', 'scorecard', 0, ?, 3, ?, ?, ?, ?)`,

@@ -80,6 +80,7 @@ beforeEach(async () => {
     env.DB.prepare(`INSERT INTO submissions
       (id, event_id, form_id, kind, title, abstract, status, origin, submitter_person_id, search_blob, created_at, updated_at)
       VALUES (?, ?, NULL, 'session', 'Taming 40-Minute CI', 'An abstract', 'accepted', 'admin', ?, 'Taming 40-Minute CI', ?, ?)`).bind(SESSION_ID, EVENT_ID, PERSON_ID, NOW, NOW),
+    // clock-check: allow — the anchor is the point here: the ZIP entry names this suite asserts are built from this session's weekday and time (see the note on NOW above)
     env.DB.prepare(`INSERT INTO agenda_items
       (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
       VALUES ('agenda_mrq117', ?, ?, 'session', ?, 30, ?, 0, ?, ?)`).bind(EVENT_ID, SESSION_ID, NOW + 2 * 60 * 60_000, ROOM_ID, NOW, NOW),

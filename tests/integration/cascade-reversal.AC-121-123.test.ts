@@ -40,6 +40,7 @@ async function seedFixture(): Promise<void> {
       `INSERT INTO people (id, org_id, email, name, created_at, updated_at)
        VALUES ('person-reversal-speaker', 'org-reversal', 'speaker@example.com', 'Ada Speaker', ?, ?)`,
     ).bind(NOW, NOW),
+    // clock-check: allow — every deadline in this suite is read back through enqueueOverdueTaskReminders(env.DB, NOW + 2_500), an injected clock that cannot drift
     env.DB.prepare(
       `INSERT INTO task_templates
         (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at)
@@ -75,6 +76,7 @@ async function seedFixture(): Promise<void> {
         ('participation-cancel', 'sub-cancel', 'person-reversal-speaker', 'speaker', 0, ?, ?),
         ('participation-retain', 'sub-retain', 'person-reversal-speaker', 'speaker', 0, ?, ?)`,
     ).bind(NOW, NOW, NOW, NOW),
+    // clock-check: allow — these due dates are only ever compared against the NOW this suite hands the reminder trigger, never against the wall clock
     env.DB.prepare(
       `INSERT INTO speaker_tasks
         (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status,
@@ -84,6 +86,7 @@ async function seedFixture(): Promise<void> {
         ('task-cancel-done', 'evt-reversal', 'person-reversal-speaker', 'sub-cancel', 'template-reversal', 'Done cancel task', 'acknowledge', 'Done', ?, 'done', ?, NULL, NULL, 'marquee', NULL, ?, ?),
         ('task-retain-open', 'evt-reversal', 'person-reversal-speaker', 'sub-retain', 'template-reversal', 'Open retain task', 'acknowledge', 'Open', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)`,
     ).bind(NOW + 7 * 86_400_000, NOW, NOW, NOW + 7 * 86_400_000, NOW, NOW, NOW, NOW + 7 * 86_400_000, NOW, NOW),
+    // clock-check: allow — the only reads of this agenda row are negative (a 404 and a not.toContain), which time can strengthen but not break
     env.DB.prepare(
       `INSERT INTO agenda_items
         (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
@@ -177,6 +180,7 @@ test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and
   expect(cancelIcs?.ics_body).toContain("UID:uid-cancel\r\n");
   expect(cancelIcs?.ics_body).toContain("SEQUENCE:2\r\n");
 
+  // clock-check: allow — this due date exists to be overdue relative to the NOW passed on the next line, not relative to today
   await env.DB.prepare(
     "UPDATE speaker_tasks SET due_at = ? WHERE id = 'task-retain-open'",
   ).bind(NOW - 1_000).run();
@@ -217,6 +221,7 @@ test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and
   expect(restorationAudit).toMatchObject({ actor_person_id: ACTOR.personId, actor_kind: ACTOR.kind, created_at: NOW + 3_000 });
   expect(JSON.parse(restorationAudit?.after_json ?? "{}")).toMatchObject({ created: 0, restored: 1, rows: 1 });
 
+  // clock-check: allow — reconciliation is driven by the explicit NOW + 5_000 in these bindings, not by Date.now()
   await env.DB.prepare(
     `INSERT INTO task_templates
       (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at)
