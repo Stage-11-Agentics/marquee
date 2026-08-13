@@ -97,7 +97,7 @@ describe.sequential("MRQ-170 submitter editing", () => {
 
   beforeAll(async () => {
     await seed();
-    const session = await createSession(env.DB, { personId: OWNER_ID, roleHint: "owner", userAgent: "mrq-170-test", now: NOW });
+    const session = await createSession(env.DB, { personId: OWNER_ID, roleHint: "owner", userAgent: "mrq-170-test" });
     ownerCookie = `mq_session=${session.id}`;
   });
 
