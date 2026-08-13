@@ -24,6 +24,28 @@ Working tree: `Marquee-worktrees/mrq-auto-eval`. Board: pinned via `LATTICE_ROOT
    to the anchor sha and raise a c11 flag. That is one of the two cases where you
    wake the operator.
 
+## Your first act: bring up the other two
+
+Nothing else launches them. Do this before you start watching — the warden has PRs to
+drain and the critic has a whole axis nobody is covering, and neither can start until you
+make them exist.
+
+```sh
+c11 launch-agent --type claude-code --model sonnet --workspace <ws> --suppressed \
+  --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee \
+  --prompt-file sequence/auto-eval/prompts/warden.md
+
+c11 launch-agent --type claude-code --model opus --workspace <ws> --suppressed \
+  --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee \
+  --prompt-file sequence/auto-eval/prompts/craft-critic.md
+```
+
+Both `--suppressed`, because you own their completion and their recoverable blockers — that
+is the contract suppression creates, and it obliges you to give them a way back to you and
+to handle what they report. Confirm both surfaces came up before you move on. If a launch
+fails, fix it and retry; do not proceed one-legged and do not silently drop the critic,
+which is the one whose absence nothing else will reveal.
+
 ## The loop
 
 ```sh
