@@ -92,6 +92,18 @@ function isNotFound(error: unknown): boolean {
 }
 
 /**
+ * A refusal the operator can answer: the request reached the conference, was
+ * understood, and was declined on its merits. A 404 is excluded because the
+ * record really is gone, and 401 because the seat is — both are the page's
+ * problem, not the button's.
+ */
+function isRefusal(error: unknown): boolean {
+  return error instanceof MarqueeApiError
+    && error.status >= 400 && error.status < 500
+    && error.status !== 404 && error.status !== 401;
+}
+
+/**
  * What saving actually does, said in the header rather than discovered after.
  * The three cases are genuinely different consequences, and a single generic
  * line would be wrong in two of them.
@@ -271,6 +283,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantEmail, setNewParticipantEmail] = useState("");
   const [participantError, setParticipantError] = useState("");
+  const [actionError, setActionError] = useState<{ action: string; message: string } | null>(null);
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
   useEffect(() => {
@@ -343,13 +356,25 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     await participantWrite(`remove-participant-${participationId}`, `/participants/${encodeURIComponent(participationId)}`, { method: "DELETE" }, PARTICIPANT_DELETE_ROUTE);
   };
 
+  /**
+   * A read that fails means the record cannot be shown. A write that is refused
+   * means the record is fine and one action was declined — and the server's
+   * refusals here are hand-written sentences an organizer can act on ("That
+   * change would leave the program in a state it cannot review from"). Sending
+   * both down the same path replaced the whole record with a full-page error
+   * card the moment a guardrail did its job, so a correct refusal read as the
+   * record being gone. Recoverable refusals now answer beside the control that
+   * asked; everything else still takes the page, because then it is true.
+   */
   const act = async (name: string, path: string, init: RequestInit = {}, route = SUBMISSION_ROUTE) => {
     setBusy(name);
+    setActionError(null);
     try {
       await apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route });
       reload();
     } catch (error: unknown) {
-      setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
+      if (isRefusal(error)) setActionError({ action: name, message: errorSummary(error) });
+      else setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
     } finally { setBusy(""); }
   };
 
@@ -522,6 +547,10 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const canEditParticipants = record.actions.can_edit_participants;
   return <div class="submission-record-page">
     <PageHeader title="Submission record" copy={`${record.id} · ${record.kind === "session" ? "Session" : "Abstract"} · ${record.origin} origin`} actions={<Chip tone={headerChipTone(record)}>{record.stage_label}</Chip>} />
+    {/* An assignment refusal answers inside the evaluation panel; every other
+        declined action answers here, where the record is still on screen. */}
+    {actionError && !actionError.action.startsWith("assign-") && !actionError.action.startsWith("remove-")
+      && <div class="record-refusal" role="alert"><strong>That action was not applied</strong><span>{actionError.message}</span></div>}
     <div class="record-layout">
       <div class="record-main stack">
         <Card><CardBody><div class="record-summary"><div><span class="eyebrow">Program record</span><h2>{record.title}</h2><p>{record.abstract || "—"}</p></div><div class="record-summary-meta"><Chip>{statusLabel(record.status)}</Chip><span class="tabular">{record.time_in_stage}</span><span>{record.bypass_evaluation ? "Evaluation bypassed" : "Evaluation required"}</span></div></div><div class="record-meta-grid"><span><small>Origin</small><strong>{statusLabel(record.origin)}</strong></span><span><small>Submitted</small><strong>{moment(record.submitted_at)}</strong></span><span><small>Format</small><strong>{record.format?.name ?? "—"}</strong></span><span><small>Wave</small><strong>{record.wave?.name ?? "—"}</strong></span><span><small>Routing rule</small><strong>{record.routing?.name ?? "—"}</strong></span></div>{record.slot && <div class="record-slot"><div class="record-slot-summary"><strong>{record.slot.day} · {record.slot.time} · {record.slot.room}</strong><span>{record.slot.building} · {record.slot.duration_min} min</span></div><div class="record-slot-publication"><Chip class="record-publication-chip" tone={record.slot.is_published ? "success" : "warning"}>{record.slot.is_published ? "Live on the public site" : "Not yet public"}</Chip><div class="record-publication-action" aria-live="polite">{publicationRequest ? <div class="record-publication-confirm" role="group" aria-labelledby="record-publication-confirm-title"><strong id="record-publication-confirm-title">{publicationRequest === "publish" ? "Publish this session?" : "Remove this session from the public site?"}</strong><span>{publicationRequest === "publish" ? "This Session's title, time, room, speakers, and description become public immediately." : "This Session disappears from the public agenda and embeds immediately."}</span><div class="record-publication-confirm-actions"><Button type="button" small variant={publicationRequest === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => void changePublication(publicationRequest === "publish")}>{busy === publicationRequest ? (publicationRequest === "publish" ? "Publishing…" : "Removing…") : publicationRequest === "publish" ? "Publish this session" : "Remove from public site"}</Button><Button type="button" small variant="ghost" disabled={Boolean(busy)} onClick={() => setPublicationRequest(null)}>Cancel</Button></div></div> : publicationAction ? <Button type="button" small class="record-publication-trigger" variant={publicationAction === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => setPublicationRequest(publicationAction)}>{publicationAction === "publish" ? "Publish this session" : "Remove from public site"}</Button> : <span class="record-publication-action-placeholder" aria-hidden="true" />}</div></div></div>}</CardBody></Card>
@@ -578,7 +607,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           {round.evaluations.some((evaluation) => evaluation.abstained) && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => evaluation.abstained).length} conflict{round.evaluations.filter((evaluation) => evaluation.abstained).length === 1 ? "" : "s"} declared</small></div>}
           {round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}
           {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
-          <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>
+          <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>
         </section>) : <span class="subtle">No evaluation rounds configured</span>}</div></CardBody></Card>
       </aside>
     </div>
