@@ -1,0 +1,1 @@
+Board reconciliation 2026-08-12: verified DONE. PR #75 (mrq-106-wave0-sweep) merged 2026-08-12T14:14:29Z; merge commit ccb78850 confirmed an ancestor of github/main via 'git merge-base --is-ancestor'. Ticket had drifted at pr_open. No open or closed-unmerged PRs exist on the repo. Status corrected to reflect merge, not PR-open.

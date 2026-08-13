@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-12T08:52:51Z",
+  "created_by": "agent:delegator-mrq-124",
+  "custom_fields": {
+    "url": "https://github.com/Stage-11-Agentics/marquee/pull/87"
+  },
+  "id": "art_01KZTJS9DSEXW25K6BWAE2YBCF",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Draft PR opened from exact green local gate head 39263db917e3fb84bdc87a5e741fee6e33c97bfb",
+  "tags": [],
+  "title": "GitHub PR #87",
+  "token_usage": null,
+  "type": "reference"
+}

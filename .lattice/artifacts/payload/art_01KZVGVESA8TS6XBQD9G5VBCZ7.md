@@ -1,0 +1,32 @@
+MRQ-132 shipped as PR #102 (https://github.com/Stage-11-Agentics/marquee/pull/102), six commits on mrq-132-attendee-schedule off github/main@6d8ee25. NOT deployed — merging does not ship (DEPLOY.md), and nobody asked for a deploy.
+
+WHAT SHIPPED, against the ratified prototype
+- Star in a fixed 40px leading rail on every agenda row and on /s/:slug; gold-on-ink starred, quiet outline unstarred, 110ms pulse. SSR ships it state-unknown; the module flips it in a slot that already exists.
+- Header segments 'Conference agenda | ★ My schedule (n)' on every public page, count in a 22px fixed slot.
+- /agenda?view=mine as a real URL: at-a-glance panel (three day columns on a real axis, overlapping picks in half-width lanes, red NOW rule on the event clock, NEXT outlined), viewport-clamped hover cards on hover and focus, quiet overlap chips, the export row, and honest empty states. The itinerary deliberately renders the WHOLE programme and ignores facets — an itinerary built from a filtered agenda would count a fraction of the attendee's picks and call it their schedule.
+- Origin-preserving back-nav with the originating segment still lit.
+- /s/:slug: star + Add to calendar (.ics/Google/Outlook) + 'Getting there' as a real Google Maps directions link.
+- D1 public_schedules + POST/GET/PUT /api/v1/public/schedules and the live feed. Read is the code; write is the key (returned once, stored as SHA-256, constant-time compared, scoped to the code's own event). Share link, sync link with the key in the fragment, import-as-copy, and a QR drawn client-side because the key must never reach a server.
+- /agenda/agents: the For-agents doc as a fetchable page rather than the prototype's modal, since its entire audience is machines.
+
+DECISIONS A REVIEWER SHOULD KNOW
+1. The feed is /schedules/{code}/calendar.ics, not /schedules/{code}.ics. A documented '{code}.ics' registers as the Hono pattern ':code.ics' — a parameter literally named 'code.ics' matching any segment — which shadows the sibling JSON route and 400s both URLs. Measured before writing the route. Same for /sessions/{slug}/calendar.ics.
+2. The prototype's entrance sentence is buildings.access_note, which AC-240/252/253 keeps off public surfaces. The ruled behaviour ('Getting there links to Maps, building + address as destination') shipped intact; a test asserts the note stays out of the anonymous JSON too.
+3. No tests/e2e specs: that directory is a repo-wide switch (first spec flips npm run e2e from stub to 'requires MARQUEE_E2E_URL or throw') that MRQ-50 owns. Coverage is integration tests plus the browser validation gate.
+4. Rate limiting: the framework's rateLimit policy is vocabulary only — no limiter adapter exists in this repo, every route gets allowAllRateLimiter. Rather than leave the one endpoint that writes durable rows for an anonymous caller unbounded, creation carries a local KV fixed window (30/hour/IP). The repo-wide gap is unchanged and is called out in the PR.
+
+THE INDEPENDENT REVIEW, AND WHAT IT CAUGHT
+The auto code-review returned FAIL with four majors, all real, all fixed in 133eea5e and each proven in a browser: a pulled talk permanently broke every export path (422 now names unknownSessionIds; the client prunes and retries — verified 4 → 3 with a working share sheet); the debounced PUT swallowed non-ok responses so the feed could go stale forever (now checked, remembered, re-sent on visibilitychange/online — verified device 2 / server 3 offline → server 2 on return); the count read a hard 0 on /speakers, /p/:slug and /agenda/agents (now 3, 3, 3); and the inert rate limit above. Eight minors also fixed: in-flight toggles reaching the code, a ticking NOW rule, an error slot that does not eat the sheet's copy, Tab trapping and focus restore, midnight-crossing geometry, and a sync link that announces itself instead of adopting in silence.
+
+Two re-runs of the review after the fixes both TIMED OUT at the harness's 600s cap without producing an artifact — the diff is ~2,900 lines. That is a harness limit, not a verdict; I stopped re-firing rather than burn 10 minutes a try. A second pass is worth running if the orchestrator wants one.
+
+VALIDATION (evidence attached: transcript, 14 screenshots, the downloaded .ics, the briefing, the QR PNG, and the three harnesses)
+Driven end to end against a real dev worker with seeded data, Chromium 1440x900 and an iPhone 13 profile at 390px: star → count → reload → itinerary → glance/lanes/chips/hover → phone QR → share → briefing → .ics → back-nav → for-agents → a friend importing a copy → a phone adopting the sync link and pushing an unstar through to the shared code. Zero page errors. Zero horizontal overflow at 375/390/768 on all four public surfaces. The QR lifted off the live canvas decodes back to the exact sync URL with zbarimg.
+
+The QR encoder is worth one line of institutional memory: it had two bugs that produced perfectly QR-shaped codes decoding to NOTHING (a transposed format-information strip; alignment patterns skipped where they cross a timing line, which only bites at v7+). Neither is visible by reading the code or looking at the image — both were caught by decoding the output with zbarimg and OpenCV. A golden-matrix unit test pins it so the next change has to redo that verification.
+
+Also chased and dismissed: starred stars painting white in the c11 embedded browser. Not a CSS or ARIA bug — the pane's animation timers were throttled so the 110ms background transition never advanced. I briefly 'fixed' it by moving the paint to a class, then reverted once I had the real cause; the prototype's aria-pressed selectors are what shipped.
+
+GATE: npm test 729 passed; npm run pr-gate --ticket=MRQ-132 PASS (45.2s of a 120s budget). One earlier gate run tripped the 45s suite objective at 49.2s with 729 green and load average 25 on 16 cores; a clean re-run came in at 32.6s.
+
+LEFT UNDONE, deliberately: no deploy; no e2e specs (see 3); no retention sweep for schedule rows — nothing deletes them outside a demo reset, which is worth a follow-up ticket. The worktree still holds three untracked drive*.review.mjs scratch files written by the review agent into my worktree; they are not mine to delete and are not in any commit.

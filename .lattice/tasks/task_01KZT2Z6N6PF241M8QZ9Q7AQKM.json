@@ -61,10 +61,15 @@
       "id": "ev_01KZT6P575YKHGZW4H4065WWPK",
       "role": "review",
       "source_type": "comment"
+    },
+    {
+      "id": "art_01KZT6VHZ1VQHTVCX6YNR0J1BQ",
+      "role": "review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZT2Z6N6PF241M8QZ9Q7AQKM",
-  "last_event_id": "ev_01KZT6P5GRPBPPVXT5ZP448D57",
+  "last_event_id": "ev_01KZT6VHZ3TGG0VJGVAGGWWX0J",
   "last_status_changed_at": "2026-08-12T05:21:26Z",
   "linked_files": [],
   "priority": "medium",
@@ -76,6 +81,6 @@
   "tags": null,
   "title": "Conference name is a dead-end stub, and the decision dialogs explain themselves in engineer",
   "type": "bug",
-  "updated_at": "2026-08-12T05:21:26Z",
+  "updated_at": "2026-08-12T05:24:23Z",
   "urgency": null
 }

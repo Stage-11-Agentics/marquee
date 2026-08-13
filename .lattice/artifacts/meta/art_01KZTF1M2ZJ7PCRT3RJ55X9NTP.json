@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T07:47:30Z",
+  "created_by": "agent:delegator-mrq-112",
+  "custom_fields": {},
+  "id": "art_01KZTF1M2ZJ7PCRT3RJ55X9NTP",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTF1M2ZJ7PCRT3RJ55X9NTP.md",
+    "size_bytes": 13551
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Exact-head local runtime and targeted checks passed; c11 browser N/A due socket timeout.",
+  "tags": [],
+  "title": "MRQ-112 validation d7f41b8",
+  "token_usage": null,
+  "type": "note"
+}

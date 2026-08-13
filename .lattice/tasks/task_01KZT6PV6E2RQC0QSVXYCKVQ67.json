@@ -1,7 +1,7 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": "high",
   "created_at": "2026-08-12T05:21:48Z",
   "created_by": {
@@ -15,21 +15,47 @@
   },
   "custom_fields": {},
   "description": "The submission record is the screen the walkthrough video spends the most time\non, and three things about it read wrong to the operator on the live site\n(2026-08-12). All three live in one file, so they are one ticket.\n\n## 1. The breadcrumb is not a breadcrumb\n\n`src/ui/shell/Topbar.tsx:14`:\n\n    <div class=\"breadcrumbs\">{eventName}&nbsp; / &nbsp;<strong>{routeName}</strong></div>\n\nIt renders as `AIE NYC 2026 / Submission record` but it is a plain `<div>` \u2014\nnothing in it is clickable. The operator kept trying to use it:\n\n> *\"I keep wanting to click the AIE NYC 2026 to the left of the slash to return\n> to whatever screen I was in. So for example, inside of submission record, I\n> want to click that to go back.\"*\n\n**Required outcome.** Make the breadcrumb a real one, with a middle crumb:\n\n    AIE NYC 2026  /  Submissions  /  Submission record\n\n- `AIE NYC 2026` \u2192 `/dashboard` (Program home).\n- `Submissions` \u2192 `/submissions` (the list). Only for routes that sit under\n  submissions; do not invent a false parent for routes that have none.\n- The trailing crumb stays the current route name, not a link.\n\n**Then delete the redundant \"Back to submissions\" button** at\n`SubmissionRecordPage.tsx:152`. Operator decision, asked and answered: the\nbreadcrumb replaces it, so there is one obvious way back instead of two controls\nsix inches apart. Keep the button on the **error** state (line 149) \u2014 there is no\nrecord there to breadcrumb from.\n\n**Ownership warning.** MRQ-99 / open PR #53 makes the *sidebar* conference name\nlink to the dashboard (`src/ui/shell/Sidebar.tsx`). Same destination, different\nelement, and that is fine \u2014 but **do not touch `Sidebar.tsx`**. Rebase onto\n`github/main` immediately before opening your PR; #53 also touches this file.\n\n## 2. The record title is rendered twice\n\n`SubmissionRecordPage.tsx:152` puts `record.title` in the gray `PageHeader`.\nLine 155 puts the *same* `record.title` in the white summary card, under the\n`Program record` eyebrow. The operator read the duplicate as a layering mistake:\n\n> *\"Right now, 'Governing financial AI across regulated teams' \u2014 might as well\n> move that into the white box, because outside in the gray it seems like it's\n> more related to subtitles or admin. Inside of the white box is where the\n> content of that specific item is.\"*\n\nHe is describing a real rule, and the code already half-implements it. **Remove\nthe title from the gray `PageHeader`**; the white card's `<h2>` already carries\nit. The gray band keeps identity/context (`record.id \u00b7 Session \u00b7 organizer\norigin`) and the state chip. Nothing is \"moved\" \u2014 a duplicate is deleted.\n\n## 3. Decision state is invisible, and the buttons offer a decision already made\n\nThe operator's exact flow: open *Debugging Open-Model Infrastructure from\nPrototype to Production* \u2192 **Reject** \u2192 **Reject and notify** \u2192 returns to the\nrecord.\n\n> *\"I know the status on the top right hand corner says rejected, but the record\n> action, they're all still there. It's very unclear.\"*\n\n**Mechanism.** `SubmissionRecordPage.tsx:157` renders **Accept / Maybe / Reject\nunconditionally** whenever `record.actions.can_decide`. The only signal that a\ndecision stands is `decidedNote(record.decisions[0])` \u2014 MRQ-86's cue, PR #28,\nmerged \u2014 which renders `Decided Rejected \u00b7 Aug 12, 2026` into a **`.subtle`**\nslot in the card header. A low-contrast caption is losing against three\nfull-weight buttons, one of which is `variant=\"danger\"`. The cue is there; it is\njust outranked.\n\nThe state also appears a third time as a plain `<Chip>` in the gray header\n(`record.stage_label`, line 152) with no tone unless the stage is `published` or\n`waved` \u2014 so a **Rejected** record's most authoritative status indicator is an\nuntoned chip in the corner.\n\n**Required outcome \u2014 four parts:**\n\n1. **Name the standing decision inside the Record action card**, at the weight\n   of content rather than a caption. The organizer must be able to tell in one\n   glance that this is a *change* of decision, not a first one.\n2. **Give the header state chip real visual prominence**, with a tone that\n   distinguishes a terminal negative (Rejected / Withdrawn) from an accepted or\n   in-flight record. Operator: *\"we should make it more prominent, the state in\n   the top right corner.\"*\n3. **Do not offer the decision that is already in effect.** A Rejected record\n   must not show a live **Reject** button. Remove or disable-with-explanation\n   the current decision's own button; the other two stay live.\n4. **Never let the UI post a decision the server will refuse.** Re-submitting\n   the standing decision reaches\n   `src/routes/submission-decisions.routes.ts:88`, which throws\n   `ApiError.unprocessable(...)` \u2014 the operator saw this as the change *\"would\n   leave the program in a state that it could not be in.\"* An impossible action\n   should be unavailable on screen, not explained in an error after the click.\n\n### The trap \u2014 read this before you touch the buttons\n\n**MRQ-83 (PR #21) deliberately restored decision buttons on declined,\nwaitlisted and withdrawn records so an organizer can change their mind**, and\n`can_decide` includes `declined`. MRQ-86's ticket says in terms: *\"the re-decide\naffordance itself is intentional. Do not undo that.\"*\n\nSo the distinction this ticket turns on is narrow and you must hold it exactly:\n\n- **Changing a decision stays possible.** Rejected \u2192 Accept must still work.\n- **Re-asserting the decision already in effect goes away.** Rejected \u2192 Reject\n  is a no-op the server rejects, and it must not be offered.\n\nDo not change `can_decide`. Do not add a confirmation step \u2014 the decision dialog\nis already one, and R7 grades speed.\n\n## 4. Also seen once: \"The record is not available\"\n\nThe operator hit the `state.kind === \"error\"` branch (line 149) on a record that\nthen loaded fine on retry:\n\n> *\"I just did submission record, the record is not available \u2014 here I'm going to\n> do it again.\"*\n\n**Investigate, do not guess.** Reproduce if you can; if you cannot, make the\nfailure legible \u2014 that branch currently prints `state.message` with no request\nid or status code, so a transient fetch failure and a real 404 look identical to\nboth the organizer and to us. At minimum, distinguish \"not found\" from \"could\nnot reach the server\" and keep Retry. Report what you find in the PR even if the\nanswer is \"could not reproduce.\"\n\n## Constraints\n\n- `DESIGN.md` Flight Deck tokens and voice. **Elements never jump**: swapped\n  strings reserve their space, the card must not change height when a decision\n  is taken on-screen, and `record-copy.ts` already documents this invariant for\n  the header slot \u2014 keep its test passing or replace it with a stronger one.\n- Organizer's language (`PHILOSOPHY.md`). No status slugs, no field names.\n  `Maybe` is the waitlist's display name.\n- No API change and no migration are needed: `record.decisions` is already on\n  the payload, newest-first (`submission-record.routes.ts:245`).\n- Test titles must begin `AC-<n> \u00b7 ` or `CONTRACT \u00b7 ` or `trace:ac` fails.\n- Suite budget 45s, gate budget 120s.\n\n## Acceptance criteria\n\n- AC-1 \u00b7 Both breadcrumb crumbs are links: `AIE NYC 2026` \u2192 `/dashboard`,\n  `Submissions` \u2192 `/submissions`, from a submission record.\n- AC-2 \u00b7 The `Back to submissions` button is gone from the loaded record header\n  and still present on the error state.\n- AC-3 \u00b7 The record title appears exactly once on the page, in the white card.\n- AC-4 \u00b7 On a decided record, the Record action card names the standing decision\n  at content weight, not as a `.subtle` caption.\n- AC-5 \u00b7 On a decided record, the button for the decision already in effect is\n  not offered; the other two decisions remain available and still work.\n- AC-6 \u00b7 The header state chip is visually distinct for a terminal-negative\n  record versus an accepted one.\n- AC-7 \u00b7 The Record action card is the same height decided and undecided, and\n  does not change height when a decision is taken on-screen.\n- AC-8 \u00b7 Changing a decision on a rejected record (Rejected \u2192 Accept) still\n  succeeds \u2014 MRQ-83 is not regressed.\n\n## Verification\n\nDrive it in a browser locally: open an undecided record and a rejected record\nside by side, screenshot both; reject a record on-screen and screenshot the\nresult; then change that rejected record to Accept and show it succeeding.\nAttach all four. A passing test does not close this \u2014 the defect is that the\nscreen is unclear.\n\n## File ownership\n\nOWNS: `src/ui/submissions/SubmissionRecordPage.tsx`,\n`src/ui/submissions/record-copy.ts`, `src/ui/submissions/record.css`,\n`src/ui/shell/Topbar.tsx`, and its own tests.\nMUST NOT TOUCH: `src/ui/shell/Sidebar.tsx` or `src/ui/health/**` (open PR #53),\n`src/ui/submissions/SubmissionsPage.tsx` (open PRs #54, #56), `scripts/seed/**`\n(MRQ-100), `can_decide` in `src/routes/submission-record.routes.ts`, or any\nmigration.\n\n**Rebase onto `github/main` immediately before opening the PR.** PR #53 touches\n`SubmissionRecordPage.tsx` and is expected to merge first.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-12T05:51:09Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZT82PYM10DP8Q1J70GF4NKJ",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT82Q1S5HPYWWRB24MXJB2Y",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT82Q52XZ8VEGG19BCAPDTK",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT82Q8E0MVEWY63BBFJ2ED6",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZT82QBNRSA5JNJPNV141F4G",
+      "role": null,
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZT6PV6E2RQC0QSVXYCKVQ67",
-  "last_event_id": "ev_01KZT6PV6FMZNQ94G5M9XAMA96",
-  "last_status_changed_at": "2026-08-12T05:21:48Z",
+  "last_event_id": "ev_01KZT8CTFC4ACS7F4H5Z74GWBY",
+  "last_status_changed_at": "2026-08-12T05:51:09Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-101",
-  "status": "backlog",
+  "status": "done",
   "tags": null,
   "title": "Submission record: the breadcrumb is dead, the title is rendered twice, and a rejected record still offers a Reject button",
   "type": "bug",
-  "updated_at": "2026-08-12T05:21:48Z",
+  "updated_at": "2026-08-12T05:51:17Z",
   "urgency": null
 }

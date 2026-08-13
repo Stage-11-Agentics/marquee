@@ -1,0 +1,72 @@
+{
+  "assigned_to": "agent:delegator-mrq-125",
+  "branch_links": [],
+  "c11_surface": "surface:430",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 5,
+  "complexity": "low",
+  "created_at": "2026-08-12T07:07:38Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "Protects CFP-03 (w3), kills two judge defect lines. (1) Wire eventName from the API in the existing AppShell boot path (useIdentity/useSeat already fetch there) and make the prop REQUIRED \u2014 AppShell({eventName = 'AIE NYC 2026'}) is never passed anywhere; the default is the only value that exists; MRQ-101 rebuilt the breadcrumb structure but not the name source. Same fix in DeliveryHealthShell.tsx:21. (2) Reconcile ALL FIVE stale brand strings (landing footer 'Built for AIE NYC 2026' + hero note are hardcoded on the run's highest-traffic page; seeded form name '2026 CFP' collides with conference-year vocabulary \u2014 rename to 'Call for Speakers'). (3) Add 'AIE NYC 2026' as a forbidden literal outside seed/fixtures in scripts/checks/ so it cannot grow back. Human lens: an organizer who renames their conference and watches the old name persist concludes the save silently failed \u2014 the run-1 judge recorded exactly that as 'a stale cached label bug'. Full spec: section T-N1. Register rows 46,48.",
+  "done_at": "2026-08-12T18:48:58Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDJYQGNCP7G8E6PJG9Z9X8",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTDSJRYQHSNB7W44BHJMGF8",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTDV3P2TMP35FTFD2K5BBSC",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTE3CVV29N0KZ9SAHXG8KSW",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTE40DV7MQAMNT14NY711PB",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTE54JBXEVT2EPVVHZZK7N0",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWSS3J55ATPZ8TNWSMBQ7",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWSS3J55ATPZ8TNWSMBQ6",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRMD7NBWRGQWXR2SG115Q",
+  "last_event_id": "ev_01KZVMWSS3J55ATPZ8TNWSMBQA",
+  "last_status_changed_at": "2026-08-12T18:48:58Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-125",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Shell truth: event name, branding, IA",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:58Z",
+  "urgency": null
+}

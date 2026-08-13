@@ -30,3 +30,7 @@ The page is anonymous and published-only, deduplicates people who speak in multi
 - Search honesty: directory `q` uses only the existing speaker name/company branch, so a title/abstract match cannot surface an unrelated speaker. Empty search results retain a one-click event-preserving reset.
 - Correctness: deduplicate on stable speaker id before rendering; include `event` in every new directory/embed profile link so two live events cannot silently resolve a profile from the default event.
 - Scope: no modal, headshot seeding, image route, public API endpoint, or organizer navigation is added; MRQ-122 owns the headshot producer/assets while this ticket consumes its projection field.
+
+## Reset 2026-08-12 by agent:delegator-mrq-121
+
+## Reset 2026-08-12 by agent:delegator-mrq-121

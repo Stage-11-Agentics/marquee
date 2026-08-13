@@ -34,3 +34,19 @@ This branch was cut from `github/main` because `github/mrq-115-files-library` wa
 - Self-review PASS: the plan keeps the visible Preparing→Ready artifact as the primary rubric surface, avoids a bare download-only implementation, and makes the server authoritative for event scope and latest-only selection.
 - Self-review PASS: it explicitly defers the parent-specific row/helper names until MRQ-115 is published, preventing a parallel `is_latest` definition or a collision with its selection surface.
 - Self-review PASS: it treats missing deliverables and missing R2 objects as manifest entries, uses STORE streaming to control Worker CPU, and reserves UI status space per the cross-cutting rules.
+
+## Reset 2026-08-12 by agent:delegator-mrq-117
+
+## Reset 2026-08-12 by agent:delegator-mrq-117
+
+## Reset 2026-08-12 by agent:delegator-mrq-117
+
+## Reset 2026-08-12 by agent:delegator-mrq-117
+
+## Reset 2026-08-12 by agent:delegator-mrq-117
+
+## Reset 2026-08-12 by agent:delegator-mrq-117
+
+## Reset 2026-08-12 by agent:delegator-mrq-117
+
+## Reset 2026-08-12 by agent:delegator-mrq-117

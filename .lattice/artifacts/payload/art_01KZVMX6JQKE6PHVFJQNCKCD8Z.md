@@ -1,0 +1,1 @@
+Board reconciliation 2026-08-12: verified DONE. PR #28 (mrq-86-decided-record-cue) merged 2026-08-12T00:04:11Z, merge commit a042d14d, confirmed an ancestor of github/main. The ticket sat at pr_open awaiting 'the human merge gate (CODEOWNERS)' per its own 21:41Z comment; that gate has since passed and the PR merged. No open PRs remain on the repo.

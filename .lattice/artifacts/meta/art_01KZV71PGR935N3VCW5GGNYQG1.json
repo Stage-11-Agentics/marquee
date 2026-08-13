@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T14:46:58Z",
+  "created_by": "agent:delegator-mrq-126",
+  "custom_fields": {},
+  "id": "art_01KZV71PGR935N3VCW5GGNYQG1",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZV71PGR935N3VCW5GGNYQG1.md",
+    "size_bytes": 751
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: exact-head final validation at 422f5f5; live Worker rename and submission flow green.",
+  "tags": [],
+  "title": "MRQ-126 final local Worker validation",
+  "token_usage": null,
+  "type": "note"
+}

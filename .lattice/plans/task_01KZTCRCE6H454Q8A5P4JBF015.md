@@ -158,3 +158,45 @@ never the cheap fix.
 None planned. If the migration rebuild collides with `schema-verify`'s 48-table assertion or its
 `*_new` handling, I fall back to `ALTER TABLE ADD COLUMN` with the kind constraint enforced in Zod
 only, and flag it.
+
+---
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+Inline self-review (single-reviewer spawn skipped: 1-min load was 172 at plan time; COMMON.md
+permits inline self-review of the plan). Eight findings, all accepted into the build.
+
+1. **`completed[]` must not be N+1.** `reviewerQueuePayload` is the reviewer's hot path and speed
+   is a feature (R7). Fetch completed rows and their evaluations in **one** joined query chunked
+   the way `queueRows` already chunks (80 ids), not a `reviewForReviewer` call per item.
+   *Accepted.*
+2. **Do not add criteria to `comparisonQueuePayload`.** A comparison round renders no scorecard;
+   the extra query would be pure cost. `round.criteria` is added to `reviewerQueuePayload` only.
+   *Accepted — narrows §3.*
+3. **`criteriaInput` must accept an empty array.** It is `.min(1)` today. With add/remove controls
+   an operator can legitimately clear a round's scorecard (that is exactly round 2's state on main),
+   and `.min(1)` would 422 with a message about a rule the product invented. Relax to allow `[]`;
+   `assertCriteriaTotal` no-ops on empty. *Accepted — amends §2.*
+4. **Renumber positions on every add/remove.** `uq_rubric_criteria_round_position` is a unique
+   index on `(round_id, position)`, and the PUT is delete-all-then-insert inside one `batch()`. If
+   the editor lets positions collide (add after a remove), the batch fails as an opaque conflict.
+   The editor reindexes `0..n-1` on every mutation before sending. *Accepted — amends §4.*
+5. **Date conversion must be UTC-stable.** `opens_at`/`closes_at` are epoch ms;
+   `<input type="date">` speaks `YYYY-MM-DD`. Round-tripping through a local-timezone parse shifts
+   the day, and ABS-01 grades the exact dates (2026-08-01..2026-10-15) — an off-by-one is a
+   visible fail. Parse with `Date.UTC(...)` and format with `timeZone: "UTC"` in the editing
+   controls. (The read-only `formatDate` display elsewhere keeps its America/New_York rendering;
+   only the editable pair changes.) *Accepted — amends §4.*
+6. **Kind changes must not break stored reviews.** Changing a criterion from numeric to select
+   leaves numeric values in already-stored `criteria_scores`. The read-only reopen view renders
+   whatever is stored, coerced to a string, and never assumes the current kind. No data migration,
+   no crash, no silent blank. *Accepted — amends §5.*
+7. **Round cards must not jump** (house rule 7). The inline 422 slot under the date pair is
+   reserved height whether or not an error is present, and the date inputs are fixed-width with
+   tabular numerals. The scorecard *dialog* may grow when a kind is switched — that is deliberate
+   progressive disclosure inside a modal, not a control moving under the operator's cursor.
+   *Accepted — pins §4.*
+8. **Criteria stay additive, never a save gate.** Re-confirmed against CFP-S3, which depends on the
+   existing A/M/D fast path: `saveNext` continues to require only a recommendation. A required-
+   criteria gate would pass no rubric item and would slow the surface for daily human use.
+   *Accepted — already in §5, restated as binding.*

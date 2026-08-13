@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T05:49:29Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZT89GM8KJR1GNA1HPNAPTBS",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT89GM8KJR1GNA1HPNAPTBS.png",
+    "size_bytes": 550376
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Local c11 browser screenshot after clicking owed headline; filtered destination reports matching 610 count.",
+  "tags": [],
+  "title": "MRQ-102 owed destination browser proof",
+  "token_usage": null,
+  "type": "file"
+}

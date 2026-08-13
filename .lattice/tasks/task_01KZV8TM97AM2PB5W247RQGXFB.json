@@ -1,0 +1,80 @@
+{
+  "assigned_to": "agent:delegator-mrq-129",
+  "branch_links": [],
+  "comment_count": 6,
+  "complexity": null,
+  "created_at": "2026-08-12T15:18:04Z",
+  "created_by": "agent:multi-event-design",
+  "custom_fields": {},
+  "description": "One ticket, one delegator, one PR. Contract: sequence/multi-event-design.md (\u00a72 design, \u00a73 rulings) + visual companion prototypes/multi-event/index.html.\n\nREAD sequence/mrq-129-audit.md BEFORE PLANNING. The design's \u00a71 archaeology is pinned to 4b2dc09 and main is at cd907d3 \u2014 34 commits, +17.7k lines past it. The audit corrects it and lists the defects this ticket must not ship. Where the design and the audit disagree, the audit is current.\n\nSCOPE BOUNDARY \u2014 MRQ-105 owns three of these surfaces (operator ruling, 2026-08-12).\nMRQ-105 (branch mrq-105-cold-start) lands FIRST and already ships:\n  - POST /api/v1/events \u2014 `createEvent`, src/routes/event-settings.routes.ts. Org-wide authority via `requireOrgAdmin` (src/lib/auth/org-admin.ts), answered in the handler because a collection route has no {eventId} and the pipeline's grant check returns false without one.\n  - /conferences/new + src/ui/setup/CreateConferencePage.tsx \u2014 the scratch path.\n  - The sidebar \uff0b beside the conference name.\n  - demo_mode inheritance and per-org slug uniqueness (both fixed on that branch).\nMRQ-129 EXTENDS those three. It does not create them. Branch off MRQ-105 or wait for its merge; coordinate before touching event-settings.routes.ts, CreateConferencePage.tsx, or Sidebar.tsx.\n\nSCOPE, in build order:\n\n1. GET /api/v1/events \u2014 NEW, no MRQ-105 counterpart. Org-scoped list of events the caller can read, with role, status, demo_mode, dates, and submission counts. Policy `authenticated` (a `grants` policy 403s every caller on a route with no {eventId} \u2014 src/api/router.ts principalHasGrant). Handler scopes to the principal's org; for a token principal, further intersect with tokenEventAllowed (scope-resolution.ts:105-109) so an event-restricted token sees only its events.\n\n2. Copy engine \u2014 extend POST /api/v1/events with optional `copy_from` + `copy` sets per design \u00a72.3 (formats, tracks, forms-closed, task templates, email templates, eval-plan structure; venues default-off; committees and people-data never). One db.batch. Response reports per-set counts \u2014 the receipt the UI renders. Mandatory corrections from the audit:\n   - Copy by DISCOVERED columns, not a hand-written list. 0009/0010 added columns to rubric_criteria, buildings, and embeds; a literal column list silently stops copying whatever the next migration adds.\n   - NULL evaluation_rounds.committee_id on copy (added by 0010_evaluation_round_committees). Copying it points the new event's round at the source event's committee \u2014 cross-event reviewer authority, and a dangling FK after the org-sweep reset.\n   - REMAP task_templates.form_id -> the copied form. Missing from the design's remap list. CHECK (kind <> 'form' OR form_id IS NOT NULL) means nulling it rolls back the batch, so when any source template has kind='form' the CFP-forms set is a hard prerequisite: auto-check and lock it in the checklist with an inline reason, and 422 (never 500) if the API is called with the illegal combination.\n   - The CFP-forms set also depends on Formats and Tracks whenever a copied field carries config.source (0010_bound_form_options binds them BY NAME). Copying forms without them yields unsubmittable forms over empty dropdowns.\n   - Null the date-bearing columns that do copy, contradicting \u00a72.3's \"nothing date-bearing copies\": forms.opens_at/closes_at and evaluation_rounds.opens_at/closes_at. task_templates.due_at cannot simply be nulled \u2014 CHECK ((due_at IS NULL) <> (due_offset_days IS NULL)) \u2014 so either derive a due_offset_days from the source event's starts_on or skip those templates and report the count in the receipt. Pick one and state it.\n   - State the status a copied evaluation_plan arrives in (the column has no CHECK), the same way forms are explicitly forced closed.\n   - Remaps that are NOT needed, so nobody invents them: form_fields.condition keys on fieldKey, not field id (src/lib/form-conditions.ts:27-36), and form_fields.config carries only source/minItems, no ids.\n\n3. Reset org-sweep \u2014 every WHERE event_id = <seeded demo event> in src/lib/reset-demo/reseed-demo.ts becomes the org-subquery form. Use SHIPPED_DEMO_ORGANIZATION_ID, never a literal: the demo org is org_aie-ny; the design's 'org_demo' is the legacy test fixture. Walk DELETE_PLANS table by table \u2014 three entries are not of the form the rewrite rule assumes:\n   - mirror_outbox is payload-JSON-scoped to one event id, not org-columned.\n   - deleteDemoObjects (reseed-demo.ts:284) is R2-prefix-scoped to uploads/<seeded event>/ and runs BEFORE the batch. Enumerate the org's event ids first, sweep each prefix, then run the batch. R2 and D1 are not atomic with each other; say so rather than rediscovering it.\n   - api_tokens and memberships already delete by org.\n\n4. Event context \u2014 EventProvider in ShellEntry (src/ui/app.tsx), NOT in AppShell. ShellEntry already wraps both render roots and already owns useEventName (shipped by MRQ-125); a provider inside AppShell misses /delivery-health entirely and misses ReviewerPage, which AppShell early-returns before its layout. Boot on GET /events. Precedence ?event= -> sessionStorage -> localStorage -> demo_event_id -> first, and EVERY candidate is accepted only if it appears in the fetched list; a stale id is cleared from both storages (after the org-sweep reset the created event is gone, storage still names it, and resetDemo ends in location.reload()).\n   Sweep all 18 hardcoded evt_aie-ny-2026 sites \u2014 18 on current main, not the design's 16; FilesPage and SpeakersPage are new. Page components take eventId: string REQUIRED. Two are not component props: venue-writer.ts uses default function parameters on loadVenueModel/saveVenueModel, and DeliveryHealthShell is the separate root. QuickSearch already declares eventId required \u2014 only its call site (AppShell.tsx:183) is hardcoded.\n   Specify what a reviewer or speaker seat gets when GET /events returns one event or zero; a required eventId prop with no value to fill it is not a design.\n   Switch = context update + navigate /dashboard with key={eventId} remount, and abort outstanding requests rather than relying on the remount to make late responses harmless.\n\n5. UI \u2014 the switcher POPOVER (MRQ-105 ships only the \uff0b; the conference name is still MRQ-125's div.event-context caption). Promote the caption to a real control per \u00a72.6: LIVE/DRAFT/DEMO chips, dates and submission gauges in mono, upcoming/past groups, arrow/Enter/Escape, filter input only past 8 events. Reconcile .event-context (current) with .event-switcher (prototype CSS) and assert the sidebar's first-nav-row offset is unchanged \u2014 elements never jump. \u2318K gains \"Switch to \u2026\" rows; NO new global chord. Extend MRQ-105's /conferences/new with the three-card choice (scratch \u00b7 from existing \u00b7 Sessionize) and the copy-contract checklist with per-set counts plus the never-copies text. Every field pre-filled and submittable with only a name changed \u2014 no required field empty on first paint. The switcher rewrites event-scoped external links (sidebar \"Conference site\" -> /agenda, \"Speaker portal\") with the current event's slug; today they open event A from event B.\n\n6. Agent surface \u2014 CLI marquee events list / events create --name \u2026 [--from \u2026 --copy \u2026]; SKILL.md gains the \"next year's conference\" recipe. Coordinate with MRQ-105, which owns cli/generate-skill.mjs renderSkill() under a byte-equality test.\n\n7. Teeth \u2014 extend scripts/checks/check-shell-truth.mjs (which already ships the \"AIE NYC 2026\" forbidden literal) with evt_aie-ny-2026, allowlisting seed/fixtures/tests. API tests for the copy remaps and null-outs above, the illegal copy-set combinations, and the org-sweep reset. Smoke: create an event via the UI, open its /submissions and /dashboard \u2014 honest empty states, no 500.\n\n8. Fix the demo-event oracle. src/routes/auth.routes.ts:390 is SELECT * FROM events WHERE demo_mode = 1 ORDER BY created_at ASC LIMIT 1 \u2014 global, no org filter. npm run seed (DEPLOY.md:59, the production path) stamps created_at = FROZEN_NOW = 2026-08-20, in the future, so an event created today sorts FIRST and becomes the demo event for the shell caption, the CLI's default event, this ticket's own precedence chain, and every subsequent eval scenario's boot. Resolve by identity, not by age. Test: with two demo_mode=1 events where the created one has the earlier created_at, /auth/me still returns the seeded event.\n\nOPERATOR HANDOFF (not delegator work): .eval-kit/evalconfig.json submissionNotes currently tells the eval agent \"MULTI-EVENT \u2014 NOT IMPLEMENTED IN THIS BUILD \u2026 do not spend turns hunting for it.\" That paragraph and the ROUTES list must be rewritten before the next run or CFP-17/18 stay not_found regardless of what ships. The file is gitignored third-party.\n\nAC: CFP-17 \u2014 a second event is created and both appear together in the switcher popover, screenshot-able with both rows visible. CFP-18 \u2014 switching observably rescopes every gauge, list, and search; the second event's submissions list is EMPTY, which the YAML accepts as passing (no need to seed data into event B). Reset leaves no created event behind, in D1 and in R2. An event created in the demo org inherits demo_mode = 1 and, with no event_settings row, its allowlist is the empty set so every demo_safe message is suppressed \u2014 note that always_live senders (public-form confirmation, smoke harness) bypass demo_mode by design (consumer.ts:155), which is why copied forms arrive closed.",
+  "done_at": "2026-08-12T17:24:22Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZVCC1AM2WYXP7EEWKJBJ4AG",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVESY3Q5ANFM6RCN6PGN7PG",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVESY6WZQT6NXPYNZYH9W0A",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVESYA0NDNPZYZBQYADB71H",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVESYD3J0QQW4DJAV57JK9E",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVEVTW0B42C8HD76KP5ZPDZ",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVG1X9WVYNAFGQ16P9MSHP8",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVG1X9WVYNAFGQ16P9MSHP7",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZV8TM97AM2PB5W247RQGXFB",
+  "last_event_id": "ev_01KZVG1X9WVYNAFGQ16P9MSHPB",
+  "last_status_changed_at": "2026-08-12T17:24:22Z",
+  "linked_files": [
+    "sequence/multi-event-design.md",
+    "prototypes/multi-event/index.html"
+  ],
+  "needs_human": null,
+  "priority": "high",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-12T15:47:24Z",
+      "created_by": "agent:mrq129-audit",
+      "note": null,
+      "target_task_id": "task_01KZTC093MQJ906BTWGGRBE3SZ",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-129",
+  "status": "done",
+  "tags": null,
+  "title": "Multi-event, end to end \u2014 events API + copy engine, event context, switcher, create flow",
+  "type": "task",
+  "updated_at": "2026-08-12T17:24:22Z",
+  "urgency": null
+}

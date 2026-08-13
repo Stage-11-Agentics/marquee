@@ -57,12 +57,17 @@ async function countPeople(): Promise<number> {
 beforeEach(async () => {
   await applyMigrations();
   const now = Date.UTC(2026, 7, 12, 12, 0, 0);
+  // Fixture data stays pinned to `now` for determinism, but the Worker validates
+  // a session against the real clock — so expiry is measured from now, not from
+  // the fixture date. Anchoring it to `now` expired this file's session 24 hours
+  // after that date and failed every run thereafter.
+  const sessionExpiresAt = Date.now() + 86_400_000;
   for (const row of demoFixtureRows(now)) await env.DB.prepare(row.statement).bind(...row.bindings).run();
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)`,
-    ).bind(SESSION_ID, DEMO_ORGANIZER_PERSON_ID, now + 86_400_000, now, now),
+    ).bind(SESSION_ID, DEMO_ORGANIZER_PERSON_ID, sessionExpiresAt, now, now),
     env.DB.prepare(
       `INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, submitted_at, last_saved_at, created_at, updated_at)
        VALUES (?, ?, 'session', 'A talk that grew a second presenter', 'accepted', 'public', ?, ?, ?, ?, ?)`,

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:32:48Z",
+  "created_by": "agent:mrq-139",
+  "custom_fields": {},
+  "id": "art_01KZVY8S7RKWDS3BSXNV0E2EN0",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVY8S7RKWDS3BSXNV0E2EN0.md",
+    "size_bytes": 3303
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "MRQ-139 landed: PR #122 merged to main at 2026-08-12T21:32:12Z (auto-merge fired on the green rebased head f159f0c7).\n\nWHAT SHIPPED\nOrganizer half, in full. Two routes under program:write -- POST /eve",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

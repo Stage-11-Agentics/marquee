@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:48:58Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMWSS3J55ATPZ8TNWSMBQ6",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMWSS3J55ATPZ8TNWSMBQ6.md",
+    "size_bytes": 365
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE. PR #69 (mrq-125-shell-truth) merged 2026-08-12T07:52:57Z; merge commit 8dd72ef8 confirmed an ancestor of github/main via 'git merge-base --is-ancestor'.",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

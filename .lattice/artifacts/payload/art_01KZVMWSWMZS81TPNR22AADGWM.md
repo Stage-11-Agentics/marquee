@@ -1,0 +1,1 @@
+Board reconciliation 2026-08-12: verified DONE. PR #92 (mrq-126-bound-options) merged 2026-08-12T14:51:03Z; merge commit a22d454e confirmed an ancestor of github/main via 'git merge-base --is-ancestor'. Ticket had drifted at pr_open. The repo has zero open and zero closed-unmerged PRs, so nothing is waiting on review. Status corrected to reflect merge, not PR-open.

@@ -1,0 +1,1 @@
+Board reconciliation 2026-08-12: verified DONE. PR #90 (mrq-110-pools-recusal) merged 2026-08-12T15:17:39Z; merge commit cd907d32 confirmed an ancestor of github/main via 'git merge-base --is-ancestor'. Ticket had drifted at pr_open. The repo has zero open and zero closed-unmerged PRs, so nothing is waiting on review. Status corrected to reflect merge, not PR-open.

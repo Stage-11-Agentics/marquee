@@ -1,0 +1,112 @@
+{
+  "assigned_to": "agent:delegator-mrq-112",
+  "branch_links": [],
+  "c11_surface": "surface:434",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 3,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:32Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "SPK-08 (w3), SPK-10 (w2), CNT-10 half. STACKED on the files-library ticket (consume its listVersionsFor helper + FileVersions component; write NO attachments SQL of your own). (1) Serve path for person_headshot attachments: widen the preview handler (uploads.routes.ts:604-608 joins strictly via submission_answers so person headshots are unreachable) or add GET .../people/{personId}/headshot. (2) Render the image in THREE places: portal profile (the speaker currently never sees their own uploaded headshot render \u2014 after reload they get descriptive text; SPK-08 fails on the speaker half too), roster row, speaker record. Initials fallback stays. (3) Files panel on the speaker record: person-owned attachments + their task uploads \u2014 filename, size, uploaded-at, download. You own read/serve handlers in uploads.routes.ts; the files ticket owns sign/complete. Full spec: section T-D2. Register rows 21,22. DEPENDS ON / STACKED: see boot prompt; parent is the 'Files library and version lists' ticket.",
+  "done_at": "2026-08-12T18:48:57Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDHRR75XJYMA78MACV8HQB",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTEV5D83PP9TH7MRRKK73HS",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTEYXJX8ZM61TPRGDGCWA7K",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTF1M2ZJ7PCRT3RJ55X9NTP",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTF233DTRCMMSMKXHECVW4T",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFJET7VQ1RWE70NBCQ6Q2R",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFQHT2VJE000EAT1F6T9NH",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGN1WBXZSBF8EBVE2BYGVV",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTGN23WT63AXW9CBHZYPF88",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTH0PPPEBB034EMBG9TM6N5",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTH0PWGY705RAJP6N5NKWAV",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTH20ENCR0HM3MMYN6VMP84",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTH26Q2QWTN2NV85CY6760A",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTJ9VFNKZQFBN2CXBY27TJR",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVMWRE7YZQ0V2NGD277HSM3",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWRE7YZQ0V2NGD277HSM2",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRE8QQ8MJ7HHJ53TNP8CH",
+  "last_event_id": "ev_01KZVMWRE7YZQ0V2NGD277HSM6",
+  "last_status_changed_at": "2026-08-12T18:48:57Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-112",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Headshots render and speaker files panel",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:57Z",
+  "urgency": null
+}

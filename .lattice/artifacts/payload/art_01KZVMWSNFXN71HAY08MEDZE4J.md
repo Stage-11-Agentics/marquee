@@ -1,0 +1,1 @@
+Board reconciliation 2026-08-12: verified DONE. PR #87 (mrq-124-batch-publish) merged 2026-08-12T14:42:37Z; merge commit 3d6c077d confirmed an ancestor of github/main via 'git merge-base --is-ancestor'. Ticket had drifted at pr_open. The repo has zero open and zero closed-unmerged PRs, so nothing is waiting on review. Status corrected to reflect merge, not PR-open.

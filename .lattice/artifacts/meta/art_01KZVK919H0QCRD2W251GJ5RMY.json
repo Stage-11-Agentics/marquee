@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:20:42Z",
+  "created_by": "agent:mrq-133-builder",
+  "custom_fields": {},
+  "id": "art_01KZVK919H0QCRD2W251GJ5RMY",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZVK919H0QCRD2W251GJ5RMY.png",
+    "size_bytes": 177694
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "smoke \u00b7 08-claim-page-restored",
+  "token_usage": null,
+  "type": "file"
+}

@@ -1,0 +1,13 @@
+{
+  "agent_type": "orchestrate",
+  "base_name": "EvalFixOrchestrator",
+  "framework": "claude-code",
+  "last_active": "2026-08-12T23:25:29Z",
+  "model": "claude-opus-5",
+  "name": "EvalFixOrchestrator-1",
+  "parent": "human:atin",
+  "serial": 1,
+  "session": "sess_01KZW4PSFBWA0T8GP141KZ3RA3",
+  "started_at": "2026-08-12T23:25:18Z",
+  "status": "active"
+}

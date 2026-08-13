@@ -1,0 +1,13 @@
+This is my conference schedule for AI Engineer New York 2026, managed on Marquee.
+My starred sessions (3):
+- Mon, Oct 12 · 09:00–09:45 · "Beyond the Consensus: Navigating AI’s Frontier in 2025" — Metropolitan Ballroom · Sheraton New York Times Square (Grace Isford)
+- Mon, Oct 12 · 09:00–09:45 · "How To Build an AI Strategy That Fails" — Marquis Room A · New York Marriott Marquis (Hamel Husain, Grace Isford, Leigh Pember)
+- Mon, Oct 12 · 10:00–10:45 · "Balancing Innovation with Security & Safety" — New York Ballroom · Sheraton New York Times Square (Don Bosco Durai)
+
+Noted overlaps:
+- "Beyond the Consensus: Navigating AI’s Frontier in 2025" and "How To Build an AI Strategy That Fails" overlap (09:00–09:45 vs 09:00–09:45) — an intentional either/or; help me decide closer to the day.
+Live data, no auth required:
+- My schedule (JSON, includes overlap pairs): http://localhost:8801/api/v1/public/schedules/MQ-15Q4GHVAF7VE8
+- Calendar feed (live): webcal://localhost:8801/api/v1/public/schedules/MQ-15Q4GHVAF7VE8/calendar.ics
+- Full program (JSON): http://localhost:8801/api/v1/public/agenda?event=aie-ny-2026
+Things you can do for me: check the JSON before advising (I restar things), warn me when back-to-back picks are in different buildings, suggest non-conflicting alternatives from the full program, and build my day-of walking plan.

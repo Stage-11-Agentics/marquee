@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T20:38:35Z",
+  "created_by": "agent:codex-mrq-146-reviewer",
+  "custom_fields": {},
+  "id": "art_01KZVV5GJDG9Q065ZR9AJHYGSV",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVV5GJDG9Q065ZR9AJHYGSV.md",
+    "size_bytes": 1685
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Custom exact-head review after automatic review timeout: PASS, no findings.",
+  "tags": [],
+  "title": "MRQ-146 exact-head custom code review",
+  "token_usage": null,
+  "type": "note"
+}

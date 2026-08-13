@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T07:56:48Z",
+  "created_by": "agent:delegator-mrq-117",
+  "custom_fields": {},
+  "id": "art_01KZTFJN3Y6C6RN5H2837XYNB3",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTFJN3Y6C6RN5H2837XYNB3.md",
+    "size_bytes": 888
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at 3eb44c9 after review fixes; no remaining findings.",
+  "tags": [],
+  "title": "MRQ-117 repair exact-HEAD adversarial review",
+  "token_usage": null,
+  "type": "note"
+}

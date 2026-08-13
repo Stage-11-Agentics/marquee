@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:13:55Z",
+  "created_by": "agent:mrq-138-delegator",
+  "custom_fields": {},
+  "id": "art_01KZVX678FXD46K6Z5ZYW1M7KA",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVX678FXD46K6Z5ZYW1M7KA.md",
+    "size_bytes": 1003
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Independent review by a separate agent (not the author): substantially clean, no must-fix defect. Verified authorization is correct and consistent with the sibling routes (a speaker seat holds speaker",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

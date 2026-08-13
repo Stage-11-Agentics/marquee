@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-12T08:46:49Z",
+  "created_by": "agent:delegator-mrq-119",
+  "custom_fields": {
+    "url": "https://github.com/Stage-11-Agentics/marquee/pull/85"
+  },
+  "id": "art_01KZTJE79CS15GRNVHEENXHC07",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Open PR for MRQ-119 at exact HEAD 269525bdaa8d29572263ee33016a225652672b5c.",
+  "tags": [],
+  "title": "GitHub PR #85",
+  "token_usage": null,
+  "type": "reference"
+}

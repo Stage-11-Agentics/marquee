@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:48:58Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMWT054ZRNB9YEHFJHK22T",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMWT054ZRNB9YEHFJHK22T.md",
+    "size_bytes": 368
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE. PR #77 (mrq-127-create-pickers) merged 2026-08-12T08:21:37Z; merge commit 514f9f48 confirmed an ancestor of github/main via 'git merge-base --is-ancesto",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

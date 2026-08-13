@@ -1,0 +1,72 @@
+{
+  "assigned_to": "agent:delegator-mrq-120",
+  "branch_links": [],
+  "c11_surface": "surface:493",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 5,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:36Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "EMB-01 (w3), EMB-09 (w2), EMB-03 (w2), de-risks EMB-06 (w3). NO new data needed except Format. (1) Card anatomy on public agenda + embed session/agenda kinds: SERVER-TRUNCATED 2-3 line description snippet (speed budget AC-85 pins agenda-cold-interactive \u2014 do not ship full abstracts) with details-element Show more (pages are SSR strings; zero JS); speaker job title/company (already in the projection, pure render); FORMAT \u2014 the public data model does not carry it at all; add the formats join + field to PublicSession (without Format, EMB-01 caps at partial). (2) Facets: Format + Location/room selects beside Track (two WHERE clauses in sessionRowsQuery; rooms already joined). Inline selects satisfy the rubric \u2014 NO facet modal. (3) Agenda framing: default to day 1 (or sticky time-group headers under All days) \u2014 EMB-06 PASSES on a time-slotted list per its own pass_criteria; the room-column grid earns ZERO and is out of scope. (4) Emit stable per-card hooks (data-public-session-id exists) as the contract for any future client module. Full spec: section T-I. Register rows 33,34,39.",
+  "done_at": "2026-08-12T18:48:57Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDR7EC0S48FWWQWZ5CH7VY",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTJCZG0V0V2B3G9KCYY3GGH",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTJNF8NWXAEJ2BEE1C6PKCR",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTJQSRG5QR5QATRWXDMMZSV",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTJR0Y2FZT0J9Q9P95X1V1P",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTK1S862JY1QRN7P4AD4KPY",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVMWS7CBXW7WWHHXTBX20D0",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWS7CBXW7WWHHXTBX20CZ",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRHTXAHCF74C1GT687SY4",
+  "last_event_id": "ev_01KZVMWS7CBXW7WWHHXTBX20D3",
+  "last_status_changed_at": "2026-08-12T18:48:57Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 2,
+  "schema_version": 1,
+  "short_id": "MRQ-120",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Public session cards, facets, agenda framing",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:57Z",
+  "urgency": null
+}

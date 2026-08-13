@@ -1,0 +1,67 @@
+{
+  "assigned_to": "agent:delegator-mrq-116",
+  "branch_links": [],
+  "c11_surface": "surface:435",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 4,
+  "complexity": "low",
+  "created_at": "2026-08-12T07:07:34Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "CNT-05 (w2). STACKED on the files-library ticket (organizer reads/replies in its detail surface). One migration: file_comments(id, event_id, owner_type, owner_id, attachment_id NULL, author_person_id, body, created_at). ANCHOR THE THREAD ON THE DELIVERABLE SLOT (owner_type+owner_id), NOT attachment_id \u2014 the eval scenario comments on v1, uploads v2, then the organizer replies on the same thread; attachment-anchored threads orphan and the failure reads as data loss. attachment_id is a nullable 'written against v1' tag rendered as a version chip. Author name AND role on every comment. Speaker side in the portal task row; organizer side in the library row expansion. BUILD NO MAIL \u2014 the rubric explicitly excuses comment notifications ('SessionBoard itself sends none'). Full spec: section T-F2. Register row 27. DEPENDS ON / STACKED: see boot prompt; parent is the 'Files library and version lists' ticket.",
+  "done_at": "2026-08-12T18:48:57Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDFXHJ0DXJNQMVQJ15NK70",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTEWEKT0CBE396TVZBZB6PQ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTFTNDEQQ40ZA9N44MPBPB6",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTFV4TPGKQM8GTHXM5GX5RX",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTFWV4AD5SRSVZZ2P0C75V8",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWRS33F02A3JZVT0ZXG7T",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWRS33F02A3JZVT0ZXG7S",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRG0MBPS48DM6601FFT7N",
+  "last_event_id": "ev_01KZVMWRS495PJVYF0K6S0JGNC",
+  "last_status_changed_at": "2026-08-12T18:48:57Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-116",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Comments on deliverables",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:57Z",
+  "urgency": null
+}

@@ -23,3 +23,9 @@ AIA-07 (w2). Per-record publish exists (SubmissionRecordPage 'Publish Session') 
 - **Write-time safety strengthened:** perform the friendly eligibility read first, but build the actual dual-table updates (`agenda_items` and `submissions`) as one `DB.batch()` per selected record with event, slot, unpublished, and stored-accepted predicates in the SQL `WHERE` clauses. Reconcile affected rows before reporting success; never let a concurrent reversal publish a withdrawn/rejected speaker or leave the two tables split.
 - **File scope made explicit:** expected implementation files are `src/routes/agenda.routes.ts`, `src/routes/agenda.queries.ts`, `src/api/agenda.ts`, `src/ui/agenda/AgendaPage.tsx`, `src/ui/agenda/agenda.css`, `src/ui/agenda/track-board.tsx`, and targeted tests. No contract documents or `.eval-kit` files will be edited.
 - **Accessibility narrowed to the observed gap:** preserve the existing list/table and tablist ARIA; add stable accessible names/roles to empty slot/drop-target cells with room/day/time context, the unscheduled pool, and occupied draggable tiles where needed. Avoid a blanket markup churn.
+
+## Reset 2026-08-12 by agent:delegator-mrq-124
+
+## Reset 2026-08-12 by agent:delegator-mrq-124
+
+## Reset 2026-08-12 by agent:delegator-mrq-124

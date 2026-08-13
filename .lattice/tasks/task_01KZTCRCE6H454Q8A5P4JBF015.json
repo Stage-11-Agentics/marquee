@@ -1,0 +1,62 @@
+{
+  "assigned_to": "agent:delegator-mrq-108",
+  "branch_links": [],
+  "c11_surface": "surface:417",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 6,
+  "complexity": "high",
+  "created_at": "2026-08-12T07:07:30Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "ABS-01 (w3), ABS-03 (w3), ABS-07 (w2). Schema is ALREADY per-round (rubric_criteria.round_id; round PATCH accepts name/dates/anonymized/mode) \u2014 work is UI + one small migration. (1) Round cards become the edit surface: name, date pickers (inline 422 rendering), anonymized toggle (ABS-07 rides free), mode select, per-round Edit scorecard button; root cause is single-array criteria state seeded from rounds[0] (EvaluationPage.tsx:126,167). (2) Migration: criterion kind numeric|select|text + options + scale bounds. TRAPS: assertCriteriaTotal requires weights sum 100 \u2014 exempt non-numeric or force 0; editor has no add/remove-criterion controls \u2014 add them; criteria_scores wire schema is numbers-only (review.routes.ts:22) \u2014 widen. (3) Reviewer renders criteria from queue payload, stores them (kill hardcoded criteria_scores:null at ReviewerPage.tsx:270). (4) REQUIRED: Completed queue section with reopenable read-only reviews \u2014 ABS-S3 step 5 must reopen a submitted review to prove storage, else ABS-03 caps at partial forever. (5) Round 2 defaults to scorecard mode (seed + EvaluationPage.tsx:150); keep comparison selectable. (6) Rider: fix unconditional blind-mode redaction copy at ReviewerPage.tsx:420. Full spec: section T-B. Register rows 5,6,8,9. Collision: T-A owns the committee dialog in EvaluationPage.tsx \u2014 coordinate/rebase; whoever lands second rebases carefully (one-line JSX merges resolve cleanly and wrongly).",
+  "done_at": "2026-08-12T18:48:56Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDFS1W849VQH3BX0WY80A9",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFG54SG1W1G8KWH5EEETXA",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFPJ5N9FN5Z0RMHZEP0HXS",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTH3346F2CN940F2GN2DWFG",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWR0633RHM0YG32D7P4FB",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWR0633RHM0YG32D7P4FA",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRCE6H454Q8A5P4JBF015",
+  "last_event_id": "ev_01KZVMWR0633RHM0YG32D7P4FE",
+  "last_status_changed_at": "2026-08-12T18:48:56Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-108",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Review depth: per-round scorecards, criterion types, reviewer capture",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:56Z",
+  "urgency": null
+}

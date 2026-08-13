@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:39:19Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZVYMPZ6K5YTHC7Q9KRTCH1Q",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVYMPZ6K5YTHC7Q9KRTCH1Q.md",
+    "size_bytes": 502
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged GitHub PR #132 at 7c12db457317d2a8486f839723a43df2d3c42215 after exact-head CI fast-gate success and independent code-review PASS. Implemented surname-aware public directory ordering with expli",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

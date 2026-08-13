@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:codex-mrq-153",
+  "branch_links": [],
+  "comment_count": 4,
+  "complexity": null,
+  "created_at": "2026-08-12T21:59:51Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "Source: .briefs/eval-gap-v2-human-lens.md section 4, authored by Fable (Eval V2 Audit, surface:55). Operator-approved 2026-08-12. Read that section for the full human-problem framing before starting. (V2-4, ~60 min.)\n\nHUMAN PROBLEM. A speaker uploads a headshot and writes a bio in the portal. The organizer's record still shows an initials tile, offers no way to fix the photo themselves, and no way to see what the speaker is seeing when they call confused.\n\nGOOD LOOKS LIKE.\n(a) SpeakerAvatar renders the image through the existing serve endpoint, following onboarding's pattern (an img with initials fallback on error). The roster AND the record both get it from this one change, by design of that component.\n(b) The record gains an 'Upload headshot' control writing the same attachment field the portal writes.\n(c) The record header gains 'Open portal as this speaker' \u2014 an organizer-only preview using the magic-link machinery invites already use, clearly labelled as viewing-as.\n\nCLOSES. SPK-08 (w3 partial), CNT-10 (w2 cannot_judge \u2014 and cannot_judge is mandatory work for 100%, since it is excluded from the denominator and blocks a perfect score), CFP-13 (w2 partial \u2014 decisions become observable on any speaker's portal).\n\nCOORDINATE. MRQ-138 (speaker files panel) merged as #125 and touches adjacent surface. Rebase on current github/main and read what it shipped before adding a second file-rendering path.\n\nVERIFY. Portal-upload a headshot -> roster row and record header both show it. Admin-upload replaces it after reload. 'Open portal as' shows an Accepted and a Rejected speaker's own status cards.",
+  "done_at": "2026-08-12T23:25:23Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZW07S0WRTYRJDWNGJQVKVA2",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZW3ZXNWJ1K0401W7QKZ19FP",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZW49YCPQ22XHN2XTE1K6CSH",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZW4E1HGRYNRE81EPWFZV4ZH",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZW4MXMAMEJ0GY9Z5CEFCZK8",
+      "role": "validation",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZVZTA6C122VM017510NZCYE",
+  "last_event_id": "ev_01KZW4PYMR0WP4SDS0BXFT7R02",
+  "last_status_changed_at": "2026-08-12T23:25:23Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-153",
+  "status": "done",
+  "tags": null,
+  "title": "V2-4: the organizer sees the speaker Marquee already knows",
+  "type": "task",
+  "updated_at": "2026-08-12T23:25:23Z",
+  "urgency": null
+}

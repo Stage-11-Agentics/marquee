@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T05:49:28Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZT89GE6PJECF0EJETVSXJ81",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT89GE6PJECF0EJETVSXJ81.png",
+    "size_bytes": 511386
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Local c11 browser screenshot of Speaker follow-ups with owed headline and 610 ledger count.",
+  "tags": [],
+  "title": "MRQ-102 speaker follow-ups browser proof",
+  "token_usage": null,
+  "type": "file"
+}

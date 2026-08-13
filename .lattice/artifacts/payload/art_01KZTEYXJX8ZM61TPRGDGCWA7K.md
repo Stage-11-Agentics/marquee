@@ -1,0 +1,1 @@
+Verdict: PASS\n\nReviewed commit: d7f41b884f238b1c13f7735a6f92245a52ea8669\nAdditional change since prior review: regenerated cli/api-registry.json for the parent MRQ-115 files route; no product logic changed.\n\nFindings: none.

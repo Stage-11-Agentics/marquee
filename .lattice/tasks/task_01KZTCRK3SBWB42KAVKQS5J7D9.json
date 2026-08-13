@@ -1,0 +1,92 @@
+{
+  "assigned_to": "agent:delegator-mrq-122",
+  "branch_links": [],
+  "c11_surface": "surface:426",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 6,
+  "complexity": "low",
+  "created_at": "2026-08-12T07:07:37Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "Completes EMB-04 (w3) + EMB-12 (w2). Headshots are blocked THREE ways: no render, no field on PublicSpeakerSummary, and ZERO headshots in the seed (deliberate: no real people's images \u2014 pool.ts:5). Build: (1) seed deliberately-synthetic avatars (deterministic monogram/geometric SVG committed as static assets \u2014 NOT stock photos, NOT AI faces; attendees recognize speakers by face and a fake face is a lie) for the ~30 published speakers, leaving 2-3 photo-less on purpose (EMB-12 explicitly rewards the graceful fallback); (2) headshotUrl on PublicSpeakerSummary + parseSpeakers; (3) img with initials fallback on directory cards (coordinate with the directory ticket \u2014 read its board plan; it ships the slot), embed speaker kinds (EmbedPage.tsx:157,165), and /p/:slug. Do NOT wire the R2 media origin for this (production blast radius, zero rubric gain). Full spec: section T-I3. Register row 35.",
+  "done_at": "2026-08-12T18:48:58Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDJQ1RMW9RC2WS0MT0WD46",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTDSJC7VBBNDD6BREVJJH7P",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTDSV47C9T5VPFC7NRNSVYD",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTE2DMZASCGQC3B47K3ZCEE",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTE2DWP31WB3JN4567MCKEW",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTF1CPDD06XZ02T2ADA6ZBS",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTF1CWY2Y4PKZHVZ9EPSSK2",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTF1S9XCAMWME30RA88A5ZM",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTF1SGS19HYFWWNN7QQ28CH",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTF3SAS8RX177H0ZZG8X2DN",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWSEDXMVTKWNZH5Y7MG8K",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWSEDXMVTKWNZH5Y7MG8J",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRK3SBWB42KAVKQS5J7D9",
+  "last_event_id": "ev_01KZVMWSEDXMVTKWNZH5Y7MG8P",
+  "last_status_changed_at": "2026-08-12T18:48:58Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-122",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Headshot seeding and public rendering",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:58Z",
+  "urgency": null
+}

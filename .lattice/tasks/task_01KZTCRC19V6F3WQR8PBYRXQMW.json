@@ -1,0 +1,62 @@
+{
+  "assigned_to": "agent:delegator-mrq-107",
+  "branch_links": [],
+  "c11_surface": "surface:416",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 7,
+  "complexity": "high",
+  "created_at": "2026-08-12T07:07:30Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "The unlock: CFP-10 (w2) direct; makes the whole ABS-S3 scenario gradeable (~19 of 28 item-weight, area weight 20) and ABS-05 (w3) winnable. Build IN ORDER: (1) 'Invite reviewer' on the committee card doing all four writes transactionally (people -> memberships role=reviewer [NO runtime API for memberships exists today \u2014 you are creating the first] -> committee_members -> reviewer_track_scopes), returning a copyable magic link on demo conferences via existing mintMagicLink purpose=login redirectTo=/reviewer. (2) Demo door: add reviewer to roleSchema + DEMO_ROLE_TO_MEMBERSHIP (auth.routes.ts:32,319) AND fix the persona query (auth.routes.ts:98-105, no ORDER BY; seeded staffer holds owner+program_lead+reviewer \u2014 naive fix signs the judge in AS THE ORGANIZER, an outright CFP-10 fail). Exclude staff-role holders, add ORDER BY. (3) Landing third door LAST. Also relax evaluation.routes.ts:577 (reviewer-add requires pre-existing membership). Do NOT touch seat.tsx (already correct). Traps and full AC: section T-A of sequence/eval-response-tickets.md. Register rows 1-3.",
+  "done_at": "2026-08-12T18:47:59Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDMGXF36NF6AADQVCPCE53",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTHDSRZ6N7XS2JYBMSJJQ7Z",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTHEP085A9C2170NMSZT7CS",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTHGDAT9ZMJM170DZA5V306",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMV0K2F034PE6EGBBAFEWW",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMV0K2F034PE6EGBBAFEWV",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRC19V6F3WQR8PBYRXQMW",
+  "last_event_id": "ev_01KZVMVXXFECQDXS5FZDKBZTHR",
+  "last_status_changed_at": "2026-08-12T18:47:59Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-107",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Reviewer provisioning end to end",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:29Z",
+  "urgency": null
+}

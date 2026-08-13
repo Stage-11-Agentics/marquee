@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T08:31:22Z",
+  "created_by": "agent:delegator-mrq-117",
+  "custom_fields": {},
+  "id": "art_01KZTHHYRX1Q8FD3PB69Y456K1",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTHHYRX1Q8FD3PB69Y456K1.md",
+    "size_bytes": 947
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Post-gate adversarial review of 19fe323 exact HEAD; no findings.",
+  "tags": [],
+  "title": "MRQ-117 post-gate exact-HEAD self-review PASS",
+  "token_usage": null,
+  "type": "note"
+}

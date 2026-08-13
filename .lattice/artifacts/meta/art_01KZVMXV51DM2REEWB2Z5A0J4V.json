@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:49:32Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMXV51DM2REEWB2Z5A0J4V",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMXV51DM2REEWB2Z5A0J4V.md",
+    "size_bytes": 601
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE, and it had drifted BACKWARDS \u2014 the ticket read 'backlog' while its fix was already on main. PR #29 (mrq-84-import-unmatched-taxonomy, 'the importer drop",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

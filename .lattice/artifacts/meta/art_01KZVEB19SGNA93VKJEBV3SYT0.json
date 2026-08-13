@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T16:54:24Z",
+  "created_by": "agent:delegator-mrq-132",
+  "custom_fields": {},
+  "id": "art_01KZVEB19SGNA93VKJEBV3SYT0",
+  "model": null,
+  "payload": {
+    "content_type": "text/plain",
+    "file": "art_01KZVEB19SGNA93VKJEBV3SYT0.txt",
+    "size_bytes": 1376
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-132 validation \u00b7 briefing.txt",
+  "token_usage": null,
+  "type": "file"
+}

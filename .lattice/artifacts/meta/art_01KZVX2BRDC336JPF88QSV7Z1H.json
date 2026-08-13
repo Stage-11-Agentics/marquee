@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:11:49Z",
+  "created_by": "agent:delegator-mrq-80",
+  "custom_fields": {},
+  "id": "art_01KZVX2BRDC336JPF88QSV7Z1H",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVX2BRDC336JPF88QSV7Z1H.md",
+    "size_bytes": 760
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged PR #120 at 1da0aead0173631dcd5fa54011ef2976d0e4bfab. MRQ-80 now has a deliberate per-record decision resend using the corrected current speaker address and a fresh outbox identity; the existing",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}
