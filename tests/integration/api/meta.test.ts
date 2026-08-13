@@ -54,14 +54,18 @@ test("CONTRACT · MRQ-146 · concurrency claims and headers describe only agenda
     paths: Record<string, Record<string, {
       operationId?: string;
       parameters?: Array<{ in?: string; name?: string }>;
+      responses?: Record<string, unknown>;
     }>>;
   };
 
   // MRQ-150 restates MRQ-146's claim in full rather than in one clause: the scope is
-  // still agenda items only, and the document now says what everything else does instead.
+  // still agenda items only, and the document names the bounded conflict cases instead.
   expect(document.info.description).toContain("Optimistic concurrency is scoped to **agenda items**");
-  expect(document.info.description).toContain("Every other mutation is last-write-wins.");
-  expect(body.match(/If-Match/g) ?? []).toHaveLength(1);
+  const normalizedDescription = document.info.description.replace(/\s+/g, " ");
+  expect(normalizedDescription).toContain(
+    "No operation other than the two agenda item mutations takes `If-Match`. Several mutations still refuse a concurrent change on their own terms — agenda publication, participation responses, and task completion answer `409` when the record moved underneath the request; submission decisions refuse the same stale write with `422` — so a `409` or `422` is worth handling on any write.",
+  );
+  expect(body.match(/If-Match/g) ?? []).toHaveLength(2);
 
   const ifMatchOperations = Object.values(document.paths)
     .flatMap((operations) => Object.values(operations))
@@ -71,6 +75,20 @@ test("CONTRACT · MRQ-146 · concurrency claims and headers describe only agenda
     .map((operation) => operation.operationId)
     .sort();
   expect(ifMatchOperations).toEqual(["removeAgendaItem", "updateAgendaItem"]);
+
+  const operations = Object.values(document.paths).flatMap((path) => Object.values(path));
+  const responsesFor = (operationId: string) => operations.find((operation) => operation.operationId === operationId)?.responses ?? {};
+  for (const operationId of [
+    "batchPublishAgenda",
+    "publishSubmission",
+    "unpublishSubmission",
+    "confirmSpeakerParticipation",
+    "declineSpeakerParticipation",
+    "completeSpeakerTask",
+  ]) {
+    expect(responsesFor(operationId)).toHaveProperty("409");
+  }
+  expect(responsesFor("decideSubmission")).toHaveProperty("422");
 });
 
 test("CONTRACT · MRQ-146 · the skill is served as markdown rather than the SPA shell", async () => {
@@ -146,8 +164,9 @@ test("CONTRACT · MRQ-150 · the document's concurrency claim matches the routes
 
   const description = (await (await SELF.fetch(`${ORIGIN}/api/openapi.json`)).json<{ info: { description: string } }>())
     .info.description;
+  const normalizedDescription = description.replace(/\s+/g, " ");
   expect(description).not.toContain("Mutations carry strong");
   expect(description).toContain("agenda items");
   expect(description).toContain("If-Match");
-  expect(description).toContain("last-write-wins");
+  expect(normalizedDescription).toContain("submission decisions refuse the same stale write with `422`");
 });
