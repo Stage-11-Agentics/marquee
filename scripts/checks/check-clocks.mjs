@@ -21,6 +21,21 @@
  * `files-export` asserts ZIP entry names built from a session's weekday — keep
  * the anchor and derive only the time-compared column from the real clock.
  *
+ * The rule reads PREPARED STATEMENTS, not lines. The column name lives in the
+ * SQL string and the offset lives over in `.bind(...)`, and nothing obliges an
+ * author to put them on one line — the two suites that went red on 2026-08-13
+ * both wrote the INSERT across three, which is exactly how a per-line rule read
+ * a live bomb as innocent.
+ *
+ * RULE 3 — a session that expires on a calendar date.
+ *
+ * Rule 1 is a judgement call about which columns matter; this one is not. A
+ * test session is a credential, and a credential minted against a frozen clock
+ * turns its whole file into 401s on a date nobody chose. So: an `auth_sessions`
+ * row may not carry a calendar date anywhere in the statement that writes it —
+ * not through an anchor, not inline. Session fixtures ride the real clock,
+ * always, without exception worth arguing about.
+ *
  * RULE 2 — bursts that race a fixed window.
  *
  * Spending a rate limit means issuing limit+1 requests inside one window, which
@@ -59,7 +74,14 @@ const TIME_COMPARED_BINDINGS = [
   "ends_at",
 ];
 
-const ABSOLUTE_ANCHOR = /\bconst\s+(\w+)\s*=\s*Date\.UTC\(\s*\d{4}\s*,/;
+/**
+ * A calendar date written into source: `Date.UTC(2026, 7, 12)`, `Date.parse(
+ * "2026-08-11T12:00:00Z")`, `new Date("2026-08-11")`. All three name a moment
+ * the wall clock eventually passes; only `Date.now()` does not.
+ */
+const LITERAL_DATE = /Date\.UTC\(\s*\d{4}\s*,|Date\.parse\(\s*["'`]\d{4}-|new Date\(\s*["'`]\d{4}-/;
+
+const ABSOLUTE_ANCHOR = new RegExp(`\\bconst\\s+(\\w+)\\s*=\\s*(?:${LITERAL_DATE.source})`);
 
 function allowed(lines, index) {
   return ALLOW.test(lines[index] ?? "") || ALLOW.test(lines[index - 1] ?? "");
@@ -75,6 +97,55 @@ async function testFiles() {
 /** Comments are prose. A rule that reads them reports on sentences about 429. */
 function stripComments(line) {
   return line.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "");
+}
+
+/**
+ * Walk from `start` to the character after the balanced close of the bracket
+ * opened just before it, ignoring brackets that live inside string literals —
+ * SQL is full of `COUNT(*)` and `VALUES (?, ?)`, and a naive counter would end
+ * a statement in the middle of one.
+ */
+function closeOf(source, start) {
+  let depth = 1;
+  let index = start;
+  let quote = "";
+  while (index < source.length && depth > 0) {
+    const character = source[index];
+    if (quote) {
+      if (character === "\\") index += 1;
+      else if (character === quote) quote = "";
+    } else if (character === '"' || character === "'" || character === "`") {
+      quote = character;
+    } else if (character === "(") depth += 1;
+    else if (character === ")") depth -= 1;
+    index += 1;
+  }
+  return index;
+}
+
+/**
+ * Every `DB.prepare(...)` and the chained calls that carry its bindings, as one
+ * unit of text. This is the scope a fixture INSERT actually occupies.
+ */
+function preparedStatements(source) {
+  const found = [];
+  const opener = /\b(?:\w+\.)*(?:DB|db)\.prepare\(/g;
+  let match;
+  while ((match = opener.exec(source)) !== null) {
+    let end = closeOf(source, match.index + match[0].length);
+    for (;;) {
+      const chained = /^\s*\.\s*\w+(?:<[^>]*>)?\s*\(/.exec(source.slice(end));
+      if (!chained) break;
+      end = closeOf(source, end + chained[0].length);
+    }
+    found.push({
+      text: source.slice(match.index, end),
+      startLine: source.slice(0, match.index).split("\n").length,
+      endLine: source.slice(0, end).split("\n").length,
+    });
+    opener.lastIndex = end;
+  }
+  return found;
 }
 
 /**
@@ -117,29 +188,60 @@ for (const file of await testFiles()) {
     if (match && !allowed(lines, index)) anchors.add(match[1]);
   });
 
-  if (anchors.size > 0 && persistsFixtures) {
-    const anchorNames = [...anchors].join("|");
-    // An anchor is only a bomb where it reaches a column the server compares
-    // against real time. A fixture date used for display or ordering is fine.
-    // Same line, any distance. The column name usually sits inside a long SQL
-    // string while the offset is over in `.bind(...)`, so a proximity window
-    // just encodes how verbose the INSERT happens to be — the files-library
-    // session bomb was 130 characters wide and slipped an 80-character window.
-    const column = new RegExp(`\\b(${TIME_COMPARED_BINDINGS.join("|")})\\b`);
-    const offsetFromAnchor = new RegExp(`\\b(${anchorNames})\\b\\s*[+\\-]`);
-    lines.forEach((line, index) => {
-      if (allowed(lines, index)) return;
-      const code = stripComments(line);
-      if (!column.test(code) || !offsetFromAnchor.test(code)) return;
+  const statements = persistsFixtures ? preparedStatements(source) : [];
+  // A statement is exempt if the marker sits anywhere inside it, or on the line
+  // above — the reason usually reads better above the INSERT than buried in it.
+  const statementAllowed = (statement) => {
+    for (let index = statement.startLine - 2; index < statement.endLine; index += 1) {
+      if (ALLOW.test(lines[index] ?? "")) return true;
+    }
+    return false;
+  };
+  const column = new RegExp(`\\b(${TIME_COMPARED_BINDINGS.join("|")})\\b`);
+
+  // An anchor is only a bomb where it reaches a column the server compares
+  // against real time. A fixture date used for display or ordering is fine, and
+  // so is a bare anchor on `created_at` — it is the arithmetic that reads as a
+  // promise about the future ("expires tomorrow") and then stops being one.
+  const offsetFromAnchor = anchors.size
+    ? new RegExp(`\\b(${[...anchors].join("|")})\\b\\s*[+\\-]`)
+    : /(?!)/;
+
+  if (anchors.size > 0 && statements.length > 0) {
+    for (const statement of statements) {
+      if (statementAllowed(statement)) continue;
+      const code = stripComments(statement.text);
+      if (!column.test(code) || !offsetFromAnchor.test(code)) continue;
       findings.push({
         rule: "absolute-anchor-on-time-compared-column",
         file: relative,
-        line: index + 1,
+        line: statement.startLine,
         detail:
           "a deadline derived from a calendar-pinned anchor; the server compares it " +
           "against the real clock, so this fixture changes meaning as time passes",
         fix: "anchor to Date.now(), or derive just this column from the real clock",
       });
+    }
+  }
+
+  // Rule 3: a session credential minted against a calendar date. Rule 1 asks
+  // whether a column is one the server compares against real time; for a
+  // session row there is nothing to ask, so this one also catches the date
+  // written inline in the bindings rather than through a named anchor.
+  for (const statement of statements) {
+    if (statementAllowed(statement)) continue;
+    const code = stripComments(statement.text);
+    if (!/INSERT\s+INTO\s+auth_sessions\b/i.test(code)) continue;
+    if (!LITERAL_DATE.test(code) && !offsetFromAnchor.test(code)) continue;
+    findings.push({
+      rule: "auth-session-expiry-from-literal-date",
+      file: relative,
+      line: statement.startLine,
+      detail:
+        "an auth_sessions row minted from a calendar date; resolveSession compares " +
+        "expires_at against the real Date.now(), so this credential dies on a date " +
+        "nobody wrote down and takes the whole file to 401 with it",
+      fix: "mint expires_at (and the row's timestamps) from Date.now()",
     });
   }
 
