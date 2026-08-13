@@ -32,7 +32,7 @@ function plan(overrides: Partial<AllocationInput> = {}): AllocationInput {
 }
 
 describe("MRQ-169 assignment allocation", () => {
-  test("CONTRACT · N-per-submission spreads the work evenly and deterministically", () => {
+  test("CONTRACT · MRQ-169 · N-per-submission spreads the work evenly and deterministically", () => {
     const first = allocateAssignments(plan({ submissions: submissions(6) }));
     const second = allocateAssignments(plan({ submissions: submissions(6) }));
     expect(first.pairs).toEqual(second.pairs);
@@ -42,14 +42,14 @@ describe("MRQ-169 assignment allocation", () => {
     expect(first.uncovered).toBe(0);
   });
 
-  test("CONTRACT · every eligible reviewer takes the submission in `everyone` mode", () => {
+  test("CONTRACT · MRQ-169 · every eligible reviewer takes the submission in `everyone` mode", () => {
     const report = allocateAssignments(plan({ submissions: submissions(2), reviewersPerSubmission: null }));
     expect(report.assigned_new).toBe(6);
     expect(report.fully_covered).toBe(2);
     expect(new Set(report.pairs.map(([, reviewer]) => reviewer))).toEqual(new Set(["r-ada", "r-bo", "r-cy"]));
   });
 
-  test("CONTRACT · a re-run tops coverage up instead of doubling it", () => {
+  test("CONTRACT · MRQ-169 · a re-run tops coverage up instead of doubling it", () => {
     const targets = submissions(2);
     const report = allocateAssignments(plan({
       submissions: targets,
@@ -63,7 +63,7 @@ describe("MRQ-169 assignment allocation", () => {
     expect(report.fully_covered).toBe(2);
   });
 
-  test("CONTRACT · an abstract no reviewer is responsible for is reported, never refused", () => {
+  test("CONTRACT · MRQ-169 · an abstract no reviewer is responsible for is reported, never refused", () => {
     const targets = [
       { id: "s1", trackNames: ["Agents"] },
       { id: "s2", trackNames: ["Leadership"] },
@@ -80,7 +80,7 @@ describe("MRQ-169 assignment allocation", () => {
     expect(report.pairs.every(([submissionId]) => submissionId === "s1")).toBe(true);
   });
 
-  test("CONTRACT · a pool too small for the target reports partial coverage", () => {
+  test("CONTRACT · MRQ-169 · a pool too small for the target reports partial coverage", () => {
     const report = allocateAssignments(plan({
       submissions: submissions(2),
       eligible: everyoneEligible(["s1", "s2"], ["r-ada"]),
@@ -93,7 +93,7 @@ describe("MRQ-169 assignment allocation", () => {
     expect(report.uncovered).toBe(0);
   });
 
-  test("CONTRACT · the per-reviewer cap binds, and says that it bound", () => {
+  test("CONTRACT · MRQ-169 · the per-reviewer cap binds, and says that it bound", () => {
     const report = allocateAssignments(plan({
       submissions: submissions(4),
       reviewersPerSubmission: 2,
@@ -105,13 +105,13 @@ describe("MRQ-169 assignment allocation", () => {
     expect(report.partially_covered + report.uncovered).toBeGreaterThan(0);
   });
 
-  test("CONTRACT · an untouched cap is not reported as one", () => {
+  test("CONTRACT · MRQ-169 · an untouched cap is not reported as one", () => {
     const report = allocateAssignments(plan({ submissions: submissions(2), maxPerReviewer: 50 }));
     expect(report.cap_reached).toBe(false);
     expect(report.assigned_new).toBe(4);
   });
 
-  test("CONTRACT · existing load carries into the balance rather than starting from zero", () => {
+  test("CONTRACT · MRQ-169 · existing load carries into the balance rather than starting from zero", () => {
     const report = allocateAssignments(plan({
       submissions: submissions(1),
       reviewersPerSubmission: 1,
