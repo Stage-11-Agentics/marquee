@@ -19,6 +19,26 @@ export function roleLabel(role: string | undefined | null): string {
 }
 
 /**
+ * How a person is on a session, in the organizer's words. Distinct from
+ * `roleLabel`, which names a membership: "Co-speaker" is a stage credit, not
+ * an account role, and "Co speaker" is neither.
+ */
+const PARTICIPATION_ROLE_LABELS: Record<string, string> = {
+  speaker: "Speaker",
+  co_speaker: "Co-speaker",
+  moderator: "Moderator",
+  chairperson: "Chairperson",
+  submitter: "Submitter",
+  sponsor_contact: "Sponsor contact",
+};
+
+export function participationRoleLabel(role: string | undefined | null): string {
+  if (!role) return "Speaker";
+  return PARTICIPATION_ROLE_LABELS[role]
+    ?? role.replace(/_/g, " ").replace(/^./, (character) => character.toUpperCase());
+}
+
+/**
  * One person holds several memberships — the seeded program committee is owner,
  * program_lead and reviewer at once — and /auth/me returns them in whatever
  * order the query produced. Labelling an owner "Reviewer" because that row

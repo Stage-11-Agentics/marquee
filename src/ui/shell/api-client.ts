@@ -130,6 +130,26 @@ export function referenceCode(requestId: string | undefined): string {
   return requestId.replaceAll("-", "").slice(0, 6).toLowerCase();
 }
 
+/**
+ * The refusals whose server sentence is worth more than the generic one.
+ *
+ * A 422 or a 409 is the API declining a specific change for a stated reason,
+ * and those reasons are written for the organizer: "Sam Whitfield reviews
+ * Evals and Infra; this abstract carries RAG/Retrieval." Replacing that with
+ * "That change would leave the program in a state it cannot be in" throws away
+ * the only part of the answer that says what to do next. The generic sentence
+ * stays for the refusals that arrive with no message, or with a technical one.
+ */
+const AUTHORED_CODES: ReadonlySet<MarqueeErrorCode> = new Set(["unprocessable", "conflict"]);
+
+/** A server sentence, rendered as a sentence: capitalized, terminated once. */
+function presentServerMessage(message: string): string {
+  const trimmed = message.trim();
+  if (trimmed.length === 0) return trimmed;
+  const capitalized = trimmed[0]!.toUpperCase() + trimmed.slice(1);
+  return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
+}
+
 export class MarqueeApiError extends Error {
   readonly code: MarqueeErrorCode;
   readonly status: number;
@@ -139,6 +159,8 @@ export class MarqueeApiError extends Error {
   readonly details?: unknown;
   /** The route template, for the diagnostic report. */
   readonly route: string;
+  /** True when the envelope carried a message a person wrote for this case. */
+  readonly serverAuthored: boolean;
 
   constructor(options: {
     code: MarqueeErrorCode;
@@ -148,6 +170,7 @@ export class MarqueeApiError extends Error {
     field?: string;
     details?: unknown;
     route: string;
+    serverAuthored?: boolean;
   }) {
     super(options.message);
     this.name = "MarqueeApiError";
@@ -157,6 +180,7 @@ export class MarqueeApiError extends Error {
     this.field = options.field;
     this.details = options.details;
     this.route = options.route;
+    this.serverAuthored = options.serverAuthored ?? false;
   }
 
   get treatment(): ErrorTreatment {
@@ -167,10 +191,16 @@ export class MarqueeApiError extends Error {
     return referenceCode(this.requestId);
   }
 
+  /** The server's own diagnosis where there is one; the taxonomy otherwise. */
+  get sentence(): string {
+    return this.serverAuthored && AUTHORED_CODES.has(this.code) && this.message.trim().length > 0
+      ? presentServerMessage(this.message)
+      : this.treatment.sentence;
+  }
+
   /** What a banner shows: the plain sentence, then the reference to quote. */
   get display(): string {
-    const treatment = this.treatment;
-    return `${treatment.sentence} ${treatment.recovery}`;
+    return `${this.sentence} ${this.treatment.recovery}`;
   }
 }
 
@@ -183,7 +213,7 @@ export function describeError(error: unknown): {
 } {
   if (error instanceof MarqueeApiError) {
     return {
-      sentence: error.treatment.sentence,
+      sentence: error.sentence,
       recovery: error.treatment.recovery,
       reference: error.reference,
       retryable: error.treatment.retryable,
@@ -366,9 +396,11 @@ export async function apiFetch<Result>(
     const code = codeFromEnvelope(envelope?.error?.code, response.status);
     if (code === "forbidden") for (const listener of forbiddenListeners) listener();
     if (code === "unauthenticated") for (const listener of unauthenticatedListeners) listener();
+    const authoredMessage = asString(envelope?.error?.message);
     throw noted(new MarqueeApiError({
       code,
-      message: asString(envelope?.error?.message) ?? `the request failed with status ${response.status}`,
+      serverAuthored: authoredMessage !== undefined,
+      message: authoredMessage ?? `the request failed with status ${response.status}`,
       status: response.status,
       requestId: asString(envelope?.request_id) ?? requestId,
       field: asString(envelope?.error?.field),
