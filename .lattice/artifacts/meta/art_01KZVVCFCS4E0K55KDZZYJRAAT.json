@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T20:42:23Z",
+  "created_by": "agent:delegator-mrq-128",
+  "custom_fields": {},
+  "id": "art_01KZVVCFCS4E0K55KDZZYJRAAT",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVVCFCS4E0K55KDZZYJRAAT.md",
+    "size_bytes": 1608
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Self-review of exact rebased diff; no product findings.",
+  "tags": [],
+  "title": "MRQ-128 manual code review",
+  "token_usage": null,
+  "type": "note"
+}

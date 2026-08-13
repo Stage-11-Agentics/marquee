@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T08:44:24Z",
+  "created_by": "agent:delegator-mrq-119",
+  "custom_fields": {},
+  "id": "art_01KZTJ9STPF97J7R6VB5AFSGSB",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTJ9STPF97J7R6VB5AFSGSB.md",
+    "size_bytes": 601
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS review of the rebased branch at f87d68bcdd9912802dbae6ad07e988afb7cf63ef; scope is limited to the public draft-save flow, styles, contract test, and plan.",
+  "tags": [],
+  "title": "MRQ-119 post-rebase exact-head self-review",
+  "token_usage": null,
+  "type": "note"
+}

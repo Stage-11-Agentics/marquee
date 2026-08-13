@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:mrq-140",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": null,
+  "created_at": "2026-08-12T19:19:10Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "SURFACE: /settings/tasks assignment -> /files (SESSION column) -> bulk export dialog.\n\nWHAT BREAKS: Tasks authored at /settings/tasks and assigned through the speaker picker produce deliverables with no session linkage. The deliverables dashboard shows '- no session attached' for both speakers, including for a speaker who has exactly one session, and an uploaded slides.pdf still reads 'No session - Priya Raman' in the bulk-export dialog. Consequence is functional, not cosmetic: the export dialog's DEFAULT grouping is 'Group files by Session - One folder per session', and it cannot place these files. Fixture tasks in the same table DO carry sessions, so the association exists as a concept and is simply not established on this path.\n\nROOT CAUSE (confirmed at live sha 75b871d94c6f) -- the backend already supports this; the UI path does not use it:\n- src/routes/files.queries.ts:162 -> session: task.submission_id ? { id, title } : null   (the SESSION column is driven entirely by task.submission_id)\n- src/routes/task-templates.routes.ts:95 -> submission_id: z.string().min(1).nullable().optional()  -- accepted on assignment\n- src/routes/task-templates.routes.ts:634-638 -> validated against the conference when supplied\n- src/routes/task-templates.routes.ts:647 -> submissionId: body.submission_id ?? null  -- silently null when the UI omits it\nSo the assignment UI never sends submission_id and the row is created unattached.\n\nFIX SHAPE: offer a session picker in the assignment flow; auto-attach when the speaker has exactly one session; and make grouped export state what it could not place rather than silently dropping it.\n\nSIZE: medium.\n\nPROVENANCE: sbek run 2026-08-12T15-33-34, content-management judgement, defects[0]. Validated by reading live source.",
+  "done_at": "2026-08-12T21:17:28Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZVRR57G4G38WPRWF8GM48QZ",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVVW1C7RW39G33CXD597Q9P",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVXAKC5VAMRDTV4AYG9J1X8",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVXCQ9BFQY358HQ14S0HH23",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVXCQ9BFQY358HQ14S0HH22",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVPM3T4W4Y4EK39RQ620282",
+  "last_event_id": "ev_01KZVXCQ9BFQY358HQ14S0HH26",
+  "last_status_changed_at": "2026-08-12T21:17:28Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-140",
+  "status": "done",
+  "tags": null,
+  "title": "File-request tasks assigned via the speaker picker lose their session, breaking grouped export",
+  "type": "bug",
+  "updated_at": "2026-08-12T21:17:28Z",
+  "urgency": null
+}

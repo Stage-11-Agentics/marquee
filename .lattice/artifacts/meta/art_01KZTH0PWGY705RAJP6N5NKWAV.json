@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T08:21:57Z",
+  "created_by": "agent:delegator-mrq-112",
+  "custom_fields": {},
+  "id": "art_01KZTH0PWGY705RAJP6N5NKWAV",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTH0PWGY705RAJP6N5NKWAV.md",
+    "size_bytes": 810
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS at be4c303; branch pushed and clean; no browser surface left open.",
+  "tags": [],
+  "title": "MRQ-112 final local gate",
+  "token_usage": null,
+  "type": "note"
+}

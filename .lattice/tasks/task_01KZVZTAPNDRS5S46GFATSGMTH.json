@@ -1,0 +1,38 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-08-12T21:59:51Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "Source: .briefs/eval-gap-v2-human-lens.md section 4, authored by Fable (Eval V2 Audit, surface:55). Operator-approved 2026-08-12. Read that section for the full human-problem framing before starting. (V2-9, ~20 min.) OPERATOR BUG REPORT, 2026-08-12.\n\nPROBLEM. In the latent.space register theme, side scrollbars, the 'Filter Sessions' box, and other text inputs render without the theme's color treatment \u2014 native controls fall back to light defaults on the black gradient. Root cause: src/styles/themes/latent-space.css contains NO input, scrollbar, or color-scheme rules.\n\nGOOD LOOKS LIKE. color-scheme: dark on the register's root, plus tokenized input / select / textarea treatment, scoped under html[data-theme='latent-space']. While you are there, audit ai-engineer.css for the same class of gap.\n\nBINDING RULES. DESIGN.md section Themes: every color is a token, 4.5:1 contrast floor. No raw hex.\n\nCLOSES NO EVAL ITEM. Small, isolated, and safe to run at any time \u2014 no sequencing constraint, which makes it a good filler for an agent that is blocked on someone else's merge.\n\nVERIFY. Load the latent.space theme; scrollbars, the Filter Sessions box, and every text input carry the theme treatment; contrast holds at 4.5:1.",
+  "done_at": "2026-08-12T23:25:24Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZW078H8MJ6405XCZJQFA57E",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZW2863K34R6YBRSESM270EV",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVZTAPNDRS5S46GFATSGMTH",
+  "last_event_id": "ev_01KZW4PZ11G2ETG28T00D3VEBC",
+  "last_status_changed_at": "2026-08-12T23:25:24Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-158",
+  "status": "done",
+  "tags": null,
+  "title": "V2-9: latent.space theme leaves native controls unstyled",
+  "type": "bug",
+  "updated_at": "2026-08-12T23:25:24Z",
+  "urgency": null
+}

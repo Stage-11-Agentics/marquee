@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:11:56Z",
+  "created_by": "mrq-136-delegator-2",
+  "custom_fields": {},
+  "id": "art_01KZVX2K6EV9YRN2NMY4VB4D7P",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVX2K6EV9YRN2NMY4VB4D7P.md",
+    "size_bytes": 1326
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged as 0b116387 via PR #123 (Stage-11-Agentics/marquee), main CI green on it.\n\nChange: canonicalFacet() in src/lib/public-site.ts resolves each incoming facet\n(day, track, format, room) against its",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

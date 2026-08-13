@@ -28,6 +28,10 @@ const ROUND_ID = "round-mrq134";
 const COMMITTEE_ID = "committee-mrq134";
 const ORIGIN = "https://marquee.example";
 const NOW = Date.UTC(2026, 7, 20, 16);
+// Fixture rows stay pinned to NOW; a session's expiry cannot, because the Worker
+// checks it against the real clock. Anchored to NOW, these sessions would expire
+// on 2026-08-21 and fail every run after that date.
+const SESSION_EXPIRES_AT = Date.now() + 86_400_000;
 
 interface SeatResponse {
   committee_id: string;
@@ -94,7 +98,7 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES (?, ?, 'owner', ?, 'mrq134-owner', NULL, ?, ?)`,
-    ).bind(ORGANIZER_SESSION, ORGANIZER_ID, NOW + 86_400_000, NOW, NOW),
+    ).bind(ORGANIZER_SESSION, ORGANIZER_ID, SESSION_EXPIRES_AT, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO people (id, org_id, email, name, kind, is_demo, last_write_source, created_at, updated_at)
        VALUES (?, ?, ?, ?, 'human', 0, 'marquee', ?, ?), (?, ?, ?, ?, 'human', 0, 'marquee', ?, ?)`,
@@ -105,7 +109,7 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES (?, ?, 'reviewer', ?, 'mrq134-human', NULL, ?, ?), (?, ?, 'reviewer', ?, 'mrq134-human-two', NULL, ?, ?)`,
-    ).bind(HUMAN_SESSION, HUMAN_ID, NOW + 86_400_000, NOW, NOW, SECOND_HUMAN_SESSION, SECOND_HUMAN_ID, NOW + 86_400_000, NOW, NOW),
+    ).bind(HUMAN_SESSION, HUMAN_ID, SESSION_EXPIRES_AT, NOW, NOW, SECOND_HUMAN_SESSION, SECOND_HUMAN_ID, SESSION_EXPIRES_AT, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
        VALUES ('membership-mrq134-human', ?, ?, ?, 'reviewer', ?, ?),

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T14:38:21Z",
+  "created_by": "agent:delegator-mrq-126",
+  "custom_fields": {},
+  "id": "art_01KZV6HXR9X97HJJN99N2X5BM8",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZV6HXR9X97HJJN99N2X5BM8.md",
+    "size_bytes": 763
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: live SELF Worker flow at e9e6db9; renamed settings rows reach public fields and submissions.",
+  "tags": [],
+  "title": "MRQ-126 local Worker validation",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,61 @@
+{
+  "assigned_to": "agent:codex-mrq-145",
+  "branch_links": [],
+  "comment_count": 5,
+  "complexity": "low",
+  "created_at": "2026-08-12T19:50:09Z",
+  "created_by": {
+    "agent_type": "research",
+    "base_name": "DiffAnalyst",
+    "framework": "claude-code",
+    "model": "claude-opus-5",
+    "name": "DiffAnalyst-1",
+    "serial": 1,
+    "session": "sess_01KZVRC5WKV4ACDY7V0JQE0YS3"
+  },
+  "custom_fields": {},
+  "description": "The deployed landing page (src/routes/landing.route.tsx) offers exactly four doors: /f/cfp, /portal?demo=speaker, /reviewer?demo=reviewer, /submissions?demo=organizer \u2014 plus a link to https://github.com/Stage-11-Agentics/marquee, which returns 404 to everyone outside the org.\n\nTWO DEFECTS, ONE FILE:\n\n1. THE PUBLIC SEAT HAS NO DOOR. /agenda (65KB of real server-rendered sessions) and /speakers (25KB) are live, anonymous and healthy, and nothing on the landing page links to either. Same failure class as the reviewer-seat-with-no-door that cost ~24.7 eval points. Public Widgets carries area_weight 20, and a scenario agent that never reaches a surface scores cannot_judge, which drags toward the 60% coverage cliff where the headline score is WITHHELD ENTIRELY.\n\n2. THE OPEN-SOURCE LINK IS A DEAD END. The competition requires an open-source repo. Verified: curl -sIL https://github.com/Stage-11-Agentics/marquee -> 404.\n\nSCOPE: add discoverable doors to /agenda and /speakers in the same visual language as the existing four (Flight Deck per DESIGN.md; elements never jump). Do NOT change the GitHub URL here \u2014 publication is an operator decision tracked separately. If it has not resolved when this is ready, leave the link untouched and say so in the PR.\n\nVERIFY AFTER DEPLOY: curl -s https://marquee.stage11.dev/ | grep -oE 'href=.[^\"]*.' must include /agenda and /speakers.\n\nEvidence: sequence/research/DIFFERENTIATION-MATRIX.md, Live defects D0 and D4.",
+  "done_at": "2026-08-12T23:06:33Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZVS5ZR1GEFKSKF7P59D909A",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVV4340KWS37Z7E2H7PHK78",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVV6A7EW7GR35E2W28BX86F",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZW3K79A1WEE8A2JCQ0K041X",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZW3ME370XX4CXYDKG31P221",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZVRCTB3YD6PPN9AH69WR6QW",
+  "last_event_id": "ev_01KZW3MF20WFG4MQ2DDHC0GV5M",
+  "last_status_changed_at": "2026-08-12T23:06:33Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-145",
+  "status": "done",
+  "tags": null,
+  "title": "The landing page hides the public conference and links to a 404",
+  "type": "bug",
+  "updated_at": "2026-08-12T23:06:33Z",
+  "urgency": null
+}

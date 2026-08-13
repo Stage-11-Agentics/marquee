@@ -53,14 +53,10 @@
     }
   ],
   "id": "task_01KZJHMCHGZ8MFE28412MYE91J",
-  "last_event_id": "ev_01KZQCM552QZMDPCXBVZ3AY3RV",
+  "last_event_id": "ev_01KZVP4B5256N0JDHJ4F07EKDV",
   "last_status_changed_at": "2026-08-09T06:28:15Z",
   "linked_files": [],
-  "needs_human": {
-    "flagged_by": "agent:delegator-mrq-55",
-    "reason": "Inspect the delivered Gmail triplet for RSVP/update/cancel behavior, and provide Outlook plus Apple-backed inbox addresses to complete the client matrix.",
-    "since": "2026-08-09T06:25:10Z"
-  },
+  "needs_human": null,
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 1,
@@ -70,6 +66,6 @@
   "tags": null,
   "title": "Spike \u2014 ICS rendering in real mail clients",
   "type": "spike",
-  "updated_at": "2026-08-11T03:07:28Z",
+  "updated_at": "2026-08-12T19:10:34Z",
   "urgency": null
 }

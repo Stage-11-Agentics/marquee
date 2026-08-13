@@ -1,0 +1,68 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 5,
+  "complexity": null,
+  "created_at": "2026-08-12T19:20:05Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "SURFACE: /speakers and /p/:slug (public).\n\nTWO SMALL DEFECTS ON THE SAME 32-CARD SURFACE, both confirmed on live 75b871d94c6f:\n\n1. ORDERED BY FIRST NAME. The directory presents as an alphabetical directory but sorts on given name. Verified by curl against live: Aarush Selvan, Alexander Bricken, Aparna Dhinkaran, Baptiste Roziere, Barr Yaron, Barry Zhang, Beyang Liu, Bruno Passos. An attendee looking for a speaker by surname has no working way to find them.\n\n2. NO WAY BACK. A speaker profile page offers no route to the directory -- the header carries only 'Agenda' and 'Organizer demo'. An attendee who opens a profile from the grid must use the browser back button to resume browsing.\n\nWHY BOTH IN ONE TICKET: they compound. Together they mean the only ways to find a specific speaker are scroll-and-scan and the browser's back button.\n\nNOTE ON A RELATED FINDING ALREADY FIXED -- DO NOT RE-FILE: the evaluation also logged that the /speakers search box was entirely non-functional. That was true of the build under test and was fixed by 864be372 ('Give the speaker directory's search a control that runs it'), which is in the live build. Search is not part of this ticket.\n\nFIX SHAPE: sort by surname (with a sensible fallback for mononyms and non-Western name orders -- do not just split on the last token without thought), and add a 'Speakers' link to the profile header.\n\nSIZE: small.\n\nPROVENANCE: sbek run 2026-08-12T15-33-34, public-widgets judgement, defects[3] and defects[4]. Validated live.",
+  "done_at": "2026-08-12T21:39:19Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZVSCHGAFR7YGKSXY7JVQ4MG",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVX1QHG7N8FE47F1N3GA1NZ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVX5Q4MNSHT10T3M9G0ZXGA",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVX5ZXJ8DZPWCFXMD66QT0Z",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVXDAE93ZYYQSN29974QNJJ",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVYJEXYYC5712JCX4GXZZK6",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVYMPZ6K5YTHC7Q9KRTCH1R",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVYMPZ6K5YTHC7Q9KRTCH1Q",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVPNS4RBG7A5P4QXD4C5WFY",
+  "last_event_id": "ev_01KZVYMPZ6K5YTHC7Q9KRTCH1V",
+  "last_status_changed_at": "2026-08-12T21:39:19Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-143",
+  "status": "done",
+  "tags": null,
+  "title": "The public speaker directory cannot be navigated: first-name ordering and no route back from a profile",
+  "type": "bug",
+  "updated_at": "2026-08-12T21:39:19Z",
+  "urgency": null
+}

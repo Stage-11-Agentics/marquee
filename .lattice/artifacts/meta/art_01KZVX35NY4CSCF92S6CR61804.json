@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:12:15Z",
+  "created_by": "agent:codex-mrq-146-handoff-reviewer",
+  "custom_fields": {},
+  "id": "art_01KZVX35NY4CSCF92S6CR61804",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVX35NY4CSCF92S6CR61804.md",
+    "size_bytes": 710
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Exact-head handoff review: PASS, no findings.",
+  "tags": [],
+  "title": "MRQ-146 final handoff review",
+  "token_usage": null,
+  "type": "note"
+}

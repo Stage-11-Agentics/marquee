@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T07:30:28Z",
+  "created_by": "agent:delegator-mrq-122",
+  "custom_fields": {},
+  "id": "art_01KZTE2DMZASCGQC3B47K3ZCEE",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTE2DMZASCGQC3B47K3ZCEE.md",
+    "size_bytes": 671
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS exact-HEAD Wrangler/curl public render smoke",
+  "tags": [],
+  "title": "MRQ-122 local runtime validation 790cdce",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,47 @@
+{
+  "assigned_to": "agent:claude-opus-mrq-105",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": "high",
+  "created_at": "2026-08-12T06:54:20Z",
+  "created_by": "agent:claude-coldstart-designer",
+  "custom_fields": {},
+  "description": "Implement BUILDPLAN Amendment 12 / milestone M-65: the complete cold start, one vertical slice in walkthrough order. This ticket owns EVALUATION \u00a72.4 (AC-275 \u2013 AC-287) via a claims manifest at tests/ac-claims/MRQ-105.json \u2014 landing that manifest is what turns the band's trace:ac enforcement on, so it ships in this PR together with the tests.\n\nREAD FIRST, in order: (1) BUILDPLAN.md Amendment 12 \u2014 the scope table and boundaries; (2) EVALUATION.md \u00a72.4 \u2014 the thirteen ACs with their exact verification shapes; (3) SPEC.md Amendment 19 \u2014 schema deltas (magic_links purposes claim|org_invite with nullable person_id), route table, CLI verbs, \u00a75 screen deltas; (4) sequence/USER_STORIES.md Amendment 19 (US-83 \u2013 US-86); (5) prototypes/cold-start/DECISIONS.md (rulings D1\u2013D8) and prototypes/cold-start/SKILL-SETUP-CHAPTER.md (the agent-side contract to fold into cli/generate-skill.mjs renderSkill()); (6) docs/GETTING-STARTED.md (human-side contract; AC-287 removes its status banner and the README caveat IN THIS PR); (7) the cold-start flow in prototypes/pipeline-v1.1/index.html v1.11 \u2014 the binding markup for the unclaimed landing, claim, handoff, Instance panel, organizers card, and conference-scoped checklist.\n\nSCOPE, in build order: migration widening magic_links; claim-link CLI verb + /claim/:token page + POST /api/v1/claim; unclaimed landing (renders ONLY when zero owner memberships exist \u2014 the seeded demo has one, so the deployed judged site must render byte-identically; hard guard, not a hope); post-claim scoped-token offer (ordinary api_tokens row, no new kind); POST /api/v1/events + /conferences/new UI + switcher \uff0b; org invites mint/exchange/revoke + organizer list/removal (sessions revoked in-transaction; last owner cannot self-remove); GET /api/v1/instance/status derived from real binding/secret presence + Instance panel + the AC-285 publish acknowledgment (warn-and-record, never hard-block); POST /api/v1/admin/remove-demo (is_demo scope only, idempotent); CLI setup verbs + SKILL setup chapter through renderSkill() (byte-equality test binding \u2014 reconcile verb names with what MRQ-104 already shipped before minting new ones); AC-287 docs-truth static scan.\n\nBOUNDARIES: package.json untouched (no new dependencies). Suite budget 45 s objective \u2014 prefer tests/node for pure logic; each new Worker-backed integration file costs ~19 s, so consolidate into as few files as the ACs allow. Test titles are \"AC-nnn \u00b7 description\" (trace:ac parses them). check:api registry/OpenAPI parity applies to every new route.\n\nPROCESS: work in a fresh worktree off github/main (Marquee-worktrees/mrq-105), never the main checkout; commit early and often; PR via gh pr create --repo Stage-11-Agentics/marquee --base main. DO NOT MERGE \u2014 merging is human-gated, and this ticket is post-deadline scope that must not merge before the competition freeze clears (BUILDPLAN Amendment 12). When the PR is open and green, set this task to review and flag your surface.\n",
+  "done_at": "2026-08-12T16:26:23Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTC6NB26F0WQTZMZVDY4C6P",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVCQQJN7HAM24B7Y21ZD25V",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVCQQJN7HAM24B7Y21ZD25T",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTC093MQJ906BTWGGRBE3SZ",
+  "last_event_id": "ev_01KZVCQQJN7HAM24B7Y21ZD25X",
+  "last_status_changed_at": "2026-08-12T16:26:23Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-105",
+  "status": "done",
+  "tags": [
+    "cold-start",
+    "post-deadline",
+    "opus"
+  ],
+  "title": "Cold start: from git clone to an owned conference \u2014 claim link, POST /events, invites, honest instance (M-65, AC-275\u2013AC-287)",
+  "type": "task",
+  "updated_at": "2026-08-12T16:26:23Z",
+  "urgency": null
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T05:45:46Z",
+  "created_by": "agent:claude-mrq101",
+  "custom_fields": {},
+  "id": "art_01KZT82Q8E0MVEWY63BBFJ2ED6",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT82Q8E0MVEWY63BBFJ2ED6.png",
+    "size_bytes": 404110
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "Same record after Reject then Accept and notify \u2014 MRQ-83 change-of-decision still works",
+  "token_usage": null,
+  "type": "file"
+}

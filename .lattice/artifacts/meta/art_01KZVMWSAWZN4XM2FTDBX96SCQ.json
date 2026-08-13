@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:48:57Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMWSAWZN4XM2FTDBX96SCQ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMWSAWZN4XM2FTDBX96SCQ.md",
+    "size_bytes": 371
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE. PR #71 (mrq-121-speaker-directory) merged 2026-08-12T08:07:22Z; merge commit e21c5d10 confirmed an ancestor of github/main via 'git merge-base --is-ance",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,41 @@
+# Plan Review: MRQ-113 — Portal invite control and speakers CSV
+
+## 1. Verdict
+
+**FAIL (plan-level)**
+
+One revision pass is needed. The plan is strong on the invite route and the CSV mechanics — every file/line citation checks out — but it leaves the exact coordination point the task flags ("Importer-created speakers must land visible — read the roster ticket's plan comment before finalizing") as a stated principle rather than a decision, and the concrete steps as written would produce speakers-only imports that are invisible, uninvitable, and portal-blocked. MRQ-111's plan is on the board now, so the gap is resolvable in minutes; it just has to be resolved *in the plan*, because it changes what step 1 and step 3 write.
+
+## 2. Summary
+
+Reviewed the MRQ-113 plan (organizer-authenticated invite route + speakers-only Sessionize import + discoverability) against the task description, the current codebase, and the MRQ-111 roster plan it is told to coordinate with. Codebase claims are accurate and the approach is architecturally sound — reuse of `mintMagicLink`/`enqueueAuthMail`/outbox is exactly right, and the verification section is fleet-aware and honest. The key concern: the plan explicitly forswears "a new membership writer," but per MRQ-111's roster derivation (`memberships UNION participations`) and the portal's membership gate, a speakers-only import creates people with neither — so the ticket's own visibility requirement fails, and the plan's own invite-route scoping cannot even resolve the people it just imported.
+
+## 3. Issues
+
+**[CRITICAL] Scope contract + Implementation step 3 — Speakers-only imports land invisible and uninvitable under the plan's own constraints**
+`importSpeaker` writes only `people` rows (`src/lib/sessionize-import.ts:485,581`); participations are created only from the sessions CSV (`:710`). MRQ-111's roster truth is `SELECT … FROM memberships … UNION … FROM participations` — its participation half covers importer speakers *with sessions*, which is precisely the half a speakers-only manifest doesn't produce. So a speakers-only import yields people in neither set: absent from the roster (violating the task's "Importer-created speakers must land visible"), unresolvable by this plan's invite route (which scopes to "speaker memberships or event participations" — correct authz, but it excludes the just-imported cohort), and rejected by the portal even with a valid magic link (`portal.routes.ts:290` joins `memberships … role = 'speaker'`). The plan's constraint "this ticket will not … assume a new membership writer" forecloses the only fix. The judge-flow this ticket protects — import speakers, bulk-invite them, judge clicks the on-screen link into the portal — fails at every step for speakers-only rows.
+**Recommendation:** Replace the deferral with a decision, in writing, in the plan. The natural one, consistent with MRQ-111's D1: the speakers-only import path writes `memberships(role='speaker')` using MRQ-111's guarded `INSERT … SELECT … WHERE NOT EXISTS` idiom (or calls a shared helper if MRQ-111 exports one). If instead MRQ-111 is to own that write, say so explicitly, add the cross-ticket dependency to the board, and state what MRQ-113 ships in the interim — silence is what the task told the planner not to leave.
+
+**[MAJOR] Implementation step 1 — `invited_at` stamped only on participations misses the session-less speakers this ticket creates**
+The plan stamps "every matching event participation's `invited_at`." Session-less speakers — the primary output of a speakers-only import, and MRQ-111's rollup rule 4 population — have no participations, so an invite stamps nothing and the roster will show them Pending, not Invited, contradicting the on-screen "queued" result. MRQ-111's plan adds `invited_at`/`confirmation_status` to `memberships` exactly for this case, but that migration belongs to MRQ-111 and hasn't landed.
+**Recommendation:** State the two-surface rule: stamp `participations.invited_at` where participations exist, and `memberships.invited_at` for membership-only speakers *if and when MRQ-111's migration is present*. Decide the landing-order behavior explicitly (e.g., MRQ-113 stamps participations unconditionally now, and the membership stamp is a named follow-up if MRQ-111 lands second — or declare a hard ordering dependency on the board).
+
+**[MAJOR] Risk identification — No treatment of concurrent-ticket collision with MRQ-111 (in_planning, high complexity, same surfaces)**
+Both tickets modify the onboarding speaker drawer/speaker area, both touch the memberships question, and MRQ-111 plans schema changes and a new `speakers.queries.ts` this plan's invite-resolution logic would ideally share. The plan cites the roster contract but names no sequencing, no merge-conflict expectation, and no fallback if MRQ-111's plan changes after this ticket implements against it.
+**Recommendation:** Add a short dependency note: which pieces are safe to build regardless of ordering (invite route, CSV/manifest changes, importer entry point), which are contingent (membership `invited_at` stamp, shared person-resolution SQL), and what the plan does if MRQ-111 lands first vs. second.
+
+**[MINOR] Implementation step 2 — "rename the utility route label to that exact noun" is ambiguous**
+The only current entry point is the dashboard empty-state's "Import from Sessionize" button (`DashboardPage.tsx:92`), which renders only when the program is empty. It's unclear whether the rename targets that button, the `/import` page heading, or both — and whether the empty-state button remains alongside the new speaker-area action.
+**Recommendation:** Name the exact surfaces: the new speaker-area "Import speakers" action, plus whatever happens to the existing empty-state button and the `/import` page title, so the implementer doesn't guess at copy the rubric will read.
+
+**[MINOR] Implementation — File inventory is partial**
+Step 1 says "under `src/routes/*.routes.ts`" without committing to a file (new `invites.routes.ts`? extend `onboarding.routes.ts`?), and step 3's UI changes ride on the task description's citations rather than the plan's own list. Fine for an experienced implementer, but the checklist asks for it and the route-file decision affects `_manifest.ts` registration.
+**Recommendation:** One line naming the new/modified files: route file (+ `_manifest.ts`), `SessionizeImportPage.tsx`, `sessionize-import.ts` (upload schema, `readImportManifest`, `normalizeMapping`, run loop), onboarding drawer component, and the test files.
+
+## 4. Positive Observations
+
+- **Every code citation in the plan verified against the tree.** `SessionizeImportPage.tsx` really does hard-require `external_ref` in `requiredSpeakers` and both files in `upload()`; `readImportManifest` really rejects a speakers-only manifest (`sessionize-import.ts:948`); the dashboard's `/import` link really is empty-program-only (`DashboardPage.tsx:92`); `invited_at` really is written on the co-speaker path (`public-form.routes.ts:306`). A plan whose premises all check out is rarer than it should be.
+- **The invite route design is right-shaped:** reusing `mintMagicLink`/`renderMagicLinkLoginMail`/`enqueueAuthMail`/`enqueueMailMessage` mirrors the existing public handler one-for-one, keeps the public route untouched, and the self-review's point that email lookup is not authorization — membership/participation joins are the resource boundary — is exactly the correct security framing.
+- **Honesty discipline is threaded throughout:** demo-only on-screen links, no success copy claiming provider delivery, per-person queued/duplicate facts, results area reserving space (the elements-never-jump rule). This matches both the rubric's manual-half framing and the house style.
+- **Verification is fleet-aware and evidence-separating:** targeted Vitest instead of the full suite in a shared fleet, `uptime` load check before the gate, and the explicit split between observed runtime facts and static/test inference during `in_validation`.
+- The speakers-only importer principle — "skip session loops rather than manufacture sessions" — is the right call and avoids the tempting-but-wrong synthetic-session hack.

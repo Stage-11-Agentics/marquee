@@ -1,0 +1,35 @@
+starred: sub_beyond-the-consensus-navigating-ais-frontier-in-2025, sub_how-to-build-an-ai-strategy-that-fails, sub_balancing-innovation-with-security-and-safety-in-multi-agent-systems
+header count: 3
+star pressed: true
+star background: rgb(16, 24, 32)
+count after reload: 3
+itinerary heading: My schedule
+summary: 3 sessionsMonday 3
+visible rows: 3
+glance blocks: glance-block lane-a is-next | glance-block lane-b | glance-block
+overlap chips: overlaps How To Build an AI Strategy That Fails · 09:00 || overlaps Beyond the Consensus: Navigating AI’s Front… · 09:00
+next chip: 1
+hover card: MON, OCT 12 · 09:00 – 09:45Beyond the Consensus: Navigating AI’s Frontier in 2025Metropolitan Ballroom · Sheraton New York Times SquareGrace Isfordoverlaps How To Build an AI Strategy T…
+sync url: http://localhost:8801/agenda?event=aie-ny-2026&sched=MQ-15Q4GHVAF7VE8#k=b7d1152e684108804343b37fc1e06196
+qr drawn: 11392 dark pixels of 32400
+code: MQ-15Q4GHVAF7VE8
+webcal: webcal://localhost:8801/api/v1/public/schedules/MQ-15Q4GHVAF7VE8/calendar.ics
+share: http://localhost:8801/agenda?event=aie-ny-2026&sched=MQ-15Q4GHVAF7VE8
+briefing first line: This is my conference schedule for AI Engineer New York 2026, managed on Marquee.
+downloaded: MQ-15Q4GHVAF7VE8.ics
+back link: ← My schedule
+segment lit: agenda=false mine=true
+detail star pressed: true
+agents page heading: For agents
+friend banner: Someone shared a schedule with you — 3 sessions. Import a copy into my schedule
+friend count before import: 0
+friend count after import: 3
+friend has own code: null
+phone url after capture: http://localhost:8801/agenda?event=aie-ny-2026&sched=MQ-15Q4GHVAF7VE8
+phone adopted code: MQ-15Q4GHVAF7VE8
+phone holds key: true
+phone count: 3
+phone segments: Conference agenda 176px | ★ My schedule 3 176px
+phone horizontal scroll: false
+shared code now holds: sub_how-to-build-an-ai-strategy-that-fails, sub_balancing-innovation-with-security-and-safety-in-multi-agent-systems
+pushed removal visible on server: true

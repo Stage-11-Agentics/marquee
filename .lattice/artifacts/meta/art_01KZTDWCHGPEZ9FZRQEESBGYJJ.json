@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T07:27:10Z",
+  "created_by": "agent:delegator-mrq-119",
+  "custom_fields": {},
+  "id": "art_01KZTDWCHGPEZ9FZRQEESBGYJJ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTDWCHGPEZ9FZRQEESBGYJJ.md",
+    "size_bytes": 1105
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS for commit d698d88; deferred blur validation verified.",
+  "tags": [],
+  "title": "MRQ-119 final re-review",
+  "token_usage": null,
+  "type": "note"
+}

@@ -208,7 +208,10 @@ button.event-context:hover, button.event-context[aria-expanded="true"] { backgro
 .token-secret { background: var(--ink); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--on-ink); display: block; font: 400 12px/1.4 var(--mono); overflow-x: auto; padding: 12px; user-select: all; }
 .token-secret-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 13px; }
 .agent-review-line { align-items: center; display: flex; gap: 5px; min-height: 18px; }
-.agent-review-label { color: var(--ink); font-weight: 600; }
+/* Reserved for the longer of its two labels ("Agent score" / "Overridden"), so
+   a chair recording an override does not slide the reviewer name and the score
+   beside it. */
+.agent-review-label { color: var(--ink); display: inline-block; font-weight: 600; min-width: 74px; }
 @media (max-width: 600px) {
   .token-secret-actions { align-items: stretch; flex-direction: column-reverse; }
   .token-secret-actions .button { width: 100%; }

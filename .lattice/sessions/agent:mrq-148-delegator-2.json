@@ -1,0 +1,11 @@
+{
+  "base_name": "agent:mrq-148-delegator",
+  "framework": "claude-code",
+  "last_active": "2026-08-12T23:06:55Z",
+  "model": "claude-opus-5",
+  "name": "agent:mrq-148-delegator-2",
+  "serial": 2,
+  "session": "sess_01KZW3M8TYTEE9X46JWP31GCSH",
+  "started_at": "2026-08-12T23:06:27Z",
+  "status": "active"
+}

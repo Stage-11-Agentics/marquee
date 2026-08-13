@@ -1,0 +1,56 @@
+{
+  "assigned_to": "agent:mrq-138-delegator",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": null,
+  "created_at": "2026-08-12T19:19:09Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "SURFACE: /roster?person=... (organizer speaker record), 'Speaker files' region; and /files.\n\nWHAT BREAKS: A headshot a speaker uploads through their portal is stored and rendered as the /onboarding row avatar, but the organizer has no filename, uploader, timestamp or download for it anywhere. The record's 'Speaker files' region is an empty labelled section, and /files is scoped to file-request tasks only (it reported 'Received 0 of 159').\n\nROOT CAUSE (confirmed at live sha 75b871d94c6f) -- src/ui/speakers/SpeakerRecord.tsx:204-205:\n    {/* Reserved for MRQ-112's speaker files panel; it owns the serve path and the render. */}\n    <section class=\"speaker-section speaker-files\" aria-label=\"Speaker files\" />\nA self-closing section with no children. The panel was never built, so the surface ships an empty region that announces itself to assistive technology as 'Speaker files'.\n\nBOARD ACCURACY NOTE: MRQ-112 ('Headshots render and speaker files panel') is marked done. It closed with this placeholder still in the tree. Linking this ticket to MRQ-112 rather than reopening it, per operator ruling.\n\nFIX SHAPE: render the speaker's profile-photo and portal uploads in that section (filename, uploader, timestamp, download), or fold profile photos into the deliverables model so /files can show them. Decide which of the two file systems owns profile photos -- today they are separate and only the deliverables one is surfaced.\n\nWHY URGENT: 'the system does the chase work' is a stated principle; an organizer who cannot see what a speaker sent cannot stop chasing it.\n\nSIZE: medium.\n\nPROVENANCE: sbek run 2026-08-12T15-33-34, speaker-management judgement, defects[1]. Validated by reading live source.",
+  "done_at": "2026-08-12T21:13:55Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KZVTJEJQ2SEJ7E3STFX0JVJG",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVX678FXD46K6Z5ZYW1M7KB",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVX678FXD46K6Z5ZYW1M7KA",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVX8T0ZE16TFHMNDEBRWD1Z",
+      "role": "plan-review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVPM2B821N7ZP3E22XD0Y5G",
+  "last_event_id": "ev_01KZVX8T12M0278J0G7P9TWHWA",
+  "last_status_changed_at": "2026-08-12T21:13:55Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-12T19:20:26Z",
+      "created_by": "agent:findings-triage",
+      "note": null,
+      "target_task_id": "task_01KZTCRE8QQ8MJ7HHJ53TNP8CH",
+      "type": "related_to"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-138",
+  "status": "done",
+  "tags": null,
+  "title": "The organizer's Speaker files panel ships as an empty placeholder",
+  "type": "bug",
+  "updated_at": "2026-08-12T21:15:20Z",
+  "urgency": null
+}

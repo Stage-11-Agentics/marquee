@@ -1,0 +1,67 @@
+{
+  "assigned_to": "agent:delegator-mrq-123",
+  "branch_links": [],
+  "c11_surface": "surface:427",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 9,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:37Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "EMB-15 (w3; partial floor already cleared \u2014 four widget kinds, filters, branding, copyable snippet). STRICT ORDER: (1) sidebar 'Embeds' row -> /embed/config \u2014 coordinate with the wave-0 ticket which may have landed it; if so verify and build on it. (2) JSON output format in the builder's picker \u2014 the anonymous public API already exists (public.routes.ts:33-110), ~10 lines \u2014 plus restore the 'Agenda data' feed link if wave-0 hasn't. (3) iCal output format (doubles as public add-to-calendar). (4) Saved-embed CRUD on the existing deliberately-empty embeds table (read migration 0007's comment first \u2014 resolvePublicEmbed currently derives everything from slug+query): naming, enable/disable, saved list on a new admin embeds page. SKIP XML (rubric-chasing nobody consumes). Human lens: a marketer with five embeds across pages eventually needs to turn one off without editing HTML \u2014 this is finishing an intended design, the table is waiting. Full spec: section T-K. Register row 40.",
+  "done_at": "2026-08-12T18:48:58Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KZTEXSNC162SMY0CHG599660",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTFKFJH101RGYEV0MBVHF75",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTGJGQ09BYXYJ5Y3G845X4Y",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTH15WNSJMBR9GKC6ZTP782",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTJ0TZ4TQPMZKRYDAW1J2RR",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVMWSHYPG0CJYMGECQ88CVV",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWSHYPG0CJYMGECQ88CVT",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRKJ1ST2HRMQ635VK3TWT",
+  "last_event_id": "ev_01KZVMWSHYPG0CJYMGECQ88CVY",
+  "last_status_changed_at": "2026-08-12T18:48:58Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-123",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Embeds as an organizer area",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:58Z",
+  "urgency": null
+}

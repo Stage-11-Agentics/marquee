@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:50:01Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMYQQQP628FSDGVRYXKAP0",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMYQQQP628FSDGVRYXKAP0.md",
+    "size_bytes": 688
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE, having sat at 'in_planning' since 2026-08-11T15:24Z while its work shipped the same day. PR #3 ('MRQ-73: instrumentation and resilience \u2014 one correlated",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

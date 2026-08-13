@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T20:35:03Z",
+  "created_by": "Mrq135-1",
+  "custom_fields": {},
+  "id": "art_01KZVTZ1ZQYH2DMNXA1WVZPBQ2",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVTZ1ZQYH2DMNXA1WVZPBQ2.md",
+    "size_bytes": 1011
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Independent review (fresh headless Claude reading git diff github/main...HEAD plus surrounding agenda code): VERDICT APPROVE. Root cause correctly addressed; is-review applied exactly when the checkbo",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,5 @@
+Verdict: PASS
+Reviewed commit: 3eb44c9
+Prior review findings resolved: API registry regenerated; task and attachment queries chunk at 80; R2.get is lazy inside the async ZIP entry generator; ZIP size is bounded before streaming; export errors reach the dialog; changing grouping or removing a row invalidates the Ready archive; timezone-aware filename and import rate bucket are aligned.
+Adversarial checks: latest-only still selects FileVersion.is_latest; missing/R2-missing deliverables remain manifest entries; event scope is enforced; path safety and duplicate names remain handled; the dialog retains missing rows, grouping and removal, Preparing -> Ready, surfaced failure copy, Escape/focus behavior, and reserved status geometry.
+Verification: npx tsc --noEmit; targeted Vitest 2 files/6 tests; Node UI tests 2/2; npm run check:api pass with 135 operations; git diff --check pass.

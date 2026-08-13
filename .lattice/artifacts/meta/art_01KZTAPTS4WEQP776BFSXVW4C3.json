@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T06:31:42Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZTAPTS4WEQP776BFSXVW4C3",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZTAPTS4WEQP776BFSXVW4C3.png",
+    "size_bytes": 439924
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Exact-head local c11 browser screenshot after rebase onto github/main.",
+  "tags": [],
+  "title": "MRQ-102 final system health browser proof",
+  "token_usage": null,
+  "type": "file"
+}

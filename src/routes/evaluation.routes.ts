@@ -506,12 +506,16 @@ async function planDetail(db: D1Database, eventId: string, planId: string): Prom
     SELECT COUNT(CASE WHEN evaluation.abstained = 0 THEN evaluation.id END) AS evaluations,
       COUNT(CASE WHEN evaluation.abstained = 1 THEN evaluation.id END) AS recusals,
       COUNT(DISTINCT CASE WHEN evaluation.abstained = 0 THEN evaluation.submission_id END) AS submissions_with_reviews,
-      MAX(CASE WHEN evaluation.abstained = 0 THEN evaluation.score END) AS highest_score,
-      COUNT(DISTINCT CASE WHEN evaluation.abstained = 0 AND evaluation.score IS NOT NULL AND evaluation.score != (
-        SELECT AVG(other.score)
+      -- A chair's override governs the score everywhere it is read, this
+      -- summary included. Reading the raw column here would headline a number
+      -- the register, the results table, the export and the record have all
+      -- already superseded.
+      MAX(CASE WHEN evaluation.abstained = 0 THEN COALESCE(evaluation.override_score, evaluation.score) END) AS highest_score,
+      COUNT(DISTINCT CASE WHEN evaluation.abstained = 0 AND COALESCE(evaluation.override_score, evaluation.score) IS NOT NULL AND COALESCE(evaluation.override_score, evaluation.score) != (
+        SELECT AVG(COALESCE(other.override_score, other.score))
         FROM evaluations other
         JOIN people other_reviewer ON other_reviewer.id = other.reviewer_person_id AND other_reviewer.kind = 'human'
-        WHERE other.round_id = evaluation.round_id AND other.abstained = 0 AND other.score IS NOT NULL
+        WHERE other.round_id = evaluation.round_id AND other.abstained = 0 AND COALESCE(other.override_score, other.score) IS NOT NULL
       ) THEN evaluation.submission_id END) AS wide_spread
     FROM evaluations evaluation
     JOIN evaluation_rounds round ON round.id = evaluation.round_id

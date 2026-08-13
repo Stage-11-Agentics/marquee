@@ -1,0 +1,47 @@
+{
+  "assigned_to": "agent:mrq-154-submitter-seat",
+  "branch_links": [
+    {
+      "branch": "v2-5-submitter-seat",
+      "linked_at": "2026-08-12T22:09:50Z",
+      "linked_by": "agent:mrq-154-submitter-seat",
+      "repo": null
+    }
+  ],
+  "c11_surface": "FD4528E3-892A-4AB5-BA9A-C50017D0F944",
+  "c11_workspace": "5A9C19A6-A68C-4169-A755-DA657E278D5E",
+  "comment_count": 6,
+  "complexity": null,
+  "created_at": "2026-08-12T21:59:51Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "Source: .briefs/eval-gap-v2-human-lens.md section 4, authored by Fable (Eval V2 Audit, surface:55). Operator-approved 2026-08-12. Read that section for the full human-problem framing before starting. (V2-5, ~45 min.)\n\nHUMAN PROBLEM. A speaker submits, gets a confirmation and a portal link \u2014 and the portal politely tells them there is nothing there. Their first question is the one the product must answer: did you get my proposal, and where does it stand?\n\nGOOD LOOKS LIKE. The portal resolves its event through participations as well as memberships, and lists the person's own submissions with status ('Submitted \u00b7 awaiting review' \u2014 the vocabulary the decision flow already uses). NO new account machinery: the magic link IS the account. Say so on the confirmation ('this link is your sign-in').\n\nCLOSES. CFP-05 (w3 fail \u2014 the largest single call-for-papers item, and call-for-papers is the biggest prize on the board at 55.9% of a 20-weight area). Hardens CFP-06's roundtrip.\n\nCOORDINATE WITH MRQ-150 (in progress). That ticket fixes the portal dead-end; this one extends its empty state into a real answer. SAME SURFACE \u2014 sequence after it, or brief the same agent. Do not run both blind in the same files.\n\nVERIFY. Public form -> submit the fixture proposal -> follow the confirmation link -> the portal lists it with a status -> the organizer's list shows the same record intact.",
+  "done_at": "2026-08-12T23:25:29Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZW0APF1E647JFBM60WW4PMH",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZW2AKB78AEF3QW1VDM75CVA",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVZTA9M5FV7D4DJDC1H801Q",
+  "last_event_id": "ev_01KZW4Q47ZGFSCDHYSE4HX8QWP",
+  "last_status_changed_at": "2026-08-12T23:25:29Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-154",
+  "status": "done",
+  "tags": null,
+  "title": "V2-5: submitting a proposal gives you a seat that shows it",
+  "type": "task",
+  "updated_at": "2026-08-12T23:25:29Z",
+  "urgency": null
+}

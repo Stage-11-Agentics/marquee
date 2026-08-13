@@ -1,0 +1,110 @@
+{
+  "assigned_to": "agent:delegator-mrq-132",
+  "branch_links": [
+    {
+      "branch": "mrq-132-attendee-schedule",
+      "linked_at": "2026-08-12T16:55:47Z",
+      "linked_by": "agent:delegator-mrq-132",
+      "repo": null
+    }
+  ],
+  "comment_count": 10,
+  "complexity": null,
+  "created_at": "2026-08-12T15:40:24Z",
+  "created_by": "agent:itinerary-design",
+  "custom_fields": {},
+  "description": "Build the ratified attendee-schedule feature end to end, reproducing the binding prototype one-to-one. Binding artifacts: sequence/attendee-schedule-design.md (decisions + prototype-round rulings) and prototypes/attendee-schedule/index.html (binding visual contract). Scope: (1) single-session Add-to-calendar ICS on /s/:slug reusing src/jobs/calendar/ics.ts; (2) star control as SSR slots + vanilla script module on public agenda cards and session detail (MRQ-120 hooks merged in PR #86; add data-public-session-end); localStorage state; segmented header 'Conference agenda | My schedule (n)'; My Schedule itinerary view with at-a-glance time blocks, NOW line, hover cards, subtle overlap chips, origin-preserving back-nav; (3) D1-backed short codes: POST/GET/PUT /api/v1/public/schedules (code=read, hashed writeKey=write), share URL, open-on-your-phone QR sheet with #k fragment sync, import-as-copy; (4) set-level ICS download + live webcal feed at /api/v1/public/schedules/{code}.ics; (5) Brief-your-agent text block + For-agents doc; overlaps[] in schedule JSON. Register rows 37/38, section T-J (post-eval product feature). Mobile verified at 390px per doc rulings. No login anywhere.",
+  "done_at": "2026-08-12T17:38:20Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZVAJ56SN8TJGC2Q2TMEXMAM",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVEB13NJFHAYK5G9BFSTMNZ",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVEB16P5A3JE0QM7PZC3ZHH",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVEB19SGNA93VKJEBV3SYT0",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVEB1CT70WDD9XAMEG1Y1VR",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVEB1G42128S01RYE99W2YA",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVEB1KC8QAAT39M388D34V8",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVEB1PDD34KJS9XKNHWADDK",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVEB1SJ82VQR5P7HD9WBKX0",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVEBZ3TFVF4HETXN56HHNNM",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVEDSD2X5K0BBDA7P3S3R7V",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVETWY0KM70NTNJQP1HVTC9",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZVFGR20DEE2PR0BX4TXKAR5",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVGVESA8TS6XBQD9G5VBCZ8",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVGVESA8TS6XBQD9G5VBCZ7",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVA3GKJEVBNKP5FG7G6KTPJ",
+  "last_event_id": "ev_01KZVMP3PXP34SEHNMKM586W1Z",
+  "last_status_changed_at": "2026-08-12T17:38:20Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 2,
+  "schema_version": 1,
+  "short_id": "MRQ-132",
+  "status": "done",
+  "tags": null,
+  "title": "Attendee personal schedule \u2014 star, My Schedule, share/sync, ICS/webcal, agent briefing",
+  "type": "task",
+  "updated_at": "2026-08-12T18:45:19Z",
+  "urgency": null
+}

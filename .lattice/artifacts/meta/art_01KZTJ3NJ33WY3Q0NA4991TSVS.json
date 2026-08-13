@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T08:41:03Z",
+  "created_by": "agent:delegator-mrq-117",
+  "custom_fields": {},
+  "id": "art_01KZTJ3NJ33WY3Q0NA4991TSVS",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTJ3NJ33WY3Q0NA4991TSVS.md",
+    "size_bytes": 939
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Final curl-backed local Worker proof at f10a3ac.",
+  "tags": [],
+  "title": "MRQ-117 final exact-HEAD running Worker validation PASS",
+  "token_usage": null,
+  "type": "note"
+}

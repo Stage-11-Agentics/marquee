@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T14:46:49Z",
+  "created_by": "agent:delegator-mrq-126",
+  "custom_fields": {},
+  "id": "art_01KZV71DBFWHBNSGFP4Z5SDRPP",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZV71DBFWHBNSGFP4Z5SDRPP.md",
+    "size_bytes": 512
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PASS: final manual review of complete diff at 422f5f5; no findings.",
+  "tags": [],
+  "title": "MRQ-126 final exact-head self-review",
+  "token_usage": null,
+  "type": "note"
+}

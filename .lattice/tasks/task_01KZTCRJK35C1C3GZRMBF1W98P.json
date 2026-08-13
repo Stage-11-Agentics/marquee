@@ -1,0 +1,72 @@
+{
+  "assigned_to": "agent:delegator-mrq-121",
+  "branch_links": [],
+  "c11_surface": "surface:425",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 5,
+  "complexity": "low",
+  "created_at": "2026-08-12T07:07:36Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "EMB-05 (w2, partial today \u2014 the /p/:slug detail page is fully built and linked from agenda rows), EMB-12 (w2), EMB-13 (w1 \u2014 back-nav acceptable, do NOT build a modal), feeds unowned EMB-14 (w3) by making the fifth enumerable public surface. Build: a real /speakers public page reusing PublicShell \u2014 grid cards (name, title, company; headshot slot with initials fallback \u2014 the headshot-seeding ticket fills it) linking to existing /p/:slug; a q search input (server-side name/company matching already exists in sessionRowsQuery \u2014 it is a missing input, not a missing capability); make the embed speakers cards actual anchors to /p/:slug (EmbedPage.tsx:154-168 emit no links today). Full spec: section T-I2. Register row 36.",
+  "done_at": "2026-08-12T18:48:57Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDCRF6Z4KKE0AW2C2GK04F",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTDV4MYW90F28AWHH7T0J7K",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTEE6BFPEXQNSYYBD1W5TFQ",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTEEEW7DMBM87PVB9A02XXA",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTERMN4MWGS6A6S0EYXT7RS",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTF8SP99KF50ENZVZDDQKX0",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWSAWZN4XM2FTDBX96SCR",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWSAWZN4XM2FTDBX96SCQ",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRJK35C1C3GZRMBF1W98P",
+  "last_event_id": "ev_01KZVMWSAWZN4XM2FTDBX96SCV",
+  "last_status_changed_at": "2026-08-12T18:48:57Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 3,
+  "schema_version": 1,
+  "short_id": "MRQ-121",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Public speaker directory",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:57Z",
+  "urgency": null
+}

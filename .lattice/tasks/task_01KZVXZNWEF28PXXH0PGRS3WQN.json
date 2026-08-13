@@ -1,0 +1,48 @@
+{
+  "assigned_to": "agent:mrq-149-delegator",
+  "branch_links": [],
+  "comment_count": 5,
+  "complexity": null,
+  "created_at": "2026-08-12T21:27:49Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "OPERATOR DECISION 2026-08-12: the declared non-goal is REVERSED. AI abstract triage is now IN SCOPE and must ship tonight. Together with MRQ-148 this is the ENTIRE arithmetic distance from 98.7% to 100% on the eval.\n\nRUBRIC ITEM: ABS-14, weight 1, type depth, testability auto-partial. Currently `not_found` (zero credit).\n\nCRITERION (verbatim): 'If the clone claims AI-assisted triage, an AI evaluator produces a first-pass numeric score with written reasoning on a submission, and a human override persists distinguishably.'\n\nPASSES WHEN (verbatim): 'An AI evaluation feature exists and yields a numeric score plus rationale text attributed to the AI on \"Taming 40-Minute CI\"; the results view distinguishes AI from human scores; an admin override to a different value persists after reload. Judge this item only if the clone claims AI review anywhere in its UI or marketing; otherwise score as not applicable per the agent recorded observation of absence.'\n\nSTART HERE, DO NOT BUILD FROM SCRATCH -- MOST OF THIS MAY ALREADY EXIST:\n**MRQ-134 is DONE** ('Evaluation is an open seat -- agent evaluator identity, badge, skill, and seeded evidence'). Its binding design is `sequence/agent-evaluator-design.md`; its ACs are AC-288 through AC-293 in EVALUATION.md 2.5; the load-bearing file is `src/lib/reviewer-scope.ts`. Its stated position: 'Marquee ships no built-in AI reviewer. It ships the seat an external agent sits in' -- the organizer's own model, own prompt, own rubric, on the organizer's own credentials.\n\nREAD ALL OF THAT FIRST, then determine honestly which of the three rubric requirements MRQ-134 already satisfies:\n  (a) a numeric score PLUS written reasoning attributed to the agent evaluator,\n  (b) the results view visibly DISTINGUISHING agent scores from human ones,\n  (c) an admin override to a different value that PERSISTS after reload and remains distinguishable as an override.\nClose only the gaps. Report in the PR exactly which of (a)/(b)/(c) already existed and which you built.\n\nTHE CONDITIONAL CLAUSE MATTERS -- READ IT CAREFULLY. The item is judged 'only if the clone claims AI review anywhere in its UI or marketing'. MRQ-134 ships an agent-evaluator badge and seeded evidence, which almost certainly means we DO claim it and the item IS judgeable. Verify that rather than assuming. If you conclude we do NOT claim it anywhere, STOP and raise a flag before building -- because in that case the honest scoring is 'not applicable', and whether N/A is excluded from the denominator (like cannot_judge) or scored zero decides whether this ticket is worth doing at all. That is an operator call, not yours.\n\nFIXTURE: the judge scores this on the submission titled 'Taming 40-Minute CI'. Make sure that specific record carries the evidence.\n\nDO NOT OVERCLAIM. This product's position is that the organizer brings their own agent. Whatever you ship must be truthful about what is doing the scoring. MRQ-146 exists because the API was caught overclaiming -- do not create a second instance.\n\nSIZE: medium, and genuinely uncertain until you have read MRQ-134's design -- it could be small.\n\nPROVENANCE: sbek run 2026-08-12T15-33-34, abstract-management, ABS-14. Re-baseline by Eval Closer (surface:48).",
+  "done_at": "2026-08-12T23:25:23Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZVYQSCAABAQVB4YPW9GF36G",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZW0D4P93BZF8BT1H44MB3VM",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZW4GX5PR6MJ6BNW1KBDT0S4",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZW5M89QTS7PV6GBJXT4Y6ZB",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZVXZNWEF28PXXH0PGRS3WQN",
+  "last_event_id": "ev_01KZW6PG8G85MVSK9REJB6HM50",
+  "last_status_changed_at": "2026-08-12T23:25:23Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-149",
+  "status": "done",
+  "tags": null,
+  "title": "ABS-14: an agent evaluator's first-pass score, its reasoning, and a human override that sticks",
+  "type": "task",
+  "updated_at": "2026-08-13T00:00:06Z",
+  "urgency": null
+}

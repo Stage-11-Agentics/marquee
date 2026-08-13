@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T05:45:46Z",
+  "created_by": "agent:claude-mrq101",
+  "custom_fields": {},
+  "id": "art_01KZT82Q52XZ8VEGG19BCAPDTK",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT82Q52XZ8VEGG19BCAPDTK.png",
+    "size_bytes": 393740
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "Same record immediately after Reject and notify on-screen \u2014 no card-height jump",
+  "token_usage": null,
+  "type": "file"
+}

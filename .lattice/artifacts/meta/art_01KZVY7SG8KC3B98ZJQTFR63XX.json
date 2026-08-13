@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T21:32:15Z",
+  "created_by": "agent:codex-mrq-146",
+  "custom_fields": {},
+  "id": "art_01KZVY7SG8KC3B98ZJQTFR63XX",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVY7SG8KC3B98ZJQTFR63XX.md",
+    "size_bytes": 488
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged PR #130 at commit 85e17150ea47 after CI fast-gate passed and the exact-head single-mode code review returned PASS with three non-blocking observations. Changes narrow the OpenAPI concurrency cl",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

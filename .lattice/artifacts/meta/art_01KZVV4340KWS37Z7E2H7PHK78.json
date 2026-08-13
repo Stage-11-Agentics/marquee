@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T20:37:48Z",
+  "created_by": "agent:codex-mrq-145",
+  "custom_fields": {},
+  "id": "art_01KZVV4340KWS37Z7E2H7PHK78",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVV4340KWS37Z7E2H7PHK78.md",
+    "size_bytes": 592
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Anonymous local Worker requests prove landing doors and real agenda/speaker content.",
+  "tags": [],
+  "title": "MRQ-145 local SSR content proof",
+  "token_usage": null,
+  "type": "note"
+}

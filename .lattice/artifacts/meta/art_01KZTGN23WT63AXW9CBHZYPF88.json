@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T08:15:36Z",
+  "created_by": "agent:delegator-mrq-112",
+  "custom_fields": {},
+  "id": "art_01KZTGN23WT63AXW9CBHZYPF88",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTGN23WT63AXW9CBHZYPF88.md",
+    "size_bytes": 972
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Post-rebase gate PASS at 73b3ae1; browser surface closed and none left open.",
+  "tags": [],
+  "title": "MRQ-112 exact-head local gate",
+  "token_usage": null,
+  "type": "note"
+}

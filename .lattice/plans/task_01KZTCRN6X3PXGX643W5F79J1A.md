@@ -39,3 +39,5 @@ No rubric item names this screen — it is the fallback the judge reaches when t
 - Fixed: inline person creation reuses an existing organization person on case-insensitive email match, avoiding the misleading conflict treatment and allowing event participation to be attached without duplicate people.
 - Fixed: the event search person query uses separate participation and submitter branches under the existing visibility scope, includes email in search text, and removes the unrelated membership-wide `Speaker` taxonomy expansion. The compound query is wrapped for SQLite ordering.
 - Fixed: agenda placement targets use labelled `group` roles rather than dozens of landmark `region`s, and a new source-contract test covers the picker controls and all board drop-cell call sites.
+
+## Reset 2026-08-12 by agent:delegator-mrq-127

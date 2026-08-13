@@ -97,3 +97,12 @@ Targeted vitest only (fleet load rule); full `pr-gate` once before the PR, load-
 3. Builder UI (add row, bound-source editor) + CSS + settings anchors.
 4. Self/headless review over the diff, triaged.
 5. `pr-gate`, live validation against `vite dev` in the c11 browser, PR.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+Self-review (inline-full; single-reviewer pass over the diff still to come after implementation).
+
+1. **Would `listFormFields` resolving internally leak resolved options back into the DB via form duplication?** No — `forms.routes.ts:472` duplicates from a raw `SELECT` (`field.config` is the stored JSON string), not from `listFormFields`. Verified; no change. The write-side strip in `normalizeFieldConfig` remains as belt-and-braces for the create/PATCH paths.
+2. **Test migrations are registered by explicit import, not glob** (`tests/integration/apply-migrations.ts:3-10`). `0009` must be added there or the integration suite silently runs against a schema that never saw it. Added to the file list.
+3. **`PublicForm.tsx` is T-H's file** ("owns PublicForm.tsx so T-Z doesn't collide", section 4). The stale-answer note stays a single additive block so a rebase behind T-H is mechanical; called out in the PR body.
+4. **Speed:** the two option lookups issue as one `Promise.all`, and only when a bound field is present, so unbound forms pay nothing and the public-form GET keeps its budget.

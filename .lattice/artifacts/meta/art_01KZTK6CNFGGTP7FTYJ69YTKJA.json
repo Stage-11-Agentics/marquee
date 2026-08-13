@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T09:00:01Z",
+  "created_by": "agent:delegator-mrq-117",
+  "custom_fields": {},
+  "id": "art_01KZTK6CNFGGTP7FTYJ69YTKJA",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZTK6CNFGGTP7FTYJ69YTKJA.md",
+    "size_bytes": 511
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-117 rebased exact-HEAD self-review PASS",
+  "token_usage": null,
+  "type": "note"
+}

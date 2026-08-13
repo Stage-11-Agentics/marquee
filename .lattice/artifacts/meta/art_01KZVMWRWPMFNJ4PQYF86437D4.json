@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:48:57Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMWRWPMFNJ4PQYF86437D4",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMWRWPMFNJ4PQYF86437D4.md",
+    "size_bytes": 364
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE. PR #89 (mrq-117-zip-export) merged 2026-08-12T14:42:24Z; merge commit 66e52f90 confirmed an ancestor of github/main via 'git merge-base --is-ancestor'. ",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

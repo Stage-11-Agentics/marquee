@@ -1,0 +1,92 @@
+{
+  "assigned_to": "agent:delegator-mrq-113",
+  "branch_links": [],
+  "c11_surface": "surface:424",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 7,
+  "complexity": "low",
+  "created_at": "2026-08-12T07:07:33Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "SPK-06 (w2), SPK-03 (w2), plus coverage protection for SPK-07/09 + CNT-02/03 (the on-screen demo magic link is the most reliable way the judge reaches the portal at all). (1) 'Invite to portal' on the speaker-facing surfaces (onboarding drawer now; speaker record when the roster ticket lands) + bulk action: existing POST /auth/magic-link machinery, organizer-authenticated variant; demo mode already returns the link on screen; the outbox row makes 'logs the send' free. Stamp participations.invited_at (already written on the co-speaker path). (2) CSV: make external_ref OPTIONAL for speakers (importer already synthesizes identity from email; the eval kit's own fixture speakers.csv has NO external_ref column and fails today's UI validation at SessionizeImportPage.tsx:81), accept a speakers-only manifest (sessionize-import.ts:948 currently requires both), entry point 'Import speakers' reachable from the speaker area (the only in-app /import link renders solely when the program is empty, DashboardPage.tsx:86-92). Importer-created speakers must land visible (coordinate with the roster ticket's membership decision \u2014 read its plan comment on the board before finalizing). Full spec: section T-D3. Register rows 18,23.",
+  "done_at": "2026-08-12T18:48:57Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDHSFZ9ZDP25M09DB80KW5",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTDWW6FW3BCKB0BA10RQK6G",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTDY6H2CVWYXXXMDQVTQVZA",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTEF7QX6G38MXGZZ6ZGDXWT",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZTEH83GHGWQPXPHXXXFGMAD",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTETMJPZ1FKG0V69X95F9HD",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTF8MJVX9HWECD5K3XC0S1F",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTFND0R6GDY0GBB83BVXAX1",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFRXWFD5N74GD4YDM4MKFX",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTFS5PDKYYDZBPXV32FQ8E3",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZVMWRHV3YXE38MQW0D5YRK0",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWRHV3YXE38MQW0D5YRJZ",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRERG8J3S52KRDZHM67AE",
+  "last_event_id": "ev_01KZVMWRHV3YXE38MQW0D5YRK3",
+  "last_status_changed_at": "2026-08-12T18:48:57Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 3,
+  "schema_version": 1,
+  "short_id": "MRQ-113",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Portal invite control and speakers CSV",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:57Z",
+  "urgency": null
+}

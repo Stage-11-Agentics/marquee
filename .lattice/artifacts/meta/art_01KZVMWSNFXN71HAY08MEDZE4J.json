@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:48:58Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMWSNFXN71HAY08MEDZE4J",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMWSNFXN71HAY08MEDZE4J.md",
+    "size_bytes": 367
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE. PR #87 (mrq-124-batch-publish) merged 2026-08-12T14:42:37Z; merge commit 3d6c077d confirmed an ancestor of github/main via 'git merge-base --is-ancestor",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

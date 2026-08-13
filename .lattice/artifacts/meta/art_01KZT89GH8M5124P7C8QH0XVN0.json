@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T05:49:29Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZT89GH8M5124P7C8QH0XVN0",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT89GH8M5124P7C8QH0XVN0.png",
+    "size_bytes": 431705
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Local c11 browser screenshot of System health capability checks.",
+  "tags": [],
+  "title": "MRQ-102 system health browser proof",
+  "token_usage": null,
+  "type": "file"
+}

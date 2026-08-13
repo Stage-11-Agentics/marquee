@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T05:45:46Z",
+  "created_by": "agent:claude-mrq101",
+  "custom_fields": {},
+  "id": "art_01KZT82QBNRSA5JNJPNV141F4G",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZT82QBNRSA5JNJPNV141F4G.png",
+    "size_bytes": 106903
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "Error state: not-found is now distinguished from a transient/unreachable failure",
+  "token_usage": null,
+  "type": "file"
+}

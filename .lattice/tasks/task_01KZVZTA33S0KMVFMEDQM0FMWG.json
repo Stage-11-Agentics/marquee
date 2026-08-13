@@ -1,0 +1,43 @@
+{
+  "assigned_to": "agent:codex-v2-3-committee-pool",
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-08-12T21:59:51Z",
+  "created_by": "agent:findings-triage",
+  "custom_fields": {},
+  "description": "Source: .briefs/eval-gap-v2-human-lens.md section 4, authored by Fable (Eval V2 Audit, surface:55). Operator-approved 2026-08-12. Read that section for the full human-problem framing before starting. (V2-3, ~30 min.)\n\nHUMAN PROBLEM. A chair creates a committee, adds reviewers, opens Distribute \u2014 and it is disabled with 'Choose a reviewer pool on this round card', a sentence pointing at a control on a DIFFERENT card. A brand-new committee cannot do the thing committees exist for. The eval recorded exactly this dead end: 'Committee created \u00b7 add reviewers to begin assignment', yet both round cards still read 'REVIEWER POOL: No pool selected'.\n\nGOOD LOOKS LIKE. Creating a committee attaches it as the pool of every round that has none \u2014 the obvious default for the overwhelmingly common one-committee conference. A round's EXPLICIT pool is never overwritten. If a round still has no pool, the gate message names the exact control and links focus to it.\n\nCLOSES. ABS-06 (w2 partial).\n\nVERIFY. Fresh event -> create committee -> invite reviewer -> Distribute is enabled -> run it -> assignments appear. Re-running is idempotent.",
+  "done_at": "2026-08-12T23:25:23Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZW08P3NZXEHQXF9Y49ATFAR",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZW23JHV6FWSFMWRMCAVPE6N",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZW2HD36KTNB726QG1040WJ5",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZVZTA33S0KMVFMEDQM0FMWG",
+  "last_event_id": "ev_01KZW4PYHNXH1K1BZP3PY7ZQ33",
+  "last_status_changed_at": "2026-08-12T23:25:23Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-152",
+  "status": "done",
+  "tags": null,
+  "title": "V2-3: a newly created committee is ready to distribute",
+  "type": "task",
+  "updated_at": "2026-08-12T23:25:23Z",
+  "urgency": null
+}

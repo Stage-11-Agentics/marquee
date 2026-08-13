@@ -1,0 +1,97 @@
+{
+  "assigned_to": "agent:delegator-mrq-110",
+  "branch_links": [],
+  "c11_surface": "surface:490",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 8,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:31Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "ABS-02 (w2), ABS-12 (w1), ABS-09 (w1). STACKED on review-depth (recusal button lands in ReviewerPage which it owns). (1) Per-round committee attachment: evaluation_rounds.committee_id nullable FK (or join table); round card shows its pool; distributeAssignments already accepts committee_id \u2014 pass the round's. Do NOT build per-round membership rows. (2) Recusal: 'Declare conflict' beside Save -> existing evaluation route with abstained:1 (column exists, hardcoded 0 at review.routes.ts:743,749; widen evaluationInput; recommendation optional when abstaining). Chair side IN THE SAME PR: exclude abstained from aggregates/denominators + show '1 recusal - needs reassignment' \u2014 a recusal that silently drags the average is worse than not shipping. (3) Reviewer 'Remind' action on progress rows from listRoundAssignments outstanding counts, queued through the outbox with a reviewer template. Do NOT widen the comms audience engine (participation-shaped; reviewers are not). Full spec: section T-C2. Register rows 7,12,14. DEPENDS ON / STACKED: see boot prompt; parent is the 'Review depth: per-round scorecards, criterion types, reviewer capture' ticket.",
+  "done_at": "2026-08-12T18:48:56Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTDH4YMC8AFRXS3T6KHCGG7",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZTF30NDS62V68ZHY4R7X7PK",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZTFJATMY2Z4KVMC7FHWW5J6",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTJTV4KXR4CE62QBZ97813S",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTN972QWJ9ATWRT36DF0XWN",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTPE3BGK7WXQVYTF84825TG",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTQH0MR2A7QYEJC7JXGNN7J",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTRMEW6T89GAF4Q5061Q72Q",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTSVDB88CZ0NQZ0W1D59ZES",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTSWFPZ71W9CHX06TDMA8BX",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTSYE4Z2NN4HQWCNB4K14RH",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWR7A69YVFWBV1H2897H7",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWR7A69YVFWBV1H2897H6",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRDB09CGHGE7346GWXDP6",
+  "last_event_id": "ev_01KZVMWR7A69YVFWBV1H2897HA",
+  "last_status_changed_at": "2026-08-12T18:48:56Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 9,
+  "schema_version": 1,
+  "short_id": "MRQ-110",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Per-round reviewer pools, recusal, reviewer reminders",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:56Z",
+  "urgency": null
+}

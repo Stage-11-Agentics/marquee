@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T16:54:25Z",
+  "created_by": "agent:delegator-mrq-132",
+  "custom_fields": {},
+  "id": "art_01KZVEB1PDD34KJS9XKNHWADDK",
+  "model": null,
+  "payload": {
+    "content_type": "image/png",
+    "file": "art_01KZVEB1PDD34KJS9XKNHWADDK.png",
+    "size_bytes": 191488
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "MRQ-132 validation \u00b7 09-for-agents.png",
+  "token_usage": null,
+  "type": "file"
+}

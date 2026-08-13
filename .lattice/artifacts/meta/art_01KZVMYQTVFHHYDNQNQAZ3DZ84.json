@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-12T18:50:01Z",
+  "created_by": "agent:board-reconciler",
+  "custom_fields": {},
+  "id": "art_01KZVMYQTVFHHYDNQNQAZ3DZ84",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZVMYQTVFHHYDNQNQAZ3DZ84.md",
+    "size_bytes": 940
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Board reconciliation 2026-08-12: verified DONE, having sat at 'in_planning' since 2026-08-11T15:24Z. PR #2 ('MRQ-74: delivery and system health, in the organizer's language') merged 2026-08-11T19:20:2",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

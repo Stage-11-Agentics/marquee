@@ -1,0 +1,82 @@
+{
+  "assigned_to": "agent:delegator-mrq-109",
+  "branch_links": [],
+  "c11_surface": "surface:432",
+  "c11_workspace": "FF5A5A52-3AD9-4735-AD2E-84E3C0270209",
+  "comment_count": 8,
+  "complexity": "medium",
+  "created_at": "2026-08-12T07:07:31Z",
+  "created_by": "agent:orchestrator-intake",
+  "custom_fields": {},
+  "description": "ABS-10 (w3 \u2014 ascending sort does not exist, fails outright today), ABS-08 (w2 \u2014 nearly free), ABS-13 (w2), ABS-04 (w1). STACKED ON the review-depth ticket (needs criteria capture). (1) One shared weighted-aggregate helper (criteria_scores x weight_pct, numeric only, per round; scalar fallback honestly labeled; exclude abstained rows); every consumer reads it. (2) score_asc in SUBMISSION_SORTS + clickable score header; the submissions list IS the results table; prominent 'View results' link from /evaluation into the pre-filtered score-sorted view; label 'Weighted score'; show reviewer count next to score. (3) NEW results export endpoint GET .../plans/{planId}/results/export?format=csv (one row per submission: title/track/format/status/per-criterion/aggregate/count/recommendations) + button. Do NOT wire the existing /rounds/{id}/export \u2014 it exports the reviewer's UNREVIEWED queue with zero scores; a button on it passes the robot and fails the human manual check. (4) Committee card progress: roll up listRoundAssignments' existing correct assigned/reviewed per reviewer (EvaluationPage.tsx:289 currently shows person-count over round-total). Full spec: section T-C. Register rows 10,11,13 + ABS-08 miss. DEPENDS ON / STACKED: see boot prompt; parent is the 'Review depth: per-round scorecards, criterion types, reviewer capture' ticket.",
+  "done_at": "2026-08-12T18:48:56Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZTF3WERCN1DS1F3QWBT4M5W",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFAJJ2TBHBZ1FDH4451CV0",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFBK1586H151VSDGQ280W4",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFBVAJW3Y7READ4ESZA5CJ",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFBVDPCJP3H8AVAD48FRRY",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTFBVGV08V85NDENYVA6B4C",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZTHDFFFST3CXM2ZVC2EXKAQ",
+      "role": null,
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZV65TZXSJ4YM3TX4EFNCSQV",
+      "role": "validation",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZVMWR3RXEQ320HE83NBPWF6",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZVMWR3RXEQ320HE83NBPWF5",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZTCRCY1MTXTAWFVAEEXE7AZ",
+  "last_event_id": "ev_01KZVMWR3RXEQ320HE83NBPWF9",
+  "last_status_changed_at": "2026-08-12T18:48:56Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-109",
+  "status": "done",
+  "tags": [
+    "eval-response"
+  ],
+  "title": "Chair results: weighted aggregates, sort, real export, progress",
+  "type": "task",
+  "updated_at": "2026-08-12T18:48:56Z",
+  "urgency": null
+}
