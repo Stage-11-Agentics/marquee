@@ -1,9 +1,9 @@
 -- Speaker portal invitations are a distinct credential from ordinary sign-in.
 -- They remain valid for the invitation window and may be opened again during
--- it; ordinary login links keep their short-lived, single-use semantics.
+-- it, while ordinary login links keep their short-lived, single-use semantics.
 --
 -- 0018 added event_id to magic_links. This later migration is intentionally
--- numbered after it so it can apply to databases where 0018 already landed;
+-- numbered after it so it can apply to databases where 0018 already landed
 -- it preserves that event provenance while widening the purpose CHECK.
 
 CREATE TABLE magic_links_0019_new (
