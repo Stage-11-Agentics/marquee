@@ -40,6 +40,7 @@ interface SettingRow {
 interface RoomQueryRow {
   id: string;
   name: string;
+  position: number;
   capacity: number;
   av_capabilities: string;
   notes: string | null;
@@ -154,6 +155,7 @@ function toRoom(row: RoomQueryRow): AgendaRoom {
     id: row.id,
     name: row.name,
     label: roomLabel(row.name, row.building_name),
+    position: Number(row.position),
     capacity: Number(row.capacity),
     building,
     av_capabilities: parseJsonArray<string>(row.av_capabilities),
@@ -339,7 +341,7 @@ async function readEvent(database: D1Database, eventId: string): Promise<EventRo
 
 async function readRooms(database: D1Database, eventId: string): Promise<AgendaRoom[]> {
   const result = await database.prepare(`
-    SELECT room.id, room.name, room.capacity, room.av_capabilities, room.notes,
+    SELECT room.id, room.name, room.position, room.capacity, room.av_capabilities, room.notes,
       building.id AS building_id, building.name AS building_name, building.address AS building_address,
       building.lat, building.lng, building.access_minutes
     FROM rooms room

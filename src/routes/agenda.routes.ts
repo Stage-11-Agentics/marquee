@@ -59,6 +59,7 @@ const roomSchema = z.object({
   id: z.string(),
   name: z.string(),
   label: z.string(),
+  position: z.number().int().nonnegative(),
   capacity: z.number().int().nonnegative(),
   building: buildingSchema,
   av_capabilities: z.array(z.string()),

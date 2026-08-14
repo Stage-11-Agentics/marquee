@@ -72,6 +72,8 @@ export interface AgendaRoom {
   id: string;
   name: string;
   label: string;
+  /** Venue authoring order; older in-memory fixtures may omit it. */
+  position?: number;
   capacity: number;
   building: AgendaBuilding;
   av_capabilities: string[];
