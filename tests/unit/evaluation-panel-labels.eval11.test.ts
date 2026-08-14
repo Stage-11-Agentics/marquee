@@ -8,6 +8,10 @@ import {
   type EvaluationPanelEvaluation,
 } from "../../src/ui/submissions/SubmissionRecordPage";
 import reviewerPageSource from "../../src/ui/review/ReviewerPage.tsx?raw";
+import sessionizeSource from "../../src/lib/sessionize-import.ts?raw";
+
+// The agent evaluator's contract lives outside `src`, so it is read from disk.
+const cliRegistrySource = readFileSync(new URL("../../cli/registry.mjs", import.meta.url), "utf8");
 
 // `?raw` resolves to an empty string for CSS under this pool, which would let a
 // stylesheet assertion pass against no stylesheet at all.
@@ -22,9 +26,13 @@ const recordStyles = readFileSync(new URL("../../src/ui/submissions/record.css",
  * pretending otherwise:
  *
  * 1. `evaluations.comment` was headed "Reviewer comment". It is not the
- *    reviewer's review — the reviewer's own control calls it "Committee note
- *    (optional)", and their reasoning about the abstract is whatever they typed
- *    against the rubric's text criterion, rendered separately beneath it.
+ *    reviewer's review of the abstract — that is whatever they typed against the
+ *    rubric's text criterion, rendered separately beneath it. Nor can the
+ *    heading name a single author: a human types it into a control called
+ *    "Committee note (optional)", an agent evaluator is told to store its
+ *    rationale there, and a Sessionize import maps "Reviewer Comment" into the
+ *    same column. What is true of all three is that it did not come from the
+ *    rubric, and that is what the heading now says.
  * 2. `evaluations.recommendation` printed bare beside the rating, reading as THE
  *    recommendation, when it is one reviewer input among several and can
  *    legitimately disagree with a Recommendation criterion on the scorecard.
@@ -62,16 +70,34 @@ function render(evaluation: EvaluationPanelEvaluation = review()): string {
 }
 
 describe("evaluation panel labelling", () => {
-  test("CONTRACT · the free-text box is headed what the reviewer was actually asked for", () => {
-    // The reviewer's own control is the authority on what that field is.
-    expect(reviewerPageSource).toContain("Committee note (optional)");
+  test("CONTRACT · the note is headed for the field it is, not for one of its three writers", () => {
+    // `evaluations.comment` has more than one writer, and a label naming any one
+    // of them is false for the other two.
+    expect(reviewerPageSource).toContain("Committee note (optional)");        // human
+    expect(cliRegistrySource).toContain("Required rationale shown to the chair verbatim."); // agent
+    expect(sessionizeSource).toContain('reviewer_comment: ["reviewer comment"'); // import
 
-    const html = render();
-    expect(html).toContain("Committee note");
-    expect(html).not.toContain("Reviewer comment");
-    expect(html).toContain(COMMITTEE_NOTE);
+    const human = render();
+    expect(human).toContain("Note beside the scorecard");
+    expect(human).not.toContain("Reviewer comment");
+    expect(human).toContain(COMMITTEE_NOTE);
     // The reviewer's actual reasoning is still the scorecard's own text answer.
-    expect(html).toContain(SCORECARD_REASONING);
+    expect(human).toContain(SCORECARD_REASONING);
+
+    // An agent evaluator was told to store its rationale in this same column;
+    // the heading has to stay true for it.
+    const agent = render(review({
+      reviewer_kind: "agent", reviewer_name: "Triage agent",
+      comment: "Agent rationale: the CI numbers are the speaker's own.",
+    }));
+    expect(agent).toContain("Note beside the scorecard");
+    expect(agent).not.toContain("Committee note");
+    expect(agent).toContain("Agent rationale: the CI numbers are the speaker's own.");
+
+    // A Sessionize import maps "Reviewer Comment" into it. Same heading, still true.
+    const imported = render(review({ comment: "Imported reviewer comment from the previous system." }));
+    expect(imported).toContain("Note beside the scorecard");
+    expect(imported).not.toContain("Committee note");
   });
 
   test("CONTRACT · the disclosure names the note it opens", () => {
@@ -102,6 +128,24 @@ describe("evaluation panel labelling", () => {
     expect(recused).toContain("Reviewer's own recommendation");
     expect(recused).toContain("Conflict declared");
     expect(recused).toContain("Reviewer recused; no recommendation recorded.");
+  });
+
+  test("CONTRACT · the recommendation row survives an organizer override, and stays the reviewer's", () => {
+    // An override is the chair's own number. It must not swallow, replace, or
+    // silence what the reviewer recorded — the panel shows both, separately.
+    const html = render(review({
+      override_score: 2,
+      override_comment: "Chair moved this to the backup track.",
+      override_person_name: "Avery Chair",
+    }));
+    expect(html).toContain("Reviewer rating");
+    expect(html).toContain("4.00");
+    expect(html).toContain("Reviewer's own recommendation");
+    expect(html).toContain("Maybe");
+    expect(html).toContain('data-evaluation-panel-override="true"');
+    expect(html).toContain("Organizer override");
+    expect(html).toContain("2.00");
+    expect(html).toContain("Chair moved this to the backup track.");
   });
 
   test("CONTRACT · the new row is styled and height-reserved like the rating it sits under", () => {

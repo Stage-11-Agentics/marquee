@@ -143,7 +143,7 @@
 .evaluation-panel-rating small, .evaluation-panel-recommendation small, .evaluation-panel-comment-slot small, .evaluation-panel-override small { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
 /* The fixed slot keeps a long comment's disclosure from pushing the panel's
    assignment controls down when the operator opens it. */
-.evaluation-panel-comment-slot { display: grid; gap: 3px; height: 68px; min-height: 68px; overflow: hidden; }
+.evaluation-panel-comment-slot { display: grid; gap: 3px; height: 80px; min-height: 80px; overflow: hidden; }
 .evaluation-panel-comment-body { color: var(--ink); font-size: 10.5px; line-height: 1.45; max-height: 51px; overflow: hidden; overflow-wrap: anywhere; }
 .evaluation-panel-comment-body:not(.expanded) { -webkit-box-orient: vertical; -webkit-line-clamp: 3; display: -webkit-box; }
 .evaluation-panel-comment-body.expanded { max-height: 51px; overflow-y: auto; }

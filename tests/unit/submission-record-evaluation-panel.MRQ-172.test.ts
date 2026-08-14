@@ -44,7 +44,7 @@ describe("CONTRACT · MRQ-172 · organizer evaluation panel evidence", () => {
     expect(html).toContain("Sam Whitfield");
     expect(html).toContain("4.00");
     expect(html).toContain("Approve");
-    expect(html).toContain("Committee note");
+    expect(html).toContain("Note beside the scorecard");
     expect(html).toContain("Strong practical content and a clear narrative arc");
     expect(html).toContain("Read full note");
   });
@@ -54,6 +54,10 @@ describe("CONTRACT · MRQ-172 · organizer evaluation panel evidence", () => {
 
     expect(html).toContain("Reviewer rating");
     expect(html).toContain("4.00");
+    // The reviewer's own recommendation survives the override rather than being
+    // swallowed by the chair's number.
+    expect(html).toContain("Reviewer's own recommendation");
+    expect(html).toContain("Approve");
     expect(html).toContain("Strong practical content and a clear narrative arc");
     expect(html).toContain('data-evaluation-panel-override="true"');
     expect(html).toContain("Organizer override");

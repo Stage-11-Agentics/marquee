@@ -215,10 +215,18 @@ function ScorecardAnswers({ criteria, scores }: { criteria: RubricCriterion[]; s
  * assignment controls or the rest of the record underneath the operator.
  *
  * A reviewer answers two separate things: the scorecard the round defines, and
- * the optional committee note beside it. Both reach this panel, each under the
- * name the reviewer was given for it — the note is labelled "Committee note",
- * which is what the reviewer's own control calls it, and the reviewer's
- * recommendation is labelled as theirs.
+ * the free-text note beside it. Both reach this panel, each named for where it
+ * came from rather than for what a chair might wish it were.
+ *
+ * That note is headed "Note beside the scorecard" — a description of the field,
+ * not of its author, because `evaluations.comment` has more than one writer. A
+ * human types it into a control their own UI calls "Committee note (optional)";
+ * an agent evaluator is told to put its rationale there (`marquee review
+ * submit --comment`); a Sessionize import maps "Reviewer Comment", "feedback",
+ * and "review notes" into the same column. Any label naming one of those three
+ * is false for the other two. What is true of all of them is that the text did
+ * not come from the rubric — which is exactly the thing a chair was getting
+ * wrong.
  *
  * Nothing here is a verdict. Acceptance is the organizer's own Accept/Reject
  * action on the record; every field in this panel is information for that human
@@ -229,9 +237,9 @@ function ScorecardAnswers({ criteria, scores }: { criteria: RubricCriterion[]; s
  */
 export function EvaluationPanelResult({ evaluation, criteria = [] }: { evaluation: EvaluationPanelEvaluation; criteria?: RubricCriterion[] }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
-  // `evaluation.comment` is the free-text box the reviewer UI labels "Committee
-  // note (optional)" — not their review of the abstract, which is whatever they
-  // typed against the rubric's own text criterion and renders below.
+  // The free-text note beside the scorecard, whoever wrote it — not the
+  // reviewer's answer to the rubric, which renders below under its own
+  // criterion name.
   const committeeNote = evaluation.comment.trim();
   const isLongNote = !evaluation.abstained && committeeNote.length > 120;
   const hasOverride = evaluation.override_score !== null || Boolean(evaluation.override_comment?.trim());
@@ -257,7 +265,7 @@ export function EvaluationPanelResult({ evaluation, criteria = [] }: { evaluatio
       <strong>{evaluation.abstained ? "—" : evaluation.recommendation || "None recorded"}</strong>
     </div>
     <div class="evaluation-panel-comment-slot">
-      <small>Committee note</small>
+      <small>Note beside the scorecard</small>
       <span id={noteId} class={`evaluation-panel-comment-body${expanded ? " expanded" : ""}`}>
         {evaluation.abstained ? "Reviewer recused; no recommendation recorded." : committeeNote || "—"}
       </span>
