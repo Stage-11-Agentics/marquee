@@ -72,11 +72,10 @@
 .record-person strong { font-size: 12px; }
 .record-person span, .record-person small { color: var(--muted); font-size: 10.5px; }
 .record-person .chip { justify-self: start; margin-top: 3px; }
-/* The submitter row carries no Remove control. The reserved height keeps its
-   card exactly as tall as every other one, so the grid does not go ragged
-   the moment a record has one participant who cannot be detached. */
-.record-person-foot { align-items: center; display: flex; gap: 7px; justify-content: space-between; min-height: 25px; }
-.record-person-foot .chip { margin-top: 0; }
+.record-person-roles { border-top: 1px solid var(--line); display: grid; gap: 6px; margin-top: 5px; padding-top: 7px; }
+.record-person-role { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; min-height: 25px; }
+.record-person-role-name { color: var(--ink) !important; flex: 1 1 80px; font-weight: 600; }
+.record-person-role .chip { justify-self: initial; margin-top: 0; }
 .record-person-remove { flex: 0 0 auto; }
 .record-participant-add { display: grid; margin-top: 10px; }
 .record-participant-actions { align-items: end; display: flex; gap: 9px; justify-content: space-between; }
