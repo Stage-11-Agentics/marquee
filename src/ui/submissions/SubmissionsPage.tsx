@@ -200,7 +200,7 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
       <a class="table-title" href={`/submissions/${item.id}`} title={item.title} onClick={(event) => { event.preventDefault(); navigate(`/submissions/${item.id}`); }}>{item.title}</a>
       <span class="row-meta">{item.id} · {item.origin}</span>
       {item.submitter && <span class="row-meta">{item.submitter.name} · {item.submitter.email}</span>}
-      {slot && <span class="slot-row"><span class="chip slot-chip">{slot}</span>{!item.slot?.is_published && <span class="chip not-public">Not yet public</span>}</span>}
+      {slot && <span class="slot-row"><span class="chip slot-chip" title={slot}><span>{slot}</span></span>{!item.slot?.is_published && <span class="chip not-public">Not yet public</span>}</span>}
     </>;
   }
   if (column === "speakers") {
