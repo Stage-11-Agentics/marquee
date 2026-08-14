@@ -35,11 +35,22 @@ function isUtcDaySentinel(value: number): boolean {
   return dueAtFromDateInput(date) === value;
 }
 
+/**
+ * Identify the preserved fixed-calendar-day encoding without assuming that a
+ * relative task happened not to land on the same millisecond.
+ *
+ * Callers with a task template should pass its fixed due_at (or null for a
+ * relative template). The omitted form keeps older sparse readers compatible
+ * with the pre-template task fixtures.
+ */
+export function isFixedCalendarDayDue(dueAt: number, templateDueAt?: number | null): boolean {
+  return templateDueAt === undefined
+    ? isUtcDaySentinel(dueAt)
+    : templateDueAt !== null && templateDueAt === dueAt;
+}
+
 function isCalendarDayTask(task: TaskDueRuntime): task is TaskDueRuntime & { timezone: string } {
-  const fixedTemplate = task.templateDueAt === undefined
-    ? isUtcDaySentinel(task.dueAt)
-    : task.templateDueAt !== null && task.templateDueAt === task.dueAt;
-  return fixedTemplate && Boolean(task.timezone);
+  return isFixedCalendarDayDue(task.dueAt, task.templateDueAt) && Boolean(task.timezone);
 }
 
 /** Apply the event-local boundary to fixed calendar-day tasks, preserving exact instants for offsets. */

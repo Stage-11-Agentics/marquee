@@ -222,6 +222,10 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...model.event, speaker_social_platforms: model.speaker_social_platforms }),
       });
+      // The timezone is the clock every other shell screen uses. Refresh the
+      // shared event context immediately after its write, before a later format
+      // or track write can fail and leave those screens reading the old zone.
+      await refresh();
       for (const id of removedFormats) {
         if (!id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/formats/${encodeURIComponent(id)}`, "/api/v1/events/{eventId}/formats/{formatId}", { method: "DELETE" });
       }

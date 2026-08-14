@@ -20,4 +20,9 @@ test("AC-10 · fixed task due days use the conference clock while relative tasks
 
   const overriddenDueAt = Date.parse("2027-04-30T23:59:59.000Z");
   expect(isTaskOverdue({ dueAt: overriddenDueAt, templateDueAt: DUE_AT, timezone: "America/New_York" }, overriddenDueAt + 1)).toBe(true);
+
+  // A relative task may land exactly on the preserved UTC end-of-day
+  // millisecond. Template provenance must keep it an instant, not turn it into
+  // a calendar-day task by shape alone.
+  expect(isTaskOverdue({ dueAt: DUE_AT!, templateDueAt: null, timezone: "America/New_York" }, DUE_AT! + 1)).toBe(true);
 });

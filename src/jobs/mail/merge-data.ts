@@ -1,6 +1,6 @@
 import type { MergeData } from "./render";
 import { formatEventDateTime, formatEventTime } from "../../lib/event-time";
-import { formatDueDate } from "../../lib/task-due";
+import { formatDueDate, isFixedCalendarDayDue } from "../../lib/task-due";
 
 export interface RecipientMergeContext {
   name: string;
@@ -15,6 +15,8 @@ export interface RecipientMergeContext {
   startsAt?: number | null;
   taskTitle?: string | null;
   taskDueAt?: number | null;
+  /** The fixed calendar-day template due_at, or null for a relative template. */
+  taskTemplateDueAt?: number | null;
 }
 
 export interface ReviewerReminderMergeContext {
@@ -33,6 +35,16 @@ function mergeTime(value: number | null | undefined, timezone: string | null | u
   return formatEventTime(value, timezone);
 }
 
+function mergeTaskDue(
+  value: number | null | undefined,
+  templateDueAt: number | null | undefined,
+  timezone: string | null | undefined,
+): string {
+  if (value === null || value === undefined) return "—";
+  if (isFixedCalendarDayDue(value, templateDueAt) || !timezone) return formatDueDate(value);
+  return formatEventDateTime(value, timezone);
+}
+
 /**
  * Canonical speaker/session/task merge data. Preview, reminders, and future
  * trigger consumers all use this vocabulary before calling renderMail or
@@ -44,9 +56,7 @@ export function mergeDataForRecipient(recipient: RecipientMergeContext): MergeDa
   const startsAt = recipient.startsAt === null || recipient.startsAt === undefined
     ? "—"
     : recipient.timezone ? formatEventDateTime(recipient.startsAt, recipient.timezone) : "—";
-  const taskDueAt = recipient.taskDueAt === null || recipient.taskDueAt === undefined
-    ? "—"
-    : formatDueDate(recipient.taskDueAt);
+  const taskDueAt = mergeTaskDue(recipient.taskDueAt, recipient.taskTemplateDueAt, recipient.timezone);
   return {
     "speaker.first_name": firstName(recipient.name),
     "speaker.name": recipient.name,

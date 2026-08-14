@@ -388,11 +388,61 @@ test("CONTRACT · MRQ-201 · mail merge clocks name the conference zone while ca
     startsAt: Date.parse("2027-05-01T03:59:00.000Z"),
     leaveBy: Date.parse("2027-05-01T02:30:00.000Z"),
     taskDueAt: dueAtFromDateInput("2027-05-01"),
+    taskTemplateDueAt: dueAtFromDateInput("2027-05-01"),
   });
   expect(data["session.time"]).toBe("Apr 30, 2027, 11:59 PM EDT");
   expect(data["session.leaveBy"]).toBe("10:30 PM EDT");
   expect(data["task.due_date"]).toBe("May 1, 2027");
   expect(String(data["session.time"])).not.toMatch(/T\d{2}:\d{2}/);
+});
+
+test("CONTRACT · MRQ-201 · conference comms preserve relative task instants in merge data", async () => {
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
+  const dueAt = Date.parse("2026-08-04T17:32:26.216Z");
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('template_mrq201_comms_relative', 'evt_mail', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mrq201_comms_relative', 'evt_mail', 'per_mail', 'sub_mail', 'template_mrq201_comms_relative', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
+  ]);
+
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-201-comms-relative" });
+  const response = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      selector: { submission_ids: ["sub_mail"], person_ids: ["per_mail"], role: "speaker" },
+      subject: "Task deadline",
+      body: "Due {{task.due_date}}",
+    }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(response.status).toBe(202);
+  const payload = await response.json<{ outbox_ids: string[] }>();
+  const row = await env.DB.prepare("SELECT text FROM outbox WHERE id = ?").bind(payload.outbox_ids[0]).first<{ text: string }>();
+  expect(row?.text).toBe("Due Aug 4, 2026, 1:32 PM EDT");
+});
+
+test("CONTRACT · MRQ-201 · submission overdue filtering honors relative-task provenance at the UTC sentinel", async () => {
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
+  const dueAt = dueAtFromDateInput("2027-05-01");
+  expect(dueAt).not.toBeNull();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('template_mrq201_sentinel_relative', 'evt_mail', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mrq201_sentinel_relative', 'evt_mail', 'per_mail', 'sub_mail', 'template_mrq201_sentinel_relative', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
+  ]);
+
+  // Just after the exact instant, although a New York calendar-day reader is
+  // still on May 1. The SQL path must use template provenance here.
+  const nowSpy = vi.spyOn(Date, "now").mockReturnValue(dueAt! + 1);
+  try {
+    const audience = await listCommsAudience(env.DB, {
+      eventId: "evt_mail",
+      task: "overdue",
+      page: 1,
+      per_page: 10,
+    });
+    expect(audience.data.some((row) => row.submission_id === "sub_mail")).toBe(true);
+  } finally {
+    nowSpy.mockRestore();
+  }
 });
 
 test("AC-127 · the cron handoff queues only rows created by its scan", async () => {

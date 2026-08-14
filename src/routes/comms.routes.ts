@@ -216,6 +216,7 @@ export interface RecipientRow {
   building_access_note: string | null;
   task_title: string | null;
   task_due_at: number | null;
+  task_template_due_at: number | null;
   arrival?: ArrivalProjection | null;
 }
 
@@ -401,7 +402,8 @@ export async function recipientsFor(
               b.id AS building_id, b.name AS building_name, b.address AS building_address,
               b.lat AS building_lat, b.lng AS building_lng,
               b.access_minutes AS building_access_minutes, b.access_note AS building_access_note,
-              st.title AS task_title, st.due_at AS task_due_at
+              st.title AS task_title, st.due_at AS task_due_at,
+              st_template.due_at AS task_template_due_at
        FROM submissions s
        JOIN events conference ON conference.id = s.event_id
        JOIN participations part ON part.submission_id = s.id
@@ -428,6 +430,8 @@ export async function recipientsFor(
                   selected_task.due_at ASC, selected_task.id ASC
          LIMIT 1
        )
+       LEFT JOIN task_templates st_template
+         ON st_template.id = st.template_id AND st_template.event_id = s.event_id
        WHERE ${where.join(" AND ")}
        ORDER BY p.name COLLATE NOCASE, s.title COLLATE NOCASE`,
     )
@@ -483,7 +487,8 @@ export async function recipientsFor(
                 NULL AS event_timezone, NULL AS building_id, NULL AS building_name,
                 NULL AS building_address, NULL AS building_lat, NULL AS building_lng,
                 NULL AS building_access_minutes, NULL AS building_access_note,
-                st.title AS task_title, st.due_at AS task_due_at
+                st.title AS task_title, st.due_at AS task_due_at,
+                st_template.due_at AS task_template_due_at
          FROM memberships membership
          JOIN people person ON person.id = membership.person_id
          LEFT JOIN speaker_tasks st ON st.id = (
@@ -497,6 +502,8 @@ export async function recipientsFor(
                     selected_task.due_at ASC, selected_task.id ASC
            LIMIT 1
          )
+         LEFT JOIN task_templates st_template
+           ON st_template.id = st.template_id AND st_template.event_id = membership.event_id
          WHERE membership.event_id = ? AND membership.role = 'speaker'
            AND person.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
            ${fallbackSelectionCondition}
@@ -508,7 +515,7 @@ export async function recipientsFor(
                AND selected_state_task.status = ?
                ${includeCancelledAt && selector.task_state === "open" ? "AND selected_state_task.cancelled_at IS NULL" : ""}
            )` : ""}
-         GROUP BY person.id, person.email, person.name, st.title, st.due_at
+         GROUP BY person.id, person.email, person.name, st.title, st.due_at, st_template.due_at
          ORDER BY person.name COLLATE NOCASE, person.id ASC`,
       )
       .bind(...fallbackBindings, ...(selector.task_state ? [selector.task_state] : []))
@@ -534,6 +541,7 @@ function mergeDataFor(row: RecipientRow): MergeData {
     startsAt: row.starts_at,
     taskTitle: row.task_title,
     taskDueAt: row.task_due_at,
+    taskTemplateDueAt: row.task_template_due_at,
   });
 }
 

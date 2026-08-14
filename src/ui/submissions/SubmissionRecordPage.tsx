@@ -29,6 +29,35 @@ const PARTICIPANTS_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/
 const PARTICIPANT_DELETE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/participants/{participationId}";
 const SEARCH_ROUTE = "/api/v1/events/{eventId}/search";
 
+export interface SubmissionScheduleDraft {
+  starts_at: string;
+  duration_min: string;
+  room_id: string;
+  track_id: string;
+}
+
+/** Build the schedule write from the conference wall clock, never the browser clock. */
+export function submissionScheduleRequest(
+  draft: SubmissionScheduleDraft,
+  timezone: string,
+): { path: string; init: RequestInit; route: string } | null {
+  const startsAt = localDateTimeToInstant(draft.starts_at, timezone);
+  if (startsAt === null) return null;
+  return {
+    path: "/schedule",
+    route: SCHEDULE_ROUTE,
+    init: {
+      method: "POST",
+      body: JSON.stringify({
+        starts_at: startsAt,
+        duration_min: Number(draft.duration_min),
+        room_id: draft.room_id,
+        track_id: draft.track_id || null,
+      }),
+    },
+  };
+}
+
 /**
  * The roles an organizer attaches after intake, in the order a program team
  * reaches for them. `submitter` is not offered: a record has exactly one and it
@@ -717,7 +746,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           {resendNotice && <p class="record-inline-message notice" role="status">{resendNotice}</p>}
         </CardBody></Card>}
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
-        {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(submitEvent) => { submitEvent.preventDefault(); if (!timezone) return; const startsAt = localDateTimeToInstant(schedule.starts_at, timezone); if (startsAt === null) return; void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: startsAt, duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }, SCHEDULE_ROUTE); }}><label class="field"><span>Starts at {eventTimeLabel(timezone)}</span><input required type="datetime-local" value={schedule.starts_at} disabled={!timezone} onInput={(inputEvent) => setSchedule({ ...schedule, starts_at: inputEvent.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(inputEvent) => setSchedule({ ...schedule, duration_min: inputEvent.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(inputEvent) => setSchedule({ ...schedule, room_id: inputEvent.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy) || !timezone}>Place on agenda</Button></form></CardBody></Card>}
+        {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(submitEvent) => { submitEvent.preventDefault(); if (!timezone) return; const request = submissionScheduleRequest(schedule, timezone); if (!request) return; void act("schedule", request.path, request.init, request.route); }}><label class="field"><span>Starts at {eventTimeLabel(timezone)}</span><input required type="datetime-local" value={schedule.starts_at} disabled={!timezone} onInput={(inputEvent) => setSchedule({ ...schedule, starts_at: inputEvent.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(inputEvent) => setSchedule({ ...schedule, duration_min: inputEvent.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(inputEvent) => setSchedule({ ...schedule, room_id: inputEvent.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy) || !timezone}>Place on agenda</Button></form></CardBody></Card>}
         <Card><CardHeader title="Participants"><span class="tabular">{participantGroups.length}</span></CardHeader><CardBody>
           <div class="record-participants">{participantGroups.length ? participantGroups.map((group) => <div class="record-person" key={group.person_id}><strong>{participantNames.get(group.person_id) ?? group.name}</strong><span>{group.company || "Company not provided"}</span><small>{group.email}</small><div class="record-person-roles" aria-label={`${participantNames.get(group.person_id) ?? group.name} roles`}>{group.participants.map((participant) => <div class="record-person-role" key={participant.id}><span class="record-person-role-name">{statusLabel(participant.role)}</span><Chip tone={participantConfirmationTone(participant.confirmation_status)}>{participantConfirmationLabel(participant.confirmation_status)}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" aria-label={`Remove the ${statusLabel(participant.role)} role from ${participantNames.get(group.person_id) ?? group.name}`} disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove {statusLabel(participant.role)} role</Button>}</div>)}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
           {canEditParticipants && <form class="record-participant-add" onSubmit={(event) => void addParticipant(event)}>
