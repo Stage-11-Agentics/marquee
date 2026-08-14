@@ -1,17 +1,14 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
-import { apiFetch, onForbidden } from "./api-client";
+import { onForbidden } from "./api-client";
 import { Button } from "./components";
+import { loadAuthMe, type AuthMeResponse } from "./identity";
 
 /** SPEC §4.1 ranks roles public < speaker < reviewer < ops < program_lead < owner. */
 const PROGRAM_STAFF_ROLES = new Set(["ops", "program_lead", "owner"]);
 
-interface AuthMe {
-  kind: "session" | "api_token";
-  memberships?: Array<{ event_id: string | null; role: string }>;
-  scopes?: { permissions: string[]; event_ids: string[] };
-}
+type AuthMe = Pick<AuthMeResponse, "kind" | "memberships" | "scopes">;
 
 export type SeatKind = "unknown" | "program_staff" | "reviewer" | "speaker";
 
@@ -37,12 +34,12 @@ export function useSeat(): { seat: SeatKind; blocked: boolean } {
   const [refused, setRefused] = useState(false);
 
   useEffect(() => {
-    const controller = new AbortController();
-    apiFetch<AuthMe>("/api/v1/auth/me", { signal: controller.signal, route: "/api/v1/auth/me" })
-      .then((auth) => setSeat(seatFromAuth(auth)))
+    let cancelled = false;
+    loadAuthMe()
+      .then((auth: AuthMe) => { if (!cancelled) setSeat(seatFromAuth(auth)); })
       // An unreadable identity is not evidence of a downgrade; leave the shell alone.
       .catch(() => { /* keep "unknown" */ });
-    return () => controller.abort();
+    return () => { cancelled = true; };
   }, []);
 
   // Sticky for the session: once a seat has been refused, every later admin

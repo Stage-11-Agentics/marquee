@@ -37,9 +37,12 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
     const scopes = JSON.parse(token.scopes as string) as ApiTokenScopes;
     // A few pre-MRQ-30 isolated route fixtures define only the old token
     // columns, without created_by. The deployed 0001 schema always has that
-    // NOT NULL column; keep the fixture adapter explicit and impossible to
-    // reach for a real token row so production authority remains membership-
-    // backed below.
+    // NOT NULL column; keep the fixture adapter explicit. An unbound token
+    // whose human issuer has no organizer seat is the other deliberate
+    // exception: organizer removal may explicitly keep it for an integration,
+    // so its own stored grants remain live after the issuer's human authority
+    // is gone. The default removal revokes the row before this fallback can
+    // apply.
     const createdBy = (token as unknown as { created_by?: string }).created_by;
     const actingPersonId = (token as unknown as { acts_as_person_id?: string | null }).acts_as_person_id ?? null;
     let effectivePersonId = createdBy;
@@ -51,7 +54,10 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
       if (!actingPerson) return null;
       effectivePersonId = actingPersonId;
     }
-    const memberships = effectivePersonId === undefined ? [] : await loadMembershipsForOrg(db, effectivePersonId, token.org_id);
+    const loadedMemberships = effectivePersonId === undefined ? [] : await loadMembershipsForOrg(db, effectivePersonId, token.org_id);
+    const issuerHasOrganizerSeat = loadedMemberships.some((membership) => membership.role !== "speaker");
+    const detachedIssuer = createdBy !== undefined && actingPersonId === null && !issuerHasOrganizerSeat;
+    const memberships = detachedIssuer ? [] : loadedMemberships;
     await db
       .prepare("UPDATE api_tokens SET last_used_at = ? WHERE id = ?")
       .bind(Date.now(), token.id)
@@ -69,7 +75,7 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
       ...(createdBy === undefined ? {} : { organizationEventIds: await loadOrganizationEventIds(db, token.org_id) }),
       actingPersonId,
       memberships,
-      ...(createdBy === undefined ? { legacyRole: roleForLegacyPermissions(scopes.permissions) } : {}),
+      ...(createdBy === undefined || detachedIssuer ? { legacyRole: roleForLegacyPermissions(scopes.permissions) } : {}),
     };
   }
 

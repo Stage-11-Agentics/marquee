@@ -2,11 +2,12 @@
  * The two halves of this fold that need no Worker: the credential a human
  * speaks, and the order in which a theme is decided.
  */
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+
+vi.mock("../../src/ui/shell/api-client", () => ({ apiFetch: vi.fn() }));
 
 import { mintShortCode, normalizeShortCode, SHORT_CODE_WORDS } from "../../src/lib/auth/short-code";
 import {
-  cacheOrgDefaultTheme,
   ORG_DEFAULT_THEME_KEY,
   readTheme,
   THEME_STORAGE_KEY,
@@ -89,7 +90,7 @@ test("AC-295 · the theme is the person's choice, then the organization's defaul
   expect(readTheme()).toBe("day");
 
   // The organization has a default, and this browser has never chosen.
-  cacheOrgDefaultTheme("latent-space");
+  localStorage.setItem(ORG_DEFAULT_THEME_KEY, "latent-space");
   expect(readTheme()).toBe("latent-space");
 
   // This person chooses. Their choice outranks the organization's default
@@ -100,7 +101,7 @@ test("AC-295 · the theme is the person's choice, then the organization's defaul
 
   // The organization changing its mind does not reach back and re-dress someone
   // who has already chosen.
-  cacheOrgDefaultTheme("ai-engineer");
+  localStorage.setItem(ORG_DEFAULT_THEME_KEY, "ai-engineer");
   expect(readTheme()).toBe("night");
 
   // A comparison link still wins over both, and persists nothing.
@@ -110,19 +111,34 @@ test("AC-295 · the theme is the person's choice, then the organization's defaul
 });
 
 test("AC-295 · clearing the organization default removes the key rather than writing Day into it", () => {
-  cacheOrgDefaultTheme("night");
+  localStorage.setItem(ORG_DEFAULT_THEME_KEY, "night");
   expect(localStorage.getItem(ORG_DEFAULT_THEME_KEY)).toBe("night");
 
   // Null means "this organization has not said". Storing "day" here instead
   // would pin every silent organization to today's default on the day the
   // product picks a different one.
-  cacheOrgDefaultTheme(null);
+  localStorage.removeItem(ORG_DEFAULT_THEME_KEY);
   expect(localStorage.getItem(ORG_DEFAULT_THEME_KEY)).toBeNull();
   expect(readTheme()).toBe("day");
 
   // A value that is not a theme is not a default either.
-  cacheOrgDefaultTheme("midnight-pro");
-  expect(localStorage.getItem(ORG_DEFAULT_THEME_KEY)).toBeNull();
+  localStorage.setItem(ORG_DEFAULT_THEME_KEY, "midnight-pro");
+  expect(readTheme()).toBe("day");
+});
+
+test("AC-295 · the authenticated shell caches the organization default for non-admin seats", async () => {
+  // The settings route is admin-only. This is the actual shell boot seam shared
+  // by reviewer and ops seats, so the test must prove the returned field reaches
+  // the cache rather than manufacturing the cache entry with the helper itself.
+  const { apiFetch } = await import("../../src/ui/shell/api-client");
+  const { loadAuthMe } = await import("../../src/ui/shell/identity");
+  vi.mocked(apiFetch).mockResolvedValueOnce({
+    kind: "session",
+    org_default_theme: "latent-space",
+  });
+
+  await expect(loadAuthMe()).resolves.toMatchObject({ org_default_theme: "latent-space" });
+  expect(localStorage.getItem(ORG_DEFAULT_THEME_KEY)).toBe("latent-space");
 });
 
 test("AC-295 · the pre-paint script reads the same three layers, in the same order", async () => {

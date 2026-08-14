@@ -12,9 +12,10 @@
  * that only asserted "their next request 401s" would pass against exactly that
  * bug, because the link has not been presented yet.
  */
-import { beforeEach, expect, test } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 import { SELF } from "cloudflare:test";
 
+import * as taskDecisions from "../../src/jobs/cascade/decisions";
 import { createSession } from "../../src/lib/auth/auth-sessions";
 import { mintMagicLink } from "../../src/lib/auth/magic-links";
 import { sha256Hex } from "../../src/lib/auth/random-token";
@@ -439,16 +440,20 @@ test("AC-298 · removing an organizer consumes the unexpired sign-in link alread
 test("AC-298 · removing an organizer revokes the tokens they minted, sparing only what the human kept — arm three", async () => {
   const { cookie, orgId, eventId } = await seedInstance("arm3");
   await addPerson(orgId, "per_arm3_member", "noor@gl-infra.dev", "Noor Haddad-Wells");
+  const keptSecret = "mq_arm3_kept_integration_secret";
+  const revokedSecret = "mq_arm3_revoked_integration_secret";
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, NULL, ?, 'program_lead', ?, ?)",
     ).bind("mem_arm3", orgId, "per_arm3_member", NOW, NOW),
-    ...["tok_fired_a", "tok_fired_b"].map((id) =>
-      env.DB.prepare(
-        `INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'mq_test', '{"permissions":["program:read"],"event_ids":[]}', ?, ?, ?)`,
-      ).bind(id, orgId, null, id, `hash_${id}`, "per_arm3_member", NOW, NOW),
-    ),
+    env.DB.prepare(
+      `INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, '{"permissions":["program:read"],"event_ids":[]}', ?, ?, ?)`,
+    ).bind("tok_fired_a", orgId, "tok_fired_a", await sha256Hex(revokedSecret), revokedSecret.slice(0, 7), "per_arm3_member", NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, '{"permissions":["program:read"],"event_ids":[]}', ?, ?, ?)`,
+    ).bind("tok_fired_b", orgId, "tok_fired_b", await sha256Hex(keptSecret), keptSecret.slice(0, 7), "per_arm3_member", NOW, NOW),
     // Someone else's token, minted by the owner. Nothing about firing this
     // person may touch it.
     env.DB.prepare(
@@ -460,6 +465,11 @@ test("AC-298 · removing an organizer revokes the tokens they minted, sparing on
   // Before acting: three live tokens. A revocation test against a fixture with
   // nothing to revoke passes beautifully and proves nothing.
   expect(await countOf("SELECT COUNT(*) AS total FROM api_tokens WHERE revoked_at IS NULL")).toBe(3);
+  const keptBearer = { authorization: `Bearer ${keptSecret}` };
+  // Positive control: the kept integration is live before the removal. The
+  // bearer must remain live afterward too; checking only `revoked_at` would
+  // miss the issuer-membership lookup that decides whether a token can act.
+  expect((await request(`/api/v1/events/${eventId}/dashboard`, { headers: keptBearer })).status).toBe(200);
 
   // Show-and-choose (ruling O3): the dialog pre-checks revoke, and the human
   // unchecked one because it powers an integration the organization keeps.
@@ -479,6 +489,8 @@ test("AC-298 · removing an organizer revokes the tokens they minted, sparing on
   expect(revoked.get("tok_fired_b")).toBeNull();
   // Never theirs to lose: `created_by` is the owner, not the removed member.
   expect(revoked.get("tok_owner")).toBeNull();
+  expect((await request(`/api/v1/events/${eventId}/dashboard`, { headers: keptBearer })).status).toBe(200);
+  expect((await request(`/api/v1/events/${eventId}/dashboard`, { headers: { authorization: `Bearer ${revokedSecret}` } })).status).toBe(401);
 });
 
 test("AC-298 · removal reaches only the removed member's own credentials, and every organizer seat ends at once", async () => {
@@ -538,14 +550,24 @@ test("AC-298 · a speaker seat survives the removal of the organizer seat the sa
 
 test("AC-299 · removing a person from a conference ends their work there and leaves published sessions standing", async () => {
   const { cookie, orgId, eventId } = await seedInstance("remove207");
-  const other = await seedInstance("keep207");
+  const otherEventId = "evt_remove207_other";
   await addPerson(orgId, "per_speaker", "wren@gl-infra.dev", "Wren Achebe-Pardo");
   await addPerson(orgId, "per_cospeaker", "co@gl-infra.dev", "Ilya Sandoval-Reyes");
-  // The same human is a speaker on someone else's instance too; nothing here
-  // may reach across the organization boundary.
-  await addPerson(other.orgId, "per_speaker_elsewhere", "wren@gl-infra.dev", "Wren Achebe-Pardo");
 
   await env.DB.batch([
+    // The risky credential fixture is the same org person in a second
+    // conference, not a same-named person in another tenant. Conference scope
+    // is the invariant this route must preserve.
+    env.DB.prepare(
+      `INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at)
+       VALUES (?, ?, 'Other Infra Days', 'other-infra-remove207', '2027-05-20', '2027-05-21', 'America/New_York', 'draft', 0, ?, ?)`,
+    ).bind(otherEventId, orgId, NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO buildings (id, event_id, name, address, position, created_at, updated_at) VALUES ('building_remove207', ?, 'Main Hall', '1 Main St', 0, ?, ?)",
+    ).bind(eventId, NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO rooms (id, event_id, building_id, name, capacity, position, av_capabilities, created_at, updated_at) VALUES ('room_remove207', ?, 'building_remove207', 'Main Room', 200, 0, '[]', ?, ?)",
+    ).bind(eventId, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
        VALUES ('sub_live', ?, 'session', 'Taming 40-Minute CI', 'accepted', 'admin', 'per_speaker', 1, ?, ?)`,
@@ -555,6 +577,14 @@ test("AC-299 · removing a person from a conference ends their work there and le
        VALUES ('sub_draft', ?, 'session', 'A Session Nobody Published', 'accepted', 'admin', 'per_speaker', 0, ?, ?)`,
     ).bind(eventId, NOW, NOW),
     env.DB.prepare(
+      `INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
+       VALUES ('sub_other', ?, 'session', 'A Session At The Other Conference', 'accepted', 'admin', 'per_speaker', 0, ?, ?)`,
+    ).bind(otherEventId, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
+       VALUES ('agenda_live', ?, 'sub_live', 'session', ?, 30, 'room_remove207', 1, ?, ?)`,
+    ).bind(eventId, NOW + 86_400_000, NOW, NOW),
+    env.DB.prepare(
       "INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_a', 'sub_live', 'per_speaker', 'speaker', 0, ?, ?)",
     ).bind(NOW, NOW),
     env.DB.prepare(
@@ -562,6 +592,9 @@ test("AC-299 · removing a person from a conference ends their work there and le
     ).bind(NOW, NOW),
     env.DB.prepare(
       "INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_c', 'sub_draft', 'per_speaker', 'speaker', 0, ?, ?)",
+    ).bind(NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_other', 'sub_other', 'per_speaker', 'speaker', 0, ?, ?)",
     ).bind(NOW, NOW),
     env.DB.prepare(
       "INSERT INTO task_templates (id, event_id, name, kind, due_offset_days, position, created_at, updated_at) VALUES ('tpl_207', ?, 'Send your bio', 'acknowledge', 7, 0, ?, ?)",
@@ -580,6 +613,18 @@ test("AC-299 · removing a person from a conference ends their work there and le
       "INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at) VALUES ('pe_note', ?, 'per_speaker', 'note', '{\"text\":\"met at KubeCon\"}', ?, ?)",
     ).bind(orgId, `per_remove207_owner`, NOW),
   ]);
+  const linkA = await mintMagicLink(env.DB, {
+    personId: "per_speaker",
+    eventId,
+    purpose: "login",
+    redirectTo: "/dashboard",
+  });
+  const linkB = await mintMagicLink(env.DB, {
+    personId: "per_speaker",
+    eventId: otherEventId,
+    purpose: "login",
+    redirectTo: "/dashboard",
+  });
 
   const preview = await request(`/api/v1/events/${eventId}/people/per_speaker/removal-preview`, { headers: { cookie } });
   expect(preview.status).toBe(200);
@@ -596,11 +641,19 @@ test("AC-299 · removing a person from a conference ends their work there and le
     sole_speaker: true,
   });
 
-  // Before acting: three participations for this person at this conference, the
-  // published session actually published, and the co-speaker present.
-  expect(await countOf("SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_speaker'")).toBe(2);
+  // Before acting: two participations for this person at this conference, one
+  // participation at the same organization's other conference, the published
+  // session's authoritative agenda item, and two live event-bound links.
+  expect(
+    await countOf(
+      "SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_speaker' AND submission_id IN ('sub_live', 'sub_draft')",
+    ),
+  ).toBe(2);
+  expect(await countOf("SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_speaker' AND submission_id = 'sub_other'")).toBe(1);
   expect(await countOf("SELECT COUNT(*) AS total FROM submissions WHERE id = 'sub_live' AND is_published = 1")).toBe(1);
+  expect(await countOf("SELECT COUNT(*) AS total FROM agenda_items WHERE submission_id = 'sub_live' AND is_published = 1")).toBe(1);
   expect(await countOf("SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_cospeaker'")).toBe(1);
+  expect(await countOf("SELECT COUNT(*) AS total FROM magic_links WHERE id IN (?, ?) AND used_at IS NULL", linkA.id, linkB.id)).toBe(2);
 
   const peopleBefore = await countOf("SELECT COUNT(*) AS total FROM people");
   const submissionsBefore = await countOf("SELECT COUNT(*) AS total FROM submissions");
@@ -615,8 +668,16 @@ test("AC-299 · removing a person from a conference ends their work there and le
     data: { ended_participations: 2, cancelled_tasks: 1, published_sessions_kept: ["Taming 40-Minute CI"] },
   });
 
-  // Gone: their participations at THIS conference, and their open work.
-  expect(await countOf("SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_speaker'")).toBe(0);
+  // Gone: their participations at THIS conference, and their open work. The
+  // other conference remains, as does its link.
+  expect(
+    await countOf(
+      "SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_speaker' AND submission_id IN ('sub_live', 'sub_draft')",
+    ),
+  ).toBe(0);
+  expect(await countOf("SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_speaker' AND submission_id = 'sub_other'")).toBe(1);
+  expect(await countOf("SELECT COUNT(*) AS total FROM magic_links WHERE id = ? AND used_at IS NOT NULL", linkA.id)).toBe(1);
+  expect(await countOf("SELECT COUNT(*) AS total FROM magic_links WHERE id = ? AND used_at IS NULL", linkB.id)).toBe(1);
   expect(
     await countOf("SELECT COUNT(*) AS total FROM speaker_tasks WHERE id = 'task_open' AND cancelled_at IS NOT NULL"),
   ).toBe(1);
@@ -628,21 +689,48 @@ test("AC-299 · removing a person from a conference ends their work there and le
   // Standing: the published session, its publication, the co-speaker, every
   // person row, every submission, and every org-level annotation.
   expect(await countOf("SELECT COUNT(*) AS total FROM submissions WHERE id = 'sub_live' AND is_published = 1")).toBe(1);
+  expect(await countOf("SELECT COUNT(*) AS total FROM agenda_items WHERE submission_id = 'sub_live' AND is_published = 1")).toBe(1);
   expect(await countOf("SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_cospeaker'")).toBe(1);
   expect(await countOf("SELECT COUNT(*) AS total FROM people")).toBe(peopleBefore);
   expect(await countOf("SELECT COUNT(*) AS total FROM submissions")).toBe(submissionsBefore);
   expect(await countOf("SELECT COUNT(*) AS total FROM person_events WHERE person_id = 'per_speaker'")).toBe(
     annotationsBefore,
   );
-  // The other organization is untouched, and so is the same-named human on it.
-  expect(await countOf("SELECT COUNT(*) AS total FROM people WHERE org_id = ?", other.orgId)).toBe(2);
-
   // Idempotent: running it again changes nothing and does not resurrect a task.
   const again = await request(`/api/v1/events/${eventId}/people/per_speaker/remove`, { method: "POST", headers: { cookie } });
   expect(again.status).toBe(200);
   expect(
     await countOf("SELECT COUNT(*) AS total FROM speaker_tasks WHERE person_id = 'per_speaker' AND cancelled_at IS NULL AND status = 'open'"),
   ).toBe(0);
+});
+
+test("AC-299 · a reconcile failure after the removal batch does not turn a committed removal into a 500", async () => {
+  const { cookie, orgId, eventId } = await seedInstance("reconcile207");
+  await addPerson(orgId, "per_reconcile", "reconcile@gl-infra.dev", "Reconcile Failure-Path");
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at)
+       VALUES ('sub_reconcile', ?, 'session', 'Reconcile Me', 'accepted', 'admin', 'per_reconcile', ?, ?)`,
+    ).bind(eventId, NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_reconcile', 'sub_reconcile', 'per_reconcile', 'speaker', 0, ?, ?)",
+    ).bind(NOW, NOW),
+  ]);
+
+  const reconcile = vi.spyOn(taskDecisions, "reconcileTaskSet").mockRejectedValueOnce(new Error("reconcile failed"));
+  try {
+    const removed = await request(`/api/v1/events/${eventId}/people/per_reconcile/remove`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(reconcile).toHaveBeenCalledOnce();
+    expect(removed.status).toBe(200);
+    expect(
+      await countOf("SELECT COUNT(*) AS total FROM participations WHERE id = 'part_reconcile'"),
+    ).toBe(0);
+  } finally {
+    reconcile.mockRestore();
+  }
 });
 
 test("AC-300 · revoking portal access ends the credentials and touches nothing else", async () => {

@@ -7,8 +7,9 @@ import type { ApiEnv } from "../api/runtime";
 import { reconcileTaskSet } from "../jobs/cascade/decisions";
 import { auditStatement } from "../lib/audit";
 import { getAuth } from "../lib/auth/auth-middleware";
-import { revokeAccessStatements } from "../lib/auth/access-revocation";
+import { revokeAccessStatements, revokeConferenceAccessStatements } from "../lib/auth/access-revocation";
 import { requireOrgAdmin } from "../lib/auth/org-admin";
+import { errorFields } from "../lib/observability/log";
 
 /**
  * Ending a person's relationship with one conference — and, separately, ending
@@ -257,7 +258,7 @@ const removeFromConference = defineApiRoute(
       context.env.DB.prepare(
         "DELETE FROM memberships WHERE org_id = ? AND person_id = ? AND event_id = ?",
       ).bind(orgId, personId, eventId),
-      ...revokeAccessStatements(context.env.DB, { orgId, personId, now }),
+      ...revokeConferenceAccessStatements(context.env.DB, { personId, eventId, now }),
       auditStatement(context.env.DB, {
         eventId,
         actorKind: actor.kind,
@@ -277,20 +278,29 @@ const removeFromConference = defineApiRoute(
     // derives its task set from participations, so a person with none is no
     // longer a candidate and nothing it does can resurrect what was just
     // cancelled. Idempotent by contract (AC-266), and this is the same function
-    // acceptance and re-acceptance traverse — not a parallel one.
-    if (submissionIds.length > 0) {
-      await reconcileTaskSet(
-        context.env.DB,
-        eventId,
-        submissionIds,
-        now,
-        // The reconciler's actor names a person; a credential whose issuer we
-        // could not resolve is honestly nobody, and it takes the undefined
-        // rather than a fabricated id.
-        actor.personId === null
-          ? undefined
-          : { kind: actor.kind, personId: actor.personId, requestId: actor.requestId },
-      );
+    // acceptance and re-acceptance traverse — not a parallel one. It cannot join
+    // the D1 batch, so a failure here is a best-effort tail: the authoritative
+    // removal already committed, and reporting a 500 would lie about that fact.
+    try {
+      if (submissionIds.length > 0) {
+        await reconcileTaskSet(
+          context.env.DB,
+          eventId,
+          submissionIds,
+          now,
+          // The reconciler's actor names a person; a credential whose issuer we
+          // could not resolve is honestly nobody, and it takes the undefined
+          // rather than a fabricated id.
+          actor.personId === null
+            ? undefined
+            : { kind: actor.kind, personId: actor.personId, requestId: actor.requestId },
+        );
+      }
+    } catch (error) {
+      context.get("logger")?.emit("worker_error", "warn", {
+        source: "removePersonFromConference.reconcileTaskSet",
+        ...errorFields(error),
+      });
     }
 
     const changes = results.map((result) => Number(result.meta?.changes ?? 0));
@@ -301,8 +311,12 @@ const removeFromConference = defineApiRoute(
           ended_participations: changes[0] ?? 0,
           cancelled_tasks: changes[1] ?? 0,
           removed_memberships: changes[2] ?? 0,
-          revoked_sessions: changes[3] ?? 0,
-          consumed_links: changes[4] ?? 0,
+          // Conference removal deliberately does not revoke the person's
+          // person-scoped session. It only consumes the links bound to this
+          // event, so the result names that absence rather than borrowing the
+          // org-wide helper's positional indexes.
+          revoked_sessions: 0,
+          consumed_links: changes[3] ?? 0,
           published_sessions_kept: holdings.filter((row) => isPublished(row)).map((row) => row.title),
         },
       },
