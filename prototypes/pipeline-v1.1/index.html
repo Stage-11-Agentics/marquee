@@ -15,7 +15,12 @@
        standalone. Icons curated: geometry glyphs dropped, the 16px column
        reserved so labels never shift; what stays means something (trailing
        ↗ on rows that leave the shell, ✉, ⚙, ⌘, ↻). Client rulings kept:
-       "Abstracts & sessions" and "Program board" keep their full names.
+       "Abstracts & sessions" and "Program board" keep their full names;
+       "Program home" renamed "Program pipeline" to agree with the page it
+       opens. Hovering that row raises a stage flyout (client idea,
+       2026-08-14): jump straight to any of the seven stages, live counts
+       included — the counts the old ladder rows never had. Click behavior
+       is unchanged, so the flyout is an accelerator, never the only path.
        v1.12 (2026-08-12): the theme system (MRQ-103, operator directive
        overriding DESIGN.md's no-dark-mode-by-Wednesday ruling). Every color
        that was hardcoded in CSS/JS is now a token; a theme is one CSS block
@@ -270,6 +275,19 @@
     .nav a.active .nav-icon { color: var(--accent); }
     .nav .ext-mark { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: 11px; }
     .settings-nav { margin-top: 14px; }
+    /* Hovering the Program pipeline row offers a jump straight to a stage —
+       with the live counts the old seven-row ladder never had. Fixed-position
+       because the sidebar scrolls (overflow would clip an absolute child).
+       Clicking the row itself still opens the dashboard; the flyout is an
+       accelerator, never the only path. */
+    .stage-flyout { position: fixed; z-index: 400; width: 226px; background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 6px; display: none; }
+    .stage-flyout.open { display: block; }
+    .stage-flyout-cap { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase; padding: 6px 9px 7px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+    .stage-flyout a { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 6px 9px; border-radius: var(--radius); color: var(--ink-soft); font-size: 12px; }
+    .stage-flyout a:hover { background: var(--accent-soft); color: var(--accent-dark); }
+    .stage-flyout .stage-num { width: 14px; flex: none; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .stage-flyout .stage-count { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .stage-flyout a:hover .stage-num, .stage-flyout a:hover .stage-count { color: var(--accent-dark); }
     .sidebar-foot { margin-top: auto; display: grid; gap: 2px; padding-top: 16px; border-top: 1px solid var(--line); }
     .sidebar-foot button { border: 0; background: none; text-align: left; color: var(--muted); padding: 7px 10px; border-radius: var(--radius); font: 400 11.5px/1.2 var(--mono); }
     .sidebar-foot button:hover { background: var(--sunk); color: var(--ink); }
@@ -1000,6 +1018,7 @@
       .nav-icon:empty { display: none; }
       .nav-icon:not(:empty) + span { display: none; }
       .nav a span:not(.nav-icon) { max-width: 1.35ch; overflow: hidden; white-space: nowrap; }
+      .stage-flyout { display: none !important; }
       .builder { grid-template-columns: 220px 1fr; }
       .preview-card { grid-column: 1 / -1; position: static; }
       .agenda-layout { grid-template-columns: 210px 1fr; }
@@ -1823,6 +1842,55 @@
         return `<a href="#${route}" data-nav-filter="${esc(filter)}" data-nav-route="${route}" class="${active ? "active" : ""}"><span class="nav-icon">${icon}</span><span>${label}</span></a>`;
       }
 
+      // The Program pipeline row's hover flyout: jump straight to a stage,
+      // counts included. One shared timer means an arriving show cancels a
+      // pending hide and vice versa; the 150/220ms pair is hover intent, so
+      // mousing past the row never flashes the panel.
+      let stageFlyoutTimer;
+      function stageFlyoutRows() {
+        const counts = pipelineCounts();
+        return [
+          ["1","Submitted",counts.Submitted,"Submitted","submissions"],
+          ["2","In review",counts["In Review"],"In Review","submissions"],
+          ["3","Waved",acceptedByWave(1) + acceptedByWave(2),"Waved","submissions"],
+          ["4","Ready to place",counts.ReadyToPlace,"Accepted","submissions"],
+          ["5","Onboarding",onboardingCounts().incomplete,"Onboarding","onboarding"],
+          ["6","Scheduled",counts.Scheduled,"Scheduled","submissions"],
+          ["7","Published",counts.Published,"Published","submissions"],
+        ];
+      }
+      function bindStageFlyout() {
+        const rowEl = document.getElementById("nav-pipeline");
+        let flyout = document.getElementById("stage-flyout");
+        if (!rowEl) { flyout?.classList.remove("open"); return; }
+        if (!flyout) {
+          flyout = document.createElement("div");
+          flyout.id = "stage-flyout"; flyout.className = "stage-flyout";
+          flyout.addEventListener("mouseenter", () => clearTimeout(stageFlyoutTimer));
+          flyout.addEventListener("mouseleave", () => { clearTimeout(stageFlyoutTimer); stageFlyoutTimer = setTimeout(() => flyout.classList.remove("open"), 220); });
+          document.body.appendChild(flyout);
+        }
+        flyout.classList.remove("open");
+        flyout.innerHTML = `<div class="stage-flyout-cap">Jump to a stage</div>` + stageFlyoutRows().map(([n, label, count, filter, route]) =>
+          `<a href="#${route}" data-flyout-filter="${esc(filter)}" data-flyout-route="${route}"><span class="stage-num">${n}</span><span>${esc(label)}</span><span class="stage-count">${count.toLocaleString()}</span></a>`).join("");
+        flyout.querySelectorAll("[data-flyout-filter]").forEach(el => el.addEventListener("click", e => {
+          e.preventDefault(); flyout.classList.remove("open");
+          const route = el.dataset.flyoutRoute;
+          navigate(route, route === "submissions" ? { submissionFilter: el.dataset.flyoutFilter, submissionTrack: "All", submissionPage: 1 } : {});
+        }));
+        const show = () => { clearTimeout(stageFlyoutTimer); stageFlyoutTimer = setTimeout(() => {
+          const r = rowEl.getBoundingClientRect();
+          flyout.style.left = `${Math.round(r.right + 2)}px`;
+          flyout.style.top = `${Math.max(8, Math.round(r.top - 8))}px`;
+          flyout.classList.add("open");
+        }, 150); };
+        const hide = () => { clearTimeout(stageFlyoutTimer); stageFlyoutTimer = setTimeout(() => flyout.classList.remove("open"), 220); };
+        rowEl.addEventListener("mouseenter", show);
+        rowEl.addEventListener("mouseleave", hide);
+        rowEl.addEventListener("focus", show);
+        rowEl.addEventListener("blur", hide);
+      }
+
       function shell(content) {
         return `<div class="app-shell">
           <aside class="sidebar">
@@ -1833,7 +1901,7 @@
             </div>
             ${switcherAltRow()}
             <nav class="nav" aria-label="Conference">
-              ${navItem("dashboard","","Program pipeline")}
+              <a href="#dashboard" data-route="dashboard" id="nav-pipeline" class="${state.route === "dashboard" ? "active" : ""}"><span class="nav-icon"></span><span>Program pipeline</span></a>
               ${navItem("board","","Program board")}
               ${pipelineNavItem("Abstracts & sessions","","All")}
               ${navItem("agenda","","Agenda")}
@@ -3418,6 +3486,7 @@
       function bindCommon() {
         document.querySelectorAll("[data-route]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); if(el.hasAttribute("data-create-session"))state.formTarget="Session"; navigate(el.dataset.route); }));
         document.querySelectorAll("[data-nav-filter]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); const route=el.dataset.navRoute; navigate(route,route==="submissions"?{submissionFilter:el.dataset.navFilter,submissionTrack:"All",submissionPage:1}:{ }); }));
+        bindStageFlyout();
         document.querySelectorAll("[data-toast]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); toast(el.dataset.toast); }));
         document.querySelectorAll("[data-publish-id]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); showPublishModal(el.dataset.publishId); }));
         const gs = document.getElementById("global-search");
