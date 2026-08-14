@@ -22,6 +22,7 @@ import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../l
 import {
   DEMO_MAIL_ALLOWLIST_LIMIT,
   demoMailAllowlistFor,
+  describeRejectedEmail,
   isAllowlistEmail,
   normalizeAllowlistEmail,
   parseAllowlist,
@@ -1076,7 +1077,7 @@ const putDemoMailAllowlist = defineApiRoute(
     // wrong, rather than rejecting a list of five for a typo in one.
     for (const email of emails) {
       if (!isAllowlistEmail(email)) {
-        throw ApiError.unprocessable(`${email.trim() || "that"} is not a complete email address`, "emails");
+        throw ApiError.unprocessable(`${describeRejectedEmail(email, "that")} is not a complete email address`, "emails");
       }
     }
     // Deduplicated before the cap is applied: two spellings of one address are

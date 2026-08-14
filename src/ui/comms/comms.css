@@ -115,7 +115,11 @@
 .allowlist-submit { background: var(--accent); border: 0; color: var(--on-accent); font: 600 12px var(--mono); text-transform: uppercase; width: 88px; }
 .allowlist-submit:hover:not(:disabled) { background: var(--accent-hover); }
 .allowlist-submit:disabled, .allowlist-entry input:disabled { cursor: not-allowed; opacity: .45; }
-.allowlist-note { font: 11px/1.4 var(--mono); height: 32px; margin: 8px 0 0; overflow: hidden; }
+/* Three reserved lines, and the overflow SCROLLS rather than hiding: a fixed box
+   that silently clips is a worse trade than the jump it was avoiding, because the
+   text it eats is the error the operator needs. `overflow-wrap: anywhere` is what
+   makes an address with no spaces in it wrap instead of running off the line. */
+.allowlist-note { font: 11px/1.4 var(--mono); height: 46px; margin: 8px 0 0; overflow-wrap: anywhere; overflow-y: auto; }
 .allowlist-note.tone-hint { color: var(--muted); }
 .allowlist-note.tone-error { color: var(--danger); }
 .allowlist-note.tone-saved { color: var(--accent); }

@@ -151,6 +151,26 @@ test("CONTRACT · an incomplete address is refused and the stored list is untouc
   expect(await demoMailAllowlistFor(env.DB, DEMO_EVENT)).toEqual(["judge@example.com"]);
 });
 
+/**
+ * A rejected value is whatever was pasted, not an address. Quoting all 254
+ * characters back puts an unbounded string into the one line the operator has
+ * to read — on screen it overruns the space reserved for it, and the message
+ * that gets lost is the reason their paste was refused.
+ */
+test("CONTRACT · a rejection quotes back enough to recognise, not the whole paste", async () => {
+  const cookie = await cookieFor(OWNER, "allowlist-long");
+  const monster = "x".repeat(254);
+  const rejected = await call(`/api/v1/events/${DEMO_EVENT}/demo-mail-allowlist`, cookie, {
+    method: "PUT",
+    body: JSON.stringify({ emails: [monster] }),
+  });
+  expect(rejected.status).toBe(422);
+  const message = (await rejected.json<{ error: { message: string } }>()).error.message;
+  expect(message).toBe(`${"x".repeat(47)}… is not a complete email address`);
+  expect(message.length).toBeLessThan(100);
+  expect(await demoMailAllowlistFor(env.DB, DEMO_EVENT)).toEqual([]);
+});
+
 test("CONTRACT · the list is capped, and the cap counts distinct addresses", async () => {
   const cookie = await cookieFor(OWNER, "allowlist-cap");
   const tooMany = Array.from({ length: DEMO_MAIL_ALLOWLIST_LIMIT + 1 }, (_, index) => `judge${index}@example.com`);

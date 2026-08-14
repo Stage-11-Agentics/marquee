@@ -2,7 +2,7 @@ import type { JSX } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
-import { isAllowlistEmail, normalizeAllowlistEmail } from "../../lib/demo-mail-allowlist";
+import { describeRejectedEmail, isAllowlistEmail, normalizeAllowlistEmail } from "../../lib/demo-mail-allowlist";
 
 const ALLOWLIST_ROUTE = "/api/v1/events/{eventId}/demo-mail-allowlist";
 
@@ -87,7 +87,7 @@ export function DemoMailAllowlist({ eventId }: { eventId: string }): JSX.Element
     event.preventDefault();
     const candidate = normalizeAllowlistEmail(draft);
     if (!isAllowlistEmail(candidate)) {
-      setNote({ tone: "error", text: `${draft.trim() || "That"} is not a complete email address.` });
+      setNote({ tone: "error", text: `${describeRejectedEmail(draft, "That")} is not a complete email address.` });
       input.current?.focus();
       return;
     }
@@ -153,6 +153,9 @@ export function DemoMailAllowlist({ eventId }: { eventId: string }): JSX.Element
             type="email"
             autoComplete="off"
             spellcheck={false}
+            // The same ceiling the schema enforces, so a monster paste is
+            // stopped at the keyboard rather than at the server.
+            maxLength={254}
             placeholder="you@example.com"
             value={draft}
             disabled={busy || loading}

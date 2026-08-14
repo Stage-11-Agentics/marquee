@@ -41,6 +41,21 @@ export function normalizeAllowlistEmail(value: string): string {
 }
 
 /**
+ * What a rejection is allowed to quote back.
+ *
+ * A rejected value is by definition not an address — it is whatever was pasted,
+ * up to the 254 characters the schema permits. Echoing all of it whole puts an
+ * unbounded string into a message that has to be read: in the API it bloats an
+ * error field, and on screen it overruns the line reserved for it. An operator
+ * needs enough to recognise what they typed, not all of it.
+ */
+export function describeRejectedEmail(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return fallback;
+  return trimmed.length <= 48 ? trimmed : `${trimmed.slice(0, 47)}…`;
+}
+
+/**
  * Accepts both shapes this key has ever held — a bare array and `{ emails }` —
  * because a deployment seeded by hand is not a reason to start suppressing mail
  * an operator believed was allowed through.

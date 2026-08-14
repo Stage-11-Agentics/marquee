@@ -53,8 +53,13 @@ test("CONTRACT · adding or removing a row cannot move the controls beside it", 
   assert.match(css, /\.allowlist-listing \{[^}]*height: \d+px;/);
   assert.match(css, /\.allowlist-listing \{[^}]*overflow-y: auto;/);
   assert.doesNotMatch(css, /\.allowlist-listing \{[^}]*min-height:/);
-  // The note under the input always occupies its two lines, empty or not.
+  // The note under the input always occupies its reserved lines, empty or not —
+  // and when a message outgrows them it SCROLLS. A fixed box that clips would
+  // trade a visible jump for an invisible loss of the error text.
   assert.match(css, /\.allowlist-note \{[^}]*height: \d+px;/);
+  assert.match(css, /\.allowlist-note \{[^}]*overflow-y: auto;/);
+  assert.match(css, /\.allowlist-note \{[^}]*overflow-wrap: anywhere;/);
+  assert.doesNotMatch(css, /\.allowlist-note \{[^}]*overflow: hidden;/);
   // The button keeps its width when its label changes from Add to Saving.
   assert.match(css, /\.allowlist-submit \{[^}]*width: \d+px;/);
   assert.match(css, /\.allowlist-remove \{[^}]*width: \d+px;/);
@@ -63,8 +68,9 @@ test("CONTRACT · adding or removing a row cannot move the controls beside it", 
 });
 
 test("CONTRACT · the outbox banner and the held reason tell the truth about this conference", async () => {
-  // A live conference does not wear a demo-safe hat.
-  assert.match(screen, /demoMode\s*$/m);
+  // A live conference does not wear a demo-safe hat. Pin the wiring, not the
+  // identifier: `demoMode` existing somewhere in the file proves nothing.
+  assert.match(screen, /const demoMode = useEventContext\(\)\.event\?\.demo_mode === 1;/);
   assert.match(screen, /Live outbox/);
   assert.match(screen, /every one of them is sent to the person it names/);
   assert.match(screen, /\{demoMode && <DemoMailAllowlist eventId=\{eventId\} \/>\}/);
