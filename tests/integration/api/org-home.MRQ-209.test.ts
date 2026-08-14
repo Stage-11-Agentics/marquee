@@ -94,6 +94,15 @@ async function seedFixture(): Promise<void> {
       .bind("sub_mrq209_upcoming_withdrawn", UPCOMING_EVENT_ID, "Withdrawn speaker abstract", OWNER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'abstract', ?, 'draft', 'public', ?, ?, ?)")
       .bind("sub_mrq209_upcoming_draft", UPCOMING_EVENT_ID, "Draft speaker abstract", OWNER_ID, NOW, NOW),
+    // These excluded applicants also appear in the past conference. If the
+    // returning-speaker source ever loses its lifecycle filter, they must not
+    // turn this metric into a count of rejected applications.
+    env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'abstract', ?, 'rejected', 'public', ?, ?, ?)")
+      .bind("sub_mrq209_ended_rejected", ENDED_EVENT_ID, "Past rejected speaker abstract", OWNER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'abstract', ?, 'withdrawn', 'public', ?, ?, ?)")
+      .bind("sub_mrq209_ended_withdrawn", ENDED_EVENT_ID, "Past withdrawn speaker abstract", OWNER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'abstract', ?, 'draft', 'public', ?, ?, ?)")
+      .bind("sub_mrq209_ended_draft", ENDED_EVENT_ID, "Past draft speaker abstract", OWNER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
       .bind("part_mrq209_upcoming_single", "sub_mrq209_upcoming_single", SINGLE_SPEAKER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
@@ -102,6 +111,12 @@ async function seedFixture(): Promise<void> {
       .bind("part_mrq209_upcoming_withdrawn", "sub_mrq209_upcoming_withdrawn", WITHDRAWN_SPEAKER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
       .bind("part_mrq209_upcoming_draft", "sub_mrq209_upcoming_draft", DRAFT_SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
+      .bind("part_mrq209_ended_rejected", "sub_mrq209_ended_rejected", REJECTED_SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
+      .bind("part_mrq209_ended_withdrawn", "sub_mrq209_ended_withdrawn", WITHDRAWN_SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
+      .bind("part_mrq209_ended_draft", "sub_mrq209_ended_draft", DRAFT_SPEAKER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at, target_event_id, next_touch_on) VALUES (?, ?, ?, 'stage', ?, ?, ?, ?, ?)")
       .bind("stage_mrq209_returning", ORG_ID, RETURNING_SPEAKER_ID, '{"stage":"contacted"}', OWNER_ID, NOW + 10, UPCOMING_EVENT_ID, "2026-08-12"),
     env.DB.prepare("INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at, target_event_id, next_touch_on) VALUES (?, ?, ?, 'stage', ?, ?, ?, ?, ?)")
