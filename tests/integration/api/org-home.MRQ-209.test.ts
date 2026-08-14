@@ -122,12 +122,12 @@ async function request(path: string, sessionId?: string): Promise<Response> {
 describe.sequential("MRQ-209 organization home", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("requires organization program access", async () => {
+  test("CONTRACT · requires organization program access", async () => {
     expect((await request("/api/v1/org/home")).status).toBe(401);
     expect((await request("/api/v1/org/home", SPEAKER_SESSION_ID)).status).toBe(403);
   });
 
-  test("composes one org-scoped snapshot with truthful counts and lifecycle", async () => {
+  test("CONTRACT · composes one org-scoped snapshot with truthful counts and lifecycle", async () => {
     const response = await request("/api/v1/org/home", OWNER_SESSION_ID);
     expect(response.status).toBe(200);
     const body = await response.json<{ data: Record<string, any> }>();
@@ -165,7 +165,7 @@ describe.sequential("MRQ-209 organization home", () => {
     });
   });
 
-  test("excludes terminal stages and keeps activity to four newest rows", async () => {
+  test("CONTRACT · excludes terminal stages and keeps activity to four newest rows", async () => {
     const response = await request("/api/v1/org/home", OWNER_SESSION_ID);
     const body = await response.json<{ data: Record<string, any> }>();
 
