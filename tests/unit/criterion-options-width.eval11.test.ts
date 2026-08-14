@@ -35,7 +35,7 @@ function selectorClassCount(selector: string): number {
 
 describe("scorecard editor options field", () => {
   test("CONTRACT · scorecard editor — the options input outranks the narrow inline-field width", () => {
-    const inlineRule = /\.criterion-detail \.field\.inline input \{[^}]*width: 72px[^}]*\}/.exec(styles);
+    const inlineRule = /\.criterion-detail \.field\.inline input(?:\s*:where\([^{}]*\))?\s*\{[^}]*width: 72px[^}]*\}/.exec(styles);
     const optionsRule = /(\.criterion-detail [^{]*criterion-options[^{]*input) \{[^}]*width: 100%[^}]*\}/.exec(styles);
 
     expect(inlineRule, "the 72px inline-field rule this must outrank").not.toBeNull();
