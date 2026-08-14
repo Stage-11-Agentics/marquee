@@ -2,14 +2,25 @@
 
 Open-source speaker/session-management platform for conference organizers, built to run AIE NYC 2026. Replaces Sessionboard; competes against Sessionize's scope with the post-acceptance workflow neither ships. It began as Stage 11's entry in swyx's "$10,000 Kill My SaaS" hackathon.
 
+**`AGENTS.md` is a symlink to this file** — one source of truth for every runtime. Edit `CLAUDE.md` only; the symlink makes drift technically impossible.
+
 ## Orient here first
 
 - `sequence/run-state.md` — where the work stands: current focus, decisions, active agents, open touchpoints. **Read this first on every session.**
 - `DESIGN.md` — the binding design language: Flight Deck aesthetic (tokens in `prototypes/skins/skin-c.html`), voice, craft rules, and the pointer to the binding prototype. The build reproduces the prototype one-to-one.
 - `PHILOSOPHY.md` — the one thing (fantastic conferences, effortlessly), the principles (respect the operator; the system does the chase work; agent-native by design; whole loop or nothing; own your conference; the organizer's language), and the taste rules. Binds every design and copy decision.
+- `EVAL.md` — how to grade this build with swyx's sbek harness (kit at `.eval-kit-agent/`): the in-context path (your session as browser, pipelined judge subagents) and the official API path. Read it before any eval run.
 - `DEPLOY.md` — how the site gets built and shipped, and how to check what is actually live. **There is no auto-deploy: merging does not ship.** Read it before deploying, and improve it there rather than rediscovering the same gotchas per-run.
 - `sequence/PRODUCT-DEFINITION.md` — Phase-2 synthesis: positioning, moat, scope, architecture bets.
 - `sequence/research/` — the Phase-1 dossiers: `competition-requirements.md` (R1–R50 register — the ground truth every artifact keys to), `stakeholders.md`, `user-stories-draft.md`, `landscape-features.md`, `seams-feasibility.md`.
+
+## Working in the code
+
+- **Stack:** Hono + Preact + Zod on Cloudflare Workers; Vite builds it, TypeScript throughout. Node ≥ 22.18. App code lives in `src/` (`api/`, `routes/`, `ui/`, `db/`, `jobs/`), schema in `migrations/`, tests in `tests/`.
+- **Dev server:** `npx vite dev` — the Cloudflare plugin runs the real Worker locally.
+- **Tests:** `npm test` (Vitest, workers pool). `npm run e2e` for Playwright.
+- **PR gate:** `npm run pr-gate` before opening a PR.
+- **Live site:** `https://marquee.stage11.dev` — `curl /health` reports the deployed sha. See `DEPLOY.md` before shipping anything.
 
 ## Rules of the road
 
@@ -183,16 +194,17 @@ those 401s is the expired-fixture case above, and only rebasing cures it.
   CLI has an unlocked read-decide-write window, and concurrent `lattice create` calls
   are how the ID counter corrupts and starts re-minting `MRQ-1`. Delegators updating
   their *own* task's status, plan, and comments is fine; those touch disjoint files.
-- **Merging a change to `CLAUDE.md` or `AGENTS.md` does not deliver it.** Both are
-  auto-loaded from the primary checkout's *working copy*, and the rule above keeps that
-  checkout parked — so a merged guidance fix sits on the ref while every session goes on
-  reading the old text. **Whoever merges a change to these two files fast-forwards the
+- **Merging a change to `CLAUDE.md` does not deliver it.** It is auto-loaded (as is
+  `AGENTS.md`, its symlink) from the primary checkout's *working copy*, and the rule
+  above keeps that checkout parked — so a merged guidance fix sits on the ref while
+  every session goes on reading the old text. A quick edit committed directly on `main`
+  here delivers itself; **whoever merges a `CLAUDE.md` change via PR fast-forwards the
   board home as part of that merge**, then verifies the working copy rather than the ref:
 
   ```sh
   cd /Users/atin/Projects/Stage11/deployments/Marquee
   git fetch github && git merge --ff-only github/main
-  grep -n "<what you changed>" CLAUDE.md AGENTS.md   # read the file, not the ref
+  grep -n "<what you changed>" CLAUDE.md   # read the file, not the ref
   ```
 
   If the fast-forward refuses, it is untracked `.lattice` files the incoming commits also
