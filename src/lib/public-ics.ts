@@ -10,6 +10,7 @@ function utcDateTime(value: number): string {
 /** Build a read-only PUBLISH feed from the same published rows as the embed. */
 export function buildPublicCalendarFeed(data: PublicEmbedData, origin: string, now = Date.now()): string {
   const base = origin.replace(/\/+$/, "");
+  const fields = new Set(data.config.fields);
   const lines = [
     "BEGIN:VCALENDAR",
     "PRODID:-//Stage 11//Marquee Public Embed//EN",
@@ -23,15 +24,23 @@ export function buildPublicCalendarFeed(data: PublicEmbedData, origin: string, n
   for (const session of data.sessions) {
     const end = session.startsAt + session.durationMin * 60_000;
     const sessionUrl = `${base}/s/${encodeURIComponent(session.slug)}?event=${encodeURIComponent(data.event.slug)}`;
+    const description = [
+      fields.has("abstract") ? session.abstract : null,
+      fields.has("speakers") ? session.speakers.map((speaker) => speaker.name).join(", ") : null,
+      fields.has("format") && session.format ? session.format.name : null,
+      fields.has("track") && session.tracks.length > 0 ? session.tracks.map((track) => track.name).join(", ") : null,
+    ].filter(Boolean).join("\n") || data.event.name;
+    const summary = fields.has("title") ? session.title : `${data.event.name} session`;
+    const location = fields.has("location") ? session.roomLabel : data.event.name;
     lines.push(
       "BEGIN:VEVENT",
       `UID:${escapeIcsText(`${session.id}@marquee.stage11.dev`)}`,
       `DTSTAMP:${utcDateTime(now)}`,
       `DTSTART:${utcDateTime(session.startsAt)}`,
       `DTEND:${utcDateTime(end)}`,
-      `SUMMARY:${escapeIcsText(session.title)}`,
-      `DESCRIPTION:${escapeIcsText(session.abstract ?? session.title)}`,
-      `LOCATION:${escapeIcsText(session.roomLabel)}`,
+      `SUMMARY:${escapeIcsText(summary)}`,
+      `DESCRIPTION:${escapeIcsText(description)}`,
+      `LOCATION:${escapeIcsText(location)}`,
       `URL:${sessionUrl}`,
       "STATUS:CONFIRMED",
       "TRANSP:OPAQUE",

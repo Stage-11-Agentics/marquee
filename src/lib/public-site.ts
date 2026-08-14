@@ -128,6 +128,73 @@ export interface PublicSpeaker extends PublicSpeakerSummary {
   sessions: Array<Pick<PublicSession, "id" | "slug" | "title" | "day" | "date" | "time" | "roomLabel">>;
 }
 
+export const EMBED_FIELD_OPTIONS = {
+  agenda: [
+    { value: "time", label: "Time" },
+    { value: "title", label: "Session title" },
+    { value: "abstract", label: "Abstract" },
+    { value: "speakers", label: "Speakers" },
+    { value: "location", label: "Location" },
+    { value: "format", label: "Format" },
+    { value: "track", label: "Track" },
+  ],
+  sessions: [
+    { value: "time", label: "Time" },
+    { value: "title", label: "Session title" },
+    { value: "abstract", label: "Abstract" },
+    { value: "speakers", label: "Speakers" },
+    { value: "location", label: "Location" },
+    { value: "format", label: "Format" },
+    { value: "track", label: "Track" },
+  ],
+  speakers: [
+    { value: "name", label: "Name" },
+    { value: "title", label: "Title" },
+    { value: "company", label: "Company" },
+    { value: "bio", label: "Bio" },
+    { value: "headshot", label: "Headshots" },
+    { value: "social", label: "Social links" },
+    { value: "sessions", label: "Published sessions" },
+  ],
+  cfp: [
+    { value: "status", label: "Open or closed status" },
+    { value: "deadline", label: "Deadline" },
+    { value: "formats", label: "Formats" },
+    { value: "link", label: "Proposal link" },
+  ],
+} as const satisfies Record<EmbedKind, readonly { value: string; label: string }[]>;
+
+export type EmbedField = (typeof EMBED_FIELD_OPTIONS)[EmbedKind][number]["value"];
+
+export function embedFieldsForKind(kind: EmbedKind): readonly { value: EmbedField; label: string }[] {
+  return EMBED_FIELD_OPTIONS[kind];
+}
+
+export function defaultEmbedFields(kind: EmbedKind): EmbedField[] {
+  return embedFieldsForKind(kind).map((option) => option.value);
+}
+
+function fieldValues(value: unknown): unknown[] | null {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") return value.split(",");
+  return null;
+}
+
+/** Normalize persisted or URL-provided field names to the active surface. */
+export function normalizeEmbedFields(value: unknown, kind: EmbedKind): EmbedField[] {
+  const raw = fieldValues(value);
+  if (!raw) return defaultEmbedFields(kind);
+  const selected = new Set(raw.filter((item): item is string => typeof item === "string").map((item) => item.trim()));
+  return embedFieldsForKind(kind)
+    .map((option) => option.value)
+    .filter((field) => selected.has(field));
+}
+
+/** `null` means the URL did not override the saved selection; an empty string means none. */
+export function parseEmbedFieldsParam(value: string | null | undefined, kind: EmbedKind): EmbedField[] | null {
+  return value === null || value === undefined ? null : normalizeEmbedFields(value, kind);
+}
+
 /**
  * Public speaker records only carry a display name, so keep the directory's
  * family-name heuristic explicit and modest: honor the common "Family, Given"
@@ -163,6 +230,7 @@ export interface PublicEmbedConfig {
   accent: string | null;
   layout: EmbedLayout | null;
   output: EmbedOutputFormat;
+  fields: EmbedField[];
 }
 
 export interface PublicEmbedFilters {
@@ -172,6 +240,7 @@ export interface PublicEmbedFilters {
   status?: string | null;
   accent?: string | null;
   layout?: string | null;
+  fields?: string | null;
 }
 
 export interface ResolvedPublicEmbed {
@@ -268,6 +337,19 @@ function isPublicEmbedCacheEnvelope(value: unknown): value is PublicEmbedCacheEn
   return typeof value === "object" && value !== null &&
     "__marqueePublicEmbed" in value &&
     (value as { __marqueePublicEmbed?: unknown }).__marqueePublicEmbed === true;
+}
+
+/** Cache entries can outlive one deploy, so old entries may not have fields. */
+function normalizeCachedEmbedData(data: PublicEmbedData): PublicEmbedData {
+  const config = data.config as PublicEmbedConfig | undefined;
+  if (!config) return data;
+  return {
+    ...data,
+    config: {
+      ...config,
+      fields: normalizeEmbedFields(config.fields, data.kind),
+    },
+  };
 }
 
 function toEvent(row: EventRow): PublicEvent {
@@ -832,7 +914,9 @@ export function parseEmbedConfig(value: string | null, kind: EmbedKind): PublicE
     ? raw.statuses.filter((item): item is string => typeof item === "string")
     : typeof raw.status === "string" ? [raw.status] : [];
   const layout = raw.layout === "list" ? "list" : raw.layout === "cards" ? "cards" : null;
-  const output = raw.output === "json" || raw.output === "ical" ? raw.output : "html";
+  const output = raw.output === "basic" || raw.output === "json" || raw.output === "xml" || raw.output === "ical"
+    ? raw.output
+    : "html";
   return {
     kind,
     tracks: trackValues,
@@ -840,6 +924,7 @@ export function parseEmbedConfig(value: string | null, kind: EmbedKind): PublicE
     accent: validAccent(raw.accent ?? raw.color),
     layout,
     output,
+    fields: normalizeEmbedFields(raw.fields, kind),
   };
 }
 
@@ -886,7 +971,7 @@ export async function resolvePublicEmbed(
     event,
     slug: request.slug,
     kind,
-    config: { kind, tracks: [], statuses: [], accent: null, layout: null, output: "html" },
+    config: { kind, tracks: [], statuses: [], accent: null, layout: null, output: "html", fields: defaultEmbedFields(kind) },
   };
 }
 
@@ -934,7 +1019,10 @@ export async function loadPublicEmbed(
   filters: PublicEmbedFilters = {},
 ): Promise<PublicEmbedData> {
   const accent = validAccent(filters.accent) ?? resolved.config.accent;
-  const config = { ...resolved.config, accent };
+  const fields = filters.fields === null || filters.fields === undefined
+    ? resolved.config.fields
+    : normalizeEmbedFields(filters.fields, resolved.kind);
+  const config = { ...resolved.config, accent, fields };
 
   if (resolved.kind === "cfp") {
     return {
@@ -1026,6 +1114,82 @@ export async function loadPublicEmbed(
   };
 }
 
+function projectEmbedSession(session: PublicSession, fields: ReadonlySet<EmbedField>): Record<string, unknown> {
+  const projected: Record<string, unknown> = { id: session.id, slug: session.slug, status: session.status };
+  if (fields.has("title")) projected.title = session.title;
+  if (fields.has("abstract")) projected.abstract = session.abstract;
+  if (fields.has("speakers")) projected.speakers = session.speakers;
+  if (fields.has("time")) {
+    Object.assign(projected, {
+      day: session.day,
+      date: session.date,
+      time: session.time,
+      endTime: session.endTime,
+      startsAt: session.startsAt,
+      durationMin: session.durationMin,
+    });
+  }
+  if (fields.has("location")) {
+    Object.assign(projected, {
+      roomId: session.roomId,
+      room: session.room,
+      building: session.building,
+      buildingAddress: session.buildingAddress,
+      roomLabel: session.roomLabel,
+    });
+  }
+  if (fields.has("format")) projected.format = session.format;
+  if (fields.has("track")) projected.tracks = session.tracks;
+  return projected;
+}
+
+function projectEmbedSpeaker(speaker: PublicSpeaker, fields: ReadonlySet<EmbedField>): Record<string, unknown> {
+  const projected: Record<string, unknown> = { id: speaker.id, slug: speaker.slug };
+  if (fields.has("name")) projected.name = speaker.name;
+  if (fields.has("title")) projected.title = speaker.title;
+  if (fields.has("company")) projected.company = speaker.company;
+  if (fields.has("bio")) projected.bio = speaker.bio;
+  if (fields.has("headshot")) projected.headshotUrl = speaker.headshotUrl;
+  if (fields.has("social")) projected.socialLinks = speaker.socialLinks;
+  if (fields.has("sessions")) projected.sessions = speaker.sessions;
+  return projected;
+}
+
+function projectEmbedCfp(cfp: PublicEmbedCfp | null, fields: ReadonlySet<EmbedField>): Record<string, unknown> | null {
+  if (!cfp) return null;
+  const projected: Record<string, unknown> = { formSlug: cfp.formSlug, formName: cfp.formName };
+  if (fields.has("status")) projected.status = cfp.status;
+  if (fields.has("deadline")) projected.closesAt = cfp.closesAt;
+  if (fields.has("formats")) projected.formats = cfp.formats;
+  if (fields.has("link")) projected.url = cfp.url;
+  return projected;
+}
+
+function isDefaultEmbedFieldSet(fields: ReadonlySet<EmbedField>, kind: EmbedKind): boolean {
+  const defaults = defaultEmbedFields(kind);
+  return fields.size === defaults.length && defaults.every((field) => fields.has(field));
+}
+
+/** Apply a saved surface's field contract while preserving the full legacy default payload. */
+export function publicEmbedPayload(data: PublicEmbedData): Record<string, unknown> {
+  const fields = new Set<EmbedField>(data.config.fields);
+  const projectSupportingArrays = !isDefaultEmbedFieldSet(fields, data.kind);
+  return {
+    ...data,
+    // Supporting arrays are part of the legacy JSON payload even when they
+    // are not the rendered surface. Preserve their complete shape for the
+    // unrestricted default, but apply a restricted field choice to both
+    // directions so a session choice cannot leak speaker data (or vice versa).
+    sessions: projectSupportingArrays
+      ? data.sessions.map((session) => projectEmbedSession(session, fields))
+      : data.sessions,
+    speakers: projectSupportingArrays
+      ? data.speakers.map((speaker) => projectEmbedSpeaker(speaker, fields))
+      : data.speakers,
+    cfp: data.kind === "cfp" ? projectEmbedCfp(data.cfp, fields) : data.cfp,
+  };
+}
+
 export function publicEmbedCacheKey(
   eventId: string,
   slug: string,
@@ -1039,6 +1203,7 @@ export function publicEmbedCacheKey(
     filters.status ?? "all-statuses",
     filters.accent ?? "event-accent",
     filters.layout === "list" ? "list" : "cards",
+    filters.fields ?? "all-fields",
     // Every facet the embed honors has to key the cache. A facet outside the
     // key serves one visitor's filtered list to the next visitor.
     filters.format ?? "all-formats",
@@ -1054,9 +1219,9 @@ export async function readPublicEmbedCache(
   const cached = await cache.get(key, "json") as PublicEmbedData | PublicEmbedCacheEnvelope | null;
   if (!cached) return null;
   if (isPublicEmbedCacheEnvelope(cached)) {
-    return cached.expiresAt > Date.now() ? cached.data : null;
+    return cached.expiresAt > Date.now() ? normalizeCachedEmbedData(cached.data) : null;
   }
-  return cached;
+  return normalizeCachedEmbedData(cached);
 }
 
 export async function writePublicEmbedCache(

@@ -6,13 +6,14 @@ import { newUlid } from "../api/ids";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { auditStatement } from "../lib/audit";
 import { EMBED_KINDS, EMBED_OUTPUT_FORMATS, type EmbedKind } from "../db/schema";
-import { parseEmbedConfig } from "../lib/public-site";
+import { defaultEmbedFields, normalizeEmbedFields, parseEmbedConfig } from "../lib/public-site";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const embedParams = eventParams.extend({ embedId: z.string().min(1) });
 const embedOutput = z.enum(EMBED_OUTPUT_FORMATS);
 const embedKind = z.enum(EMBED_KINDS);
 const embedLayout = z.enum(["cards", "list"]);
+const embedFields = z.array(z.string().trim().min(1).max(40)).max(20);
 const embedRow = z.object({
   id: z.string(),
   event_id: z.string(),
@@ -25,6 +26,7 @@ const embedRow = z.object({
   status: z.string().nullable(),
   layout: embedLayout.nullable(),
   accent: z.string().nullable(),
+  fields: z.array(z.string()),
   snippet: z.string(),
   updated_at: z.number(),
 });
@@ -38,6 +40,7 @@ const body = z.object({
   status: z.string().trim().max(40).nullable().optional(),
   layout: embedLayout.nullable().optional(),
   accent: z.string().regex(/^#[0-9a-f]{3,8}$/i).nullable().optional(),
+  fields: embedFields.optional(),
 });
 const patch = body.partial().extend({ enabled: z.boolean().optional() });
 
@@ -78,14 +81,18 @@ function savedEmbedSnippet(row: SavedEmbed, origin: string): string {
   if (config.statuses[0]) params.set("status", config.statuses[0]);
   if (config.layout === "list") params.set("layout", "list");
   if (config.accent) params.set("accent", config.accent);
-  const query = params.toString();
+  if (config.fields.length > 0) params.set("fields", config.fields.join(","));
   const path = config.output === "json"
     ? `/api/v1/public/embeds/${encodeURIComponent(row.slug)}`
+    : config.output === "xml"
+      ? `/api/v1/public/embeds/${encodeURIComponent(row.slug)}/xml`
     : config.output === "ical"
       ? `/embed/${encodeURIComponent(row.slug)}.ics`
       : `/embed/${encodeURIComponent(row.slug)}`;
-  const source = `${origin.replace(/\/+$/, "")}${path}${query ? `?${query}` : ""}`;
-  if (config.output === "json") return source;
+  if (config.output === "basic") params.set("style", "basic");
+  const finalQuery = params.toString();
+  const source = `${origin.replace(/\/+$/, "")}${path}${finalQuery ? `?${finalQuery}` : ""}`;
+  if (config.output === "json" || config.output === "xml" || config.output === "basic") return source;
   if (config.output === "ical") return `<a href="${source}">Add ${escapeHtml(row.name)} to calendar</a>`;
   return `<iframe src="${source}" title="${escapeHtml(row.name)}" loading="lazy" style="width:100%;border:0"></iframe>`;
 }
@@ -105,6 +112,7 @@ function rowView(row: SavedEmbed, origin: string) {
       status: config.statuses[0] ?? null,
       layout: config.layout,
       accent: config.accent,
+      fields: config.fields,
       snippet: savedEmbedSnippet(row, origin),
       updated_at: row.updated_at,
     },
@@ -165,7 +173,8 @@ const createEmbed = defineApiRoute(
     const now = Date.now();
     const id = newUlid(now);
     const slug = `embed-${id.toLowerCase()}`;
-    const config = JSON.stringify({ tracks: input.track ? [input.track] : [], statuses: input.status ? [input.status] : [], accent: input.accent ?? null, layout: input.layout ?? null, output: input.output_format });
+    const fields = input.fields === undefined ? defaultEmbedFields(input.kind) : normalizeEmbedFields(input.fields, input.kind);
+    const config = JSON.stringify({ tracks: input.track ? [input.track] : [], statuses: input.status ? [input.status] : [], accent: input.accent ?? null, layout: input.layout ?? null, output: input.output_format, fields });
     const row: SavedEmbed = { id, event_id: eventId, name: input.name, slug, kind: input.kind, config, enabled: 1, updated_at: now, accent: input.accent ?? null };
     await context.env.DB.batch([
       context.env.DB.prepare("INSERT INTO embeds (id, event_id, kind, slug, config, created_at, updated_at, name, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)").bind(id, eventId, input.kind, slug, config, now, now, input.name),
@@ -194,7 +203,10 @@ const updateEmbed = defineApiRoute(
     const currentConfig = parseEmbedConfig(current.config, current.kind);
     const kind = input.kind ?? current.kind;
     const output = input.output_format ?? currentConfig.output;
-    const config = JSON.stringify({ tracks: input.track === undefined ? currentConfig.tracks : input.track ? [input.track] : [], statuses: input.status === undefined ? currentConfig.statuses : input.status ? [input.status] : [], accent: input.accent === undefined ? currentConfig.accent : input.accent, layout: input.layout === undefined ? currentConfig.layout : input.layout, output });
+    const fields = input.fields === undefined
+      ? kind === current.kind ? currentConfig.fields : defaultEmbedFields(kind)
+      : normalizeEmbedFields(input.fields, kind);
+    const config = JSON.stringify({ tracks: input.track === undefined ? currentConfig.tracks : input.track ? [input.track] : [], statuses: input.status === undefined ? currentConfig.statuses : input.status ? [input.status] : [], accent: input.accent === undefined ? currentConfig.accent : input.accent, layout: input.layout === undefined ? currentConfig.layout : input.layout, output, fields });
     const now = Date.now();
     const updated: SavedEmbed = { ...current, name: input.name ?? current.name, kind, config, enabled: input.enabled === undefined ? current.enabled : input.enabled ? 1 : 0, updated_at: now };
     await context.env.DB.batch([

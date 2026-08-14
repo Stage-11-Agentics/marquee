@@ -33,7 +33,7 @@ function safeAccent(value: string | undefined): string | null {
 async function readEmbed(
   database: D1Database,
   cache: PublicEmbedCache | undefined,
-  request: { slug: string; eventSlug?: string | null; kind?: EmbedKind; track?: string | null; format?: string | null; room?: string | null; status?: string | null; accent?: string | null; layout?: string | null },
+  request: { slug: string; eventSlug?: string | null; kind?: EmbedKind; track?: string | null; format?: string | null; room?: string | null; status?: string | null; accent?: string | null; layout?: string | null; fields?: string | null },
 ) {
   const resolved = await resolvePublicEmbed(database, request);
   if (!resolved) return null;
@@ -44,6 +44,7 @@ async function readEmbed(
     status: request.status ?? null,
     accent: safeAccent(request.accent ?? undefined),
     layout: request.layout === "list" ? "list" : null,
+    fields: request.fields ?? null,
   };
   const key = publicEmbedCacheKey(resolved.event.id, resolved.slug, filters);
   const cached = await readPublicEmbedCache(cache, key);
@@ -61,6 +62,10 @@ function renderEmbedDocument(shell: string, markup: string, script?: string): st
   return renderPublicDocument(shell, markup, { title: "Embed", script })
     .replace("</style>", "</style>")
     .replace(PUBLIC_SITE_STYLES, embedDocumentStyles());
+}
+
+function renderBasicEmbedDocument(markup: string): string {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Marquee — Basic embed</title></head><body data-embed-output="basic">${markup}</body></html>`;
 }
 
 async function shellFor(context: { env: Env; req: { raw: Request } }): Promise<string> {
@@ -87,9 +92,9 @@ embedRoutes.get("/embed/config", async (context) => {
     kind,
   });
   if (!resolved) return context.notFound();
-  const preview = await loadPublicEmbed(context.env.DB, resolved, { track, format, room, status, accent, layout });
+  const preview = await loadPublicEmbed(context.env.DB, resolved, { track, format, room, status, accent, layout, fields: query.fields ?? null });
   const shell = await shellFor(context);
-  const markup = renderToString(<EmbedConfigPage event={event} tracks={preview.tracks} kind={kind} track={track} status={status} layout={layout} accent={accent} output={output} preview={preview} />);
+  const markup = renderToString(<EmbedConfigPage event={event} tracks={preview.tracks} kind={kind} track={track} status={status} layout={layout} accent={accent} output={output} fields={preview.config.fields} preview={preview} />);
   return context.html(renderEmbedDocument(shell, markup, EMBED_CONFIG_SCRIPT));
 });
 
@@ -107,6 +112,7 @@ embedRoutes.get("/embed/:slug", async (context) => {
     status: query.status,
     accent: query.accent,
     layout: query.layout,
+    fields: query.fields,
   });
   if (!result) return context.notFound();
   context.header("Cache-Control", "public, max-age=30, s-maxage=30");
@@ -114,6 +120,9 @@ embedRoutes.get("/embed/:slug", async (context) => {
     context.header("Content-Type", "text/calendar; charset=utf-8");
     context.header("Content-Disposition", `inline; filename="${encodeURIComponent(slug)}.ics"`);
     return context.body(buildPublicCalendarFeed(result.data, new URL(context.req.url).origin));
+  }
+  if (query.style === "basic") {
+    return context.html(renderBasicEmbedDocument(renderToString(<EmbedPage data={result.data} basic />)));
   }
   const shell = await shellFor(context);
   return context.html(renderEmbedDocument(shell, renderToString(<EmbedPage data={result.data} />)));
@@ -136,9 +145,13 @@ embedRoutes.get("/:eventSlug/:kind/embed", async (context) => {
     status: query.status,
     accent: query.accent,
     layout: query.layout,
+    fields: query.fields,
   });
   if (!result) return context.notFound();
   context.header("Cache-Control", "public, max-age=30, s-maxage=30");
+  if (query.style === "basic") {
+    return context.html(renderBasicEmbedDocument(renderToString(<EmbedPage data={result.data} basic />)));
+  }
   const shell = await shellFor(context);
   return context.html(renderEmbedDocument(shell, renderToString(<EmbedPage data={result.data} />)));
 });
