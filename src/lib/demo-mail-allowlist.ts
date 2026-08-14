@@ -1,3 +1,5 @@
+import type { D1Database } from "@cloudflare/workers-types";
+
 /**
  * The addresses a demo conference is allowed to send real email to.
  *
