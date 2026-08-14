@@ -34,8 +34,21 @@ interface ApiToken {
 }
 
 interface Props {
-  eventId: string;
+  /**
+   * The conference the "restrict to this conference" shortcut would name.
+   *
+   * Null at `/org/tokens`, which is this page's home now (ruling O2): tokens
+   * are org-scoped rows with a nullable event scope, so the page is reachable
+   * on an instance that has no conference yet — and where there is no
+   * conference the shortcut is simply not offered rather than offered as a
+   * control that would produce an invalid scope.
+   */
+  eventId: string | null;
   navigate: (target: string) => void;
+  /** Where the back link goes; the page is reached from two places now. */
+  backTo?: { href: string; label: string };
+  /** The org surface draws its own header and tabs, so the page omits its own. */
+  chrome?: boolean;
 }
 
 type LoadState =
@@ -94,7 +107,7 @@ function TokenRow({ token, onRevoke }: { token: ApiToken; onRevoke: (token: ApiT
   </tr>;
 }
 
-export function ApiTokensPage({ eventId, navigate }: Props): JSX.Element {
+export function ApiTokensPage({ eventId, navigate, backTo, chrome = true }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", tokens: [] });
   const [reloadKey, setReloadKey] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
@@ -140,7 +153,7 @@ export function ApiTokensPage({ eventId, navigate }: Props): JSX.Element {
           name,
           scopes: {
             permissions,
-            event_ids: restrictToConference ? [eventId] : [],
+            event_ids: restrictToConference && eventId !== null ? [eventId] : [],
           },
         }),
       });
@@ -179,16 +192,18 @@ export function ApiTokensPage({ eventId, navigate }: Props): JSX.Element {
         ? <EmptyState class="token-empty" title="No API tokens yet" copy="Create a narrowly scoped token for the CLI or an integration. Secrets are shown once and stored only as hashes." action={<button class="button" type="button" onClick={() => setShowCreate(true)}>Create API token</button>} />
         : <section class="card token-table-card"><div class="table-scroll"><table class="token-table"><thead><tr><th scope="col">Token</th><th scope="col">Named scopes</th><th scope="col">Restriction</th><th scope="col">Created</th><th scope="col">Last used</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>{state.tokens.map((token) => <TokenRow key={token.id} token={token} onRevoke={revokeToken} />)}</tbody></table></div></section>;
 
+  const back = backTo ?? { href: "/org", label: "← Organization settings" };
   return <div class="settings-page api-tokens-page">
-    <PageHeader
+    {chrome && <PageHeader
       title="API tokens"
       copy="Issue narrowly scoped credentials for the CLI and integrations. Every request resolves against the issuer or its bound Agent seat membership."
-      actions={<><a class="button ghost" href="/settings" onClick={(event) => { event.preventDefault(); navigate("/settings"); }}>← Conference settings</a><a class="button" href="/api/docs">Read API &amp; CLI docs</a><button class="button primary" type="button" onClick={() => setShowCreate((value) => !value)}>{showCreate ? "Close form" : "Create API token"}</button></>}
-    />
+      actions={<><a class="button ghost" href={back.href} onClick={(event) => { event.preventDefault(); navigate(back.href); }}>{back.label}</a><a class="button" href="/api/docs">Read API &amp; CLI docs</a><button class="button primary" type="button" onClick={() => setShowCreate((value) => !value)}>{showCreate ? "Close form" : "Create API token"}</button></>}
+    />}
+    {!chrome && <div class="token-list-heading"><div><span class="eyebrow">Credentials</span><h2>Issue a token</h2></div><button class="button primary" type="button" onClick={() => setShowCreate((value) => !value)}>{showCreate ? "Close form" : "Create API token"}</button></div>}
     {notice && <div class="settings-banner" role="status"><span>{notice}</span></div>}
     {error && <div class="settings-error" role="alert"><strong>Action failed</strong><span>{error}</span></div>}
     {secret && <TokenSecretPanel secret={secret} onDismiss={() => setSecret(null)} onNotice={setNotice} />}
-    {showCreate && <section class="card token-create-card"><header class="card-head"><div><h2>New API token</h2><p class="subtle">Named scopes are intersected with the issuer's membership on every request.</p></div></header><form class="card-body stack" onSubmit={(event) => void createToken(event)}><label class="field"><span>Token name</span><input required maxLength={120} value={name} placeholder="CI integration" onInput={(event) => setName(event.currentTarget.value)} /></label><fieldset class="token-scope-fieldset"><legend>Named scopes</legend><div class="token-scope-grid">{API_GRANTS.map((grant) => <GrantCheckbox key={grant} grant={grant} checked={permissions.includes(grant)} onChange={toggleGrant} />)}</div><small>Choose only what this integration needs. A grant never exceeds the issuer's membership.</small></fieldset><label class="token-restriction"><input type="checkbox" checked={restrictToConference} onChange={(event) => setRestrictToConference(event.currentTarget.checked)} /><span>Restrict this token to the current conference <code>{eventId}</code></span></label><div class="token-form-actions"><button class="button" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button class="button primary" type="submit" disabled={pending}>{pending ? "Issuing…" : "Issue token"}</button></div></form></section>}
+    {showCreate && <section class="card token-create-card"><header class="card-head"><div><h2>New API token</h2><p class="subtle">Named scopes are intersected with the issuer's membership on every request.</p></div></header><form class="card-body stack" onSubmit={(event) => void createToken(event)}><label class="field"><span>Token name</span><input required maxLength={120} value={name} placeholder="CI integration" onInput={(event) => setName(event.currentTarget.value)} /></label><fieldset class="token-scope-fieldset"><legend>Named scopes</legend><div class="token-scope-grid">{API_GRANTS.map((grant) => <GrantCheckbox key={grant} grant={grant} checked={permissions.includes(grant)} onChange={toggleGrant} />)}</div><small>Choose only what this integration needs. A grant never exceeds the issuer's membership.</small></fieldset>{eventId !== null && <label class="token-restriction"><input type="checkbox" checked={restrictToConference} onChange={(event) => setRestrictToConference(event.currentTarget.checked)} /><span>Restrict this token to the current conference <code>{eventId}</code></span></label>}<div class="token-form-actions"><button class="button" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button class="button primary" type="submit" disabled={pending}>{pending ? "Issuing…" : "Issue token"}</button></div></form></section>}
     <div class="token-list-heading"><div><span class="eyebrow">Organization credentials</span><h2>Issued tokens</h2></div><span class="subtle">Revocation is immediate</span></div>
     {content}
     <p class="token-docs-note">Need the wire contract? <a href="/api/docs">Open the rendered API reference</a>. Organizer-facing copy says “conference”; the API keeps its versioned <code>/api/v1/events/…</code> paths.</p>

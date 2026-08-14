@@ -62,11 +62,23 @@ export const routeTable: readonly RouteDefinition[] = [
   // Org-level by design: one relationship, courted across years, each card
   // naming the conference it is currently aimed at.
   { id: "sourcing", path: ORG_HOME_OUTREACH_HREF, label: "Outreach", icon: "", group: "organization", sidebar: true },
-  // MRQ-207 will own the visible Organization settings tabs. Keep Server
-  // reachable as a standalone org-level surface until that fold lands.
-  { id: "org-server", path: "/org/server", label: "Server", icon: "", group: "organization" },
-  { id: "org-instance", path: "/org/instance", label: "Server", icon: "", group: "organization" },
-  // Agents guess URLs, and every 404 costs turns. These organization destinations
+  // ⚙ Settings closes the Organization group exactly as the whole conference
+  // stack ends in its own Settings row (ruling O1). The symmetry is the lesson:
+  // everything above the conference caption outlives every conference, and each
+  // level ends where its own settings live. The label is shortened by its group,
+  // the convention the rest of this nav uses, so the two Settings rows are
+  // unambiguous without either growing a qualifier — and ⚙ is what marks a
+  // Settings row here, so it is what marks this one.
+  { id: "org-settings", path: "/org", label: "Settings", icon: "⚙", group: "organization", sidebar: true },
+  // Three tabs of one surface. Real routes, so a tab is linkable and an agent
+  // guessing one lands on it, but no rows of their own — the Settings row above
+  // is the one they light.
+  { id: "org-server", path: "/org/server", label: "Server", icon: "", group: "utility" },
+  // MRQ-210's standalone alias for the same surface. It kept Server reachable
+  // before these tabs existed; it stays reachable now, as the Server tab.
+  { id: "org-instance", path: "/org/instance", label: "Server", icon: "", group: "utility" },
+  { id: "org-tokens", path: "/org/tokens", label: "API tokens", icon: "", group: "utility" },
+  // Agents guess URLs, and every 404 costs turns. These three resolve to People
   // rather than to the SPA's not-found state; they are not shown in the sidebar
   // because the area has one name and one entry.
   { id: "people-crm", path: "/crm", label: "People CRM", icon: "", group: "utility" },
@@ -146,6 +158,9 @@ export const routeTable: readonly RouteDefinition[] = [
   // `/tasks` is where the sidebar sends an organizer; this row keeps the older
   // settings path working for anything that already links to it.
   { id: "task-templates", path: "/settings/tasks", label: "Task templates", icon: "", group: "utility" },
+  // API tokens now lives at /org/tokens (ruling O2 — `api_tokens` is org-scoped
+  // with a nullable event scope). This row keeps the old path reachable: a URL
+  // that has worked does not stop working because its home moved.
   { id: "api-tokens", path: "/settings/api", label: "API tokens", icon: "", group: "utility" },
   // Organization-level, like People and the sourcing pipeline: the log survives
   // every conference in it, and an instance with no conference at all still has
@@ -213,7 +228,14 @@ const SIDEBAR_HOME: Readonly<Record<string, string>> = {
   published: "submissions",
   venues: "settings",
   "task-templates": "tasks",
-  "api-tokens": "settings",
+  // The org-settings tabs are one surface with four views, so all four light
+  // the one row — and so does the legacy /settings/api path, whose content now
+  // lives inside it (ruling O2).
+  "org-organizers": "org-settings",
+  "org-server": "org-settings",
+  "org-instance": "org-settings",
+  "org-tokens": "org-settings",
+  "api-tokens": "org-settings",
   webhooks: "settings",
 };
 

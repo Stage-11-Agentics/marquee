@@ -6,7 +6,6 @@ import { EVENT_TIMEZONES } from "../../lib/event-time";
 import { PageHeader } from "../shell/components";
 import { useEventContext } from "../shell/event-context";
 import { EVENT_NAME_CHANGED } from "../shell/identity";
-import { OrganizersCard } from "../setup/OrganizersCard";
 import { SocialMark } from "../social/SocialBadges";
 import { SOCIAL_PLATFORMS, type SocialPlatformId } from "../../lib/social-links";
 import { loadVenueModel } from "../venues/venue-writer";
@@ -358,7 +357,6 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
 
         {/* Organizers are instance-level people, surfaced here because this is
             where an organizer already looks for "who else can get in". */}
-        <div class="settings-organizers span-2"><OrganizersCard /></div>
 
         <section class="card settings-venue-link">
           <div><span class="eyebrow">Venues and rooms</span><h2>One place for every door</h2><p class="subtle tabular">{venueCounts ? `${venueCounts.buildings} buildings · ${venueCounts.rooms} rooms` : "Venue counts unavailable"}</p></div>
