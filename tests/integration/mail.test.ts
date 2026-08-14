@@ -212,6 +212,61 @@ test("CONTRACT · MRQ-180 · a mixed bulk reminder accounts for and names the re
   });
 });
 
+test("CONTRACT · MRQ-180 · exact onboarding pairs queue a co-speaker without a role filter", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mrq180_speaker', 'org_mail', 'speaker-180@example.com', 'Priya Raman', ?, ?), ('per_mrq180_co', 'org_mail', 'co-speaker-180@example.com', 'Marcus Okafor', ?, ?)").bind(NOW, NOW, NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, form_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES ('sub_mrq180_speaker', 'evt_mail', 'form_mail', 'session', 'Main session', 'accepted', 'admin', 'per_mail', ?, ?), ('sub_mrq180_co', 'evt_mail', 'form_mail', 'session', 'Co-speaker session', 'accepted', 'admin', 'per_mail', ?, ?)").bind(NOW, NOW, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_mrq180_speaker', 'sub_mrq180_speaker', 'per_mrq180_speaker', 'speaker', 0, ?, ?), ('part_mrq180_co', 'sub_mrq180_co', 'per_mrq180_co', 'co_speaker', 0, ?, ?)").bind(NOW, NOW, NOW, NOW),
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at) VALUES ('template_mrq180_roles', 'evt_mail', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 0, 0, ?, ?)").bind(NOW + 86_400_000, NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mrq180_speaker', 'evt_mail', 'per_mrq180_speaker', 'sub_mrq180_speaker', 'template_mrq180_roles', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?), ('task_mrq180_co', 'evt_mail', 'per_mrq180_co', 'sub_mrq180_co', 'template_mrq180_roles', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(NOW + 86_400_000, NOW, NOW, NOW + 86_400_000, NOW, NOW),
+  ]);
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-180-co-speaker-reminder" });
+  const headers = { cookie: `mq_session=${session.id}`, "content-type": "application/json" };
+  const pairs = [
+    { person_id: "per_mrq180_speaker", submission_id: "sub_mrq180_speaker" },
+    { person_id: "per_mrq180_co", submission_id: "sub_mrq180_co" },
+  ];
+
+  // Keep the old selector in the test once to prove the reconciliation path
+  // names a selected co-speaker instead of silently dropping it.
+  const roleFilteredResponse = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ selector: { recipient_pairs: pairs, role: "speaker", task_state: "open" }, template_key: "reminder_generic" }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(roleFilteredResponse.status).toBe(202);
+  expect(await roleFilteredResponse.json()).toMatchObject({
+    selected: 2,
+    queued: 1,
+    duplicate: 0,
+    skipped: [{ person_id: "per_mrq180_co", name: "Marcus Okafor", reason: "does not have the speaker role on this Session" }],
+  });
+
+  // The onboarding board sends exact pairs without a role filter, so the same
+  // two selected rows must both queue and leave no unexplained remainder.
+  await env.DB.prepare("DELETE FROM outbox WHERE event_id = 'evt_mail'").run();
+  const response = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ selector: { recipient_pairs: pairs, task_state: "open" }, template_key: "reminder_generic" }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(response.status).toBe(202);
+  const result = await response.json() as {
+    selected: number;
+    queued: number;
+    duplicate: number;
+    skipped: Array<{ person_id: string; name: string; reason: string }>;
+  };
+  expect(result).toMatchObject({ selected: 2, queued: 2, duplicate: 0, skipped: [] });
+  expect(result.queued + result.duplicate + result.skipped.length).toBe(result.selected);
+  expect(await env.DB.prepare("SELECT person_id, to_email FROM outbox WHERE event_id = 'evt_mail' ORDER BY person_id").all<{ person_id: string; to_email: string }>()).toMatchObject({
+    results: [
+      { person_id: "per_mrq180_co", to_email: "co-speaker-180@example.com" },
+      { person_id: "per_mrq180_speaker", to_email: "speaker-180@example.com" },
+    ],
+  });
+});
+
 test("AC-93 · preview does not resolve a person outside the requested event", async () => {
   await env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_other_event', 'org_mail', 'other@example.com', 'Other Event Speaker', ?, ?)").bind(NOW, NOW).run();
   const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-preview-scope" });
