@@ -14,7 +14,7 @@ const people = readFileSync(new URL("../../src/ui/people/PeoplePage.tsx", import
 const peopleApi = readFileSync(new URL("../../src/ui/people/people-api.ts", import.meta.url), "utf8");
 const compose = readFileSync(new URL("../../src/ui/people/PeopleModals.tsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("../../src/ui/people/people.css", import.meta.url), "utf8");
-const migration = readFileSync(new URL("../../migrations/0017_outreach_targeting.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../../migrations/0019_outreach_targeting.sql", import.meta.url), "utf8");
 
 const stages = [
   { id: "researching", name: "Researching", kind: "open" },
