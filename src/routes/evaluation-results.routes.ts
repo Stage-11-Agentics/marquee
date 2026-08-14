@@ -44,21 +44,13 @@ const exportQuery = z.object({ format: z.literal("csv").default("csv") });
 
 interface CriterionColumn {
   id: string;
+  round_id: string;
+  name: string;
   header: string;
   kind: "numeric" | "select" | "text";
 }
 
 /** One reviewer's answer to one criterion, as recorded. */
-interface CriterionAnswerRow {
-  submission_id: string;
-  evaluation_id: string;
-  criterion_id: string;
-  reviewer_id: string;
-  reviewer_name: string;
-  keyed_by_id: number;
-  value: string;
-}
-
 
 
 interface CriterionRow {
@@ -82,14 +74,16 @@ function csvCell(value: string | number | null): string {
 /** Plan criteria in reading order, headed with their round so two rounds never collide. */
 async function criterionColumns(db: D1Database, planId: string): Promise<CriterionColumn[]> {
   const { results } = await db.prepare(`
-    SELECT criterion.id AS id, criterion.name AS name, criterion.kind AS kind, round.name AS round_name
+    SELECT criterion.id AS id, criterion.round_id AS round_id, criterion.name AS name, criterion.kind AS kind, round.name AS round_name
     FROM rubric_criteria criterion
     JOIN evaluation_rounds round ON round.id = criterion.round_id
     WHERE round.plan_id = ?
     ORDER BY round.position, criterion.position, criterion.id
-  `).bind(planId).all<{ id: string; name: string; kind: string; round_name: string }>();
+  `).bind(planId).all<{ id: string; round_id: string; name: string; kind: string; round_name: string }>();
   return results.map((row) => ({
     id: row.id,
+    round_id: row.round_id,
+    name: row.name,
     header: `${row.name} (${row.round_name})`,
     kind: row.kind === "select" || row.kind === "text" ? row.kind : "numeric",
   }));
@@ -170,77 +164,117 @@ async function recommendationTallies(
  * deliberate everywhere else in the file, and quietly breaking it in one column
  * would be a change of meaning wearing a bug fix's clothes.
  *
- * Three things the obvious query gets wrong:
+ * The key resolution is done HERE rather than in the join, because it is a
+ * precedence rule and SQL made it one that could not be stated. `criteria_scores`
+ * is keyed by criterion id, and a revision preserves an older key by NAME beside
+ * it; criterion ids are caller-supplied and names are not unique, so one key can
+ * be criterion A's name and criterion B's id at the same time. Read as a join
+ * that matches either, that key answers two columns at once and disagrees with
+ * the organizer screen, which reads the id alone. Read as a rule — the id wins;
+ * a name is a fallback only when the criterion has no id key at all, the name
+ * belongs to exactly one criterion in the round, and the key is nobody else's id
+ * — it is one answer per reviewer per criterion, and legible.
  *
- * - **A criterion can be keyed twice.** `criteria_scores` is keyed by criterion
- *   id today, and a revision preserves a legacy key by NAME beside it. Matching
- *   either without preferring the id reports one reviewer twice, disagreeing
- *   with themselves, while the organizer screen reads the id alone. The id wins
- *   whenever the same evaluation carries both.
- * - **A select or text answer need not be a JSON string.** `review.routes.ts`
- *   accepts a number or a string for every criterion and the record renders
- *   either, so filtering to `type = 'text'` recreates the reported defect —
- *   visible on screen, empty in the file — for a schema-valid write.
- * - **The attribution has to survive its own contents.** Two reviewers can share
- *   a name, so names are disambiguated the way every organizer surface
- *   disambiguates them; and an answer containing the separator would otherwise
- *   read as another reviewer, so the separator is neutralised inside values —
- *   the same bounded flattening `csvCell` already applies to newlines.
+ * Emptiness is judged AFTER that, not before: dropping an empty id-keyed answer
+ * first would let a stale name-keyed one take its place.
  */
 const ANSWER_SEPARATOR = " · ";
 
-/** Nothing inside one answer may imitate the boundary between two. */
+/**
+ * Nothing inside one answer may imitate the boundary between two.
+ *
+ * Whitespace is collapsed FIRST. `csvCell` flattens newlines to spaces when the
+ * file is written, so an answer containing a line break either side of a middot
+ * carries no separator here and grows one later — a false reviewer boundary
+ * built after the check that was supposed to prevent it.
+ */
 function answerText(value: string): string {
-  return value.split(ANSWER_SEPARATOR).join(" - ").trim();
+  return value.replace(/\s+/g, " ").split(ANSWER_SEPARATOR).join(" - ").trim();
+}
+
+interface ScorecardRow {
+  submission_id: string;
+  evaluation_id: string;
+  round_id: string;
+  reviewer_id: string;
+  reviewer_name: string;
+  criteria_scores: string | null;
+}
+
+interface AnswerCriterion {
+  id: string;
+  round_id: string;
+  name: string;
+}
+
+/** The answer a scorecard records for one criterion, or undefined for none. */
+function answerFor(
+  scores: Record<string, unknown>,
+  criterion: AnswerCriterion,
+  roundCriteria: readonly AnswerCriterion[],
+): unknown {
+  if (Object.hasOwn(scores, criterion.id)) return scores[criterion.id];
+  const name = criterion.name.toLowerCase();
+  const sameName = roundCriteria.filter((other) => other.name.toLowerCase() === name);
+  if (sameName.length !== 1) return undefined;
+  const key = Object.keys(scores).find((candidate) => candidate.toLowerCase() === name);
+  if (key === undefined) return undefined;
+  // A key that is some other criterion's id is that criterion's answer, whatever
+  // it also happens to spell.
+  return roundCriteria.some((other) => other.id === key) ? undefined : scores[key];
 }
 
 async function criterionAnswers(
   db: D1Database,
   eventId: string,
+  columns: readonly CriterionColumn[],
 ): Promise<Map<string, Map<string, string[]>>> {
+  const nonNumeric = columns.filter((column) => column.kind !== "numeric");
+  if (nonNumeric.length === 0) return new Map();
+
   const { results } = await db.prepare(`
     SELECT evaluation.submission_id AS submission_id,
       evaluation.id AS evaluation_id,
-      criterion.id AS criterion_id,
+      evaluation.round_id AS round_id,
       reviewer.id AS reviewer_id,
       reviewer.name AS reviewer_name,
-      CASE WHEN element.key = criterion.id THEN 1 ELSE 0 END AS keyed_by_id,
-      CAST(element.value AS TEXT) AS value
+      evaluation.criteria_scores AS criteria_scores
     FROM evaluations evaluation
     JOIN submissions submission ON submission.id = evaluation.submission_id
     JOIN people reviewer ON reviewer.id = evaluation.reviewer_person_id AND reviewer.kind = 'human'
-    JOIN json_each(evaluation.criteria_scores) element
-    JOIN rubric_criteria criterion
-      ON criterion.round_id = evaluation.round_id
-     AND (criterion.id = element.key OR lower(criterion.name) = lower(element.key))
     WHERE submission.event_id = ?
       AND evaluation.abstained = 0
       AND evaluation.criteria_scores IS NOT NULL
-      AND criterion.kind IN ('select', 'text')
-      AND element.type IN ('text', 'integer', 'real')
-      AND trim(CAST(element.value AS TEXT)) <> ''
-    ORDER BY evaluation.submission_id, criterion.id, reviewer.name, evaluation.id, keyed_by_id DESC
-  `).bind(eventId).all<CriterionAnswerRow>();
-
-  // One answer per reviewer per criterion, the id-keyed one where both exist.
-  const kept = new Map<string, CriterionAnswerRow>();
-  for (const row of results) {
-    const key = `${row.evaluation_id}:${row.criterion_id}`;
-    const held = kept.get(key);
-    if (!held || (Number(row.keyed_by_id) === 1 && Number(held.keyed_by_id) === 0)) kept.set(key, row);
-  }
+    ORDER BY evaluation.submission_id, reviewer.name, evaluation.id
+  `).bind(eventId).all<ScorecardRow>();
 
   const reviewerNames = disambiguatedNames(
-    [...new Map([...kept.values()].map((row) => [row.reviewer_id, { id: row.reviewer_id, name: row.reviewer_name }])).values()],
+    [...new Map(results.map((row) => [row.reviewer_id, { id: row.reviewer_id, name: row.reviewer_name }])).values()],
   );
   const bySubmission = new Map<string, Map<string, string[]>>();
-  for (const row of kept.values()) {
-    const forSubmission = bySubmission.get(row.submission_id) ?? new Map<string, string[]>();
-    const answers = forSubmission.get(row.criterion_id) ?? [];
-    const name = answerText(reviewerNames.get(row.reviewer_id) ?? row.reviewer_name);
-    answers.push(`${name}: ${answerText(row.value)}`);
-    forSubmission.set(row.criterion_id, answers);
-    bySubmission.set(row.submission_id, forSubmission);
+  for (const row of results) {
+    let scores: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(row.criteria_scores ?? "null");
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) continue;
+      scores = parsed as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const roundCriteria = columns.filter((column) => column.round_id === row.round_id);
+    for (const column of nonNumeric) {
+      if (column.round_id !== row.round_id) continue;
+      const value = answerFor(scores, column, roundCriteria);
+      if (value === undefined || value === null || typeof value === "object") continue;
+      const text = answerText(String(value));
+      if (text === "") continue;
+      const forSubmission = bySubmission.get(row.submission_id) ?? new Map<string, string[]>();
+      const answers = forSubmission.get(column.id) ?? [];
+      const name = answerText(reviewerNames.get(row.reviewer_id) ?? row.reviewer_name);
+      answers.push(`${name}: ${text}`);
+      forSubmission.set(column.id, answers);
+      bySubmission.set(row.submission_id, forSubmission);
+    }
   }
   return bySubmission;
 }
@@ -292,10 +326,10 @@ const exportPlanResults = defineApiRoute(
     requireProgram(context, eventId, false);
     await planForEventOrThrow(context.env.DB, eventId, planId);
 
-    const [columns, means, answers, tallies, rows] = await Promise.all([
-      criterionColumns(context.env.DB, planId),
+    const columns = await criterionColumns(context.env.DB, planId);
+    const [means, answers, tallies, rows] = await Promise.all([
       criterionMeans(context.env.DB, eventId),
-      criterionAnswers(context.env.DB, eventId),
+      criterionAnswers(context.env.DB, eventId, columns),
       recommendationTallies(context.env.DB, eventId),
       allResultRows(context.env.DB, eventId),
     ]);

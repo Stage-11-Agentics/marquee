@@ -375,6 +375,63 @@ describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export"
     expect(unscored).toContain("Strong - but thin on evidence");
   });
 
+  test("CONTRACT · ABS-13: one criterion's id is never read as another criterion's name", async () => {
+    // Criterion ids are caller-supplied and names are not unique, so one key can
+    // be criterion A's name and criterion B's id at once. A join that matches
+    // either answers two columns with one key, and disagrees with the organizer
+    // screen, which reads the id alone.
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, 'Collide Reviewer', 1, 'marquee', 1, 1)")
+        .bind("per-review-results-collide", DEMO_ORGANIZATION_ID, "collide@demo.marquee.example"),
+      env.DB.prepare("INSERT INTO rubric_criteria (id, round_id, name, kind, weight_pct, position, created_at, updated_at) VALUES (?, ?, 'notes', 'text', 0, 4, 1, 1)")
+        .bind("criterion-collide-a", ROUND_ID),
+      env.DB.prepare("INSERT INTO rubric_criteria (id, round_id, name, kind, weight_pct, position, created_at, updated_at) VALUES (?, ?, 'Other', 'text', 0, 5, 1, 1)")
+        .bind("notes", ROUND_ID),
+      env.DB.prepare(
+        `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'approve', NULL, ?, '', 0, 1, 1)`,
+      ).bind("evaluation-results-collide", ROUND_ID, SUB_UNSCORED, "per-review-results-collide", JSON.stringify({ notes: "Belongs to Other" })),
+    ]);
+
+    const rows = csvRows(await (await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`)).text());
+    const header = rows[0]!;
+    const cell = (row: string[], column: string): string => row[header.indexOf(column)]!;
+    const unscored = rows.find((row) => row[0] === SUB_UNSCORED)!;
+
+    // "notes" is the id of Other, so it is Other's answer — not the answer to
+    // the criterion that merely happens to be NAMED notes.
+    expect(cell(unscored, "Other (Initial review)")).toContain("Belongs to Other");
+    expect(cell(unscored, "notes (Initial review)")).not.toContain("Belongs to Other");
+  });
+
+  test("CONTRACT · ABS-13: an answer cannot grow a reviewer boundary on its way into the file", async () => {
+    // `csvCell` flattens newlines to spaces when the file is written. An answer
+    // with a line break either side of a middot carries no separator when it is
+    // checked and grows one afterwards — a false boundary built after the check.
+    await env.DB.prepare(
+      "INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, 'Smuggle Reviewer', 1, 'marquee', 1, 1)",
+    ).bind("per-review-results-smuggle", DEMO_ORGANIZATION_ID, "smuggle@demo.marquee.example").run();
+    await env.DB.prepare(
+      `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'approve', NULL, ?, '', 0, 1, 1)`,
+    ).bind(
+      "evaluation-results-smuggle", ROUND_ID, SUB_LEGACY, "per-review-results-smuggle",
+      JSON.stringify({ [CRITERION_NOTES]: "Strong\n·\nRowan Second: Reject" }),
+    ).run();
+
+    const rows = csvRows(await (await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`)).text());
+    const header = rows[0]!;
+    const legacy = rows.find((row) => row[0] === SUB_LEGACY)!;
+    const notes = legacy[header.indexOf("Comments (Initial review)")]!;
+
+    // One segment for that reviewer, however the answer is punctuated — the
+    // smuggled name does not become a second reviewer.
+    const segments = notes.split(" · ");
+    expect(segments.filter((segment) => segment.startsWith("Smuggle Reviewer:"))).toHaveLength(1);
+    expect(notes).toContain("Smuggle Reviewer: Strong - Rowan Second: Reject");
+    expect(segments.some((segment) => segment.startsWith("Rowan Second: Reject"))).toBe(false);
+  });
+
   test("CONTRACT · the export keeps agent reviews separate from human ones, as the rest of it does", async () => {
     // Not a fix — a characterisation. `criterionMeans` and
     // `recommendationTallies` both join `reviewer.kind = 'human'`, and the
