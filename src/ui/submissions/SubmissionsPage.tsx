@@ -7,6 +7,7 @@ import {
   SUBMISSION_COLUMN_REGISTRY,
   submissionColumn,
   submissionKindLabel,
+  submissionStatusLabel,
   type SubmissionColumnId,
 } from "../../lib/submission-columns";
 import { reviewCountLabel, scoreBasisLabel } from "../../lib/review-aggregate";
@@ -24,6 +25,7 @@ import {
   submissionsRequestKey,
   SUBMISSIONS_PAGE_SIZE,
 } from "./list-request";
+import { submissionsCsv } from "./export-csv";
 import { selectionCount } from "./selection";
 import "./submissions.css";
 
@@ -117,13 +119,6 @@ const SORT_OPTIONS = [
 
 const COLD_SKELETON_ROWS = 9;
 
-function statusLabel(status: SubmissionListItem["status"]): string {
-  if (status === "waitlisted") return "Maybe";
-  if (status === "in_review") return "In review";
-  if (status === "unreviewed") return "Unreviewed";
-  return status[0]!.toUpperCase() + status.slice(1);
-}
-
 function formatMoment(value: number | null): string {
   if (value === null) return "—";
   return new Intl.DateTimeFormat("en-US", {
@@ -211,7 +206,7 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
     const roster = item.speakers.map((speaker) => `${speaker.name} · ${participationRoleLabel(speaker.role)}`).join("\n");
     return <span title={roster || "No speaker on this record"}>{first ? `${first.name}${rest.length ? ` +${rest.length}` : ""}` : "—"}</span>;
   }
-  if (column === "status") return <span class={`chip status-chip ${item.status}`}>{statusLabel(item.status)}</span>;
+  if (column === "status") return <span class={`chip status-chip ${item.status}`}>{submissionStatusLabel(item.status)}</span>;
   if (column === "notified") return item.notified
     ? <span class={`notification-state ${item.notified.state}`} title={item.notified.detail}><strong>{item.notified.label}</strong><small>{item.notified.detail}</small></span>
     : <span class="subtle">—</span>;
@@ -229,11 +224,6 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
   if (column === "origin") return <span>{item.origin[0]!.toUpperCase() + item.origin.slice(1)}</span>;
   if (column === "missing") return item.missing_fields.length ? <span class="draft-warning">{item.missing_fields.join(" · ")}</span> : <span class="subtle">—</span>;
   return <span>—</span>;
-}
-
-function csvCell(value: string | number | null): string {
-  const text = value === null ? "" : String(value);
-  return `"${text.replaceAll('"', '""')}"`;
 }
 
 function SkeletonRow({ columns }: { columns: readonly SubmissionColumnId[] }): JSX.Element {
@@ -610,14 +600,7 @@ export function SubmissionsPage({
         exported.push(...result.data);
         totalPages = result.total_pages;
       }
-      const header = ["Type", "ID", "Title", "Speakers", "Status", "Tracks", "Score", "Submitted", "Last updated", "Origin"];
-      const lines = [header.map(csvCell).join(","), ...exported.map((item) => [
-        submissionKindLabel(item.kind), item.id, item.title,
-        item.speakers.map((speaker) => speaker.name).join("; "), statusLabel(item.status),
-        item.tracks.map((itemTrack) => itemTrack.name).join("; "), item.score,
-        item.submitted_at, item.updated_at, item.origin,
-      ].map(csvCell).join(","))];
-      const url = URL.createObjectURL(new Blob([`${lines.join("\n")}\n`], { type: "text/csv;charset=utf-8" }));
+      const url = URL.createObjectURL(new Blob([submissionsCsv(exported)], { type: "text/csv;charset=utf-8" }));
       const link = document.createElement("a");
       link.href = url;
       link.download = "marquee-submissions.csv";

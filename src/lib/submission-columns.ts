@@ -44,3 +44,15 @@ export function submissionColumn(id: SubmissionColumnId) {
 export function submissionKindLabel(kind: "abstract" | "session"): "Abstract" | "Session" {
   return kind === "abstract" ? "Abstract" : "Session";
 }
+
+/**
+ * The organizer's word for a submission's state — the chip on the row and the
+ * cell in the export, which must read the same or the file is about a different
+ * conference than the screen.
+ */
+export function submissionStatusLabel(status: string): string {
+  if (status === "waitlisted") return "Maybe";
+  if (status === "in_review") return "In review";
+  if (status === "unreviewed") return "Unreviewed";
+  return status.length === 0 ? "" : status[0]!.toUpperCase() + status.slice(1);
+}
