@@ -38,6 +38,28 @@ assert.equal(online.lng, null, "Online must remain unpinned");
 assert.ok(conflicts.length > 0, "seed must produce a live Transit conflict");
 assert.ok(conflicts.some((conflict) => conflict.kind === "transit"), "live seed conflict must be Transit");
 
+// Every seeded conflict is a person in two places at once. A room booked twice
+// is never deliberate, and nothing else would catch one: it is invisible in the
+// grid until an organizer reads two tiles stacked in one cell.
+const byRoom = new Map();
+for (const item of table("agenda_items")) {
+  const current = byRoom.get(item.room_id) ?? [];
+  current.push(item);
+  byRoom.set(item.room_id, current);
+}
+const roomOverlaps = [];
+for (const [roomId, items] of byRoom) {
+  const ordered = [...items].sort((left, right) => left.starts_at - right.starts_at);
+  for (let index = 1; index < ordered.length; index += 1) {
+    const previous = ordered[index - 1];
+    const current = ordered[index];
+    if (previous.starts_at + previous.duration_min * 60_000 > current.starts_at) {
+      roomOverlaps.push(`${rooms.get(roomId)?.name ?? roomId}: ${previous.id} overlaps ${current.id}`);
+    }
+  }
+}
+assert.deepEqual(roomOverlaps, [], "seed must not double-book a room");
+
 const apiEvidence = await withLocalRuntime((runtime) => runSeedApiChecks(runtime));
 const elapsedMs = Math.round(performance.now() - startedAt);
 const budgetMs = 30_000;

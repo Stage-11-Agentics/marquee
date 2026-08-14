@@ -103,14 +103,12 @@ export function primaryTrackKey(session: SourceSession): keyof typeof TRACK_IDS 
  * Format mapping, per plan: workshops by their source track (the capture types
  * three real workshops as OTHER), the Online track to Online, the Expo Stage's
  * short slots to Lightning — that stage is where the source ran its short-form
- * talks, and nothing in the capture is ten minutes or shorter — everything else
- * to Stage Talk.
+ * talks — everything else to Stage Talk.
  */
 export function formatKeyFor(session: SourceSession): keyof typeof FORMAT_IDS {
   if (session.type === "WORKSHOP" || session.track === "Workshops") return "workshop";
   if (session.track === "Online") return "online";
   if (session.track === "Expo Stage" && session.duration_min <= 15) return "lightning";
-  if (session.duration_min <= 10) return "lightning";
   return "stageTalk";
 }
 
