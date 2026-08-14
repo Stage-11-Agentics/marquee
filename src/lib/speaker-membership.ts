@@ -15,10 +15,13 @@
  *
  * Duplicates are absorbed by the constraint, not by a read-then-write check:
  * `uq_memberships_event` already covers `(org_id, event_id, person_id, role)`
- * (`0001_init.sql:755`), so `ON CONFLICT DO NOTHING` is race-free where a
+ * (`0001_init.sql:755`), so the conflict upsert is race-free where a
  * `WHERE NOT EXISTS` guard is not. That matters: a double-clicked "Add speaker"
- * racing the acceptance cascade would otherwise raise UNIQUE inside the
- * cascade's batch and abort task minting for the whole acceptance.
+ * racing the acceptance cascade must not raise UNIQUE inside the cascade's
+ * batch and abort task minting for the whole acceptance. An explicit invitation
+ * is the one meaningful update on conflict: a re-add can be the first place an
+ * organizer records that they reached out, so an old pending membership must
+ * gain its invitation timestamp without clearing confirmation or decline state.
  *
  * The bridge is deliberately one-way. Nothing here removes a membership when a
  * talk is withdrawn or an acceptance reversed: the person may still hold
@@ -44,7 +47,13 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
       `INSERT INTO memberships
          (id, org_id, event_id, person_id, role, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, 'speaker', 'pending', NULL, ?, ?, ?)
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT (org_id, event_id, person_id, role) WHERE event_id IS NOT NULL
+       DO UPDATE SET
+         invited_at = COALESCE(memberships.invited_at, excluded.invited_at),
+         updated_at = CASE
+           WHEN excluded.invited_at IS NULL THEN memberships.updated_at
+           ELSE excluded.updated_at
+         END`,
     )
     .bind(
       newUlid(input.now),

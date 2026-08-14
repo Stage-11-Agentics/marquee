@@ -24,6 +24,15 @@ function formatDue(value: number): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
 }
 
+type SpeakerFileGroup = SpeakerFilesSnapshot["groups"][number];
+
+function groupMeta(group: SpeakerFileGroup): string {
+  if (group.cancelled_at !== null) return "Cancelled request";
+  if (group.kind === "headshot") return group.versions.latest === null ? "Not uploaded yet" : "Speaker-provided";
+  if (group.versions.latest !== null) return "Received";
+  return group.due_at !== null ? `Due ${formatDue(group.due_at)}` : "Not received yet";
+}
+
 export function SpeakerFilesPanel({ eventId, personId }: { eventId: string; personId: string }): JSX.Element {
   const [state, setState] = useState<
     { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; files: SpeakerFilesSnapshot }
@@ -44,6 +53,7 @@ export function SpeakerFilesPanel({ eventId, personId }: { eventId: string; pers
   }, [eventId, personId]);
 
   const files = state.kind === "ready" ? state.files : null;
+  const headshot = files?.groups.find((group) => group.kind === "headshot");
 
   return <section class="speaker-section speaker-files" aria-label="Speaker files">
     <h3>Files</h3>
@@ -52,11 +62,16 @@ export function SpeakerFilesPanel({ eventId, personId }: { eventId: string; pers
       ? <p class="speaker-empty-line alarm-text" role="alert">{state.message}</p>
       : null}
 
-    {files ? <p class="speaker-note tabular">
-      {files.expected === 0
-        ? "No deliverables have been requested from this speaker yet."
-        : `${files.received} of ${files.expected} requested file${files.expected === 1 ? "" : "s"} received.`}
-    </p> : null}
+    {files ? <div class="speaker-files-summary" aria-label="File summary">
+      <p class="speaker-note tabular">
+        <strong>Requested deliverables</strong>
+        <span>{files.expected === 0 ? "None requested yet." : `${files.received} of ${files.expected} received.`}</span>
+      </p>
+      <p class="speaker-note tabular">
+        <strong>Profile photo</strong>
+        <span>{headshot?.versions.latest ? "Received." : "Not received yet."}</span>
+      </p>
+    </div> : null}
 
     {/* No "nothing here" branch: the profile-photo row is always present, and
         its own empty copy is the honest answer for a speaker who has sent
@@ -66,13 +81,7 @@ export function SpeakerFilesPanel({ eventId, personId }: { eventId: string; pers
         <div class="speaker-files-group-head">
           <strong>{group.label}</strong>
           <span class="speaker-files-group-meta">
-            {group.cancelled_at !== null
-              ? "Cancelled request"
-              : group.due_at !== null
-                ? `Due ${formatDue(group.due_at)}`
-                // Reads true whether or not a photo is on file; "Uploaded by
-                // the speaker" contradicts the empty copy directly below it.
-                : "Speaker-provided"}
+            {groupMeta(group)}
             {group.session ? ` · ${group.session.title}` : ""}
           </span>
         </div>

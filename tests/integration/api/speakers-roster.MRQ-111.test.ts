@@ -30,6 +30,7 @@ const ACCEPTED_SPEAKER = "per_mrq111_accepted";
 const DONE_SPEAKER = "per_mrq111_done";
 const REJECTED_PERSON = "per_mrq111_rejected";
 const MODERATOR_PERSON = "per_mrq111_moderator";
+const READD_SPEAKER = "per_mrq176_readd";
 const SUBMITTED_ID = "sub_mrq111_pending";
 const SHELL = `<!doctype html><html><head><title>Marquee</title></head><body><div id="app"></div></body></html>`;
 const assets = { fetch: async () => new Response(SHELL, { headers: { "content-type": "text/html" } }) } as unknown as Fetcher;
@@ -257,6 +258,57 @@ test("CONTRACT · MRQ-111 · CNT-10 · one email is one person: a re-added speak
   const body = await roster();
   expect(body.rows.filter((row) => row.email === "marcus@example.com").length).toBe(1);
   expect(body.rows.find((row) => row.id === ACCEPTED_SPEAKER)?.bio).toBe("Re-entered by hand.");
+});
+
+test("CONTRACT · MRQ-176 · a hand-added speaker reaches its count and status tab, including an invited re-add", async () => {
+  const before = await roster();
+  const created = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Avery Singh", email: "avery-mrq176@example.com", invited: true }),
+  });
+  expect(created.status).toBe(201);
+
+  const afterCreate = await roster();
+  const createdRow = afterCreate.rows.find((row) => row.email === "avery-mrq176@example.com");
+  expect(createdRow).toMatchObject({ name: "Avery Singh", status: "invited" });
+  expect(afterCreate.total).toBe(before.total + 1);
+  expect(afterCreate.counts.all).toBe(afterCreate.total);
+  expect(afterCreate.counts.invited).toBe(before.counts.invited + 1);
+  const invitedAfterCreate = await roster("?status=invited");
+  expect(invitedAfterCreate.rows.map((row) => row.email)).toContain("avery-mrq176@example.com");
+
+  // A prior pending membership is already enough to put the person on the
+  // roster. Re-adding them with `invited: true` must update that same row's
+  // status without creating a second person or membership.
+  await env.DB.batch([
+    person(READD_SPEAKER, "Re-added Speaker", "readd-mrq176@example.com"),
+    env.DB.prepare(
+      `INSERT INTO memberships
+         (id, org_id, event_id, person_id, role, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
+       VALUES ('mem_mrq176_readd', ?, ?, ?, 'speaker', 'pending', NULL, NULL, ?, ?)`,
+    ).bind(ORG_ID, EVENT_ID, READD_SPEAKER, NOW, NOW),
+  ]);
+  const beforeReAdd = await roster();
+  const linked = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Re-added Speaker", email: "readd-mrq176@example.com", invited: true }),
+  });
+  expect(linked.status).toBe(201);
+  expect((await linked.json<{ speaker: { status: string } }>()).speaker.status).toBe("invited");
+
+  const afterReAdd = await roster();
+  expect(afterReAdd.total).toBe(beforeReAdd.total);
+  expect(afterReAdd.rows.filter((row) => row.email === "readd-mrq176@example.com")).toHaveLength(1);
+  expect(afterReAdd.rows.find((row) => row.email === "readd-mrq176@example.com")?.status).toBe("invited");
+  const invitedAfterReAdd = await roster("?status=invited");
+  expect(invitedAfterReAdd.rows.filter((row) => row.email === "readd-mrq176@example.com")).toHaveLength(1);
+  const membershipCount = await env.DB
+    .prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'")
+    .bind(EVENT_ID, READD_SPEAKER)
+    .first<{ count: number }>();
+  expect(Number(membershipCount?.count)).toBe(1);
 });
 
 test("CONTRACT · MRQ-111 · SPK-08 · every speaker payload carries the headshot pointer MRQ-112 renders", async () => {
