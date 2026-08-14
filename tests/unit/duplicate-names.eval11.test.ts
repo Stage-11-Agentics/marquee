@@ -175,8 +175,17 @@ describe("duplicate person names", () => {
     // strip a trailing "(n)" corrupts the legitimate cases — a person actually
     // named "Alex (2)", a session called "Workshop (3)" — so the literal query
     // is sent unchanged and the marker is re-derived over what comes back.
-    for (const source of [createSubmissionSource, submissionRecordSource, quickSearchSource]) {
-      expect(source).not.toContain("searchableQuery");
+    // Pinned by BEHAVIOUR, not by the name of a helper: any stripping needs a
+    // pattern matching a trailing parenthesised number, and none of the three
+    // may carry one. Renaming or inlining the rewrite still fails here.
+    for (const [what, source, literal] of [
+      ["the submitter picker", createSubmissionSource, "const query = submitterQuery.trim();"],
+      ["the participant search", submissionRecordSource, "const query = participantQuery.trim();"],
+      ["global search", quickSearchSource, "const requestQuery = query;"],
+    ] as const) {
+      expect(source, `${what} sends the literal query`).toContain(literal);
+      expect(source, `${what} strips no trailing ordinal`).not.toMatch(/\\\(\\d\+\\\)/);
+      expect(source, `${what} strips no trailing ordinal`).not.toMatch(/\(\\d\+\)/);
     }
     // A person whose real name ends that way is still handled by the derivation.
     const names = disambiguatedNames([{ id: "a", name: "Alex (2)" }, { id: "b", name: "Alex (2)" }]);
@@ -234,8 +243,9 @@ describe("duplicate person names", () => {
   const WIRED_SITES: ReadonlyArray<readonly [string, string, readonly string[], boolean?]> = [
     ["the roster", peoplePageSource, ["displayNames.get(row.id) ?? row.name"]],
     ["the speaker roster", speakersSource, ["displayNames.get(row.id) ?? row.name"]],
-    ["the onboarding grid, compose drawer, and invite results", onboardingSource, [
+    ["the onboarding grid, compose drawer, invite results, and Nudge", onboardingSource, [
       "displayNames.get(row.person.id) ?? row.person.name",
+      "aria-label={`Nudge ${displayNames.get(row.person.id) ?? row.person.name}`}",
       "displayNames.get(row.person_id)",
       "displayNames.get(item.person_id) ?? item.name",
     ]],
@@ -256,6 +266,7 @@ describe("duplicate person names", () => {
       "label: participantResultNames.get(person.id) ?? person.title",
       "{selectedParticipant.label}",
       "aria-label={`Remove ${reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} from ${round.name}`}",
+      "aria-label={`Remove the ${statusLabel(participant.role)} role from ${participantNames.get(group.person_id) ?? group.name}`}",
       "reviewerNames.get(reviewer.id) ?? reviewer.name",
       "reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name",
       "participantNames.get(group.person_id) ?? group.name",
@@ -273,6 +284,7 @@ describe("duplicate person names", () => {
       "coverageNames.get(reviewer.person_id) ?? reviewer.name",
       // Captured before the delete: removing "(2)" makes the survivor unique.
       "removePoolMember(pool.id, member, poolNames.get(member.id) ?? member.name)",
+      "setNotice(`${label} removed from this pool",
       // Remind and Remove repeat their own words; the person has to be in the
       // ACCESSIBLE name, not only in a hover title a screen reader never reads.
       "aria-label={`Remind ${memberLabel}`}",
