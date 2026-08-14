@@ -121,13 +121,13 @@ test("AC-117, AC-93 · the same bulk action twice relies on the UNIQUE idempoten
 });
 
 test("AC-93 · exact person selection can queue a demo-safe reminder for a roster speaker without a submission", async () => {
+  const dueAt = Date.parse("2026-08-05T01:30:00.000Z");
   await env.DB.batch([
+    env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'"),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_roster', 'org_mail', 'roster@example.com', 'Roster Speaker', ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_mail_roster', 'org_mail', 'evt_mail', 'per_mail_roster', 'speaker', ?, ?)").bind(NOW, NOW),
-    // clock-check: allow — the assertion here is which recipients get selected; no path in it compares a due date to the clock
-    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at) VALUES ('template_mail_roster', 'evt_mail', 'Upload slides', 'file', 'Upload the deck.', ?, 0, 0, ?, ?)").bind(NOW + 86_400_000, NOW, NOW),
-    // clock-check: allow — as above: the task exists to be selectable, and its due date is never read against the clock
-    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mail_roster', 'evt_mail', 'per_mail_roster', NULL, 'template_mail_roster', 'Upload slides', 'file', 'Upload the deck.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(NOW + 86_400_000, NOW, NOW),
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('template_mail_roster', 'evt_mail', 'Upload slides', 'file', 'Upload the deck.', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mail_roster', 'evt_mail', 'per_mail_roster', NULL, 'template_mail_roster', 'Upload slides', 'file', 'Upload the deck.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
   ]);
   const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-person-selection" });
   const response = await app.request("/api/v1/events/evt_mail/comms/send", {
@@ -137,8 +137,12 @@ test("AC-93 · exact person selection can queue a demo-safe reminder for a roste
   }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
   expect(response.status).toBe(202);
   expect(await response.json()).toMatchObject({ selected: 1, queued: 1, duplicate: 0, outbox_rows: [{ person_id: "per_mail_roster", entity_id: "per_mail_roster", inserted: true }] });
-  const row = await env.DB.prepare("SELECT entity_id, send_policy FROM outbox WHERE event_id = 'evt_mail' AND person_id = 'per_mail_roster'").first<{ entity_id: string; send_policy: string }>();
-  expect(row).toEqual({ entity_id: "per_mail_roster", send_policy: "demo_safe" });
+  const row = await env.DB.prepare("SELECT entity_id, send_policy, text FROM outbox WHERE event_id = 'evt_mail' AND person_id = 'per_mail_roster'").first<{ entity_id: string; send_policy: string; text: string }>();
+  expect(row).toEqual({
+    entity_id: "per_mail_roster",
+    send_policy: "demo_safe",
+    text: "Hi Roster,\n\nUpload slides was due on Aug 4, 2026, 9:30 PM EDT.",
+  });
 });
 
 test("AC-93 · exact recipient pairs do not cross-multiply co-speaking selections", async () => {

@@ -484,13 +484,14 @@ export async function recipientsFor(
         `SELECT person.id AS person_id, NULL AS submission_id, 'speaker' AS role,
                 person.email, person.name, '—' AS submission_title,
                 NULL AS room_id, NULL AS room, NULL AS starts_at, NULL AS duration_min,
-                NULL AS event_timezone, NULL AS building_id, NULL AS building_name,
+                event.timezone AS event_timezone, NULL AS building_id, NULL AS building_name,
                 NULL AS building_address, NULL AS building_lat, NULL AS building_lng,
                 NULL AS building_access_minutes, NULL AS building_access_note,
                 st.title AS task_title, st.due_at AS task_due_at,
                 st_template.due_at AS task_template_due_at
          FROM memberships membership
          JOIN people person ON person.id = membership.person_id
+         JOIN events event ON event.id = membership.event_id
          LEFT JOIN speaker_tasks st ON st.id = (
            SELECT selected_task.id FROM speaker_tasks selected_task
            WHERE selected_task.event_id = membership.event_id
@@ -515,7 +516,7 @@ export async function recipientsFor(
                AND selected_state_task.status = ?
                ${includeCancelledAt && selector.task_state === "open" ? "AND selected_state_task.cancelled_at IS NULL" : ""}
            )` : ""}
-         GROUP BY person.id, person.email, person.name, st.title, st.due_at, st_template.due_at
+         GROUP BY person.id, person.email, person.name, event.timezone, st.title, st.due_at, st_template.due_at
          ORDER BY person.name COLLATE NOCASE, person.id ASC`,
       )
       .bind(...fallbackBindings, ...(selector.task_state ? [selector.task_state] : []))
