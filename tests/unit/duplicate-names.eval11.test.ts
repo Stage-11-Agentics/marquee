@@ -6,7 +6,6 @@ import {
   disambiguatedName,
   disambiguatedNames,
   duplicateNameOrdinals,
-  searchableQuery,
 } from "../../src/lib/duplicate-names";
 import {
   AssigneePicker,
@@ -170,15 +169,19 @@ describe("duplicate person names", () => {
     expect(shown("   ")).toHaveLength(3);
   });
 
-  test("CONTRACT · a server-backed search strips a marker the server has never heard of", () => {
+  test("CONTRACT · a server-backed search is not asked to match a marker it cannot know", () => {
     // "(2)" is a property of one rendered result set, so it cannot exist before
-    // the search that would be filtering by it has run. Pasting a visible label
-    // must still find the person it belongs to.
-    expect(searchableQuery("Marcus Okafor (2)")).toBe("Marcus Okafor");
-    expect(searchableQuery("Marcus Okafor (12)  ")).toBe("Marcus Okafor");
-    // A parenthesised number that is part of the query, not a marker, survives.
-    expect(searchableQuery("Marcus Okafor (2) session")).toBe("Marcus Okafor (2) session");
-    expect(searchableQuery("Marcus")).toBe("Marcus");
+    // the search that would be filtering by it has run. Rewriting the query to
+    // strip a trailing "(n)" corrupts the legitimate cases — a person actually
+    // named "Alex (2)", a session called "Workshop (3)" — so the literal query
+    // is sent unchanged and the marker is re-derived over what comes back.
+    for (const source of [createSubmissionSource, submissionRecordSource, quickSearchSource]) {
+      expect(source).not.toContain("searchableQuery");
+    }
+    // A person whose real name ends that way is still handled by the derivation.
+    const names = disambiguatedNames([{ id: "a", name: "Alex (2)" }, { id: "b", name: "Alex (2)" }]);
+    expect(names.get("a")).toBe("Alex (2)");
+    expect(names.get("b")).toBe("Alex (2) (2)");
   });
 
   test("CONTRACT · a cancelled task's holder is not on the page and does not mark the one who is", () => {
@@ -248,17 +251,28 @@ describe("duplicate person names", () => {
       // line, and both override controls' accessible names.
       "aria-label={`Override score for ${displayName}`}",
       "aria-label={`Reason for overriding ${displayName}`}",
+      // The label a row carried when it was CLICKED, kept through selection:
+      // choosing clears the result list that produced it.
+      "label: participantResultNames.get(person.id) ?? person.title",
+      "{selectedParticipant.label}",
+      "aria-label={`Remove ${reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} from ${round.name}`}",
       "reviewerNames.get(reviewer.id) ?? reviewer.name",
       "reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name",
       "participantNames.get(group.person_id) ?? group.name",
       "participantNames.get(participant.person_id) ?? participant.name",
     ]],
-    ["the submitter picker", createSubmissionSource, ["submitterNames.get(person.id) ?? person.title"]],
+    ["the submitter picker", createSubmissionSource, [
+      "submitterNames.get(person.id) ?? person.title",
+      "label: submitterNames.get(person.id) ?? person.title",
+      "{selectedSubmitter.label}",
+    ]],
     ["global search speaker results", quickSearchSource, ["speakerNames.get(result.id) ?? result.title"]],
     ["the committee rows, reviewer pool drawer, and distribution result", evaluationSource, [
       "memberNames.get(member.id) ?? member.name",
       "poolNames.get(member.id) ?? member.name",
       "coverageNames.get(reviewer.person_id) ?? reviewer.name",
+      // Captured before the delete: removing "(2)" makes the survivor unique.
+      "removePoolMember(pool.id, member, poolNames.get(member.id) ?? member.name)",
       // Remind and Remove repeat their own words; the person has to be in the
       // ACCESSIBLE name, not only in a hover title a screen reader never reads.
       "aria-label={`Remind ${memberLabel}`}",

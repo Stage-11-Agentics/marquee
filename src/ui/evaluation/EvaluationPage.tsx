@@ -448,7 +448,11 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
    * the API says so and this copy says so, because a removal that silently
    * deleted evidence is the one mistake nobody would risk twice.
    */
-  const removePoolMember = async (poolId: string, member: CommitteeMember): Promise<void> => {
+  // The label is captured by the CALLER, before the delete. Removing "Marcus
+  // Okafor (2)" makes the remaining namesake unique, so re-deriving afterwards
+  // would report the removal of a plain "Marcus Okafor" — naming the person who
+  // is still there.
+  const removePoolMember = async (poolId: string, member: CommitteeMember, label: string): Promise<void> => {
     setDialogError(null);
     setPoolBusy(`${poolId}:${member.id}`);
     try {
@@ -457,7 +461,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
         "/api/v1/events/{eventId}/committees/{committeeId}/reviewers/{personId}",
         { method: "DELETE" },
       );
-      setNotice(`${member.name} removed from this pool · ${result.assignments_retained.toLocaleString()} existing assignment${result.assignments_retained === 1 ? "" : "s"} and every recorded review kept`);
+      setNotice(`${label} removed from this pool · ${result.assignments_retained.toLocaleString()} existing assignment${result.assignments_retained === 1 ? "" : "s"} and every recorded review kept`);
       await load({ quiet: true });
     } catch (reason: unknown) {
       setDialogError(errorSummary(reason));
@@ -898,7 +902,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
                     <div class="scope-chips">{member.track_scopes.length ? member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>) : <span class="subtle">No track responsibilities · nothing can be assigned</span>}</div>
                     <span class="subtle"><span class="tabular">{member.progress}</span> review{member.progress === 1 ? "" : "s"} recorded</span>
                   </div>
-                  <span class="committee-person-action"><Button small variant="ghost" disabled={poolBusy !== null} aria-label={`Remove ${poolNames.get(member.id) ?? member.name} from ${pool.name}`} title={`Remove ${poolNames.get(member.id) ?? member.name} from ${pool.name}`} onClick={() => void removePoolMember(pool.id, member)}>{poolBusy === `${pool.id}:${member.id}` ? "Removing…" : "Remove"}</Button></span>
+                  <span class="committee-person-action"><Button small variant="ghost" disabled={poolBusy !== null} aria-label={`Remove ${poolNames.get(member.id) ?? member.name} from ${pool.name}`} title={`Remove ${poolNames.get(member.id) ?? member.name} from ${pool.name}`} onClick={() => void removePoolMember(pool.id, member, poolNames.get(member.id) ?? member.name)}>{poolBusy === `${pool.id}:${member.id}` ? "Removing…" : "Remove"}</Button></span>
                 </div>)}</div>}
             </section>;
           })}</div>}

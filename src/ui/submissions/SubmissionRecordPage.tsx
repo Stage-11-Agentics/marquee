@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import { formatFileSize, type FileAnswerView } from "../../lib/file-answers";
 import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } from "../shell/components";
-import { disambiguatedNames, searchableQuery } from "../../lib/duplicate-names";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
 import { ContentHistory } from "../history/ContentHistory";
 import { groupParticipants, type Participant } from "./participant-groups";
@@ -384,7 +384,11 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [participantQuery, setParticipantQuery] = useState("");
   const [participantResults, setParticipantResults] = useState<SearchResult[]>([]);
   const [participantSearchState, setParticipantSearchState] = useState<"idle" | "loading" | "error">("idle");
-  const [selectedParticipant, setSelectedParticipant] = useState<SearchResult | null>(null);
+  // The label the row carried WHEN IT WAS CLICKED. Selecting clears the result
+  // list that produced the marker, so re-deriving afterwards would drop
+  // "Marcus Okafor (2)" back to plain in the line the organizer reads before
+  // pressing Add.
+  const [selectedParticipant, setSelectedParticipant] = useState<{ person: SearchResult; label: string } | null>(null);
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantEmail, setNewParticipantEmail] = useState("");
   const [participantError, setParticipantError] = useState("");
@@ -402,9 +406,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
 
   /** The create screen's picker, on the record: same search, same debounce. */
   useEffect(() => {
-    // A pasted "Marcus Okafor (2)" has to find Marcus Okafor: the marker is a
-    // property of the result set, so the server has never heard of it.
-    const query = searchableQuery(participantQuery);
+    const query = participantQuery.trim();
     if (participantMode !== "existing" || selectedParticipant || query.length < 2) {
       setParticipantResults([]);
       setParticipantSearchState("idle");
@@ -449,7 +451,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     if (participantMode === "existing" && !selectedParticipant) { setParticipantError("Choose a person from the list, or add a new person."); return; }
     if (participantMode === "new" && (!newParticipantName.trim() || !newParticipantEmail.trim())) { setParticipantError("A new participant needs a name and an email address."); return; }
     const person = participantMode === "existing"
-      ? { person_id: selectedParticipant!.id }
+      ? { person_id: selectedParticipant!.person.id }
       : { name: newParticipantName.trim(), email: newParticipantEmail.trim() };
     const added = await participantWrite("add-participant", "/participants", { method: "POST", body: JSON.stringify({ ...person, role: participantRole }) }, PARTICIPANTS_ROUTE);
     if (!added) return;
@@ -713,7 +715,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }, SCHEDULE_ROUTE); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}
         <Card><CardHeader title="Participants"><span class="tabular">{participantGroups.length}</span></CardHeader><CardBody>
-          <div class="record-participants">{participantGroups.length ? participantGroups.map((group) => <div class="record-person" key={group.person_id}><strong>{participantNames.get(group.person_id) ?? group.name}</strong><span>{group.company || "Company not provided"}</span><small>{group.email}</small><div class="record-person-roles" aria-label={`${participantNames.get(group.person_id) ?? group.name} roles`}>{group.participants.map((participant) => <div class="record-person-role" key={participant.id}><span class="record-person-role-name">{statusLabel(participant.role)}</span><Chip tone={participantConfirmationTone(participant.confirmation_status)}>{participantConfirmationLabel(participant.confirmation_status)}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove {statusLabel(participant.role)} role</Button>}</div>)}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
+          <div class="record-participants">{participantGroups.length ? participantGroups.map((group) => <div class="record-person" key={group.person_id}><strong>{participantNames.get(group.person_id) ?? group.name}</strong><span>{group.company || "Company not provided"}</span><small>{group.email}</small><div class="record-person-roles" aria-label={`${participantNames.get(group.person_id) ?? group.name} roles`}>{group.participants.map((participant) => <div class="record-person-role" key={participant.id}><span class="record-person-role-name">{statusLabel(participant.role)}</span><Chip tone={participantConfirmationTone(participant.confirmation_status)}>{participantConfirmationLabel(participant.confirmation_status)}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" aria-label={`Remove the ${statusLabel(participant.role)} role from ${participantNames.get(group.person_id) ?? group.name}`} disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove {statusLabel(participant.role)} role</Button>}</div>)}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
           {canEditParticipants && <form class="record-participant-add" onSubmit={(event) => void addParticipant(event)}>
             <fieldset class="record-person-picker" aria-describedby="record-participant-error">
               <legend>Add a participant</legend>
@@ -723,14 +725,14 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
                 <button type="button" role="tab" aria-selected={participantMode === "new"} class={participantMode === "new" ? "active" : ""} onClick={() => { setParticipantMode("new"); setSelectedParticipant(null); setParticipantResults([]); setParticipantError(""); }}>Add new person</button>
               </div>
               {participantMode === "existing" && <div class="record-picker-body">
-                {selectedParticipant ? <div class="record-selected-person"><span><strong>{selectedParticipant.title}</strong><small>{selectedParticipant.subtitle}</small></span><Button type="button" small onClick={() => { setSelectedParticipant(null); setParticipantQuery(""); }}>Change person</Button></div> : <>
+                {selectedParticipant ? <div class="record-selected-person"><span><strong>{selectedParticipant.label}</strong><small>{selectedParticipant.person.subtitle}</small></span><Button type="button" small onClick={() => { setSelectedParticipant(null); setParticipantQuery(""); }}>Change person</Button></div> : <>
                   <label class="sr-only" for="record-participant-search">Search people</label><input id="record-participant-search" value={participantQuery} onInput={(event) => { setParticipantQuery(event.currentTarget.value); setSelectedParticipant(null); setParticipantError(""); }} placeholder="Search people by name…" autoComplete="off" aria-controls="record-participant-results" />
                   <div id="record-participant-results" class="record-person-suggestions" role="listbox" aria-label="People search results">
                     {participantSearchState === "loading" && <span class="record-picker-placeholder">Searching people…</span>}
                     {participantSearchState === "error" && <span class="record-picker-placeholder error">People search unavailable. Try again.</span>}
                     {participantSearchState === "idle" && participantQuery.trim().length < 2 && <span class="record-picker-placeholder">Type at least 2 characters to search.</span>}
                     {participantSearchState === "idle" && participantQuery.trim().length >= 2 && participantResults.length === 0 && <span class="record-picker-placeholder">No matching people. Add a new person if this is a new contact.</span>}
-                    {participantResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedParticipant(person); setParticipantQuery(person.title); setParticipantResults([]); setParticipantError(""); }}><strong>{participantResultNames.get(person.id) ?? person.title}</strong><small>{person.subtitle}</small></button>)}
+                    {participantResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedParticipant({ person, label: participantResultNames.get(person.id) ?? person.title }); setParticipantQuery(person.title); setParticipantResults([]); setParticipantError(""); }}><strong>{participantResultNames.get(person.id) ?? person.title}</strong><small>{person.subtitle}</small></button>)}
                   </div>
                 </>}
               </div>}
@@ -760,7 +762,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
             {round.evaluations.map((evaluation, index) => <EvaluationPanelResult key={`${evaluation.id}-${index}`} evaluation={evaluation} criteria={criteriaByRound.get(round.id) ?? []} displayName={evidenceNames.get(evaluation.reviewer_person_id) ?? evaluation.reviewer_name} />)}
           </div>}
           {round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}
-          {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
+          {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" aria-label={`Remove ${reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} from ${round.name}`} disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
           <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewerNames.get(reviewer.id) ?? reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>
         </section>) : <span class="subtle">No evaluation rounds configured</span>}</div></CardBody></Card>
       </aside>

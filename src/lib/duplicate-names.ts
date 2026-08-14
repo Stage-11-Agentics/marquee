@@ -85,19 +85,3 @@ export function disambiguatedNames(records: readonly NamedRecord[]): Map<string,
   const ordinals = duplicateNameOrdinals(records);
   return new Map(records.map((record) => [record.id, disambiguatedName(record, ordinals)]));
 }
-
-/**
- * The query to send to a SERVER-backed person search.
- *
- * A server cannot match "(2)": that marker is a property of one rendered result
- * set, so it does not exist until the search it would be filtering has already
- * run. Rather than pretend otherwise, strip a trailing disambiguator before
- * sending — pasting a label you can see then finds the person it belongs to,
- * and the marker is re-derived over whatever comes back.
- *
- * Client-side pickers over a fully loaded list have no such problem and match
- * the rendered label directly.
- */
-export function searchableQuery(query: string): string {
-  return query.replace(/\s*\(\d+\)\s*$/, "").trim();
-}
