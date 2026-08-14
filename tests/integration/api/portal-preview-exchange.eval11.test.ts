@@ -32,10 +32,13 @@ const OWNER_ID = "person_spk07_owner";
 const SPEAKER_ID = "person_spk07_speaker";
 const OTHER_SPEAKER_ID = "person_spk07_other_speaker";
 const BYSTANDER_ID = "person_spk07_bystander";
+/** An organizer of the OTHER conference, and of that one only. */
+const OTHER_OWNER_ID = "person_spk07_other_owner";
 
 let ownerCookie = "";
 let ownerSessionId = "";
 let bystanderCookie = "";
+let otherOwnerCookie = "";
 
 async function seedFixture(): Promise<void> {
   await applyMigrations();
@@ -49,18 +52,22 @@ async function seedFixture(): Promise<void> {
       OTHER_SPEAKER_ID, ORG_ID, "other@spk07.test", "Other Event Speaker", now, now,
       BYSTANDER_ID, ORG_ID, "bystander@spk07.test", "Bystander Speaker", now, now,
     ),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, created_at, updated_at) VALUES (?, ?, ?, ?, '[]', ?, ?)").bind(OTHER_OWNER_ID, ORG_ID, "other-owner@spk07.test", "Other conference owner", now, now),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'program_lead', ?, ?), (?, ?, ?, ?, 'speaker', ?, ?), (?, ?, ?, ?, 'speaker', ?, ?), (?, ?, ?, ?, 'speaker', ?, ?)").bind(
       "mem_spk07_owner", ORG_ID, EVENT_ID, OWNER_ID, now, now,
       "mem_spk07_speaker", ORG_ID, EVENT_ID, SPEAKER_ID, now, now,
       "mem_spk07_bystander", ORG_ID, EVENT_ID, BYSTANDER_ID, now, now,
       "mem_spk07_other", ORG_ID, OTHER_EVENT_ID, OTHER_SPEAKER_ID, now, now,
     ),
+    env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'program_lead', ?, ?)").bind("mem_spk07_other_owner", ORG_ID, OTHER_EVENT_ID, OTHER_OWNER_ID, now, now),
   ]);
   const owner = await createSession(env.DB, { personId: OWNER_ID, roleHint: "program_lead", userAgent: "spk07-test", now });
   ownerSessionId = owner.id;
   ownerCookie = `mq_session=${owner.id}`;
   const bystander = await createSession(env.DB, { personId: BYSTANDER_ID, roleHint: "login", userAgent: "spk07-test", now });
   bystanderCookie = `mq_session=${bystander.id}`;
+  const otherOwner = await createSession(env.DB, { personId: OTHER_OWNER_ID, roleHint: "program_lead", userAgent: "spk07-test", now });
+  otherOwnerCookie = `mq_session=${otherOwner.id}`;
 }
 
 async function request(path: string, init: RequestInit = {}, cookie = ownerCookie): Promise<Response> {
@@ -98,7 +105,7 @@ function sessionCookieFrom(response: Response): string | null {
 describe.sequential("SPK-07 portal preview exchange", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("AC-284 · a signed-in organizer opening a speaker's portal lands in the portal, not on /signin", async () => {
+  test("CONTRACT · SPK-07 · a signed-in organizer opening a speaker's portal lands in the portal, not on /signin", async () => {
     const url = await previewUrl();
     const landed = await navigate(url);
 
@@ -118,7 +125,7 @@ describe.sequential("SPK-07 portal preview exchange", () => {
     expect(session?.person_id).toBe(SPEAKER_ID);
   });
 
-  test("AC-284 · the preview is one-time, exactly like every other magic link", async () => {
+  test("CONTRACT · SPK-07 · the preview is one-time, exactly like every other magic link", async () => {
     const url = await previewUrl();
     expect((await navigate(url)).headers.get("location")).toContain("/portal");
     // Spending it twice must not work, or a preview URL in a log is a standing
@@ -126,7 +133,7 @@ describe.sequential("SPK-07 portal preview exchange", () => {
     expect((await navigate(url)).headers.get("location") ?? "").not.toContain("/portal");
   });
 
-  test("AC-284 · the organizer can get back to their own seat", async () => {
+  test("CONTRACT · SPK-07 · the organizer can get back to their own seat", async () => {
     const url = await previewUrl();
     const landed = await navigate(url);
     const previewCookie = `mq_session=${sessionCookieFrom(landed)}`;
@@ -138,7 +145,7 @@ describe.sequential("SPK-07 portal preview exchange", () => {
     expect((await resolveSession(env.DB, restored!))?.person_id).toBe(OWNER_ID);
   });
 
-  test("AC-284 · the already-signed-in protection still holds for an ordinary login link", async () => {
+  test("CONTRACT · SPK-07 · the already-signed-in protection still holds for an ordinary login link", async () => {
     // The guard exists so a stray link cannot silently swap who a browser is
     // signed in as. Only a deliberate organizer preview is exempt, and the
     // exemption travels with the minted link rather than in the caller's URL —
@@ -155,7 +162,7 @@ describe.sequential("SPK-07 portal preview exchange", () => {
     expect((await navigate(`${link!}&viewing_as=speaker`)).headers.get("location") ?? "").toContain("already_signed_in");
   });
 
-  test("AC-284 · a preview link is refused for a browser that is not an organizer of that conference", async () => {
+  test("CONTRACT · SPK-07 · a preview link is refused for a browser that is not an organizer of that conference", async () => {
     const url = await previewUrl();
     // A speaker who happens to be signed in gets the ordinary refusal: the
     // exemption is for organizers of this conference, not for anyone holding
@@ -168,7 +175,36 @@ describe.sequential("SPK-07 portal preview exchange", () => {
     expect((await navigate(url)).headers.get("location") ?? "").toContain("/portal");
   });
 
-  test("AC-284 · a signed-out browser follows a preview link the ordinary way", async () => {
+  test("CONTRACT · SPK-07 · the conference the ops check runs against comes from the link, not the address bar", async () => {
+    // The escalation this design exists to refuse. The preview marker carries
+    // an eventId, and the ONLY server-side field a magic link has to carry it
+    // in is `redirect_to` — `magic_links` has no event column, and `purpose` is
+    // CHECK-constrained, so a dedicated purpose is a migration. That makes the
+    // eventId load-bearing, which in turn makes "is it read from the link row
+    // or from the caller?" the question that decides whether it is a hole.
+    //
+    // Here an organizer of the OTHER conference — who has ops on nothing in
+    // this one — presents a link minted for THIS conference with the eventId
+    // they do hold ops over appended to the address. If the exchange read the
+    // eventId from the URL, the check would pass and they would become a
+    // speaker whose conference they have no authority over. It reads the D1
+    // row, so the tampering is not merely rejected, it is never consulted.
+    const url = await previewUrl();
+    const tampered = `${url}&eventId=${encodeURIComponent(OTHER_EVENT_ID)}`;
+
+    const escalated = await navigate(tampered, otherOwnerCookie);
+    expect(escalated.headers.get("location") ?? "", "a foreign organizer must not spend this link").toContain("already_signed_in");
+    expect(sessionCookieFrom(escalated), "and no session may be minted").toBeNull();
+
+    // Belt and braces: the same tampering by the RIGHTFUL organizer is simply
+    // ignored rather than honoured for the named event — proof the parameter is
+    // inert on this route rather than merely insufficient.
+    const rightful = await navigate(tampered);
+    expect(rightful.headers.get("location") ?? "").toContain("viewing_as=speaker");
+    expect((await resolveSession(env.DB, sessionCookieFrom(rightful)!))?.person_id).toBe(SPEAKER_ID);
+  });
+
+  test("CONTRACT · SPK-07 · a signed-out browser follows a preview link the ordinary way", async () => {
     // Nothing about this change may make an anonymous exchange harder: that is
     // the path every real speaker uses.
     const url = await previewUrl();
@@ -178,7 +214,7 @@ describe.sequential("SPK-07 portal preview exchange", () => {
     expect((await resolveSession(env.DB, sessionCookieFrom(landed)!))?.person_id).toBe(SPEAKER_ID);
   });
 
-  test("AC-284 · exit-preview refuses a session that is not a preview", async () => {
+  test("CONTRACT · SPK-07 · exit-preview refuses a session that is not a preview", async () => {
     // Otherwise it is a free session-swap primitive.
     expect((await request("/api/v1/auth/exit-preview", { method: "POST", body: "{}" }, ownerCookie)).status).toBe(403);
     expect((await request("/api/v1/auth/exit-preview", { method: "POST", body: "{}" }, "")).status).toBe(401);

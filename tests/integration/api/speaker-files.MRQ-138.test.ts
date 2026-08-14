@@ -209,7 +209,21 @@ test("CONTRACT · MRQ-153 — the organizer preview mints a one-use speaker port
   expect(body.person_id).toBe(PRIYA);
   expect(body.url).toContain("/api/v1/auth/exchange?token=");
   const link = await env.DB.prepare("SELECT person_id, purpose, redirect_to, used_at FROM magic_links ORDER BY created_at DESC LIMIT 1").first<{ person_id: string; purpose: string; redirect_to: string; used_at: number | null }>();
-  expect(link).toMatchObject({ person_id: PRIYA, purpose: "login", redirect_to: "/portal?viewing_as=speaker", used_at: null });
+  // SPK-07 changed this expectation, and it is a widening of what the contract
+  // asserts rather than a loosening. The redirect used to read
+  // `/portal?viewing_as=speaker`; it now names the conference the preview was
+  // authorised for.
+  //
+  // That eventId is load-bearing, not decoration. A signed-in organizer opening
+  // a speaker's portal trips the exchange's already-signed-in guard, and the
+  // exchange re-checks their `ops` role over the named conference before
+  // honouring it. `magic_links` has no event column and its `purpose` is
+  // CHECK-constrained, so `redirect_to` is the only server-side field a link
+  // has to carry that in — which is exactly why it must be pinned here, on the
+  // stored row, rather than left to whatever a caller puts in an address bar.
+  // `portal-preview-exchange.eval11.test.ts` holds the escalation test.
+  expect(link).toMatchObject({ person_id: PRIYA, purpose: "login", used_at: null });
+  expect(link?.redirect_to).toBe(`/portal?viewing_as=speaker&eventId=${EVENT_ID}`);
   const after = await env.DB.prepare("SELECT invited_at FROM participations WHERE person_id = ?").bind(PRIYA).first<{ invited_at: number | null }>();
   expect(after).toEqual(before);
 });
