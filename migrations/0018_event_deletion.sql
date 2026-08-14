@@ -44,7 +44,7 @@ CREATE INDEX idx_audit_request ON audit_log(request_id, created_at);
 -- Portal credentials are event-scoped even though older magic-link rows did
 -- not carry the event that minted them.  Backfill the unambiguous outbox and
 -- eventId cases, and have new writers supply event_id directly.
-CREATE TABLE magic_links_0018 (
+CREATE TABLE magic_links_0018_new (
   id TEXT PRIMARY KEY,
   token_hash TEXT NOT NULL,
   person_id TEXT REFERENCES people(id),
@@ -63,7 +63,7 @@ CREATE TABLE magic_links_0018 (
   )
 );
 
-INSERT INTO magic_links_0018 (
+INSERT INTO magic_links_0018_new (
   id, token_hash, person_id, event_id, purpose, redirect_to, expires_at, used_at,
   created_at, updated_at
 )
@@ -82,7 +82,7 @@ SELECT link.id, link.token_hash, link.person_id,
 FROM magic_links link;
 
 DROP TABLE magic_links;
-ALTER TABLE magic_links_0018 RENAME TO magic_links;
+ALTER TABLE magic_links_0018_new RENAME TO magic_links;
 
 CREATE UNIQUE INDEX uq_magic_links_token_hash ON magic_links(token_hash);
 CREATE INDEX idx_magic_links_expires ON magic_links(expires_at);
