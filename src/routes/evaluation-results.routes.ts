@@ -30,6 +30,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses } from "../api/route";
 import type { SubmissionListItem } from "../api/submissions";
+import { disambiguatedNames } from "../lib/duplicate-names";
 import { scoreBasisCell } from "../lib/review-aggregate";
 import { requireProgram } from "./evaluation.routes";
 import { listSubmissions } from "./submissions.queries";
@@ -50,8 +51,11 @@ interface CriterionColumn {
 /** One reviewer's answer to one criterion, as recorded. */
 interface CriterionAnswerRow {
   submission_id: string;
+  evaluation_id: string;
   criterion_id: string;
+  reviewer_id: string;
   reviewer_name: string;
+  keyed_by_id: number;
   value: string;
 }
 
@@ -165,16 +169,43 @@ async function recommendationTallies(
  * is a live product question and not this fix's to answer: the separation is
  * deliberate everywhere else in the file, and quietly breaking it in one column
  * would be a change of meaning wearing a bug fix's clothes.
+ *
+ * Three things the obvious query gets wrong:
+ *
+ * - **A criterion can be keyed twice.** `criteria_scores` is keyed by criterion
+ *   id today, and a revision preserves a legacy key by NAME beside it. Matching
+ *   either without preferring the id reports one reviewer twice, disagreeing
+ *   with themselves, while the organizer screen reads the id alone. The id wins
+ *   whenever the same evaluation carries both.
+ * - **A select or text answer need not be a JSON string.** `review.routes.ts`
+ *   accepts a number or a string for every criterion and the record renders
+ *   either, so filtering to `type = 'text'` recreates the reported defect —
+ *   visible on screen, empty in the file — for a schema-valid write.
+ * - **The attribution has to survive its own contents.** Two reviewers can share
+ *   a name, so names are disambiguated the way every organizer surface
+ *   disambiguates them; and an answer containing the separator would otherwise
+ *   read as another reviewer, so the separator is neutralised inside values —
+ *   the same bounded flattening `csvCell` already applies to newlines.
  */
+const ANSWER_SEPARATOR = " · ";
+
+/** Nothing inside one answer may imitate the boundary between two. */
+function answerText(value: string): string {
+  return value.split(ANSWER_SEPARATOR).join(" - ").trim();
+}
+
 async function criterionAnswers(
   db: D1Database,
   eventId: string,
 ): Promise<Map<string, Map<string, string[]>>> {
   const { results } = await db.prepare(`
     SELECT evaluation.submission_id AS submission_id,
+      evaluation.id AS evaluation_id,
       criterion.id AS criterion_id,
+      reviewer.id AS reviewer_id,
       reviewer.name AS reviewer_name,
-      element.value AS value
+      CASE WHEN element.key = criterion.id THEN 1 ELSE 0 END AS keyed_by_id,
+      CAST(element.value AS TEXT) AS value
     FROM evaluations evaluation
     JOIN submissions submission ON submission.id = evaluation.submission_id
     JOIN people reviewer ON reviewer.id = evaluation.reviewer_person_id AND reviewer.kind = 'human'
@@ -186,15 +217,28 @@ async function criterionAnswers(
       AND evaluation.abstained = 0
       AND evaluation.criteria_scores IS NOT NULL
       AND criterion.kind IN ('select', 'text')
-      AND element.type = 'text'
-      AND trim(element.value) <> ''
-    ORDER BY evaluation.submission_id, criterion.id, reviewer.name, evaluation.id
+      AND element.type IN ('text', 'integer', 'real')
+      AND trim(CAST(element.value AS TEXT)) <> ''
+    ORDER BY evaluation.submission_id, criterion.id, reviewer.name, evaluation.id, keyed_by_id DESC
   `).bind(eventId).all<CriterionAnswerRow>();
-  const bySubmission = new Map<string, Map<string, string[]>>();
+
+  // One answer per reviewer per criterion, the id-keyed one where both exist.
+  const kept = new Map<string, CriterionAnswerRow>();
   for (const row of results) {
+    const key = `${row.evaluation_id}:${row.criterion_id}`;
+    const held = kept.get(key);
+    if (!held || (Number(row.keyed_by_id) === 1 && Number(held.keyed_by_id) === 0)) kept.set(key, row);
+  }
+
+  const reviewerNames = disambiguatedNames(
+    [...new Map([...kept.values()].map((row) => [row.reviewer_id, { id: row.reviewer_id, name: row.reviewer_name }])).values()],
+  );
+  const bySubmission = new Map<string, Map<string, string[]>>();
+  for (const row of kept.values()) {
     const forSubmission = bySubmission.get(row.submission_id) ?? new Map<string, string[]>();
     const answers = forSubmission.get(row.criterion_id) ?? [];
-    answers.push(`${row.reviewer_name}: ${row.value}`);
+    const name = answerText(reviewerNames.get(row.reviewer_id) ?? row.reviewer_name);
+    answers.push(`${name}: ${answerText(row.value)}`);
     forSubmission.set(row.criterion_id, answers);
     bySubmission.set(row.submission_id, forSubmission);
   }
@@ -226,7 +270,7 @@ const exportPlanResults = defineApiRoute(
     operationId: "exportEvaluationResults",
     summary: "Export review results as CSV",
     description:
-      "One row per submission: identity, status, weighted aggregate, reviewer count, recommendation tally, and a column per scorecard criterion — numeric criteria averaged, select and text criteria carrying every recorded answer attributed to its reviewer.",
+      "One row per submission: identity, status, weighted aggregate, reviewer count, recommendation tally, and a column per scorecard criterion — numeric criteria averaged over human reviewers, select and text criteria carrying each human reviewer's recorded answer attributed to them.",
     tags: ["Evaluation"],
     request: { params: planParams, query: exportQuery },
     policy: {
@@ -281,7 +325,7 @@ const exportPlanResults = defineApiRoute(
         tally?.deny_count ?? 0,
         ...columns.map((column) => (column.kind === "numeric"
           ? perCriterion?.get(column.id) ?? null
-          : perCriterionAnswers?.get(column.id)?.join(" · ") ?? null)),
+          : perCriterionAnswers?.get(column.id)?.join(ANSWER_SEPARATOR) ?? null)),
       ].map(csvCell).join(","));
     }
 

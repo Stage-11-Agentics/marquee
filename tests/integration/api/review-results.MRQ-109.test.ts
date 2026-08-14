@@ -307,6 +307,74 @@ describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export"
     expect(cell(weighted, "Weighted score")).toBe("3.33");
   });
 
+  test("CONTRACT · ABS-13: an answer survives its own keying, type, and contents", async () => {
+    // Three ways the obvious query reports the wrong thing, each reachable:
+    //  - a revision preserves a legacy NAME key beside the id key, so matching
+    //    either without preferring the id reports one reviewer disagreeing with
+    //    themselves while the screen reads the id alone;
+    //  - `review.routes.ts` accepts a number for any criterion, so filtering to
+    //    JSON strings recreates "visible on screen, empty in the CSV";
+    //  - an answer containing the separator would read as another reviewer.
+    await env.DB.prepare(
+      `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'maybe', NULL, ?, '', 0, 1, 1)`,
+    ).bind(
+      "evaluation-results-edge", ROUND_ID, SUB_LEGACY, SECOND_REVIEWER_ID,
+      JSON.stringify({
+        [CRITERION_CALL]: "Accept",
+        // The same criterion, keyed by name by an older revision.
+        Recommendation: "Reject",
+        // A number where a string was assumed.
+        [CRITERION_NOTES]: 7,
+      }),
+    ).run();
+
+    const rows = csvRows(await (await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`)).text());
+    const header = rows[0]!;
+    const cell = (row: string[], column: string): string => row[header.indexOf(column)]!;
+    const legacy = rows.find((row) => row[0] === SUB_LEGACY)!;
+
+    // The id-keyed answer wins, and the reviewer is reported once.
+    expect(cell(legacy, "Recommendation (Initial review)")).toContain("Accept");
+    expect(cell(legacy, "Recommendation (Initial review)")).not.toContain("Reject");
+    expect(cell(legacy, "Recommendation (Initial review)").match(/Rowan Second/g)).toHaveLength(1);
+    // A numeric answer is an answer.
+    expect(cell(legacy, "Comments (Initial review)")).toContain("7");
+  });
+
+  test("CONTRACT · ABS-13: attribution survives two reviewers sharing a name, and an answer that mimics the separator", async () => {
+    await env.DB.prepare(
+      "INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, 'Rowan Second', 1, 'marquee', 1, 1)",
+    ).bind("per-review-results-namesake", DEMO_ORGANIZATION_ID, "namesake@demo.marquee.example").run();
+    await env.DB.prepare(
+      `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'approve', NULL, ?, '', 0, 1, 1)`,
+    ).bind(
+      "evaluation-results-namesake", ROUND_ID, SUB_UNSCORED, "per-review-results-namesake",
+      JSON.stringify({ [CRITERION_NOTES]: "Strong · but thin on evidence" }),
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'approve', NULL, ?, '', 0, 1, 1)`,
+    ).bind(
+      "evaluation-results-namesake-other", ROUND_ID, SUB_UNSCORED, SECOND_REVIEWER_ID,
+      JSON.stringify({ [CRITERION_NOTES]: "Agreed." }),
+    ).run();
+
+    const rows = csvRows(await (await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`)).text());
+    const header = rows[0]!;
+    const cell = (row: string[], column: string): string => row[header.indexOf(column)]!;
+    const unscored = cell(rows.find((row) => row[0] === SUB_UNSCORED)!, "Comments (Initial review)");
+
+    // Two people, one name: the cell has to tell them apart the way every
+    // organizer surface does.
+    expect(unscored).toContain("Rowan Second (2)");
+    // And exactly two answers, not three — the separator inside one of them
+    // must not read as a boundary.
+    expect(unscored.split(" · ")).toHaveLength(2);
+    expect(unscored).toContain("Strong - but thin on evidence");
+  });
+
   test("CONTRACT · the export keeps agent reviews separate from human ones, as the rest of it does", async () => {
     // Not a fix — a characterisation. `criterionMeans` and
     // `recommendationTallies` both join `reviewer.kind = 'human'`, and the
