@@ -437,7 +437,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, FORM_ID).run();
 
     const api = await request(`/api/v1/public/forms/public-cfp${resume.search}`);
-    expect((await json<{ state: string; form: { status: string } }>(api))).toMatchObject({ state: "submitted", form: { status: "open" } });
+    expect((await json<{ state: string; form: { status: string } }>(api))).toMatchObject({ state: "submitted", form: { status: "closed" } });
     const rendered = await request(`/f/public-cfp${resume.search}`);
     const body = await rendered.text();
     expect(body).toContain("Call for speakers · closed");

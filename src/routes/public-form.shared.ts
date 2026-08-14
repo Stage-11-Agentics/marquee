@@ -335,6 +335,7 @@ export function toPublicFormState(
   record: PublicFormRecord,
   options: { origin: string; turnstileSiteKey?: string | null },
 ): PublicFormState {
+  const now = Date.now();
   const resumeUrl = record.resumeToken
     ? `${options.origin}/f/${encodeURIComponent(record.form.slug)}?resume=${encodeURIComponent(record.resumeToken)}`
     : null;
@@ -361,7 +362,7 @@ export function toPublicFormState(
       name: record.form.name,
       slug: record.form.slug,
       kind: record.form.kind,
-      status: record.form.status === "closed" ? "closed" : "open",
+      status: publicFormIsClosed(record.form, now) ? "closed" : "open",
       welcome_md: record.form.welcome_md,
       closes_at: asNumber(record.form.closes_at),
       per_submitter_limit: Number(record.form.per_submitter_limit),
