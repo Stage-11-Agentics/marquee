@@ -429,7 +429,9 @@ nothing.</p>
       <td>Attribution. Merging stays continuous.</td></tr>
     <tr><td><strong>One gate at a time</strong></td>
       <td>Same branch, one night: load 14 → 78s, load 48 → 135s, load 164 → 276s against a
-      120s budget. Unserialized, the gate false-fails and the warden believes it.</td></tr>
+      120s budget — and all three passed. Serializing keeps the warns honest; it was never
+      protection against false reds, because slowness cannot red the gate. A red is
+      load-invariant.</td></tr>
     <tr><td><strong>Deadline barrier, not completion barrier</strong></td>
       <td>Never wait on "all tickets done" — one stuck implementer would end the run.
       Unfinished tickets roll forward.</td></tr>

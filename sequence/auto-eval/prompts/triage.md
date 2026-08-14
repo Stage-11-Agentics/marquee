@@ -39,10 +39,15 @@ c11 launch-agent --type codex --model gpt-5.6-luna --effort max \
 tree, onto your branch, into someone else's PR. That has already happened here once and it
 cost an evening of confusion.
 
-6. **Merge.** Gate serialized — `flock /tmp/marquee-gate.lock -c 'npm run pr-gate'`. One at
-   a time: the budget is 120s and the same branch has run 78s at load 14 and 276s at load
-   164, so an unserialized gate false-fails and you will believe it. Gate green → merge.
-   Merge decisively; a bad merge costs a `git revert`.
+6. **Merge.** Gate serialized through the shared lock —
+   `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh npm run pr-gate`.
+   That wrapper is mkdir-based because macOS ships no `flock(1)`; the `flock` invocation this
+   line used to carry cannot execute here at all. One at a time: the budget is 120s and the
+   same branch has run 78s at load 14 and 276s at load 164, so serializing keeps those numbers
+   honest. It is not protection against false reds — slowness cannot red this gate, an
+   over-budget run is a warn, and only a 600s hang detector fails a slow one. **A red is
+   load-invariant: believe it.** Gate green → merge. Merge decisively; a bad merge costs a
+   `git revert`.
 
 ## Every implementer gets its own worktree
 
