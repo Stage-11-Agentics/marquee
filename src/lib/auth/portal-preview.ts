@@ -24,6 +24,8 @@
  * flagged rather than taken.)
  */
 
+import type { D1Database } from "@cloudflare/workers-types";
+
 import type { Id } from "../../db/schema";
 
 /**
@@ -53,6 +55,42 @@ export function portalPreviewEventId(redirectTo: string): Id | null {
   if (parsed.searchParams.get("viewing_as") !== "speaker") return null;
   const eventId = parsed.searchParams.get("eventId");
   return eventId && eventId.length > 0 ? eventId : null;
+}
+
+/**
+ * Is this person actually a speaker at this conference?
+ *
+ * The mint already asks exactly this before it will write a preview marker, so
+ * asking again at exchange time is deliberate duplication. It is the layer that
+ * does not depend on the marker's provenance: a marker written by some future
+ * caller-supplied path that slips past the reserved-parameter strip still
+ * cannot open the portal of somebody who is not a speaker at the conference the
+ * organizer holds `ops` over.
+ *
+ * The predicate mirrors `previewSpeakerPortal`'s on purpose — the two must
+ * agree, or a link the mint issued would be refused when it is spent.
+ */
+export async function isEventSpeaker(db: D1Database, eventId: Id, personId: Id): Promise<boolean> {
+  const row = await db.prepare(
+    `SELECT person.id
+     FROM people person
+     JOIN events conference ON conference.id = ? AND conference.org_id = person.org_id
+     WHERE person.id = ?
+       AND (
+         EXISTS (
+           SELECT 1 FROM memberships membership
+           WHERE membership.org_id = person.org_id AND membership.event_id = conference.id
+             AND membership.person_id = person.id AND membership.role = 'speaker'
+         )
+         OR EXISTS (
+           SELECT 1 FROM participations participation
+           JOIN submissions submission ON submission.id = participation.submission_id
+           WHERE submission.event_id = conference.id AND participation.person_id = person.id
+         )
+       )
+     LIMIT 1`,
+  ).bind(eventId, personId).first<{ id: string }>();
+  return row !== null;
 }
 
 /**
