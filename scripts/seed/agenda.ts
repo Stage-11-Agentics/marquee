@@ -16,11 +16,15 @@ const ROOM_IDS = [
 const EXPO_ROOM_ID = ROOM_IDS[3]!;
 const ONLINE_ROOM_ID = seedId("rm", "online");
 
+const WORKSHOP_ROOM_IDS = ROOM_IDS.slice(4);
+
 /**
- * Day one is the two conflict pairs, whatever `scheduledSessions()` puts first:
- * the opening pair crosses Sheraton → Marriott so the seed carries a live
- * Transit conflict, the second stays in one building as a person
- * double-booking.
+ * Day one is the two conflict pairs: the opening pair crosses Sheraton →
+ * Marriott so the seed carries a live Transit conflict, the second stays in one
+ * building as a person double-booking. These four slots are mainstage rooms and
+ * mainstage lengths, so they only make sense for Stage Talks — and unlike
+ * everything after them they are positional, taking whatever `SCHEDULE_PLAN`
+ * puts first. `run()` asserts the format rather than trusting the plan's order.
  */
 const DAY_ONE_PLACEMENTS: ReadonlyArray<{ startsAt: number; roomId: string }> = [
   { startsAt: Date.UTC(2026, 9, 12, 13), roomId: ROOM_IDS[0]! },
@@ -40,8 +44,19 @@ function dayTwoPlacement(
 ): { startsAt: number; roomId: string } {
   switch (format) {
     // Five parallel Workshop rooms in the Marriott, the source's workshop block.
-    case "workshop":
-      return { startsAt: Date.UTC(2026, 9, 13, 17), roomId: ROOM_IDS[4 + (ordinal % 5)]! };
+    // One slot per room and no second sitting: a sixth workshop has nowhere to
+    // go, and wrapping it back to the first room would double-book that room at
+    // the same hour. Say so instead of scheduling it.
+    case "workshop": {
+      const room = WORKSHOP_ROOM_IDS[ordinal];
+      if (!room) {
+        throw new Error(
+          `the workshop block seats ${WORKSHOP_ROOM_IDS.length} parallel sessions; `
+            + "raising the workshop quota needs a second slot, not a sixth room",
+        );
+      }
+      return { startsAt: Date.UTC(2026, 9, 13, 17), roomId: room };
+    }
     // The Expo Stage runs its short talks back to back, through the mainstage break.
     case "lightning":
       return { startsAt: Date.UTC(2026, 9, 13, 18, ordinal * 15), roomId: EXPO_ROOM_ID };
@@ -174,6 +189,12 @@ export function run(ctx: SeedContext): void {
     const format = formatKeyFor(session);
     const ordinal = placed.get(format) ?? 0;
     const dayOne = DAY_ONE_PLACEMENTS[index];
+    if (dayOne && format !== "stageTalk") {
+      throw new Error(
+        `day one seats Stage Talks, but SCHEDULE_PLAN puts a ${format} at position ${index}; `
+          + "lead the plan with its mainstage talks, or give day one placements of its own",
+      );
+    }
     if (!dayOne) placed.set(format, ordinal + 1);
     const { startsAt, roomId } = dayOne ?? dayTwoPlacement(format, ordinal);
     const duration = defaultDurations.get(String(submission.format_id));
