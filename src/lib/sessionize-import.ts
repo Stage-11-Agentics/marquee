@@ -537,12 +537,25 @@ async function importSpeaker(
     : null;
   if (priorTargetId && !priorTarget) throw new Error("the original speaker target no longer exists; rerun refused");
   const byEmail = await personByEmail(db, event.org_id, email);
+  // A source-system id is a stronger identity key than a display name. A new
+  // import has no prior row to anchor it, but it can still find the person
+  // created by an earlier import when Sessionize keeps that id and changes the
+  // exported email address.
+  const byExternalRef = !priorTarget && !byEmail && externalRef
+    ? await db.prepare("SELECT * FROM people WHERE id = ? AND org_id = ?")
+      .bind(stableImportId("person", event.id, externalRef), event.org_id).first<PersonRow>()
+    : null;
   // A fresh row is only allowed to identify an existing person by normalized
-  // email. Same-name rows with another address are separate people until an
-  // organizer explicitly reconciles them; name alone is not an identity key.
-  const sameName = !priorTarget && !byEmail ? await personByName(db, event.org_id, name) : null;
-  const current = priorTarget ?? byEmail;
-  const matchedBy = !current ? null : priorTarget ? "prior import target" : "normalized email";
+  // email or source external_ref. Same-name rows with another address are
+  // separate people until an organizer explicitly reconciles them; name alone
+  // is not an identity key.
+  const sameName = !priorTarget && !byEmail && !byExternalRef ? await personByName(db, event.org_id, name) : null;
+  const current = priorTarget ?? byEmail ?? byExternalRef;
+  const matchedBy = !current
+    ? null
+    : priorTarget ? "prior import target"
+      : byEmail ? "normalized email"
+        : "source external_ref";
   const keepsStoredEmail = Boolean(current && byEmail?.id !== current.id);
   const beforeAttachment = current ? await attachmentForPerson(db, event.id, current.id) : null;
   const beforeMembership = current ? await speakerMembershipForPerson(db, event.id, current.id) : null;
@@ -645,7 +658,7 @@ async function importSpeaker(
       ? `matched by ${matchedBy}`
       : externalRef ? `new person, keyed by external_ref ${externalRef}` : "new person, keyed by normalized email",
     sameName ? "same name exists with a different email; created separate person" : null,
-    keepsStoredEmail ? "kept email (name match)" : null,
+    keepsStoredEmail ? "kept email (existing profile)" : null,
     preserved.length ? `kept ${preserved.join(", ")} (existing value)` : null,
     filled.length ? `filled ${filled.join(", ")}` : null,
     blankRetained.length ? `kept ${blankRetained.join(", ")} (blank in CSV)` : null,

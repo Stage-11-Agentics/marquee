@@ -30,6 +30,7 @@ type ImportRow = {
   entity: string;
   outcome: "created" | "updated" | "skipped" | "failed";
   reason: string | null;
+  target_id?: string | null;
 };
 
 type RunResult = {
@@ -139,6 +140,31 @@ describe.sequential("CONTRACT · MRQ-166 · Sessionize speaker email", () => {
     const row = result.rows.find((candidate) => candidate.entity === "speaker");
     expect(row).toMatchObject({ outcome: "created" });
     expect(row?.reason).toContain("same name exists with a different email; created separate person");
+  });
+
+  test("CONTRACT · MRQ-166 · a later import with the same external ref keeps the person when email changes", async () => {
+    const first = await upload([
+      "Speaker Id,Name,Email,Title,Company,Bio",
+      "sessionize-speaker-1,External Ref Speaker,old-address@mrq166.test,Original title,Original company,Original bio",
+    ].join("\n"));
+    const firstResult = await mapAndRun(first);
+    expect(firstResult.counts).toMatchObject({ created: 1, failed: 0 });
+    const firstPerson = await env.DB.prepare("SELECT id FROM people WHERE org_id = ? AND email = ?")
+      .bind(ORG_ID, "old-address@mrq166.test").first<{ id: string }>();
+    expect(firstPerson?.id).toBeTruthy();
+
+    const second = await upload([
+      "Speaker Id,Name,Email,Title,Company,Bio",
+      "sessionize-speaker-1,External Ref Speaker,external-ref-new-address@mrq166.test,Original title,Original company,Original bio",
+    ].join("\n"));
+    const secondResult = await mapAndRun(second);
+    const row = secondResult.rows.find((candidate) => candidate.entity === "speaker");
+    expect(row).toMatchObject({ outcome: "skipped", target_id: firstPerson?.id });
+    expect(row?.reason).toContain("matched by source external_ref");
+    expect(row?.reason).toContain("kept email (existing profile)");
+    expect(await env.DB.prepare("SELECT id, email FROM people WHERE id = ?").bind(firstPerson?.id ?? "").first())
+      .toMatchObject({ id: firstPerson?.id, email: "old-address@mrq166.test" });
+    expect(await env.DB.prepare("SELECT id FROM people WHERE org_id = ? AND email = ?").bind(ORG_ID, "external-ref-new-address@mrq166.test").first()).toBeNull();
   });
 
   test("CONTRACT · MRQ-166 · duplicate names match neither existing person", async () => {
