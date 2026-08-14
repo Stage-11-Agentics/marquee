@@ -15,6 +15,7 @@ import { expect, test } from "vitest";
 
 import { completedItemForRevision, reviewStateForRevision, reviewerRevisionFor, reviewerRevisionId, reviewerRevisionPath } from "../../src/ui/review/reviewer-revision";
 import { ReviewerPage, ReviewerRevisionAction, type QueueEnvelope } from "../../src/ui/review/ReviewerPage";
+import { groupParticipants, type Participant } from "../../src/ui/submissions/participant-groups";
 
 const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 
@@ -23,6 +24,7 @@ const evaluationPage = source("../../src/ui/evaluation/EvaluationPage.tsx");
 const evaluationStyles = source("../../src/ui/evaluation/evaluation.css");
 const submissionsPage = source("../../src/ui/submissions/SubmissionsPage.tsx");
 const portalPage = source("../../src/ui/portal/PortalPage.tsx");
+const submissionRecordPage = source("../../src/ui/submissions/SubmissionRecordPage.tsx");
 
 const revisionQueue: QueueEnvelope = {
   completed: [{
@@ -261,4 +263,32 @@ test("CONTRACT · MRQ-169 · co-presenters are named on the results table and in
   expect(portalPage).toContain("portal-copresenters");
   expect(portalPage).toContain("On this session with you");
   expect(portalPage).toContain("co_presenters");
+});
+
+test("CONTRACT · MRQ-169 · the participant panel counts people once while preserving role states", () => {
+  const participant = (overrides: Partial<Participant>): Participant => ({
+    company: "Latticework Systems",
+    confirmed_at: null,
+    email: "priya@example.com",
+    id: "participation-speaker",
+    invited_at: null,
+    name: "Priya Raman",
+    person_id: "person-priya",
+    role: "speaker",
+    confirmation_status: "pending",
+    ...overrides,
+  });
+  const groups = groupParticipants([
+    participant({ id: "participation-speaker", role: "speaker" }),
+    participant({ id: "participation-submitter", role: "submitter", confirmation_status: "confirmed" }),
+    participant({ id: "participation-lee", person_id: "person-lee", name: "Lee Park", email: "lee@example.com" }),
+  ]);
+
+  expect(groups).toHaveLength(2);
+  expect(groups[0].participants.map((entry) => entry.role)).toEqual(["speaker", "submitter"]);
+  expect(groups[0].participants.map((entry) => entry.confirmation_status)).toEqual(["pending", "confirmed"]);
+  expect(submissionRecordPage).toContain("groupParticipants(record.participants)");
+  expect(submissionRecordPage).toContain("{participantGroups.length}");
+  expect(submissionRecordPage).toContain("record-person-roles");
+  expect(submissionRecordPage).toContain("Remove {statusLabel(participant.role)} role");
 });

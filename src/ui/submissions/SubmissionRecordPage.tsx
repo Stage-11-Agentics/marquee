@@ -6,6 +6,7 @@ import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } from "../shell/components";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
 import { ContentHistory } from "../history/ContentHistory";
+import { groupParticipants, type Participant } from "./participant-groups";
 import { decidedNote, headerChipTone, historyMoment, lastSendLine, moment, sendMoment, sendMomentFor, sendOutcome, statusLabel, type DecisionSend } from "./record-copy";
 import "./record.css";
 
@@ -34,7 +35,6 @@ const SEARCH_ROUTE = "/api/v1/events/{eventId}/search";
 const ATTACHABLE_ROLES = ["co_speaker", "speaker", "moderator", "chairperson", "sponsor_contact"] as const;
 
 
-interface Participant { id: string; person_id: string; name: string; email: string; company: string | null; role: string; confirmation_status: "pending" | "confirmed" | "declined"; confirmed_at: number | null; invited_at: number | null; }
 interface SearchResult { type: string; id: string; title: string; subtitle: string; }
 interface Reviewer { id: string; name: string; kind: "human" | "agent"; company: string | null; track_ids: string[]; }
 interface Assignment { assignment_id: string; reviewer_person_id: string; reviewer_name: string; reviewer_kind: "human" | "agent"; status: string; coverage: { assigned: number; reviewed: number }; }
@@ -148,6 +148,18 @@ function FileAnswer({ label, file }: { label: string; file: FileAnswerView }): J
 
 function scoreText(score: number | null): string {
   return score === null ? "—" : score.toFixed(2);
+}
+
+function participantConfirmationLabel(status: Participant["confirmation_status"]): string {
+  if (status === "confirmed") return "Role confirmed";
+  if (status === "declined") return "Role declined";
+  return "Role response pending";
+}
+
+function participantConfirmationTone(status: Participant["confirmation_status"]): "success" | "alarm" | "" {
+  if (status === "confirmed") return "success";
+  if (status === "declined") return "alarm";
+  return "";
 }
 
 /**
@@ -574,6 +586,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // Every round's rubric, so an evaluation's criteria_scores can be read back
   // as the questions the reviewer actually answered.
   const criteriaByRound = new Map(record.evaluation.rounds.map((round) => [round.id, round.criteria ?? []]));
+  const participantGroups = groupParticipants(record.participants);
   const speakerParticipant = record.participants.find((participant) => participant.role === "speaker")
     ?? record.participants.find((participant) => participant.role === "co_speaker")
     ?? record.participants.find((participant) => participant.role !== "submitter");
@@ -645,8 +658,8 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         </CardBody></Card>}
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }, SCHEDULE_ROUTE); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}
-        <Card><CardHeader title="Participants"><span class="tabular">{record.participants.length}</span></CardHeader><CardBody>
-          <div class="record-participants">{record.participants.length ? record.participants.map((participant) => <div class="record-person" key={participant.id}><strong>{participant.name}</strong><span>{statusLabel(participant.role)} · {participant.company || "Company not provided"}</span><small>{participant.email}</small><div class="record-person-foot"><Chip tone={participant.confirmation_status === "confirmed" ? "success" : participant.confirmation_status === "declined" ? "alarm" : ""}>{participant.confirmation_status === "confirmed" ? "Role confirmed" : participant.confirmation_status === "declined" ? "Role declined" : "Role response pending"}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove</Button>}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
+        <Card><CardHeader title="Participants"><span class="tabular">{participantGroups.length}</span></CardHeader><CardBody>
+          <div class="record-participants">{participantGroups.length ? participantGroups.map((group) => <div class="record-person" key={group.person_id}><strong>{group.name}</strong><span>{group.company || "Company not provided"}</span><small>{group.email}</small><div class="record-person-roles" aria-label={`${group.name} roles`}>{group.participants.map((participant) => <div class="record-person-role" key={participant.id}><span class="record-person-role-name">{statusLabel(participant.role)}</span><Chip tone={participantConfirmationTone(participant.confirmation_status)}>{participantConfirmationLabel(participant.confirmation_status)}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove {statusLabel(participant.role)} role</Button>}</div>)}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
           {canEditParticipants && <form class="record-participant-add" onSubmit={(event) => void addParticipant(event)}>
             <fieldset class="record-person-picker" aria-describedby="record-participant-error">
               <legend>Add a participant</legend>
