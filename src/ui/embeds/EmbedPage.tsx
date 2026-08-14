@@ -58,15 +58,16 @@ export const EMBED_STYLES = `
 .embed-speaker h2 { margin: 0; overflow-wrap: anywhere; font: 650 16px/1.15 Georgia, serif; }
 .embed-speaker p { margin: 4px 0 0; color: var(--public-muted); font-size: 10px; }
 .embed-speaker small { display: block; margin-top: 12px; color: var(--public-soft); font: 600 9px/1.35 var(--public-mono); }
-.embed-speaker-list { display: grid; gap: 0; padding: 4px 16px 16px; list-style: none; }
-.embed-speaker-row { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--public-rule-soft); font-size: 12px; }
+.embed-speaker-list { display: grid; gap: 0; min-width: 0; padding: 4px 16px 16px; list-style: none; }
+.embed-speaker-list > li { min-width: 0; }
+.embed-speaker-row { display: grid; width: 100%; min-width: 0; grid-template-columns: 36px minmax(0, 1fr); align-items: start; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--public-rule-soft); font-size: 12px; }
 .embed-speaker-row:hover, .embed-speaker-row:focus-visible { color: var(--embed-accent); outline: none; }
 .embed-speaker-row .embed-speaker-avatar { --avatar-size: 36px; }
-.embed-speaker-row-copy { min-width: 0; }
+.embed-speaker-row-copy { display: block; width: 100%; min-width: 0; }
 .embed-speaker-row:last-child { border-bottom: 0; }
-.embed-speaker-row strong { font: 650 13px/1.2 Georgia, serif; }
-.embed-speaker-row-copy span { color: var(--public-muted); font-size: 10px; }
-.embed-speaker-row-copy p { margin: 4px 0 0; color: var(--public-soft); font-size: 10px; line-height: 1.45; }
+.embed-speaker-row strong { display: block; overflow-wrap: anywhere; font: 650 13px/1.2 Georgia, serif; }
+.embed-speaker-row-copy span { display: block; overflow-wrap: anywhere; color: var(--public-muted); font-size: 10px; }
+.embed-speaker-row-copy p { display: block; max-width: 100%; margin: 4px 0 0; color: var(--public-soft); font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
 .embed-speaker-social { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .embed-speaker-social a { color: var(--embed-accent); font: 600 9px/1.2 var(--public-mono); overflow-wrap: anywhere; }
 .embed-flat-list { display: grid; gap: 0; background: var(--public-surface); }

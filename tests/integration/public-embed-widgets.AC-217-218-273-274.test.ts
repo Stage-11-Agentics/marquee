@@ -155,6 +155,8 @@ test("AC-274 · the speakers embed offers cards and list layouts carried in the 
   expect(listBody).toContain('<ul class="embed-speaker-list"');
   expect(listBody).not.toContain('<section class="embed-speaker-grid"');
   expect(listBody).toContain("Agents Speaker");
+  expect(listBody).toContain(".embed-speaker-row-copy { display: block; width: 100%; min-width: 0; }");
+  expect(listBody).toContain(".embed-speaker-row strong { display: block;");
   expect(listBody).toContain("@media (max-width: 375px)");
 
   const cards = await request(`/embed/${EVENT_SLUG}-speakers?event=${EVENT_SLUG}&layout=cards`);
