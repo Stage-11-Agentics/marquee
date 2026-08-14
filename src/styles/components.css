@@ -132,7 +132,7 @@ button.event-context:hover, button.event-context[aria-expanded="true"] { backgro
 .eyebrow { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
 .field { display: grid; gap: 6px; }
 .field label { color: var(--muted); font: 600 10px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-.field input:not([type="radio"]):not([type="checkbox"]), .field select, .field textarea { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font-size: 12.5px; min-height: 34px; outline: none; padding: 8px 10px; width: 100%; }
+.field input:where(:not([type="radio"]):not([type="checkbox"])), .field select, .field textarea { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font-size: 12.5px; min-height: 34px; outline: none; padding: 8px 10px; width: 100%; }
 .field-note { color: var(--muted); font-size: 10px; min-height: 13px; }
 .field-error { color: var(--danger); font-size: 11px; min-height: 15px; }
 .segment { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); display: inline-flex; gap: 2px; padding: 2px; }

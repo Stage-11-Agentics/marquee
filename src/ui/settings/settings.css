@@ -14,7 +14,7 @@
 .settings-venue-link p { margin: 0; }
 .settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .field { display: grid; gap: 7px; min-width: 0; color: var(--muted); font-size: 12px; letter-spacing: .02em; }
-.field > input:not([type="radio"]):not([type="checkbox"]), .field > select, .field > textarea, .field .unit-input, .field .color-field { width: 100%; box-sizing: border-box; }
+.field > input:where(:not([type="radio"]):not([type="checkbox"])), .field > select, .field > textarea, .field .unit-input, .field .color-field { width: 100%; box-sizing: border-box; }
 .field input:where(:not([type="radio"]):not([type="checkbox"])), .field select, .field textarea { min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; color: var(--ink); background: var(--panel); font: inherit; letter-spacing: 0; }
 .field input[type="color"] { padding: 3px; min-width: 42px; width: 42px; }
 .field input[type="file"] { padding: 8px 10px; }

@@ -333,6 +333,31 @@ test("CONTRACT · MRQ-131 · CRM-09 · opening a List from People resolves BOTH 
   expect((await request("/api/v1/org/people?list_id=lst_alien"))).toHaveProperty("status", 404);
 });
 
+test("CONTRACT · MRQ-200 · every saved Live filter dimension keeps count parity", async () => {
+  await post(`/api/v1/org/people/${SPEAKER}/tags`, { tag: "Keynote" });
+  await post(`/api/v1/org/people/${SUBMITTER}/stage`, { stage: "contacted" });
+
+  const cases = [
+    { name: "query", config: { q: "priya" }, expected: ["Priya Raman"] },
+    { name: "company", config: { company: "Latticework Systems" }, expected: ["Priya Raman"] },
+    { name: "title", config: { title: "Principal Engineer" }, expected: ["Priya Raman"] },
+    { name: "tag", config: { tag: "Keynote" }, expected: ["Priya Raman"] },
+    { name: "stage", config: { stage: "contacted" }, expected: ["Marcus Okafor"] },
+  ] as const;
+
+  for (const entry of cases) {
+    const created = await post(`/api/v1/org/lists`, { name: `Parity ${entry.name}`, kind: "live", config: entry.config });
+    expect(created.status).toBe(201);
+    const createdBody = await created.json() as { list: { id: string; member_count: number } };
+    const peopleRows = await people(`?list_id=${createdBody.list.id}`);
+    const opened = await json<{ list: { member_count: number } }>(`/api/v1/org/lists/${createdBody.list.id}`);
+
+    expect(peopleRows.data.map((row) => row.name)).toEqual(entry.expected);
+    expect(createdBody.list.member_count).toBe(entry.expected.length);
+    expect(opened.list.member_count).toBe(entry.expected.length);
+  }
+});
+
 test("CONTRACT · MRQ-200 · an unknown list id is not an empty list", async () => {
   const emptyCreated = await post("/api/v1/org/lists", { name: "Empty here", kind: "fixed", person_ids: [OUTSIDER] });
   const emptyId = ((await emptyCreated.json()) as { list: { id: string } }).list.id;

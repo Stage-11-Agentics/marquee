@@ -228,10 +228,11 @@ test("CONTRACT · MRQ-200 · shared field sizing excludes radios and checkboxes"
   const evaluation = readFileSync(new URL("../../src/ui/evaluation/evaluation.css", import.meta.url), "utf8");
   const settings = readFileSync(new URL("../../src/ui/settings/settings.css", import.meta.url), "utf8");
   const forms = readFileSync(new URL("../../src/ui/forms/forms.css", import.meta.url), "utf8");
-  expect(components).toMatch(/\.field input:not\(\[type="radio"\]\):not\(\[type="checkbox"\]\)/);
+  expect(components).toContain('.field input:where(:not([type="radio"]):not([type="checkbox"]))');
   expect(settings).toContain('.field input:where(:not([type="radio"]):not([type="checkbox"]))');
   expect(evaluation).not.toMatch(/\.scope-check input \{[^}]*min-height: 0; width: auto;/);
   for (const css of [components, evaluation, settings, forms]) {
+    expect(css).not.toMatch(/\.field[^{}]*input:not\(/);
     expect(css).not.toMatch(/\.field input(?:\s*[,{}])/);
     expect(css).not.toMatch(/\.field > input(?:\s*[,{}])/);
   }
