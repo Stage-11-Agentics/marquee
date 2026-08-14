@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { errorSummary, MarqueeApiError } from "../shell/api-client";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { PersonDrawer } from "./PersonDrawer";
 import { AddPersonModal, ComposeModal, ImportPeopleModal, SaveListModal } from "./PeopleModals";
 import {
@@ -170,6 +171,9 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
 
   const payload = state.kind === "ready" ? state.payload : null;
   const rows = payload?.data ?? [];
+  // Two people may legitimately share a name; the roster must not print them as
+  // one indistinguishable pair.
+  const displayNames = disambiguatedNames(rows);
   const facets = payload?.facets ?? { company: [], title: [], tag: [] };
   const criteria = activeCriteria(filters);
   const filtered = hasFilters(filters);
@@ -385,14 +389,14 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
             <td class="people-check">
               <input
                 type="checkbox"
-                aria-label={`Select ${row.name}`}
+                aria-label={`Select ${displayNames.get(row.id) ?? row.name}`}
                 checked={selected.has(row.id)}
                 onChange={() => toggleRow(row.id)}
               />
             </td>
             <td>
               <button type="button" class="people-rowlink" onClick={() => openPerson(row.id)}>
-                <span class="people-cell-name">{row.name}</span>
+                <span class="people-cell-name">{displayNames.get(row.id) ?? row.name}</span>
               </button>
             </td>
             <td><span class="people-cell-mail people-cell-trunc">{row.email}</span></td>

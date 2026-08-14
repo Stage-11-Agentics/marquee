@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 
 import type { SpeakerRosterSnapshot, SpeakerRow, SpeakerStatus } from "../../routes/speakers.queries";
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { SpeakerAvatar } from "./SpeakerAvatar";
 import { SpeakerRecord, SpeakerStatusBadge } from "./SpeakerRecord";
@@ -147,6 +148,9 @@ export function SpeakersPage({
 
   const ready = state.kind === "ready" ? state.snapshot : null;
   const rows = ready?.rows ?? [];
+  // Two speakers may legitimately share a name; the roster must not print them
+  // as one indistinguishable pair.
+  const displayNames = disambiguatedNames(rows);
   const counts = ready?.counts ?? { all: 0, pending: 0, invited: 0, confirmed: 0, declined: 0 };
   const hasFilters = filters.status !== "all" || Boolean(filters.track) || filters.query.trim().length > 0;
   const clearFilters = () => setFilters({ status: "all", track: "", query: "" });
@@ -223,7 +227,7 @@ export function SpeakersPage({
               <th scope="row">
                 <button class="speaker-link" type="button" onClick={() => openRecord(row.id)}>
                   <SpeakerAvatar eventId={eventId} personId={row.id} name={row.name} attachmentId={row.headshot_attachment_id} />
-                  <span><strong>{row.name}</strong><small>{row.email}</small></span>
+                  <span><strong>{displayNames.get(row.id) ?? row.name}</strong><small>{row.email}</small></span>
                 </button>
               </th>
               <td>{[row.title, row.company].filter(Boolean).join(" · ") || <span class="speaker-muted">—</span>}</td>

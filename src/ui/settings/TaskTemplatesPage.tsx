@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
 import { dateInputFromDueAt, dueAtFromDateInput, formatDueDate } from "../../lib/task-due";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import "./settings.css";
 
 const BYTES_PER_MB = 1024 * 1024;
@@ -70,7 +71,7 @@ interface SessionOption {
   title: string;
 }
 
-interface Assignee {
+export interface Assignee {
   id: string;
   name: string;
   email: string;
@@ -183,13 +184,16 @@ function TaskTemplatesSkeleton(): JSX.Element {
  * to both speakers at once, and an organizer assigning a release form to sixty
  * speakers one at a time would be right to give up on the product.
  */
-function AssigneePicker({
+export function AssigneePicker({
   assignees,
+  displayNames,
   selected,
   onChange,
   idPrefix,
 }: {
   assignees: readonly Assignee[];
+  /** Names to print: duplicates carry a disambiguator so the wrong record is not ticked. */
+  displayNames: ReadonlyMap<string, string>;
   selected: readonly string[];
   /**
    * Emits a transform, not a snapshot. Ticking two speakers in the same frame
@@ -228,7 +232,7 @@ function AssigneePicker({
         <div class="task-assignee-list" role="group" aria-label="Speakers">
           {visible.map((person) => <label class="task-assignee-option" key={person.id}>
             <input type="checkbox" id={`${idPrefix}-${person.id}`} checked={selectedSet.has(person.id)} onChange={() => toggle(person.id)} />
-            <span><strong>{person.name}</strong><small>{person.company || person.email}</small></span>
+            <span><strong>{displayNames.get(person.id) ?? person.name}</strong><small>{person.company || person.email}</small></span>
           </label>)}
         </div>
       </>}
@@ -246,12 +250,14 @@ function AssigneePicker({
  */
 function SessionChoicePicker({
   assignees,
+  displayNames,
   selected,
   choices,
   onChange,
   idPrefix,
 }: {
   assignees: readonly Assignee[];
+  displayNames: ReadonlyMap<string, string>;
   selected: readonly string[];
   choices: Readonly<Record<string, string>>;
   onChange: (personId: string, submissionId: string) => void;
@@ -269,13 +275,13 @@ function SessionChoicePicker({
     <div class="task-session-list">
       {people.map((person) => <div class="task-session-row" key={person.id}>
         <span class="task-session-person">
-          <strong>{person.name}</strong>
+          <strong>{displayNames.get(person.id) ?? person.name}</strong>
           <small>{person.sessions.length === 1 ? "Their only session" : `${person.sessions.length} sessions`}</small>
         </span>
         <select
           class="task-session-select"
           id={`${idPrefix}-session-${person.id}`}
-          aria-label={`Session for ${person.name}`}
+          aria-label={`Session for ${displayNames.get(person.id) ?? person.name}`}
           value={chosenSession(person, choices)}
           onChange={(event) => onChange(person.id, event.currentTarget.value)}
         >
@@ -408,6 +414,11 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
   }, [eventId, reloadKey]);
 
   const reload = (): void => setReloadKey((value) => value + 1);
+
+  // Two speakers may share a name. Assigning work to the wrong record is the
+  // failure this guards, so the picker, the session control, and the list of
+  // who is already assigned all read from one derivation.
+  const assigneeNames = useMemo(() => disambiguatedNames(assignees), [assignees]);
 
   const assignmentsByTemplate = useMemo(() => {
     const map = new Map<string, SpeakerTask[]>();
@@ -658,8 +669,8 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
                 <div class="task-compose-actions"><button class="button primary" type="button" onClick={() => void saveEdit(template.id)} disabled={rowBusy === template.id}>{rowBusy === template.id ? "Saving…" : "Save task"}</button></div>
               </div>}
               {assignFor === template.id && <div class="task-row-assign">
-                <AssigneePicker assignees={assignees} selected={assignSelection} idPrefix={`task-assign-${template.id}`} onChange={(update) => setAssignSelection((current) => update(current))} />
-                <SessionChoicePicker assignees={assignees} selected={assignSelection} choices={assignSessions} idPrefix={`task-assign-${template.id}`} onChange={(personId, submissionId) => setAssignSessions((current) => ({ ...current, [personId]: submissionId }))} />
+                <AssigneePicker assignees={assignees} displayNames={assigneeNames} selected={assignSelection} idPrefix={`task-assign-${template.id}`} onChange={(update) => setAssignSelection((current) => update(current))} />
+                <SessionChoicePicker assignees={assignees} displayNames={assigneeNames} selected={assignSelection} choices={assignSessions} idPrefix={`task-assign-${template.id}`} onChange={(personId, submissionId) => setAssignSessions((current) => ({ ...current, [personId]: submissionId }))} />
                 <div class="task-compose-actions"><button class="button primary" type="button" onClick={() => void assignTemplate(template.id)} disabled={assignSelection.length === 0 || rowBusy === template.id}>{rowBusy === template.id ? "Assigning…" : `Assign to ${assignSelection.length} speaker${assignSelection.length === 1 ? "" : "s"}`}</button></div>
               </div>}
               {isOpen && <div class="task-assignment-list">
@@ -667,7 +678,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
                   ? <p class="task-assignee-empty">Nobody is assigned to this task yet.</p>
                   : <table class="task-assignment-table"><thead><tr><th scope="col">Speaker</th><th scope="col">Session</th><th scope="col">Due</th><th scope="col">Status</th></tr></thead><tbody>
                     {rows.map((row) => <tr key={row.id}>
-                      <th scope="row"><strong>{row.person.name}</strong><small>{row.person.email}</small></th>
+                      <th scope="row"><strong>{assigneeNames.get(row.person.id) ?? row.person.name}</strong><small>{row.person.email}</small></th>
                       <td>{row.submission_title ?? "—"}</td>
                       <td class="tabular">{formatDueDate(row.due_at)}</td>
                       <td><span class={`task-status task-status-${row.status}`}>{row.status === "done" ? "Complete" : "Pending"}</span></td>

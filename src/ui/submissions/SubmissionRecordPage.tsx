@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import { formatFileSize, type FileAnswerView } from "../../lib/file-answers";
 import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } from "../shell/components";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
 import { ContentHistory } from "../history/ContentHistory";
 import { groupParticipants, type Participant } from "./participant-groups";
@@ -617,6 +618,9 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // Every round's rubric, so an evaluation's criteria_scores can be read back
   // as the questions the reviewer actually answered.
   const criteriaByRound = new Map(record.evaluation.rounds.map((round) => [round.id, round.criteria ?? []]));
+  // Two reviewers may share a name. This picker assigns work, so the option a
+  // human clicks has to name a record they can tell from its twin.
+  const reviewerNames = disambiguatedNames(record.evaluation.reviewer_options);
   const participantGroups = groupParticipants(record.participants);
   const speakerParticipant = record.participants.find((participant) => participant.role === "speaker")
     ?? record.participants.find((participant) => participant.role === "co_speaker")
@@ -737,8 +741,8 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
             {round.evaluations.map((evaluation, index) => <EvaluationPanelResult key={`${evaluation.id}-${index}`} evaluation={evaluation} criteria={criteriaByRound.get(round.id) ?? []} />)}
           </div>}
           {round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}
-          {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
-          <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>
+          {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
+          <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewerNames.get(reviewer.id) ?? reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>
         </section>) : <span class="subtle">No evaluation rounds configured</span>}</div></CardBody></Card>
       </aside>
     </div>
