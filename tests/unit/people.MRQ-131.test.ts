@@ -204,10 +204,38 @@ test("CONTRACT · MRQ-131 · a list is never rendered as its id, and still count
   for (const state of ["resolving", "named", "missing", "error"]) {
     expect(page, `the band must handle the "${state}" state`).toContain(`"${state}"`);
   }
+  expect(page).toContain('kind: "list_missing"');
   // Reserved height: the name and its meta line arrive from a second request
   // and the table below must not move when they land.
   const css = readFileSync(new URL("../../src/ui/people/people.css", import.meta.url), "utf8");
   expectOk(/\.people-listband \{[^}]*min-height:/s.test(css));
+  expect(page).toContain("they are not narrowed by the selected chip");
+});
+
+test("CONTRACT · MRQ-200 · the People band resolves one list by id, not by scanning the index", () => {
+  const api = readFileSync(new URL("../../src/ui/people/people-api.ts", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../../src/ui/people/PeoplePage.tsx", import.meta.url), "utf8");
+  const listRoutes = readFileSync(new URL("../../src/routes/person-lists.routes.ts", import.meta.url), "utf8");
+  expect(api).toMatch(/export function fetchList\(listId: string/);
+  expect(page).toMatch(/fetchList\(listFromUrl, controller\.signal\)/);
+  expect(page).not.toMatch(/fetchLists\(controller\.signal\)/);
+  expect(listRoutes).toMatch(/const OPEN_LIST_SELECT =/);
+  expect(listRoutes).toMatch(/\.prepare\(`\$\{OPEN_LIST_SELECT\} WHERE saved\.id = \? AND saved\.org_id = \?`\)/);
+});
+
+test("CONTRACT · MRQ-200 · shared field sizing excludes radios and checkboxes", () => {
+  const components = readFileSync(new URL("../../src/styles/components.css", import.meta.url), "utf8");
+  const evaluation = readFileSync(new URL("../../src/ui/evaluation/evaluation.css", import.meta.url), "utf8");
+  const settings = readFileSync(new URL("../../src/ui/settings/settings.css", import.meta.url), "utf8");
+  const forms = readFileSync(new URL("../../src/ui/forms/forms.css", import.meta.url), "utf8");
+  expect(components).toContain('.field input:where(:not([type="radio"]):not([type="checkbox"]))');
+  expect(settings).toContain('.field input:where(:not([type="radio"]):not([type="checkbox"]))');
+  expect(evaluation).not.toMatch(/\.scope-check input \{[^}]*min-height: 0; width: auto;/);
+  for (const css of [components, evaluation, settings, forms]) {
+    expect(css).not.toMatch(/\.field[^{}]*input:not\(/);
+    expect(css).not.toMatch(/\.field input(?:\s*[,{}])/);
+    expect(css).not.toMatch(/\.field > input(?:\s*[,{}])/);
+  }
 });
 
 test("CONTRACT · MRQ-131 · Lists is reached from People, not from a sidebar row of its own", () => {

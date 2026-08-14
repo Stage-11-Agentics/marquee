@@ -13,13 +13,13 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
 import { Button, EmptyState, PageHeader } from "../shell/components";
-import { errorSummary } from "../shell/api-client";
+import { errorSummary, MarqueeApiError } from "../shell/api-client";
 import { PersonDrawer } from "./PersonDrawer";
 import { AddPersonModal, ComposeModal, ImportPeopleModal, SaveListModal } from "./PeopleModals";
 import {
   activeCriteria,
   EMPTY_FILTERS,
-  fetchLists,
+  fetchList,
   fetchPeople,
   fetchSummary,
   formatDay,
@@ -29,7 +29,7 @@ import {
   type OrgSummary,
   type PeopleFilters,
   type PeoplePage as PeoplePayload,
-  type SavedPersonList,
+  type PersonListDetail,
 } from "./people-api";
 import "./people.css";
 
@@ -51,6 +51,7 @@ function peopleUrl(listId: string, personId?: string): string {
 type LoadState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
+  | { kind: "list_missing" }
   | { kind: "ready"; payload: PeoplePayload };
 
 function KpiStrip({ summary }: { summary: OrgSummary | null }): JSX.Element {
@@ -109,32 +110,31 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
   // request failed" look identical to a `.catch`, and reporting a network blip
   // as "this list no longer exists" tells an organizer their work is gone.
   const [listState, setListState] = useState<
-    { kind: "resolving" } | { kind: "named"; list: SavedPersonList } | { kind: "missing" } | { kind: "error"; message: string }
+    { kind: "resolving" } | { kind: "named"; list: PersonListDetail } | { kind: "missing" } | { kind: "error"; message: string }
   >({ kind: "resolving" });
   const filterIdentity = JSON.stringify(filters);
 
   useEffect(() => { setFilters((current) => ({ ...current, listId: listFromUrl })); }, [listFromUrl]);
 
-  // Resolved from the index rather than from `GET /lists/{id}`, which serialises
-  // every member to hand back a name — an unpaginated scan of the whole list to
-  // render one line (R7). The index carries the name and a correct count for
-  // both kinds and carries no members at all. Absent from it IS "missing", so
-  // the distinction never rests on classifying an error.
+  // Resolve the named lens directly. The detail projection carries no member
+  // rows, and a real 404 is the only missing state; an index cannot turn an
+  // uncapped-list assumption into a deletion claim.
   useEffect(() => {
     setListState({ kind: "resolving" });
     if (!listFromUrl) return;
     const controller = new AbortController();
-    fetchLists(controller.signal)
-      .then((payload) => {
-        const found = payload.data.find((entry) => entry.id === listFromUrl);
-        setListState(found ? { kind: "named", list: found } : { kind: "missing" });
-      })
+    fetchList(listFromUrl, controller.signal)
+      .then((payload) => setListState({ kind: "named", list: payload.list }))
       .catch((caught: unknown) => {
         if (controller.signal.aborted) return;
         // A conference switch calls `abortInFlightRequests()`, which aborts the
         // shell's generation controller and not this one — so the signal above
         // reads false and only the error's own name gives it away.
         if (caught instanceof Error && caught.name === "AbortError") return;
+        if (caught instanceof MarqueeApiError && caught.code === "not_found") {
+          setListState({ kind: "missing" });
+          return;
+        }
         setListState({ kind: "error", message: errorSummary(caught) });
       });
     return () => controller.abort();
@@ -149,7 +149,14 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
       fetchPeople(filters, page, PER_PAGE, controller.signal)
         .then((payload) => setState({ kind: "ready", payload }))
         .catch((caught: unknown) => {
-          if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(caught) });
+          if (controller.signal.aborted) return;
+          if (filters.listId && caught instanceof MarqueeApiError && caught.code === "not_found") {
+            // The list band owns the missing-list explanation. Do not add a
+            // second generic People error underneath it for the same 404.
+            setState({ kind: "list_missing" });
+            return;
+          }
+          setState({ kind: "error", message: errorSummary(caught) });
         });
     }, debounceMs);
     return () => { window.clearTimeout(timer); controller.abort(); };
@@ -271,6 +278,7 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
     </div> : null}
 
     {filterOpen ? <div class="people-filter-panel">
+      <p class="people-filter-note">Counts show available values after the current list, search, and other filters; they are not narrowed by the selected chip.</p>
       <div class="people-filter-group">
         <h3>Company</h3>
         {facets.company.length === 0 ? <span class="people-hint">No companies recorded yet.</span> : facets.company.map((facet) => <button

@@ -53,7 +53,7 @@
 .promotion-preview strong { font: 600 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .promotion-preview span { color: var(--muted); font-size: 11px; }
 .promotion-preview .field { color: var(--ink-soft); display: grid; gap: 5px; margin-top: 6px; }
-.promotion-preview .field select, .promotion-preview .field input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 32px; padding: 6px 8px; }
+.promotion-preview .field select, .promotion-preview .field input:where(:not([type="radio"]):not([type="checkbox"])) { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 32px; padding: 6px 8px; }
 .promotion-result { border-top: 1px solid var(--line); display: grid; gap: 4px; margin-top: 6px; padding-top: 9px; }
 .promotion-result span { color: var(--muted); }
 .evaluation-loading { display: grid; gap: 8px; min-height: 240px; padding: 48px; place-content: center; text-align: center; }
@@ -91,7 +91,7 @@
 .criterion-detail { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; min-height: 30px; padding-left: 29px; }
 .criterion-detail .field.inline { align-items: center; display: flex; flex-direction: row; gap: 6px; margin: 0; }
 .criterion-detail .field.inline span { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
-.criterion-detail .field.inline input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 28px; padding: 5px 7px; width: 72px; }
+.criterion-detail .field.inline input:where(:not([type="radio"]):not([type="checkbox"])) { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 28px; padding: 5px 7px; width: 72px; }
 .criterion-detail .criterion-options { flex: 1 1 260px; }
 /* The label takes its 260px, but the input inside it kept the 72px meant for
    the numeric fields above: `.criterion-detail .field.inline input` carries
@@ -139,7 +139,6 @@
 .invite-tracks legend { color: var(--muted); font: 600 10px/1.2 var(--mono); letter-spacing: .1em; padding: 0 4px; text-transform: uppercase; }
 .scope-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 6px; }
 .scope-check { align-items: center; color: var(--ink); display: flex; font-size: 12px; gap: 6px; }
-.scope-check input { min-height: 0; width: auto; }
 /* A floor, so a one-line confirmation does not collapse the dialog to a sliver. */
 .invite-result { background: var(--sunk); border: 1px solid var(--line); color: var(--muted); display: grid; font-size: 11px; gap: 6px; line-height: 1.55; min-height: 92px; padding: 10px 12px; }
 .invite-result strong { color: var(--ink); font-size: 12.5px; }

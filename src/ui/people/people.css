@@ -162,6 +162,15 @@
   grid-template-columns: repeat(3, 1fr);
 }
 
+.people-filter-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--s2) var(--s4);
+  border-bottom: var(--hair) solid var(--rule-soft);
+  color: var(--muted);
+  font: 10.5px/1.4 var(--mono);
+}
+
 .people-filter-group {
   padding: var(--s3) var(--s4);
   border-right: var(--hair) solid var(--rule-soft);

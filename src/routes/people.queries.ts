@@ -80,22 +80,28 @@ export function configFilters(config: PersonListConfig) {
  * "Keynote shortlist · 12 people". As an intersection it cannot: the caller's
  * filters AND with the list instead of competing with it.
  *
- * An unknown or borrowed id keeps the membership clause, which is empty for a
- * list this org does not own — the safe direction. Dropping the clause instead
- * would answer a typo'd id with the entire organization.
+ * An unknown or borrowed id is reported to the route so the API can distinguish
+ * a missing List from an existing List with zero members. The membership query
+ * still defends its own org boundary for every known Fixed list.
  */
+export interface ResolvedListScope {
+  found: boolean;
+  filters: Partial<PeopleQueryInput>;
+}
+
 export async function resolveListScope(
   db: D1Database,
   orgId: string,
   listId: string,
-): Promise<Partial<PeopleQueryInput>> {
+): Promise<ResolvedListScope> {
   const row = await db
     .prepare("SELECT kind, config_json FROM person_lists WHERE id = ? AND org_id = ?")
     .bind(listId, orgId)
     .first<{ kind: string; config_json: string }>();
-  if (!row || row.kind !== "live") return { listId };
+  if (!row) return { found: false, filters: {} };
+  if (row.kind !== "live") return { found: true, filters: { listId } };
   const saved = buildPeopleQuery({ orgId, ...configFilters(parseListConfig(row.config_json)) });
-  return { personIdIn: { sql: saved.idsSql, bindings: saved.idsBindings } };
+  return { found: true, filters: { personIdIn: { sql: saved.idsSql, bindings: saved.idsBindings } } };
 }
 
 export const PEOPLE_SORTS: SortRegistry = {
@@ -207,6 +213,54 @@ export const CURRENT_STAGE = `(
   LIMIT 1
 )`;
 
+/**
+ * The detail projection for a Live List cannot bind its saved filter as
+ * request input: the row being selected is the source of that filter. Keep
+ * the count in the same SQL statement as the List metadata so opening one
+ * never becomes metadata-plus-roster work. The predicates mirror
+ * `filterClauses`, with the saved config read through the selected row.
+ */
+export const LIVE_LIST_COUNT_SQL = `(
+  SELECT COUNT(*) FROM people live_person
+  WHERE live_person.org_id = saved.org_id
+    AND (
+      NULLIF(json_extract(saved.config_json, '$.q'), '') IS NULL
+      OR live_person.name LIKE ('%' || json_extract(saved.config_json, '$.q') || '%') COLLATE NOCASE
+      OR live_person.email LIKE ('%' || json_extract(saved.config_json, '$.q') || '%') COLLATE NOCASE
+      OR IFNULL(live_person.company, '') LIKE ('%' || json_extract(saved.config_json, '$.q') || '%') COLLATE NOCASE
+      OR IFNULL(live_person.title, '') LIKE ('%' || json_extract(saved.config_json, '$.q') || '%') COLLATE NOCASE
+    )
+    AND (
+      NULLIF(json_extract(saved.config_json, '$.company'), '') IS NULL
+      OR live_person.company = json_extract(saved.config_json, '$.company')
+    )
+    AND (
+      NULLIF(json_extract(saved.config_json, '$.title'), '') IS NULL
+      OR live_person.title = json_extract(saved.config_json, '$.title')
+    )
+    AND (
+      NULLIF(json_extract(saved.config_json, '$.tag'), '') IS NULL
+      OR (
+        SELECT json_extract(latest_tag.value_json, '$.op')
+        FROM person_events latest_tag
+        WHERE latest_tag.person_id = live_person.id AND latest_tag.kind = 'tag'
+          AND json_extract(latest_tag.value_json, '$.tag') = json_extract(saved.config_json, '$.tag')
+        ORDER BY latest_tag.created_at DESC, latest_tag.id DESC
+        LIMIT 1
+      ) = 'add'
+    )
+    AND (
+      NULLIF(json_extract(saved.config_json, '$.stage'), '') IS NULL
+      OR (
+        SELECT json_extract(latest_stage.value_json, '$.stage')
+        FROM person_events latest_stage
+        WHERE latest_stage.person_id = live_person.id AND latest_stage.kind = 'stage'
+        ORDER BY latest_stage.created_at DESC, latest_stage.id DESC
+        LIMIT 1
+      ) = json_extract(saved.config_json, '$.stage')
+    )
+)`;
+
 const CONFERENCE_COUNT = `(
   SELECT COUNT(DISTINCT counted.event_id)
   FROM participations counted_part
@@ -291,6 +345,14 @@ function filterClauses(input: PeopleQueryInput): Clauses {
   return { where, bindings };
 }
 
+function whereClause(input: PeopleQueryInput): { sql: string; bindings: (string | number)[] } {
+  const clauses = filterClauses(input);
+  return {
+    sql: clauses.where.length > 0 ? `WHERE ${clauses.where.join(" AND ")}` : "",
+    bindings: clauses.bindings,
+  };
+}
+
 export interface BuiltQuery {
   countSql: string;
   countBindings: (string | number)[];
@@ -306,8 +368,7 @@ export interface BuiltQuery {
  * function so the shape of the query is checked without paying for a Worker.
  */
 export function buildPeopleQuery(input: PeopleQueryInput): BuiltQuery {
-  const { where, bindings } = filterClauses(input);
-  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  const { sql: whereSql, bindings } = whereClause(input);
   const sort = resolveSort(PEOPLE_SORTS, input.sort, DEFAULT_PEOPLE_SORT);
   // Same shape as `orderClause`, with the ULID tiebreaker qualified: this query
   // aliases `people` and a bare `id ASC` is ambiguous under the subqueries.
@@ -363,21 +424,27 @@ export interface PeopleFacets {
 
 /**
  * The filter panel's options and counts, resolved server-side against the same
- * org the list reads. A panel built from the current page would offer the
- * organizer filters that vanish as they page — which is not a filter panel.
+ * population the table reads. Each facet leaves its own field open so the
+ * organizer can switch to another value without first clearing the active
+ * chip; list/search/other chips stay in the scope. The filter panel says plainly
+ * that these are available-value counts, not counts for the selected facet.
  */
-export async function listPeopleFacets(db: D1Database, orgId: string): Promise<PeopleFacets> {
+export async function listPeopleFacets(db: D1Database, input: PeopleQueryInput): Promise<PeopleFacets> {
+  const countFacet = (column: "company" | "title", limit: number) => {
+    const { sql, bindings } = whereClause({ ...input, [column]: undefined });
+    const extra = `${sql ? "AND" : "WHERE"} person.${column} IS NOT NULL AND person.${column} <> ''`;
+    return db.prepare(
+      `SELECT person.${column} AS value, COUNT(*) AS count FROM people person
+       ${sql} ${extra}
+       GROUP BY person.${column} ORDER BY count DESC, person.${column} COLLATE NOCASE ASC LIMIT ${limit}`,
+    ).bind(...bindings).all<PeopleFacet>();
+  };
+
+  const tagScope = whereClause({ ...input, tag: undefined });
+  const tagPersonScope = `SELECT person.id FROM people person ${tagScope.sql}`;
   const [companies, titles, tags] = await Promise.all([
-    db.prepare(
-      `SELECT company AS value, COUNT(*) AS count FROM people
-       WHERE org_id = ? AND company IS NOT NULL AND company <> ''
-       GROUP BY company ORDER BY count DESC, company COLLATE NOCASE ASC LIMIT 8`,
-    ).bind(orgId).all<PeopleFacet>(),
-    db.prepare(
-      `SELECT title AS value, COUNT(*) AS count FROM people
-       WHERE org_id = ? AND title IS NOT NULL AND title <> ''
-       GROUP BY title ORDER BY count DESC, title COLLATE NOCASE ASC LIMIT 8`,
-    ).bind(orgId).all<PeopleFacet>(),
+    countFacet("company", 8),
+    countFacet("title", 8),
     db.prepare(
       `SELECT tag AS value, COUNT(*) AS count FROM (
          SELECT json_extract(tag_row.value_json, '$.tag') AS tag, tag_row.person_id AS person_id
@@ -390,8 +457,10 @@ export async function listPeopleFacets(db: D1Database, orgId: string): Promise<P
              ORDER BY newest.created_at DESC, newest.id DESC LIMIT 1
            )
            AND json_extract(tag_row.value_json, '$.op') = 'add'
-       ) GROUP BY tag ORDER BY count DESC, tag COLLATE NOCASE ASC LIMIT 12`,
-    ).bind(orgId).all<PeopleFacet>(),
+       ) current_tags
+       WHERE current_tags.person_id IN (${tagPersonScope})
+       GROUP BY tag ORDER BY count DESC, tag COLLATE NOCASE ASC LIMIT 12`,
+    ).bind(input.orgId ?? "", ...tagScope.bindings).all<PeopleFacet>(),
   ]);
   return {
     company: companies.results,

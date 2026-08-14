@@ -73,7 +73,7 @@ interface PeopleEnvelope {
   total: number;
   total_pages: number;
   page: number;
-  facets: { company: Array<{ value: string; count: number }>; tag: Array<{ value: string; count: number }> };
+  facets: { company: Array<{ value: string; count: number }>; title: Array<{ value: string; count: number }>; tag: Array<{ value: string; count: number }> };
 }
 
 const people = (query = ""): Promise<PeopleEnvelope> => json<PeopleEnvelope>(`/api/v1/org/people${query}`);
@@ -131,8 +131,9 @@ test("CONTRACT · MRQ-131 · CRM-02 · an attribute filter narrows consistently 
   const filtered = await people(`?company=${encodeURIComponent("Latticework Systems")}`);
   expect(filtered.total).toBe(1);
   expect(filtered.data[0]?.name).toBe("Priya Raman");
-  // The panel's options come from the server, so it can never offer a filter
-  // that matches nothing on the next page.
+  // The panel keeps this facet open so the organizer can switch values without
+  // clearing the chip; its UI labels these as available-value counts rather
+  // than pretending Northwind is in the visible Latticework result.
   expect(filtered.facets.company.map((facet) => facet.value)).toContain("Northwind Data");
   expect((await people()).total).toBe(3);
 });
@@ -224,7 +225,7 @@ test("CONTRACT · MRQ-131 · CRM-07/08 · a stage move survives a reload and the
   expect((await people("?stage=contacted")).data.map((row) => row.name)).toEqual(["Marcus Okafor"]);
 });
 
-test("CONTRACT · MRQ-131 · CRM-09 · both kinds of List save and reopen with their members", async () => {
+test("CONTRACT · MRQ-131 · CRM-09 · both kinds of List save and resolve as metadata", async () => {
   await post(`/api/v1/org/people/${SPEAKER}/tags`, { tag: "Keynote" });
 
   const live = await post("/api/v1/org/lists", { name: "Keynote shortlist", kind: "live", config: { q: "", tag: "Keynote" } });
@@ -241,32 +242,31 @@ test("CONTRACT · MRQ-131 · CRM-09 · both kinds of List save and reopen with t
   // The outsider belongs to another organization and cannot be smuggled in.
   expect(fixedList.member_count).toBe(2);
 
-  const opened = await json<{ members: Array<{ name: string }> }>(`/api/v1/org/lists/${fixedList.id}`);
-  expect(opened.members.map((member) => member.name).sort()).toEqual(["Marcus Okafor", "Priya Raman"]);
+  // A stray cross-org membership row must not make the metadata count disagree
+  // with the org-scoped People projection.
+  await env.DB
+    .prepare("INSERT INTO person_list_members (list_id, person_id, created_at) VALUES (?, ?, ?)")
+    .bind(fixedList.id, OUTSIDER, NOW)
+    .run();
+  const indexedAfterStray = await json<{ data: Array<{ id: string; member_count: number }> }>('/api/v1/org/lists');
+  expect(indexedAfterStray.data.find((entry) => entry.id === fixedList.id)?.member_count).toBe(2);
+
+  const opened = await json<{ list: { id: string; name: string; kind: string; member_count: number; created_by_name: string | null; created_at: number }; members?: unknown }>(`/api/v1/org/lists/${fixedList.id}`);
+  expect(opened.list).toMatchObject({ id: fixedList.id, name: "2026 chairs", kind: "fixed", member_count: 2 });
+  expect(Object.keys(opened.list).sort()).toEqual(["created_at", "created_by_name", "id", "kind", "member_count", "name"]);
+  expect(opened.list.created_by_name).toBe("Jordan Alvarez");
+  expect(opened.list.created_at).toEqual(expect.any(Number));
+  expect(opened).not.toHaveProperty("members");
 
   // A live list keeps up: tag someone else and they join it without an edit.
   await post(`/api/v1/org/people/${SUBMITTER}/tags`, { tag: "Keynote" });
-  const reopened = await json<{ members: Array<{ name: string }> }>(`/api/v1/org/lists/${liveList.id}`);
-  expect(reopened.members).toHaveLength(2);
+  const reopened = await json<{ list: { member_count: number }; members?: unknown }>(`/api/v1/org/lists/${liveList.id}`);
+  expect(reopened.list.member_count).toBe(2);
+  expect(reopened).not.toHaveProperty("members");
 
   expect((await request(`/api/v1/org/lists/${fixedList.id}`, { method: "DELETE" })).status).toBe(200);
   // Deleting a list never deletes people.
   expect((await people()).total).toBe(3);
-});
-
-test("CONTRACT · MRQ-131 · CRM-09 · the Lists index returns every list, which People depends on", async () => {
-  // People names the list you are inside by finding it in this index, and
-  // treats absent-from-the-index as "this list no longer exists". That is only
-  // true while the index is complete. The day someone pages or caps this
-  // endpoint, every list past the first page renders as deleted — the exact
-  // false statement the band exists to prevent. This test is the tripwire on
-  // that coupling, so it fails here rather than in front of an organizer.
-  const names = Array.from({ length: 12 }, (_, index) => `List ${String(index).padStart(2, "0")}`);
-  for (const name of names) {
-    expect((await post("/api/v1/org/lists", { name, kind: "live", config: { q: name } })).status).toBe(201);
-  }
-  const index = await json<{ data: Array<{ name: string }> }>("/api/v1/org/lists");
-  expect(index.data.map((entry) => entry.name).sort()).toEqual([...names].sort());
 });
 
 test("CONTRACT · MRQ-131 · CRM-09 · opening a List from People resolves BOTH kinds, not just Fixed", async () => {
@@ -316,24 +316,86 @@ test("CONTRACT · MRQ-131 · CRM-09 · opening a List from People resolves BOTH 
   expect((await people(`?list_id=${fixedId}&q=marcus`)).data.map((row) => row.name)).toEqual(["Marcus Okafor"]);
   expect((await people(`?list_id=${fixedId}&q=nobody`)).data.map((row) => row.name)).toEqual([]);
 
-  // An id this organization does not own matches nobody. Dropping the clause
-  // instead would answer a borrowed id with the entire organization.
-  expect((await people("?list_id=lst_not_ours")).total).toBe(0);
+  // An id this organization does not own is not visible. Returning 200 with
+  // zero rows would blur a missing/borrowed List into an owned empty one.
+  expect((await request("/api/v1/org/people?list_id=lst_not_ours"))).toHaveProperty("status", 404);
 
-  // And emptiness has to be a property of the QUERY, not of an invariant kept
-  // in the create route. Here is a list owned by another organization holding a
-  // membership row that names one of OUR people — the exact row a bulk import
-  // or a merge tool could write without thinking about orgs. The membership
-  // clause joins `person_lists` and checks its owner, so the borrowed id still
-  // matches nobody. (Cross-org people were never reachable — `person.org_id`
-  // binds separately — but this is the half that was resting on another file.)
+  // A borrowed row must not change that answer. Here is a list owned by another
+  // organization holding a membership row that names one of OUR people — the
+  // exact row a bulk import or merge tool could write without thinking about
+  // orgs. The route checks the owning List before it evaluates membership.
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO person_lists (id, org_id, name, kind, config_json, created_by, created_at, updated_at)
       VALUES ('lst_alien', ?, 'Theirs', 'fixed', '{"q":""}', NULL, ?, ?)`).bind(OTHER_ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO person_list_members (list_id, person_id, created_at) VALUES ('lst_alien', ?, ?)")
       .bind(SPEAKER, NOW),
   ]);
-  expect((await people("?list_id=lst_alien")).total).toBe(0);
+  expect((await request("/api/v1/org/people?list_id=lst_alien"))).toHaveProperty("status", 404);
+});
+
+test("CONTRACT · MRQ-200 · every saved Live filter dimension keeps count parity", async () => {
+  await post(`/api/v1/org/people/${SPEAKER}/tags`, { tag: "Keynote" });
+  await post(`/api/v1/org/people/${SUBMITTER}/stage`, { stage: "contacted" });
+
+  const cases = [
+    { name: "query", config: { q: "priya" }, expected: ["Priya Raman"] },
+    { name: "company", config: { company: "Latticework Systems" }, expected: ["Priya Raman"] },
+    { name: "title", config: { title: "Principal Engineer" }, expected: ["Priya Raman"] },
+    { name: "tag", config: { tag: "Keynote" }, expected: ["Priya Raman"] },
+    { name: "stage", config: { stage: "contacted" }, expected: ["Marcus Okafor"] },
+  ] as const;
+
+  for (const entry of cases) {
+    const created = await post(`/api/v1/org/lists`, { name: `Parity ${entry.name}`, kind: "live", config: entry.config });
+    expect(created.status).toBe(201);
+    const createdBody = await created.json() as { list: { id: string; member_count: number } };
+    const peopleRows = await people(`?list_id=${createdBody.list.id}`);
+    const opened = await json<{ list: { member_count: number } }>(`/api/v1/org/lists/${createdBody.list.id}`);
+
+    expect(peopleRows.data.map((row) => row.name)).toEqual(entry.expected);
+    expect(createdBody.list.member_count).toBe(entry.expected.length);
+    expect(opened.list.member_count).toBe(entry.expected.length);
+  }
+});
+
+test("CONTRACT · MRQ-200 · an unknown list id is not an empty list", async () => {
+  const emptyCreated = await post("/api/v1/org/lists", { name: "Empty here", kind: "fixed", person_ids: [OUTSIDER] });
+  const emptyId = ((await emptyCreated.json()) as { list: { id: string } }).list.id;
+  expect((await json<{ total: number }>(`/api/v1/org/people?list_id=${emptyId}`)).total).toBe(0);
+  expect((await request("/api/v1/org/people?list_id=lst_unknown"))).toHaveProperty("status", 404);
+});
+
+test("CONTRACT · MRQ-200 · list-scoped facet counts describe the visible population", async () => {
+  const created = await post("/api/v1/org/lists", { name: "One person", kind: "fixed", person_ids: [SPEAKER] });
+  const listId = ((await created.json()) as { list: { id: string } }).list.id;
+  const scoped = await people(`?list_id=${listId}`);
+  expect(scoped.facets.company).toEqual([{ value: "Latticework Systems", count: 1 }]);
+});
+
+test("CONTRACT · MRQ-200 · search-scoped facet counts describe the visible population", async () => {
+  const searched = await people("?q=priya");
+  expect(searched.facets.company).toEqual([{ value: "Latticework Systems", count: 1 }]);
+});
+
+test("CONTRACT · MRQ-200 · list, search, and chip facets share one visible population", async () => {
+  await post(`/api/v1/org/people/${SPEAKER}/tags`, { tag: "Keynote" });
+  const created = await post("/api/v1/org/lists", { name: "Two people", kind: "fixed", person_ids: [SPEAKER, SUBMITTER] });
+  const listId = ((await created.json()) as { list: { id: string } }).list.id;
+  const scoped = await people(`?list_id=${listId}&q=priya&tag=Keynote`);
+  expect(scoped.facets.company).toEqual([{ value: "Latticework Systems", count: 1 }]);
+  expect(scoped.facets.title).toEqual([{ value: "Principal Engineer", count: 1 }]);
+  expect(scoped.facets.tag).toEqual([{ value: "Keynote", count: 1 }]);
+});
+
+test("CONTRACT · MRQ-200 · an active facet chip labels available-value counts", async () => {
+  const created = await post("/api/v1/org/lists", { name: "Company slice", kind: "fixed", person_ids: [SPEAKER, SUBMITTER] });
+  const listId = ((await created.json()) as { list: { id: string } }).list.id;
+  const scoped = await people(`?list_id=${listId}&company=${encodeURIComponent("Northwind Data")}`);
+  expect(scoped.data.map((row) => row.name)).toEqual(["Marcus Okafor"]);
+  expect(scoped.facets.company).toEqual([
+    { value: "Latticework Systems", count: 1 },
+    { value: "Northwind Data", count: 1 },
+  ]);
 });
 
 test("CONTRACT · MRQ-131 · CRM-11 · a bulk send from People is logged per recipient in the outbox", async () => {

@@ -210,11 +210,11 @@ const listPeople = defineApiRoute(
     operationId: "listOrgPeople",
     summary: "List the organization's people",
     description:
-      "Everyone this organization has worked with, across every conference. Search, filters, sort, and paging are server-side. Pass event_id to narrow the same query to one conference's roster.",
+      "Everyone this organization has worked with, across every conference. Search, filters, sort, and paging are server-side. Pass event_id to narrow the same query to one conference's roster. An unknown list_id is not an empty List and returns 404.",
     tags: ["People"],
     request: { query: peopleListQuerySchema },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
-    responses: { 200: jsonResponse(peopleListResponse, "People"), ...errorResponses([400, 401, 403, 429, 500]) },
+    responses: { 200: jsonResponse(peopleListResponse, "People"), ...errorResponses([400, 401, 403, 404, 429, 500]) },
   },
   async (context) => {
     const access = requireOrgAccess(context);
@@ -224,12 +224,13 @@ const listPeople = defineApiRoute(
     // before the query is built or it matches nobody. It arrives as an id
     // restriction rather than as filters precisely so the caller's own chips
     // AND with it — see `resolveListScope`, where merging them was the bug.
-    const listScope = query.list_id
+    const resolvedList = query.list_id
       ? await resolveListScope(context.env.DB, access.orgId, query.list_id)
-      : {};
-    const built = buildPeopleQuery({
+      : { found: true, filters: {} };
+    if (!resolvedList.found) throw ApiError.notFound("list not found");
+    const input = {
       orgId: access.orgId,
-      ...listScope,
+      ...resolvedList.filters,
       ...(query.q ? { q: query.q } : {}),
       ...(query.company ? { company: query.company } : {}),
       ...(query.title ? { title: query.title } : {}),
@@ -237,6 +238,9 @@ const listPeople = defineApiRoute(
       ...(query.stage ? { stage: query.stage } : {}),
       ...(query.event_id ? { eventId: query.event_id } : {}),
       ...(query.sort ? { sort: query.sort } : {}),
+    };
+    const built = buildPeopleQuery({
+      ...input,
       page,
     });
     const [envelope, facets] = await Promise.all([
@@ -245,7 +249,7 @@ const listPeople = defineApiRoute(
         data: context.env.DB.prepare(built.dataSql).bind(...built.dataBindings),
         page,
       }),
-      listPeopleFacets(context.env.DB, access.orgId),
+      listPeopleFacets(context.env.DB, input),
     ]);
     return context.json({ ...envelope, data: envelope.data.map(rowResponse), facets }, 200);
   },

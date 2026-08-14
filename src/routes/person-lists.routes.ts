@@ -10,8 +10,8 @@
  *   - **Fixed** — exactly the people who were put in it, held in
  *     `person_list_members`.
  *
- * A List is reusable as an email audience and as a pipeline source, which is why
- * opening one hands back resolved members rather than just its config.
+ * A List is reusable as an email audience and as a pipeline source. Opening one
+ * for navigation returns its metadata; member rows stay on the people endpoint.
  */
 import { z } from "@hono/zod-openapi";
 
@@ -22,11 +22,10 @@ import { requireOrgAccess } from "../lib/auth/org-access";
 import {
   buildPeopleQuery,
   configFilters,
+  LIVE_LIST_COUNT_SQL,
   listConfigSchema,
   parseListConfig,
-  parseTags,
   type PersonListConfig,
-  type PersonListRow,
 } from "./people.queries";
 
 const listParams = z.object({ listId: z.string().min(1) });
@@ -42,14 +41,14 @@ const listSummary = z.object({
   updated_at: z.number().int(),
 }).openapi("PersonList");
 
-const listMember = z.object({
+const openListSummary = z.object({
   id: z.string(),
   name: z.string(),
-  email: z.string(),
-  company: z.string().nullable(),
-  title: z.string().nullable(),
-  tags: z.array(z.string()),
-});
+  kind: z.enum(["live", "fixed"]),
+  member_count: z.number().int().nonnegative(),
+  created_by_name: z.string().nullable(),
+  created_at: z.number().int(),
+}).openapi("PersonListDetail");
 
 interface PersonListRecord {
   id: string;
@@ -76,9 +75,32 @@ function recordResponse(row: PersonListRecord) {
   };
 }
 
+function openRecordResponse(row: PersonListRecord) {
+  return {
+    id: row.id,
+    name: row.name,
+    kind: row.kind,
+    member_count: Number(row.member_count ?? 0),
+    created_by_name: row.created_by_name,
+    created_at: row.created_at,
+  };
+}
+
+const FIXED_LIST_COUNT_SQL = `(SELECT COUNT(*) FROM person_list_members member
+         JOIN people member_person ON member_person.id = member.person_id
+         WHERE member.list_id = saved.id AND member_person.org_id = saved.org_id)`;
+
 const LIST_SELECT = `SELECT saved.id, saved.name, saved.kind, saved.config_json, saved.created_by,
          author.name AS created_by_name, saved.created_at, saved.updated_at,
-         (SELECT COUNT(*) FROM person_list_members member WHERE member.list_id = saved.id) AS member_count
+         ${FIXED_LIST_COUNT_SQL} AS member_count
+  FROM person_lists saved
+  LEFT JOIN people author ON author.id = saved.created_by`;
+
+const OPEN_LIST_SELECT = `SELECT saved.id, saved.name, saved.kind, saved.config_json, saved.created_by,
+         author.name AS created_by_name, saved.created_at, saved.updated_at,
+         CASE WHEN saved.kind = 'live' THEN ${LIVE_LIST_COUNT_SQL}
+           ELSE ${FIXED_LIST_COUNT_SQL}
+         END AS member_count
   FROM person_lists saved
   LEFT JOIN people author ON author.id = saved.created_by`;
 
@@ -195,12 +217,13 @@ const openList = defineApiRoute(
     method: "get",
     path: "/api/v1/org/lists/{listId}",
     operationId: "getPersonList",
-    summary: "Open a List and resolve its members",
+    summary: "Read one saved people List",
+    description: "Returns the List's metadata without loading its member rows.",
     tags: ["People"],
     request: { params: listParams },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
     responses: {
-      200: jsonResponse(z.object({ list: listSummary, members: z.array(listMember) }), "List with members"),
+      200: jsonResponse(z.object({ list: openListSummary }), "List metadata"),
       ...errorResponses([401, 403, 404, 429, 500]),
     },
   },
@@ -208,26 +231,11 @@ const openList = defineApiRoute(
     const access = requireOrgAccess(context);
     const { listId } = context.req.valid("param");
     const row = await context.env.DB
-      .prepare(`${LIST_SELECT} WHERE saved.id = ? AND saved.org_id = ?`)
+      .prepare(`${OPEN_LIST_SELECT} WHERE saved.id = ? AND saved.org_id = ?`)
       .bind(listId, access.orgId)
       .first<PersonListRecord>();
     if (!row) throw ApiError.notFound("list not found");
-    const response = recordResponse(row);
-    const built = row.kind === "live"
-      ? buildPeopleQuery({ orgId: access.orgId, ...configFilters(response.config) })
-      : buildPeopleQuery({ orgId: access.orgId, listId });
-    const members = await context.env.DB.prepare(built.dataSql).bind(...built.dataBindings).all<PersonListRow>();
-    return context.json({
-      list: { ...response, member_count: members.results.length },
-      members: members.results.map((member) => ({
-        id: member.id,
-        name: member.name,
-        email: member.email,
-        company: member.company,
-        title: member.title,
-        tags: parseTags(member.tags_json),
-      })),
-    }, 200);
+    return context.json({ list: openRecordResponse(row) }, 200);
   },
 );
 

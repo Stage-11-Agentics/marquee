@@ -19,7 +19,7 @@
 .forms-target button { flex: 1; min-width: 0; }
 .forms-target + .field-note { display: block; min-height: 28px; }
 .forms-steps .field { display: grid; gap: 7px; }
-.forms-steps .field input { font-family: var(--mono); font-size: 11px; }
+.forms-steps .field input:where(:not([type="radio"]):not([type="checkbox"])) { font-family: var(--mono); font-size: 11px; }
 .forms-editor { min-height: 722px; }
 .forms-editor-intro { align-items: start; border-bottom: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; margin-bottom: 4px; padding-bottom: 14px; }
 .forms-editor-intro > div:first-child { display: grid; gap: 4px; }
@@ -60,13 +60,13 @@
 .forms-condition-box span { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .forms-condition-box code { color: var(--accent-dark); font: 10px/1.4 var(--mono); }
 .forms-condition-box .field { display: grid; gap: 6px; }
-.forms-condition-box .field input, .forms-condition-box .field select { min-height: 32px; }
+.forms-condition-box .field input:where(:not([type="radio"]):not([type="checkbox"])), .forms-condition-box .field select { min-height: 32px; }
 .forms-validation-box { background: var(--panel); border: 1px solid var(--line-strong); display: grid; gap: 10px; padding: 11px 12px; }
 .forms-validation-heading { display: grid; gap: 4px; }
 .forms-validation-heading strong { font: 600 10.5px/1.2 var(--mono); letter-spacing: .05em; text-transform: uppercase; }
 .forms-validation-heading span { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .forms-validation-box .field { display: grid; gap: 6px; }
-.forms-validation-box .field input { min-height: 31px; }
+.forms-validation-box .field input:where(:not([type="radio"]):not([type="checkbox"])) { min-height: 31px; }
 .forms-step-panel { display: grid; gap: 14px; min-height: 530px; }
 .forms-step-panel .field { display: grid; gap: 7px; }
 .forms-step-panel .field textarea { min-height: 100px; resize: vertical; }
