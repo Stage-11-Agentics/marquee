@@ -3,6 +3,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { Principal } from "../api/runtime";
+import { csvRow } from "../lib/csv";
 import { validateComparisonRanking } from "../lib/evaluation-comparisons";
 import { participantListSql } from "../lib/participants";
 import { parseCriterionOptions } from "../lib/rubric-criteria";
@@ -926,7 +927,7 @@ const reviewerExportRoute = defineApiRoute(
         const tracks = parseJsonArray(row.tracks)
           .map((track) => (track as { name?: string }).name ?? "")
           .join(" | ");
-        lines.push([row.id, row.title, row.abstract ?? "", row.format ?? "", tracks].map(csv).join(","));
+        lines.push(csvRow([row.id, row.title, row.abstract ?? "", row.format ?? "", tracks]));
       }
     }
     return new Response(`${lines.join("\n")}\n`, {
@@ -937,10 +938,6 @@ const reviewerExportRoute = defineApiRoute(
     });
   },
 );
-
-function csv(value: string): string {
-  return `"${value.replaceAll('"', '""').replaceAll("\n", " ").replaceAll("\r", " ")}"`;
-}
 
 const writeEvaluationRoute = defineApiRoute(
   {

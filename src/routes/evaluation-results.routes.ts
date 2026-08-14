@@ -30,6 +30,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses } from "../api/route";
 import type { SubmissionListItem } from "../api/submissions";
+import { csvRow } from "../lib/csv";
 import { disambiguatedNames } from "../lib/duplicate-names";
 import { scoreBasisCell } from "../lib/review-aggregate";
 import { requireProgram } from "./evaluation.routes";
@@ -64,11 +65,6 @@ interface RecommendationRow {
   approve_count: number;
   maybe_count: number;
   deny_count: number;
-}
-
-function csvCell(value: string | number | null): string {
-  const text = value === null ? "" : String(value);
-  return `"${text.replaceAll('"', '""').replaceAll("\n", " ").replaceAll("\r", " ")}"`;
 }
 
 /** Plan criteria in reading order, headed with their round so two rounds never collide. */
@@ -365,12 +361,12 @@ const exportPlanResults = defineApiRoute(
       "Weighted score", "Score basis", "Reviews", "Accept", "Maybe", "Decline",
       ...columns.map((column) => column.header),
     ];
-    const lines = [header.map(csvCell).join(",")];
+    const lines = [csvRow(header)];
     for (const item of rows) {
       const tally = tallies.get(item.id);
       const perCriterion = means.get(item.id);
       const perCriterionAnswers = answers.get(item.id);
-      lines.push([
+      lines.push(csvRow([
         item.id,
         item.title,
         item.speakers.map((speaker) => speaker.name).join("; "),
@@ -386,7 +382,7 @@ const exportPlanResults = defineApiRoute(
         ...columns.map((column) => (column.kind === "numeric"
           ? perCriterion?.get(column.id) ?? null
           : perCriterionAnswers?.get(column.id)?.join(ANSWER_SEPARATOR) ?? null)),
-      ].map(csvCell).join(","));
+      ]));
     }
 
     return new Response(`${lines.join("\n")}\n`, {
