@@ -1135,7 +1135,34 @@ GET  /api/v1/public/schedules/{code}/calendar.ics
      → the live calendar feed; webcal:// is the same URL
 
 GET  /api/v1/public/sessions/{slug}/calendar.ics
-     → one session as a calendar file`}</pre>
+     → one session as a calendar file
+
+POST /api/v1/public/stars
+     { "eventSlug": "${event.slug}",
+       "sessionId": "ses_…",
+       "deviceHash": "<16–64 hex chars you mint once>",
+       "starred": true }
+     → records one anonymous device's interest in a session.
+       Idempotent both ways; unstar with "starred": false.`}</pre>
+          <div class="public-divider" />
+          <h2>The demand signal</h2>
+          <p>
+            Building a schedule here counts toward this conference's session demand signal, anonymously.
+            The organizer sees how many distinct devices and distinct agent-built schedules include each
+            session — a room-planning number, weeks before the doors open — and never who they belong to.
+            A schedule you create through <code class="num">POST /schedules</code> counts as one; if you
+            are also driving a browser, pass the same <code class="num">deviceHash</code> on both and the
+            pair counts once rather than twice.
+          </p>
+          <div class="public-divider" />
+          <h2>Attaching an email</h2>
+          <p>
+            A schedule can be linked to an address so its owner can recover it anywhere:
+            <code class="num"> POST /schedules/&#123;code&#125;/claim</code> with the write key. It sends
+            one mail and writes nothing else — the link in that mail is what completes the claim. Do not
+            claim a schedule on somebody's behalf without asking them; the address becomes visible to the
+            conference organizers along with the picks.
+          </p>
           <div class="public-divider" />
           <h2>What to hand a human</h2>
           <p>

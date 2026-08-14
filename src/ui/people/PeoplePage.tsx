@@ -14,9 +14,10 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { errorSummary, MarqueeApiError } from "../shell/api-client";
+import { useEventContext } from "../shell/event-context";
 import { disambiguatedNames } from "../../lib/duplicate-names";
 import { PersonDrawer } from "./PersonDrawer";
-import { AddPersonModal, ComposeModal, ImportPeopleModal, SaveListModal } from "./PeopleModals";
+import { AddPersonModal, ComposeModal, ImportAttendeesModal, ImportPeopleModal, SaveListModal } from "./PeopleModals";
 import { ListsPanel } from "./ListsPanel";
 import {
   activeCriteria,
@@ -109,6 +110,9 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   const openPersonId = useMemo(() => new URLSearchParams(search).get("person"), [search]);
   const listFromUrl = useMemo(() => new URLSearchParams(search).get("list") ?? "", [search]);
   const [filters, setFilters] = useState<PeopleFilters>({ ...EMPTY_FILTERS, listId: listFromUrl });
+  // People is org-level, but "bring in attendees" is not: an attendance row
+  // belongs to one conference, so the brief names the one the shell is on.
+  const { event } = useEventContext();
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   // Keep the selected records, not only their ids. Selection survives a
@@ -119,7 +123,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   const [summary, setSummary] = useState<OrgSummary | null>(null);
   const [lists, setLists] = useState<SavedPersonList[] | null>(null);
   const [listsError, setListsError] = useState("");
-  const [modal, setModal] = useState<"" | "import" | "compose" | "savelist" | "addperson">("");
+  const [modal, setModal] = useState<"" | "import" | "attendees" | "compose" | "savelist" | "addperson">("");
   const [toast, setToast] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
   const [exporting, setExporting] = useState(false);
@@ -285,6 +289,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
       actions={<>
         <Button onClick={() => void downloadCsv()} disabled={exporting}>{exporting ? "Exporting…" : "Export CSV"}</Button>
         <Button onClick={() => setModal("import")}>Import people</Button>
+        <Button onClick={() => setModal("attendees")}>Bring in attendees</Button>
         <Button variant="primary" onClick={() => setModal("addperson")}>Add person</Button>
       </>}
     />
@@ -531,6 +536,11 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
       onClose={closePerson}
       navigate={navigate}
       onChanged={() => setReloadToken((token) => token + 1)}
+    /> : null}
+
+    {modal === "attendees" ? <ImportAttendeesModal
+      event={event ? { name: event.name, slug: event.slug } : null}
+      onClose={() => setModal("")}
     /> : null}
 
     {modal === "import" ? <ImportPeopleModal

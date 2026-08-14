@@ -184,6 +184,25 @@ node cli/marquee.mjs people import --file speakers.csv --url "$MARQUEE_URL" --to
 node cli/marquee.mjs people email --filter person_ids="$A,$B" --subject "Speak next year?" --body "Hi {{speaker.first_name}}, …" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 ```
 
+### Attendees
+
+Attendees are people too — org-level `people` rows plus an event-scoped attendance row. There is no separate attendee database, and there is not going to be one: this year's attendee is next year's speaker prospect, and only one table can know that. Notes, tags and lists work on them the day they arrive.
+
+Marquee ships no ticketing integrations. The loop is export → map → bulk upsert → verify, and it is one call plus one check:
+
+```sh
+# Upsert people AND record them as attending the conference, in one request.
+# Matched on email, so re-running an updated export duplicates nobody.
+node cli/marquee.mjs people import --file attendees.csv --set event=aie-nyc-2026 \
+  --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+
+# Verify: the attendee population of that conference, counted on the server.
+node cli/marquee.mjs people list --filter event_id=aie-nyc-2026 --filter kind=attendee \
+  --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
+
+`event` accepts an id or a slug. `kind` chooses which population `event_id` means — `roster` (who speaks, the default), `attendee` (who is coming), or `any`. Nothing about an attendance row grants a seat: attendees never touch `memberships` and have no role, no login, and nothing to sign in to.
+
 A **List** is a named group addressed more than once. A **live** list is a saved filter and picks up anyone who newly matches; a **fixed** list holds exactly the people named in it. Both are reusable as an email audience.
 
 ```sh

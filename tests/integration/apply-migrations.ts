@@ -29,6 +29,7 @@ import outreachTargetingMigrationSql from "../../migrations/0019_outreach_target
 import orgInviteSeatsMigrationSql from "../../migrations/0020_org_invite_seats.sql?raw";
 import portalInvitesMigrationSql from "../../migrations/0020_portal_invites.sql?raw";
 import auditOrgScopeMigrationSql from "../../migrations/0021_audit_log_org_scope.sql?raw";
+import attendeeSchedulesMigrationSql from "../../migrations/0022_attendee_schedules.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -114,6 +115,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(orgInviteSeatsMigrationSql),
     ...splitStatements(portalInvitesMigrationSql),
     ...splitStatements(auditOrgScopeMigrationSql),
+    ...splitStatements(attendeeSchedulesMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

@@ -28,6 +28,7 @@ import {
   pipelineStageName,
   type PersonEventRow,
 } from "../lib/person-annotations";
+import { resolveEventForOrg } from "../lib/event-attendances";
 import { personFeedPage } from "../lib/org-activity";
 import type { ActivityLine } from "../lib/activity-copy";
 import { EVENT_POPULATIONS, type EventPopulation } from "../lib/roster-source";
@@ -364,6 +365,16 @@ const listPeople = defineApiRoute(
       ? await resolveListScope(context.env.DB, access.orgId, query.list_id)
       : { found: true, filters: {} };
     if (!resolvedList.found) throw ApiError.notFound("list not found");
+    // An id or a slug, because both are things a caller genuinely holds: the
+    // admin shell knows the id, and an agent reading the public site — or the
+    // import brief it was handed — knows the slug. Refusing one of them would
+    // make a documented loop fail on its last step.
+    const scopedEvent = query.event_id
+      ? await resolveEventForOrg(context.env.DB, access.orgId, query.event_id)
+      : null;
+    if (query.event_id && !scopedEvent) {
+      throw ApiError.unprocessable(`this organization has no conference "${query.event_id}"`, "event_id");
+    }
     const input = {
       orgId: access.orgId,
       ...resolvedList.filters,
@@ -372,7 +383,7 @@ const listPeople = defineApiRoute(
       ...(query.title ? { title: query.title } : {}),
       ...(query.tag ? { tag: query.tag } : {}),
       ...(query.stage ? { stage: query.stage } : {}),
-      ...(query.event_id ? { eventId: query.event_id, eventPopulation: query.kind ?? "roster" } : {}),
+      ...(scopedEvent ? { eventId: scopedEvent.id, eventPopulation: query.kind ?? "roster" } : {}),
       ...(query.sort ? { sort: query.sort } : {}),
     };
     if (query.format === "csv") {

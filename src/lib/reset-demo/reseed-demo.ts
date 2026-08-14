@@ -37,6 +37,11 @@ export const WIPE_ORDER = [
   "task_templates",
   "agenda_items",
   "embeds",
+  // MRQ-208. Claims reference schedules and people, attendances reference
+  // people — so all three go before the rows they point at.
+  "schedule_claims",
+  "session_star_beacons",
+  "event_attendances",
   "public_schedules",
   "import_rows",
   "imports",

@@ -13,7 +13,7 @@ import { useState } from "preact/hooks";
 import { AgentBriefPanel } from "../shell/AgentBrief";
 import { errorSummary } from "../shell/api-client";
 import { Button } from "../shell/components";
-import { peopleImportBrief } from "./people-brief";
+import { attendeeImportBrief, peopleImportBrief } from "./people-brief";
 import {
   createList,
   createPerson,
@@ -411,5 +411,38 @@ export function AddPersonModal({
     {field("title", "Job title")}
     {field("company", "Company")}
     {error ? <div class="people-state error" role="alert">{error}</div> : <div />}
+  </Modal>;
+}
+
+/**
+ * Attendees, brought in by an agent.
+ *
+ * Deliberately its own door rather than a second panel inside the speaker
+ * import: it is a different job — a ticketing export, scoped to one conference,
+ * writing attendance rows — and stacking two briefs in one modal would make
+ * both of them scenery.
+ */
+export function ImportAttendeesModal({
+  event,
+  onClose,
+}: {
+  event: { name: string; slug: string } | null;
+  onClose: () => void;
+}): JSX.Element {
+  return <Modal
+    title="Bring in attendees"
+    meta={event
+      ? `Attendees of ${event.name} become people in this record — the same table as your speakers`
+      : "Attendees become people in this record — the same table as your speakers"}
+    onClose={onClose}
+    foot={<Button onClick={onClose}>Done</Button>}
+  >
+    <AgentBriefPanel copy={attendeeImportBrief(window.location.origin, event)} />
+    <p class="people-hint">
+      No per-platform integrations, and none planned. The rails are a documented endpoint and an
+      email-keyed upsert; the bridge from whichever site sold your tickets is a job your agent can
+      do in one pass, and re-running it never duplicates anyone. This year's attendee is next
+      year's speaker prospect, so they arrive with notes, tags and lists already working.
+    </p>
   </Modal>;
 }
