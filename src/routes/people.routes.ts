@@ -15,7 +15,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
 import { LIST_DEFAULTS } from "../api/list";
-import { executeListPage, parsePagination, totalPages } from "../api/pagination";
+import { executeListPage, parseKeysetPagination, parsePagination, totalPages } from "../api/pagination";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { requireOrgAccess } from "../lib/auth/org-access";
 import {
@@ -46,6 +46,8 @@ const personActivityQuery = z.object({
     .openapi({ type: "integer", minimum: 1 }),
   per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional().catch(undefined)
     .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
+  cursor: z.string().min(1).optional().catch(undefined)
+    .openapi({ type: "string" }),
 });
 
 export const peopleListQuerySchema = z.object({
@@ -147,6 +149,8 @@ const activityListResponse = z.object({
   per_page: z.number().int(),
   total: z.number().int(),
   total_pages: z.number().int(),
+  next_cursor: z.string().nullable(),
+  has_more: z.boolean(),
 }).openapi("PersonActivityList");
 const personRecordResponse = z.object({
   person: personSummary,
@@ -155,6 +159,8 @@ const personRecordResponse = z.object({
   activity: z.array(activitySchema),
   /** Everything the feed has, so the drawer knows whether page two exists. */
   activity_total: z.number().int(),
+  activity_next_cursor: z.string().nullable(),
+  activity_has_more: z.boolean(),
   stage_history: z.array(stageEntrySchema),
   card: stageEntrySchema.nullable(),
   target_events: z.array(targetEventSchema),
@@ -479,7 +485,7 @@ const getPerson = defineApiRoute(
       // annotations, the audit log, and what was mailed — but it is assembled in
       // SQL now, so the drawer reads one page instead of three unbounded lists
       // it then sorts and throws most of away.
-      personFeedPage(context.env.DB, personId, parsePagination({ per_page: PERSON_FEED_PAGE_SIZE }), describePersonFeedEntry),
+      personFeedPage(context.env.DB, access.orgId, personId, parseKeysetPagination({ per_page: PERSON_FEED_PAGE_SIZE }), describePersonFeedEntry),
       context.env.DB.prepare(
         "SELECT id, name FROM events WHERE org_id = ? ORDER BY starts_on ASC, id ASC",
       ).bind(access.orgId).all<{ id: string; name: string }>(),
@@ -506,6 +512,8 @@ const getPerson = defineApiRoute(
       })),
       activity: feed.rows,
       activity_total: feed.total,
+      activity_next_cursor: feed.nextCursor,
+      activity_has_more: feed.hasMore,
       stage_history: stageHistory,
       card: card
         ? { ...card, target_event_name: card.target_event_id ? targetNames.get(card.target_event_id) ?? null : null }
@@ -895,8 +903,9 @@ const getPersonActivity = defineApiRoute(
     const access = requireOrgAccess(context);
     const { personId } = context.req.valid("param");
     await requirePerson(context.env.DB, access.orgId, personId);
-    const page = parsePagination({ ...context.req.valid("query"), per_page: context.req.valid("query").per_page ?? PERSON_FEED_PAGE_SIZE });
-    const feed = await personFeedPage(context.env.DB, personId, page, describePersonFeedEntry);
+    const query = context.req.valid("query");
+    const page = parseKeysetPagination({ ...query, per_page: query.per_page ?? PERSON_FEED_PAGE_SIZE });
+    const feed = await personFeedPage(context.env.DB, access.orgId, personId, page, describePersonFeedEntry);
     return context.json(
       {
         data: feed.rows,
@@ -904,6 +913,8 @@ const getPersonActivity = defineApiRoute(
         per_page: page.perPage,
         total: feed.total,
         total_pages: totalPages(feed.total, page.perPage),
+        next_cursor: feed.nextCursor,
+        has_more: feed.hasMore,
       },
       200,
     );

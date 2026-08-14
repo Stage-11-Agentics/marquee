@@ -3,7 +3,6 @@ import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, EmptyState, PageHeader } from "../shell/components";
-import { appendUnseen } from "../history/paging";
 import "./settings.css";
 
 /**
@@ -42,11 +41,13 @@ interface ActivityPage {
   per_page: number;
   total: number;
   total_pages: number;
+  next_cursor: string | null;
+  has_more: boolean;
 }
 
 type LoadState =
   | { kind: "loading" }
-  | { kind: "ready"; events: ActivityEvent[]; total: number; page: number; totalPages: number }
+  | { kind: "ready"; events: ActivityEvent[]; total: number; page: number; totalPages: number; nextCursor: string | null; hasMore: boolean }
   | { kind: "error"; message: string };
 
 const PER_PAGE = 50;
@@ -95,21 +96,26 @@ export function OrgActivityPage(): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
 
-  async function load(page: number, existing: ActivityEvent[], signal?: AbortSignal): Promise<void> {
+  async function load(page: number, existing: ActivityEvent[], cursor: string | null = null, signal?: AbortSignal): Promise<void> {
     try {
-      const result = await apiFetch<ActivityPage>(`${ACTIVITY_ROUTE}?page=${page}&per_page=${PER_PAGE}`, {
+      const params = new URLSearchParams({ page: String(page), per_page: String(PER_PAGE) });
+      if (cursor) params.set("cursor", cursor);
+      const result = await apiFetch<ActivityPage>(`${ACTIVITY_ROUTE}?${params.toString()}`, {
         credentials: "include",
         route: ACTIVITY_ROUTE,
         ...(signal ? { signal } : {}),
       });
       setState({
         kind: "ready",
-        // The log grows while it is being read, which shifts the offset window:
-        // without this, a row written between two pages arrives in both.
-        events: appendUnseen(existing, result.data),
+        // The server holds the last `(created_at, id)` position. A new row can
+        // prepend without moving this page's boundary, so concatenation is
+        // correct and a client-side dedupe is neither needed nor sufficient.
+        events: [...existing, ...result.data],
         total: result.total,
         page: result.page,
         totalPages: result.total_pages,
+        nextCursor: result.next_cursor,
+        hasMore: result.has_more,
       });
     } catch (error) {
       if (signal?.aborted) return;
@@ -119,14 +125,14 @@ export function OrgActivityPage(): JSX.Element {
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(1, [], controller.signal);
+    void load(1, [], null, controller.signal);
     return () => controller.abort();
   }, []);
 
   const body = state.kind === "loading"
     ? <div class="token-skeleton" aria-busy="true" aria-label="Loading organization activity"><span class="skeleton-line wide" /><span class="skeleton-line" /><span class="skeleton-line" /></div>
     : state.kind === "error"
-      ? <div class="settings-error" role="alert"><strong>Activity unavailable</strong><span>{state.message}</span><Button small onClick={() => { setState({ kind: "loading" }); void load(1, []); }}>Retry</Button></div>
+      ? <div class="settings-error" role="alert"><strong>Activity unavailable</strong><span>{state.message}</span><Button small onClick={() => { setState({ kind: "loading" }); void load(1, [], null); }}>Retry</Button></div>
       : state.events.length === 0
         ? <EmptyState title="Nothing recorded yet" copy="Invites, organizer access, API tokens, defaults and ownership transfers are recorded here as they happen." />
         : <Card>
@@ -141,13 +147,13 @@ export function OrgActivityPage(): JSX.Element {
                   control below never moves the numbers around it when it goes. */}
               <div class="org-activity-foot">
                 <span class="subtle tabular">{state.events.length} of {state.total}</span>
-                {state.page < state.totalPages
+                {state.hasMore
                   ? <Button
                       small
                       disabled={pending}
                       onClick={() => {
                         setPending(true);
-                        void load(state.page + 1, state.events).finally(() => setPending(false));
+                        void load(state.page + 1, state.events, state.nextCursor).finally(() => setPending(false));
                       }}
                     >{pending ? "Loading…" : "Load more"}</Button>
                   : <span class="subtle">Complete</span>}

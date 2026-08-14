@@ -17,6 +17,7 @@
  * guarantee rather than the reader's chore.
  */
 import type { AuditActorKind } from "../db/schema";
+import { encodeKeysetCursor, type KeysetCursor } from "../api/pagination";
 import { auditStatement, type AuditEntry } from "./audit";
 import { describeActivity, type ActivityLine } from "./activity-copy";
 import type { AuthContext } from "./auth/scope-resolution";
@@ -124,10 +125,10 @@ export function projectActivity(row: ActivityRow): ActivityEvent {
 }
 
 export const ACTIVITY_SELECT = `SELECT entry.id, entry.action, entry.actor_kind, entry.actor_person_id,
-    actor.name AS actor_name, entry.created_at, entry.before_json, entry.after_json,
+    COALESCE(entry.actor_name, actor.name) AS actor_name, entry.created_at, entry.before_json, entry.after_json,
     entry.entity_type, entry.entity_id, entry.event_id, conference.name AS event_name
   FROM audit_log entry
-  LEFT JOIN people actor ON actor.id = entry.actor_person_id
+  LEFT JOIN people actor ON actor.id = entry.actor_person_id AND actor.org_id = entry.org_id
   LEFT JOIN events conference ON conference.id = entry.event_id`;
 
 /** Newest first, tie-broken on the ULID so one batch keeps its write order. */
@@ -136,6 +137,8 @@ export const ACTIVITY_ORDER = "ORDER BY entry.created_at DESC, entry.id DESC";
 export interface ActivityPage {
   rows: ActivityEvent[];
   total: number;
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 /**
@@ -148,16 +151,28 @@ export interface ActivityPage {
 export async function orgActivityPage(
   db: D1Database,
   orgId: string,
-  page: { limit: number; offset: number },
+  page: { limit: number; cursor: KeysetCursor | null },
 ): Promise<ActivityPage> {
+  const cursorWhere = page.cursor
+    ? " AND (entry.created_at < ? OR (entry.created_at = ? AND entry.id < ?))"
+    : "";
+  const cursorBindings = page.cursor
+    ? [page.cursor.createdAt, page.cursor.createdAt, page.cursor.id]
+    : [];
   const [count, rows] = await Promise.all([
     db.prepare("SELECT COUNT(*) AS total FROM audit_log WHERE org_id = ?").bind(orgId).first<{ total: number }>(),
     db
-      .prepare(`${ACTIVITY_SELECT} WHERE entry.org_id = ? ${ACTIVITY_ORDER} LIMIT ? OFFSET ?`)
-      .bind(orgId, page.limit, page.offset)
+      .prepare(`${ACTIVITY_SELECT} WHERE entry.org_id = ?${cursorWhere} ${ACTIVITY_ORDER} LIMIT ?`)
+      .bind(orgId, ...cursorBindings, page.limit)
       .all<ActivityRow>(),
   ]);
-  return { rows: rows.results.map(projectActivity), total: Number(count?.total ?? 0) };
+  const last = rows.results.at(-1);
+  return {
+    rows: rows.results.map(projectActivity),
+    total: Number(count?.total ?? 0),
+    nextCursor: rows.results.length >= page.limit && last ? encodeKeysetCursor(last) : null,
+    hasMore: rows.results.length >= page.limit,
+  };
 }
 
 /**
@@ -179,22 +194,26 @@ export async function orgActivityPage(
 const PERSON_FEED_SOURCES = `
   SELECT entry.id AS id, 'audit' AS kind, entry.action AS action,
          entry.before_json AS before_json, entry.after_json AS after_json,
-         actor.name AS actor_name, entry.created_at AS created_at
+         COALESCE(entry.actor_name, actor.name) AS actor_name, entry.created_at AS created_at
     FROM audit_log entry
+    LEFT JOIN events entry_event ON entry_event.id = entry.event_id
     LEFT JOIN people actor ON actor.id = entry.actor_person_id
-   WHERE entry.entity_type = 'person' AND entry.entity_id = ?1
+      AND actor.org_id = COALESCE(entry.org_id, entry_event.org_id)
+   WHERE (entry.org_id = ?1 OR entry_event.org_id = ?1)
+     AND entry.entity_type = 'person' AND entry.entity_id = ?2
   UNION ALL
   SELECT annotation.id, annotation.kind, NULL, NULL, annotation.value_json,
          actor.name, annotation.created_at
     FROM person_events annotation
-    LEFT JOIN people actor ON actor.id = annotation.actor_person_id
-   WHERE annotation.person_id = ?1
+    LEFT JOIN people actor ON actor.id = annotation.actor_person_id AND actor.org_id = annotation.org_id
+   WHERE annotation.org_id = ?1 AND annotation.person_id = ?2
   UNION ALL
   SELECT message.id, 'email', message.status, NULL,
          json_object('subject', message.subject, 'status', message.status),
          NULL, message.created_at
     FROM outbox message
-   WHERE message.person_id = ?1`;
+    JOIN events message_event ON message_event.id = message.event_id AND message_event.org_id = ?1
+   WHERE message.person_id = ?2`;
 
 export interface PersonFeedEntry extends ActivityLine {
   id: string;
@@ -216,25 +235,34 @@ interface PersonFeedRow {
 
 export async function personFeedPage(
   db: D1Database,
+  orgId: string,
   personId: string,
-  page: { limit: number; offset: number },
+  page: { limit: number; cursor: KeysetCursor | null },
   /** Annotation and mail copy stays with the module that owns those kinds. */
   describeOther: (kind: string, payload: unknown) => ActivityLine,
-): Promise<{ rows: PersonFeedEntry[]; total: number }> {
+): Promise<{ rows: PersonFeedEntry[]; total: number; nextCursor: string | null; hasMore: boolean }> {
+  const cursorWhere = page.cursor
+    ? "WHERE created_at < ?3 OR (created_at = ?4 AND id < ?5)"
+    : "";
+  const dataBindings = page.cursor
+    ? [orgId, personId, page.cursor.createdAt, page.cursor.createdAt, page.cursor.id, page.limit]
+    : [orgId, personId, page.limit];
   const [count, rows] = await Promise.all([
     db
       .prepare(`SELECT COUNT(*) AS total FROM (${PERSON_FEED_SOURCES})`)
-      .bind(personId)
+      .bind(orgId, personId)
       .first<{ total: number }>(),
     db
       .prepare(
         `SELECT * FROM (${PERSON_FEED_SOURCES})
+         ${cursorWhere}
          ORDER BY created_at DESC, id DESC
-         LIMIT ?2 OFFSET ?3`,
+         LIMIT ?${page.cursor ? "6" : "3"}`,
       )
-      .bind(personId, page.limit, page.offset)
+      .bind(...dataBindings)
       .all<PersonFeedRow>(),
   ]);
+  const last = rows.results.at(-1);
   return {
     rows: rows.results.map((row) => {
       const after = parseJson(row.after_json);
@@ -244,5 +272,7 @@ export async function personFeedPage(
       return { ...line, id: row.id, kind: row.kind, actor_name: row.actor_name, created_at: row.created_at };
     }),
     total: Number(count?.total ?? 0),
+    nextCursor: rows.results.length >= page.limit && last ? encodeKeysetCursor(last) : null,
+    hasMore: rows.results.length >= page.limit,
   };
 }

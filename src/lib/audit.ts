@@ -52,8 +52,8 @@ export interface AuditEntry {
 }
 
 const COLUMNS =
-  "(id, event_id, org_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at, request_id)";
-const PLACEHOLDERS = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+  "(id, event_id, org_id, actor_person_id, actor_name, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at, request_id)";
+const PLACEHOLDERS = "(?, ?, ?, ?, (SELECT name FROM people WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?)";
 
 /**
  * Build the row as a prepared statement, for composition into a `batch()`.
@@ -68,6 +68,7 @@ export function auditStatement(db: D1Database, entry: AuditEntry): D1PreparedSta
       newUlid(entry.now),
       entry.eventId,
       entry.orgId ?? null,
+      entry.actorPersonId,
       entry.actorPersonId,
       entry.actorKind,
       entry.action,
@@ -103,6 +104,7 @@ export function auditStatementFromSelect(
       newUlid(entry.now),
       entry.eventId,
       entry.orgId ?? null,
+      entry.actorPersonId,
       entry.actorPersonId,
       entry.actorKind,
       entry.action,

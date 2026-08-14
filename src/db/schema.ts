@@ -721,6 +721,8 @@ export interface AuditLogRow extends ImmutableRecord {
   action: string;
   actor_kind: AuditActorKind;
   actor_person_id: Id | null;
+  /** Snapshot taken at write time; the FK may later be severed by demo cleanup. */
+  actor_name: string | null;
   after_json: JsonText | null;
   before_json: JsonText | null;
   entity_id: Id;

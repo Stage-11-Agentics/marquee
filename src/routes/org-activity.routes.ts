@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 
 import { LIST_DEFAULTS } from "../api/list";
-import { parsePagination, totalPages } from "../api/pagination";
+import { parseKeysetPagination, totalPages } from "../api/pagination";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { requireOrgAdmin } from "../lib/auth/org-admin";
 import { orgActivityPage } from "../lib/org-activity";
@@ -26,6 +26,8 @@ const activityQuery = z.object({
     .openapi({ type: "integer", minimum: 1 }),
   per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional().catch(undefined)
     .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
+  cursor: z.string().min(1).optional().catch(undefined)
+    .openapi({ type: "string" }),
 });
 
 export const activityEventSchema = z.object({
@@ -50,6 +52,8 @@ const activityListResponse = z.object({
   per_page: z.number().int(),
   total: z.number().int(),
   total_pages: z.number().int(),
+  next_cursor: z.string().nullable(),
+  has_more: z.boolean(),
 }).openapi("ActivityEventList");
 
 const listOrgActivity = defineApiRoute(
@@ -71,8 +75,8 @@ const listOrgActivity = defineApiRoute(
   async (context) => {
     const auth = requireOrgAdmin(context, "program:read");
     const query = context.req.valid("query");
-    const page = parsePagination(query);
-    const { rows, total } = await orgActivityPage(context.env.DB, auth.orgId, page);
+    const page = parseKeysetPagination(query);
+    const { rows, total, nextCursor, hasMore } = await orgActivityPage(context.env.DB, auth.orgId, page);
     return context.json(
       {
         data: rows,
@@ -80,6 +84,8 @@ const listOrgActivity = defineApiRoute(
         per_page: page.perPage,
         total,
         total_pages: totalPages(total, page.perPage),
+        next_cursor: nextCursor,
+        has_more: hasMore,
       },
       200,
     );

@@ -89,6 +89,8 @@ export interface PersonActivityPage {
   per_page: number;
   total: number;
   total_pages: number;
+  next_cursor: string | null;
+  has_more: boolean;
 }
 
 export interface PersonRecord {
@@ -98,6 +100,8 @@ export interface PersonRecord {
   activity: PersonActivity[];
   /** Everything the feed holds, so the drawer knows whether page two exists. */
   activity_total: number;
+  activity_next_cursor: string | null;
+  activity_has_more: boolean;
   stage_history: StageEntry[];
   card: StageEntry | null;
   target_events: Array<{ id: string; name: string }>;
@@ -255,9 +259,11 @@ export function fetchPerson(personId: string, signal?: AbortSignal): Promise<Per
  * read; this is the same projection, so a row cannot read one way on open and
  * another after "Load more".
  */
-export function fetchPersonActivity(personId: string, page: number, signal?: AbortSignal): Promise<PersonActivityPage> {
+export function fetchPersonActivity(personId: string, page: number, cursor?: string | null, signal?: AbortSignal): Promise<PersonActivityPage> {
+  const params = new URLSearchParams({ page: String(page) });
+  if (cursor) params.set("cursor", cursor);
   return apiFetch<PersonActivityPage>(
-    `${PEOPLE_ROUTE}/${encodeURIComponent(personId)}/activity?page=${page}`,
+    `${PEOPLE_ROUTE}/${encodeURIComponent(personId)}/activity?${params.toString()}`,
     {
       route: "/api/v1/org/people/{personId}/activity",
       ...(signal ? { signal } : {}),

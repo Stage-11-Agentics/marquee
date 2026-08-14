@@ -579,26 +579,22 @@ export async function resendSubmissionDecision(input: ResendDecisionInput): Prom
   });
   if (!outbox.id) return failed("the decision email template is disabled");
 
-  await writeAudit(input.db, {
-    eventId: input.eventId,
-    actor: input.actor,
-    action: "submission.decision_resent",
-    entityType: "submission",
-    entityId: submission.id,
-    before: {
-      decision_id: decision.id,
-      resulting_status: decision.resulting_status,
-      to_email: submission.person_email,
-    },
-    after: {
-      decision_id: decision.id,
-      outbox_id: outbox.id,
-      outbox_inserted: outbox.inserted,
-      resulting_status: decision.resulting_status,
-      to_email: submission.person_email,
-    },
-    now,
-  });
+  if (outbox.inserted) {
+    await writeAudit(input.db, {
+      eventId: input.eventId,
+      actor: input.actor,
+      action: "submission.decision_mail_queued",
+      entityType: "submission",
+      entityId: submission.id,
+      after: {
+        decision_id: decision.id,
+        outbox_id: outbox.id,
+        resulting_status: decision.resulting_status,
+        to_email: submission.person_email,
+      },
+      now,
+    });
+  }
 
   return {
     id: submission.id,

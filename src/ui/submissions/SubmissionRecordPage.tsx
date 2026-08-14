@@ -10,7 +10,6 @@ import { disambiguatedNames } from "../../lib/duplicate-names";
 import { useEventContext } from "../shell/event-context";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
 import { ContentHistory } from "../history/ContentHistory";
-import { appendUnseen } from "../history/paging";
 import { groupParticipants, type Participant } from "./participant-groups";
 import { decidedNote, headerChipTone, historyMoment, lastSendLine, moment, sendMoment, sendMomentFor, sendOutcome, statusLabel, type DecisionSend } from "./record-copy";
 import "./record.css";
@@ -124,6 +123,8 @@ interface RecordData {
   history: TimelineEntry[];
   /** Everything the timeline holds, so the card knows whether there is more. */
   history_total: number;
+  history_next_cursor: string | null;
+  history_has_more: boolean;
   actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_edit_participants: boolean; can_override_scores: boolean };
 }
 
@@ -145,7 +146,7 @@ interface TimelineEntry {
   restorable: boolean;
 }
 
-interface TimelinePage { data: TimelineEntry[]; page: number; total: number; total_pages: number }
+interface TimelinePage { data: TimelineEntry[]; page: number; total: number; total_pages: number; next_cursor: string | null; has_more: boolean }
 
 interface Props { eventId: string; submissionId: string; navigate: (target: string) => void; }
 
@@ -529,18 +530,24 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // is exactly the moment the newest page changed.
   const [olderHistory, setOlderHistory] = useState<TimelineEntry[]>([]);
   const [historyPage, setHistoryPage] = useState(1);
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyBusy, setHistoryBusy] = useState(false);
 
   const loadMoreHistory = async (): Promise<void> => {
-    if (historyBusy) return;
+    if (historyBusy || !historyHasMore || !historyNextCursor) return;
     setHistoryBusy(true);
     try {
       const next = await apiFetch<TimelinePage>(
-        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/timeline?page=${historyPage + 1}`,
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/timeline?page=${historyPage + 1}&cursor=${encodeURIComponent(historyNextCursor)}`,
         { route: TIMELINE_ROUTE },
       );
-      setOlderHistory((rows) => appendUnseen(rows, next.data));
+      // The cursor pins the prior page's last row. Newer writes cannot move
+      // this boundary, so the returned page can be appended as-is.
+      setOlderHistory((rows) => [...rows, ...next.data]);
       setHistoryPage(next.page);
+      setHistoryNextCursor(next.next_cursor);
+      setHistoryHasMore(next.has_more);
     } catch (error) {
       setActionError({ action: "timeline", message: errorSummary(error) });
     } finally {
@@ -562,8 +569,10 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     // pages beside it would show one row twice the moment anything was written.
     setOlderHistory([]);
     setHistoryPage(1);
+    setHistoryNextCursor(null);
+    setHistoryHasMore(false);
     apiFetch<RecordData>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`, { signal: controller.signal, route: SUBMISSION_ROUTE })
-      .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle((current) => adoptServerValue(contentEdits.current !== contentSavedAtEdit.current, current, record.title)); setDraftAbstract((current) => adoptServerValue(contentEdits.current !== contentSavedAtEdit.current, current, record.abstract ?? "")); setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); setBusy(""); })
+      .then((record) => { setHistoryNextCursor(record.history_next_cursor); setHistoryHasMore(record.history_has_more); setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle((current) => adoptServerValue(contentEdits.current !== contentSavedAtEdit.current, current, record.title)); setDraftAbstract((current) => adoptServerValue(contentEdits.current !== contentSavedAtEdit.current, current, record.abstract ?? "")); setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); setBusy(""); })
       .catch((error: unknown) => { if (!controller.signal.aborted) { setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); setBusy(""); } });
     return () => controller.abort();
   }, [eventId, submissionId, reloadKey]);
@@ -974,7 +983,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           livePublicly={isLivePublicly}
           footer={<div class="history-foot">
             <span class="subtle tabular">{shownHistory.length} of {record.history_total}</span>
-            {shownHistory.length < record.history_total
+            {historyHasMore
               ? <Button small disabled={historyBusy} onClick={() => void loadMoreHistory()}>{historyBusy ? "Loading…" : "Load more"}</Button>
               : <span class="subtle">Complete</span>}
           </div>}

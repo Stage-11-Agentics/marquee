@@ -30,6 +30,7 @@ interface ActivityEvent {
   summary: string;
   detail: string | null;
   actor_name: string | null;
+  entity_id?: string;
   event_id: string | null;
   event_name: string | null;
   created_at: number;
@@ -41,6 +42,8 @@ interface ActivityPage {
   per_page: number;
   total: number;
   total_pages: number;
+  next_cursor: string | null;
+  has_more: boolean;
 }
 
 async function request(path: string, init: RequestInit = {}, session = OWNER_SESSION): Promise<Response> {
@@ -102,6 +105,33 @@ test("CONTRACT · MRQ-211 · the schema refuses an audit row scoped to neither a
        VALUES ('audit-mrq-211-unscoped', NULL, NULL, NULL, 'system', 'test.unscoped', 'submission', ?, ?)`,
     ).bind(SUBMISSION_ID, Date.now()).run(),
   ).rejects.toThrow();
+});
+
+test("CONTRACT · MRQ-211 · keyset pages survive an append between reads without losing or repeating a row", async () => {
+  const inviteIds: string[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    const response = await request("/api/v1/org/invites", { method: "POST" });
+    expect(response.status).toBe(201);
+    inviteIds.push((await response.json() as { data: { id: string } }).data.id);
+  }
+
+  // Read page one, then append X. With OFFSET, page two starts one row too
+  // early and either repeats the boundary or permanently skips the oldest of
+  // these three. The route's cursor pins page one's actual last row.
+  const first = await orgActivity("?per_page=2");
+  expect(first.data).toHaveLength(2);
+  expect(first.next_cursor).toBeTruthy();
+  const appended = await request("/api/v1/org/invites", { method: "POST" });
+  expect(appended.status).toBe(201);
+  const appendedId = (await appended.json() as { data: { id: string } }).data.id;
+
+  const second = await orgActivity(`?per_page=2&page=2&cursor=${encodeURIComponent(first.next_cursor!)}`);
+  const pageIds = [...first.data, ...second.data]
+    .map((entry) => entry.entity_id)
+    .filter((id): id is string => typeof id === "string");
+  expect(new Set(pageIds).size).toBe(pageIds.length);
+  expect(pageIds.filter((id) => inviteIds.includes(id))).toHaveLength(3);
+  expect(pageIds).not.toContain(appendedId);
 });
 
 test("CONTRACT · MRQ-211 · lens one · minting and revoking an invite lands in the organization log, in the organizer's language", async () => {
@@ -217,13 +247,36 @@ test("CONTRACT · MRQ-211 · lens two · the person's feed merges annotations, a
   // two different rows — a client-side slice of a full read would pass a test
   // that only counted rows, so this asserts they differ.
   const first = await request(`/api/v1/org/people/${SECOND_ORGANIZER}/activity?per_page=1`);
-  const second = await request(`/api/v1/org/people/${SECOND_ORGANIZER}/activity?per_page=1&page=2`);
   const firstPage = await first.json() as ActivityPage;
+  const second = await request(`/api/v1/org/people/${SECOND_ORGANIZER}/activity?per_page=1&page=2&cursor=${encodeURIComponent(firstPage.next_cursor!)}`);
   const secondPage = await second.json() as ActivityPage;
   expect(firstPage.data).toHaveLength(1);
   expect(secondPage.data).toHaveLength(1);
   expect(firstPage.data[0]?.id).not.toBe(secondPage.data[0]?.id);
   expect(firstPage.total).toBe(view.activity_total);
+});
+
+test("CONTRACT · MRQ-211 · lens two · a second organization's person-shaped audit row is absent from the first organization's feed", async () => {
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES ('org-mrq-211-other', 'Other Org', 'other-mrq-211', ?, ?)",
+    ).bind(now, now),
+    env.DB.prepare(
+      "INSERT INTO people (id, org_id, name, email, created_at, updated_at) VALUES ('per-mrq-211-other', 'org-mrq-211-other', 'Other Actor', 'other-mrq-211@example.test', ?, ?)",
+    ).bind(now, now),
+    env.DB.prepare(
+      `INSERT INTO audit_log
+        (id, event_id, org_id, actor_person_id, actor_name, actor_kind, action, entity_type, entity_id, created_at)
+       VALUES ('audit-mrq-211-cross-org', NULL, 'org-mrq-211-other', 'per-mrq-211-other', 'Other Actor', 'user', 'org-b.person_touched', 'person', ?, ?)`,
+    ).bind(OWNER_ID, now + 10_000),
+  ]);
+
+  const response = await request(`/api/v1/org/people/${OWNER_ID}/activity`);
+  expect(response.status).toBe(200);
+  const feed = await response.json() as ActivityPage;
+  expect(feed.data.some((entry) => entry.action === "org-b.person_touched")).toBe(false);
+  expect(feed.data.some((entry) => entry.actor_name === "Other Actor")).toBe(false);
 });
 
 test("CONTRACT · MRQ-211 · lens three · a submission's timeline reads its own audit rows as sentences, newest first", async () => {

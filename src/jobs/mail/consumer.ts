@@ -1,6 +1,7 @@
 import type { D1Database, MessageBatch, Queue } from "@cloudflare/workers-types";
 
 import type { OutboxRow } from "../../db/schema";
+import { writeAudit } from "../../lib/audit";
 import { RESEND_MAIL_FROM } from "../../lib/mail/config";
 import { enqueueOverdueTaskReminderRows, enqueuePreCloseReminderRows } from "./triggers";
 
@@ -189,8 +190,8 @@ async function suppressRow(db: D1Database, row: OutboxRow, now: number): Promise
     .run();
 }
 
-async function markSent(db: D1Database, row: OutboxRow, providerMessageId: string | null, now: number): Promise<void> {
-  await db
+async function markSent(db: D1Database, row: OutboxRow, providerMessageId: string | null, now: number): Promise<boolean> {
+  const result = await db
     .prepare(
       `UPDATE outbox
        SET status = 'sent', provider_message_id = ?, delivery_state = 'unknown',
@@ -201,6 +202,57 @@ async function markSent(db: D1Database, row: OutboxRow, providerMessageId: strin
     )
     .bind(providerMessageId, now, now, row.id, PROCESSING_SENTINEL)
     .run();
+  return (result.meta.changes ?? 0) === 1;
+}
+
+/**
+ * Delivery is a fact of the consumer, not of the route that admitted a row to
+ * the queue. Decision retries use the decision id as their outbox entity;
+ * initial decision mail uses the submission id. Ad-hoc record mail also uses
+ * the submission id, so only those rows have a timeline lens to update.
+ */
+async function recordSentAudit(
+  db: D1Database,
+  row: OutboxRow,
+  providerMessageId: string | null,
+  now: number,
+): Promise<void> {
+  const target = await db
+    .prepare(
+      `SELECT submission.id AS direct_submission_id,
+              decision.submission_id AS decision_submission_id,
+              decision.id AS retry_decision_id
+       FROM outbox message
+       LEFT JOIN submissions submission
+         ON submission.id = message.entity_id AND submission.event_id = message.event_id
+       LEFT JOIN submission_decisions decision
+         ON decision.id = message.entity_id AND decision.event_id = message.event_id
+       WHERE message.id = ?`,
+    )
+    .bind(row.id)
+    .first<{ direct_submission_id: string | null; decision_submission_id: string | null; retry_decision_id: string | null }>();
+  const submissionId = target?.direct_submission_id ?? target?.decision_submission_id;
+  if (!submissionId) return;
+  const isDecision = row.template_key === "acceptance" || row.template_key === "rejection";
+  const action = isDecision
+    ? target?.retry_decision_id ? "submission.decision_resent" : "submission.decision_mail_sent"
+    : "submission.message_sent";
+  await writeAudit(db, {
+    eventId: row.event_id,
+    actorKind: "system",
+    actorPersonId: null,
+    action,
+    entityType: "submission",
+    entityId: submissionId,
+    after: {
+      outbox_id: row.id,
+      template_key: row.template_key,
+      provider_message_id: providerMessageId,
+      sent_at: now,
+    },
+    now,
+    requestId: null,
+  });
 }
 
 async function markFailed(db: D1Database, row: OutboxRow, error: unknown, now: number): Promise<void> {
@@ -254,8 +306,10 @@ export async function processMailOutbox(
         // first-row fallback would make an inbound bounce land on the wrong
         // speaker; a missing id stays unknown and the health surface says so.
         const providerId = providerIds[index]?.trim() || null;
-        await markSent(db, row, providerId, now);
-        sent += 1;
+        if (await markSent(db, row, providerId, now)) {
+          await recordSentAudit(db, row, providerId, now);
+          sent += 1;
+        }
       }
     } catch (error) {
       for (const row of plain) {
@@ -270,8 +324,10 @@ export async function processMailOutbox(
     try {
       if (!provider) throw new Error("mail provider is unavailable");
       const providerId = await provider.sendSingle(row);
-      await markSent(db, row, providerId, now);
-      sent += 1;
+      if (await markSent(db, row, providerId, now)) {
+        await recordSentAudit(db, row, providerId, now);
+        sent += 1;
+      }
     } catch (error) {
       await markFailed(db, row, error, now);
       failed += 1;

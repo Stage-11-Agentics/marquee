@@ -85,6 +85,37 @@ test("AC-33 · auth-shaped and form-shaped messages render into the outbox with 
   expect(row?.idempotency_key).toBe(await buildIdempotencyKey("submission_confirmation", "sub_mail", "per_mail"));
 });
 
+test("CONTRACT · MRQ-211 · queue admission says queued and the consumer alone records sent", async () => {
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-211-send-fact" });
+  const response = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+    body: JSON.stringify({ selector: { submission_ids: ["sub_mail"], person_ids: ["per_mail"], role: "speaker" }, subject: "A note", body: "Hello {{speaker.first_name}}" }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(response.status).toBe(202);
+  const queued = await response.json<{ outbox_ids: string[] }>();
+  const outboxId = queued.outbox_ids[0];
+  expect(outboxId).toBeTruthy();
+
+  const beforeConsumer = await env.DB
+    .prepare("SELECT action FROM audit_log WHERE event_id = 'evt_mail' AND entity_id = 'sub_mail' ORDER BY created_at, id")
+    .all<{ action: string }>();
+  expect(beforeConsumer.results.map((row) => row.action)).toEqual(["submission.message_queued"]);
+
+  await env.DB.prepare(
+    "INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at) VALUES ('setting_mrq211_send', 'evt_mail', 'demo_safe_allowlist', '[\"speaker@example.com\"]', ?, ?)",
+  ).bind(NOW, NOW).run();
+  const fake = provider();
+  expect(await processMailOutbox(env.DB, env, [outboxId!], { provider: fake, now: Date.now(), sleep: async () => undefined })).toEqual({ sent: 1, suppressed: 0, failed: 0 });
+
+  const afterConsumer = await env.DB
+    .prepare("SELECT action, actor_kind, after_json FROM audit_log WHERE event_id = 'evt_mail' AND entity_id = 'sub_mail' ORDER BY created_at, id")
+    .all<{ action: string; actor_kind: string; after_json: string }>();
+  expect(afterConsumer.results.map((row) => row.action)).toEqual(["submission.message_queued", "submission.message_sent"]);
+  expect(afterConsumer.results[1]?.actor_kind).toBe("system");
+  expect(JSON.parse(afterConsumer.results[1]?.after_json ?? "{}")).toMatchObject({ outbox_id: outboxId, provider_message_id: `provider-${outboxId}` });
+});
+
 test("AC-117, AC-93 · the same bulk action twice relies on the UNIQUE idempotency constraint and delivers once", async () => {
   const input = {
     db: env.DB,

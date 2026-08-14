@@ -5,7 +5,7 @@ import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
 import { BOARD_STAGE_LABELS, BOARD_STAGE_SQL, type BoardSlot } from "../api/board";
 import { LIST_DEFAULTS } from "../api/list";
-import { parsePagination, totalPages } from "../api/pagination";
+import { parseKeysetPagination, totalPages } from "../api/pagination";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
@@ -46,6 +46,8 @@ const timelineQuery = z.object({
     .openapi({ type: "integer", minimum: 1 }),
   per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional().catch(undefined)
     .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
+  cursor: z.string().min(1).optional().catch(undefined)
+    .openapi({ type: "string" }),
 });
 const errors = errorResponses([400, 401, 403, 404, 409, 422, 429, 500]);
 
@@ -614,7 +616,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     // everything needed, so this is a read that was missing, not a write.
     db.prepare(`
       SELECT reversal.id, reversal.after_json, reversal.created_at,
-        reversal.actor_person_id, person.name AS actor_name
+        reversal.actor_person_id, COALESCE(reversal.actor_name, person.name) AS actor_name
       FROM audit_log reversal
       LEFT JOIN people person ON person.id = reversal.actor_person_id
       WHERE reversal.event_id = ? AND reversal.entity_id = ?
@@ -662,7 +664,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     // The record opens with the most recent page; "Load more" walks the rest
     // through `GET …/timeline`, so a six-month-old session with hundreds of
     // rows costs the same first paint as a fresh one.
-    recordTimelinePage(db, eventId, submissionId, parsePagination({ per_page: RECORD_TIMELINE_PAGE_SIZE })),
+    recordTimelinePage(db, eventId, submissionId, parseKeysetPagination({ per_page: RECORD_TIMELINE_PAGE_SIZE })),
     db.prepare(`
       SELECT round.id, round.name, round.position, round.mode, round.target_reviews_per_submission,
         plan.id AS plan_id, plan.name AS plan_name, plan.status AS plan_status,
@@ -867,6 +869,8 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       after_json: entry.after,
     })),
     history_total: history.total,
+    history_next_cursor: history.nextCursor,
+    history_has_more: history.hasMore,
     actions: {
       // `declined` covers waitlisted, rejected, and withdrawn. All three stay
       // decidable: Maybe is a holding state the organizer resolves later, and
@@ -1179,7 +1183,7 @@ const getSubmissionTimeline = defineApiRoute(
     if (submission.status === "draft") await requireDraftRead(context, eventId);
     else await requireSubmissionRead(context, eventId);
     const query = context.req.valid("query");
-    const page = parsePagination({ ...query, per_page: query.per_page ?? RECORD_TIMELINE_PAGE_SIZE });
+    const page = parseKeysetPagination({ ...query, per_page: query.per_page ?? RECORD_TIMELINE_PAGE_SIZE });
     const timeline = await recordTimelinePage(context.env.DB, eventId, submissionId, page);
     return context.json(
       {
@@ -1188,6 +1192,8 @@ const getSubmissionTimeline = defineApiRoute(
         per_page: page.perPage,
         total: timeline.total,
         total_pages: totalPages(timeline.total, page.perPage),
+        next_cursor: timeline.nextCursor,
+        has_more: timeline.hasMore,
       },
       200,
     );

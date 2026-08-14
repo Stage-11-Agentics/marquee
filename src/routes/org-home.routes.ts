@@ -409,7 +409,7 @@ export async function readStaleSeatAttention(db: D1Database, orgId: string, toda
 async function readActivity(db: D1Database, orgId: string): Promise<ActivityRow[]> {
   const rows = await db.prepare(
     `SELECT a.id, a.event_id, e.name AS event_name, a.actor_person_id,
-            actor.name AS actor_name, a.actor_kind, a.action, a.entity_type,
+            COALESCE(a.actor_name, actor.name) AS actor_name, a.actor_kind, a.action, a.entity_type,
             a.entity_id, a.created_at
        FROM audit_log a
        JOIN events e ON e.id = a.event_id AND e.org_id = ?

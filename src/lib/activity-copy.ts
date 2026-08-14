@@ -80,7 +80,9 @@ const SUMMARIES: Readonly<Record<string, string>> = {
   "bulk.withdraw": "Withdrawn in a bulk action",
   "submission.acceptance_reversed": "Acceptance reversed",
   "submission.decision_mail_queued": "Decision email queued",
+  "submission.decision_mail_sent": "Decision email sent",
   "submission.decision_resent": "Decision email resent",
+  "submission.message_queued": "Message queued",
   "submission.message_sent": "Message sent",
   "submission.tasks_reconciled": "Speaker tasks updated",
   "submission.tasks_cancelled": "Speaker tasks cancelled",
@@ -238,7 +240,10 @@ export function describeActivity(entry: {
       return { summary, detail: payloadField(after, "title") };
     case "submission.routed":
       return { summary, detail: payloadField(after, "rule_name") };
+    case "submission.message_queued":
     case "submission.message_sent":
+    case "submission.decision_mail_queued":
+    case "submission.decision_mail_sent":
     case "submission.decision_resent":
       return { summary, detail: payloadField(after, "subject") ?? payloadField(after, "template_key") };
     default:

@@ -13,6 +13,7 @@
  * `submission-record.routes.ts`), never an update or a delete of an old one.
  */
 import { describeActivity, type ActivityLine } from "./activity-copy";
+import { encodeKeysetCursor, type KeysetCursor } from "../api/pagination";
 
 /**
  * The actions that describe a content change and can therefore be restored.
@@ -81,7 +82,7 @@ function project(row: HistoryRow): HistoryEntry {
 }
 
 const SELECT = `SELECT audit.id, audit.action, audit.actor_kind, audit.actor_person_id,
-    person.name AS actor_name, audit.created_at, audit.before_json, audit.after_json
+    COALESCE(audit.actor_name, person.name) AS actor_name, audit.created_at, audit.before_json, audit.after_json
   FROM audit_log audit
   LEFT JOIN people person ON person.id = audit.actor_person_id`;
 
@@ -154,18 +155,25 @@ export async function recordTimelinePage(
   db: D1Database,
   eventId: string,
   entityId: string,
-  page: { limit: number; offset: number },
-): Promise<{ entries: TimelineEntry[]; total: number }> {
+  page: { limit: number; cursor: KeysetCursor | null },
+): Promise<{ entries: TimelineEntry[]; total: number; nextCursor: string | null; hasMore: boolean }> {
+  const cursorWhere = page.cursor
+    ? " AND (audit.created_at < ? OR (audit.created_at = ? AND audit.id < ?))"
+    : "";
+  const cursorBindings = page.cursor
+    ? [page.cursor.createdAt, page.cursor.createdAt, page.cursor.id]
+    : [];
   const [count, rows] = await Promise.all([
     db
       .prepare("SELECT COUNT(*) AS total FROM audit_log WHERE event_id = ? AND entity_id = ?")
       .bind(eventId, entityId)
       .first<{ total: number }>(),
     db
-      .prepare(`${SELECT} WHERE audit.event_id = ? AND audit.entity_id = ? ${ORDER} LIMIT ? OFFSET ?`)
-      .bind(eventId, entityId, page.limit, page.offset)
+      .prepare(`${SELECT} WHERE audit.event_id = ? AND audit.entity_id = ?${cursorWhere} ${ORDER} LIMIT ?`)
+      .bind(eventId, entityId, ...cursorBindings, page.limit)
       .all<HistoryRow>(),
   ]);
+  const last = rows.results.at(-1);
   return {
     entries: rows.results.map((row) => {
       const entry = project(row);
@@ -176,6 +184,8 @@ export async function recordTimelinePage(
       };
     }),
     total: Number(count?.total ?? 0),
+    nextCursor: rows.results.length >= page.limit && last ? encodeKeysetCursor(last) : null,
+    hasMore: rows.results.length >= page.limit,
   };
 }
 

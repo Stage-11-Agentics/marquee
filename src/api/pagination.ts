@@ -17,6 +17,11 @@ export interface PageParams {
   offset: number;
 }
 
+export interface KeysetCursor {
+  createdAt: number;
+  id: string;
+}
+
 /** Validate raw query values (already zod-parsed at the boundary, or raw in unit probes). */
 export function parsePagination(input: { page?: unknown; per_page?: unknown }): PageParams {
   const page = Number(input.page ?? LIST_DEFAULTS.page);
@@ -34,6 +39,51 @@ export function parsePagination(input: { page?: unknown; per_page?: unknown }): 
     );
   }
   return { page, perPage, limit: perPage, offset: (page - 1) * perPage };
+}
+
+/**
+ * Decode the stable `(created_at, id)` position used by the activity lenses.
+ * ULIDs contain no colon, so the compact representation stays URL-safe while
+ * remaining inspectable when an operator copies a request from the network
+ * panel. A cursor is a position, never a caller-controlled SQL fragment.
+ */
+export function parseKeysetCursor(value: unknown): KeysetCursor | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string") {
+    throw ApiError.badRequest("cursor must be a created_at:id position", "cursor");
+  }
+  const separator = value.indexOf(":");
+  if (separator <= 0 || separator === value.length - 1) {
+    throw ApiError.badRequest("cursor must be a created_at:id position", "cursor");
+  }
+  const createdAt = Number(value.slice(0, separator));
+  const id = value.slice(separator + 1);
+  if (!Number.isSafeInteger(createdAt) || createdAt < 0 || id.length === 0) {
+    throw ApiError.badRequest("cursor must be a created_at:id position", "cursor");
+  }
+  return { createdAt, id };
+}
+
+export function encodeKeysetCursor(row: { created_at: number; id: string }): string {
+  return `${row.created_at}:${row.id}`;
+}
+
+/**
+ * Offset pages are still appropriate for ordinary lists. These feeds are
+ * different: rows prepend while an operator is reading them, so page two must
+ * carry page one's last row rather than a moving integer offset.
+ */
+export function parseKeysetPagination(input: {
+  page?: unknown;
+  per_page?: unknown;
+  cursor?: unknown;
+}): PageParams & { cursor: KeysetCursor | null } {
+  const page = parsePagination(input);
+  const cursor = parseKeysetCursor(input.cursor);
+  if (page.page > 1 && cursor === null) {
+    throw ApiError.badRequest("cursor is required when page is greater than 1", "cursor");
+  }
+  return { ...page, cursor };
 }
 
 export function totalPages(total: number, perPage: number): number {

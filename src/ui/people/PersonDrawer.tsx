@@ -26,7 +26,6 @@ import {
   type PersonActivity,
   type PersonRecord,
 } from "./people-api";
-import { appendUnseen } from "../history/paging";
 import { PIPELINE_STAGES } from "./pipeline-stages";
 
 export function PersonDrawer({
@@ -50,6 +49,8 @@ export function PersonDrawer({
   // resets this to page one — the newest rows, which is what a write produced.
   const [olderActivity, setOlderActivity] = useState<PersonActivity[]>([]);
   const [activityPage, setActivityPage] = useState(1);
+  const [activityNextCursor, setActivityNextCursor] = useState<string | null>(null);
+  const [activityHasMore, setActivityHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
@@ -58,8 +59,14 @@ export function PersonDrawer({
     setError("");
     setOlderActivity([]);
     setActivityPage(1);
+    setActivityNextCursor(null);
+    setActivityHasMore(false);
     fetchPerson(personId, controller.signal)
-      .then(setRecord)
+      .then((next) => {
+        setRecord(next);
+        setActivityNextCursor(next.activity_next_cursor);
+        setActivityHasMore(next.activity_has_more);
+      })
       .catch((caught: unknown) => { if (!controller.signal.aborted) setError(errorSummary(caught)); });
     return () => controller.abort();
   }, [personId]);
@@ -78,21 +85,28 @@ export function PersonDrawer({
   // Re-read rather than patch: the note that comes back is the one on the
   // server, which is the only one worth showing.
   const reread = async () => {
-    setRecord(await fetchPerson(personId));
     setOlderActivity([]);
     setActivityPage(1);
+    setActivityNextCursor(null);
+    setActivityHasMore(false);
+    const next = await fetchPerson(personId);
+    setRecord(next);
+    setActivityNextCursor(next.activity_next_cursor);
+    setActivityHasMore(next.activity_has_more);
     onChanged?.();
   };
 
   const loadMoreActivity = async () => {
-    if (loadingMore) return;
+    if (loadingMore || !activityHasMore || !activityNextCursor) return;
     setLoadingMore(true);
     try {
-      const next = await fetchPersonActivity(personId, activityPage + 1);
-      // The feed grows while it is read; without the filter a row written
-      // between two pages arrives in both, twice on screen and twice as a key.
-      setOlderActivity((rows) => appendUnseen(rows, next.data));
+      const next = await fetchPersonActivity(personId, activityPage + 1, activityNextCursor);
+      // The cursor is the server's stable boundary. A row written now belongs
+      // to a newer window; concatenation cannot repeat or skip it.
+      setOlderActivity((rows) => [...rows, ...next.data]);
       setActivityPage(next.page);
+      setActivityNextCursor(next.next_cursor);
+      setActivityHasMore(next.has_more);
     } catch (caught) {
       setError(errorSummary(caught));
     } finally {
@@ -344,7 +358,7 @@ export function PersonDrawer({
                     so the control's disappearance never moves the feed. */}
                 <div class="people-feed-foot">
                   <span class="people-hint tabular">{shownActivity.length} of {record.activity_total}</span>
-                  {shownActivity.length < record.activity_total
+                  {activityHasMore
                     ? <Button small disabled={loadingMore} onClick={() => void loadMoreActivity()}>{loadingMore ? "Loading…" : "Load more"}</Button>
                     : <span class="people-hint">Complete</span>}
                 </div>

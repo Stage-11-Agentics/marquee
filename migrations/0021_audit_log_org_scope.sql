@@ -39,6 +39,9 @@ CREATE TABLE audit_log_0021_new (
   event_id TEXT,
   org_id TEXT REFERENCES organizations(id),
   actor_person_id TEXT REFERENCES people(id),
+  -- Authorship survives the referential cleanup that lets demo people be
+  -- deleted. This is a display snapshot, not a second mutable person record.
+  actor_name TEXT,
   actor_kind TEXT NOT NULL CHECK (actor_kind IN ('user', 'api_token', 'system', 'airtable')),
   action TEXT NOT NULL,
   entity_type TEXT NOT NULL,
@@ -51,11 +54,12 @@ CREATE TABLE audit_log_0021_new (
 );
 
 INSERT INTO audit_log_0021_new
-  (id, event_id, org_id, actor_person_id, actor_kind, action, entity_type, entity_id,
+  (id, event_id, org_id, actor_person_id, actor_name, actor_kind, action, entity_type, entity_id,
    before_json, after_json, created_at, request_id)
 SELECT entry.id, entry.event_id,
   (SELECT conference.org_id FROM events conference WHERE conference.id = entry.event_id),
-  entry.actor_person_id, entry.actor_kind, entry.action, entry.entity_type, entry.entity_id,
+  entry.actor_person_id, (SELECT actor.name FROM people actor WHERE actor.id = entry.actor_person_id),
+  entry.actor_kind, entry.action, entry.entity_type, entry.entity_id,
   entry.before_json, entry.after_json, entry.created_at, entry.request_id
 FROM audit_log entry;
 
