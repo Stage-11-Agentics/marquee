@@ -3,8 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Marquee — Pipeline v1.13 prototype</title>
-  <!-- v1.13 (2026-08-14): sidebar reorg (DRAFT — prototype only, build
+  <title>Marquee — Pipeline v1.14 prototype</title>
+  <!-- v1.14 (2026-08-14): Organization settings (interview rulings O1–O8,
+       sequence/org-settings-design.md). Access management gets its
+       steady-state home: a ⚙ Settings row closes the Organization group,
+       opening #org with four tabs — Organization (org name, default
+       timezone, default theme, comms-defaults and branding cards mocked to
+       be judged, demo-data removal) · Organizers (roles + scopes, the
+       one-transaction removal dialog with minted-token checklist defaulting
+       to revoke, dual-seat note, day-of invites with QR + short join code +
+       role/scope) · Instance (the D8 panel as steady state) · API tokens
+       (moved up from Conference settings — org-scoped table, tokens can
+       span conferences; settings/api redirects here). The theme registry
+       now matches production (src/ui/shell/theme.ts): Marquee Light,
+       Marquee Night, and the three register themes latent.space,
+       AI Engineer, swyxy as best-effort palette re-lights — the full
+       register chrome (marks, casing, layout tropes) remains build-only,
+       and swyxy's in-theme dark mode is not carried here.
+       v1.13 (2026-08-14): sidebar reorg (DRAFT — prototype only, build
        unchanged until Atin's love pass; comparison mock and rationale in
        prototypes/sidebar-reorg/). The seven-stage Pipeline ladder leaves
        the nav — the stages stay one click away on the Program-home strip
@@ -240,6 +256,65 @@
       --canvas-drop-bg: rgba(63,186,194,.14);
     }
 
+    /* ════ REGISTER THEMES (v1.14) ════════════════════════════════════════
+       Palette re-lights of the three production register themes, mapped from
+       src/styles/themes/*.css onto this file's token names (surface→panel,
+       rule→line-strong, accent-wash→accent-soft, alarm→danger). The full
+       register chrome — latent.space's gradient hexagon, AI Engineer's >_
+       prompt and shell tropes, swyxy's lowercase nav and dark mode — lives
+       in the build only; here a register re-lights the instrument so the
+       org-settings default-theme picker previews honestly. ──────────────── */
+    html[data-theme="latent-space"] {
+      --bg: #0b0b0e; --panel: #131318; --sunk: #0f0f13; --graph: #1a1a21;
+      --ink: #f2f0f5; --ink-soft: #c7c4cf; --muted: #8b8896;
+      --line: #1d1d24; --line-strong: #26262e;
+      --accent: #e56eff; --accent-soft: #231626; --accent-dark: #e56eff;
+      --accent-hover: #f09dff; --on-accent: #0b0b0e; --accent-line: #5c2a52;
+      --danger: #e56eff; --danger-soft: #2a1626; --danger-ink: #f0a0ff; --danger-line: #5c2a52;
+      --warning: #ffa363; --warning-soft: #2a1f16; --warning-ink: #ffc890; --warning-line: #5c4122; --warning-edge: #5c4122;
+      --success: #b8b4c2; --success-soft: #1a1a21; --success-ink: #c9cdd4; --success-line: #33333c;
+      --on-ink: #131318; --on-ink-plain: #131318; --on-ink-line: #8b8896; --on-ink-hover: #e56eff;
+      --backdrop: rgba(11,11,14,.66); --break-tint: #9a97a4; --break-stripe: #1a1a21;
+      --veil: rgba(255,255,255,.04); --veil-strong: rgba(255,255,255,.06); --veil-dim: rgba(255,255,255,.02);
+      --wave-tick: rgba(0,0,0,.45);
+      --spectrum: linear-gradient(92deg,#ffa363,#e56eff);
+      --canvas: #08080a; --canvas-line: #26262e; --canvas-ink: #e8e6ec;
+      --display: "Syncopate", "Arial Black", sans-serif;
+      --sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    }
+    html[data-theme="ai-engineer"] {
+      --bg: #ffffff; --panel: #ffffff; --sunk: #f7f7f7; --graph: #f2f2f2;
+      --ink: #000000; --ink-soft: #333333; --muted: #545454;
+      --line: #e5e5e5; --line-strong: #dddddd;
+      --accent: #000000; --accent-soft: #f0f0f0; --accent-dark: #000000;
+      --accent-hover: #333333; --on-accent: #ffffff; --accent-line: #bbbbbb;
+      --danger: #000000; --danger-soft: #eaeaea; --danger-ink: #1a1a1a; --danger-line: #bbbbbb;
+      --warning: #1a1a1a; --warning-soft: #f0f0f0; --warning-ink: #1a1a1a; --warning-line: #cccccc; --warning-edge: #999999;
+      --success: #1a1a1a; --success-soft: #f0f0f0; --success-ink: #1a1a1a; --success-line: #cccccc;
+      --on-ink: #ffffff; --on-ink-plain: #ffffff; --on-ink-line: #545454; --on-ink-hover: #cccccc;
+      --backdrop: rgba(0,0,0,.4); --break-tint: #6e6e6e; --break-stripe: #f2f2f2;
+      --spectrum: linear-gradient(90deg,#000,#545454,#000);
+      --canvas: #111111; --canvas-line: #333333; --canvas-ink: #eeeeee;
+      --display: "Plus Jakarta Sans", system-ui, sans-serif;
+      --sans: "Inter", system-ui, sans-serif;
+    }
+    html[data-theme="swyxy"] {
+      --bg: #ffffff; --panel: #ffffff; --sunk: #f8fafc; --graph: #f1f5f9;
+      --ink: #0f172a; --ink-soft: #334155; --muted: #64748b;
+      --line: #eef2f7; --line-strong: #e2e8f0;
+      --accent: #3730a3; --accent-soft: #eef2ff; --accent-dark: #3730a3;
+      --accent-hover: #312e81; --on-accent: #ffffff; --accent-line: #c7d2fe;
+      --danger: #b91c1c; --danger-soft: #fef2f2; --danger-ink: #991b1b; --danger-line: #fecaca;
+      --warning: #b45309; --warning-soft: #fef9ec; --warning-ink: #92400e; --warning-line: #f0dfa8; --warning-edge: #d6b25c;
+      --success: #15803d; --success-soft: #f0fdf4; --success-ink: #166534; --success-line: #bbf7d0;
+      --on-ink: #e2e8f0; --on-ink-plain: #e2e8f0; --on-ink-line: #64748b; --on-ink-hover: #a5b4fc;
+      --backdrop: rgba(15,23,42,.4); --break-tint: #64748b; --break-stripe: #f1f5f9;
+      --spectrum: linear-gradient(90deg,#3730a3,#818cf8,#3730a3);
+      --canvas: #0b1120; --canvas-line: #1e293b; --canvas-ink: #e2e8f0;
+      --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --mono: var(--sans); --display: var(--sans);
+    }
+
     * { box-sizing: border-box; }
     html { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
     body { margin: 0; min-width: 320px; }
@@ -413,13 +488,13 @@
     .peek-bar-spacer { margin-left:auto; }
     .claim-note { border:1px solid var(--line-strong); border-left:3px solid var(--accent); border-radius:var(--radius); background:var(--sunk); padding:10px 12px; font-size:11px; color:var(--ink-soft); line-height:1.6; }
     .token-line { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; }
-    .org-row { display:grid; grid-template-columns:1fr 210px 92px 84px; gap:12px; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); min-height:44px; }
+    .org-row { display:grid; grid-template-columns:1fr 210px 150px 92px 84px; gap:12px; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); min-height:44px; }
     .org-row:last-child { border-bottom:0; }
     .org-row .org-name { font-weight:600; font-size:11.5px; }
     .org-row .org-note { display:block; font-weight:400; font-size:10px; color:var(--muted); }
     .org-row .org-email { font:400 10.5px/1.4 var(--mono); color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .org-row .chip { width:84px; justify-content:center; }
-    @media (max-width:1100px) { .setup-doors { grid-template-columns:1fr; } .org-row { grid-template-columns:1fr 92px 84px; } .org-row .org-email { display:none; } .inst-row { grid-template-columns:118px 112px 1fr; } .inst-row .inst-fix { grid-column:3; justify-self:end; } }
+    @media (max-width:1100px) { .setup-doors { grid-template-columns:1fr; } .org-row { grid-template-columns:1fr 150px 92px 84px; } .org-row .org-email { display:none; } .inst-row { grid-template-columns:118px 112px 1fr; } .inst-row .inst-fix { grid-column:3; justify-self:end; } }
     .empty-preview:hover { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
     .detail-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr); gap:14px; align-items:start; }
     .definition-list { display:grid; grid-template-columns:150px 1fr; gap:0; }
@@ -447,6 +522,9 @@
     .list-button:last-child { border-bottom:0; }
     .toggle-line { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px solid var(--line); }
     .toggle-line:last-child { border-bottom:0; }
+    button.toggle-line { background:none; border:0; border-bottom:1px solid var(--line); color:inherit; font:inherit; border-radius:0; }
+    button.toggle-line:last-child { border-bottom:0; }
+    button.toggle-line:hover strong { color:var(--accent-dark); }
     .switch { width:38px; height:20px; border:1px solid var(--line-strong); border-radius:2px; background:var(--sunk); padding:2px; }
     .switch::after { content:""; display:block; width:14px; height:14px; border-radius:1px; background:var(--muted); transition:transform 110ms, background 110ms; }
     .switch.on { background:var(--accent-soft); border-color:var(--accent); }
@@ -1096,9 +1174,16 @@
       // day hues are tuned for white and go muddy on dark ground); custom
       // tracks keep their stored color in every theme.
       const NIGHT_TRACKS = { "AI in Financial Services":"#8b85ff", "Agents":"#f2705f", "Evals":"#2ec4b6", "Infra":"#f59e0b", "Open Models":"#5b8def", "RAG / Retrieval":"#b06ef5", "Security":"#ef5da8", "Leadership":"#84cc16" };
+      // Registry matches production (src/ui/shell/theme.ts THEMES): the same
+      // five ids and labels, swyxy's lowercase deliberate (judge-facing).
+      // Dark-ground themes reuse the night track octave; light registers keep
+      // day hues. Registers here are palette re-lights (see the CSS note).
       const THEMES = [
-        { id: "day", label: "Day" },
-        { id: "night", label: "Night", tracks: NIGHT_TRACKS }
+        { id: "day", label: "Marquee Light" },
+        { id: "night", label: "Marquee Night", tracks: NIGHT_TRACKS },
+        { id: "latent-space", label: "latent.space", tracks: NIGHT_TRACKS, kind: "register" },
+        { id: "ai-engineer", label: "AI Engineer", kind: "register" },
+        { id: "swyxy", label: "swyxy", kind: "register" }
       ];
       function currentTheme() { return THEMES.find(t=>t.id===state.theme) || THEMES[0]; }
       function applyTheme() {
@@ -1190,11 +1275,23 @@
         instance: {
           domain: "marquee.stage11.dev", mail: true, uploads: true, spam: true,
           owner: { name:"Maya Chen", email:"maya.chen@example.com" }, agentToken: null,
+          // Scope mirrors memberships.event_id: null = whole organization,
+          // an event name = that conference only (O4's day-of volunteer).
+          // alsoSpeaker demonstrates the O3 dual-seat trap: removing the
+          // organizer seat must say it leaves the speaker seat alone.
           organizers: [
             { name:"Maya Chen", note:"Program lead", email:"maya.chen@example.com", role:"Owner", you:true },
-            { name:"Tomás Herrera-Lindqvist", note:"Speaker ops", email:"tomas.herrera-lindqvist@example.com", role:"Organizer" },
-            { name:"Ruthie Adeyemi-O'Connor", note:"Review coordination", email:"ruthie.adeyemi-oconnor@example.com", role:"Organizer" }
+            { name:"Tomás Herrera-Lindqvist", note:"Speaker ops", email:"tomas.herrera-lindqvist@example.com", role:"Organizer", alsoSpeaker:true, openWork:"2 unfinished review assignments" },
+            { name:"Ruthie Adeyemi-O'Connor", note:"Review coordination", email:"ruthie.adeyemi-oconnor@example.com", role:"Organizer", openWork:"3 unfinished review assignments" },
+            { name:"Dele Ogunwale", note:"Day-of volunteer", email:"dele.ogunwale@example.com", role:"Ops", scope:"AIE New York 2026" }
           ]
+        },
+        // Organization settings (v1.14, rulings O1/O7). Defaults seed new
+        // conferences; each conference still owns its own values.
+        org: {
+          name: "AI Engineer", defaultTimezone: "America/New_York", defaultTheme: "day",
+          commsFrom: "AIE program team", commsReply: "program@ai.engineer",
+          accent: "#0b6a72"
         },
         submissions: [],
         submissionFilter: "All",
@@ -1325,7 +1422,11 @@
         importStep: 0,
         importBatch: null,
         airtableLog: ["09:42:17 connected to appAIE2026", "09:42:18 local 1,040 · Airtable 1,040", "09:42:18 outbox clear · mirror healthy"],
-        apiTokens: [{id:"tok_92Jf",name:"Agenda publisher",prefix:"mq_live_92Jf…",created:"Aug 8",lastUsed:"2 minutes ago"}],
+        apiTokens: [
+          {id:"tok_92Jf",name:"Agenda publisher",prefix:"mq_live_92Jf…",created:"Aug 8",lastUsed:"2 minutes ago",createdBy:"Maya Chen",scope:"AIE New York 2026"},
+          {id:"tok_4dQx",name:"Sponsor roster sync",prefix:"mq_live_4dQx…",created:"Aug 11",lastUsed:"3 hours ago",createdBy:"Tomás Herrera-Lindqvist",scope:"All conferences"},
+          {id:"tok_7mPa",name:"Review reminder script",prefix:"mq_live_7mPa…",created:"Aug 12",lastUsed:"Yesterday",createdBy:"Ruthie Adeyemi-O'Connor",scope:"AIE New York 2026"}
+        ],
         webhooks: [
           {id:"wh_4a1",url:"https://ops.ai.engineer/hooks/marquee",secret:"whsec_8Kd2…",events:["submission.status_changed","agenda.published"],enabled:true,lastDelivery:"3 min ago"},
           {id:"wh_9c7",url:"https://hooks.zapier.com/hooks/catch/44119/marquee",secret:"whsec_1Xb9…",events:["submission.created"],enabled:true,lastDelivery:"1 h ago"}
@@ -1544,7 +1645,8 @@
         cfp: "Public CFP form", portal: "Speaker portal", evaluation: "Evaluation plan", reviewer: "Reviewer queue",
         submissions: "Abstracts & sessions", submissionDetail:"Submission record", submissionNew:"Create submission", eventNew:"Create conference",
         onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Conference site", comms:"Communications",
-        venues:"Venues", taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", apiTokens:"API tokens", webhooks:"Webhooks",
+        venues:"Venues", taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", webhooks:"Webhooks",
+        orgGeneral:"Organization settings", orgOrganizers:"Organizers", orgInstance:"Instance", orgTokens:"API tokens",
         apiDocs:"API documentation", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker",
         setupAgent:"Agent setup", claim:"Claim this instance", handoff:"Instance handoff"
       };
@@ -1687,7 +1789,9 @@
         if (/^submissions\/[^/]+$/.test(path)) { state.submissionRecordId = decodeURIComponent(path.split("/")[1]); return "submissionDetail"; }
         if (/^s\/[^/]+$/.test(path)) { state.publicRecordId = decodeURIComponent(path.split("/")[1]); return "publicSession"; }
         if (/^p\/[^/]+$/.test(path)) { state.publicPersonName = decodeURIComponent(path.slice(2)); return "publicSpeaker"; }
-        return ({"settings/venues":"venues","settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"apiTokens","settings/webhooks":"webhooks","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer","setup/agent":"setupAgent"})[path] || path;
+        // settings/api redirects to the token surface's new home (O2): the
+        // old conference-settings path keeps working, it just lands in org.
+        return ({"settings/venues":"venues","settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"orgTokens","settings/webhooks":"webhooks","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer","setup/agent":"setupAgent","org":"orgGeneral","org/organizers":"orgOrganizers","org/instance":"orgInstance","org/tokens":"orgTokens"})[path] || path;
       }
 
       function currentRoute() {
@@ -1834,6 +1938,10 @@
       function showsEmptyState(route) {
         if (!state.setup.active || state.demoPeek) return false;
         if (["eventNew","setupAgent","claim","handoff","landing"].includes(route)) return false;
+        // Organization surfaces are instance-level and render real state in
+        // the walk (mode "second" is the same configured instance). Only the
+        // token list on a brand-new install honestly has nothing yet.
+        if (String(route).startsWith("org")) return route === "orgTokens" && state.setup.mode === "first";
         if (route === "dashboard" || route === "settings") return !state.setup.steps.details;
         if (route === "forms") return state.forms.length === 0;
         if (route === "importer") return !state.setup.steps.details;
@@ -1911,6 +2019,7 @@
             <nav class="nav" aria-label="Organization">
               <a href="../crm/index.html?v=14"><span class="nav-icon"></span><span>People CRM</span></a>
               <a href="../crm/index.html?v=14"><span class="nav-icon"></span><span>Outreach</span></a>
+              <a href="#org" class="${String(state.route).startsWith("org")?"active":""}"><span class="nav-icon">⚙</span><span>Settings</span></a>
             </nav>
             <div class="nav-label">Conference</div>
             <div class="event-switcher-row">
@@ -1951,7 +2060,7 @@
           <main class="main">
             ${peekBar()}
             <header class="topbar">
-              <div class="breadcrumbs">${esc(state.event.name || "New install")}&nbsp; / &nbsp;<strong>${esc(routeNames[state.route])}</strong></div>
+              <div class="breadcrumbs">${esc(String(state.route).startsWith("org") ? state.org.name : (state.event.name || "New install"))}&nbsp; / &nbsp;<strong>${esc(routeNames[state.route])}</strong></div>
               <div class="global-search">
                 <span class="search-glyph">⌕</span>
                 <input id="global-search" aria-label="Search everything" autocomplete="off" placeholder="Search abstracts, speakers, sessions…" readonly>
@@ -1998,7 +2107,7 @@
       }
 
       function routePath(route) {
-        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"conferences/new",venues:"settings/venues",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiTokens:"settings/api",apiDocs:"api/docs",aiAssist:"evaluation/ai",setupAgent:"setup/agent",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
+        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"conferences/new",venues:"settings/venues",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiDocs:"api/docs",aiAssist:"evaluation/ai",setupAgent:"setup/agent",orgGeneral:"org",orgOrganizers:"org/organizers",orgInstance:"org/instance",orgTokens:"org/tokens",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
       }
 
       function pageHead(title, copy, actions = "") {
@@ -2497,7 +2606,14 @@
       }
 
       function settingsTabs(active) {
-        const tabs = [["settings","Conference"],["settings/venues","Venues"],["settings/tasks","Task templates"],["settings/airtable","Airtable"],["settings/api","API tokens"],["settings/webhooks","Webhooks"]];
+        // API tokens moved to Organization settings (v1.14, ruling O2):
+        // api_tokens is an org-scoped table and a token can span conferences.
+        const tabs = [["settings","Conference"],["settings/venues","Venues"],["settings/tasks","Task templates"],["settings/airtable","Airtable"],["settings/webhooks","Webhooks"]];
+        return `<nav class="route-tabs">${tabs.map(([href,label])=>`<a class="button ${routeKey(href)===active?"active":""}" href="#${href}">${esc(label)}</a>`).join("")}</nav>`;
+      }
+
+      function orgTabs(active) {
+        const tabs = [["org","Organization"],["org/organizers","Organizers"],["org/instance","Instance"],["org/tokens","API tokens"]];
         return `<nav class="route-tabs">${tabs.map(([href,label])=>`<a class="button ${routeKey(href)===active?"active":""}" href="#${href}">${esc(label)}</a>`).join("")}</nav>`;
       }
 
@@ -2525,19 +2641,23 @@
       function buildingsCard() { return `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Buildings</h2><span class="subtle">Coordinates drive walking times, transit conflicts, and the map above</span></div><button class="button small" id="add-building">+ Add building</button></div><div class="card-body">${buildings.map((b,i) => `<div class="building-block"><div class="building-row"><span class="drag-handle">${i+1}</span><input aria-label="Building name" data-building-name="${b.id}" value="${esc(b.name)}"><input aria-label="Building address" data-building-address="${b.id}" value="${esc(b.address)}" placeholder="Street address, floor, entrance notes"><span class="building-rooms tabular">${roomsInBuilding(b.id)} ${roomsInBuilding(b.id)===1?"room":"rooms"}${sessionsToday(b)?` · ${sessionsToday(b)} today`:""}</span><button class="button small" data-remove-building="${b.id}" ${buildings.length<=1?"disabled":""}>Remove</button></div><div class="building-geo"><span></span><div><label for="lat-${b.id}">Latitude</label><input id="lat-${b.id}" data-building-lat="${b.id}" value="${b.lat==null?"":b.lat}" placeholder="40.75600"></div><div><label for="lng-${b.id}">Longitude</label><input id="lng-${b.id}" data-building-lng="${b.id}" value="${b.lng==null?"":b.lng}" placeholder="-73.98923"></div><div><label for="acc-${b.id}">Minutes to get in</label><input id="acc-${b.id}" data-building-access="${b.id}" type="number" min="0" step="1" value="${b.accessMinutes||0}"></div><div><label for="note-${b.id}">Entrance note</label><input id="note-${b.id}" data-building-note="${b.id}" value="${esc(b.accessNote||"")}" placeholder="Doors, ID, lifts — shown to speakers"></div></div></div>`).join("")}</div></section>`; }
       function roomsCard() { return `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Rooms</h2><span class="subtle">Capacity, building, AV capability, and the notes an ops lead needs on the day</span></div><button class="button small" id="add-room">+ Add room</button></div><div class="card-body">${rooms.map((r,i) => `<div class="room-row"><div class="room-row-main"><span class="drag-handle">${i+1}</span><input aria-label="Room name" data-room-name="${i}" value="${esc(r)}"><input aria-label="Room capacity" data-room-capacity="${i}" type="number" min="1" step="1" value="${state.roomCapacities[i]}"><select aria-label="Building" data-room-building="${i}"><option value="">Unassigned</option>${buildings.map(b=>`<option value="${b.id}" ${state.roomBuildings[i]===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}</select><button class="button small" data-remove-room="${i}" ${rooms.length<=1?"disabled":""}>Remove</button></div><div class="room-row-meta"><span class="room-meta-label">AV</span><div class="av-tags">${AV_TAGS.map(tag=>`<button class="av-tag ${(state.roomAV[i]||[]).includes(tag)?"on":""}" data-room-av="${i}" data-av-tag="${esc(tag)}" aria-pressed="${(state.roomAV[i]||[]).includes(tag)?"true":"false"}">${esc(tag)}</button>`).join("")}</div></div><div class="room-row-meta"><span class="room-meta-label">Notes</span><input aria-label="Room notes" data-room-notes="${i}" value="${esc(state.roomNotes[i]||"")}" placeholder="Access, load-in, quirks — shown on the agenda and to speakers"></div></div>`).join("")}</div></section>`; }
 
-      // Organizers are instance-level people, surfaced inside Conference
-      // settings because that is where an organizer already looks. Invites are
+      // Organizers are instance-level people. Their steady-state home is
+      // Organization settings (v1.14, ruling O1); during the cold-start walk
+      // the same card is one click from the setup dashboard. Invites are
       // one-time links the owner hands over on any channel — the same trick as
-      // the claim link, so a co-organizer can join before mail exists.
+      // the claim link, so a co-organizer can join before mail exists. A row's
+      // scope mirrors memberships.event_id: whole organization, or one
+      // conference (the day-of volunteer, ruling O4).
       function organizersCard() {
         const orgs = state.instance.organizers;
         const dash = w => `<span class="subtle" style="display:inline-block;width:${w}px;text-align:center">—</span>`;
-        return `<section class="card"><div class="card-head"><div><h2>Organizers</h2><span class="subtle">Everyone who can run this instance · invites are links, never dependent on mail</span></div><button class="button small" id="invite-organizer">+ Invite additional organizer</button></div>
+        const scopeChip = o => `<span class="chip" style="width:auto">${esc(o.scope || "Organization")}</span>`;
+        return `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Organizers</h2><span class="subtle">Everyone who can run this instance · invites are links, never dependent on mail</span></div><button class="button small" id="invite-organizer">+ Invite additional organizer</button></div>
           <div class="card-body" style="padding-top:2px;padding-bottom:2px">
             ${orgs.length ? orgs.map((o,i)=> o.pending
-              ? `<div class="org-row"><span class="org-name">Invite link minted<span class="org-note">${esc(o.minted)} · single use · expires in 7 days</span></span><span class="org-email">—</span><span class="chip">Pending</span><button class="button small" data-revoke-invite="${i}" style="width:76px">Revoke</button></div>`
-              : `<div class="org-row"><span class="org-name">${esc(o.name)}${o.you?` <span class="chip" style="width:auto;margin-left:4px">you</span>`:""}<span class="org-note">${esc(o.note||"")}</span></span><span class="org-email">${esc(o.email)}</span><span class="chip ${o.role==="Owner"?"published":""}">${esc(o.role)}</span>${o.role==="Owner"?dash(76):`<button class="button small" data-remove-organizer="${i}" style="width:76px">Remove</button>`}</div>`).join("")
-            : `<div class="org-row"><span class="org-name">No organizers yet<span class="org-note">Claiming the instance creates the first owner</span></span><span class="org-email">—</span><span class="chip">—</span>${dash(76)}</div>`}
+              ? `<div class="org-row"><span class="org-name">Invite link minted<span class="org-note">${esc(o.minted)} · single use · expires in 7 days</span></span><span class="org-email">${esc(o.code||"—")}</span><span class="chip" style="width:auto">${esc(o.scope || "Organization")}</span><span class="chip">Pending · ${esc(o.role||"Organizer")}</span><button class="button small" data-revoke-invite="${i}" style="width:76px">Revoke</button></div>`
+              : `<div class="org-row"><span class="org-name">${esc(o.name)}${o.you?` <span class="chip" style="width:auto;margin-left:4px">you</span>`:""}<span class="org-note">${esc(o.note||"")}${o.alsoSpeaker?" · also holds a speaker seat":""}</span></span><span class="org-email">${esc(o.email)}</span>${scopeChip(o)}<span class="chip ${o.role==="Owner"?"published":""}">${esc(o.role)}</span>${o.role==="Owner"?dash(76):`<button class="button small" data-remove-organizer="${i}" style="width:76px">Remove</button>`}</div>`).join("")
+            : `<div class="org-row"><span class="org-name">No organizers yet<span class="org-note">Claiming the instance creates the first owner</span></span><span class="org-email">—</span><span class="chip">—</span><span class="chip">—</span>${dash(76)}</div>`}
           </div></section>`;
       }
 
@@ -2554,7 +2674,7 @@
               <div class="field"><label for="event-timezone">Timezone</label><select id="event-timezone"><option selected>America/New_York</option><option>America/Los_Angeles</option><option>Europe/London</option></select><span class="field-note">Agenda and calendar invites inherit this timezone.</span></div>
               <div class="field"><label for="event-submission-limit">Submissions per person · conference default</label><input id="event-submission-limit" type="number" min="1" max="10" value="${state.event.submissionLimit||3}" style="width:80px"><span class="field-note">Applies when a form sets no limit of its own. Saved drafts count toward it.</span></div>
             </div></section>
-            ${organizersCard()}
+            <section class="card"><div class="card-head"><div><h2>Organizers &amp; access</h2><span class="subtle">Who can log in is an organization concern, not a conference one</span></div><a class="button small" href="#org/organizers">Open Organization settings →</a></div><div class="card-body"><span class="subtle">${state.instance.organizers.filter(o=>!o.pending).length} organizers · ${state.instance.organizers.filter(o=>o.pending).length} pending ${state.instance.organizers.filter(o=>o.pending).length===1?"invite":"invites"} · API tokens live there too</span></div></section>
             <section class="card"><div class="card-head"><h2>Formats</h2><button class="button small" id="add-format">+ Add format</button></div><div class="card-body" id="format-settings">
               ${formats.map((f,i) => `<div class="settings-row" data-format-index="${i}"><span class="drag-handle">⋮</span><input aria-label="Format name" data-format-name="${i}" value="${esc(f)}"><input aria-label="Allowed range" data-format-range="${i}" value="${esc(formatRanges[f]||"15–30")}"><label class="field" style="display:flex;align-items:center;gap:4px"><input aria-label="Default duration" data-format-duration="${i}" type="number" min="5" max="180" value="${formatDurations[f]}"><span class="subtle">min</span></label></div>`).join("")}
             </div></section>
@@ -3032,8 +3152,95 @@
         return shell(`<div class="page">${pageHead("Airtable mirror", "D1 stays authoritative. The two-way mirror runs off the request path and makes its health visible.", `<a class="button" href="#settings">Conference settings</a><button class="button primary" id="sync-airtable">Sync now</button>`)}${settingsTabs("airtable")}<div class="grid-2"><section class="card"><div class="card-head"><h2>AIE NYC 2026 base</h2><a class="button small" href="https://airtable.com/appAIE2026" target="_blank" rel="noreferrer">Open base ↗</a></div><div class="card-body"><div class="metric-grid"><div class="metric-box"><span class="eyebrow">Marquee rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Airtable rows</span><div class="metric">1,040</div></div><div class="metric-box"><span class="eyebrow">Last successful sync</span><div class="metric" style="font-size:16px">23 sec ago</div></div><div class="metric-box"><span class="eyebrow">Outbox depth</span><div class="metric">0</div></div></div><div class="message-preview" style="margin-top:14px"><strong>Webhook healthy · renews automatically</strong><br><span class="subtle">Expires Aug 14, 2026 · keepalive due in 5 days. You’ll see a warning here 48 hours before expiry.</span></div></div></section><section class="card"><div class="card-head"><h2>Live sync log</h2><span class="chip published">Healthy</span></div><div class="card-body"><div class="live-log" id="airtable-log">${state.airtableLog.map((line,i)=>`<div>${i===state.airtableLog.length-1?"<strong>✓</strong>":"·"} ${esc(line)}</div>`).join("")}</div></div></section></div></div>`);
       }
 
-      function apiTokensView() {
-        return shell(`<div class="page">${pageHead("API tokens", "Issue revocable credentials for agents, scripts, and integrations independently of browser sessions.", `<a class="button" href="#api/docs">Read API docs</a><button class="button primary" id="create-token">Create token</button>`)}${settingsTabs("apiTokens")}<section class="card table-card"><div class="table-wrap" style="min-height:300px"><table><thead><tr><th>Name</th><th>Token</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>${state.apiTokens.map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td><code>${esc(t.prefix)}</code></td><td>${esc(t.created)}</td><td>${esc(t.lastUsed)}</td><td><button class="button small danger" data-revoke-token="${t.id}">Revoke</button></td></tr>`).join("")||`<tr><td colspan="5" style="height:180px;text-align:center"><strong>No API tokens</strong><div class="subtle">Create one for your first agent or integration.</div></td></tr>`}</tbody></table></div></section></div>`);
+      // ── Organization settings (v1.14) ─────────────────────────────────────
+      // The steady-state home for everything instance/org-level: who can log
+      // in, what the machine reports, org-wide defaults, and API tokens.
+      // Rulings O1–O8 in sequence/org-settings-design.md.
+
+      // A deterministic decorative QR: real finder squares, seeded noise. It
+      // is a mock (the link itself is fabricated), drawn honestly as one — a
+      // scan target shape, not a scannable payload. Always on a white tile:
+      // QR contrast is not themeable.
+      function fauxQR(seed) {
+        let h = 2166136261;
+        for (const ch of String(seed)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+        const rand = () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return (h >>> 0) / 4294967296; };
+        const n = 25, on = [];
+        const finder = (fx,fy) => { for(let y=0;y<7;y++) for(let x=0;x<7;x++) { const edge = x===0||x===6||y===0||y===6, core = x>=2&&x<=4&&y>=2&&y<=4; if(edge||core) on.push([fx+x,fy+y]); } };
+        finder(0,0); finder(n-7,0); finder(0,n-7);
+        for (let y=0;y<n;y++) for (let x=0;x<n;x++) {
+          const inFinder = (x<8&&y<8)||(x>=n-8&&y<8)||(x<8&&y>=n-8);
+          if (!inFinder && rand() < .44) on.push([x,y]);
+        }
+        return `<svg viewBox="-1 -1 ${n+2} ${n+2}" width="128" height="128" role="img" aria-label="Invite QR code" style="display:block;background:#fff;border-radius:2px">${on.map(([x,y])=>`<rect x="${x}" y="${y}" width="1" height="1" fill="#111"/>`).join("")}</svg>`;
+      }
+
+      // The short join code: the same one-time link, readable aloud across a
+      // registration desk when even a QR scan fails (ruling O4). Single-use
+      // with expiry, so guessability is a non-issue.
+      const INVITE_WORDS_A = ["BLUE","CEDAR","IRON","NORTH","AMBER","RIDGE","SOLAR","QUARTZ"];
+      const INVITE_WORDS_B = ["FALCON","HARBOR","SIGNAL","MERIDIAN","LANTERN","CIRCUIT","SUMMIT","BEACON"];
+      function mintInviteCode() {
+        const pick = list => list[Math.floor(Math.random()*list.length)];
+        return `${pick(INVITE_WORDS_A)}-${pick(INVITE_WORDS_B)}-${10+Math.floor(Math.random()*90)}`;
+      }
+
+      function orgGeneralView() {
+        const org = state.org;
+        return shell(`<div class="page">
+          ${pageHead("Organization settings", "The level above any one conference: who you are, what new conferences inherit, and the machine underneath.", `<button class="button primary" id="save-org">Save organization settings</button>`)}
+          ${orgTabs("orgGeneral")}
+          <div class="grid-2">
+            <section class="card"><div class="card-head"><h2>Organization</h2></div><div class="card-body stack">
+              <div class="field"><label for="org-name">Organization name</label><input id="org-name" value="${esc(org.name)}"><span class="field-note">Shown in the sidebar's Organization group, invite screens, and API metadata.</span></div>
+              <div class="field"><label for="org-timezone">Default timezone</label><select id="org-timezone">${TIMEZONES.map(tz=>`<option ${org.defaultTimezone===tz?"selected":""}>${tz}</option>`).join("")}</select><span class="field-note">Seeds the timezone when a conference is created. Each conference still owns its own.</span></div>
+            </div></section>
+            <section class="card"><div class="card-head"><div><h2>Default theme</h2><span class="subtle">What a user sees before they choose · their own top-bar choice wins once made</span></div></div><div class="card-body" style="padding-top:4px;padding-bottom:6px">
+              ${THEMES.map(t=>`<button class="toggle-line" data-org-theme="${t.id}" style="width:100%;text-align:left"><span><strong>${esc(t.label)}</strong><small class="subtle" style="display:block;margin-top:3px">${t.kind==="register"?"Register · re-lights the palette and restyles the shell in the build":"Palette · re-lights the instrument, structure unchanged"}</small></span><span class="chip ${org.defaultTheme===t.id?"published":""}" style="width:84px">${org.defaultTheme===t.id?"Default":"—"}</span></button>`).join("")}
+              <span class="field-note" style="display:block;margin-top:6px">Choosing a default applies it here so you see what new users will see. Register themes preview as palette re-lights in this prototype; their full chrome ships in the build.</span>
+            </div></section>
+            <section class="card"><div class="card-head"><div><h2>Communication defaults</h2><span class="subtle">The voice new conferences inherit · mail mechanics live on the Instance tab</span></div><span class="chip" style="width:auto">Mocked to judge</span></div><div class="card-body stack">
+              <div class="field"><label for="org-comms-from">From name</label><input id="org-comms-from" value="${esc(org.commsFrom)}"><span class="field-note">Outbound mail sends as this name unless a conference overrides it.</span></div>
+              <div class="field"><label for="org-comms-reply">Reply-to address</label><input id="org-comms-reply" value="${esc(org.commsReply)}"><span class="field-note">Where speaker replies land. A conference can point this at its own inbox.</span></div>
+            </div></section>
+            <section class="card"><div class="card-head"><div><h2>Branding</h2><span class="subtle">Inherited as the default by every new conference · overridable per conference</span></div><span class="chip" style="width:auto">Mocked to judge</span></div><div class="card-body stack">
+              <div class="field"><label for="org-logo">Organization logo</label><input id="org-logo" type="file" accept="image/png,image/jpeg,image/svg+xml"><span class="field-note">PNG, JPEG, or SVG · the existing per-conference logo field becomes the override.</span></div>
+              <div class="field"><label for="org-accent">Accent color</label><input id="org-accent" type="color" value="${esc(org.accent)}" style="width:80px;height:32px;padding:2px"><span class="field-note">Public pages and embeds default to this until a conference sets its own.</span></div>
+            </div></section>
+            ${state.setup.active ? "" : `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Demo data</h2><span class="subtle">The seeded AIE conference exists for orientation · removing it touches nothing of yours</span></div><button class="button small" id="org-remove-demo">Remove demo data</button></div><div class="card-body"><span class="subtle">One action, scoped to rows the seed marked as demo — your organizers, tokens, and instance configuration stay exactly as they are.</span></div></section>`}
+          </div>
+        </div>`);
+      }
+
+      function orgOrganizersView() {
+        return shell(`<div class="page">
+          ${pageHead("Organizers", "Everyone who can run this instance. Seats are org-wide or scoped to one conference; invites are one-time links that never depend on mail.")}
+          ${orgTabs("orgOrganizers")}
+          <div class="grid-2">
+            ${organizersCard()}
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>When an organizer is removed</h2><span class="subtle">One dialog, one transaction — everything it touches is listed before you commit</span></div></div><div class="card-body"><div class="grid-2">
+              <div class="message-preview"><strong>Ends immediately</strong><br><span class="subtle">Every seat they hold · their session on every device · any unexpired sign-in link.</span></div>
+              <div class="message-preview"><strong>Decided in the dialog</strong><br><span class="subtle">API tokens they minted (listed, default = revoke) · open review work returns to the pool.</span></div>
+              <div class="message-preview"><strong>Survives untouched</strong><br><span class="subtle">Their entry in People · every attributed action · submitted evaluations · the audit trail.</span></div>
+              <div class="message-preview"><strong>Never crossed</strong><br><span class="subtle">A speaker seat is a different seat. Removing the organizer never touches talks, speaker tasks, or the portal.</span></div>
+            </div></div></section>
+          </div>
+        </div>`);
+      }
+
+      function orgInstanceView() {
+        return shell(`<div class="page">
+          ${pageHead("Instance", "The machine under the conference, reported honestly — each row derives from real bindings and secrets, never a stored flag.")}
+          ${orgTabs("orgInstance")}
+          <div class="grid-2">
+            ${instancePanel().replace('<section class="card">','<section class="card" style="grid-column:1/-1">')}
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Recovery</h2><span class="subtle">No passwords, ever</span></div></div><div class="card-body"><span class="subtle">Sign-in is a magic link once mail works. Locked out entirely? Re-running the CLI on the deploy host prints a fresh one-time claim link — proof of deploy is proof of ownership, and a used link is inert.</span></div></section>
+          </div>
+        </div>`);
+      }
+
+      function orgTokensView() {
+        return shell(`<div class="page">${pageHead("API tokens", "Issue revocable credentials for agents, scripts, and integrations independently of browser sessions. Tokens are organization-level and may be scoped to one conference or span them all.", `<a class="button" href="#api/docs">Read API docs</a><button class="button primary" id="create-token">Create token</button>`)}${orgTabs("orgTokens")}<section class="card table-card"><div class="table-wrap" style="min-height:300px"><table><thead><tr><th>Name</th><th>Token</th><th>Scope</th><th>Created by</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>${state.apiTokens.map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td><code>${esc(t.prefix)}</code></td><td><span class="chip" style="width:auto">${esc(t.scope||"All conferences")}</span></td><td class="subtle">${esc(t.createdBy||"—")}</td><td>${esc(t.created)}</td><td>${esc(t.lastUsed)}</td><td><button class="button small danger" data-revoke-token="${t.id}">Revoke</button></td></tr>`).join("")||`<tr><td colspan="7" style="height:180px;text-align:center"><strong>No API tokens</strong><div class="subtle">Create one for your first agent or integration.</div></td></tr>`}</tbody></table></div></section></div>`);
       }
 
       // Outbound webhooks: the other half of "agent-native." The API lets a system
@@ -3054,7 +3261,7 @@
 
       function apiDocsView() {
         const endpoints=[["GET","/v1/events/:id/submissions","List submissions with status, type, track, search, sort, and cursor filters."],["POST","/v1/events/:id/submissions","Create an Abstract or Session; Session may bypass evaluation."],["PATCH","/v1/submissions/:id","Update status and receive the cascade plan."],["POST","/v1/submissions/:id/reverse-acceptance","Apply explicit retain/cancel choices for dependent work."],["GET","/v1/events/:id/agenda","Read the same filtered agenda shown in the UI."],["POST","/v1/events/:id/imports/sessionize","Create an idempotent import batch."]];
-        return shell(`<div class="page">${pageHead("Marquee API", "Rendered OpenAPI 3.1 documentation · everything the admin UI does uses this same surface.", `<button class="button" id="download-openapi">Download OpenAPI JSON</button><a class="button primary" href="#settings/api">Create API token</a>`)}<div class="detail-grid"><section class="card"><div class="card-head"><div><h2>HTTP endpoints</h2><span class="subtle">Base URL · https://marquee.stage11.dev/api</span></div><span class="chip published">v1</span></div><div class="card-body">${endpoints.map(e=>`<div class="api-route"><span class="method">${e[0]}</span><code>${e[1]}</code><span class="subtle">${e[2]}</span></div>`).join("")}</div></section><aside class="stack"><section class="card"><div class="card-head"><h2>Authentication</h2></div><div class="card-body"><p class="subtle">Send a UI-issued token as a bearer credential. Tokens are event-scoped and independently revocable.</p><div class="code-block">curl https://marquee.stage11.dev/api/v1/events/aie-nyc-2026/submissions \\\n  -H 'Authorization: Bearer mq_live_…' \\\n  -G --data-urlencode 'status=in_review'</div></div></section><section class="card"><div class="card-head"><h2>Agent contract</h2></div><div class="card-body"><p class="subtle">Pagination and filter names mirror the UI. Writes return the resulting record plus queued side effects, so agents never infer whether work was accepted.</p></div></section></aside></div></div>`);
+        return shell(`<div class="page">${pageHead("Marquee API", "Rendered OpenAPI 3.1 documentation · everything the admin UI does uses this same surface.", `<button class="button" id="download-openapi">Download OpenAPI JSON</button><a class="button primary" href="#org/tokens">Create API token</a>`)}<div class="detail-grid"><section class="card"><div class="card-head"><div><h2>HTTP endpoints</h2><span class="subtle">Base URL · https://marquee.stage11.dev/api</span></div><span class="chip published">v1</span></div><div class="card-body">${endpoints.map(e=>`<div class="api-route"><span class="method">${e[0]}</span><code>${e[1]}</code><span class="subtle">${e[2]}</span></div>`).join("")}</div></section><aside class="stack"><section class="card"><div class="card-head"><h2>Authentication</h2></div><div class="card-body"><p class="subtle">Send a UI-issued token as a bearer credential. Tokens are organization-level, optionally scoped to one conference, and independently revocable.</p><div class="code-block">curl https://marquee.stage11.dev/api/v1/events/aie-nyc-2026/submissions \\\n  -H 'Authorization: Bearer mq_live_…' \\\n  -G --data-urlencode 'status=in_review'</div></div></section><section class="card"><div class="card-head"><h2>Agent contract</h2></div><div class="card-body"><p class="subtle">Pagination and filter names mirror the UI. Writes return the resulting record plus queued side effects, so agents never infer whether work was accepted.</p></div></section></aside></div></div>`);
       }
 
       function aiAssistView() {
@@ -3674,27 +3881,8 @@
       }
 
       function bindSettings() {
-        document.getElementById("invite-organizer")?.addEventListener("click",()=>{
-          const link=`https://${state.instance.domain}/join/mq_inv_k2v0d4x9`;
-          const mailReady=state.instance.mail;
-          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Organizers</div><h2>Invite additional organizer</h2><p>One link, one person, one use. They open it, confirm their name and email, and have a session — the same pattern that claimed this instance, so it works before mail does.</p></div><div class="modal-body stack"><div class="token-line"><div class="code-block" style="padding:10px 12px;word-break:break-all;white-space:normal">${link}</div><button class="button" id="copy-invite">Copy link</button></div><span class="subtle">${mailReady?"Send it on any channel you share — or have Marquee email it.":"Send it on any channel you already share. Once mail is configured, Marquee can send it for you."}</span></div><div class="modal-actions">${mailReady?`<button class="button" id="email-invite">Email the invite</button>`:`<button class="button" id="email-invite-off">Email the invite</button>`}<button class="button primary" id="close-invite">Done</button></div></section></div>`;
-          let minted=false;
-          const mint=note=>{ if(minted)return; minted=true; state.instance.organizers.push({pending:true,minted:`Today · ${note}`}); };
-          document.getElementById("copy-invite").onclick=()=>{ mint("link copied"); copyText(link,"Invite link copied · valid once, expires in 7 days"); };
-          document.getElementById("email-invite")?.addEventListener("click",()=>{ mint("emailed"); toast("Invite emailed · the link stays single-use"); });
-          document.getElementById("email-invite-off")?.addEventListener("click",()=>toast("Mail isn’t configured on this instance — copy the link instead"));
-          document.getElementById("close-invite").onclick=()=>{ modalRoot.innerHTML=""; render(); };
-        });
-        document.querySelectorAll("[data-remove-organizer]").forEach(b=>b.onclick=()=>{
-          const i=Number(b.dataset.removeOrganizer), person=state.instance.organizers[i]; if(!person)return;
-          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Organizers</div><h2>Remove ${esc(person.name)}?</h2><p>Their reviews, decisions, and sent mail stay on the record. Their access ends now, and any sign-in link already in their inbox stops working.</p></div><div class="modal-actions"><button class="button" id="cancel-remove-org">Keep access</button><button class="button primary" id="confirm-remove-org">Remove organizer</button></div></section></div>`;
-          document.getElementById("cancel-remove-org").onclick=()=>modalRoot.innerHTML="";
-          document.getElementById("confirm-remove-org").onclick=()=>{ state.instance.organizers.splice(i,1); modalRoot.innerHTML=""; toast(`${person.name} removed · their work stays on the record`); render(); };
-        });
-        document.querySelectorAll("[data-revoke-invite]").forEach(b=>b.onclick=()=>{
-          state.instance.organizers.splice(Number(b.dataset.revokeInvite),1);
-          toast("Invite link revoked · it can no longer be used"); render();
-        });
+        // Organizer management moved to Organization settings (v1.14, O1) —
+        // its handlers live in bindOrg now.
         document.getElementById("save-venues")?.addEventListener("click",()=>{
           persistVenueEdits();
           toast(`Venues saved · ${pinnedBuildings().length} pinned, ${rooms.length} rooms`);
@@ -3985,8 +4173,91 @@
         document.getElementById("sync-airtable")?.addEventListener("click",e=>{const syncButton=e.currentTarget;syncButton.disabled=true;const log=document.getElementById("airtable-log"),lines=["manual sync requested · reading local outbox","pushed 3 local changes · received 2 webhook records","echo suppression matched 2 origins · no loop","sync complete · local 1,040 · Airtable 1,040 · outbox 0"];let i=0;const tick=()=>{if(i>=lines.length){state.airtableLog.push(...lines);toast("Airtable sync complete · both sides have 1,040 rows");syncButton.disabled=false;return;}const div=document.createElement("div");div.innerHTML=`${i===lines.length-1?"<strong>✓</strong>":"·"} ${esc(new Date().toLocaleTimeString([], {hour12:false}))} ${esc(lines[i++])}`;log.appendChild(div);log.scrollTop=log.scrollHeight;setTimeout(tick,180);};tick();});
       }
 
-      function bindApiTokens() {
-        document.getElementById("create-token")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Create API token</h2><p>The secret is shown once. Store it in the client that needs it.</p></div><div class="modal-body field"><label>Token name</label><input id="token-name" value="Conference agent"></div><div class="modal-actions"><button class="button" id="cancel-token">Cancel</button><button class="button primary" id="issue-token">Issue token</button></div></section></div>`;document.getElementById("cancel-token").onclick=()=>modalRoot.innerHTML="";document.getElementById("issue-token").onclick=()=>{const name=document.getElementById("token-name").value||"Untitled token",id=`tok_${Math.random().toString(36).slice(2,6)}`;state.apiTokens.push({id,name,prefix:`mq_live_${id.slice(-4)}…`,created:"Just now",lastUsed:"Never"});modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Copy this token now</h2><p>Marquee will not show the full secret again.</p></div><div class="modal-body"><div class="code-block" id="issued-token">mq_live_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}</div></div><div class="modal-actions"><button class="button primary" id="done-token">I stored it</button></div></section></div>`;document.getElementById("done-token").onclick=()=>{modalRoot.innerHTML="";render();};};});
+      // One binder serves all four Organization-settings tabs; every lookup is
+      // null-safe, so a tab only binds what it rendered.
+      function bindOrg() {
+        // ── Organization tab ──
+        document.querySelectorAll("[data-org-theme]").forEach(b=>b.onclick=()=>{
+          state.org.defaultTheme=b.dataset.orgTheme;
+          setTheme(state.org.defaultTheme);
+          toast(`Default theme set · ${currentTheme().label} — a user's own choice still wins`);
+        });
+        document.getElementById("save-org")?.addEventListener("click",()=>{
+          state.org.name=document.getElementById("org-name").value.trim()||state.org.name;
+          state.org.defaultTimezone=document.getElementById("org-timezone").value;
+          state.org.commsFrom=document.getElementById("org-comms-from").value.trim();
+          state.org.commsReply=document.getElementById("org-comms-reply").value.trim();
+          state.org.accent=document.getElementById("org-accent").value;
+          toast("Organization settings saved · new conferences inherit these defaults");
+          render();
+        });
+        document.getElementById("org-remove-demo")?.addEventListener("click",()=>{
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Demo data</div><h2>Remove the demo conference?</h2><p>${esc(state.event.name||"The demo conference")} and its seeded submissions were created for orientation. Removal is scoped to rows the seed marked as demo — your organizers, tokens, and instance configuration stay exactly as they are.</p></div><div class="modal-actions"><button class="button" id="cancel-org-demo">Keep the demo</button><button class="button primary" id="confirm-org-demo">Remove demo data</button></div></section></div>`;
+          document.getElementById("cancel-org-demo").onclick=()=>modalRoot.innerHTML="";
+          document.getElementById("confirm-org-demo").onclick=()=>{
+            modalRoot.innerHTML="";
+            // Simulated with the fresh-install machinery in "second" mode: a
+            // claimed, configured instance with no conference data — exactly
+            // what remove-demo leaves behind. The escape button restores.
+            enterFreshInstall("second");
+            toast("Demo conference removed · your organizers and tokens are untouched");
+            navigate("dashboard");
+          };
+        });
+        // ── Organizers tab ──
+        document.getElementById("invite-organizer")?.addEventListener("click",()=>{
+          const code=mintInviteCode();
+          const link=`https://${state.instance.domain}/join/${code.toLowerCase()}`;
+          const mailReady=state.instance.mail;
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" style="max-width:560px"><div class="modal-head"><div class="eyebrow">Organizers</div><h2>Invite additional organizer</h2><p>One link, one person, one use. They open it, confirm their name and email, and have a session — the same pattern that claimed this instance, so it works before mail does, and day-of it works over a phone's own connection.</p></div><div class="modal-body stack">
+            <div class="grid-2">
+              <div class="field"><label for="invite-role">Role</label><select id="invite-role"><option>Organizer</option><option>Ops</option><option>Reviewer</option></select><span class="field-note">Owner transfers are separate, deliberately.</span></div>
+              <div class="field"><label>Scope</label><div class="segment"><button type="button" id="invite-scope-org" class="active" style="width:50%">Organization</button><button type="button" id="invite-scope-event" style="width:50%">${esc(state.event.name||"This conference")}</button></div><span class="field-note">A day-of volunteer gets Ops, scoped to this conference.</span></div>
+            </div>
+            <div class="token-line"><div class="code-block" style="padding:10px 12px;word-break:break-all;white-space:normal">${link}</div><button class="button" id="copy-invite">Copy link</button></div>
+            <div style="display:flex;gap:14px;align-items:center">
+              <span style="flex:0 0 auto;padding:6px;background:#fff;border:1px solid var(--line-strong);border-radius:var(--radius)">${fauxQR(link)}</span>
+              <div class="field" style="flex:1"><label>Short join code</label><div class="code-block" style="font-size:15px;letter-spacing:.06em">${code}</div><span class="field-note">Readable aloud at a registration desk: they type ${esc(state.instance.domain)}/join and the code. Same single-use link, same expiry.</span></div>
+            </div>
+            <span class="subtle">${mailReady?"Send it on any channel you share — or have Marquee email it.":"Send it on any channel you already share. Once mail is configured, Marquee can send it for you."}</span>
+          </div><div class="modal-actions">${mailReady?`<button class="button" id="email-invite">Email the invite</button>`:`<button class="button" id="email-invite-off">Email the invite</button>`}<button class="button primary" id="close-invite">Done</button></div></section></div>`;
+          let minted=false, scope=null;
+          const scopeOrg=document.getElementById("invite-scope-org"), scopeEvent=document.getElementById("invite-scope-event");
+          scopeOrg.onclick=()=>{scope=null;scopeOrg.classList.add("active");scopeEvent.classList.remove("active");};
+          scopeEvent.onclick=()=>{scope=state.event.name||"This conference";scopeEvent.classList.add("active");scopeOrg.classList.remove("active");};
+          const mint=note=>{ if(minted)return; minted=true; state.instance.organizers.push({pending:true,minted:`Today · ${note}`,role:document.getElementById("invite-role").value,scope,code}); };
+          document.getElementById("copy-invite").onclick=()=>{ mint("link copied"); copyText(link,"Invite link copied · valid once, expires in 7 days"); };
+          document.getElementById("email-invite")?.addEventListener("click",()=>{ mint("emailed"); toast("Invite emailed · the link stays single-use"); });
+          document.getElementById("email-invite-off")?.addEventListener("click",()=>toast("Mail isn’t configured on this instance — copy the link instead"));
+          document.getElementById("close-invite").onclick=()=>{ modalRoot.innerHTML=""; render(); };
+        });
+        // The removal transaction (ruling O3): everything listed before commit.
+        document.querySelectorAll("[data-remove-organizer]").forEach(b=>b.onclick=()=>{
+          const i=Number(b.dataset.removeOrganizer), person=state.instance.organizers[i]; if(!person)return;
+          const minted=state.apiTokens.filter(t=>t.createdBy===person.name);
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" style="max-width:560px"><div class="modal-head"><div class="eyebrow">Organizers</div><h2>Remove ${esc(person.name)}?</h2><p>One action, one transaction. Everything below happens together, now.</p></div><div class="modal-body stack">
+            <div class="message-preview"><strong>Ends immediately</strong><br><span class="subtle">Their ${esc(person.role||"organizer")} seat (${esc(person.scope||"whole organization")}) · their session on every device · any unexpired sign-in link.</span></div>
+            ${minted.length?`<div class="field"><label>API tokens they minted</label>${minted.map(t=>`<label class="toggle-line"><span><strong style="font-size:11px">${esc(t.name)}</strong><small class="subtle" style="display:block;margin-top:2px"><code>${esc(t.prefix)}</code> · ${esc(t.scope||"All conferences")} · last used ${esc(t.lastUsed)}</small></span><input type="checkbox" class="revoke-minted" value="${esc(t.id)}" checked></label>`).join("")}<span class="field-note">They know these token values. Revoking is the default; keep one only if an integration the organization still runs depends on it.</span></div>`:""}
+            ${person.openWork?`<div class="message-preview"><strong>Open work returns to the pool</strong><br><span class="subtle">${esc(person.openWork)} become unassigned — reassign them on the Evaluation screen.</span></div>`:""}
+            ${person.alsoSpeaker?`<div class="message-preview" style="border-left:3px solid var(--warning-edge)"><strong>They also hold a speaker seat</strong><br><span class="subtle">${esc(person.name)} is a speaker at ${esc(state.event.name||"this conference")}. This removal does not touch it — their talk, speaker tasks, and portal access stay.</span></div>`:""}
+            <div class="message-preview"><strong>Stays on the record</strong><br><span class="subtle">Their reviews, decisions, and sent mail keep their name · their entry in People survives.</span></div>
+          </div><div class="modal-actions"><button class="button" id="cancel-remove-org">Keep access</button><button class="button primary" id="confirm-remove-org">Remove organizer</button></div></section></div>`;
+          document.getElementById("cancel-remove-org").onclick=()=>modalRoot.innerHTML="";
+          document.getElementById("confirm-remove-org").onclick=()=>{
+            const revoke=new Set(Array.from(document.querySelectorAll(".revoke-minted:checked")).map(cb=>cb.value));
+            state.apiTokens=state.apiTokens.filter(t=>!revoke.has(t.id));
+            state.instance.organizers.splice(i,1);
+            modalRoot.innerHTML="";
+            toast(`${person.name} removed · access ended${revoke.size?` · ${revoke.size} ${revoke.size===1?"token":"tokens"} revoked`:""} · their work stays on the record`);
+            render();
+          };
+        });
+        document.querySelectorAll("[data-revoke-invite]").forEach(b=>b.onclick=()=>{
+          state.instance.organizers.splice(Number(b.dataset.revokeInvite),1);
+          toast("Invite link revoked · it can no longer be used"); render();
+        });
+        // ── API tokens tab ──
+        document.getElementById("create-token")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Create API token</h2><p>The secret is shown once. Store it in the client that needs it.</p></div><div class="modal-body stack"><div class="field"><label>Token name</label><input id="token-name" value="Conference agent"></div><div class="field"><label>Scope</label><select id="token-scope"><option>All conferences</option><option>${esc(state.event.name||"This conference")}</option></select></div></div><div class="modal-actions"><button class="button" id="cancel-token">Cancel</button><button class="button primary" id="issue-token">Issue token</button></div></section></div>`;document.getElementById("cancel-token").onclick=()=>modalRoot.innerHTML="";document.getElementById("issue-token").onclick=()=>{const name=document.getElementById("token-name").value||"Untitled token",id=`tok_${Math.random().toString(36).slice(2,6)}`;state.apiTokens.push({id,name,prefix:`mq_live_${id.slice(-4)}…`,created:"Just now",lastUsed:"Never",createdBy:"Maya Chen",scope:document.getElementById("token-scope").value});modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Copy this token now</h2><p>Marquee will not show the full secret again.</p></div><div class="modal-body"><div class="code-block" id="issued-token">mq_live_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}</div></div><div class="modal-actions"><button class="button primary" id="done-token">I stored it</button></div></section></div>`;document.getElementById("done-token").onclick=()=>{modalRoot.innerHTML="";render();};};});
         document.querySelectorAll("[data-revoke-token]").forEach(b=>b.onclick=()=>{state.apiTokens=state.apiTokens.filter(t=>t.id!==b.dataset.revokeToken);toast("API token revoked · requests using it now fail");render();});
       }
 
@@ -4088,7 +4359,7 @@
           taskTemplates:["No speaker task templates","Add acknowledgements, forms, and file requests before the first acceptance.","Add task template","settings/tasks"],
           importer:["Import your active program","Upload Sessionize Sessions and Speakers exports to preserve undecided records and review history.","Start mocked import","import"],
           airtable:["Airtable is not connected","Connect a Team-plan base to start the off-request-path two-way mirror.","Connect Airtable","settings/airtable"],
-          apiTokens:["No API tokens","Create a conference-scoped token for your first agent or integration.","Create API token","settings/api"],
+          orgTokens:["No API tokens","Create an organization token for your first agent or integration.","Create API token","org/tokens"],
           apiDocs:["API ready for a conference","Create a conference to populate examples and issue an event-scoped token.","Create conference","settings"],
           aiAssist:["AI assistance is off","This optional aid stays absent from the demo path and never changes submission status.","Return to evaluation","evaluation"],
           publicSession:["Session not found","Only published Sessions have public permalinks; private titles never leak here.","View conference site","publicAgenda"],
@@ -4162,7 +4433,7 @@
 
       function render() {
         state.route = currentRoute();
-        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,apiTokens:apiTokensView,webhooks:webhooksView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView,setupAgent:agentSetupView,claim:claimView,handoff:handoffView };
+        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,orgGeneral:orgGeneralView,orgOrganizers:orgOrganizersView,orgInstance:orgInstanceView,orgTokens:orgTokensView,webhooks:webhooksView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView,setupAgent:agentSetupView,claim:claimView,handoff:handoffView };
         // During the fresh-install walk the dashboard is the setup checklist, the
         // landing is the unclaimed-instance page, and screens with genuinely no
         // data render their empty state; everything else renders for real. While
@@ -4179,7 +4450,7 @@
         bindCommon();
         bindRoomHeads();
         bindMdToolbars();
-        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,apiTokens:bindApiTokens,webhooks:bindWebhooks,apiDocs:bindApiDocs,aiAssist:bindAiAssist,claim:bindClaim,handoff:bindHandoff}[state.route];
+        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,orgGeneral:bindOrg,orgOrganizers:bindOrg,orgInstance:bindOrg,orgTokens:bindOrg,webhooks:bindWebhooks,apiDocs:bindApiDocs,aiAssist:bindAiAssist,claim:bindClaim,handoff:bindHandoff}[state.route];
         // The setup dashboard and fresh landing have no binder of their own —
         // bindCommon carries their links.
         if(!showEmpty && binder && !(inWalk && (state.route === "dashboard" || state.route === "landing"))) binder();
