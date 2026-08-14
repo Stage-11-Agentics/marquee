@@ -35,7 +35,11 @@ test("CONTRACT · MRQ-129 promoting the caption to a control moves nothing below
   assert.match(context, /border-left: 2px solid var\(--line-strong\)/);
   assert.match(context, /border: 0/);
   assert.match(context, /background: none/);
-  assert.match(ruleFor(css, ".event-context-row"), /margin: 0 4px 18px/);
+  // 6px below, not 18px: the picker wears the "Conference" group label above it
+  // now (v1.15), so it reads as the head of the conference's nav rather than a
+  // floating control. That is a deliberate ruled change to the gap BELOW the
+  // row — the control's own box, which is what this test protects, is untouched.
+  assert.match(ruleFor(css, ".event-context-row"), /margin: 0 4px 6px/);
   assert.match(ruleFor(css, ".event-add"), /flex: 0 0 32px/);
 
   // Hover and expansion change color, never the box.

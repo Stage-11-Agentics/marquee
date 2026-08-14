@@ -316,7 +316,7 @@ test("CONTRACT · MRQ-131 · the area's language is People and List — and CRM 
     expectEqual(offender, undefined, `forbidden vocabulary in a user-facing string: ${offender}`);
   }
   for (const line of userFacing.filter((candidate) => /\bCRM\b/.test(candidate))) {
-    expectOk(/People CRM/.test(line), `"CRM" appears outside the area's name: ${line.trim()}`);
+    expect(/People CRM/.test(line), `"CRM" appears outside the area's name: ${line.trim()}`).toBe(true);
   }
 });
 
@@ -325,8 +325,8 @@ test("CONTRACT · MRQ-203 · Lists renders inside People, as a tab, with the Peo
   const people = readFileSync(new URL("../../src/ui/people/PeoplePage.tsx", import.meta.url), "utf8");
   // /lists is the People screen with its second tab selected — not a screen of
   // its own that happens to be about people.
-  expectOk(/route\?\.id === "lists" \? <PeoplePage[^>]*tab="lists"/.test(shell), "/lists does not render the People screen");
-  expectOk(shell.indexOf("ListsPage") === -1, "a separate Lists screen is still mounted");
+  expect(/route\?\.id === "lists" \? <PeoplePage[^>]*tab="lists"/.test(shell), "/lists does not render the People screen").toBe(true);
+  expect(shell.includes("ListsPage"), "a separate Lists screen is still mounted").toBe(false);
   // Both tabs are on screen from both tabs, and the count has a reserved slot
   // so making or deleting a list cannot change the tab's width.
   expectOk(/class="people-tabs"/.test(people));

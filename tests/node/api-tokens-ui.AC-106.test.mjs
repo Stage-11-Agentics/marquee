@@ -21,5 +21,7 @@ test("AC-106 · API token settings is a real SPA route with docs navigation and 
   assert.match(tokensPage, /comms:send/);
   assert.match(tokensPage, /mirror:write/);
   assert.match(tokensPage, /href="\/api\/docs"/);
-  assert.match(sidebar, /href="\/api\/docs"/);
+  // The footer link is read out of the route table rather than spelled twice.
+  assert.match(sidebar, /API_DOCS_PATH = matchRoute\("\/api\/docs"\)/);
+  assert.match(sidebar, /href=\{API_DOCS_PATH\}/);
 });

@@ -80,10 +80,15 @@ test("CONTRACT · MRQ-203 · every count is the dashboard snapshot's own number"
   for (const row of STAGE_ROWS) {
     expect(stageCount(live, row.stage)).toBe(COUNTS[row.stage]);
   }
-  // Rendered with the reader's separators — 1,204 is a number, 1204 is a string
-  // of digits.
-  expect(html).toContain(">1,204<");
-  expect(html).toContain(">0<");
+  // Every row's own count, read back out of its own row rather than looked for
+  // loose in the document — and with the reader's separators, because 1,204 is
+  // a number and 1204 is a string of digits.
+  const rendered = [...html.matchAll(/data-stage="([a-z_]+)"[\s\S]*?class="stage-count">([^<]+)</g)]
+    .map(([, stage, count]) => [stage, count]);
+  expect(rendered).toEqual([
+    ["submitted", "41"], ["in_review", "12"], ["waved", "1,204"], ["accepted", "7"],
+    ["onboarding", "3"], ["scheduled", "96"], ["published", "0"],
+  ]);
 });
 
 test("CONTRACT · MRQ-203 · with no snapshot yet the rows keep their shape and reserve the count", () => {

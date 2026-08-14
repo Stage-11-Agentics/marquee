@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-203",
+  "owns": [],
+  "exercises": [],
+  "notes": "MRQ-203 owns no new evaluation criterion. It folds the signed sidebar-reorg prototype (v1.15, Atin love pass 2026-08-14) into the build: the route table regroups to organization / conference / speaker-ops / cfp / public-links / settings, the seven-row lifecycle ladder leaves the nav while every one of its routes keeps resolving, the ruled renames land (Program pipeline, People CRM, Outreach, and the labels shortened by their group), a stage flyout on the Program pipeline row restores direct stage jumps from the dashboard snapshot at no request cost, /lists renders as a tab inside the People screen, and the icon column, the Conference group label over the picker and the `+` on Abstracts & sessions come across. Existing contracts are preserved except where the operator's rulings supersede them: tests/unit/route-table.test.ts records the new group structure and the reachability of every pre-existing path, tests/unit/sidebar-reorg.MRQ-203.test.ts covers the flyout and the shared snapshot, and tests/unit/people.MRQ-131.test.ts's \"never CRM\" assertion is rewritten to permit \"CRM\" only as the area's own name (R5)."
+}

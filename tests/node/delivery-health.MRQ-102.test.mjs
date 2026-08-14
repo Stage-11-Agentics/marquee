@@ -7,9 +7,15 @@ const routeTable = readFileSync(new URL("../../src/ui/shell/route-table.ts", imp
 const page = readFileSync(new URL("../../src/ui/health/DeliveryHealthPage.tsx", import.meta.url), "utf8");
 const shell = readFileSync(new URL("../../src/ui/health/DeliveryHealthShell.tsx", import.meta.url), "utf8");
 
-test("AC-1 · system health is rendered in the utility sidebar group", () => {
-  assert.match(routeTable, /id: "system-health"[^\n]*group: "utility"[^\n]*sidebar: true[^\n]*external: true/);
-  assert.match(sidebar, /routesFor\("utility"\)/);
+test("AC-1 · system health is rendered in the sidebar, from the route table", () => {
+  // It moved from a nav row to the sidebar footer, beside API & CLI, where the
+  // system's own entrances belong (v1.15). Still a real external route, still
+  // rendered by the sidebar, and still read out of the route table rather than
+  // written twice — so a path change moves the link instead of orphaning it.
+  assert.match(routeTable, /id: "system-health"[^\n]*group: "utility"[^\n]*external: true/);
+  assert.match(sidebar, /matchRoute\("\/delivery-health", "\?view=system"\)/);
+  assert.match(sidebar, /href=\{SYSTEM_HEALTH_PATH\}/);
+  assert.match(sidebar, /System health/);
 });
 
 test("AC-4 · the owed headline is an exact-set browser link", () => {
