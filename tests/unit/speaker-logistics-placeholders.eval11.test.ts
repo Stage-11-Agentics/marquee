@@ -34,6 +34,20 @@ const VALUE_SHAPES: Array<{ name: string; pattern: RegExp }> = [
   { name: "a single bare word", pattern: /^\S+$/ },
 ];
 
+/**
+ * The multiword gap the review found: "Aisle seat; no red-eyes" and "Step-free
+ * stage access" carry no date, no time and more than one word, so every shape
+ * above lets them through.
+ *
+ * What actually separates the two is not shape but grammar — a prompt asks
+ * something about the person, a specimen asserts a fact about them. Every
+ * prompt on this panel names the question it is asking, so the contract is that
+ * it must. This is deliberately a constraint on future copy: a better prompt
+ * that avoids all of these words is welcome, and changing this list to admit it
+ * is the deliberate act that should accompany it.
+ */
+const ASKS_SOMETHING = /\b(when|what|which|who|how|anything)\b/i;
+
 describe("speaker logistics placeholders", () => {
   test("CONTRACT · speaker record — every logistics field carries a prompt", () => {
     expect(LOGISTICS_FIELDS.length).toBeGreaterThanOrEqual(6);
@@ -72,6 +86,19 @@ describe("speaker logistics placeholders", () => {
     }
   });
 
+  test("CONTRACT · speaker record — every prompt asks for the answer rather than stating one", () => {
+    for (const field of LOGISTICS_FIELDS) {
+      expect(field.placeholder, `${field.key}: "${field.placeholder}" states a value instead of asking for one`)
+        .toMatch(ASKS_SOMETHING);
+    }
+  });
+
+  test("CONTRACT · speaker record — the grammar rule rejects the multiword specimens shape alone missed", () => {
+    for (const specimen of ["Aisle seat; no red-eyes", "Step-free stage access", "Window seat preferred", "Gluten free"]) {
+      expect(ASKS_SOMETHING.test(specimen), `"${specimen}" would pass the grammar rule`).toBe(false);
+    }
+  });
+
   test("CONTRACT · speaker record — the prompts are what the inputs actually render", () => {
     // The list is only a contract if the screen uses it. Asserting the seam
     // rather than the file layout: a literal typed into the input instead would
@@ -81,5 +108,12 @@ describe("speaker logistics placeholders", () => {
 
     expect(panel).toContain("LOGISTICS_FIELDS.map");
     expect(panel).toMatch(/placeholder=\{field\.placeholder\}/);
+
+    // The named regression: a prompt must never become the field's VALUE. A
+    // `value={form.custom[field.key] ?? field.placeholder}` would render the
+    // prompt as captured data — the exact defect this file exists to prevent,
+    // arriving through the other attribute.
+    expect(panel).toMatch(/value=\{form\.custom\[field\.key\] \?\? ""\}/);
+    expect(panel).not.toMatch(/value=\{[^}]*field\.placeholder/);
   });
 });
