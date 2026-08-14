@@ -111,6 +111,42 @@
   color: var(--muted);
 }
 
+/* ── Tabs ────────────────────────────────────────────────────────────────────
+   People and Lists are two views of one area, so they are two tabs of one
+   screen. The strip sits below the counts, which belong to both. */
+.people-tabs {
+  display: flex;
+  gap: var(--s1);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s3);
+}
+
+.people-tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: 600 12.5px/1 var(--sans);
+  margin-bottom: -1px;
+  padding: 9px 12px;
+  transition: color 110ms, border-color 110ms;
+}
+
+.people-tab:hover { color: var(--ink); }
+.people-tab.active { border-bottom-color: var(--accent); color: var(--accent-dark); }
+/* Fixed slot: the count arriving, or a list being made or deleted, must not
+   change the tab's width and move the tab beside it. */
+.people-tab-count { display: inline-block; min-width: 2.4ch; text-align: right; }
+
+.people-tabnote {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin: 0 0 var(--s3);
+  max-width: 680px;
+}
+
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
 .people-toolbar {
   display: flex;

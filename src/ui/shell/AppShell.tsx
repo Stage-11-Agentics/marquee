@@ -38,7 +38,6 @@ import { FilesPage } from "../files/FilesPage";
 import { CreateConferencePage } from "../setup/CreateConferencePage";
 import { HandoffPage } from "../setup/HandoffPage";
 import { PeoplePage } from "../people/PeoplePage";
-import { ListsPage } from "../people/ListsPage";
 import { SourcingPipelinePage } from "../people/SourcingPipelinePage";
 
 type ResetResponse = {
@@ -229,7 +228,8 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
           {route?.id === "conference-new"
             ? <CreateConferencePage navigate={navigate} />
             : isPeople ? <PeoplePage search={location.search} navigate={navigate} />
-            : route?.id === "lists" ? <ListsPage navigate={navigate} />
+            /* Lists is the People screen's second tab, not a screen of its own. */
+            : route?.id === "lists" ? <PeoplePage search={location.search} navigate={navigate} tab="lists" />
             : route?.id === "sourcing" ? <SourcingPipelinePage search={location.search} navigate={navigate} />
             : eventId === null ? <NoConference navigate={navigate} />
             : isSubmissionsList

@@ -16,7 +16,11 @@ export interface RegisterChrome {
   searchGlyph: "⌕" | ">_";
   /** Sidebar label overrides by route id (swyxy's lowercase single-word nav). */
   navLabels: Readonly<Record<string, string>>;
-  /** Zero-pad the numeric pipeline icons (1–7 → 01–07) — AI Engineer. */
+  /**
+   * Zero-pad the pipeline stage numerals (1–7 → 01–07) — AI Engineer.
+   * The numbered ladder this dressed left the sidebar; the numerals it dresses
+   * are the stage flyout's, which is where the seven stages live now.
+   */
   zeroPadNavIcons: boolean;
   /** Which renderer each dashboard section uses. */
   attention: "cards" | "terminal" | "feed";
@@ -53,35 +57,29 @@ const REGISTER_CHROME: Partial<Record<ThemeId, RegisterChrome>> = {
   },
   swyxy: {
     ...DEFAULT_CHROME,
+    // One entry per sidebar row, and no entry without one: the trope is a
+    // complete lowercase nav, so a row this map forgets reverts to Marquee's
+    // sentence case in the middle of it.
     navLabels: {
-      people: "people",
-      lists: "lists",
-      sourcing: "sourcing",
-      dashboard: "home",
+      people: "people crm",
+      sourcing: "outreach",
+      dashboard: "pipeline",
       board: "board",
       submissions: "sessions",
-      "submission-new": "add session",
-      submitted: "submitted",
-      "in-review": "in review",
-      waved: "waved",
-      accepted: "accepted",
-      onboarding: "onboarding",
-      scheduled: "scheduled",
-      published: "published",
+      agenda: "agenda",
       speakers: "speakers",
+      onboarding: "onboarding",
+      tasks: "tasks",
+      communications: "comms",
+      files: "files",
+      "delivery-health": "follow-ups",
       forms: "forms",
       evaluation: "evaluation",
       reviewer: "review",
-      agenda: "agenda",
-      files: "files",
-      communications: "comms",
-      tasks: "tasks",
-      portal: "portal",
       "event-site": "site",
+      portal: "portal",
       embeds: "embeds",
       settings: "settings",
-      "delivery-health": "follow-ups",
-      "system-health": "health",
     },
     attention: "feed",
     waves: "kv",
