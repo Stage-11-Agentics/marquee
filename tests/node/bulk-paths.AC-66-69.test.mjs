@@ -231,6 +231,20 @@ function nonMapPlaceholderSites(modules) {
 
 const EXPECTED_PLACEHOLDER_SITES = [
   {
+    file: "src/lib/auth/access-revocation.ts",
+    owner: "consumeLinksStatement",
+    binding: "placeholders",
+    expression: 'purposes.map(() => "?")',
+    classification: "bounded by the four-value PERSON_BOUND_LINK_PURPOSES taxonomy; organizer removal narrows to login and no user list reaches it",
+  },
+  {
+    file: "src/lib/auth/access-revocation.ts",
+    owner: "revokeCreatedTokensStatement",
+    binding: "exclusion",
+    expression: 'keep.map(() => "?")',
+    classification: "bounded by removeMemberRequest.keep_token_ids.max(200); client-supplied ids bind at most 200 exclusions",
+  },
+  {
     file: "src/lib/auth/demo-seat.ts",
     owner: "findDemoPersona",
     binding: "preferenceOrder",

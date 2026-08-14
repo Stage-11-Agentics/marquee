@@ -7,7 +7,7 @@ import test from "node:test";
 // are asserted here — against the registry, not a copied list, so a new theme
 // fails this test until its thumbnail is captured
 // (node scripts/capture-theme-thumbnails.mjs).
-const registry = readFileSync(new URL("../../src/ui/shell/theme.ts", import.meta.url), "utf8");
+const registry = readFileSync(new URL("../../src/lib/theme-registry.ts", import.meta.url), "utf8");
 const ids = [...registry.matchAll(/\{ id: "([a-z-]+)", label/g)].map((match) => match[1]);
 
 test("CONTRACT · every registered theme ships a landing thumbnail", () => {
