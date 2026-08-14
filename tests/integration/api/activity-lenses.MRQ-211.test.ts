@@ -92,7 +92,7 @@ beforeAll(async () => {
   ]);
 });
 
-test("MRQ-211 · the schema refuses an audit row scoped to neither a conference nor an organization", async () => {
+test("CONTRACT · MRQ-211 · the schema refuses an audit row scoped to neither a conference nor an organization", async () => {
   // The CHECK is what keeps "one substrate" true: a row no lens can reach is
   // the same as a row nobody wrote, and it would fail as silence rather than
   // as an error.
@@ -104,7 +104,7 @@ test("MRQ-211 · the schema refuses an audit row scoped to neither a conference 
   ).rejects.toThrow();
 });
 
-test("MRQ-211 · lens one · minting and revoking an invite lands in the organization log, in the organizer's language", async () => {
+test("CONTRACT · MRQ-211 · lens one · minting and revoking an invite lands in the organization log, in the organizer's language", async () => {
   const minted = await request("/api/v1/org/invites", { method: "POST" });
   expect(minted.status).toBe(201);
   const inviteId = (await minted.json() as { data: { id: string } }).data.id;
@@ -132,7 +132,7 @@ test("MRQ-211 · lens one · minting and revoking an invite lands in the organiz
   expect(afterSecondRevoke.data.filter((entry) => entry.action === "org.invite_revoked")).toHaveLength(1);
 });
 
-test("MRQ-211 · lens one · an API token is recorded by name and grants, never by secret", async () => {
+test("CONTRACT · MRQ-211 · lens one · an API token is recorded by name and grants, never by secret", async () => {
   const created = await request("/api/v1/org/tokens", {
     method: "POST",
     body: JSON.stringify({ name: "Schedule bot", scopes: { permissions: ["program:read"], event_ids: [EVENT_ID] } }),
@@ -168,7 +168,7 @@ test("MRQ-211 · lens one · an API token is recorded by name and grants, never 
   expect(log.data.filter((entry) => entry.action === "org.token_revoked")).toHaveLength(1);
 });
 
-test("MRQ-211 · lenses one and two · removing an organizer records what it revoked, on the person's own record", async () => {
+test("CONTRACT · MRQ-211 · lenses one and two · removing an organizer records what it revoked, on the person's own record", async () => {
   const removed = await request(`/api/v1/org/members/${SECOND_ORGANIZER}`, { method: "DELETE" });
   expect(removed.status).toBe(200);
 
@@ -193,7 +193,7 @@ test("MRQ-211 · lenses one and two · removing an organizer records what it rev
   expect(session?.revoked_at).not.toBeNull();
 });
 
-test("MRQ-211 · lens two · the person's feed merges annotations, audit rows and mail, and pages in SQL", async () => {
+test("CONTRACT · MRQ-211 · lens two · the person's feed merges annotations, audit rows and mail, and pages in SQL", async () => {
   const noteA = await request(`/api/v1/org/people/${SECOND_ORGANIZER}/notes`, {
     method: "POST",
     body: JSON.stringify({ body: "Met at the infra track dinner." }),
@@ -226,7 +226,7 @@ test("MRQ-211 · lens two · the person's feed merges annotations, audit rows an
   expect(firstPage.total).toBe(view.activity_total);
 });
 
-test("MRQ-211 · lens three · a submission's timeline reads its own audit rows as sentences, newest first", async () => {
+test("CONTRACT · MRQ-211 · lens three · a submission's timeline reads its own audit rows as sentences, newest first", async () => {
   const decided = await request(`/api/v1/events/${EVENT_ID}/submissions/${SUBMISSION_ID}/decision`, {
     method: "POST",
     body: JSON.stringify({ recommendation: "approve", feedback_md: "Strong fit for the infra track." }),
@@ -260,7 +260,7 @@ test("MRQ-211 · lens three · a submission's timeline reads its own audit rows 
   expect(view.history[0]?.summary).toBe(page.data[0]?.summary);
 });
 
-test("MRQ-211 · the org lens reads by scope, so an action nobody has written copy for still appears", async () => {
+test("CONTRACT · MRQ-211 · the org lens reads by scope, so an action nobody has written copy for still appears", async () => {
   const organization = await orgId();
   const now = Date.now();
   await env.DB.prepare(
@@ -280,7 +280,7 @@ test("MRQ-211 · the org lens reads by scope, so an action nobody has written co
   expect(withUnknown.data[0]?.summary).toBe("Branding replaced");
 });
 
-test("MRQ-211 · the organization log is organizer authority, not open to any signed-in seat", async () => {
+test("CONTRACT · MRQ-211 · the organization log is organizer authority, not open to any signed-in seat", async () => {
   const now = Date.now();
   await env.DB.batch([
     env.DB.prepare(
