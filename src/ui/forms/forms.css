@@ -25,8 +25,8 @@
 .forms-editor-intro > div:first-child { display: grid; gap: 4px; }
 .forms-editor-intro strong { font: 600 11.5px/1.2 var(--mono); }
 .forms-editor-intro span { color: var(--muted); font-size: 10.5px; line-height: 1.4; }
-/* One row, one save. Every control keeps a fixed track so switching field
-   type never reflows the row underneath a pointer already on its way. */
+/* One form, one save. Wide screens keep every control on one row; the compact
+   editor wraps the controls before fixed tracks can push into the preview. */
 .forms-add-row { align-items: end; background: var(--panel); border: 1px solid var(--line-strong); display: grid; gap: 8px; grid-template-columns: minmax(0, 1.6fr) 118px 132px minmax(0, 1.4fr) 88px 104px; margin-bottom: 12px; padding: 11px 12px; }
 .forms-add-row .field { display: grid; gap: 5px; min-width: 0; }
 .forms-add-row label { color: var(--muted); font: 600 9.5px/1.2 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; }
@@ -121,6 +121,7 @@
 .forms-error span { color: var(--ink-soft); }
 
 @media (max-width: 1320px) {
+  .forms-add-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .forms-builder { grid-template-columns: 220px minmax(390px, 1fr) 330px; }
   .forms-preview-window { margin: 10px; }
   .forms-preview-body { padding-left: 13px; padding-right: 13px; }
