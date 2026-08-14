@@ -17,6 +17,7 @@ import { SELF } from "cloudflare:test";
 
 import { createSession } from "../../src/lib/auth/auth-sessions";
 import { mintMagicLink } from "../../src/lib/auth/magic-links";
+import { sha256Hex } from "../../src/lib/auth/random-token";
 import { normalizeShortCode } from "../../src/lib/auth/short-code";
 import { applyMigrations, env } from "./apply-migrations";
 
@@ -694,4 +695,124 @@ test("AC-300 · revoking portal access ends the credentials and touches nothing 
     await countOf("SELECT COUNT(*) AS total FROM speaker_tasks WHERE id = 'task_portal' AND cancelled_at IS NULL AND status = 'open'"),
   ).toBe(1);
   expect(await countOf("SELECT COUNT(*) AS total FROM submissions WHERE id = 'sub_portal' AND is_published = 1")).toBe(1);
+});
+
+test("AC-296 · an unattributable legacy invite is refused rather than minted into whichever organization sorts first", async () => {
+  // Two tenants. Org A sorts first, so it is what `resolveOrganization`'s
+  // first-row fallback would hand back to anybody who reached it.
+  const a = await seedInstance("aaa-tenant");
+  const b = await seedInstance("zzz-tenant");
+  expect(
+    (await env.DB.prepare("SELECT id FROM organizations ORDER BY created_at ASC, id ASC LIMIT 1").first<{ id: string }>())?.id,
+  ).toBe(a.orgId);
+
+  // An invite minted before SPEC Amendment 21: a real row, still unspent, with
+  // no record of which organization minted it. This is the shape the column was
+  // added to fix, and closing the hole only for NEW invites leaves every one of
+  // these live.
+  const token = "legacy-invite-token-value-for-mrq-207-test";
+  await env.DB.prepare(
+    `INSERT INTO magic_links (id, token_hash, person_id, purpose, redirect_to, expires_at, used_at, created_at, updated_at)
+     VALUES ('ml_legacy_invite', ?, NULL, 'org_invite', '/dashboard', ?, NULL, ?, ?)`,
+  )
+    .bind(await sha256Hex(token), Date.now() + 7 * 86_400_000, NOW, NOW)
+    .run();
+
+  const exchanged = await request("/api/v1/claim", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token, purpose: "org_invite", name: "Legacy Recipient", email: "legacy@example.org" }),
+  });
+  // Refused, and refused in the same words as every other dead link — an invite
+  // nobody can attribute to a tenant must not be exchanged into an arbitrary
+  // one. Minting into the wrong tenant is the worse answer than refusing.
+  expect(exchanged.status).toBe(401);
+  expect(await countOf("SELECT COUNT(*) AS total FROM people WHERE email = 'legacy@example.org'")).toBe(0);
+  for (const orgId of [a.orgId, b.orgId]) {
+    expect(
+      await countOf(
+        "SELECT COUNT(*) AS total FROM memberships WHERE org_id = ? AND person_id NOT IN (SELECT id FROM people WHERE email LIKE 'sam+%')",
+        orgId,
+      ),
+    ).toBe(0);
+  }
+});
+
+test("AC-296 · one organization's admin can neither see nor revoke another's pending invites", async () => {
+  const a = await seedInstance("tenant-a");
+  const b = await seedInstance("tenant-b");
+
+  const mintedForB = await request("/api/v1/org/invites", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: b.cookie },
+    body: JSON.stringify({ role: "ops" }),
+  });
+  expect(mintedForB.status).toBe(201);
+  const bInvite = (await mintedForB.json()) as { data: { id: string } };
+
+  const mintedForA = await request("/api/v1/org/invites", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: a.cookie },
+    body: JSON.stringify({ role: "ops" }),
+  });
+  const aInvite = (await mintedForA.json()) as { data: { id: string } };
+
+  // Enumeration: A's list is A's. Seeing that B has a pending invite at all is
+  // information disclosure across a tenant boundary, and it needs no special
+  // access — only the admin role A legitimately holds in its own organization.
+  const listed = await request("/api/v1/org/invites", { headers: { cookie: a.cookie } });
+  const listedIds = ((await listed.json()) as { data: { id: string }[] }).data.map((row) => row.id);
+  expect(listedIds).toEqual([aInvite.data.id]);
+  expect(listedIds).not.toContain(bInvite.data.id);
+
+  // Destruction: and A cannot spend B's invite by naming its id. The refusal
+  // must not distinguish "not yours" from "does not exist".
+  const revoked = await request(`/api/v1/org/invites/${bInvite.data.id}`, {
+    method: "DELETE",
+    headers: { cookie: a.cookie },
+  });
+  expect(revoked.status).toBe(404);
+  expect(
+    await countOf("SELECT COUNT(*) AS total FROM magic_links WHERE id = ? AND used_at IS NULL", bInvite.data.id),
+  ).toBe(1);
+
+  // B's own admin still can, so the scoping narrowed nothing it should not.
+  expect(
+    (await request(`/api/v1/org/invites/${bInvite.data.id}`, { method: "DELETE", headers: { cookie: b.cookie } })).status,
+  ).toBe(200);
+});
+
+test("AC-296 · a live conference-scoped invite does not make its conference undeletable", async () => {
+  const { cookie, orgId, eventId } = await seedInstance("del207");
+
+  const minted = await request("/api/v1/org/invites", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ role: "ops", event_id: eventId }),
+  });
+  expect(minted.status).toBe(201);
+  const invite = (await minted.json()) as { data: { id: string } };
+  // The row the deletion cascade has to know about: it references the event
+  // through `invite_event_id`, which is this ticket's column, while the
+  // cascade was written against `event_id`. Nothing else in the schema points
+  // at the conference from here.
+  expect(
+    await countOf(
+      "SELECT COUNT(*) AS total FROM magic_links WHERE id = ? AND invite_event_id = ? AND event_id IS NULL",
+      invite.data.id,
+      eventId,
+    ),
+  ).toBe(1);
+
+  // Deleting the conference must still work. Left unhandled this is not a
+  // partial cascade — it is a FOREIGN KEY failure that makes the conference
+  // permanently undeletable while one invite is outstanding.
+  const deleted = await request(`/api/v1/events/${eventId}`, { method: "DELETE", headers: { cookie } });
+  expect(deleted.status).toBe(200);
+  expect(await countOf("SELECT COUNT(*) AS total FROM events WHERE id = ?", eventId)).toBe(0);
+  // And the invite goes with it: a seat scoped to a conference that no longer
+  // exists is not a seat anyone should be able to exchange.
+  expect(await countOf("SELECT COUNT(*) AS total FROM magic_links WHERE id = ?", invite.data.id)).toBe(0);
+  // The organization itself is untouched — only the conference was deleted.
+  expect(await countOf("SELECT COUNT(*) AS total FROM organizations WHERE id = ?", orgId)).toBe(1);
 });

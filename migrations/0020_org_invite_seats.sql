@@ -57,3 +57,24 @@ ALTER TABLE magic_links ADD COLUMN short_code_hash TEXT;
 -- exactly the moment a volunteer is standing at the desk.
 CREATE UNIQUE INDEX uq_magic_links_short_code
   ON magic_links(short_code_hash) WHERE short_code_hash IS NOT NULL;
+
+-- Backfill, and only where the answer is unambiguous.
+--
+-- Invites minted before this migration carry no organization, and the exchange
+-- now REFUSES a row it cannot attribute rather than falling back to "the oldest
+-- organization row" — that fallback is correct for a claim creating the first
+-- organization there has ever been, and an arbitrary tenant for anybody else.
+-- Refusing every legacy invite outright would be safe but needlessly harsh: on
+-- an instance that holds exactly one organization there is only one answer this
+-- could ever have meant, and it is the one it already resolved to.
+--
+-- So: attribute unspent, unexpired invites on a single-organization instance,
+-- and leave every other row null. A null here is now inert by construction —
+-- the exchange refuses it — which is the safe direction to be wrong in.
+UPDATE magic_links
+   SET invite_org_id = (SELECT id FROM organizations),
+       updated_at = updated_at
+ WHERE purpose = 'org_invite'
+   AND invite_org_id IS NULL
+   AND used_at IS NULL
+   AND (SELECT COUNT(*) FROM organizations) = 1;

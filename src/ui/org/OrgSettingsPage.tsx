@@ -6,7 +6,7 @@ import { Button, Card, CardBody, CardHeader, EmptyState, PageHeader } from "../s
 import { cacheOrgDefaultTheme } from "../shell/theme";
 import { THEMES } from "../../lib/theme-registry";
 import { ApiTokensPage } from "../settings/ApiTokensPage";
-import { SERVER_LEAD_COPY, ServerPanel } from "../setup/ServerPanel";
+import { ServerPage } from "../settings/ServerPage";
 import { OrganizersCard } from "../setup/OrganizersCard";
 import "../settings/settings.css";
 import "./org-settings.css";
@@ -78,13 +78,12 @@ export function OrgSettingsPage({ tab, eventId, navigate }: Props): JSX.Element 
     </nav>
     {tab === "organization" && <OrganizationTab />}
     {tab === "organizers" && <div class="org-tab-body"><OrganizersCard /></div>}
-    {/* MRQ-210 owns what this panel says; this tab is only its home. Rendering
-        ServerPanel rather than a copy keeps its request, status and recovery
-        behaviour in one place, which is exactly how MRQ-210 wrote it to be used. */}
-    {tab === "server" && <div class="org-tab-body" data-org-settings-tab="server">
-      <p class="subtle">{SERVER_LEAD_COPY}</p>
-      <ServerPanel />
-    </div>}
+    {/* MRQ-210 owns everything this tab says; this surface is only its home,
+        which is what MRQ-210's own note asked for. Rendering their page whole —
+        rather than reaching past it to ServerPanel — keeps its lead copy,
+        request/status behaviour and recovery card in one place and copies none
+        of it here. `/org/instance` redirects to `/org/server`, still theirs. */}
+    {tab === "server" && <div class="org-tab-body"><ServerPage /></div>}
     {tab === "tokens" && <div class="org-tab-body">
       <ApiTokensPage eventId={eventId} navigate={navigate} chrome={false} />
     </div>}

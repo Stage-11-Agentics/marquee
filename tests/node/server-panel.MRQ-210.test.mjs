@@ -11,6 +11,7 @@ test("CONTRACT · the standalone server route mounts the shared panel and redire
   const instance = await source("src/ui/setup/InstancePanel.tsx");
   const config = await source("src/lib/mail/config.ts");
   const appShell = await source("src/ui/shell/AppShell.tsx");
+  const orgSettings = await source("src/ui/org/OrgSettingsPage.tsx");
   const routeTable = await source("src/ui/shell/route-table.ts");
   const wrangler = await source("wrangler.jsonc");
 
@@ -29,5 +30,9 @@ test("CONTRACT · the standalone server route mounts the shared panel and redire
   assert.match(routeTable, /path: "\/org\/server"/);
   assert.match(routeTable, /path: "\/org\/instance"/);
   assert.match(appShell, /navigate\("\/org\/server", \{ replace: true \}\)/);
-  assert.match(appShell, /<ServerPage \/>/);
+  // MRQ-207 folded the standalone Server route into the Organization settings
+  // tabs, so the mount moved from the shell to that surface — which is what
+  // ServerPage's own note anticipated. The assertion follows the mount; what it
+  // asserts is unchanged, and /org/instance still redirects to /org/server above.
+  assert.match(orgSettings, /<ServerPage \/>/);
 });

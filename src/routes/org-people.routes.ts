@@ -101,17 +101,24 @@ const listOrganizerInvites = defineApiRoute(
     responses: { 200: jsonResponse(inviteListResponse, "Pending invites"), ...orgErrors },
   },
   async (context) => {
-    requireOrgAdmin(context, "program:read");
+    const auth = requireOrgAdmin(context, "program:read");
     const now = Date.now();
+    // Scoped to the caller's own organization. Unscoped, this listed every
+    // tenant's pending invites to anyone holding the admin role they already
+    // legitimately hold in their own — which is information disclosure across a
+    // tenant boundary requiring no special access at all. Rows with a null
+    // `invite_org_id` belong to nobody this query can name and are inert at the
+    // exchange, so they are absent here for the same reason.
     const rows = await context.env.DB.prepare(
       `SELECT l.id AS id, l.created_at AS created_at, l.expires_at AS expires_at, l.used_at AS used_at,
               l.invite_role AS invite_role, l.invite_event_id AS invite_event_id, e.name AS event_name
          FROM magic_links l
          LEFT JOIN events e ON e.id = l.invite_event_id
         WHERE l.purpose = 'org_invite' AND l.used_at IS NULL AND l.expires_at > ?
+          AND l.invite_org_id = ?
         ORDER BY l.created_at DESC, l.id DESC`,
     )
-      .bind(now)
+      .bind(now, auth.orgId)
       .all<PendingInviteRow>();
     return context.json({ data: rows.results.map(summarizeInvite) }, 200);
   },
@@ -245,20 +252,27 @@ const revokeOrganizerInvite = defineApiRoute(
     const auth = requireOrgAdmin(context);
     const { inviteId } = context.req.valid("param");
     const now = Date.now();
+    // The ownership predicate is on the UPDATE itself, not on a check before it.
+    // A read-then-write would still be wrong here: the write is what crosses the
+    // boundary, and only the write can be made incapable of crossing it. An
+    // invite id is client-supplied, so without `invite_org_id = ?` one
+    // organization's admin could spend another's pending invite by naming it.
     const revoked = await context.env.DB.prepare(
       `UPDATE magic_links SET used_at = ?, updated_at = ?
-        WHERE id = ? AND purpose = 'org_invite' AND used_at IS NULL`,
+        WHERE id = ? AND purpose = 'org_invite' AND used_at IS NULL AND invite_org_id = ?`,
     )
-      .bind(now, now, inviteId)
+      .bind(now, now, inviteId, auth.orgId)
       .run();
+    // One answer for "not yours", "already spent" and "never existed": the
+    // refusal must not confirm that another tenant's invite exists.
     if ((revoked.meta.changes ?? 0) !== 1) throw ApiError.notFound("invite not found");
     const row = await context.env.DB.prepare(
       `SELECT l.id AS id, l.created_at AS created_at, l.expires_at AS expires_at, l.used_at AS used_at,
               l.invite_role AS invite_role, l.invite_event_id AS invite_event_id, e.name AS event_name
          FROM magic_links l LEFT JOIN events e ON e.id = l.invite_event_id
-        WHERE l.id = ?`,
+        WHERE l.id = ? AND l.invite_org_id = ?`,
     )
-      .bind(inviteId)
+      .bind(inviteId, auth.orgId)
       .first<PendingInviteRow>();
     if (!row) throw ApiError.notFound("invite not found");
     // Recorded after the guarded UPDATE, so the row exists only for a revocation

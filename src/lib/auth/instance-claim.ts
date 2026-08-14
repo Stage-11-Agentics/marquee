@@ -283,14 +283,30 @@ export async function exchangeInstanceLink(
   const link = await consumeMagicLink(db, input.token, now);
   if (!link || link.purpose !== input.purpose) return null;
 
-  // Whose organization this seat is on. An invite names its own — the
-  // organization that minted it — and only a claim, which may be creating the
-  // first organization there has ever been, falls back to resolving one.
-  const invitedOrgId = input.purpose === "org_invite" ? link.invite_org_id : null;
-  const organization =
-    invitedOrgId === null
-      ? await resolveOrganization(db, now)
-      : await db.prepare("SELECT * FROM organizations WHERE id = ?").bind(invitedOrgId).first<OrganizationRow>();
+  // Whose organization this seat is on.
+  //
+  // An invite names its own — the organization that minted it — and **an invite
+  // that names none is refused outright**. It must never reach
+  // `resolveOrganization`'s first-row fallback: that helper answers "the oldest
+  // organization row", which is the right answer for a claim creating the first
+  // organization there has ever been, and an arbitrary tenant for anybody else.
+  //
+  // Rows minted before Amendment 21 carry no `invite_org_id`. Migration 0020
+  // backfills the unambiguous case — an instance holding exactly one
+  // organization — so the only invites this refuses are the ones genuinely
+  // impossible to attribute. For those, refusing is correct and minting into
+  // whichever tenant sorts first is not: an unspent invite is worth far less
+  // than a membership in someone else's organization.
+  let organization: OrganizationRow | null;
+  if (input.purpose === "org_invite") {
+    if (link.invite_org_id === null) return null;
+    organization = await db
+      .prepare("SELECT * FROM organizations WHERE id = ?")
+      .bind(link.invite_org_id)
+      .first<OrganizationRow>();
+  } else {
+    organization = await resolveOrganization(db, now);
+  }
   // The organization was deleted between mint and exchange. Nothing to join.
   if (!organization) return null;
   const existingPerson = await db
