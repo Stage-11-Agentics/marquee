@@ -1,23 +1,51 @@
 .program-board-page .page-head p { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.program-board-card-shell { min-width: 0; overflow: hidden; }
-.program-board-filters { align-items: center; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; gap: 7px; min-height: 58px; padding: 10px 12px; }
+/* The board ends where the window ends. Its whole promise is as much of the
+   pipeline at once as the display can hold, and a column cut off at a fixed
+   height throws away the taller half of a monitor. The chrome above and below
+   it is fixed by the design contract — a 52px topbar and `.page`'s 26/56
+   padding — so the fill is plain CSS: no measurement that has to chase the
+   layout it is itself changing. Below 760px the rail is fixed to the bottom
+   rather than in flow, so only the topbar and the page padding count. */
+/* `height`, not `min-height`: the chain of flex and grid tracks below only
+   resolves against a definite height, and without one the list stops being a
+   scroll box and grows to the full 1,000 cards.
+   The floor is what keeps that definite height from becoming a dead end. A
+   short viewport — a landscape phone, a half-height window — otherwise leaves
+   the grid resolving to zero, and because the height is fixed rather than
+   minimum there is no page scroll to recover the board with: eight columns
+   clipped out of existence with nothing to scroll. Below the floor the board
+   stops shrinking and the page scrolls instead, which is how it behaved before
+   it learned to fill. `max()` keeps the height definite either way. */
+.program-board-page { --board-chrome: 134px; --board-floor: 700px; display: flex; flex-direction: column; height: max(var(--board-floor), calc(100dvh - var(--board-chrome))); }
+/* The grid is 1680px of eight columns and `.page` is capped at 1500px, so the
+   board is always wider than the page it sits in. Hidden overflow made the last
+   stages unreachable rather than merely off-screen — a dead end in the one view
+   whose promise is the whole pipeline at once. It scrolls sideways instead,
+   with the chaining contained so running out of board does not pan the page. */
+.program-board-card-shell { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+/* Sticky to the left edge of the horizontal scroll: the filters govern all
+   eight columns, so they stay put while the columns run under them. */
+.program-board-filters { align-items: center; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; gap: 7px; left: 0; min-height: 58px; padding: 10px 12px; position: sticky; width: 100%; }
 .program-board-filters input, .program-board-filters select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink); font-size: 11.5px; height: 34px; min-width: 136px; outline: 0; padding: 0 9px; }
 .program-board-filters input:focus, .program-board-filters select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .program-board-search { flex: 1 1 280px; min-width: 230px; }
 .program-board-search input { width: 100%; }
 .program-board-filter-summary { color: var(--muted); margin-left: auto; min-width: 108px; text-align: right; }
-.program-board-state { align-items: center; color: var(--muted); display: grid; gap: 8px; min-height: 560px; padding: 24px; place-items: center; text-align: center; }
+.program-board-state { align-items: center; color: var(--muted); display: grid; flex: 1; gap: 8px; min-height: 0; padding: 24px; place-items: center; text-align: center; }
 .program-board-state.error { color: var(--danger); }
-.program-board-card-shell > .program-board-empty-state { border: 0; border-radius: 0; box-shadow: none; min-height: 560px; }
-.program-board-grid { display: grid; grid-template-columns: repeat(8, minmax(210px, 1fr)); min-width: 1680px; }
-.program-board-column { background: var(--panel); border-right: 1px solid var(--line-strong); min-width: 0; }
+.program-board-card-shell > .program-board-empty-state { border: 0; border-radius: 0; box-shadow: none; flex: 1; min-height: 0; }
+.program-board-grid { display: grid; flex: 1; grid-template-columns: repeat(8, minmax(210px, 1fr)); min-height: 0; min-width: 1680px; }
+/* auto / auto / rest: the column head and its note take what they need and the
+   card list takes the remainder, which is what makes the fill above land on
+   the scrolling element rather than on the section around it. */
+.program-board-column { background: var(--panel); border-right: 1px solid var(--line-strong); display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 0; min-width: 0; }
 .program-board-column:last-child { border-right: 0; }
 .program-board-column-head { align-items: flex-start; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; gap: 8px; justify-content: space-between; min-height: 62px; padding: 11px 10px 9px; }
 .program-board-column-head strong { display: block; font: 600 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .program-board-column-head small { color: var(--muted); display: block; font-size: 10px; line-height: 1.35; margin-top: 5px; }
 .program-board-count { align-items: center; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent-dark); display: inline-flex; flex: 0 0 50px; font-size: 11px; justify-content: center; min-height: 24px; }
 .program-board-derived-note { border-bottom: 1px solid var(--line); color: var(--muted); font: 400 9.5px/1.2 var(--mono); min-height: 28px; overflow: hidden; padding: 7px 10px; text-overflow: ellipsis; white-space: nowrap; }
-.program-board-column-list { min-height: 560px; overflow-y: auto; overscroll-behavior: contain; position: relative; }
+.program-board-column-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; position: relative; }
 .program-board-window { display: grid; gap: 7px; left: 0; padding: 7px; position: absolute; right: 0; top: 0; }
 .program-board-card { background: var(--panel); border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); display: grid; gap: 5px; min-height: 118px; overflow: hidden; padding: 9px 8px; text-align: left; width: 100%; }
 .program-board-card:hover, .program-board-card:focus-visible { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); outline: 0; }
@@ -40,6 +68,7 @@
 }
 
 @media (max-width: 760px) {
+  .program-board-page { --board-chrome: 162px; }
   .program-board-filters { align-items: stretch; }
   .program-board-search { min-width: 100%; }
   .program-board-filters label:not(.program-board-search) { flex: 1 1 130px; }

@@ -5,7 +5,7 @@
 
 /* The header action keeps one width across "Add speaker" / "Close form": a
    control that resizes when you press it moves everything beside it. */
-.speaker-fixed-action { align-items: center; background: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius); color: #fff; display: inline-flex; flex: 0 0 132px; font: 600 10px/1 var(--mono); justify-content: center; min-height: 34px; padding: 8px 10px; white-space: nowrap; width: 132px; }
+.speaker-fixed-action { align-items: center; background: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--on-accent); display: inline-flex; flex: 0 0 132px; font: 600 10px/1 var(--mono); justify-content: center; min-height: 34px; padding: 8px 10px; white-space: nowrap; width: 132px; }
 .speaker-fixed-action:hover { background: var(--accent-dark); }
 .speaker-fixed-action:disabled { cursor: default; opacity: .45; }
 

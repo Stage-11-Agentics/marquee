@@ -2,12 +2,14 @@
 //
 // Palette themes (Day, Night) keep the MRQ-103 invariant: a palette theme is
 // one `html[data-theme="…"]` block in tokens.css plus one row here, and it may
-// only move color. Structure tokens — spacing, radius, the hairline, the type
-// stacks, `--shadow: none` — are theme-invariant, which is what keeps Night a
-// re-lit instrument rather than a generic dark mode. Day still carries no
-// attribute so it stays the true default: nothing to load, and a browser that
-// never runs the pre-paint script in index.html still gets the designed light
-// palette.
+// only move color — the sole rules outside that block are the ones that re-light
+// native scroll furniture, which CSS exposes as pseudo-elements rather than as
+// properties a token can reach. Structure tokens — spacing, radius, the
+// hairline, the type stacks, `--shadow: none` — are theme-invariant, which is
+// what keeps Night a re-lit instrument rather than a generic dark mode. Day
+// still carries no attribute so it stays the true default: nothing to load,
+// and a browser that never runs the pre-paint script in index.html still gets
+// the designed light palette.
 //
 // Register themes (latent.space, AI Engineer, swyxy) are the theme-round
 // experiment: they re-light the palette AND restyle the shell's chrome —
