@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Marquee">
+  <!--
+    Night's tab. A palette theme only re-lights, and so does its icon: the same
+    M on the same 16-unit grid as favicon.svg, lit the way Night lights the
+    shell: the instrument teal standing on the accent wash, which is exactly
+    the sidebar mark Night wears.
+
+    No hairline border, though the shell's mark has one: a 1-unit stroke on a
+    16-unit tile is a third of the margin the M needs, and the tab would read
+    as a ring with something inside it.
+  -->
+  <rect width="16" height="16" rx="1.5" fill="#0f3134"/>
+  <path fill="#3fbac2" d="M2 2H4V13H2ZM4 2H6L8.5 13H7.5ZM10 2H12L8.5 13H7.5ZM12 2H14V13H12Z"/>
+</svg>

@@ -229,4 +229,21 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).toContain("Viewing as speaker · organizer preview");
     expect(html).toContain("Your abstract was not selected");
   });
+
+  test("CONTRACT · CFP-09 · the submitted abstract edit control stays present and explains when it is unavailable", () => {
+    const open = render(snapshot({ submissions: [submission({
+      description: "The abstract the submitter sent.",
+      edit: { enabled: true, reason: null },
+    })] }));
+    expect(open).toContain("The abstract the submitter sent.");
+    expect(open).toContain("Edit abstract");
+    expect(open).toContain("You can edit this abstract while the call for speakers is open.");
+
+    const closed = render(snapshot({ submissions: [submission({
+      edit: { enabled: false, reason: "Editing is closed because the call for speakers is closed." },
+    })] }));
+    expect(closed).toContain("Edit abstract");
+    expect(closed).toContain("disabled");
+    expect(closed).toContain("Editing is closed because the call for speakers is closed.");
+  });
 });

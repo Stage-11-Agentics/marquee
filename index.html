@@ -3,11 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#eaeef2" />
+    <meta id="theme-color-meta" name="theme-color" content="#eaeef2" />
     <!-- Kept in sync with src/lib/head-icons.ts, which carries the same tags
-         for the fallback documents the HTML routes emit without ASSETS. -->
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+         for the fallback documents the HTML routes emit without ASSETS.
+
+         The two live formats carry ids because the tab dresses with the page:
+         the script below and applyTheme() in src/ui/shell/theme.ts re-point
+         them at the worn theme's mark. /favicon.ico is the legacy last resort
+         and stays the Day mark — a browser old enough to need it is one no
+         register theme was drawn for. -->
+    <link id="icon-svg" rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link id="icon-png" rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Marquee — Program operations</title>
@@ -25,6 +31,13 @@
       swyxy's dark palette is a second attribute read from its own key —
       explicit toggle only, never prefers-color-scheme. `?theme=<id>` and
       `?mode=dark` override storage for comparison links without persisting.
+
+      The tab is dressed here too — icon and theme-color — for the same reason
+      the palette is: a tab that keeps the Flight Deck M above a latent.space
+      page reads as another site's icon on the wrong window, and correcting it
+      after hydration means the browser has already fetched and cached the
+      wrong one. Every non-Day theme ships /favicon-<id>.svg and
+      /favicon-<id>-32.png, so the id is the path.
     -->
     <script>
       try {
@@ -37,10 +50,22 @@
         if (!ids[t]) t = localStorage.getItem("marquee-theme");
         if (ids[t] && t !== "day") {
           document.documentElement.dataset.theme = t;
+          var dark = false;
           if (t === "swyxy") {
             var mode = params.get("mode") || localStorage.getItem("marquee-swyxy-mode");
-            if (mode === "dark") document.documentElement.dataset.swyxyMode = "dark";
+            dark = mode === "dark";
+            if (dark) document.documentElement.dataset.swyxyMode = "dark";
           }
+          // Null-guarded: a route that rewrites this head is free to drop a
+          // tag, and a TypeError here would take the webfonts below with it.
+          var dress = function (id, prop, value) {
+            var el = document.getElementById(id);
+            if (el) el[prop] = value;
+          };
+          dress("icon-svg", "href", "/favicon-" + t + ".svg");
+          dress("icon-png", "href", "/favicon-" + t + "-32.png");
+          var colors = { "night": "#121416", "latent-space": "#0b0b0e", "ai-engineer": "#ffffff", "swyxy": "#ffffff" };
+          dress("theme-color-meta", "content", dark ? "#0b1120" : colors[t]);
           var fonts = {
             "latent-space": "https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&display=swap",
             "ai-engineer": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"

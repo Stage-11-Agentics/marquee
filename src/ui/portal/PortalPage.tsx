@@ -154,6 +154,7 @@ type PortalSnapshot = {
 type SubmitterSubmission = {
   id: string;
   title: string;
+  description?: string | null;
   status: string;
   format: string | null;
   submitted_at: number | null;
@@ -162,6 +163,7 @@ type SubmitterSubmission = {
   wave_decision_on: string | null;
   role: string;
   form_slug: string | null;
+  edit?: { enabled: boolean; reason: string | null };
 };
 
 /**
@@ -824,6 +826,12 @@ function submitterProgressCopy(status: string, draftCallOpen: boolean): string {
 }
 
 function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX.Element {
+  const [title, setTitle] = useState(submission.title);
+  const [description, setDescription] = useState(submission.description ?? "");
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const edit = submission.edit ?? { enabled: false, reason: "Editing availability is not available for this abstract." };
   const decisionDetails = isSubmitterAwaitingReview(submission.status)
     ? [
       submission.wave_name,
@@ -831,13 +839,43 @@ function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX
     ].filter((value): value is string => Boolean(value)).join(" · ")
     : null;
   const decisionLabel = decisionDetails ? `Next decision · ${decisionDetails}` : null;
+  useEffect(() => {
+    setTitle(submission.title);
+    setDescription(submission.description ?? "");
+    if (!edit.enabled) setEditing(false);
+  }, [submission.id, submission.title, submission.description, edit.enabled]);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await requestJson<{ submission: { title: string; abstract?: string | null; description?: string | null } }>(`/api/v1/me/submissions/${encodeURIComponent(submission.id)}/talk`, {
+        method: "PATCH",
+        body: JSON.stringify({ title, description }),
+      });
+      setTitle(response.submission.title);
+      setDescription(response.submission.description ?? response.submission.abstract ?? "");
+      setEditing(false);
+    } catch (caught) {
+      setError((caught as ApiFailure).message || "The conference could not save this abstract. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return <article class="portal-submitted-row" data-submission-id={submission.id} data-submission-status={submission.status}>
     <div class="portal-submitted-copy">
-      <strong title={submission.title}>{submission.title}</strong>
+      <strong title={title}>{title}</strong>
       <span>{submission.format ?? "Format not set"} · {submission.submitted_at === null ? "Not yet submitted" : `Submitted ${formatDate(submission.submitted_at)}`}</span>
       {decisionLabel ? <span class="portal-submitted-wave">{decisionLabel}</span> : null}
+      <p class="portal-submitted-abstract">{description || "No abstract text recorded."}</p>
+      <form class={`portal-submitter-editor${editing ? "" : " is-hidden"}`} aria-hidden={!editing} onSubmit={(event) => { event.preventDefault(); void save(); }}>
+        <label><span>Title</span><input disabled={!editing || busy} value={title} onInput={(event) => setTitle(event.currentTarget.value)} /></label>
+        <label><span>Abstract</span><textarea disabled={!editing || busy} rows={6} value={description} onInput={(event) => setDescription(event.currentTarget.value)} /></label>
+        <div class="portal-submitter-editor-actions"><span class="portal-submitter-edit-error" role={error ? "alert" : undefined}>{error ?? " "}</span><button class="portal-button secondary" type="button" disabled={!editing || busy} onClick={() => setEditing(false)}>Cancel</button><button class="portal-button" type="submit" disabled={!editing || busy}>{busy ? "Saving…" : "Save changes"}</button></div>
+      </form>
     </div>
-    <span class="portal-submitted-status">{submitterStatusLabel(submission.status)}</span>
+    <div class="portal-submitted-actions"><span class="portal-submitted-status">{submitterStatusLabel(submission.status)}</span><button class="portal-task-action" type="button" disabled={!edit.enabled || busy} aria-describedby={`submitter-edit-reason-${submission.id}`} onClick={() => { setError(null); setEditing((current) => !current); }}>{editing ? "Close editor" : "Edit abstract"}</button><span class="portal-submitter-edit-reason" id={`submitter-edit-reason-${submission.id}`}>{edit.reason ?? "You can edit this abstract while the call for speakers is open."}</span></div>
   </article>;
 }
 
@@ -969,6 +1007,29 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
   </div>;
 }
 
+/**
+ * What the portal says to an account that has no seat in it. An organizer
+ * reaches this from the sidebar's own "Speaker portal" entry, and the generic
+ * failure state told them the site was broken — "We could not load your
+ * portal · conference not found" — when the server had answered correctly.
+ * The truth is short, and every route out of it is one they can use.
+ */
+function NoSeatNotice(): JSX.Element {
+  return <div class="portal-shell">
+    <header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></header>
+    <main class="portal-main"><div class="portal-error portal-answer"><div>
+      <strong>You have no speaker record at this conference.</strong>
+      <p>The speaker portal opens one speaker's own workspace — their tasks, profile, and session times. Nothing here failed: this account is not a speaker or a submitter at this conference.</p>
+      <p>If you organize this conference, open any speaker's portal from their record on the Speakers page.</p>
+      <div class="portal-seat-actions">
+        <a class="portal-button" href="/roster">Speakers</a>
+        <a class="portal-button secondary" href="/dashboard">Program home</a>
+        <a class="portal-button secondary" href="/">Return to conference</a>
+      </div>
+    </div></div></main>
+  </div>;
+}
+
 function PortalPage(): JSX.Element {
   const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const viewingAsSpeaker = query?.get("viewing_as") === "speaker";
@@ -994,11 +1055,17 @@ function PortalPage(): JSX.Element {
   const handbook = useMemo(() => speaker?.handbook.markdown ?? "", [speaker?.handbook.markdown]);
   if (loading && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-loading">Loading your conference portal…</div></main></div>;
   if (error && !snapshot && error.status === 401) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></div><main class="portal-main"><div class="portal-error"><div><strong>Sign in to open your speaker portal.</strong><p>Your session is missing or has expired.</p><a class="portal-signin" href="/signin?next=/portal">Sign in</a></div></div></main></div>;
+  /* A 404 here is not a failure to load — it is a true answer: this account
+     has no speaker or submitter record at this conference. Organizers reach
+     it constantly from the sidebar, and "We could not load your portal ·
+     conference not found" told them the site was broken when nothing was.
+     Every route out of it is a route they can actually use. */
+  if (error && !snapshot && error.status === 404) return <NoSeatNotice />;
   if (error && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-error"><div><strong>We could not load your portal.</strong><p>{error.message}</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
   if (snapshot && snapshot.seat === "submitter") return <SubmitterPortal snapshot={snapshot} onSignOut={() => void signOut()} viewingAsSpeaker={viewingAsSpeaker} />;
   if (!speaker) return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></header><main class="portal-main"><div class="portal-error"><div><strong>No portal data is available.</strong><p>Try loading the speaker workspace again.</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
   return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={() => void signOut()}>Sign out</button></header><main class="portal-main">{viewingAsSpeaker ? <div class="portal-viewing-as" role="status">Viewing as speaker · organizer preview</div> : null}{speaker.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : speaker.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={speaker.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {speaker.person.name}</h2><p>{speaker.event.name} · your speaker workspace</p></div><div class="portal-progress">{completedTasks} / {activeTasks.length} tasks complete</div></div><div class="portal-grid"><TasksPanel eventId={speaker.event.id} tasks={speaker.tasks} submissions={speaker.submissions} person={speaker.person} onRefresh={refresh} /><ProfileEditor eventId={speaker.event.id} person={speaker.person} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{speaker.submissions.length} record{speaker.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{speaker.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : speaker.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{speaker.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{speaker.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{speaker.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
 }
 
-export { PortalPage, SubmitterPortal };
+export { NoSeatNotice, PortalPage, SubmitterPortal };
 export type { PortalPerson, PortalSubmission, PortalTask, SubmitterSnapshot, SubmitterSubmission };

@@ -6,7 +6,7 @@ import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } from "../shell/components";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
 import { ContentHistory } from "../history/ContentHistory";
-import { decidedNote, headerChipTone, moment, statusLabel } from "./record-copy";
+import { decidedNote, headerChipTone, lastSendLine, moment, sendMoment, sendMomentFor, sendOutcome, statusLabel, type DecisionSend } from "./record-copy";
 import "./record.css";
 
 const SUBMISSION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}";
@@ -43,7 +43,7 @@ interface Assignment { assignment_id: string; reviewer_person_id: string; review
  * The reviewer's own score and reasoning are always present: an override
  * supersedes a judgment on the record, it does not erase it.
  */
-interface EvaluationEvidence {
+export interface EvaluationEvidence {
   abstained: boolean;
   id: string;
   round_id: string;
@@ -62,7 +62,11 @@ interface EvaluationEvidence {
   scale_max: number | null;
 }
 interface RubricCriterion { id: string; name: string; kind: "numeric" | "select" | "text"; weight_pct: number; position: number }
-interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; criteria: RubricCriterion[]; reviewers: Assignment[]; evaluations: Array<{ abstained: boolean; score: number | null; recommendation: string | null; comment: string; reviewer_kind: "human" | "agent" }>; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
+export type EvaluationPanelEvaluation = Pick<EvaluationEvidence,
+  "abstained" | "id" | "reviewer_name" | "reviewer_kind" | "recommendation" | "score" | "comment"
+  | "override_score" | "override_comment" | "override_person_name"
+>;
+interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; criteria: RubricCriterion[]; reviewers: Assignment[]; evaluations: EvaluationPanelEvaluation[]; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
 interface RecordData {
   id: string; event_id: string; event_name: string; kind: "abstract" | "session"; title: string; abstract: string | null;
   status: string; stage: string; stage_label: string; bypass_evaluation: boolean; origin: string; vendor_affiliation: string;
@@ -73,6 +77,10 @@ interface RecordData {
   tracks: Array<{ id: string; name: string; color: string; is_primary: boolean }>;
   participants: Participant[]; answers: Array<{ id: string; field_id: string; label: string | null; key: string | null; type: string | null; value_text: string | null; value_json: unknown; file: FileAnswerView | null }>;
   decisions: Array<{ id: string; kind?: "decision" | "reversal"; decision: string; resulting_status: string; feedback_md: string | null; note?: string | null; decided_at: number; decided_by_name: string | null }>;
+  /** Who a decision mail goes to today, decided by the sender's own rule. */
+  decision_recipient: { person_id: string; name: string; email: string } | null;
+  /** Every decision mail this record has produced, newest first. */
+  decision_sends: Array<DecisionSend & { id: string; kind: "accepted" | "rejected" }>;
   evaluations: EvaluationEvidence[];
   comparisons: Array<{ round_id: string; round_name: string; reviewer_name: string; reviewer_kind: "human" | "agent"; ranking: unknown; submission_ids: string[] }>;
   evaluation: { rounds: Round[]; reviewer_options: Reviewer[] };
@@ -184,6 +192,54 @@ function ScorecardAnswers({ criteria, scores }: { criteria: RubricCriterion[]; s
   </div>;
 }
 
+/**
+ * The panel is the organizer's decision surface, so a scorecard result cannot
+ * stop at a count. Keep the reviewer's rating and words in one stable result
+ * row, with the chair's override in its own explicitly labelled block.
+ *
+ * The comment body and its action each have reserved space. Expanding a long
+ * comment makes that body scrollable inside the slot instead of moving the
+ * assignment controls or the rest of the record underneath the operator.
+ */
+export function EvaluationPanelResult({ evaluation }: { evaluation: EvaluationPanelEvaluation }): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const reviewerComment = evaluation.comment.trim();
+  const isLongComment = !evaluation.abstained && reviewerComment.length > 120;
+  const hasOverride = evaluation.override_score !== null || Boolean(evaluation.override_comment?.trim());
+  const commentId = `evaluation-panel-comment-${evaluation.id}`;
+
+  return <article class="record-round-result" data-evaluation-panel-result={evaluation.id}>
+    <div class="record-round-result-head">
+      <strong><ReviewerName name={evaluation.reviewer_name} kind={evaluation.reviewer_kind} /></strong>
+      <span class="evaluation-panel-override-slot">{hasOverride
+        ? <Chip tone="warning" class="override-chip">Override</Chip>
+        : <span class="evaluation-panel-override-slot-placeholder" aria-hidden="true" />}</span>
+    </div>
+    <div class="evaluation-panel-rating">
+      <small>{evaluation.abstained ? "Reviewer outcome" : "Reviewer rating"}</small>
+      <strong class="tabular">{evaluation.abstained
+        ? "Conflict declared"
+        : `${scoreText(evaluation.score)} · ${evaluation.recommendation || "No recommendation"}`}</strong>
+    </div>
+    <div class="evaluation-panel-comment-slot">
+      <small>Reviewer comment</small>
+      <span id={commentId} class={`evaluation-panel-comment-body${expanded ? " expanded" : ""}`}>
+        {evaluation.abstained ? "Reviewer recused; no recommendation recorded." : reviewerComment || "—"}
+      </span>
+    </div>
+    <div class="evaluation-panel-comment-action">
+      {isLongComment
+        ? <button type="button" aria-controls={commentId} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Show less" : "Read full comment"}</button>
+        : <span class="evaluation-panel-comment-action-placeholder" aria-hidden="true" />}
+    </div>
+    {hasOverride && <div class="evaluation-panel-override" data-evaluation-panel-override="true">
+      <small>Organizer override</small>
+      <strong class="tabular">{scoreText(evaluation.override_score)}</strong>
+      <span>{evaluation.override_comment?.trim() || "No override reason recorded."}</span>
+    </div>}
+  </article>;
+}
+
 function EvaluationEvidenceRow({ evaluation, criteria, canOverride, busy, error, onOverride, onClear }: {
   evaluation: EvaluationEvidence;
   criteria: RubricCriterion[];
@@ -273,6 +329,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [messageError, setMessageError] = useState("");
   const [messageNotice, setMessageNotice] = useState("");
   const [resendNotice, setResendNotice] = useState("");
+  const [sendsOpen, setSendsOpen] = useState(false);
   const [overrideError, setOverrideError] = useState("");
   const [participantMode, setParticipantMode] = useState<"existing" | "new">("existing");
   const [participantRole, setParticipantRole] = useState<string>("co_speaker");
@@ -566,7 +623,25 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("approve"); setFeedbackDraft(""); }}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy)} onClick={() => { setDecisionRequest("maybe"); setFeedbackDraft(""); }}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("deny"); setFeedbackDraft(""); }}>Reject</Button>}<span class="subtle">Feedback (optional) is saved with the decision; accepted and rejected decisions also include it in the speaker email.</span></div></CardBody></Card>}
         {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>{decisionRequest === "maybe" ? "A waitlist does not send a message. Any feedback you add is saved with the decision." : "Feedback is optional. If you add it, the speaker will see the same words in the decision email."}</p><label class="field"><span>Feedback for the speaker (optional)</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist" : "Reject and notify"}</Button></div></div>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{decision.kind === "reversal" ? `Acceptance reversed · ${statusLabel(decision.resulting_status)}` : statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.note || decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
-        {record.actions.can_resend_decision && <Card><CardHeader title="Decision delivery"><span class="subtle">The decision is already recorded.</span></CardHeader><CardBody><p class="record-delivery-copy">If the speaker did not receive this decision, correct the address on their speaker record, then send the decision again.</p><div class="record-action-row"><Button onClick={() => navigate(speakerRecordHref)}>Edit speaker address</Button><Button variant="primary" disabled={Boolean(busy)} onClick={() => void resendDecision()}>{busy === "resend" ? "Queueing…" : "Send decision again"}</Button></div>{resendNotice && <p class="record-inline-message notice" role="status">{resendNotice}</p>}</CardBody></Card>}
+        {record.actions.can_resend_decision && <Card><CardHeader title="Decision delivery"><span class="subtle">The decision is already recorded.</span></CardHeader><CardBody>
+          <p class="record-delivery-copy">If the speaker did not receive this decision, correct the address on their speaker record, then send the decision again.</p>
+          {/* The address the last attempt used, named on the card. Without it
+              "send it again" repeats a typo the organizer cannot see, and the
+              speaker stays uninformed twice. */}
+          <p class="record-delivery-last" data-send-count={record.decision_sends.length}>{lastSendLine(record.decision_sends, record.decision_recipient?.email ?? null)}</p>
+          {record.decision_sends.length > 0 && <details class="record-delivery-history" open={sendsOpen} onToggle={(event) => setSendsOpen(event.currentTarget.open)}>
+            <summary>{sendsOpen ? "Hide previous sends" : `Review previous sends (${record.decision_sends.length})`}</summary>
+            <ul class="record-delivery-sends">{record.decision_sends.map((send) => <li key={send.id}>
+              <span class="record-delivery-address">{send.to_email}</span>
+              <span class="subtle">{statusLabel(send.kind)} · {sendMoment(sendMomentFor(send))}</span>
+              <Chip tone={sendOutcome(send).tone}>{sendOutcome(send).label}</Chip>
+              {/* A demo hold is not a fault; only an alarm outcome is coloured like one. */}
+              {send.reason && <small class={sendOutcome(send).tone === "alarm" ? "record-delivery-reason alarm" : "record-delivery-reason"}>{send.reason}</small>}
+            </li>)}</ul>
+          </details>}
+          <div class="record-action-row"><Button onClick={() => navigate(speakerRecordHref)}>Edit speaker address</Button><Button variant="primary" disabled={Boolean(busy)} onClick={() => void resendDecision()}>{busy === "resend" ? "Queueing…" : "Send decision again"}</Button></div>
+          {resendNotice && <p class="record-inline-message notice" role="status">{resendNotice}</p>}
+        </CardBody></Card>}
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }, SCHEDULE_ROUTE); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}
         <Card><CardHeader title="Participants"><span class="tabular">{record.participants.length}</span></CardHeader><CardBody>
@@ -613,6 +688,9 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           <div class="record-round-head"><strong>{round.name}</strong><span class="tabular">{round.mode === "comparison" ? "Comparison" : "Scorecard"} · target {round.target_reviews_per_submission}</span></div>
           {round.evaluations.filter((evaluation) => !evaluation.abstained).length > 0 && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => !evaluation.abstained).length} scorecard result{round.evaluations.filter((evaluation) => !evaluation.abstained).length === 1 ? "" : "s"}</small></div>}
           {round.evaluations.some((evaluation) => evaluation.abstained) && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => evaluation.abstained).length} conflict{round.evaluations.filter((evaluation) => evaluation.abstained).length === 1 ? "" : "s"} declared</small></div>}
+          {round.evaluations.length > 0 && <div class="record-round-results">
+            {round.evaluations.map((evaluation, index) => <EvaluationPanelResult key={`${evaluation.id}-${index}`} evaluation={evaluation} />)}
+          </div>}
           {round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}
           {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
           <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>

@@ -10,6 +10,10 @@
  * calendar page, which never reads the shell at all. A degraded page should
  * still be recognisably Marquee in the tab.
  *
+ * These stay the Day mark, and carry none of the ids `index.html` puts on its
+ * icon tags: a fallback document has no shell, no theme script and no app to
+ * re-dress the tab, so there is no theme for the icon to follow.
+ *
  * Keep in sync with `index.html`.
  */
 export const ICON_LINKS =

@@ -64,8 +64,9 @@ export interface PublicFormState {
   resume_url: string | null;
   last_saved_at: number | null;
   submitted_at: number | null;
+  submission_editable: boolean;
+  submission_edit_reason: string | null;
   turnstile_site_key: string | null;
   confirmation: PublicFormConfirmation | null;
   message: string | null;
 }
-

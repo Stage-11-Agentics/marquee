@@ -43,6 +43,21 @@
 .record-inline-message { color: transparent; flex: 1 1 260px; font-size: 10.5px; line-height: 1.4; min-height: 16px; }
 .record-inline-message.error { color: var(--danger); }
 .record-inline-message.notice { color: var(--ok); }
+/* Delivery evidence sits between the instruction and the buttons: read what
+   the last attempt did, then act. The line holds two rows' worth of height at
+   every width so opening the history never shifts the buttons under a cursor
+   already on its way to them. */
+.record-delivery-last { color: var(--ink-soft); font-size: 11px; line-height: 1.45; margin: 8px 0 0; min-height: 32px; }
+.record-delivery-history { margin: 6px 0 14px; }
+.record-delivery-history summary { color: var(--muted); cursor: pointer; font-size: 10.5px; }
+.record-delivery-sends { display: grid; gap: 6px; list-style: none; margin: 8px 0 0; padding: 0; }
+.record-delivery-sends li { align-items: baseline; border-bottom: 1px solid var(--line); display: grid; gap: 4px 8px; grid-template-columns: minmax(0, 1fr) auto; padding-bottom: 6px; }
+.record-delivery-sends li:last-child { border-bottom: 0; padding-bottom: 0; }
+.record-delivery-sends .chip { grid-column: 2; grid-row: 1 / span 2; justify-self: end; }
+.record-delivery-address { font: 400 10.5px var(--mono); overflow-wrap: anywhere; }
+.record-delivery-sends .subtle { font-size: 10px; grid-column: 1; }
+.record-delivery-reason { color: var(--muted); font-size: 10px; grid-column: 1; line-height: 1.4; }
+.record-delivery-reason.alarm { color: var(--danger); }
 .record-decision-list { display: grid; gap: 10px; }
 .record-decision { border-bottom: 1px solid var(--line); display: grid; gap: 7px; padding-bottom: 10px; }
 .record-decision:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -116,6 +131,26 @@
 .record-round-head strong { font-size: 11.5px; }
 .record-round-head span { color: var(--muted); font: 400 9.5px var(--mono); }
 .record-round-evidence { background: var(--sunk); border: 1px solid var(--line); color: var(--muted); padding: 7px 8px; }
+.record-round-results { display: grid; gap: 6px; }
+.record-round-result { background: var(--sunk); border: 1px solid var(--line); display: grid; gap: 4px; padding: 8px; }
+.record-round-result-head { align-items: center; display: flex; gap: 7px; justify-content: space-between; min-height: 18px; }
+.record-round-result-head > strong { font-size: 10.5px; min-width: 0; overflow-wrap: anywhere; }
+.record-round-result-head .reviewer-name { max-width: 100%; }
+.evaluation-panel-override-slot { align-items: center; display: inline-flex; flex: 0 0 70px; justify-content: flex-start; min-height: 18px; }
+.evaluation-panel-override-slot-placeholder { display: inline-flex; min-height: 18px; min-width: 70px; visibility: hidden; }
+.evaluation-panel-rating { align-items: baseline; display: flex; flex-wrap: wrap; gap: 6px; min-height: 20px; }
+.evaluation-panel-rating small, .evaluation-panel-comment-slot small, .evaluation-panel-override small { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+/* The fixed slot keeps a long comment's disclosure from pushing the panel's
+   assignment controls down when the operator opens it. */
+.evaluation-panel-comment-slot { display: grid; gap: 3px; height: 68px; min-height: 68px; overflow: hidden; }
+.evaluation-panel-comment-body { color: var(--ink); font-size: 10.5px; line-height: 1.45; max-height: 51px; overflow: hidden; overflow-wrap: anywhere; }
+.evaluation-panel-comment-body:not(.expanded) { -webkit-box-orient: vertical; -webkit-line-clamp: 3; display: -webkit-box; }
+.evaluation-panel-comment-body.expanded { max-height: 51px; overflow-y: auto; }
+.evaluation-panel-comment-action { align-items: center; display: flex; min-height: 24px; }
+.evaluation-panel-comment-action button { background: transparent; border: 0; color: var(--accent-dark); cursor: pointer; font: 600 9.5px var(--mono); padding: 0; text-align: left; text-decoration: underline; }
+.evaluation-panel-comment-action-placeholder { min-height: 20px; visibility: hidden; }
+.evaluation-panel-override { border-left: 2px solid var(--warning-line, var(--line)); display: grid; gap: 3px; min-height: 39px; padding-left: 7px; }
+.evaluation-panel-override span { color: var(--muted); font-size: 10.5px; overflow-wrap: anywhere; }
 .record-assignment { background: var(--sunk); padding: 7px; }
 .record-assignment > span { display: grid; gap: 3px; min-width: 0; }
 .record-assignment strong { font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
