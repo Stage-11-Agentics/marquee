@@ -28,10 +28,10 @@ const KIND_LABEL: Record<CriterionKind, string> = {
 };
 
 /**
- * Round dates are epoch milliseconds and `<input type="date">` speaks calendar
- * days, so both directions go through UTC. Reading a stored date in the browser's
- * local zone and writing it back shifts it a day for anyone west of Greenwich —
- * and a review round that opens a day early is a wrong answer, not a rounding one.
+ * Round dates are calendar days, encoded at UTC midnight because the field has
+ * no clock. Both directions use that one stable encoding, so every reader sees
+ * the same day; a review round that opens a day early is a wrong answer, not a
+ * rounding one.
  */
 function toDateInput(value: number | null): string {
   if (value === null) return "";
@@ -192,10 +192,9 @@ function csvDataRowCount(csv: string): number {
 }
 
 /**
- * Round boundaries are calendar days, stored as UTC midnight — so they are read
- * back in UTC, matching the date pickers beside them. Rendering the same value
- * in a western zone shows the day before, and a round the organizer set to open
- * on the 1st that reads "Jul 31" looks like the product losing their edit.
+ * Round boundaries are calendar days, encoded at UTC midnight because they have
+ * no clock. Read them back with that same encoding, matching the date pickers
+ * beside them; the displayed day is identical for every reader.
  */
 function formatDate(value: number | null): string {
   if (value === null) return "Not scheduled";

@@ -81,7 +81,7 @@ const publicFileSchema = z.object({
 });
 const publicStateSchema = z.enum(["open", "closed", "at_limit", "resumed", "submitted"]);
 const publicFormSchema = z.object({
-  conference: z.object({ name: z.string(), slug: z.string() }),
+  conference: z.object({ name: z.string(), slug: z.string(), timezone: z.string() }),
   form: z.object({
     id: z.string(), name: z.string(), slug: z.string(), kind: z.enum(["abstract", "session"]),
     status: z.enum(["open", "closed"]), welcome_md: z.string(), closes_at: z.number().int().nullable(), per_submitter_limit: z.number().int(),

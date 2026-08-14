@@ -7,9 +7,11 @@ import { listCommsAudience, listCommsRecipientsForSubmissionIds } from "../../sr
 import { processMailOutbox, runMailSchedule, type MailProvider } from "../../src/jobs/mail/consumer";
 import { enqueueOutbox, enqueuePublicFormConfirmation, enqueueSmokeHarnessMail, buildIdempotencyKey } from "../../src/jobs/mail/outbox";
 import { isMailScheduleCron, selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "../../src/jobs/mail/schedule";
+import { mergeDataForRecipient } from "../../src/jobs/mail/merge-data";
 import { enqueueBulkReminder, enqueuePreCloseReminders, enqueueTrigger } from "../../src/jobs/mail/triggers";
 import { findTemplate, renderStoredTemplate, TRIGGER_TEMPLATE_KEYS } from "../../src/jobs/mail/templates";
 import { renderMail } from "../../src/jobs/mail/render";
+import { dueAtFromDateInput } from "../../src/lib/task-due";
 import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.parse("2026-08-10T12:00:00.000Z");
@@ -119,13 +121,13 @@ test("AC-117, AC-93 · the same bulk action twice relies on the UNIQUE idempoten
 });
 
 test("AC-93 · exact person selection can queue a demo-safe reminder for a roster speaker without a submission", async () => {
+  const dueAt = Date.parse("2026-08-05T01:30:00.000Z");
   await env.DB.batch([
+    env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'"),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_roster', 'org_mail', 'roster@example.com', 'Roster Speaker', ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_mail_roster', 'org_mail', 'evt_mail', 'per_mail_roster', 'speaker', ?, ?)").bind(NOW, NOW),
-    // clock-check: allow — the assertion here is which recipients get selected; no path in it compares a due date to the clock
-    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at) VALUES ('template_mail_roster', 'evt_mail', 'Upload slides', 'file', 'Upload the deck.', ?, 0, 0, ?, ?)").bind(NOW + 86_400_000, NOW, NOW),
-    // clock-check: allow — as above: the task exists to be selectable, and its due date is never read against the clock
-    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mail_roster', 'evt_mail', 'per_mail_roster', NULL, 'template_mail_roster', 'Upload slides', 'file', 'Upload the deck.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(NOW + 86_400_000, NOW, NOW),
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('template_mail_roster', 'evt_mail', 'Upload slides', 'file', 'Upload the deck.', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mail_roster', 'evt_mail', 'per_mail_roster', NULL, 'template_mail_roster', 'Upload slides', 'file', 'Upload the deck.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
   ]);
   const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mail-person-selection" });
   const response = await app.request("/api/v1/events/evt_mail/comms/send", {
@@ -135,8 +137,12 @@ test("AC-93 · exact person selection can queue a demo-safe reminder for a roste
   }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
   expect(response.status).toBe(202);
   expect(await response.json()).toMatchObject({ selected: 1, queued: 1, duplicate: 0, outbox_rows: [{ person_id: "per_mail_roster", entity_id: "per_mail_roster", inserted: true }] });
-  const row = await env.DB.prepare("SELECT entity_id, send_policy FROM outbox WHERE event_id = 'evt_mail' AND person_id = 'per_mail_roster'").first<{ entity_id: string; send_policy: string }>();
-  expect(row).toEqual({ entity_id: "per_mail_roster", send_policy: "demo_safe" });
+  const row = await env.DB.prepare("SELECT entity_id, send_policy, text FROM outbox WHERE event_id = 'evt_mail' AND person_id = 'per_mail_roster'").first<{ entity_id: string; send_policy: string; text: string }>();
+  expect(row).toEqual({
+    entity_id: "per_mail_roster",
+    send_policy: "demo_safe",
+    text: "Hi Roster,\n\nUpload slides was due on Aug 4, 2026, 9:30 PM EDT.",
+  });
 });
 
 test("AC-93 · exact recipient pairs do not cross-multiply co-speaking selections", async () => {
@@ -338,12 +344,109 @@ test("AC-126 · a disabled trigger emits no row and an edited template round-tri
 test("AC-127 · the pre-close schedule fires at the configured offset and not before", async () => {
   expect(isMailScheduleCron("0 * * * *")).toBe(true);
   expect(isMailScheduleCron("*/5 * * * *")).toBe(false);
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
   expect(await selectPreCloseReminderCandidates(env.DB, NOW + 23 * 60 * 60_000)).toHaveLength(0);
-  expect(await selectPreCloseReminderCandidates(env.DB, NOW + 24 * 60 * 60_000)).toHaveLength(1);
+  const preClose = await selectPreCloseReminderCandidates(env.DB, NOW + 24 * 60 * 60_000);
+  expect(preClose).toHaveLength(1);
+  expect(preClose[0]?.data["form.closes_at"]).toBe("Aug 12, 2026, 8:00 AM EDT");
   expect(await selectOverdueTaskCandidates(env.DB, NOW)).toHaveLength(0);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 23 * 60 * 60_000)).toBe(0);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 24 * 60 * 60_000)).toBe(1);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 25 * 60 * 60_000)).toBe(0);
+});
+
+test("CONTRACT · MRQ-201 · overdue mail waits for the conference-local due day to end", async () => {
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
+  const dueAt = dueAtFromDateInput("2027-05-01");
+  expect(dueAt).not.toBeNull();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at) VALUES ('template_mrq201', 'evt_mail', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 0, 0, ?, ?)").bind(dueAt, NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mrq201', 'evt_mail', 'per_mail', 'sub_mail', 'template_mrq201', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
+  ]);
+
+  expect(await selectOverdueTaskCandidates(env.DB, Date.parse("2027-05-01T20:00:00-04:00"))).toHaveLength(0);
+  const overdue = await selectOverdueTaskCandidates(env.DB, Date.parse("2027-05-02T00:00:01-04:00"));
+  expect(overdue).toHaveLength(1);
+  expect(overdue[0]?.data["task.due_date"]).toBe("May 1, 2027");
+});
+
+test("CONTRACT · CNT-08 · SPK-16 · relative overdue mail names the conference-local instant", async () => {
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
+  const dueAt = Date.parse("2026-08-04T17:32:26.216Z");
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('template_mrq201_relative', 'evt_mail', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mrq201_relative', 'evt_mail', 'per_mail', 'sub_mail', 'template_mrq201_relative', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
+  ]);
+
+  const overdue = await selectOverdueTaskCandidates(env.DB, dueAt + 1);
+  expect(overdue.find((candidate) => candidate.entityId === "task_mrq201_relative")?.data["task.due_date"]).toBe("Aug 4, 2026, 1:32 PM EDT");
+  expect(overdue.find((candidate) => candidate.entityId === "task_mrq201_relative")?.data["task.due_date"]).not.toMatch(/T\d{2}:\d{2}/);
+});
+
+test("CONTRACT · MRQ-201 · mail merge clocks name the conference zone while calendar due dates stay date-only", () => {
+  const data = mergeDataForRecipient({
+    name: "Ada Lovelace",
+    email: "speaker@example.com",
+    submissionTitle: "Reliable email",
+    timezone: "America/New_York",
+    startsAt: Date.parse("2027-05-01T03:59:00.000Z"),
+    leaveBy: Date.parse("2027-05-01T02:30:00.000Z"),
+    taskDueAt: dueAtFromDateInput("2027-05-01"),
+    taskTemplateDueAt: dueAtFromDateInput("2027-05-01"),
+  });
+  expect(data["session.time"]).toBe("Apr 30, 2027, 11:59 PM EDT");
+  expect(data["session.leaveBy"]).toBe("10:30 PM EDT");
+  expect(data["task.due_date"]).toBe("May 1, 2027");
+  expect(String(data["session.time"])).not.toMatch(/T\d{2}:\d{2}/);
+});
+
+test("CONTRACT · MRQ-201 · conference comms preserve relative task instants in merge data", async () => {
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
+  const dueAt = Date.parse("2026-08-04T17:32:26.216Z");
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('template_mrq201_comms_relative', 'evt_mail', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mrq201_comms_relative', 'evt_mail', 'per_mail', 'sub_mail', 'template_mrq201_comms_relative', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
+  ]);
+
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-201-comms-relative" });
+  const response = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      selector: { submission_ids: ["sub_mail"], person_ids: ["per_mail"], role: "speaker" },
+      subject: "Task deadline",
+      body: "Due {{task.due_date}}",
+    }),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(response.status).toBe(202);
+  const payload = await response.json<{ outbox_ids: string[] }>();
+  const row = await env.DB.prepare("SELECT text FROM outbox WHERE id = ?").bind(payload.outbox_ids[0]).first<{ text: string }>();
+  expect(row?.text).toBe("Due Aug 4, 2026, 1:32 PM EDT");
+});
+
+test("CONTRACT · MRQ-201 · submission overdue filtering honors relative-task provenance at the UTC sentinel", async () => {
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
+  const dueAt = dueAtFromDateInput("2027-05-01");
+  expect(dueAt).not.toBeNull();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('template_mrq201_sentinel_relative', 'evt_mail', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mrq201_sentinel_relative', 'evt_mail', 'per_mail', 'sub_mail', 'template_mrq201_sentinel_relative', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
+  ]);
+
+  // Just after the exact instant, although a New York calendar-day reader is
+  // still on May 1. The SQL path must use template provenance here.
+  const nowSpy = vi.spyOn(Date, "now").mockReturnValue(dueAt! + 1);
+  try {
+    const audience = await listCommsAudience(env.DB, {
+      eventId: "evt_mail",
+      task: "overdue",
+      page: 1,
+      per_page: 10,
+    });
+    expect(audience.data.some((row) => row.submission_id === "sub_mail")).toBe(true);
+  } finally {
+    nowSpy.mockRestore();
+  }
 });
 
 test("AC-127 · the cron handoff queues only rows created by its scan", async () => {

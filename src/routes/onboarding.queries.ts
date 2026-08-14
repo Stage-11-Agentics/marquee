@@ -1,13 +1,13 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import { listVersionsFor, listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
+import { isTaskDueWithinDays, isTaskOverdue, taskDaysOverdue } from "../lib/task-due";
 import { ONBOARDING_PERSON_SOURCE } from "./speakers.queries";
 
 export const ONBOARDING_FILTERS = ["all", "overdue", "incomplete", "risk"] as const;
 export type OnboardingFilter = (typeof ONBOARDING_FILTERS)[number];
 
 export const ONBOARDING_RISK_WINDOW_DAYS = 14;
-const DAY_MS = 86_400_000;
 
 export type OnboardingTaskState = "done" | "overdue" | "risk" | "upcoming" | "cancelled" | "unassigned";
 
@@ -130,6 +130,8 @@ interface TaskQueryRow {
   kind: "acknowledge" | "file" | "form";
   description: string;
   due_at: number;
+  template_due_at: number | null;
+  timezone: string;
   status: "open" | "done";
   completed_at: number | null;
   cancelled_at: number | null;
@@ -169,14 +171,14 @@ export function isOwedTask(task: { status: "open" | "done"; cancelled_at: number
 }
 
 export function deriveTaskState(
-  task: { status: "open" | "done"; cancelled_at: number | null; due_at: number },
+  task: { status: "open" | "done"; cancelled_at: number | null; due_at: number; template_due_at?: number | null; timezone?: string | null },
   now: number,
   riskWindowDays = ONBOARDING_RISK_WINDOW_DAYS,
 ): OnboardingTaskState {
   if (task.status === "done") return "done";
   if (task.cancelled_at !== null) return "cancelled";
-  if (task.due_at < now) return "overdue";
-  if (task.due_at <= now + riskWindowDays * DAY_MS) return "risk";
+  if (isTaskOverdue({ dueAt: task.due_at, templateDueAt: task.template_due_at, timezone: task.timezone }, now)) return "overdue";
+  if (isTaskDueWithinDays({ dueAt: task.due_at, templateDueAt: task.template_due_at, timezone: task.timezone }, now, riskWindowDays)) return "risk";
   return "upcoming";
 }
 
@@ -311,13 +313,25 @@ function buildRows(
       .filter((track, index, all) => all.findIndex((candidate) => candidate.id === track.id) === index)
       .sort((left, right) => Number(right.is_primary) - Number(left.is_primary) || left.name.localeCompare(right.name));
     const stateTasks = tasks.filter((task) => task.state !== "unassigned");
-    const overdueTaskCount = personTasks.filter((task) => isOwedTask(task) && task.due_at < now).length;
+    const overdueTaskCount = personTasks.filter((task) => isOwedTask(task) && isTaskOverdue({
+      dueAt: task.due_at,
+      templateDueAt: task.template_due_at,
+      timezone: task.timezone,
+    }, now)).length;
     const maxDaysOverdue = personTasks.reduce((maximum, task) => {
-      if (!isOwedTask(task) || task.due_at >= now) return maximum;
-      return Math.max(maximum, Math.ceil((now - task.due_at) / DAY_MS));
+      if (!isOwedTask(task)) return maximum;
+      return Math.max(maximum, taskDaysOverdue({
+        dueAt: task.due_at,
+        templateDueAt: task.template_due_at,
+        timezone: task.timezone,
+      }, now));
     }, 0);
     const riskTaskCount = personTasks.filter((task) => {
-      return isOwedTask(task) && task.due_at >= now && task.due_at <= now + ONBOARDING_RISK_WINDOW_DAYS * DAY_MS;
+      return isOwedTask(task) && isTaskDueWithinDays({
+        dueAt: task.due_at,
+        templateDueAt: task.template_due_at,
+        timezone: task.timezone,
+      }, now, ONBOARDING_RISK_WINDOW_DAYS);
     }).length;
     const cells = Object.fromEntries(tasks.map((task) => [task.template_id, task]));
     rows.push({
@@ -414,9 +428,13 @@ async function listTasks(db: D1Database, eventId: string, personIds: readonly st
   if (personIds.length === 0) return [];
   const result = await db.prepare(
     `SELECT task.id, task.person_id, task.submission_id, task.template_id, task.title,
-            task.kind, task.description, task.due_at, task.status, task.completed_at,
+            task.kind, task.description, task.due_at, template.due_at AS template_due_at,
+            event.timezone, task.status, task.completed_at,
             task.cancelled_at
      FROM speaker_tasks task
+     JOIN task_templates template
+       ON template.id = task.template_id AND template.event_id = task.event_id
+     JOIN events event ON event.id = task.event_id
      WHERE task.event_id = ?
        AND task.person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
      ORDER BY task.person_id ASC, task.due_at ASC, task.id ASC`,
@@ -512,7 +530,11 @@ export async function listOnboarding(
     listSessions(db, eventId, personIds),
   ]);
   const rows = buildRows(people, taskRows, templates, sessions, now);
-  const overdueTasks = taskRows.filter((task) => isOwedTask(task) && task.due_at < now).length;
+  const overdueTasks = taskRows.filter((task) => isOwedTask(task) && isTaskOverdue({
+    dueAt: task.due_at,
+    templateDueAt: task.template_due_at,
+    timezone: task.timezone,
+  }, now)).length;
   const filteredRows = rows.filter((row) => rowMatchesOnboardingFilters(row, filters)).sort(compareOnboardingRows);
   return {
     generated_at: now,

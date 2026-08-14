@@ -326,12 +326,13 @@ test("AC-217 · the cfp embed renders the open deadline, formats, and a link to 
   await env.DB.prepare(
     `INSERT INTO forms (id, event_id, name, slug, kind, status, opens_at, closes_at, created_at, updated_at)
      VALUES ('form-cfp', ?, 'Call for speakers', 'widget-cfp', 'abstract', 'open', ?, ?, ?, ?)`,
-  ).bind(EVENT_ID, Date.now() - 86_400_000, Date.now() + 30 * 86_400_000, NOW, NOW).run();
+  ).bind(EVENT_ID, Date.now() - 86_400_000, Date.parse("2027-05-01T03:59:00.000Z"), NOW, NOW).run();
 
   const embed = await request(`/embed/${EVENT_SLUG}-cfp?event=${EVENT_SLUG}`);
   const body = await embed.text();
   expect(embed.status).toBe(200);
   expect(body).toContain("Call for speakers is open");
+  expect(body).toContain("Apr 30, 2027, 11:59 PM EDT");
   expect(body).toContain("Stage Talk");
   expect(body).toContain("Workshop");
   expect(body).toContain('href="/f/widget-cfp"');

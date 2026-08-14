@@ -1,4 +1,6 @@
 import type { MergeData } from "./render";
+import { formatEventDateTime, formatEventTime } from "../../lib/event-time";
+import { formatDueDate, isFixedCalendarDayDue } from "../../lib/task-due";
 
 export interface RecipientMergeContext {
   name: string;
@@ -13,6 +15,8 @@ export interface RecipientMergeContext {
   startsAt?: number | null;
   taskTitle?: string | null;
   taskDueAt?: number | null;
+  /** The fixed calendar-day template due_at, or null for a relative template. */
+  taskTemplateDueAt?: number | null;
 }
 
 export interface ReviewerReminderMergeContext {
@@ -27,12 +31,18 @@ export function firstName(name: string): string {
 }
 
 function mergeTime(value: number | null | undefined, timezone: string | null | undefined): string {
+  if (value === null || value === undefined || !timezone) return "—";
+  return formatEventTime(value, timezone);
+}
+
+function mergeTaskDue(
+  value: number | null | undefined,
+  templateDueAt: number | null | undefined,
+  timezone: string | null | undefined,
+): string {
   if (value === null || value === undefined) return "—";
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: timezone ?? "UTC",
-  }).format(new Date(value));
+  if (isFixedCalendarDayDue(value, templateDueAt) || !timezone) return formatDueDate(value);
+  return formatEventDateTime(value, timezone);
 }
 
 /**
@@ -45,10 +55,8 @@ export function mergeDataForRecipient(recipient: RecipientMergeContext): MergeDa
   const room = recipient.room ?? "—";
   const startsAt = recipient.startsAt === null || recipient.startsAt === undefined
     ? "—"
-    : new Date(recipient.startsAt).toISOString();
-  const taskDueAt = recipient.taskDueAt === null || recipient.taskDueAt === undefined
-    ? "—"
-    : new Date(recipient.taskDueAt).toISOString();
+    : recipient.timezone ? formatEventDateTime(recipient.startsAt, recipient.timezone) : "—";
+  const taskDueAt = mergeTaskDue(recipient.taskDueAt, recipient.taskTemplateDueAt, recipient.timezone);
   return {
     "speaker.first_name": firstName(recipient.name),
     "speaker.name": recipient.name,

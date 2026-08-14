@@ -10,6 +10,7 @@ import type {
   SubmissionTrackListItem,
 } from "../api/submissions";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
+import { localParts } from "../lib/event-time";
 import { participantListSql } from "../lib/participants";
 import { reviewAggregateColumns } from "../lib/review-aggregate";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
@@ -70,15 +71,39 @@ export function submissionTaskPredicate(
   task: "open" | SubmissionTaskFilter,
   submission = "s",
   includeCancelledAt = false,
+  includeTemplateProvenance = false,
 ): string {
+  const utcDayEnd = "(strftime('%s', date(filtered_task.due_at / 1000, 'unixepoch', '+1 day')) * 1000 - 1)";
+  const overduePredicate = includeTemplateProvenance
+    ? `
+        (
+          filtered_template.due_at IS NOT NULL
+          AND filtered_template.due_at = filtered_task.due_at
+          AND date(filtered_task.due_at / 1000, 'unixepoch') < ?
+        )
+        OR (
+          (filtered_template.due_at IS NULL OR filtered_template.due_at <> filtered_task.due_at)
+          AND filtered_task.due_at < ?
+        )`
+    : `
+        (filtered_task.due_at = ${utcDayEnd} AND date(filtered_task.due_at / 1000, 'unixepoch') < ?)
+        OR (filtered_task.due_at <> ${utcDayEnd} AND filtered_task.due_at < ?)`;
   return `EXISTS (
     SELECT 1 FROM speaker_tasks filtered_task
+    ${includeTemplateProvenance ? `LEFT JOIN task_templates filtered_template
+      ON filtered_template.id = filtered_task.template_id
+      AND filtered_template.event_id = filtered_task.event_id` : ""}
     WHERE filtered_task.event_id = ${submission}.event_id
       AND filtered_task.submission_id = ${submission}.id
       AND filtered_task.status = 'open'
       ${includeCancelledAt ? "AND filtered_task.cancelled_at IS NULL" : ""}
-      ${task === "overdue" ? "AND filtered_task.due_at < ?" : ""}
+      ${task === "overdue" ? `AND (${overduePredicate})` : ""}
   )`;
+}
+
+async function eventLocalDay(database: D1Database, eventId: string, now: number): Promise<string> {
+  const event = await database.prepare("SELECT timezone FROM events WHERE id = ?").bind(eventId).first<{ timezone: string }>();
+  return localParts(now, event?.timezone ?? "UTC").day;
 }
 
 export async function hasSpeakerTaskCancellationColumn(database: D1Database): Promise<boolean> {
@@ -86,6 +111,12 @@ export async function hasSpeakerTaskCancellationColumn(database: D1Database): Pr
     .prepare("SELECT 1 AS present FROM pragma_table_info('speaker_tasks') WHERE name = 'cancelled_at'")
     .first<{ present: number }>();
   return row?.present === 1;
+}
+
+/** Full task rows carry the template's fixed-date provenance; old sparse fixtures do not. */
+export async function hasSpeakerTaskTemplateProvenance(database: D1Database): Promise<boolean> {
+  return (await hasColumns(database, "speaker_tasks", ["template_id"]))
+    && hasColumns(database, "task_templates", ["id", "event_id", "due_at"]);
 }
 
 function pendingWavePredicate(submission: string): string {
@@ -215,6 +246,8 @@ function filterParts(
   filters: SubmissionListFilters,
   includeCancelledAt = false,
   statusSemantics: SubmissionStatusSemantics = "derived",
+  overdueDay?: string,
+  includeTemplateProvenance = false,
 ): QueryParts {
   const clauses = ["s.event_id = ?"];
   const bindings: unknown[] = [filters.eventId];
@@ -248,8 +281,8 @@ function filterParts(
     bindings.push(filters.wave);
   }
   if (filters.task) {
-    clauses.push(submissionTaskPredicate(filters.task, "s", includeCancelledAt));
-    if (filters.task === "overdue") bindings.push(Date.now());
+    clauses.push(submissionTaskPredicate(filters.task, "s", includeCancelledAt, includeTemplateProvenance));
+    if (filters.task === "overdue") bindings.push(overdueDay ?? "1970-01-01", Date.now());
   }
   if (filters.placement === "unplaced") clauses.push("ai.id IS NULL");
   if (filters.q) {
@@ -663,7 +696,9 @@ async function listDraftsNeedingAttention(
   const page = parsePagination(filters);
   const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "updated");
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
-  const { where, bindings } = filterParts(filters, includeCancelledAt);
+  const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
+  const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
+  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const rows = await database.prepare(`
@@ -704,7 +739,9 @@ export async function listSubmissions(
   // The shared helper deliberately emits the canonical `id ASC` tie-break.
   // This query joins several id-bearing tables, so qualify that fixed suffix.
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
-  const { where, bindings } = filterParts(filters, includeCancelledAt);
+  const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
+  const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
+  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
@@ -726,7 +763,10 @@ async function listNotNotifiedSubmissions(
   const page = parsePagination(filters);
   const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "newest");
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
-  const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
+  const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
+  const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
+  const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
+  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database
@@ -797,10 +837,15 @@ export async function selectSubmissionIds(
   filters: SubmissionFilter & { eventId: string },
   options: { statusSemantics?: SubmissionStatusSemantics } = {},
 ): Promise<string[]> {
+  const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
+  const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
+  const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
   const { where, bindings } = filterParts(
     filters,
-    await hasSpeakerTaskCancellationColumn(database),
+    includeCancelledAt,
     options.statusSemantics,
+    overdueDay,
+    includeTemplateProvenance,
   );
   const source = filters.status === "not_notified" ? NOTIFICATION_FROM : FROM;
   const result = await database

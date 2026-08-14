@@ -26,6 +26,7 @@ import {
 import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
 import { listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
 import { readTaskFileConfig } from "../lib/task-template-config";
+import { isTaskOverdue } from "../lib/task-due";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import { firstName } from "../jobs/mail/merge-data";
@@ -179,6 +180,7 @@ type TaskProjection = {
   submission_title: string | null;
   submission_status: string | null;
   template_id: string;
+  template_due_at: number | null;
   title: string;
   kind: "acknowledge" | "file" | "form";
   description: string;
@@ -857,7 +859,8 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
       .prepare(
         `SELECT task.id, task.event_id, task.person_id, task.submission_id,
            submission.title AS submission_title, submission.status AS submission_status,
-           task.template_id, task.title, task.kind, task.description, task.due_at,
+           task.template_id, template.due_at AS template_due_at,
+           task.title, task.kind, task.description, task.due_at,
            task.status, task.completed_at, task.cancelled_at,
            task.response_json, task.attachment_id, template.form_id, template.file_config
          FROM speaker_tasks task
@@ -917,7 +920,11 @@ async function listTasks(db: D1Database, event: EventProjection, personId: strin
       completed_at: task.completed_at,
       cancelled_at: task.cancelled_at,
       cancelled_reason: cancelled ? cancelledReason : null,
-      overdue: !cancelled && task.status === "open" && task.due_at < Date.now(),
+      overdue: !cancelled && task.status === "open" && isTaskOverdue({
+        dueAt: task.due_at,
+        templateDueAt: task.template_due_at,
+        timezone: event.timezone,
+      }, Date.now()),
       payload: taskPayload(task, fields, answers, versionsByTask.get(task.id) ?? null),
     };
   }));

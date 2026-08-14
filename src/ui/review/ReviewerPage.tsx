@@ -249,9 +249,9 @@ function recommendationLabel(value: ReviewState["recommendation"]): string {
 
 function formatRoundClose(value: number | null): string | null {
   if (value === null) return null;
-  // Round boundaries are calendar days stored at UTC midnight. Rendering that
-  // instant in the reviewer's local zone turns a configured close on the 15th
-  // into the 14th for organizers west of UTC.
+  // Round boundaries are calendar days encoded at UTC midnight because they
+  // have no clock. That one encoding keeps the displayed day identical for
+  // every reader.
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(value));
 }
 

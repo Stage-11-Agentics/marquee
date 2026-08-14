@@ -9,6 +9,9 @@ import {
   generateAgendaGridSlots,
   type AgendaGridSlot,
 } from "../../lib/agenda-grid";
+import { localParts } from "../../lib/event-time";
+
+export { localParts } from "../../lib/event-time";
 
 /** Default slot labels retained for callers that only need the board's default list. */
 export const TIME_SLOTS = generateAgendaGridSlots(DEFAULT_AGENDA_GRID_GRANULARITY).map((slot) => slot.time);
@@ -119,23 +122,6 @@ export function TrackBoard({
       </section>;
     })}
   </div>;
-}
-
-export function localParts(timestamp: number, timezone: string): { day: string; time: string } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(timestamp));
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  return {
-    day: `${values.get("year")}-${values.get("month")}-${values.get("day")}`,
-    time: `${values.get("hour")}:${values.get("minute")}`,
-  };
 }
 
 export function sessionDay(session: AgendaSession, timezone: string): string {

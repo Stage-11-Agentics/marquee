@@ -14,6 +14,7 @@ import type {
 } from "../../api/agenda";
 import { AGENDA_VIEWS, durationIsAllowed, MAX_BATCH_PUBLISH_IDS, viewNames } from "../../api/agenda";
 import { autoPlaceSummary, planAutoPlacements, type AutoPlaceSlot } from "../../lib/auto-place";
+import { zonedStart } from "../../lib/event-time";
 import { isVisibleToAudience, PUBLIC_SPEAKER_EMPTY_LABEL } from "../../lib/participants";
 import {
   AGENDA_GRID_OPTIONS,
@@ -31,8 +32,10 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import { orderNewestFirst } from "../shell/wide-grid";
-import { localParts, sessionDay, sessionTime, TrackBoard } from "./track-board";
+import { sessionDay, sessionTime, TrackBoard } from "./track-board";
 import "./agenda.css";
+
+export { zonedStart } from "../../lib/event-time";
 
 const AGENDA_ROUTE = "/api/v1/events/{eventId}/agenda";
 const AGENDA_ITEMS_ROUTE = "/api/v1/events/{eventId}/agenda/items";
@@ -86,26 +89,6 @@ interface ArmedPlacement {
 function dayOptions(snapshot: AgendaSnapshot): DayOption[] {
   return conferenceDays(snapshot.event.starts_on, snapshot.event.ends_on)
     .map((day) => ({ value: day.id, label: day.label.replace(", ", " · ") }));
-}
-
-/** Convert a conference-local wall-clock value into an instant without using the browser's zone. */
-export function zonedStart(date: string, time: string, timezone: string): number {
-  const [year, month, day] = date.split("-").map(Number);
-  const [hour, minute] = time.split(":").map(Number);
-  const target = Date.UTC(year!, month! - 1, day, hour, minute);
-  let candidate = target;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const rendered = localParts(candidate, timezone);
-    const renderedTarget = Date.UTC(
-      Number(rendered.day.slice(0, 4)),
-      Number(rendered.day.slice(5, 7)) - 1,
-      Number(rendered.day.slice(8, 10)),
-      Number(rendered.time.slice(0, 2)),
-      Number(rendered.time.slice(3, 5)),
-    );
-    candidate += target - renderedTarget;
-  }
-  return candidate;
 }
 
 /**

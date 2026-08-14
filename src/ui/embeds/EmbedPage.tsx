@@ -2,6 +2,7 @@
 import type { JSX } from "preact";
 
 import { EMBED_KINDS, EMBED_OUTPUT_FORMATS, type EmbedKind, type EmbedLayout, type EmbedOutputFormat } from "../../db/schema";
+import { formatEventDateTime } from "../../lib/event-time";
 import {
   embedFieldsForKind,
   type EmbedField,
@@ -319,8 +320,8 @@ function trackChip(track: PublicTrack): JSX.Element {
   return <span class="embed-track" style={{ "--track-color": track.color }} key={track.id}>{track.name}</span>;
 }
 
-function formatDeadline(epochMs: number): string {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(epochMs));
+function formatDeadline(epochMs: number, timezone: string): string {
+  return formatEventDateTime(epochMs, timezone);
 }
 
 function speakerHref(slug: string, eventSlug: string): string {
@@ -425,12 +426,12 @@ function sessionsFlatList(sessions: PublicEmbedData["sessions"], fields: Readonl
   );
 }
 
-function cfpBody(cfp: PublicEmbedData["cfp"], fields: ReadonlySet<EmbedField>): JSX.Element {
+function cfpBody(cfp: PublicEmbedData["cfp"], fields: ReadonlySet<EmbedField>, timezone: string): JSX.Element {
   if (!cfp) {
     return <div class="embed-empty"><div><strong>Call for speakers has not opened yet</strong><span>Check back once the conference team publishes a form.</span></div></div>;
   }
   const isOpen = cfp.status === "open";
-  const deadline = fields.has("deadline") && cfp.closesAt ? formatDeadline(cfp.closesAt) : null;
+  const deadline = fields.has("deadline") && cfp.closesAt ? formatDeadline(cfp.closesAt, timezone) : null;
   return (
     <div class="embed-cfp">
       {fields.has("status") ? <strong>Call for speakers is {isOpen ? "open" : "closed"}{deadline && isOpen ? ` · closes ${deadline}` : ""}</strong> : null}
@@ -475,7 +476,7 @@ export function EmbedPage({ data, basic = false }: { data: PublicEmbedData; basi
           </select>
         </form>
       ) : null}
-      {data.kind === "cfp" ? cfpBody(data.cfp, fields) : data.kind === "speakers" ? (
+      {data.kind === "cfp" ? cfpBody(data.cfp, fields, data.event.timezone) : data.kind === "speakers" ? (
         data.speakers.length > 0 ? (layout === "list" ? speakerList(data.speakers, data.event.slug, fields) : speakerCards(data.speakers, data.event.slug, fields))
           : <div class="embed-empty"><div><strong>{hasFilters ? "No published speakers match" : "No published speakers yet"}</strong><span>{hasFilters ? "Clear a filter to bring the gallery back into view." : "The conference team has not published any speakers yet."}</span><a class="public-button primary" href={hasFilters ? `/embed/${encodeURIComponent(data.slug)}` : agendaHref}>{hasFilters ? "Show all speakers" : "Open the conference agenda"}</a></div></div>
       ) : data.kind === "sessions" ? (

@@ -2,7 +2,9 @@ import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { EVENT_TIMEZONES } from "../../lib/event-time";
 import { PageHeader } from "../shell/components";
+import { useEventContext } from "../shell/event-context";
 import { EVENT_NAME_CHANGED } from "../shell/identity";
 import { OrganizersCard } from "../setup/OrganizersCard";
 import { SocialMark } from "../social/SocialBadges";
@@ -174,6 +176,7 @@ function TrackRow({
 }
 
 export function EventSettings({ eventId, navigate }: Props): JSX.Element {
+  const { refresh } = useEventContext();
   const [state, setState] = useState<LoadState>({ kind: "loading", model: null });
   const [venueCounts, setVenueCounts] = useState<VenueCounts | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -219,6 +222,10 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...model.event, speaker_social_platforms: model.speaker_social_platforms }),
       });
+      // The timezone is the clock every other shell screen uses. Refresh the
+      // shared event context immediately after its write, before a later format
+      // or track write can fail and leave those screens reading the old zone.
+      await refresh();
       for (const id of removedFormats) {
         if (!id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/formats/${encodeURIComponent(id)}`, "/api/v1/events/{eventId}/formats/{formatId}", { method: "DELETE" });
       }
@@ -238,6 +245,7 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
       const response = await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, "/api/v1/events/{eventId}");
       window.dispatchEvent(new CustomEvent(EVENT_NAME_CHANGED, { detail: response.data.event.name }));
       setState({ kind: "ready", model: response.data });
+      await refresh();
       setRemovedFormats([]);
       setRemovedTracks([]);
       setDirty(false);
@@ -266,7 +274,7 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
             <Field label="Tagline" className="span-2"><input value={model.event.tagline ?? ""} onInput={(event) => updateModel((current) => ({ ...current, event: { ...current.event, tagline: event.currentTarget.value } }))} /></Field>
             <Field label="Starts"><input type="date" value={model.event.starts_on} onInput={(event) => updateModel((current) => ({ ...current, event: { ...current.event, starts_on: event.currentTarget.value } }))} /></Field>
             <Field label="Ends"><input type="date" value={model.event.ends_on} onInput={(event) => updateModel((current) => ({ ...current, event: { ...current.event, ends_on: event.currentTarget.value } }))} /></Field>
-            <Field label="Timezone" className="span-2"><select value={model.event.timezone} onChange={(event) => updateModel((current) => ({ ...current, event: { ...current.event, timezone: event.currentTarget.value } }))}><option value="America/New_York">America/New_York</option><option value="America/Los_Angeles">America/Los_Angeles</option><option value="Europe/London">Europe/London</option><option value="UTC">UTC</option></select><small>Agenda and calendar invites inherit this timezone.</small></Field>
+            <Field label="Timezone" className="span-2"><select value={model.event.timezone} onChange={(event) => updateModel((current) => ({ ...current, event: { ...current.event, timezone: event.currentTarget.value } }))}>{[...new Set([model.event.timezone, ...EVENT_TIMEZONES])].map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select><small>Agenda and calendar invites inherit this timezone.</small></Field>
             <Field label="Venue" className="span-2"><input value={model.event.venue ?? ""} onInput={(event) => updateModel((current) => ({ ...current, event: { ...current.event, venue: event.currentTarget.value } }))} /></Field>
             <Field label="Conference logo" className="span-2"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) updateModel((current) => ({ ...current, event: { ...current.event, logo_key: file.name } })); }} /><small>{model.event.logo_key ? `Selected: ${model.event.logo_key}` : "PNG, JPG, or WebP"}</small></Field>
           </div>

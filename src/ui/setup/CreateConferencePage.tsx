@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
+import { EVENT_TIMEZONES } from "../../lib/event-time";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, PageHeader } from "../shell/components";
 import { useEventContext } from "../shell/event-context";
@@ -23,17 +24,6 @@ import "./setup.css";
 
 export const CREATE_EVENT_ROUTE = "/api/v1/events";
 const COPY_PLAN_ROUTE = "/api/v1/events/{eventId}/copy-plan";
-
-const TIMEZONES = [
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "Europe/London",
-  "Europe/Berlin",
-  "Asia/Tokyo",
-  "Australia/Sydney",
-];
 
 type StartMode = "scratch" | "existing" | "sessionize";
 
@@ -132,7 +122,7 @@ export function CreateConferencePage({ navigate }: { navigate: (target: string) 
   const [selection, setSelection] = useState<Record<CopySetKey, boolean>>({ ...DEFAULT_SELECTION });
   const [name, setName] = useState("");
   const [dates, setDates] = useState(() => defaultDates(null));
-  const [timezone, setTimezone] = useState(TIMEZONES[0] ?? "America/New_York");
+  const [timezone, setTimezone] = useState<string>(EVENT_TIMEZONES[0] ?? "America/New_York");
   const [venue, setVenue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -293,7 +283,7 @@ export function CreateConferencePage({ navigate }: { navigate: (target: string) 
           <label for="new-event-timezone">Timezone</label>
           <select id="new-event-timezone" value={timezone}
             onChange={(event) => setTimezone((event.currentTarget as HTMLSelectElement).value)}>
-            {[...new Set([timezone, ...TIMEZONES])].map((zone) => <option key={zone} value={zone}>{zone}</option>)}
+            {[...new Set([timezone, ...EVENT_TIMEZONES])].map((zone) => <option key={zone} value={zone}>{zone}</option>)}
           </select>
           <span class="field-note">Agenda times and calendar invites inherit this timezone.</span>
         </div>

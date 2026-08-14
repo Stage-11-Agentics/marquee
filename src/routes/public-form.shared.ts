@@ -26,11 +26,12 @@ export interface PublicFormEnv {
 interface PublicFormRow extends FormRow {
   conference_name: string;
   conference_slug: string;
+  conference_timezone: string;
 }
 
 export interface PublicFormRecord {
   form: FormRow;
-  conference: { name: string; slug: string };
+  conference: { name: string; slug: string; timezone: string };
   fields: FormFieldView[];
   state: PublicFormStateName;
   submission: SubmissionRow | null;
@@ -318,7 +319,7 @@ export async function loadPublicForm(
 ): Promise<PublicFormRecord | null> {
   const row = await db
     .prepare(
-      `SELECT f.*, e.name AS conference_name, e.slug AS conference_slug
+      `SELECT f.*, e.name AS conference_name, e.slug AS conference_slug, e.timezone AS conference_timezone
        FROM forms f JOIN events e ON e.id = f.event_id
        WHERE f.slug = ? LIMIT 1`,
     )
@@ -357,7 +358,7 @@ export async function loadPublicForm(
 
   return {
     form,
-    conference: { name: row.conference_name, slug: row.conference_slug },
+    conference: { name: row.conference_name, slug: row.conference_slug, timezone: row.conference_timezone },
     fields,
     state,
     submission,
@@ -642,10 +643,10 @@ export async function countFormForPerson(
   return Number(row?.total ?? 0);
 }
 
-export async function publicFormForSlug(db: D1Database, slug: string): Promise<{ form: FormRow; fields: FormFieldView[]; conference: { name: string; slug: string } } | null> {
+export async function publicFormForSlug(db: D1Database, slug: string): Promise<{ form: FormRow; fields: FormFieldView[]; conference: { name: string; slug: string; timezone: string } } | null> {
   const form = await findFormBySlug(db, slug);
   if (!form || form.status === "draft") return null;
-  const event = await db.prepare("SELECT name, slug FROM events WHERE id = ?").bind(form.event_id).first<{ name: string; slug: string }>();
+  const event = await db.prepare("SELECT name, slug, timezone FROM events WHERE id = ?").bind(form.event_id).first<{ name: string; slug: string; timezone: string }>();
   if (!event) return null;
   return { form, fields: await listFormFields(db, form.id), conference: event };
 }
