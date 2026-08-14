@@ -22,9 +22,18 @@ export interface PublicScheduleRow {
   event_id: string;
   session_ids: string;
   write_key_hash: string;
+  /**
+   * The browser that owns this code, when one created it. Null for a schedule
+   * an agent built — and that null is what the demand aggregate reads to count
+   * an agent-built code as one voice instead of none.
+   */
+  device_hash: string | null;
   created_at: number;
   updated_at: number;
 }
+
+/** The handle a browser mints for itself. Sixteen to sixty-four hex characters. */
+export const DEVICE_HASH_PATTERN = /^[0-9a-f]{16,64}$/;
 
 export interface PublicScheduleUrls {
   share: string;
@@ -38,6 +47,12 @@ export interface PublicScheduleView {
   code: string;
   event: PublicEvent;
   sessions: PublicSession[];
+  /**
+   * The whole published programme this code was read against. It costs nothing
+   * — the view already loads it to resolve the set — and it is what lets a
+   * caller derive the owner's speaking sessions without a second query.
+   */
+  allSessions: PublicSession[];
   overlaps: Array<[string, string]>;
   updatedAt: number;
 }
@@ -176,7 +191,7 @@ export async function checkScheduleCreateLimit(
 
 export async function readSchedule(database: D1Database, code: string): Promise<PublicScheduleRow | null> {
   return database
-    .prepare("SELECT code, event_id, session_ids, write_key_hash, created_at, updated_at FROM public_schedules WHERE code = ? LIMIT 1")
+    .prepare("SELECT code, event_id, session_ids, write_key_hash, device_hash, created_at, updated_at FROM public_schedules WHERE code = ? LIMIT 1")
     .bind(code)
     .first<PublicScheduleRow>();
 }
@@ -204,6 +219,7 @@ export async function loadScheduleView(
     code: row.code,
     event: agenda.event,
     sessions,
+    allSessions: agenda.sessions,
     overlaps: computeOverlaps(sessions),
     updatedAt: row.updated_at,
   };

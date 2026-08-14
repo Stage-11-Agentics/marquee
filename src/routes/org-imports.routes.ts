@@ -17,7 +17,9 @@ import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { orgAttributionEventId, requireOrgAccess } from "../lib/auth/org-access";
+import { attendanceStatement, resolveEventForOrg } from "../lib/event-attendances";
 import { planPersonImport } from "../lib/people-import";
+import { noPersonReferencesPredicate, personReferences } from "../lib/person-references";
 
 const importParams = z.object({ importId: z.string().min(1) });
 
@@ -50,51 +52,6 @@ interface UndoSkip {
   reason: UndoSkipReason;
   fields: PersonProfileField[];
   references: string[];
-}
-
-/**
- * Every direct foreign key to people must appear here. The predicate is kept
- * as a fixed string rather than assembled from table names supplied by a
- * request. `PERSON_ID` is replaced with either the CTE target or the outer
- * `people.id` when the same inventory guards a delete.
- */
-const PERSON_REFERENCE_CHECKS = [
-  { label: "memberships", predicate: "EXISTS (SELECT 1 FROM memberships WHERE memberships.person_id = PERSON_ID)" },
-  { label: "auth_sessions", predicate: "EXISTS (SELECT 1 FROM auth_sessions WHERE auth_sessions.person_id = PERSON_ID)" },
-  { label: "magic_links", predicate: "EXISTS (SELECT 1 FROM magic_links WHERE magic_links.person_id = PERSON_ID)" },
-  { label: "api_tokens", predicate: "EXISTS (SELECT 1 FROM api_tokens WHERE api_tokens.created_by = PERSON_ID OR api_tokens.acts_as_person_id = PERSON_ID)" },
-  { label: "form_admins", predicate: "EXISTS (SELECT 1 FROM form_admins WHERE form_admins.person_id = PERSON_ID)" },
-  { label: "outbox", predicate: "EXISTS (SELECT 1 FROM outbox WHERE outbox.person_id = PERSON_ID)" },
-  { label: "submissions", predicate: "EXISTS (SELECT 1 FROM submissions WHERE submissions.submitter_person_id = PERSON_ID OR submissions.decided_by_person_id = PERSON_ID)" },
-  { label: "submission_decisions", predicate: "EXISTS (SELECT 1 FROM submission_decisions WHERE submission_decisions.decided_by_person_id = PERSON_ID)" },
-  { label: "saved_views", predicate: "EXISTS (SELECT 1 FROM saved_views WHERE saved_views.person_id = PERSON_ID)" },
-  { label: "participations", predicate: "EXISTS (SELECT 1 FROM participations WHERE participations.person_id = PERSON_ID)" },
-  { label: "committee_members", predicate: "EXISTS (SELECT 1 FROM committee_members WHERE committee_members.person_id = PERSON_ID)" },
-  { label: "reviewer_track_scopes", predicate: "EXISTS (SELECT 1 FROM reviewer_track_scopes WHERE reviewer_track_scopes.person_id = PERSON_ID)" },
-  { label: "round_assignments", predicate: "EXISTS (SELECT 1 FROM round_assignments WHERE round_assignments.reviewer_person_id = PERSON_ID)" },
-  { label: "evaluations", predicate: "EXISTS (SELECT 1 FROM evaluations WHERE evaluations.reviewer_person_id = PERSON_ID OR evaluations.override_person_id = PERSON_ID)" },
-  { label: "comparisons", predicate: "EXISTS (SELECT 1 FROM comparisons WHERE comparisons.reviewer_person_id = PERSON_ID)" },
-  { label: "round_promotions", predicate: "EXISTS (SELECT 1 FROM round_promotions WHERE round_promotions.promoted_by = PERSON_ID)" },
-  { label: "speaker_tasks", predicate: "EXISTS (SELECT 1 FROM speaker_tasks WHERE speaker_tasks.person_id = PERSON_ID)" },
-  { label: "calendar_invites", predicate: "EXISTS (SELECT 1 FROM calendar_invites WHERE calendar_invites.person_id = PERSON_ID)" },
-  { label: "audit_log", predicate: "EXISTS (SELECT 1 FROM audit_log WHERE audit_log.actor_person_id = PERSON_ID)" },
-  { label: "file_comments", predicate: "EXISTS (SELECT 1 FROM file_comments WHERE file_comments.author_person_id = PERSON_ID)" },
-  { label: "person_events", predicate: "EXISTS (SELECT 1 FROM person_events WHERE person_events.person_id = PERSON_ID OR person_events.actor_person_id = PERSON_ID)" },
-  { label: "person_lists", predicate: "EXISTS (SELECT 1 FROM person_lists WHERE person_lists.created_by = PERSON_ID)" },
-  { label: "person_list_members", predicate: "EXISTS (SELECT 1 FROM person_list_members WHERE person_list_members.person_id = PERSON_ID)" },
-] as const;
-
-function personReferencePredicates(personExpression: string): string[] {
-  return PERSON_REFERENCE_CHECKS.map(({ predicate }) => predicate.replaceAll("PERSON_ID", personExpression));
-}
-
-function personReferenceSelect(): string {
-  return PERSON_REFERENCE_CHECKS.map(({ label, predicate }) =>
-    `${predicate.replaceAll("PERSON_ID", "target.id")} AS "${label}"`).join(",\n       ");
-}
-
-function noPersonReferencesPredicate(): string {
-  return personReferencePredicates("people.id").map((predicate) => `NOT (${predicate})`).join(" AND ");
 }
 
 function conditionalRestoreStatement(
@@ -143,18 +100,6 @@ async function personHasReferences(db: D1Database, personId: string): Promise<st
   return personReferences(db, personId);
 }
 
-async function personReferences(db: D1Database, personId: string): Promise<string[]> {
-  const references = await db.prepare(
-    `WITH target AS (SELECT ? AS id)
-     SELECT ${personReferenceSelect()}
-     FROM target`,
-  ).bind(personId).first<Record<string, number>>();
-  if (!references) return [];
-  return PERSON_REFERENCE_CHECKS
-    .filter(({ label }) => Number(references[label]) > 0)
-    .map(({ label }) => label);
-}
-
 const importResponse = z.object({
   import_id: z.string(),
   created: z.number().int().nonnegative(),
@@ -162,6 +107,9 @@ const importResponse = z.object({
   skipped: z.number().int().nonnegative(),
   unmapped: z.array(z.string()).describe("Columns no field claimed; they were ignored, not guessed at."),
   headers: z.array(z.string()),
+  attendances: z.number().int().nonnegative()
+    .describe("Attendance rows written for the conference named in `event`; zero when none was named."),
+  event: z.string().nullable().describe("The conference slug these people were marked as attending, if one was named."),
   undo_path: z.string().describe("POST this path to restore the values overwritten by this import."),
 }).openapi("PeopleImportResult");
 
@@ -184,7 +132,7 @@ const importPeople = defineApiRoute(
     operationId: "importOrgPeople",
     summary: "Import people from a CSV",
     description:
-      "Columns are mapped by header. Matched on email: an existing person is updated, never duplicated. Returns created, updated, skipped, and any column it could not map.",
+      "Columns are mapped by header. Matched on email: an existing person is updated, never duplicated. Pass `event` (id or slug) to mark everyone in the file as an attendee of that conference — the attendance rows are written by this call, so importing a ticket export is one request, and re-running it neither duplicates a person nor a row. Returns created, updated, skipped, and any column it could not map.",
     tags: ["People"],
     request: {
       body: {
@@ -193,6 +141,8 @@ const importPeople = defineApiRoute(
             schema: z.object({
               csv: z.string().min(1).max(2_000_000).describe("The file's contents, as text."),
               filename: z.string().trim().max(200).optional(),
+              event: z.string().trim().min(1).max(120).optional()
+                .describe("A conference id or slug. Everyone imported is recorded as an attendee of it (source: import)."),
             }),
           },
         },
@@ -206,6 +156,15 @@ const importPeople = defineApiRoute(
     const body = context.req.valid("json");
     const plan = planPersonImport(body.csv);
     const now = Date.now();
+    // Resolved before a single row is written: naming a conference this
+    // organization does not run is a mistake worth refusing, not a silent
+    // import that quietly marks nobody as attending anything.
+    const attendanceEvent = body.event
+      ? await resolveEventForOrg(context.env.DB, access.orgId, body.event)
+      : null;
+    if (body.event && !attendanceEvent) {
+      throw ApiError.unprocessable(`this organization has no conference "${body.event}"`, "event");
+    }
     // `imports.event_id` is NOT NULL, so the receipt is attributed to the
     // organization's conference — the documented single-org shortcut, decided in
     // one place.
@@ -226,6 +185,7 @@ const importPeople = defineApiRoute(
     let created = 0;
     let updated = 0;
     const receipts: D1PreparedStatement[] = [];
+    const attendances: D1PreparedStatement[] = [];
     for (const [index, row] of plan.rows.entries()) {
       const existing = await context.env.DB
         .prepare("SELECT id, name, title, company, bio FROM people WHERE org_id = ? AND lower(email) = ?")
@@ -263,8 +223,20 @@ const importPeople = defineApiRoute(
           after ? JSON.stringify(after) : null, now, now,
         ),
       );
+      // The whole point of passing `event`: the caller does not make a second
+      // pass to say "and these people are attending". One request, and running
+      // it again writes neither a second person nor a second attendance.
+      if (attendanceEvent) {
+        attendances.push(attendanceStatement(context.env.DB, {
+          eventId: attendanceEvent.id,
+          personId,
+          source: "import",
+          now,
+        }));
+      }
     }
     if (receipts.length > 0) await context.env.DB.batch(receipts);
+    if (attendances.length > 0) await context.env.DB.batch(attendances);
     return context.json({
       import_id: importId,
       created,
@@ -272,6 +244,8 @@ const importPeople = defineApiRoute(
       skipped: plan.skipped,
       unmapped: plan.unmapped,
       headers: plan.headers,
+      attendances: attendances.length,
+      event: attendanceEvent?.slug ?? null,
       undo_path: `/api/v1/org/imports/${importId}/undo`,
     }, 202);
   },

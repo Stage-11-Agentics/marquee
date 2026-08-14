@@ -15,6 +15,7 @@ import { publicSessionCalendar } from "../lib/public-calendar";
 import { clientIp } from "../api/rate-limit";
 import {
   CODE_PATTERN,
+  DEVICE_HASH_PATTERN,
   MAX_SESSIONS,
   checkScheduleCreateLimit,
   computeOverlaps,
@@ -28,6 +29,8 @@ import {
   timingSafeEqual,
 } from "../lib/public-schedules";
 import { loadPublicAgenda } from "../lib/public-site";
+import { claimState, readClaim } from "../lib/schedule-claims";
+import { speakingSessionIds, withSpeakingPins } from "../lib/speaker-pins";
 
 const WRITE_KEY_HEADER = "X-Schedule-Write-Key";
 
@@ -47,22 +50,43 @@ function unknownSessions(eventSlug: string, unknown: readonly string[]): ApiErro
 }
 
 const sessionIdList = z.array(z.string().min(1).max(240)).max(MAX_SESSIONS);
+/**
+ * `deviceHash` is how the site's own module says "this code and my stars are
+ * the same person". Without it the demand aggregate would count a synced
+ * browser twice — once as a device, once as a code. An agent has no device and
+ * simply omits it, which is the ruled semantics rather than a missing field.
+ */
+const deviceHash = z.string().regex(DEVICE_HASH_PATTERN).optional();
 const createBody = z.object({
   eventSlug: z.string().min(1).max(120).optional(),
   event: z.string().min(1).max(120).optional(),
   sessionIds: sessionIdList.min(1),
+  deviceHash,
 });
-const updateBody = z.object({ sessionIds: sessionIdList });
+const updateBody = z.object({ sessionIds: sessionIdList, deviceHash });
 const codeParams = z.object({ code: z.string().regex(CODE_PATTERN) });
 const schedulePayload = z.any();
 
-/** One shape for every response that describes a schedule. */
-async function scheduleResponse(database: Parameters<typeof readSchedule>[0], code: string, origin: string) {
+/**
+ * One shape for every response that describes a schedule.
+ *
+ * `owner` is the half that only exists for the device holding the write key:
+ * who this code is linked to, and which of its sessions the linked person is
+ * speaking at. Both are withheld from a bare read on purpose — the share link
+ * is a code with no key, and a friend must see the picks without inheriting
+ * the owner's identity or their "you're speaking" pins (round-4 ruling).
+ */
+async function scheduleResponse(
+  database: Parameters<typeof readSchedule>[0],
+  code: string,
+  origin: string,
+  options: { owner?: boolean } = {},
+) {
   const row = await readSchedule(database, code);
   if (!row) throw ApiError.notFound("schedule not found");
   const view = await loadScheduleView(database, row);
   if (!view) throw ApiError.notFound("schedule not found");
-  return {
+  const payload: Record<string, unknown> = {
     code: view.code,
     event: view.event,
     sessions: view.sessions,
@@ -70,6 +94,16 @@ async function scheduleResponse(database: Parameters<typeof readSchedule>[0], co
     updatedAt: view.updatedAt,
     urls: scheduleUrls(view.code, view.event.slug, origin),
   };
+  if (options.owner) {
+    const claim = await readClaim(database as D1Database, code);
+    payload.claim = claim ? claimState(claim) : null;
+    // Derived here, stored nowhere: the pins are a projection of who the
+    // verified email turned out to be, recomputed on every read.
+    payload.speakingSessionIds = claim?.verified_at
+      ? speakingSessionIds(view.allSessions, claim.person_id)
+      : [];
+  }
+  return payload;
 }
 
 const createPublicSchedule = defineApiRoute(
@@ -111,10 +145,10 @@ const createPublicSchedule = defineApiRoute(
     const now = Date.now();
     await context.env.DB
       .prepare(
-        `INSERT INTO public_schedules (code, event_id, session_ids, write_key_hash, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO public_schedules (code, event_id, session_ids, write_key_hash, device_hash, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(code, agenda.event.id, JSON.stringify(resolved), await hashWriteKey(writeKey), now, now)
+      .bind(code, agenda.event.id, JSON.stringify(resolved), await hashWriteKey(writeKey), body.deviceHash ?? null, now, now)
       .run();
 
     const sessions = agenda.sessions
@@ -141,9 +175,12 @@ const getPublicSchedule = defineApiRoute(
     operationId: "getPublicSchedule",
     summary: "Read a schedule by its short code",
     description:
-      "Anonymous. The set with full public session objects embedded and computed overlap pairs, so a caller gets the whole answer in one call and never re-derives interval maths.",
+      "Anonymous. The set with full public session objects embedded and computed overlap pairs, so a caller gets the whole answer in one call and never re-derives interval maths. Present the write key to also receive `claim` and `speakingSessionIds`, which belong to the owner of the code and never to a share link.",
     tags: ["Public"],
-    request: { params: codeParams },
+    request: {
+      params: codeParams,
+      headers: z.object({ "x-schedule-write-key": z.string().min(1).max(200).optional() }),
+    },
     policy: { auth: { kind: "public" }, rateLimit: { bucket: "read" }, concurrency: "none" },
     responses: {
       200: jsonResponse(schedulePayload, "The schedule and its sessions"),
@@ -151,7 +188,17 @@ const getPublicSchedule = defineApiRoute(
     },
   },
   async (context) => {
-    const payload = await scheduleResponse(context.env.DB, context.req.valid("param").code, new URL(context.req.url).origin);
+    const code = context.req.valid("param").code;
+    const presented = context.req.header(WRITE_KEY_HEADER) ?? "";
+    // The key is optional on a read — a share link has none — so a wrong one is
+    // simply not the owner rather than an error: the caller still gets the
+    // schedule, minus the half that belongs to whoever owns it.
+    let owner = false;
+    if (presented) {
+      const row = await readSchedule(context.env.DB, code);
+      owner = Boolean(row && timingSafeEqual(await hashWriteKey(presented), row.write_key_hash));
+    }
+    const payload = await scheduleResponse(context.env.DB, code, new URL(context.req.url).origin, { owner });
     context.header("Cache-Control", "no-store");
     return context.json(payload, 200);
   },
@@ -200,8 +247,11 @@ const updatePublicSchedule = defineApiRoute(
     if (unknown.length > 0) throw unknownSessions(scoped.event.slug, unknown);
 
     await context.env.DB
-      .prepare("UPDATE public_schedules SET session_ids = ?, updated_at = ? WHERE code = ?")
-      .bind(JSON.stringify(resolved), Date.now(), code)
+      // COALESCE, not overwrite: a client that knows its device says so, and a
+      // caller that does not (an agent driving someone else's code) must not
+      // erase the pairing that keeps the demand aggregate honest.
+      .prepare("UPDATE public_schedules SET session_ids = ?, device_hash = COALESCE(?, device_hash), updated_at = ? WHERE code = ?")
+      .bind(JSON.stringify(resolved), context.req.valid("json").deviceHash ?? null, Date.now(), code)
       .run();
 
     const payload = await scheduleResponse(context.env.DB, code, new URL(context.req.url).origin);
@@ -226,7 +276,7 @@ const getPublicScheduleCalendar = defineApiRoute(
     path: "/api/v1/public/schedules/{code}/calendar.ics",
     operationId: "getPublicScheduleCalendar",
     summary: "Subscribe to a schedule as a calendar feed",
-    description: "Anonymous live VCALENDAR of the code's current set. The same URL under webcal:// is the subscription.",
+    description: "Anonymous live VCALENDAR of the code's current set, plus any session the code's verified owner is speaking at. The same URL under webcal:// is the subscription.",
     tags: ["Public"],
     request: { params: codeParams },
     policy: { auth: { kind: "public" }, rateLimit: { bucket: "read" }, concurrency: "none" },
@@ -245,12 +295,21 @@ const getPublicScheduleCalendar = defineApiRoute(
     const view = await loadScheduleView(context.env.DB, row);
     if (!view) throw ApiError.notFound("schedule not found");
 
+    // The feed is the one export the pins ride (round-4 ruling): a speaker who
+    // claimed their schedule should find their own talk in the calendar they
+    // subscribed to, without having starred themselves. It is derived from the
+    // claim on this code, so it appears and disappears with the identity.
+    const claim = await readClaim(context.env.DB, code);
+    const sessions = claim?.verified_at
+      ? withSpeakingPins(view.sessions, view.allSessions, claim.person_id)
+      : view.sessions;
+
     const body = publicSessionCalendar({
       calendarName: `My ${view.event.name} schedule`,
       event: view.event,
       now: Date.now(),
       origin: new URL(context.req.url).origin,
-      sessions: view.sessions,
+      sessions,
     });
     return context.body(body, 200, {
       // Short, because the point of the feed is that it changes.

@@ -30,6 +30,7 @@ import {
 } from "../lib/person-annotations";
 import { personFeedPage } from "../lib/org-activity";
 import type { ActivityLine } from "../lib/activity-copy";
+import { EVENT_POPULATIONS, type EventPopulation } from "../lib/roster-source";
 import { normalizeEmail } from "../lib/sessionize-import";
 import {
   buildPeopleQuery,
@@ -58,7 +59,9 @@ export const peopleListQuerySchema = z.object({
   stage: z.enum(PIPELINE_STAGE_IDS as unknown as [string, ...string[]]).optional(),
   list_id: z.string().trim().min(1).optional(),
   event_id: z.string().trim().min(1).optional()
-    .describe("Narrow the same query to one conference's roster population."),
+    .describe("Narrow the same query to one conference's population — see `kind`."),
+  kind: z.enum(EVENT_POPULATIONS as unknown as [EventPopulation, ...EventPopulation[]]).optional()
+    .describe("Which population `event_id` means: the speaker roster (default), the conference's attendees, or either."),
   // The directory predates the shared list contract but is pasted and
   // hand-edited exactly like every list built on it, so its navigational
   // parameters degrade to the endpoint's defaults rather than 400-ing the
@@ -369,7 +372,7 @@ const listPeople = defineApiRoute(
       ...(query.title ? { title: query.title } : {}),
       ...(query.tag ? { tag: query.tag } : {}),
       ...(query.stage ? { stage: query.stage } : {}),
-      ...(query.event_id ? { eventId: query.event_id } : {}),
+      ...(query.event_id ? { eventId: query.event_id, eventPopulation: query.kind ?? "roster" } : {}),
       ...(query.sort ? { sort: query.sort } : {}),
     };
     if (query.format === "csv") {

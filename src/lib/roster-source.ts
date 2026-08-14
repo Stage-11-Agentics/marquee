@@ -64,3 +64,20 @@ export const ONBOARDING_PERSON_SOURCE = `
   ${SPEAKER_ROSTER_PERSON_SOURCE}
   UNION
   SELECT owed.person_id FROM speaker_tasks owed WHERE owed.event_id = ?`;
+
+/**
+ * "Who is coming to this conference" — the attendee population, MRQ-208.
+ *
+ * It lives beside the speaker definition for the same reason that one does:
+ * the people list narrows to it, the organizer's attendee view narrows to it,
+ * and an agent verifying its own import counts it. One binding, the event id.
+ *
+ * Note what it does not do: an attendance row is not a membership and carries
+ * no role, so nobody acquires a seat on the auth rails by being an attendee.
+ */
+export const ATTENDEE_PERSON_SOURCE = `
+  SELECT person_id FROM event_attendances WHERE event_id = ?`;
+
+/** Which population an `event_id` filter means. */
+export const EVENT_POPULATIONS = ["roster", "attendee", "any"] as const;
+export type EventPopulation = (typeof EVENT_POPULATIONS)[number];

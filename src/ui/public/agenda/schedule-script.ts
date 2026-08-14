@@ -48,6 +48,40 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   const starred = new Set(state.sessionIds);
   const isStarred = (id) => starred.has(id);
 
+  /**
+   * The device handle behind the demand signal. It is random, it is per
+   * browser rather than per event, and it is the only thing a star ever sends
+   * — no person, nothing derived from one. Private mode leaves it null, in
+   * which case stars still work and simply are not counted; a schedule that
+   * refuses to save because a counter is unavailable would be the worse trade.
+   */
+  const DEVICE_KEY = 'marquee:device';
+  function readDevice() {
+    try {
+      let value = localStorage.getItem(DEVICE_KEY);
+      if (!value || !/^[0-9a-f]{16,64}$/.test(value)) {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        value = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+        localStorage.setItem(DEVICE_KEY, value);
+      }
+      return value;
+    } catch { return null; }
+  }
+  const DEVICE = readDevice();
+
+  /**
+   * What the server knows about this code: the address it is linked to, and —
+   * only when that address turned out to belong to a speaker here — the
+   * sessions they are speaking at. Both are read with the write key, so a
+   * share link never sees either. The pins are held apart from the starred
+   * set on purpose: they are derived, they are never pushed, and unstarring
+   * cannot reach them.
+   */
+  let claim = null;
+  let speaking = new Set();
+  const inMine = (id) => starred.has(id) || speaking.has(id);
+
   /* ── The program, read from the card hooks ─────────────────────────── */
 
   const cardsById = new Map();
@@ -72,7 +106,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   readCards();
 
   const mineSessions = () => [...cardsById.values()]
-    .filter((session) => isStarred(session.id))
+    .filter((session) => inMine(session.id))
     .sort((left, right) => left.start - right.start);
 
   /** Touching is not overlapping: a 14:00–14:45 and a 14:45–15:30 are a plan, not a conflict. */
@@ -124,7 +158,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   function paintMine() {
     if (!MINE) return;
     const mine = mineSessions();
-    for (const session of cardsById.values()) session.card.hidden = !isStarred(session.id);
+    for (const session of cardsById.values()) session.card.hidden = !inMine(session.id);
     for (const slot of document.querySelectorAll('.public-agenda-slot')) {
       slot.hidden = !slot.querySelector('[data-public-session-id]:not([hidden])');
     }
@@ -161,8 +195,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       counts.append(total, perDay);
     }
     paintOverlapChips(mine);
+    paintSpeakingChips();
     paintNextChip(mine);
     paintGlance(mine);
+    paintIdentity(mine);
   }
 
   /** Noted, never nagged: double-starring is a conscious act. */
@@ -261,7 +297,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         const earlier = twin && (session.start < twin.start || (session.start === twin.start && session.id < twin.id));
         const block = document.createElement('button');
         block.type = 'button';
-        block.className = 'glance-block' + (twin ? (earlier ? ' lane-a' : ' lane-b') : '') + (session.id === nextId ? ' is-next' : '');
+        block.className = 'glance-block' + (twin ? (earlier ? ' lane-a' : ' lane-b') : '')
+          + (session.id === nextId ? ' is-next' : '') + (speaking.has(session.id) ? ' speaking' : '');
         block.dataset.scheduleBlock = session.id;
         const bounds = at.get(session.id);
         block.style.top = pct(bounds.start) + '%';
@@ -285,6 +322,25 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         lane.append(rule);
       }
       glance.append(lane);
+    }
+  }
+
+  /**
+   * "You're speaking" on the sessions the claimed address turned out to own.
+   * Rendered from the derived set every paint, so it appears with the identity
+   * and vanishes with it — there is no stored state to go stale.
+   */
+  function paintSpeakingChips() {
+    for (const chip of document.querySelectorAll('.speaking-chip')) chip.remove();
+    if (!MINE) return;
+    for (const id of speaking) {
+      const session = cardsById.get(id);
+      const title = session?.card.querySelector('.public-session-title');
+      if (!title) continue;
+      const chip = document.createElement('span');
+      chip.className = 'speaking-chip';
+      chip.textContent = "You're speaking";
+      title.append(chip);
     }
   }
 
@@ -398,8 +454,13 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
 
   scrim?.addEventListener('click', closeSheets);
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closeSheets();
-    else trapFocus(event);
+    if (event.key === 'Escape') { closeSheets(); return; }
+    if (event.key === 'Enter' && event.target?.dataset?.scheduleClaimEmail) {
+      event.preventDefault();
+      document.querySelector('[data-schedule-claim-send]')?.click();
+      return;
+    }
+    trapFocus(event);
   });
 
   /**
@@ -413,7 +474,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       const day = config.days.find((entry) => entry.date === session.day);
       return '- ' + (day ? day.label : session.day) + ' · ' + hhmm(session.start) + '–' + hhmm(session.end)
         + ' · "' + session.title + '"' + (session.room ? ' — ' + session.room : '')
-        + (session.speakers ? ' (' + session.speakers + ')' : '');
+        + (session.speakers ? ' (' + session.speakers + ')' : '')
+        + (speaking.has(session.id) ? " — I'M SPEAKING at this one" : '');
     });
     const pairs = [];
     mine.forEach((left, index) => {
@@ -745,6 +807,45 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     }
   }
 
+  /* ── Identity: the page says what it knows about you ───────────────── */
+
+  /**
+   * Three sentences, one slot, one height. The anonymous one is the truth the
+   * server rendered; the other two replace its text once the browser — and,
+   * for a claimed code, the server — have answered. Nothing is inserted or
+   * removed, so the line never pushes the itinerary down as it resolves.
+   */
+  function paintIdentity(mine) {
+    const line = document.querySelector('[data-schedule-identity]');
+    if (!line) return;
+    line.hidden = mine.length === 0;
+    const copy = line.querySelector('[data-schedule-identity-copy]');
+    const action = line.querySelector('[data-schedule-identity-action]');
+    if (!copy || !action) return;
+    const strong = (text) => { const node = document.createElement('b'); node.textContent = text; return node; };
+    copy.textContent = '';
+    if (claim && claim.status === 'verified') {
+      line.classList.add('linked');
+      copy.append('Linked to ', strong(claim.maskedEmail), ' — recoverable by email, on any device.');
+      if (speaking.size > 0) {
+        copy.append(" You're speaking at ");
+        copy.append(strong(String(speaking.size)));
+        copy.append(' session' + (speaking.size === 1 ? '' : 's') + ' — pinned below.');
+      }
+      action.textContent = 'Manage';
+      return;
+    }
+    if (claim && claim.status === 'pending') {
+      line.classList.remove('linked');
+      copy.append('Check your email — link sent to ', strong(claim.maskedEmail), '. Your picks stay on this device until you open it.');
+      action.textContent = 'Manage';
+      return;
+    }
+    line.classList.remove('linked');
+    copy.append('Saved on ', strong('this device only'), ' — no account, not linked to an email.');
+    action.textContent = 'Get it by email';
+  }
+
   function paint() {
     paintStars();
     paintMine();
@@ -788,7 +889,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     pending = fetch(SCHEDULES, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ eventSlug: config.eventSlug, sessionIds: posted }),
+      body: JSON.stringify({ eventSlug: config.eventSlug, sessionIds: posted, deviceHash: DEVICE || undefined }),
     })
       .then((response) => {
         if (response.ok) return response.json();
@@ -831,7 +932,9 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       fetch(SCHEDULES + '/' + encodeURIComponent(state.code), {
         method: 'PUT',
         headers: { 'content-type': 'application/json', 'x-schedule-write-key': state.writeKey },
-        body: JSON.stringify({ sessionIds: [...starred] }),
+        // The device travels with the set so the aggregate counts this browser
+        // once — as a device — rather than twice, once more as a code.
+        body: JSON.stringify({ sessionIds: [...starred], deviceHash: DEVICE || undefined }),
       }).then((response) => {
         if (response.ok) { unpushed = false; return; }
         if (response.status === 422) {
@@ -916,8 +1019,17 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
    * a screenshot, a shared URL, or a history entry.
    */
   const fragmentKey = /^#k=(.+)$/.exec(window.location.hash)?.[1] ?? null;
-  if (fragmentKey) {
-    history.replaceState(null, '', window.location.pathname + window.location.search);
+  /**
+   * The claim token from the mail. Like the write key it is read once and
+   * removed from the address bar — a verification link left sitting in a
+   * history entry is a link somebody else can follow.
+   */
+  const claimToken = query.get('claim');
+  if (fragmentKey || claimToken) {
+    const remaining = new URLSearchParams(window.location.search);
+    remaining.delete('claim');
+    const search = remaining.toString();
+    history.replaceState(null, '', window.location.pathname + (search ? '?' + search : ''));
   }
 
   let sharedSessions = null;
@@ -972,7 +1084,243 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       .catch(() => { /* a dead code is not worth a banner */ });
   }
 
+  /* ── The claim: request, verify, unlink ────────────────────────────── */
+
+  const CLAIM_BASE = () => SCHEDULES + '/' + encodeURIComponent(state.code);
+
+  /**
+   * Read what the server knows about this code. The write key is what makes
+   * the answer ours: without it the same endpoint returns the schedule and
+   * nothing about who owns it, which is exactly what a shared link should see.
+   */
+  function loadOwnerState() {
+    if (!state.code || !state.writeKey) return Promise.resolve();
+    return fetch(CLAIM_BASE(), { headers: { accept: 'application/json', 'x-schedule-write-key': state.writeKey } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!payload) return;
+        claim = payload.claim ?? null;
+        speaking = new Set(Array.isArray(payload.speakingSessionIds) ? payload.speakingSessionIds : []);
+        paint();
+        renderClaimRow();
+      })
+      .catch(() => {});
+  }
+
+  /**
+   * Turnstile, loaded only when the sheet that needs it opens. The agenda is
+   * the page people leave open all morning; it should not pay for a third-party
+   * script because one row inside one sheet might accept an email. Exempt
+   * conferences (demo mode) send no site key and mount nothing.
+   */
+  let turnstileToken = '';
+  let turnstileMounted = false;
+  function mountTurnstile() {
+    const siteKey = config.turnstileSiteKey;
+    const holder = document.querySelector('[data-schedule-turnstile]');
+    if (!siteKey || !holder || turnstileMounted) return;
+    turnstileMounted = true;
+    const render = () => {
+      if (!window.turnstile || typeof window.turnstile.render !== 'function') return;
+      try {
+        window.turnstile.render(holder, {
+          sitekey: siteKey,
+          callback: (token) => { turnstileToken = token; },
+          'expired-callback': () => { turnstileToken = ''; },
+          'error-callback': () => { turnstileToken = ''; },
+        });
+      } catch { /* the send still tries; the server is the gate */ }
+    };
+    if (window.turnstile) { render(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.addEventListener('load', render);
+    document.head.append(script);
+  }
+
+  function claimRowElements() {
+    return {
+      row: document.querySelector('[data-schedule-claim-row]'),
+      controls: document.querySelector('[data-schedule-claim-controls]'),
+    };
+  }
+
+  function claimLine(text, quiet) {
+    const line = document.createElement('div');
+    line.className = 'claim-done' + (quiet ? ' quiet-state' : '');
+    line.style.flex = '1 1 auto';
+    const copy = document.createElement('span');
+    copy.textContent = text;
+    line.append(copy);
+    return { line, copy };
+  }
+
+  function quietButton(label, hook) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'quiet';
+    button.textContent = label;
+    button.dataset[hook] = 'true';
+    return button;
+  }
+
+  /**
+   * Every state of this row is the same height, because they replace each
+   * other in place: the input, "check your email", "linked to …", and the
+   * unlink confirmation. Nothing here jumps while somebody reads it.
+   */
+  function renderClaimRow(justUnlinked) {
+    const { controls } = claimRowElements();
+    if (!controls) return;
+    controls.textContent = '';
+
+    if (justUnlinked) {
+      // The ruled sentence, said once and plainly, in the same register as the
+      // disclosure that took the address in the first place.
+      const { line } = claimLine('Unlinked — your email and picks are removed from the organizers' + String.fromCharCode(39) + ' records.', true);
+      controls.append(line);
+      setTimeout(() => { if (!claim) renderClaimRow(); }, 3200);
+      return;
+    }
+
+    if (claim && claim.status === 'verified') {
+      const { line } = claimLine('', false);
+      const copy = line.firstChild;
+      copy.textContent = 'Linked to ' + claim.maskedEmail + ' — the organizers can see your picks.'
+        + (speaking.size > 0 ? " You're speaking at " + speaking.size + ' session' + (speaking.size === 1 ? '' : 's') + ' — pinned in My schedule.' : '');
+      const actions = document.createElement('span');
+      actions.className = 'claim-actions';
+      actions.append(quietButton('Resend', 'scheduleClaimResend'), quietButton('Unlink', 'scheduleClaimUnlink'));
+      line.append(actions);
+      controls.append(line);
+      return;
+    }
+
+    if (claim && claim.status === 'pending') {
+      const { line } = claimLine('Check your email — link sent to ' + claim.maskedEmail + '. Opening it is what links your picks.', false);
+      const actions = document.createElement('span');
+      actions.className = 'claim-actions';
+      actions.append(quietButton('Resend', 'scheduleClaimResend'));
+      line.append(actions);
+      controls.append(line);
+      return;
+    }
+
+    if (config.claimEnabled === false) {
+      // Not a disabled button and not a lie: the conference has not switched
+      // mail on, and the way to move a schedule across devices is named.
+      const { line } = claimLine('Email links are not switched on for this conference yet — use Open on your phone to carry your schedule across.', true);
+      controls.append(line);
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.className = 'claim-input';
+    input.type = 'email';
+    input.placeholder = 'you@example.com';
+    input.setAttribute('aria-label', 'Your email address');
+    input.dataset.scheduleClaimEmail = 'true';
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'copy-btn';
+    send.style.flexBasis = '96px';
+    send.style.width = '96px';
+    send.textContent = 'Send link';
+    send.dataset.scheduleClaimSend = 'true';
+    controls.append(input, send);
+    if (config.turnstileSiteKey) {
+      const holder = document.createElement('div');
+      holder.dataset.scheduleTurnstile = 'true';
+      holder.style.flex = '0 0 auto';
+      controls.append(holder);
+      mountTurnstile();
+    }
+  }
+
+  function claimError(message) {
+    showError('share', message);
+  }
+
+  /**
+   * An omitted email is a resend: the server keeps the address, the page keeps
+   * only its masked form, and the write key is what says this is the same
+   * person asking.
+   */
+  function sendClaim(email) {
+    return ensureCode()
+      .then(() => fetch(CLAIM_BASE() + '/claim', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-schedule-write-key': state.writeKey },
+        body: JSON.stringify({ email: email || undefined, turnstileToken: turnstileToken || undefined }),
+      }))
+      .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
+      .then((result) => {
+        if (!result.ok) {
+          claimError(result.payload?.error?.message ?? 'That did not reach the server. Try again in a moment.');
+          return;
+        }
+        claim = result.payload.claim ?? null;
+        clearErrors();
+        renderClaimRow();
+        paint();
+      })
+      .catch(() => claimError('That did not reach the server. Your stars are safe on this device — try again when you have a signal.'));
+  }
+
+  function unlinkClaim() {
+    if (!state.code || !state.writeKey) return;
+    fetch(CLAIM_BASE() + '/claim', {
+      method: 'DELETE',
+      headers: { 'x-schedule-write-key': state.writeKey },
+    }).then((response) => {
+      if (!response.ok) { claimError('That did not reach the server. Try again in a moment.'); return; }
+      claim = null;
+      speaking = new Set();
+      renderClaimRow(true);
+      paint();
+    }, () => claimError('That did not reach the server. Try again in a moment.'));
+  }
+
+  /**
+   * The verification. The mail's link carries the token in the query and the
+   * write key in the fragment; both are read once and taken out of the address
+   * bar, so a screenshot or a shared URL cannot carry either.
+   */
+  function verifyClaimToken(token) {
+    if (!state.code || !token) return Promise.resolve();
+    return fetch(CLAIM_BASE() + '/claim/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!payload) return;
+        claim = payload.claim ?? null;
+        speaking = new Set(Array.isArray(payload.speakingSessionIds) ? payload.speakingSessionIds : []);
+        paint();
+        renderClaimRow();
+      })
+      .catch(() => {});
+  }
+
   /* ── Interaction ───────────────────────────────────────────────────── */
+
+  /**
+   * The demand beacon: anonymous, best-effort, and deliberately unawaited. A
+   * star is a local act that must never wait on a network, and a signal that
+   * failed to send is not a reason to tell somebody their star did not land.
+   */
+  function sendBeacon(id, starred) {
+    if (!DEVICE) return;
+    fetch('/api/v1/public/stars', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ eventSlug: config.eventSlug, sessionId: id, deviceHash: DEVICE, starred }),
+    }).catch(() => {});
+  }
 
   function toggleStar(id, button) {
     const adding = !isStarred(id);
@@ -980,6 +1328,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     state.sessionIds = [...starred];
     writeState();
     pushUpdate();
+    sendBeacon(id, adding);
     paint();
     if (adding && button) {
       button.classList.add('just-starred');
@@ -1015,6 +1364,34 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         ? document.querySelector('[data-schedule-brief]')?.textContent ?? ''
         : document.querySelector('[data-schedule-url="' + which + '"]')?.textContent ?? '';
       copyText(copy, source);
+      return;
+    }
+
+    const send = event.target.closest?.('[data-schedule-claim-send]');
+    if (send) {
+      const field = document.querySelector('[data-schedule-claim-email]');
+      const value = (field?.value ?? '').trim();
+      if (!value || value.indexOf('@') < 1) { field?.focus(); return; }
+      send.disabled = true;
+      sendClaim(value).finally(() => { if (send.isConnected) send.disabled = false; });
+      return;
+    }
+
+    const resend = event.target.closest?.('[data-schedule-claim-resend]');
+    if (resend) {
+      resend.disabled = true;
+      resend.textContent = 'Sending';
+      sendClaim(null).finally(() => {
+        if (!resend.isConnected) return;
+        resend.disabled = false;
+        resend.textContent = 'Sent';
+        setTimeout(() => { if (resend.isConnected) resend.textContent = 'Resend'; }, 1400);
+      });
+      return;
+    }
+
+    if (event.target.closest?.('[data-schedule-claim-unlink]')) {
+      unlinkClaim();
       return;
     }
 
@@ -1074,5 +1451,15 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   applyOrigin();
   paint();
   loadShared();
+  renderClaimRow();
+  /**
+   * Order matters on arrival: verify first when the mail sent us here, so the
+   * identity the page then reads is the one the click just created.
+   */
+  if (claimToken) {
+    verifyClaimToken(claimToken).then(loadOwnerState);
+  } else {
+    loadOwnerState();
+  }
 })();
 `;

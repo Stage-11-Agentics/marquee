@@ -11,6 +11,9 @@ import {
   loadPublicSpeaker,
   loadPublicSpeakerDirectory,
 } from "../lib/public-site";
+import { publishableStarCounts } from "../lib/star-beacons";
+import { claimMailEnabled } from "../lib/attendee-claim-mail";
+import { publicTurnstileExempt } from "./public-form.shared";
 import { PUBLIC_SCHEDULE_SCRIPT } from "../ui/public/agenda/schedule-script";
 import {
   PUBLIC_AGENDA_SCRIPT,
@@ -99,10 +102,25 @@ publicAgendaRoutes.get("/agenda", async (context) => {
   });
   const shell = await assetShell(context.env.ASSETS, context.req.raw);
   if (!data) return notFoundDocument(shell);
+  // A server aggregate, read at render. Deliberately not a live tally: the
+  // number is session metadata an organizer chose to publish, not a counter
+  // that ticks while you look at it (round-2 review ruling).
+  const starCounts = await publishableStarCounts(context.env.DB, data.event.id);
+  const turnstileSiteKey = (await publicTurnstileExempt(context.env.DB, data.event.id))
+    ? null
+    : context.env.TURNSTILE_SITE_KEY ?? null;
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(
     shell,
-    renderToString(<PublicAgendaPage data={data} view={view} />),
+    renderToString(
+      <PublicAgendaPage
+        data={data}
+        view={view}
+        starCounts={starCounts}
+        claimEnabled={claimMailEnabled(context.env)}
+        turnstileSiteKey={turnstileSiteKey}
+      />,
+    ),
     { title: view === "mine" ? "My schedule" : "Agenda", script: `${PUBLIC_AGENDA_SCRIPT}\n${PUBLIC_SCHEDULE_SCRIPT}` },
   ));
 });
@@ -145,7 +163,7 @@ publicAgendaRoutes.get("/s/:slug", async (context) => {
   context.header("Cache-Control", "no-store");
   return context.html(renderPublicDocument(
     shell,
-    renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} origin={new URL(context.req.url).origin} />),
+    renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} origin={new URL(context.req.url).origin} starCounts={await publishableStarCounts(context.env.DB, result.event.id)} />),
     { title: result.session.title, script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });

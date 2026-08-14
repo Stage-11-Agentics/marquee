@@ -135,6 +135,8 @@ export interface ApiBindings {
   RESEND_WEBHOOK_SECRET?: string;
   /** `debug | info | warn | error`; anything else falls back to `info`. */
   LOG_LEVEL?: string;
+  /** `"1"` lets an attendee's "get it by email" claim actually send (MRQ-208). */
+  ATTENDEE_CLAIM_MAIL?: string;
 }
 
 /** The Hono environment every API route and middleware is typed against. */
