@@ -40,6 +40,7 @@ interface QueueEnvelope {
   plan: { id: string; name: string };
   remaining: number;
   round?: { criteria?: Array<{ kind: string; name: string; options: string[] | null }> };
+  social_platforms?: string[];
   scopes: Array<{ name: string }>;
   total: number;
 }
@@ -133,6 +134,7 @@ async function seedReviewerFixture(): Promise<void> {
     env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, 'MRQ-18 committee', ?, ?)").bind(COMMITTEE_ID, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO committee_members (id, committee_id, person_id, role, created_at, updated_at) VALUES ('committee-member-mrq-18', ?, ?, 'chair', ?, ?)").bind(COMMITTEE_ID, REVIEWER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES ('scope-mrq-18-a', ?, ?, ?, ?, ?)").bind(EVENT_ID, REVIEWER_ID, TRACK_A, NOW, NOW),
+    env.DB.prepare("INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at) VALUES ('setting-mrq-18-social-platforms', ?, 'speaker_social_platforms', ?, ?, ?)").bind(EVENT_ID, JSON.stringify({ platforms: ["linkedin", "unknown-platform"] }), NOW, NOW),
     ...submissions,
     ...trackRows,
     env.DB.prepare("INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at) VALUES ('answer-mrq-18', ?, ?, 'Build reliable systems', NULL, ?, ?)").bind(MAIN_ID, FIELD_ID, NOW, NOW),
@@ -174,6 +176,7 @@ describe.sequential("MRQ-18 reviewer queue", () => {
     expect(response.status).toBe(200);
     const body = await json<QueueEnvelope>(response);
     expect(body.person).toMatchObject({ id: REVIEWER_ID, name: "MRQ-18 Reviewer", email: "reviewer@mrq-18.marquee.example" });
+    expect(body.social_platforms).toEqual(["linkedin"]);
     expect(body.committees).toEqual([{ id: COMMITTEE_ID, name: "MRQ-18 committee", role: "chair" }]);
     expect(body.counts).toEqual({ reviewed: 0, total: body.data.length, waiting: body.data.length });
 

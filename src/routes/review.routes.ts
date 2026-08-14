@@ -13,6 +13,7 @@ import {
   reviewerTrackIntersectionSql,
 } from "../lib/reviewer-scope";
 import { parseSocialLinks } from "../lib/person-profile";
+import { enabledSocialPlatformsFor } from "../lib/social-platform-setting";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const roundParams = eventParams.extend({ roundId: z.string().min(1) });
@@ -594,6 +595,7 @@ async function reviewerQueuePayload(
   const ids = await reviewerQueue(db, principal, eventId, round);
   const rows = await queueRows(db, eventId, ids);
   const personId = reviewerPersonIdForEvent(principal, eventId);
+  const socialPlatformsPromise = enabledSocialPlatformsFor(db, eventId);
   const data: Array<Record<string, unknown>> = [];
   for (const [index, submissionId] of ids.entries()) {
     const row = rows.get(submissionId) ?? null;
@@ -607,6 +609,7 @@ async function reviewerQueuePayload(
       reviewerCommittees(db, eventId, personId),
       reviewerReviewedCount(db, eventId, round.id, personId),
     ]);
+  const socialPlatforms = await socialPlatformsPromise;
   const counts = { reviewed, total: data.length + reviewed, waiting: data.length };
   return {
     committees,
@@ -629,6 +632,7 @@ async function reviewerQueuePayload(
       position: round.position,
     },
     person: profile,
+    social_platforms: socialPlatforms,
     scopes: personId ? await reviewerTrackScopes(db, eventId, personId) : [],
     total: data.length,
   };
@@ -736,10 +740,11 @@ async function comparisonQueuePayload(
     const row = rows.get(submissionId);
     if (row) data.push({ ...row, tracks: parseJsonArray(row.tracks), queue_id: row.id, position: data.length + 1 });
   }
-  const [profile, committees, reviewed] = await Promise.all([
+  const [profile, committees, reviewed, socialPlatforms] = await Promise.all([
     reviewerProfile(db, eventId, personId),
     reviewerCommittees(db, eventId, personId),
     reviewerReviewedCount(db, eventId, round.id, personId),
+    enabledSocialPlatformsFor(db, eventId),
   ]);
   return {
     committees,
@@ -749,6 +754,7 @@ async function comparisonQueuePayload(
     plan: { id: round.plan_id, name: round.plan_name },
     round: { anonymized: Boolean(round.anonymized), closes_at: round.closes_at, id: round.id, mode: round.mode, name: round.name, position: round.position },
     person: profile,
+    social_platforms: socialPlatforms,
     scopes: await reviewerTrackScopes(db, eventId, personId),
   };
 }

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 
 import { formatFileSize, readStoredFileAnswer } from "../../lib/file-answers";
 import { ROLE_HOME } from "../../lib/auth/role-home";
-import { SOCIAL_PLATFORM_IDS } from "../../lib/social-links";
+import type { SocialPlatformId } from "../../lib/social-links";
 import { ProfileForm, type PortalPerson } from "../portal/PortalPage";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
@@ -71,6 +71,7 @@ export interface QueueEnvelope {
   position?: number;
   remaining?: number;
   round: { anonymized: boolean; closes_at?: number | null; criteria?: Criterion[]; id: string; mode: "scorecard" | "comparison"; name: string; position?: number };
+  social_platforms?: SocialPlatformId[];
   person?: PortalPerson | null;
   scopes: Scope[];
   total?: number;
@@ -294,6 +295,7 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
   const [committees, setCommittees] = useState<Committee[]>(initialQueue?.committees ?? []);
   const [counts, setCounts] = useState<ReviewerCounts>(initialCounts);
   const [profile, setProfile] = useState<PortalPerson | null>(initialQueue?.person ?? null);
+  const [socialPlatforms, setSocialPlatforms] = useState<SocialPlatformId[]>(initialQueue?.social_platforms ?? []);
   const [profileEditing, setProfileEditing] = useState(false);
   const [roundClosesAt, setRoundClosesAt] = useState<number | null>(initialQueue?.round.closes_at ?? null);
   const [roundName, setRoundName] = useState(initialQueue?.round.name || "Initial review");
@@ -355,6 +357,7 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
       setCommittees(queueResponse.committees ?? initialQueue.committees ?? []);
       setCounts(responseCounts);
       setProfile(queueResponse.person ?? initialQueue.person ?? null);
+      setSocialPlatforms(queueResponse.social_platforms ?? initialQueue.social_platforms ?? []);
       setCriteria(queueResponse.round.criteria ?? initialQueue.round.criteria ?? []);
       const loadedCompleted = queueResponse.completed ?? initialQueue.completed ?? [];
       setCompleted(loadedCompleted);
@@ -670,7 +673,7 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
             {profile ? <button type="button" class="reviewer-profile-toggle" onClick={() => setProfileEditing((current) => !current)}>{profileEditing ? "Close editor" : "Edit profile"}</button> : null}
           </header>
           <div class="reviewer-profile-body">
-            {!profile ? <div class="reviewer-home-empty"><strong>Profile details are unavailable.</strong><span>Refresh the reviewer home to load your profile.</span></div> : profileEditing ? <ProfileForm eventId={eventId} person={profile} platforms={[...SOCIAL_PLATFORM_IDS]} onSaved={async (next) => { setProfile(next); setProfileEditing(false); setNotice("Profile saved · your reviewer record is up to date"); }} /> : <div class="reviewer-profile-summary"><div><strong>{profile.name}</strong><span>{profile.email}</span></div><dl><div><dt>Title</dt><dd>{profile.title || "Not added"}</dd></div><div><dt>Company</dt><dd>{profile.company || "Not added"}</dd></div><div class="reviewer-profile-bio"><dt>Bio</dt><dd>{profile.bio || "No bio added yet."}</dd></div></dl><p class="subtle">{profile.social_links.length ? `${profile.social_links.length} social link${profile.social_links.length === 1 ? "" : "s"} on file` : "No social links on file"} · {profile.headshot_attachment_id ? "Headshot on file" : "No headshot on file"}</p></div>}
+            {!profile ? <div class="reviewer-home-empty"><strong>Profile details are unavailable.</strong><span>Refresh the reviewer home to load your profile.</span></div> : profileEditing ? <ProfileForm eventId={eventId} person={profile} platforms={socialPlatforms} onSaved={async (next) => { setProfile(next); setProfileEditing(false); setNotice("Profile saved · your reviewer record is up to date"); }} /> : <div class="reviewer-profile-summary"><div><strong>{profile.name}</strong><span>{profile.email}</span></div><dl><div><dt>Title</dt><dd>{profile.title || "Not added"}</dd></div><div><dt>Company</dt><dd>{profile.company || "Not added"}</dd></div><div class="reviewer-profile-bio"><dt>Bio</dt><dd>{profile.bio || "No bio added yet."}</dd></div></dl><p class="subtle">{profile.social_links.length ? `${profile.social_links.length} social link${profile.social_links.length === 1 ? "" : "s"} on file` : "No social links on file"} · {profile.headshot_attachment_id ? "Headshot on file" : "No headshot on file"}</p></div>}
           </div>
         </section>
       </> : <>
