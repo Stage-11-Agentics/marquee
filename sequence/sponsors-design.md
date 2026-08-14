@@ -169,3 +169,66 @@ cleanly (ruling 5); judge's-language and Flight Deck rules bind as everywhere.
 - Swoogo-style integrations
 - A custom group-field builder (reuse existing custom-field patterns if the build
   needs them)
+
+---
+
+## 5. Sponsor portal — design round outcome (2026-08-14)
+
+Designed in the dedicated surface (ruling 3). **Prototype loved by Atin 2026-08-14
+with no change requests.** Binding design contract:
+`prototypes/sponsor-portal/index.html` (commit `6ab0b7ee`); the build reproduces it
+one-to-one, Flight Deck rules as everywhere.
+
+### 5.1 The shape
+
+The sponsor portal is the speaker portal's sibling, not a new species: same
+magic-link door, same public-shell chrome, same task machinery (SPEC §3.7), same
+Flight Deck day treatment. The center of gravity moves from *the session* to *the
+sponsorship*. Page order deliberately mirrors the speaker portal's hero → location →
+tasks precedent:
+
+1. **Head** — welcome + viewer name + `N of M deliverables done` progress meter.
+2. **Sponsorship hero** (most prominent) — company, tier chip, status, conference
+   line, and a **derived deal line** ("2 Sessions · Booth 214 · 6 conference
+   passes") read from attached data, never a tier blurb. Organizer contact
+   (name · role · email) on the hero's right side.
+3. **Your booth** — the speaker "Where you are speaking" location card reused
+   wholesale: loc-lines (booth/hall/building/load-in/access), leave-by accent box
+   repurposed for load-in timing, venue map as the receipt. Present only when booth
+   data exists; absence is ordinary (ruling 5, proven both ways in the prototype).
+4. **Deliverables** (left column) — exact task-row machinery incl. cancelled-block
+   with reason stated once; assignee labeled per row ("yours" / "assigned to X").
+5. **Your Sessions** (right rail) — read-only Session cards: title, format,
+   speakers, slot chip + "Not yet public" when unpublished, honest empties
+   ("Speaker not named yet" links to its task; "Not scheduled yet" states when
+   scheduling happens).
+6. **Company profile** (right rail) — org-level facts, contact roster with
+   Primary/You chips, edit modal; contacts managed via the organizer.
+7. **Sponsor handbook** (right rail) — same handbook machinery as speakers.
+
+### 5.2 Rulings signed in this round (Atin, 2026-08-14)
+
+1. **Whole sponsorship, anyone completes.** Every deliverable of the sponsorship is
+   visible to every signed-in contact with its assignee named; any contact can
+   complete any open task; completion attribution is recorded and shown ("completed
+   by Dana Okafor"). The person holding the file is never blocked — a blocked task
+   in front of the right human is exactly the dead end PHILOSOPHY forbids.
+2. **The hero is the sponsorship** — company + tier + status + derived deal line.
+   The sponsor's boarding pass; booth-and-session sponsorships read as ordinary
+   composition.
+3. **Sessions are read-only in the portal; the task machinery is the single write
+   path.** "Name your speaker" / "Session title" tasks fill the Session on
+   completion — one write path, so the chase board sees everything and completion
+   state is never ambiguous.
+4. **The prototype's demo views carry into the build.** Atin: keep the different
+   prototype views in whatever we build. The Gold (booth-bearing, multi-contact,
+   overdue + cancelled states) and Silver (no booth, single contact) sponsorships
+   and the viewer switch become build seed/demo data, so both compositions and the
+   attribution behavior stay demonstrable end-to-end.
+
+### 5.3 Disposition
+
+Ticket **MRQ-214** minted for the build (backlog, unassigned). **Operator hold:
+do not start a worker** — machine overloaded at mint time (Atin, 2026-08-14). The
+portal build depends on the sponsors-module data layer (§3.1 entities), which is
+not yet ticketed; the ticket carries that dependency in its description.
