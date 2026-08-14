@@ -95,6 +95,10 @@ describe("duplicate person names", () => {
     // Both records are still offered; disambiguation is not deduplication.
     expect(html).toContain("person_marcus_a");
     expect(html).toContain("person_marcus_b");
+    // The property the defect violated: no two choices print the same label.
+    const labels = [...html.matchAll(/<strong>([^<]*)<\/strong>/g)].map((match) => match[1]);
+    expect(labels).toHaveLength(3);
+    expect(new Set(labels).size).toBe(labels.length);
   });
 
   test("CONTRACT · every surface that lists people by name reads the shared derivation", () => {
