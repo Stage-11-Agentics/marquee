@@ -16,6 +16,9 @@ const review = (overrides: Partial<EvaluationPanelEvaluation> = {}): EvaluationP
   recommendation: "Approve",
   score: 4,
   comment: "Strong practical content and a clear narrative arc; abstract could name the specific tooling used. Recommend accept for the Platform track.",
+  // No scorecard recorded, so the panel has nothing to add under the note and
+  // every assertion below reads exactly what it read before.
+  criteria_scores: null,
   override_score: null,
   override_comment: null,
   override_person_name: null,

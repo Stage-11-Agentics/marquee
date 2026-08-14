@@ -55,14 +55,14 @@ function render(evaluation: EvaluationPanelEvaluation): string {
 }
 
 describe("evaluation panel surfaces the scorecard the reviewer actually filled in", () => {
-  test("prints the reviewer's own scorecard reasoning, not only the committee note", () => {
+  test("CONTRACT · evaluation panel — prints the reviewer's own scorecard reasoning, not only the committee note", () => {
     const html = render(review());
 
     expect(html).toContain(SCORECARD_COMMENT);
     expect(html).toContain("Comments");
   });
 
-  test("shows the recommendation recorded on the scorecard beside the one stored on the review", () => {
+  test("CONTRACT · evaluation panel — shows the recommendation recorded on the scorecard beside the one stored on the review", () => {
     const html = render(review());
 
     // The stored review row still reads "maybe"; the scorecard says Accept.
@@ -72,7 +72,7 @@ describe("evaluation panel surfaces the scorecard the reviewer actually filled i
     expect(html).toContain("Recommendation");
   });
 
-  test("carries the weighted criteria through so a rating is traceable to its parts", () => {
+  test("CONTRACT · evaluation panel — carries the weighted criteria through so a rating is traceable to its parts", () => {
     const html = render(review());
 
     expect(html).toContain("Program fit");
@@ -80,7 +80,7 @@ describe("evaluation panel surfaces the scorecard the reviewer actually filled i
     expect(html).toContain("Clarity");
   });
 
-  test("omits criteria the reviewer left unanswered instead of rendering them empty", () => {
+  test("CONTRACT · evaluation panel — omits criteria the reviewer left unanswered instead of rendering them empty", () => {
     const html = render(review({
       criteria_scores: { crit_fit: 4, crit_comments: SCORECARD_COMMENT },
     }));
@@ -90,14 +90,14 @@ describe("evaluation panel surfaces the scorecard the reviewer actually filled i
     expect(html).not.toContain("Audience value");
   });
 
-  test("stays silent when no scorecard was recorded rather than inventing an empty rubric", () => {
+  test("CONTRACT · evaluation panel — stays silent when no scorecard was recorded rather than inventing an empty rubric", () => {
     const html = render(review({ criteria_scores: null }));
 
     expect(html).toContain(COMMITTEE_NOTE);
     expect(html).not.toContain("Program fit");
   });
 
-  test("keeps a recusal free of scorecard content", () => {
+  test("CONTRACT · evaluation panel — keeps a recusal free of scorecard content", () => {
     const html = render(review({ abstained: true, recommendation: null, score: null, comment: "" }));
 
     expect(html).toContain("Conflict declared");
