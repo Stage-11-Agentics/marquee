@@ -215,19 +215,35 @@ function ScorecardAnswers({ criteria, scores }: { criteria: RubricCriterion[]; s
  * assignment controls or the rest of the record underneath the operator.
  *
  * A reviewer answers two separate things: the scorecard the round defines, and
- * the optional committee note beside it. Only the note used to reach this
- * panel, so a chair read the note under "Reviewer comment" and never saw the
- * reasoning typed against the rubric's own text criterion — and when the two
- * disagree, the panel showed the half the reviewer did not write. The scorecard
- * follows the note here rather than replacing it: which of the two recommendations
- * governs is a product question, and presenting both is the honest answer to it.
+ * the free-text note beside it. Both reach this panel, each named for where it
+ * came from rather than for what a chair might wish it were.
+ *
+ * That note is headed "Note beside the scorecard" — a description of the field,
+ * not of its author, because `evaluations.comment` has more than one writer. A
+ * human types it into a control their own UI calls "Committee note (optional)";
+ * an agent evaluator is told to put its rationale there (`marquee review
+ * submit --comment`); a Sessionize import maps "Reviewer Comment", "feedback",
+ * and "review notes" into the same column. Any label naming one of those three
+ * is false for the other two. What is true of all of them is that the text did
+ * not come from the rubric — which is exactly the thing a chair was getting
+ * wrong.
+ *
+ * Nothing here is a verdict. Acceptance is the organizer's own Accept/Reject
+ * action on the record; every field in this panel is information for that human
+ * judge. So the reviewer's recommendation and a Recommendation criterion on the
+ * scorecard may legitimately disagree, and the panel shows both plainly rather
+ * than resolving them — there is no precedence rule to read here, because there
+ * is none to have.
  */
 export function EvaluationPanelResult({ evaluation, criteria = [] }: { evaluation: EvaluationPanelEvaluation; criteria?: RubricCriterion[] }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
-  const reviewerComment = evaluation.comment.trim();
-  const isLongComment = !evaluation.abstained && reviewerComment.length > 120;
+  // The free-text note beside the scorecard, whoever wrote it — not the
+  // reviewer's answer to the rubric, which renders below under its own
+  // criterion name.
+  const committeeNote = evaluation.comment.trim();
+  const isLongNote = !evaluation.abstained && committeeNote.length > 120;
   const hasOverride = evaluation.override_score !== null || Boolean(evaluation.override_comment?.trim());
-  const commentId = `evaluation-panel-comment-${evaluation.id}`;
+  const noteId = `evaluation-panel-comment-${evaluation.id}`;
 
   return <article class="record-round-result" data-evaluation-panel-result={evaluation.id}>
     <div class="record-round-result-head">
@@ -238,19 +254,25 @@ export function EvaluationPanelResult({ evaluation, criteria = [] }: { evaluatio
     </div>
     <div class="evaluation-panel-rating">
       <small>{evaluation.abstained ? "Reviewer outcome" : "Reviewer rating"}</small>
-      <strong class="tabular">{evaluation.abstained
-        ? "Conflict declared"
-        : `${scoreText(evaluation.score)} · ${evaluation.recommendation || "No recommendation"}`}</strong>
+      <strong class="tabular">{evaluation.abstained ? "Conflict declared" : scoreText(evaluation.score)}</strong>
+    </div>
+    {/* Its own labelled line rather than a suffix on the rating: printed bare
+        beside the score it read as the recommendation, when it is one reviewer's
+        input among several and may disagree with the scorecard's own. The row is
+        always here, "—" and all, so nothing below it moves. */}
+    <div class="evaluation-panel-recommendation" data-evaluation-panel-recommendation="true">
+      <small>Reviewer's own recommendation</small>
+      <strong>{evaluation.abstained ? "—" : evaluation.recommendation || "None recorded"}</strong>
     </div>
     <div class="evaluation-panel-comment-slot">
-      <small>Reviewer comment</small>
-      <span id={commentId} class={`evaluation-panel-comment-body${expanded ? " expanded" : ""}`}>
-        {evaluation.abstained ? "Reviewer recused; no recommendation recorded." : reviewerComment || "—"}
+      <small>Note beside the scorecard</small>
+      <span id={noteId} class={`evaluation-panel-comment-body${expanded ? " expanded" : ""}`}>
+        {evaluation.abstained ? "Reviewer recused; no recommendation recorded." : committeeNote || "—"}
       </span>
     </div>
     <div class="evaluation-panel-comment-action">
-      {isLongComment
-        ? <button type="button" aria-controls={commentId} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Show less" : "Read full comment"}</button>
+      {isLongNote
+        ? <button type="button" aria-controls={noteId} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Show less" : "Read full note"}</button>
         : <span class="evaluation-panel-comment-action-placeholder" aria-hidden="true" />}
     </div>
     {!evaluation.abstained && <ScorecardAnswers criteria={criteria} scores={evaluation.criteria_scores} />}
