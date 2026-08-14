@@ -1,0 +1,38 @@
+/*
+  Shared primitives for grids whose columns can outgrow the viewport. A
+  consumer supplies the leading-column width when it pins a second column:
+
+    --wide-grid-leading-width: 38px;
+
+  The agenda builder can use the same scroll and pinning affordance as the
+  onboarding chase board without coupling either grid's domain styles.
+*/
+.wide-grid-scroll {
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+}
+
+.wide-grid-content {
+  min-width: max-content;
+}
+
+.wide-grid-pinned {
+  background: var(--panel);
+  position: sticky;
+  z-index: 1;
+}
+
+.wide-grid-pinned-leading {
+  left: 0;
+}
+
+.wide-grid-pinned-after-leading {
+  left: var(--wide-grid-leading-width, 0px);
+}
+
+.wide-grid-pinned-header {
+  background: var(--sunk);
+  z-index: 3;
+}

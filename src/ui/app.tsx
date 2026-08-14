@@ -2,6 +2,7 @@ import { hydrate, render } from "preact";
 import type { JSX } from "preact";
 import "../styles/tokens.css";
 import "../styles/components.css";
+import "../styles/wide-grid.css";
 // Register themes (theme round): every rule scoped under html[data-theme="…"],
 // so bundling all three keeps them orthogonal to each other and to Day/Night.
 import "../styles/themes/latent-space.css";

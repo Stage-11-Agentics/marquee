@@ -44,37 +44,23 @@
 */
 .onboarding-matrix-scroll-note { align-items: center; border-bottom: 1px solid var(--line); color: var(--muted); display: flex; font: 500 10px/1.4 var(--mono); gap: 6px; min-height: 30px; padding: 6px 12px; }
 .onboarding-matrix-scroll-note strong { color: var(--ink); font-weight: 600; }
-.onboarding-matrix-wrap { overflow-x: auto; }
+.onboarding-matrix-wrap { --select-column-width: 38px; --wide-grid-leading-width: var(--select-column-width); }
 /*
-  Every column states a width and the table is at least as wide as their sum, so
-  a conference with many task templates scrolls the wrap rather than squeezing
-  every column past legibility. A flat min-width cannot do that job: it does not
-  grow with the column count, so each added template came out of the columns that
-  stated no width.
+  Every column states a width and the shared wide-grid content primitive keeps
+  the table at least as wide as their sum, so a conference with many task
+  templates scrolls the wrap rather than squeezing every column past legibility.
+  A flat min-width cannot do that job: it does not grow with the column count,
+  so each added template came out of the columns that stated no width.
 */
-.onboarding-matrix { border-collapse: collapse; min-width: max-content; table-layout: fixed; width: 100%; }
+.onboarding-matrix { border-collapse: collapse; table-layout: fixed; width: 100%; }
 .onboarding-matrix th, .onboarding-matrix td { border-bottom: 1px solid var(--line); padding: 10px 8px; vertical-align: middle; }
-.onboarding-matrix thead th { background: var(--sunk); color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .1em; position: sticky; text-align: left; text-transform: uppercase; top: 0; z-index: 2; }
+.onboarding-matrix thead th { background: var(--sunk); color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .1em; position: sticky; text-align: left; text-transform: uppercase; top: 0; }
+.onboarding-matrix thead th:not(.wide-grid-pinned) { z-index: 2; }
 .onboarding-matrix thead th:not(:first-child) { border-left: 1px solid var(--line); }
 .onboarding-matrix tbody tr:last-child th, .onboarding-matrix tbody tr:last-child td { border-bottom: 0; }
 .onboarding-matrix tbody tr:hover { background: color-mix(in srgb, var(--accent-wash) 42%, transparent); }
-.onboarding-matrix { --select-column-width: 38px; }
-.onboarding-select-column { padding-left: 12px !important; width: var(--select-column-width); }
-/*
-  Scrolling sideways to reach a task column must not cost the row's identity —
-  a grid of glyphs with the names scrolled away is unreadable. The checkbox and
-  the speaker cell stay pinned to the left edge; both need an opaque background
-  because the cells beneath them travel underneath.
-
-  The speaker cell's offset is the select column's width, so the two read from
-  one token: a hand-copied number would misalign the pinned pair the moment
-  either changed, and nothing but the eye would catch it.
-*/
-.onboarding-matrix th.onboarding-select-column, .onboarding-matrix td.onboarding-select-column { left: 0; position: sticky; z-index: 1; }
-.onboarding-matrix th.onboarding-speaker-column { left: var(--select-column-width); position: sticky; z-index: 1; }
-.onboarding-matrix tbody .onboarding-select-column, .onboarding-matrix tbody th.onboarding-speaker-column { background: var(--panel); }
 .onboarding-matrix tbody tr:hover .onboarding-select-column, .onboarding-matrix tbody tr:hover th.onboarding-speaker-column { background: color-mix(in srgb, var(--accent-wash) 42%, var(--panel)); }
-.onboarding-matrix thead th.onboarding-select-column, .onboarding-matrix thead th.onboarding-speaker-column { z-index: 3; }
+.onboarding-select-column { padding-left: 12px !important; width: var(--select-column-width); }
 .onboarding-matrix th.onboarding-speaker-column::after { border-right: 1px solid var(--line); bottom: 0; content: ""; position: absolute; right: 0; top: 0; }
 .onboarding-action-column { text-align: right !important; width: 76px; }
 /*

@@ -21,8 +21,8 @@ test("CONTRACT · the speaker column states a width, like every other column in 
   assert.match(css, /\.onboarding-speaker-column \{[^}]*width: \d+px/);
   // Both the header and the row header carry it, or fixed layout has nothing
   // to apply the width to.
-  assert.match(page, /<th scope="col" class="onboarding-speaker-column">Speaker<\/th>/);
-  assert.match(page, /<th scope="row" class="onboarding-speaker-column">/);
+  assert.match(page, /<th scope="col" class="onboarding-speaker-column wide-grid-pinned wide-grid-pinned-after-leading wide-grid-pinned-header">Speaker<\/th>/);
+  assert.match(page, /<th scope="row" class="onboarding-speaker-column wide-grid-pinned wide-grid-pinned-after-leading">/);
 });
 
 test("CONTRACT · nothing inside a matrix cell sets a width floor the cell cannot honour", async () => {
@@ -35,7 +35,9 @@ test("CONTRACT · nothing inside a matrix cell sets a width floor the cell canno
 
 test("CONTRACT · the matrix scrolls rather than squeezing, and the cell clips either way", async () => {
   const css = await read("src/ui/onboarding/onboarding.css");
-  assert.match(css, /\.onboarding-matrix-wrap \{[^}]*overflow-x: auto/);
+  const sharedCss = await read("src/styles/wide-grid.css");
+  assert.match(css, /\.onboarding-matrix-wrap \{[^}]*--wide-grid-leading-width: var\(--select-column-width\)/);
+  assert.match(sharedCss, /\.wide-grid-scroll \{[^}]*overflow: auto/);
   assert.match(css, /\.onboarding-matrix tbody th\.onboarding-speaker-column \{[^}]*overflow: hidden/);
 });
 
@@ -62,7 +64,8 @@ test("CONTRACT · every column in the header row states a width, whatever the te
 
   // A flat pixel min-width does not grow with the column count, which is the
   // whole reason the columns were squeezed in the first place.
-  assert.match(css, /\.onboarding-matrix \{[^}]*min-width: max-content/);
+  const sharedCss = await read("src/styles/wide-grid.css");
+  assert.match(sharedCss, /\.wide-grid-content \{[^}]*min-width: max-content/);
 });
 
 /**
@@ -74,6 +77,7 @@ test("CONTRACT · every column in the header row states a width, whatever the te
  */
 test("CONTRACT · the matrix declares its hidden columns and keeps the speaker pinned", async () => {
   const css = await read("src/ui/onboarding/onboarding.css");
+  const sharedCss = await read("src/styles/wide-grid.css");
   const page = await read("src/ui/onboarding/OnboardingPage.tsx");
 
   // The strip states the count always and names the furthest column only when
@@ -84,17 +88,29 @@ test("CONTRACT · the matrix declares its hidden columns and keeps the speaker p
   // Reserved height, so the grid does not jump as filters change what fits.
   assert.match(css, /\.onboarding-matrix-scroll-note \{[^}]*min-height: \d+px/);
 
-  assert.match(css, /\.onboarding-matrix th\.onboarding-speaker-column \{[^}]*position: sticky/);
+  assert.match(page, /wide-grid-pinned-after-leading/);
   // The speaker cell's pinned offset is the select column's width. One token
   // for both, or a later width change misaligns the pair and only the eye
   // catches it.
   assert.match(css, /\.onboarding-select-column \{[^}]*width: var\(--select-column-width\)/);
-  assert.match(css, /\.onboarding-matrix th\.onboarding-speaker-column \{[^}]*left: var\(--select-column-width\)/);
-  assert.match(css, /\.onboarding-matrix th\.onboarding-select-column[^{]*\{[^}]*position: sticky/);
+  assert.match(sharedCss, /\.wide-grid-pinned-leading \{[\s\S]*left: 0/);
+  assert.match(sharedCss, /\.wide-grid-pinned-after-leading \{[\s\S]*left: var\(--wide-grid-leading-width/);
   // A pinned cell the rows travel under needs an opaque background.
-  assert.match(css, /\.onboarding-matrix tbody[^{]*onboarding-speaker-column \{[^}]*background: var\(--panel\)/);
+  assert.match(sharedCss, /\.wide-grid-pinned \{[\s\S]*background: var\(--panel\)/);
 
   // A row with no applicable task must not read like one whose tasks are merely
   // unstarted — both are em dashes in the grid, so the row says which it is.
   assert.match(page, /No tasks assigned/);
+});
+
+test("CONTRACT · CNT-07 · newest task columns render first and the speaker identity stays pinned", async () => {
+  const sharedCss = await read("src/styles/wide-grid.css");
+  const page = await read("src/ui/onboarding/OnboardingPage.tsx");
+
+  assert.match(page, /orderNewestFirst\(state\.snapshot\.task_templates/);
+  assert.match(page, /ready\.task_templates\.map/);
+  assert.match(page, /class="onboarding-select-column wide-grid-pinned wide-grid-pinned-leading wide-grid-pinned-header"/);
+  assert.match(page, /class="onboarding-speaker-column wide-grid-pinned wide-grid-pinned-after-leading wide-grid-pinned-header"/);
+  assert.match(sharedCss, /\.wide-grid-pinned \{[\s\S]*position: sticky/);
+  assert.match(sharedCss, /\.wide-grid-pinned-after-leading \{[\s\S]*left: var\(--wide-grid-leading-width/);
 });
