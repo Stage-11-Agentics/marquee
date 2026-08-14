@@ -14,6 +14,7 @@ import type {
 } from "../../api/agenda";
 import { AGENDA_VIEWS, durationIsAllowed, MAX_BATCH_PUBLISH_IDS, viewNames } from "../../api/agenda";
 import { autoPlaceSummary, planAutoPlacements, type AutoPlaceSlot } from "../../lib/auto-place";
+import { isVisibleToAudience, PUBLIC_SPEAKER_EMPTY_LABEL } from "../../lib/participants";
 import {
   AGENDA_GRID_OPTIONS,
   agendaGridPosition,
@@ -202,7 +203,11 @@ function publicationDateTime(candidate: AgendaPublishCandidate, timezone: string
 }
 
 function publicationSpeakerLine(candidate: AgendaPublishCandidate): string {
-  return candidate.speakers.length ? candidate.speakers.map((speaker) => speaker.name).join(" · ") : "No speakers listed";
+  const hasOnStageParticipant = candidate.speakers.some((speaker) =>
+    speaker.role === undefined || isVisibleToAudience(speaker.role, "public"));
+  return hasOnStageParticipant
+    ? candidate.speakers.map((speaker) => speaker.name).join(" · ")
+    : PUBLIC_SPEAKER_EMPTY_LABEL;
 }
 
 function trackColor(snapshot: AgendaSnapshot, session: AgendaSession): string {

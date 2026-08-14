@@ -4,6 +4,7 @@ import type { ComponentChildren, JSX } from "preact";
 import { SocialBadges } from "../../social/SocialBadges";
 import SOCIAL_BADGE_STYLES from "../../social/social-badge.css?raw";
 import { sessionCalendarLinks, sessionDirectionsUrl } from "../../../lib/public-calendar";
+import { PUBLIC_SPEAKER_EMPTY_LABEL } from "../../../lib/participants";
 import {
   publicAbstractSnippet,
   type PublicAgendaData,
@@ -78,6 +79,7 @@ export const PUBLIC_SITE_STYLES = `
 .public-session-title { margin: 0; font: 650 17px/1.2 Georgia, serif; letter-spacing: -.01em; }
 .public-session-title a:hover, .public-session-title a:focus-visible { color: var(--public-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .public-speakers { min-height: 20px; margin: 8px 0 0; color: var(--public-muted); font-size: 12px; }
+.public-speaker-empty { display: inline-block; min-height: 20px; line-height: 20px; white-space: nowrap; }
 .public-speakers a { text-decoration: underline; text-decoration-color: var(--public-rule); text-underline-offset: 3px; }
 .public-speakers a:hover, .public-speakers a:focus-visible { color: var(--public-accent); }
 .public-speaker-role { color: var(--public-soft); }
@@ -533,6 +535,10 @@ function speakerRole(speaker: PublicSpeakerSummary): string {
   return [speaker.title, speaker.company].filter(Boolean).join(", ");
 }
 
+export function PublicSpeakerEmpty(): JSX.Element {
+  return <span class="public-speaker-empty">{PUBLIC_SPEAKER_EMPTY_LABEL}</span>;
+}
+
 /** Job title and company have always been in the projection; the card just never showed them. */
 function SpeakerLine({ session }: { session: PublicSession }): JSX.Element {
   return (
@@ -543,7 +549,7 @@ function SpeakerLine({ session }: { session: PublicSession }): JSX.Element {
           <a href={speakerHref(speaker.slug)}>{speaker.name}</a>
           {speakerRole(speaker) ? <span class="public-speaker-role"> — {speakerRole(speaker)}</span> : null}
         </span>
-      )) : "—"}
+      )) : <PublicSpeakerEmpty />}
     </p>
   );
 }
@@ -937,7 +943,7 @@ export function PublicSessionPage({ event, venue, session, origin }: { event: Pu
               <a class="public-speaker-link" href={speakerHref(speaker.slug)} key={speaker.id}>
                 <span><strong>{speaker.name}</strong><small>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</small></span><span aria-hidden="true">→</span>
               </a>
-            )) : <span>—</span>}
+            )) : <PublicSpeakerEmpty />}
           </div>
           <div class="public-divider" />
           <h2>Getting there</h2>
