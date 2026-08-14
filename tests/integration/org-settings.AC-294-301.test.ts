@@ -22,6 +22,13 @@ import { applyMigrations, env } from "./apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
 const NOW = Date.UTC(2026, 7, 14, 12, 0, 0);
+/**
+ * Task deadlines are compared against the real clock by the server, so this one
+ * column is derived from it rather than from the pinned fixture anchor — a
+ * calendar-pinned `due_at` silently becomes an overdue task once that date
+ * passes, and the test starts asserting something different from what it says.
+ */
+const DUE_AT = Date.now() + 86_400_000;
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
   return SELF.fetch(`${ORIGIN}${path}`, init);
@@ -403,6 +410,18 @@ test("AC-298 · removing an organizer consumes the unexpired sign-in link alread
   const stale = await mintMagicLink(env.DB, { personId: "per_arm2_member", purpose: "login" });
   await env.DB.prepare("UPDATE magic_links SET expires_at = ? WHERE id = ?").bind(NOW, stale.id).run();
 
+  // Before acting: exactly one live link, and two that are already dead in the
+  // two different ways. Without this, a fixture that minted nothing would let
+  // every assertion below pass while proving nothing was revoked.
+  expect(
+    await countOf(
+      "SELECT COUNT(*) AS total FROM magic_links WHERE person_id = ? AND used_at IS NULL AND expires_at > ?",
+      "per_arm2_member",
+      Date.now(),
+    ),
+  ).toBe(1);
+  expect(await countOf("SELECT COUNT(*) AS total FROM magic_links WHERE person_id = ?", "per_arm2_member")).toBe(3);
+
   const removed = await request("/api/v1/org/members/per_arm2_member", { method: "DELETE", headers: { cookie } });
   expect(removed.status).toBe(200);
   expect((await removed.json()) as { data: { consumed_links: number } }).toMatchObject({ data: { consumed_links: 1 } });
@@ -436,6 +455,10 @@ test("AC-298 · removing an organizer revokes the tokens the human named, and on
        VALUES ('tok_owner', ?, ?, 'owner token', 'hash_owner', 'mq_test', '{"permissions":["program:read"],"event_ids":[]}', ?, ?, ?)`,
     ).bind(orgId, null, `per_arm3_owner`, NOW, NOW),
   ]);
+
+  // Before acting: three live tokens. A revocation test against a fixture with
+  // nothing to revoke passes beautifully and proves nothing.
+  expect(await countOf("SELECT COUNT(*) AS total FROM api_tokens WHERE revoked_at IS NULL")).toBe(3);
 
   // Show-and-choose (ruling O3): the dialog pre-checks revoke, and the human
   // unchecked one because it powers an integration the organization keeps.
@@ -541,11 +564,11 @@ test("AC-299 · removing a person from a conference ends their work there and le
     env.DB.prepare(
       `INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, due_at, status, created_at, updated_at)
        VALUES ('task_open', ?, 'per_speaker', 'sub_live', 'tpl_207', 'Send your bio', 'acknowledge', ?, 'open', ?, ?)`,
-    ).bind(eventId, NOW + 86_400_000, NOW, NOW),
+    ).bind(eventId, DUE_AT, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, due_at, status, completed_at, created_at, updated_at)
        VALUES ('task_done', ?, 'per_speaker', 'sub_live', 'tpl_207', 'Signed the release', 'acknowledge', ?, 'done', ?, ?, ?)`,
-    ).bind(eventId, NOW + 86_400_000, NOW, NOW, NOW),
+    ).bind(eventId, DUE_AT, NOW, NOW, NOW),
     // Org-level person data: notes and tags hang off the person, never off a
     // conference roster row. None of it is this conference's to delete.
     env.DB.prepare(
@@ -567,6 +590,12 @@ test("AC-299 · removing a person from a conference ends their work there and le
     published: false,
     sole_speaker: true,
   });
+
+  // Before acting: three participations for this person at this conference, the
+  // published session actually published, and the co-speaker present.
+  expect(await countOf("SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_speaker'")).toBe(2);
+  expect(await countOf("SELECT COUNT(*) AS total FROM submissions WHERE id = 'sub_live' AND is_published = 1")).toBe(1);
+  expect(await countOf("SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_cospeaker'")).toBe(1);
 
   const peopleBefore = await countOf("SELECT COUNT(*) AS total FROM people");
   const submissionsBefore = await countOf("SELECT COUNT(*) AS total FROM submissions");
@@ -628,12 +657,23 @@ test("AC-300 · revoking portal access ends the credentials and touches nothing 
     env.DB.prepare(
       `INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, due_at, status, created_at, updated_at)
        VALUES ('task_portal', ?, 'per_portal', 'sub_portal', 'tpl_portal', 'Send your slides', 'file', ?, 'open', ?, ?)`,
-    ).bind(eventId, NOW + 86_400_000, NOW, NOW),
+    ).bind(eventId, DUE_AT, NOW, NOW),
   ]);
   const theirs = await createSession(env.DB, { personId: "per_portal", userAgent: "mrq-207" });
   const login = await mintMagicLink(env.DB, { personId: "per_portal", purpose: "login" });
   const taskLink = await mintMagicLink(env.DB, { personId: "per_portal", purpose: "task_link" });
   const cospeaker = await mintMagicLink(env.DB, { personId: "per_portal", purpose: "cospeaker_profile" });
+
+  // Before acting: a live session, three unspent links, a participation, and an
+  // open task — every row the assertions below are about.
+  expect(await countOf("SELECT COUNT(*) AS total FROM auth_sessions WHERE id = ? AND revoked_at IS NULL", theirs.id)).toBe(1);
+  expect(
+    await countOf("SELECT COUNT(*) AS total FROM magic_links WHERE person_id = 'per_portal' AND used_at IS NULL"),
+  ).toBe(3);
+  expect(await countOf("SELECT COUNT(*) AS total FROM participations WHERE person_id = 'per_portal'")).toBe(1);
+  expect(
+    await countOf("SELECT COUNT(*) AS total FROM speaker_tasks WHERE id = 'task_portal' AND status = 'open' AND cancelled_at IS NULL"),
+  ).toBe(1);
 
   const revoked = await request("/api/v1/org/people/per_portal/revoke-access", { method: "POST", headers: { cookie } });
   expect(revoked.status).toBe(200);
