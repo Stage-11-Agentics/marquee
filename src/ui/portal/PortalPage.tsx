@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../../lib/auth/draft-resume-copy";
 import { apiFetch } from "../shell/api-client";
 import { participationRoleLabel } from "../shell/identity-format";
-import { isUploadAborted, putFileToR2, speakerUploadFailureMessage, type UploadProgressHandlers } from "../upload/upload-client";
+import { isUploadAborted, putFileToR2, speakerUploadAbortedMessage, speakerUploadFailureMessage, type UploadProgressHandlers } from "../upload/upload-client";
 import { formatBytes, validateClientUpload } from "../upload/upload-policy";
 import type { SignedUpload } from "../../lib/r2/protocol";
 import { isFieldApplicable } from "../../lib/form-conditions";
@@ -331,13 +331,15 @@ export function TaskSurface({ eventId, task, submission, person, onComplete }: T
   return <GenericTaskSurface task={task} onComplete={onComplete} />;
 }
 
+type UploadProgress = { loaded: number | null; total: number; state: "uploading" | "failed" };
+
 function GenericTaskSurface({ task, onComplete }: { task: PortalTask; onComplete: () => Promise<void> }): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [acknowledged, setAcknowledged] = useState(task.payload.acknowledged === true);
   const [answers, setAnswers] = useState<Record<string, unknown>>(task.payload.answers ?? {});
   const [file, setFile] = useState<File | null>(null);
-  const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [canAbort, setCanAbort] = useState(false);
   const [canRetry, setCanRetry] = useState(false);
   const abortUpload = useRef<(() => void) | null>(null);
@@ -347,17 +349,22 @@ function GenericTaskSurface({ task, onComplete }: { task: PortalTask; onComplete
     event.preventDefault();
     setBusy(true);
     setError(null);
+    let uploadStarted = false;
+    let uploadCompleted = false;
     try {
       let attachmentId = task.payload.attachment_id ?? undefined;
       if (task.kind === "file") {
         if (!file) throw new Error("Choose a file before completing this task.");
         const validationError = validateClientUpload(file, { accept: task.payload.accept, maxBytes: task.payload.max_bytes });
         if (validationError) throw new Error(validationError);
-        setProgress({ loaded: 0, total: file.size });
+        // No progress event has arrived yet. Showing 0% here claims byte-level
+        // knowledge the browser does not have and makes a stalled PUT look alive.
+        setProgress({ loaded: null, total: file.size, state: "uploading" });
         setCanRetry(false);
         uploadLinkExpired.current = false;
+        uploadStarted = true;
         attachmentId = await uploadFile(file, "task_upload", task.id, {
-          onProgress: (loaded, total) => setProgress({ loaded, total }),
+          onProgress: (loaded, total) => setProgress({ loaded, total, state: "uploading" }),
           onExpiredOrForbidden: () => {
             uploadLinkExpired.current = true;
             setError("The upload link expired. Retry to request a fresh link.");
@@ -367,6 +374,7 @@ function GenericTaskSurface({ task, onComplete }: { task: PortalTask; onComplete
             setCanAbort(abort !== null);
           },
         });
+        uploadCompleted = true;
       }
       await requestJson(`/api/v1/me/tasks/${task.id}/complete`, {
         method: "POST",
@@ -379,13 +387,23 @@ function GenericTaskSurface({ task, onComplete }: { task: PortalTask; onComplete
       await onComplete();
     } catch (caught) {
       const aborted = isUploadAborted(caught);
-      const speakerFailure = speakerUploadFailureMessage(caught);
+      const hasPreviousVersion = (task.payload.version_count ?? 0) > 0;
+      const speakerFailure = uploadStarted ? speakerUploadFailureMessage(caught, { hasPreviousVersion }) : null;
       if (task.kind === "file" && speakerFailure) console.error("Speaker upload failed", caught);
-      setError(uploadLinkExpired.current ? "The upload link expired. Retry to request a fresh link." : aborted ? null : speakerFailure ?? (caught as Error).message);
+      if (task.kind === "file" && uploadStarted && !uploadCompleted) {
+        // Keep the terminal state row in place so the retry affordance does
+        // not jump when a pending upload becomes a visible failure.
+        setProgress({ loaded: null, total: file?.size ?? 0, state: "failed" });
+      }
+      setError(uploadLinkExpired.current
+        ? `The upload link expired. ${hasPreviousVersion ? "Your previous version is still current. " : "No new file was saved. "}Retry to request a fresh link.`
+        : aborted
+          ? speakerUploadAbortedMessage(hasPreviousVersion)
+          : speakerFailure ?? (caught as Error).message);
       setCanRetry(task.kind === "file" && file !== null);
     } finally {
       setBusy(false);
-      setProgress(null);
+      if (uploadCompleted || !uploadStarted) setProgress(null);
       setCanAbort(false);
       abortUpload.current = null;
     }
@@ -401,9 +419,10 @@ function GenericTaskSurface({ task, onComplete }: { task: PortalTask; onComplete
   if (task.kind === "file") {
     const accept = task.payload.accept?.map((item) => item.startsWith(".") ? item : `.${item}`).join(",") || undefined;
     const hasVersions = (task.payload.version_count ?? 0) > 0;
+    const progressFailed = progress?.state === "failed";
     return <form onSubmit={submit}>
       <div class="portal-task-field"><label for={`file-${task.id}`}>{hasVersions ? "Upload a new version" : "Upload file"}</label><input id={`file-${task.id}`} type="file" accept={accept} onChange={(event) => { setFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null); setError(null); setCanRetry(false); }} /><small>{accept ? `Accepted: ${accept}` : "Choose the file requested by the conference."}{task.payload.max_bytes ? ` · Limit: ${formatBytes(task.payload.max_bytes)}` : ""}{hasVersions ? " · Your earlier upload is kept as a previous version." : ""}</small></div>
-      {progress ? <div class="portal-upload-progress" role="status" aria-live="polite"><div><span>Uploading · {progress.total > 0 ? Math.round(progress.loaded / progress.total * 100) : 0}%</span><span>{formatBytes(progress.loaded)} / {formatBytes(progress.total)}</span></div><progress max={progress.total} value={progress.loaded} /></div> : null}
+      {progress ? <div class="portal-upload-progress" role="status" aria-live="polite"><div><span>{progressFailed ? "Upload stopped" : progress.loaded === null ? "Uploading · waiting for transfer" : `Uploading · ${progress.total > 0 ? Math.round(progress.loaded / progress.total * 100) : 0}%`}</span><span>{progressFailed ? hasVersions ? "Previous version kept" : "No version saved" : progress.loaded === null ? "Waiting for transfer" : `${formatBytes(progress.loaded)} / ${formatBytes(progress.total)}`}</span></div>{progressFailed ? <progress max={progress.total} value={0} aria-label="Upload stopped" /> : progress.loaded === null ? <progress max={progress.total} /> : <progress max={progress.total} value={progress.loaded} />}</div> : null}
       <div class="portal-payload-actions"><span class="portal-payload-error">{error ?? (canRetry ? "The file is still selected. Retry when ready." : "")}</span><span class="portal-upload-actions">{canAbort ? <button class="portal-button secondary" type="button" onClick={() => abortUpload.current?.()}>Cancel upload</button> : null}<button class="portal-button" type="submit" disabled={busy}>{busy ? "Uploading…" : canRetry ? "Retry upload" : hasVersions ? "Upload new version" : "Upload and complete"}</button></span></div>
     </form>;
   }
