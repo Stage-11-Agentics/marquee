@@ -608,8 +608,8 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
         {draft.kind === "form" && <label class="field span-2"><span>Form</span><select value={draft.formId} onChange={(event) => { const value = event.currentTarget.value; setDraft((current) => ({ ...current, formId: value })); }}><option value="">Choose a form…</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}</select></label>}
         <div class="field span-2"><span>Deadline</span><DeadlineFields dueMode={draft.dueMode} dueDate={draft.dueDate} dueOffsetDays={draft.dueOffsetDays} idPrefix="task-new" onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))} /></div>
       </div>
-      <AssigneePicker assignees={assignees} selected={draft.assignTo} idPrefix="task-new-assignee" onChange={(update) => setDraft((current) => ({ ...current, assignTo: update(current.assignTo) }))} />
-      <SessionChoicePicker assignees={assignees} selected={draft.assignTo} choices={draft.sessionChoices} idPrefix="task-new-assignee" onChange={(personId, submissionId) => setDraft((current) => ({ ...current, sessionChoices: { ...current.sessionChoices, [personId]: submissionId } }))} />
+      <AssigneePicker assignees={assignees} displayNames={assigneeNames} selected={draft.assignTo} idPrefix="task-new-assignee" onChange={(update) => setDraft((current) => ({ ...current, assignTo: update(current.assignTo) }))} />
+      <SessionChoicePicker assignees={assignees} displayNames={assigneeNames} selected={draft.assignTo} choices={draft.sessionChoices} idPrefix="task-new-assignee" onChange={(personId, submissionId) => setDraft((current) => ({ ...current, sessionChoices: { ...current.sessionChoices, [personId]: submissionId } }))} />
       <label class="task-auto-assign"><input type="checkbox" checked={draft.autoAssign} onChange={(event) => { const checked = event.currentTarget.checked; setDraft((current) => ({ ...current, autoAssign: checked })); }} /><span>Also give this task to every speaker accepted from now on</span></label>
       <div class="task-compose-error" role="alert">{createError ?? ""}</div>
       <div class="task-compose-actions">
