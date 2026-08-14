@@ -1,4 +1,5 @@
 import type { EmailTemplateRow } from "../../db/schema";
+import { MERGE_TOKEN_PATTERN } from "../../lib/mail-merge-fields";
 
 export type MergeValue = string | number | boolean | null | undefined;
 export type MergeData = Record<string, MergeValue>;
@@ -25,7 +26,7 @@ export function escapeHtml(value: string): string {
  * This keeps an operator from sending a message that silently lost context.
  */
 export function mergeTemplate(source: string, data: MergeData): string {
-  return source.replace(/{{\s*([a-zA-Z0-9_.-]+)\s*}}/g, (_match, key: string) => {
+  return source.replace(MERGE_TOKEN_PATTERN, (_match, key: string) => {
     const value = data[key];
     return value === null || value === undefined ? `{{${key}}}` : String(value);
   });
