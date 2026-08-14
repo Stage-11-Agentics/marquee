@@ -131,14 +131,14 @@ test("AC-13 · settings hands venue capacity and room authoring to the Venues su
  * The unset case is the one worth pinning: a conference that never opens the
  * screen has to get every shipped platform, not an empty speaker form.
  */
-test("a conference that has never touched the setting is asked for every shipped platform", async () => {
+test("CONTRACT · a conference that has never touched the setting is asked for every shipped platform", async () => {
   const response = await request(`/api/v1/events/${EVENT_ID}`);
   expect(response.status).toBe(200);
   const body = await response.json<{ data: { speaker_social_platforms: string[] } }>();
   expect(body.data.speaker_social_platforms).toEqual(["x", "linkedin"]);
 });
 
-test("turning a platform off persists, and turning them all off is a real choice", async () => {
+test("CONTRACT · turning a platform off persists, and turning them all off is a real choice", async () => {
   const saved = await request(`/api/v1/events/${EVENT_ID}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -157,7 +157,7 @@ test("turning a platform off persists, and turning them all off is a real choice
   expect((await emptied.json<{ data: { speaker_social_platforms: string[] } }>()).data.speaker_social_platforms).toEqual([]);
 });
 
-test("omitting the field leaves the conference's existing choice alone", async () => {
+test("CONTRACT · omitting the field leaves the conference's existing choice alone", async () => {
   await request(`/api/v1/events/${EVENT_ID}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -171,7 +171,7 @@ test("omitting the field leaves the conference's existing choice alone", async (
   expect((await renamed.json<{ data: { speaker_social_platforms: string[] } }>()).data.speaker_social_platforms).toEqual(["linkedin"]);
 });
 
-test("an unknown platform id is refused rather than stored", async () => {
+test("CONTRACT · an unknown platform id is refused rather than stored", async () => {
   const response = await request(`/api/v1/events/${EVENT_ID}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },

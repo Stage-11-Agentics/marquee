@@ -22,7 +22,9 @@ test("CONTRACT · MRQ-93 reuses the existing talk and profile write paths", () =
   assert.equal((portal.match(/\/api\/v1\/me\/submissions\/\$\{submission\.id\}\/talk/g) ?? []).length, 1);
   assert.equal((portal.match(/requestJson\("\/api\/v1\/me\/profile"/g) ?? []).length, 1);
   assert.match(portal, /<TalkEditor submission=\{submission\} onSaved=\{onSaved\} \/>/);
-  assert.match(portal, /<ProfileForm eventId=\{eventId\} person=\{person\} onSaved=\{onSaved\} \/>/);
+  // The contract is that the profile panel reuses ProfileForm rather than
+  // growing a second write path — not that the component's props never change.
+  assert.match(portal, /<ProfileForm eventId=\{eventId\} person=\{person\}[^/]*onSaved=\{onSaved\} \/>/);
   assert.match(portal, /Talk editing is closed because the conference call for proposals is closed\./);
 });
 
