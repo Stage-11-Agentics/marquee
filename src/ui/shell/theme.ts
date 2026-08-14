@@ -7,10 +7,9 @@
 // properties a token can reach. Structure tokens — spacing, radius, the
 // hairline, the type stacks, `--shadow: none` — are theme-invariant, which is
 // what keeps Night a re-lit instrument rather than a generic dark mode. Day
-// still carries no
-// attribute so it stays the true default: nothing to load, and a browser that
-// never runs the pre-paint script in index.html still gets the designed light
-// palette.
+// still carries no attribute so it stays the true default: nothing to load,
+// and a browser that never runs the pre-paint script in index.html still gets
+// the designed light palette.
 //
 // Register themes (latent.space, AI Engineer, swyxy) are the theme-round
 // experiment: they re-light the palette AND restyle the shell's chrome —
