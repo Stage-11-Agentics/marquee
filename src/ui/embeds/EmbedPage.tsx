@@ -157,6 +157,7 @@ export const EMBED_CONFIG_SCRIPT = `
   const trackNote = document.querySelector('[data-track-note]');
   const statusNote = document.querySelector('[data-status-note]');
   const layoutNote = document.querySelector('[data-layout-note]');
+  const previewNote = document.querySelector('[data-preview-note]');
   if (!form || !code || !preview) return;
   const KIND_LABEL = { agenda: 'Agenda', sessions: 'Sessions', speakers: 'Speakers', cfp: 'Call for speakers' };
   // Interpolated from EMBED_SNIPPET_HEIGHT_PX so the snippet this page copies
@@ -242,6 +243,8 @@ export const EMBED_CONFIG_SCRIPT = `
     const previewSrc = src + (src.includes('?') ? '&' : '?') + 'preview=' + encodeURIComponent(state.output);
     preview.src = previewSrc;
     preview.setAttribute('data-preview-output', state.output);
+    // The snippet's height changes with the kind, so the note about it has to.
+    if (previewNote) previewNote.textContent = 'Fitted to this panel. Your snippet is ' + SNIPPET_HEIGHT[kind] + 'px tall, and you can change that number in the code.';
   };
   kindButtons.forEach((b) => b.addEventListener('click', () => { saveFieldSelection(); state.kind = b.dataset.embedKind; state.savedSlug = null; paintControls(); update(); }));
   outputButtons.forEach((b) => b.addEventListener('click', () => { state.output = b.dataset.embedOutput; outputButtons.forEach((item) => { const active = item.dataset.embedOutput === state.output; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); }); update(); }));
@@ -652,7 +655,7 @@ export function EmbedConfigPage({
             {/* The preview is its own viewport and always has been. Saying so
                 stops an organizer reading its height as the one they are about
                 to paste — the snippet states that number itself. */}
-            <p class="embed-preview-note">Fitted to this panel. Your snippet is {EMBED_SNIPPET_HEIGHT_PX[kind]}px tall, and you can change that number in the code.</p>
+            <p class="embed-preview-note" data-preview-note>Fitted to this panel. Your snippet is {EMBED_SNIPPET_HEIGHT_PX[kind]}px tall, and you can change that number in the code.</p>
             <div class="embed-preview"><iframe data-embed-preview title={`${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()} live preview`} src={previewSrc(event, kind, track, status, layout, accent, selectedFields, output)} /></div>
             <p style={{ margin: "10px 0 0", fontSize: "11px" }}>Published changes are served anonymously and refreshed from a 30-second edge cache.</p>
           </section>

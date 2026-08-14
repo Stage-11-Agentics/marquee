@@ -16,9 +16,10 @@ import { EMBED_CONFIG_SCRIPT } from "../../src/ui/embeds/EmbedPage";
  * so a visitor saw the header and the filter bar and essentially none of the
  * programme. Setting a height by hand revealed the whole correct widget.
  *
- * These assertions parse the generated tag rather than matching substrings of
- * it: a source-string check passes against a dead helper reference beside a
- * hand-written tag, which is the shape of the defect it claims to prevent.
+ * These assertions parse the generated tag and RUN the generated script, rather
+ * than matching substrings of either. A source-string check passes against a
+ * dead helper reference beside a hand-written tag, which is the shape of the
+ * defect it claims to prevent.
  */
 
 /** The generated snippet's attributes, read as a browser would read them. */
@@ -35,7 +36,72 @@ function styleOf(tag: string): Record<string, string> {
     .map((rule) => rule.split(":").map((part) => part.trim()) as [string, string]));
 }
 
-const HOSTILE = 'AIE" onload="alert(1)';
+/** A name that closes the attribute it is written into. */
+const HOSTILE_ATTRIBUTE = 'AIE" onload="alert(1)';
+/** A name that opens a tag in a text context. */
+const HOSTILE_TEXT = "AIE <img src=x onerror=alert(1)>";
+
+/**
+ * The config page's script, executed against the smallest DOM it will accept.
+ *
+ * The script is a string until it reaches a page, so nothing about it is
+ * type-checked and a broken interpolation is invisible. Running it and reading
+ * the textarea is the only way to assert what an organizer actually copies.
+ */
+function runConfigScript(options: { eventName: string; kind: EmbedKind; output: string }): {
+  snippet: string;
+  previewNote: string;
+} {
+  const code = { value: "" };
+  const previewNote = { textContent: "" };
+  const preview = { src: "", setAttribute: () => undefined };
+  const button = (data: Record<string, string>) => ({
+    dataset: data,
+    classList: { contains: (name: string) => name === "active" && data.active === "1", add: () => undefined, remove: () => undefined, toggle: () => undefined },
+    addEventListener: () => undefined,
+    setAttribute: () => undefined,
+    removeAttribute: () => undefined,
+    querySelectorAll: () => [],
+  });
+  const form = { addEventListener: () => undefined, querySelectorAll: () => [], querySelector: () => null };
+  const byQuery: Record<string, unknown> = {
+    "[data-embed-config]": form,
+    "[data-embed-code]": code,
+    "[data-embed-preview]": preview,
+    "[data-copy-embed]": null,
+    "[data-track-note]": null,
+    "[data-status-note]": null,
+    "[data-layout-note]": null,
+    "[data-preview-note]": previewNote,
+  };
+  const listsByQuery: Record<string, unknown[]> = {
+    "[data-embed-kind]": EMBED_KINDS.map((kind) => button({ embedKind: kind, active: kind === options.kind ? "1" : "0" })),
+    "[data-embed-output]": ["html", "basic", "json", "xml", "ical"].map((output) => button({ embedOutput: output, active: output === options.output ? "1" : "0" })),
+    "[data-embed-layout]": ["cards", "list"].map((layout) => button({ embedLayout: layout, active: layout === "cards" ? "1" : "0" })),
+    "[data-embed-fields-for]": [],
+  };
+
+  const context = {
+    document: {
+      querySelector: (selector: string) => byQuery[selector] ?? null,
+      querySelectorAll: (selector: string) => listsByQuery[selector] ?? [],
+      getElementById: () => null,
+    },
+    window: { location: { origin: "https://host.example" } },
+    FormData: class {
+      get(name: string): string {
+        return name === "event" ? options.eventName : "";
+      }
+    },
+    URLSearchParams,
+    Array,
+    String,
+    encodeURIComponent,
+  };
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  new Function(...Object.keys(context), EMBED_CONFIG_SCRIPT)(...Object.values(context));
+  return { snippet: code.value, previewNote: previewNote.textContent };
+}
 
 describe("generated embed snippet", () => {
   test("CONTRACT · every kind's snippet states a height twice, so a pasted embed is not a 150px sliver", () => {
@@ -45,9 +111,9 @@ describe("generated embed snippet", () => {
       const style = styleOf(tag);
       const height = EMBED_SNIPPET_HEIGHT_PX[kind];
 
-      // The attribute, because an inline style is not a floor: a host CSP that
-      // permits the frame and blocks inline styles reverts it to the 150px
-      // default, and a host `!important` rule collapses it outright.
+      // The attribute, because the inline style alone is not enough: measured, a
+      // host CSP that permits the frame and blocks inline styles reverts it to
+      // the 150px default while the attribute holds.
       expect(attrs.height, `${kind} carries a height attribute`).toBe(String(height));
       expect(attrs.width, `${kind} carries a width attribute`).toBe("100%");
       expect(style.height, `${kind} states the same height in its style`).toBe(`${height}px`);
@@ -59,54 +125,53 @@ describe("generated embed snippet", () => {
     }
   });
 
-  test("CONTRACT · a conference name cannot escape the attribute it is written into", () => {
+  test("CONTRACT · a conference name cannot escape the attribute or the text it is written into", () => {
     // The snippet is delivered through a textarea, which decodes one layer of
     // entities before anyone copies it — so an unescaped quote in a conference
     // name is an executable attribute on whatever page it is pasted into.
-    const tag = embedIframeSnippet("https://marquee.stage11.dev/embed/x?a=1&b=2", `${HOSTILE} agenda`, "agenda");
+    const tag = embedIframeSnippet("https://marquee.stage11.dev/embed/x?a=1&b=2", `${HOSTILE_ATTRIBUTE} agenda`, "agenda");
     expect(tag).not.toContain('onload="');
-    expect(tag).toContain("&quot;");
     expect(attributes(tag).title).not.toContain('"');
-    // The source is escaped on the same terms; its ampersand is not a new entity.
     expect(attributes(tag).src).toBe("https://marquee.stage11.dev/embed/x?a=1&amp;b=2");
 
-    const link = embedCalendarLink("https://marquee.stage11.dev/embed/x.ics", HOSTILE);
-    expect(link).not.toContain('onload="');
-    expect(link).not.toContain(`>Add ${HOSTILE}`);
+    // The calendar link writes the name into a TEXT context, where a tag needs
+    // no quote at all to open.
+    const link = embedCalendarLink("https://marquee.stage11.dev/embed/x.ics", HOSTILE_TEXT);
+    expect(link).not.toContain("<img");
+    expect(link).toContain("&lt;img");
+    expect(embedCalendarLink("https://x.test/y", HOSTILE_ATTRIBUTE)).not.toContain('onload="');
   });
 
-  test("CONTRACT · the config page's own script builds the same tag, from the same numbers", () => {
-    // The browser script is a string until it reaches a page, so a broken
-    // interpolation is invisible to the type checker. Execute it.
-    const built = new Function(`
-      ${EMBED_CONFIG_SCRIPT.slice(EMBED_CONFIG_SCRIPT.indexOf("const SNIPPET_STYLE"), EMBED_CONFIG_SCRIPT.indexOf("const OUTPUT_LABEL"))}
-      return { SNIPPET_STYLE, SNIPPET_HEIGHT, escapeAttr };
-    `)() as {
-      SNIPPET_STYLE: Record<EmbedKind, string>;
-      SNIPPET_HEIGHT: Record<EmbedKind, number>;
-      escapeAttr: (value: string) => string;
-    };
-
+  test("CONTRACT · the config page's own script produces that same tag, run rather than read", () => {
     for (const kind of EMBED_KINDS) {
-      expect(built.SNIPPET_HEIGHT[kind], `${kind} height matches the shared constant`).toBe(EMBED_SNIPPET_HEIGHT_PX[kind]);
-      expect(built.SNIPPET_STYLE[kind]).toBe(styleAsWritten(kind));
+      const { snippet, previewNote } = runConfigScript({ eventName: "AIE NYC 2026", kind, output: "html" });
+      const attrs = attributes(snippet);
+      expect(attrs.height, `${kind} height in the copied snippet`).toBe(String(EMBED_SNIPPET_HEIGHT_PX[kind]));
+      expect(attrs.width).toBe("100%");
+      expect(styleOf(snippet).height).toBe(`${EMBED_SNIPPET_HEIGHT_PX[kind]}px`);
+      // The note beside the preview follows the kind rather than freezing on the
+      // one the page was rendered with.
+      expect(previewNote, `${kind} preview note`).toContain(`${EMBED_SNIPPET_HEIGHT_PX[kind]}px`);
     }
-    // And it escapes the same hostile name the server-side builder does.
-    expect(built.escapeAttr(HOSTILE)).not.toContain('"');
-    expect(built.escapeAttr(HOSTILE)).toContain("&quot;");
+  });
+
+  test("CONTRACT · the script escapes the conference name the server-side builder escapes", () => {
+    const { snippet } = runConfigScript({ eventName: HOSTILE_ATTRIBUTE, kind: "agenda", output: "html" });
+    expect(snippet).not.toContain('onload="');
+    expect(attributes(snippet).title).not.toContain('"');
+
+    const calendar = runConfigScript({ eventName: HOSTILE_TEXT, kind: "agenda", output: "ical" });
+    expect(calendar.snippet).not.toContain("<img");
+    expect(calendar.snippet).toContain("&lt;img");
   });
 
   test("CONTRACT · a call for speakers is shorter than a day of programme", () => {
-    // Per kind because the content is, and measured rather than guessed: the
-    // call for speakers block is a promotional card and a link, not the form.
+    // Per kind because the content is, and measured rather than guessed.
     expect(EMBED_SNIPPET_HEIGHT_PX.cfp).toBeLessThan(EMBED_SNIPPET_HEIGHT_PX.agenda);
     expect(EMBED_SNIPPET_HEIGHT_PX.agenda).toBe(EMBED_SNIPPET_HEIGHT_PX.sessions);
-    // A speakers gallery card is taller than an agenda row, so it gets more room.
+    // A speakers gallery card is far taller than an agenda row, so it gets more
+    // room — though no embeddable height fits one whole, which is a layout
+    // question filed on its own rather than answered here.
     expect(EMBED_SNIPPET_HEIGHT_PX.speakers).toBeGreaterThan(EMBED_SNIPPET_HEIGHT_PX.agenda);
   });
 });
-
-function styleAsWritten(kind: EmbedKind): string {
-  const height = EMBED_SNIPPET_HEIGHT_PX[kind];
-  return `width:100%;height:${height}px;border:0`;
-}

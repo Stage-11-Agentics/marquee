@@ -24,12 +24,15 @@ import { escapeHtml } from "../jobs/mail/render";
  * content ends around 174px, so 240px frames it without dead space beneath.
  * A speakers gallery card is far taller than either, so it takes 900px.
  *
- * The gallery is the one kind a fixed height cannot fully satisfy: at a 600px
- * host a single speaker card runs past 1100px, so two complete cards would need
- * an iframe over 2300px tall — not an embed, a page. 900px shows one card whole
- * with the next beginning under it, which is what tells a visitor the gallery
- * scrolls. That the card is that tall at a narrow width is worth looking at on
- * its own; it is not what this fix is about.
+ * The speakers gallery is the one kind NO embeddable height satisfies, and the
+ * honest thing is to say so rather than pick a number and describe it well.
+ * Measured: the first card ends at 2275px at a 600px host and 2431px at 375px,
+ * so one whole card needs an iframe taller than most pages and two need 2481px
+ * / 2717px. 900px is chosen as the most of that first card a reasonable embed
+ * can show, and the gallery scrolls from there. The card being that tall is the
+ * defect underneath, and it is a layout question rather than a snippet one —
+ * filed separately rather than absorbed here. A host who wants several speakers
+ * in a short box should ask for the list layout, which this embed supports.
  */
 export const EMBED_SNIPPET_HEIGHT_PX: Readonly<Record<EmbedKind, number>> = {
   agenda: 720,
@@ -49,10 +52,15 @@ export function embedSnippetStyle(kind: EmbedKind): string {
  * about anything in it — not the height, and not the escaping either.
  *
  * The height is stated TWICE, as an attribute and in the style, because the
- * style alone is not a floor. Measured: under a host CSP that permits the frame
- * and blocks inline styles the frame reverts to the 150px default, and a host
- * `!important` rule collapses it outright. The attribute survives both, and is
- * also the number a host most easily finds and edits.
+ * style alone is not enough: measured, under a host CSP that permits the frame
+ * and blocks inline styles the frame reverts to the 150px default, while the
+ * attribute still holds. It is also the number a host most easily finds and
+ * edits.
+ *
+ * Neither is a guarantee, and this snippet does not pretend otherwise. A host
+ * rule of `iframe { height: 96px !important }` measured 96px with `height="900"`
+ * present — a page can always overrule its own embeds, and an earlier
+ * `min-height` here claimed a floor it did not have.
  *
  * `title` and the calendar link's text are conference-controlled strings going
  * into an HTML attribute and into HTML text. The snippet is delivered through a
