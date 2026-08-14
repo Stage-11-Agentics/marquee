@@ -17,4 +17,7 @@ test("AC-10 · fixed task due days use the conference clock while relative tasks
 
   expect(isTaskOverdue({ dueAt: beforeLocalMidnight - 1 }, beforeLocalMidnight)).toBe(true);
   expect(isTaskDueWithinDays({ dueAt: beforeLocalMidnight + 7 * 86_400_000 }, beforeLocalMidnight, 14)).toBe(true);
+
+  const overriddenDueAt = Date.parse("2027-04-30T23:59:59.000Z");
+  expect(isTaskOverdue({ dueAt: overriddenDueAt, templateDueAt: DUE_AT, timezone: "America/New_York" }, overriddenDueAt + 1)).toBe(true);
 });

@@ -366,6 +366,19 @@ test("CONTRACT · MRQ-201 · overdue mail waits for the conference-local due day
   expect(overdue[0]?.data["task.due_date"]).toBe("May 1, 2027");
 });
 
+test("CONTRACT · CNT-08 · SPK-16 · relative overdue mail names the conference-local instant", async () => {
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
+  const dueAt = Date.parse("2026-08-04T17:32:26.216Z");
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_offset_days, position, auto_assign, created_at, updated_at) VALUES ('template_mrq201_relative', 'evt_mail', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', 1, 0, 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mrq201_relative', 'evt_mail', 'per_mail', 'sub_mail', 'template_mrq201_relative', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
+  ]);
+
+  const overdue = await selectOverdueTaskCandidates(env.DB, dueAt + 1);
+  expect(overdue.find((candidate) => candidate.entityId === "task_mrq201_relative")?.data["task.due_date"]).toBe("Aug 4, 2026, 1:32 PM EDT");
+  expect(overdue.find((candidate) => candidate.entityId === "task_mrq201_relative")?.data["task.due_date"]).not.toMatch(/T\d{2}:\d{2}/);
+});
+
 test("CONTRACT · MRQ-201 · mail merge clocks name the conference zone while calendar due dates stay date-only", () => {
   const data = mergeDataForRecipient({
     name: "Ada Lovelace",

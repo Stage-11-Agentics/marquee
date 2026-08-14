@@ -36,7 +36,9 @@ function isUtcDaySentinel(value: number): boolean {
 }
 
 function isCalendarDayTask(task: TaskDueRuntime): task is TaskDueRuntime & { timezone: string } {
-  const fixedTemplate = task.templateDueAt === undefined ? isUtcDaySentinel(task.dueAt) : task.templateDueAt !== null;
+  const fixedTemplate = task.templateDueAt === undefined
+    ? isUtcDaySentinel(task.dueAt)
+    : task.templateDueAt !== null && task.templateDueAt === task.dueAt;
   return fixedTemplate && Boolean(task.timezone);
 }
 

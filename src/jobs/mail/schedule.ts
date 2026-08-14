@@ -18,6 +18,15 @@ export interface MailScheduleCandidate {
   data: Record<string, string>;
 }
 
+function taskDueLabel(row: { due_at: number; template_due_at: number | null; timezone: string }): string {
+  // Fixed calendar-day templates keep their UTC-encoded date contract. Relative
+  // and explicitly overridden deadlines are instants, so speakers read them
+  // in the conference clock instead of receiving a machine timestamp.
+  return row.template_due_at !== null && row.template_due_at === row.due_at
+    ? formatDueDate(row.due_at)
+    : formatEventDateTime(row.due_at, row.timezone);
+}
+
 /**
  * Read the configurable form offset without queueing or rendering anything.
  * The existing enqueue adapter can consume these candidates after the shared
@@ -124,7 +133,7 @@ export async function selectOverdueTaskCandidates(
       "speaker.email": row.email,
       "submission.title": row.submission_title ?? "—",
       "task.title": row.task_title,
-      "task.due_date": formatDueDate(row.due_at),
+      "task.due_date": taskDueLabel(row),
     },
   }));
 }
