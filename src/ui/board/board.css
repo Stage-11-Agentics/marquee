@@ -8,8 +8,15 @@
    rather than in flow, so only the topbar and the page padding count. */
 /* `height`, not `min-height`: the chain of flex and grid tracks below only
    resolves against a definite height, and without one the list stops being a
-   scroll box and grows to the full 1,000 cards. */
-.program-board-page { --board-chrome: 134px; display: flex; flex-direction: column; height: calc(100dvh - var(--board-chrome)); }
+   scroll box and grows to the full 1,000 cards.
+   The floor is what keeps that definite height from becoming a dead end. A
+   short viewport — a landscape phone, a half-height window — otherwise leaves
+   the grid resolving to zero, and because the height is fixed rather than
+   minimum there is no page scroll to recover the board with: eight columns
+   clipped out of existence with nothing to scroll. Below the floor the board
+   stops shrinking and the page scrolls instead, which is how it behaved before
+   it learned to fill. `max()` keeps the height definite either way. */
+.program-board-page { --board-chrome: 134px; --board-floor: 700px; display: flex; flex-direction: column; height: max(var(--board-floor), calc(100dvh - var(--board-chrome))); }
 /* The grid is 1680px of eight columns and `.page` is capped at 1500px, so the
    board is always wider than the page it sits in. Hidden overflow made the last
    stages unreachable rather than merely off-screen — a dead end in the one view
