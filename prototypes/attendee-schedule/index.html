@@ -27,7 +27,7 @@
   speakers Name — Title, Company · snippet + Show more · format chip + track
   chips) plus the star slot this feature adds.
 
-  Simulated clock for the NEXT marker: Wed Oct 14, 2026 · 13:40.
+  Simulated clock for the NEXT marker: Tue Oct 13, 2026 · 13:40.
   Starring really persists (localStorage key marquee:proto:attendee-schedule).
 
   ROUND 2 (design doc §7, rulings 2026-08-14) — added in v0.2:
@@ -206,11 +206,18 @@ body { margin: 0; min-width: 320px; }
 .demand-count { color: var(--public-ink); font: 700 15px/1 var(--public-mono); font-variant-numeric: tabular-nums; text-align: right; }
 .demand-title { min-width: 0; }
 .demand-title strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 13px/1.3 var(--public-sans); letter-spacing: -.01em; }
+.demand-title a:hover, .demand-title a:focus-visible { color: var(--public-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.org-demo-note { margin: 0 0 14px; border: 1px dashed var(--public-rule); background: var(--public-surface); padding: 8px 12px; color: var(--public-muted); font: 600 10.5px/1.5 var(--public-mono); letter-spacing: .04em; }
 .demand-title small { color: var(--public-muted); font: 600 10px/1.5 var(--public-mono); }
 .demand-room { color: var(--public-muted); font: 600 10px/1.5 var(--public-mono); }
 .demand-room strong { display: block; color: var(--public-soft); font-weight: 650; }
+/* Bar = room fullness (advance stars vs capacity), domain 0–125%; the tick is 100%.
+   Popularity ranking is already carried by sort order + the count column —
+   the bar carries the room decision. */
 .demand-bar { position: relative; height: 10px; border: 1px solid var(--public-rule-soft); background: var(--public-sunk); }
 .demand-bar i { position: absolute; inset: 0 auto 0 0; background: var(--public-accent); opacity: .75; }
+.demand-bar i.over { background: #b02a1f; opacity: .85; }
+.demand-bar .tick { position: absolute; top: -2px; bottom: -2px; left: 80%; width: 1px; background: var(--public-muted); }
 .demand-cap { justify-self: end; display: inline-flex; align-items: center; min-height: 22px; border: 1px solid transparent; border-radius: 2px; padding: 2px 7px; font: 650 9.5px/1.3 var(--public-mono); font-variant-numeric: tabular-nums; color: var(--public-muted); }
 .demand-cap.near { border-color: var(--public-warn); background: var(--public-warn-wash); color: var(--public-warn); }
 .demand-cap.over { border-color: #b02a1f; background: #fbe9e7; color: #b02a1f; }
@@ -223,8 +230,8 @@ body { margin: 0; min-width: 320px; }
 .org-setting small { display: block; color: var(--public-muted); font: 400 11px/1.45 var(--public-sans); }
 .org-toggle { flex: 0 0 auto; width: 46px; height: 26px; position: relative; border: 1px solid var(--public-rule); border-radius: 13px; background: var(--public-sunk); transition: background 110ms, border-color 110ms; }
 .org-toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--public-surface); border: 1px solid var(--public-rule); transition: left 110ms; }
-.org-toggle[aria-pressed="true"] { border-color: var(--public-accent); background: var(--public-accent); }
-.org-toggle[aria-pressed="true"]::after { left: 22px; border-color: var(--public-accent-ink); }
+.org-toggle[aria-checked="true"] { border-color: var(--public-accent); background: var(--public-accent); }
+.org-toggle[aria-checked="true"]::after { left: 22px; border-color: var(--public-accent-ink); }
 .org-n { width: 58px; height: 32px; border: 1px solid var(--public-rule); border-radius: 2px; padding: 0 8px; font: 650 13px/1 var(--public-mono); font-variant-numeric: tabular-nums; text-align: right; }
 .attendee-mini { width: 100%; border-collapse: collapse; margin-top: 4px; }
 .attendee-mini td { border-top: 1px solid var(--public-rule-soft); padding: 7px 8px 7px 0; font-size: 11.5px; vertical-align: top; }
@@ -238,7 +245,7 @@ body { margin: 0; min-width: 320px; }
 .claim-line { min-height: 36px; }
 .claim-input { flex: 1 1 auto; min-width: 0; height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 0 9px; font-size: 12px; }
 .claim-done { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-accent-wash); padding: 0 10px; font: 600 11.5px/1.4 var(--public-sans); color: var(--public-accent-ink); }
-.claim-done .quiet { background: none; border: 0; padding: 0; color: var(--public-accent); font: 650 10.5px/1 var(--public-mono); letter-spacing: .04em; cursor: pointer; }
+.claim-done .quiet { background: none; border: 0; padding: 0; min-width: 46px; text-align: center; color: var(--public-accent); font: 650 10.5px/1 var(--public-mono); letter-spacing: .04em; cursor: pointer; }
 .claim-done .quiet:hover { text-decoration: underline; }
 
 /* Prototype chrome */
@@ -325,10 +332,10 @@ body { margin: 0; min-width: 320px; }
 
   <footer class="public-footer">
     <div class="public-footer-inner">
-      <span>AIE NYC 2026 · Oct 13 – 15 · Sheraton Times Square + Marriott Marquis</span>
-      <span style="display:inline-flex;gap:18px">
-        <button id="orgLink">Organizer demand ↗</button>
-        <button id="agentsLink">For agents ↗</button>
+      <span>AIE NYC 2026 · Oct 12 – 14 · Sheraton Times Square + Marriott Marquis</span>
+      <span style="display:inline-flex;gap:18px;flex-wrap:wrap">
+        <button id="orgLink">Organizer view (demo)</button>
+        <button id="agentsLink">For agents</button>
       </span>
     </div>
   </footer>
@@ -420,15 +427,15 @@ body { margin: 0; min-width: 320px; }
 /* ══════════════ Mock program — realistic AIE NYC 2026 seed shape ══════════ */
 const TRACK_COLORS = { Finance:"#635bff", Agents:"#db4c3f", Evals:"#0d9488", Infra:"#d97706", "Open Models":"#2563eb", RAG:"#9333ea", Security:"#0f766e", Leadership:"#0369a1" };
 const DAYS = [
-  { id:"d1", tab:"TUE OCT 13", label:"Tuesday, Oct 13", date:"2026-10-13" },
-  { id:"d2", tab:"WED OCT 14", label:"Wednesday, Oct 14", date:"2026-10-14" },
-  { id:"d3", tab:"THU OCT 15", label:"Thursday, Oct 15", date:"2026-10-15" },
+  { id:"d1", tab:"MON OCT 12", label:"Monday, Oct 12", date:"2026-10-12" },
+  { id:"d2", tab:"TUE OCT 13", label:"Tuesday, Oct 13", date:"2026-10-13" },
+  { id:"d3", tab:"WED OCT 14", label:"Wednesday, Oct 14", date:"2026-10-14" },
 ];
 const S = (id, day, start, end, room, building, title, speakers, fmt, tracks, snippet, abstract) =>
   ({ id, slug:id, day, start, end, room, building, title, speakers, fmt, tracks, snippet, abstract });
 
 const SESSIONS = [
-  // ── Tuesday Oct 13
+  // ── Monday Oct 12
   S("ses-keynote-1","d1","09:00","09:45","Metropolitan Ballroom","Sheraton",
     "The Year Agents Went to Work",
     [{n:"Priya Raghunathan",t:"Chief Scientist",c:"Continual AI"}],
@@ -466,7 +473,7 @@ const SESSIONS = [
     "Where a fine-tuned 3B model genuinely wins — extraction, routing, structured rewrite — with the training recipes and the honest list of places it never will.",
     "Where a fine-tuned 3B model genuinely wins: extraction, routing, structured rewrite, anything with a narrow output contract. We publish the full training recipes, the data-curation loop that mattered more than architecture, and the honest list of tasks where no amount of fine-tuning closed the gap to frontier generalists."),
 
-  // ── Wednesday Oct 14  (14:00 pair overlaps by design — conflict demo)
+  // ── Tuesday Oct 13  (14:00 pair overlaps by design — conflict demo)
   S("ses-sec-injection","d2","09:30","10:15","Metropolitan Ballroom","Sheraton",
     "Prompt Injection Is a Solved Problem (We're Just Not Using the Solutions)",
     [{n:"Rachel Lindqvist",t:"Head of AI Security",c:"Bastion"}],
@@ -498,7 +505,7 @@ const SESSIONS = [
     "A year after giving all 30 product teams an agent budget instead of contractor headcount: what shipped, what broke, and how the org chart bent.",
     "A year after giving all thirty product teams an agent budget instead of contractor headcount. A candid fireside on what actually shipped, the two teams that broke their services, the review-culture correction that followed, and how the org chart bent — plus the numbers our CFO now shows the board."),
 
-  // ── Thursday Oct 15
+  // ── Wednesday Oct 14
   S("ses-rag-live","d3","09:30","10:15","New York Ballroom","Sheraton",
     "Live Index or Stale Answers: Streaming Ingestion for RAG at 2M Docs/Day",
     [{n:"Piotr Wiśniewski",t:"Staff Engineer",c:"Copperline"}],
@@ -536,7 +543,7 @@ const ROOM_CAPACITY = {
 const LS_KEY = "marquee:proto:attendee-schedule";
 const ORG_KEY = LS_KEY + ":org";
 const CLAIM_KEY = LS_KEY + ":claim";
-const NOW = { date:"2026-10-14", time:"13:40" };            // simulated hallway moment
+const NOW = { date:"2026-10-13", time:"13:40" };            // simulated hallway moment (middle day)
 let starred = new Set(JSON.parse(localStorage.getItem(LS_KEY) || "[]"));
 let view = { name:"agenda" };                                // agenda | mine | session | organizer
 let filters = { day:"all", track:"", fmt:"", room:"", q:"" };
@@ -582,7 +589,7 @@ function publicStars(s) {
 }
 function starCell(s) {
   const n = publicStars(s);
-  return `<span class="star-cell">${starBtn(s)}<span class="star-count num" ${n !== null ? `title="${n} attendees have starred this session"` : ""}>${n !== null ? n : ""}</span></span>`;
+  return `<span class="star-cell">${starBtn(s)}<span class="star-count num" ${n !== null ? `title="In ${n} personal schedules"` : ""}>${n !== null ? n : ""}</span></span>`;
 }
 function card(s, { showDay=true, inMine=false } = {}) {
   const d = dayOf(s);
@@ -619,12 +626,12 @@ function renderAgenda() {
   const rooms = [...new Set(SESSIONS.map(s=>s.room))];
   const groups = DAYS.filter(d => list.some(s => s.day === d.id));
   $("#view").innerHTML = `
-    <div class="public-kicker">Oct 13 → Oct 15 · Sheraton New York Times Square</div>
+    <div class="public-kicker">Oct 12 → Oct 14 · Sheraton New York Times Square</div>
     <div class="public-heading"><div>
       <h1>Agenda</h1>
       <p>Practical sessions for people building and operating AI. Star what you want to go to — your schedule follows you.</p>
     </div></div>
-    <div class="proto-note"><b>Prototype v0.2.</b> Try: star a few sessions → open <b>★ My schedule</b> (top right) → on Wednesday, star both the <b>14:00</b> and <b>14:30</b> talks to see the overlap note → then <b>Subscribe / share</b>, where <b>Get it by email</b> is the new opt-in claim. New in round 2: the quiet <b>★ counts</b> under the stars (only ≥ 3 — two sessions sit below the threshold on purpose), and in the footer, <b>Organizer demand ↗</b>: exact counts vs room capacity, the public-counts setting (flip it and come back), and the agent-native attendee import. Stars persist across reloads. Simulated clock: Wed Oct 14, 13:40.</div>
+    <div class="proto-note"><b>Prototype v0.2.</b> Try: star a few sessions → open <b>★ My schedule</b> (top right) → on Tuesday, star both the <b>14:00</b> and <b>14:30</b> talks to see the overlap note → then <b>Subscribe / share</b>, where <b>Get it by email</b> is the new opt-in claim. New in round 2: the quiet <b>★ counts</b> under the stars (only ≥ 3 — two sessions sit below the threshold on purpose), and in the footer, <b>Organizer view (demo)</b>: exact counts vs room capacity, the public-counts setting (flip it and come back), and the agent-native attendee import. Stars persist across reloads. Simulated clock: Tue Oct 13, 13:40.</div>
     <form class="public-filters" onsubmit="return false">
       <div class="public-days" role="tablist" aria-label="Agenda day">
         <button type="button" data-day="all" class="${filters.day==="all"?"active":""}" role="tab" aria-selected="${filters.day==="all"}">All days</button>
@@ -743,7 +750,7 @@ function renderSession(id) {
         <button class="public-button" data-ics-one="${s.id}">Add to calendar (.ics)</button>
         <a class="public-button" target="_blank" rel="noopener" href="${gcalUrl(s)}">Google</a>
         <a class="public-button" target="_blank" rel="noopener" href="${outlookUrl(s)}">Outlook</a>
-        ${publicStars(s) !== null ? `<span class="star-count-inline">★ ${publicStars(s)} attendees</span>` : ""}
+        ${publicStars(s) !== null ? `<span class="star-count-inline" title="In ${publicStars(s)} personal schedules">★ ${publicStars(s)} schedules</span>` : ""}
       </div>
       <div class="public-divider"></div>
       <p>${esc(s.abstract)}</p>
@@ -778,10 +785,10 @@ Rails:
 
 The loop:
   1. Pull the attendee export from the source (name, email, company).
-  2. POST /orgs/aie/people/import - upsert by email. Re-running is
-     safe; nothing duplicates.
-  3. Every imported person gets an attendance row for event
-     aie-nyc-2026 (source: "import").
+  2. POST /orgs/aie/people/import?event=aie-nyc-2026 - upsert by
+     email. Re-running is safe; nothing duplicates.
+  3. The import endpoint writes each person's attendance row itself
+     when "event" is passed (source: "import") - no second call.
   4. Verify: GET /orgs/aie/people?event=aie-nyc-2026&kind=attendee -
      the count should match the export.
 
@@ -790,14 +797,14 @@ an email that already exists (many attendees are past speakers).
 Report back: rows imported, matched to existing people, skipped.`;
 
 const CLAIMED_MOCK = [
-  { name:"Maya Okafor", email:"maya@copperline.dev", starredN:7, src:"claim", crm:"spoke 2025" },
-  { name:"Tom Brandt", email:"tom.brandt@meridian.cap", starredN:4, src:"claim", crm:"" },
-  { name:"Ines Fujimori", email:"ines@fathom.systems", starredN:11, src:"claim", crm:"reviewer" },
+  { name:"Maya Okafor", email:"maya@copperline.dev", starred:"7 starred", src:"claimed", crm:"spoke 2025" },
+  { name:"Tom Brandt", email:"tom.brandt@meridian.cap", starred:"—", src:"imported", crm:"" },
+  { name:"Ines Fujimori", email:"ines@fathom.systems", starred:"11 starred", src:"claimed", crm:"reviewer" },
 ];
 
 function renderOrganizer() {
   const ranked = [...SESSIONS].sort((a,b) => (STARS[b.id]??0) - (STARS[a.id]??0));
-  const maxN = STARS[ranked[0].id] ?? 1;
+  const totalStars = SESSIONS.reduce((t,s) => t + (STARS[s.id] ?? 0), 0);
   const rows = ranked.map(s => {
     const n = STARS[s.id] ?? 0, cap = ROOM_CAPACITY[s.room] ?? 0, d = dayOf(s);
     const ratio = cap ? n / cap : 0;
@@ -807,25 +814,26 @@ function renderOrganizer() {
       <span class="demand-count num">${n}</span>
       <span class="demand-title"><strong><a href="#" data-open="${s.id}">${esc(s.title)}</a></strong><small class="num">${d.tab} · ${s.start}–${s.end} · ${esc(s.fmt)}</small></span>
       <span class="demand-room"><strong>${esc(s.room)}</strong>capacity <span class="num">${cap}</span></span>
-      <span class="demand-bar" aria-hidden="true"><i style="width:${(n/maxN*100).toFixed(1)}%"></i></span>
+      <span class="demand-bar" aria-hidden="true"><i class="${ratio >= 1 ? "over" : ""}" style="width:${(Math.min(ratio,1.25)/1.25*100).toFixed(1)}%"></i><span class="tick"></span></span>
       <span class="demand-cap ${capCls}" title="Advance stars against room capacity">${capTxt}${ratio >= 1 ? " — bigger room?" : ""}</span>
     </div>`;
   }).join("");
   $("#view").innerHTML = `
-    <button class="back-link" data-nav="agenda">← Agenda</button>
+    <button class="back-link" data-nav="${["mine"].includes(view.from) ? "mine" : "agenda"}">← ${view.from === "mine" ? "My schedule" : "Agenda"}</button>
     <div class="public-kicker">Organizer · demand signal</div>
     <div class="public-heading"><div>
       <h1>Session demand</h1>
       <p>Anonymous star counts from attendee schedules — the room-planning signal you normally get when a room overflows, weeks early. A signal, not a vote: counts are distinct devices, lightly rate-limited, spoofable by someone determined.</p>
     </div></div>
+    <p class="org-demo-note">Admin surface — reachable from the attendee footer only in this prototype, for the walkthrough. In the product it lives behind organizer sign-in.</p>
     <p class="demand-note">
       <span class="org-stat"><strong class="num">1,847</strong><span>attendees imported</span></span>
       <span class="org-stat"><strong class="num">641</strong><span>synced schedules</span></span>
       <span class="org-stat"><strong class="num">213</strong><span>claimed with email</span></span>
-      <span class="org-stat"><strong class="num">2,570</strong><span>stars placed</span></span>
+      <span class="org-stat"><strong class="num">${totalStars.toLocaleString("en-US")}</strong><span>stars placed</span></span>
     </p>
     <div class="demand-board" aria-label="Sessions ranked by advance demand">
-      <div class="demand-row head"><span>★</span><span>Session</span><span class="h-room">Room</span><span class="h-bar"></span><span style="justify-self:end">vs capacity</span></div>
+      <div class="demand-row head"><span>★</span><span>Session</span><span class="h-room">Room</span><span class="h-bar" title="Advance stars as a share of room capacity; the tick is 100%">room fullness</span><span style="justify-self:end">vs capacity</span></div>
       ${rows}
     </div>
     <div class="org-grid">
@@ -835,7 +843,7 @@ function renderOrganizer() {
         <table class="attendee-mini">
           ${CLAIMED_MOCK.map(a => `<tr>
             <td><strong>${esc(a.name)}</strong>${a.crm ? `<span class="crm-chip">already in CRM — ${esc(a.crm)}</span>` : ""}<br><span class="num">${esc(a.email)}</span></td>
-            <td style="text-align:right;white-space:nowrap"><span class="num">${a.starredN} starred</span><br><span class="num" style="color:var(--public-muted)">${a.src}</span></td>
+            <td style="text-align:right;white-space:nowrap"><span class="num">${a.starred}</span><br><span class="num" style="color:var(--public-muted)">${a.src}</span></td>
           </tr>`).join("")}
           <tr><td colspan="2" style="color:var(--public-muted)">… and <span class="num">2,057</span> more — People → list “AIE NYC 2026 attendees”</td></tr>
         </table>
@@ -846,11 +854,11 @@ function renderOrganizer() {
           <p class="hint">What attendees see on the agenda. Exact counts here are always yours.</p>
           <div class="org-setting">
             <label>Show counts on the public agenda<small>Ships off by default — popularity is a choice, not a given.</small></label>
-            <button class="org-toggle" id="orgShowCounts" role="switch" aria-pressed="${orgSettings.showCounts}" aria-label="Show star counts on the public agenda"></button>
+            <button class="org-toggle" id="orgShowCounts" role="switch" aria-checked="${orgSettings.showCounts}" aria-label="Show star counts on the public agenda"></button>
           </div>
           <div class="org-setting">
             <label>Only show once a session has at least<small>Below this, attendees see no number at all.</small></label>
-            <input class="org-n" id="orgMinStars" type="number" min="0" max="99" value="${orgSettings.minStars}" aria-label="Minimum stars before the count is public">
+            <input class="org-n" id="orgMinStars" type="number" min="1" max="99" value="${orgSettings.minStars}" aria-label="Minimum stars before the count is public">
           </div>
         </div>
         <div class="org-panel">
@@ -866,11 +874,13 @@ function renderOrganizer() {
     </div>`;
   $("#orgShowCounts").addEventListener("click", () => {
     orgSettings.showCounts = !orgSettings.showCounts; saveOrg();
-    $("#orgShowCounts").setAttribute("aria-pressed", orgSettings.showCounts);
+    $("#orgShowCounts").setAttribute("aria-checked", orgSettings.showCounts);
   });
   $("#orgMinStars").addEventListener("change", e => {
-    orgSettings.minStars = Math.max(0, Math.min(99, +e.target.value || 0)); saveOrg();
-    e.target.value = orgSettings.minStars;
+    const v = parseInt(e.target.value, 10);
+    if (Number.isFinite(v)) orgSettings.minStars = Math.max(1, Math.min(99, v));  // floor 1: "0" is the worst popularity display there is
+    saveOrg();
+    e.target.value = orgSettings.minStars;                                        // blank/invalid reverts to the previous value
   });
   $("#importCopy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(IMPORT_PROMPT); } catch {}
@@ -891,7 +901,7 @@ function buildBriefing() {
   });
   const pairs = [];
   mine.forEach((a,i) => mine.slice(i+1).forEach(b => { if (overlap(a,b)) pairs.push(`"${a.title}" and "${b.title}" overlap on ${dayOf(a).label} (${a.start}–${a.end} vs ${b.start}–${b.end}) — an intentional either/or; help me decide closer to the day.`); }));
-  return `This is my conference schedule for AIE NYC 2026 (Oct 13–15, New York), managed on Marquee.
+  return `This is my conference schedule for AIE NYC 2026 (Oct 12–14, New York), managed on Marquee.
 
 My starred sessions (${mine.length}):
 ${lines.join("\n")}
@@ -954,7 +964,7 @@ function toggleStar(id, btn) {
     document.querySelectorAll(`[data-star="${id}"]`).forEach(b => {
       const on = starred.has(id);
       b.setAttribute("aria-pressed", on);
-      b.setAttribute("aria-label", `${on ? "Remove from" : "Add to"} my schedule`);
+      b.setAttribute("aria-label", `${on ? "Remove from" : "Add to"} my schedule: ${byId(id)?.title ?? ""}`);
     });
   }
 }
@@ -1033,7 +1043,7 @@ document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click"
   setTimeout(() => { b.classList.remove("done"); b.textContent = "Copy"; }, 1400);
 }));
 $("#agentsLink").addEventListener("click", () => openSheet("agentsSheet"));
-$("#orgLink").addEventListener("click", () => { view = { name:"organizer" }; route(); window.scrollTo(0,0); });
+$("#orgLink").addEventListener("click", () => { view = { name:"organizer", from: view.name === "session" ? view.from : view.name }; route(); window.scrollTo(0,0); });
 
 /* Email claim (round 2): opt-in recovery. Attach an email to the code; the
    organizers can then see your picks — said plainly, at the moment it happens. */
