@@ -71,6 +71,11 @@ Check *is my base current?*, not *do I have `a04f80b1`?* — the second answers 
 incident and then expires, printing OK forever once that commit is deep in history. A
 check that can no longer fail still looks like reassurance.
 
+**"Behind" is normal on a busy day, not a defect.** Rebase when your PR is `CONFLICTING`,
+when you are about to merge, or when you are seeing a wave of auth 401s — not merely when
+behind; each needless rebase burns a queued gate run. Behind *plus* those 401s is the
+expired-fixture case, which only rebasing cures.
+
 - **Launch agents with the board pinned:** `c11 launch-agent … --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee`,
   so board resolution never depends on cwd or branch.
 - **Minting tickets is single-writer** — orchestrator/intake only. Concurrent

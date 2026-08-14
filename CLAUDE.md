@@ -119,6 +119,12 @@ quietly expires: once that commit is deep in history every branch contains it, t
 prints OK forever, and a check that can no longer fail is worse than none, because it
 still looks like reassurance.
 
+**"Behind" is the normal state on a busy day, not a defect** — a branch cut an hour ago
+will say so with nothing wrong with it. Rebase when your PR reports `CONFLICTING`, when you
+are about to merge, or when you are seeing a wave of auth 401s; not merely because you are
+behind, since every needless rebase throws away a gate run already queued. Behind *plus*
+those 401s is the expired-fixture case above, and only rebasing cures it.
+
 - **Launch agents with the board pinned:** `c11 launch-agent … --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee`.
   Board resolution then never depends on cwd or on what branch anything is on.
 - **Minting tickets is single-writer** — the orchestrator/intake agent only. Lattice's
