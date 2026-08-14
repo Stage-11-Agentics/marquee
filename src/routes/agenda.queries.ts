@@ -532,6 +532,7 @@ export async function readAgendaPublication(
       LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
       WHERE submission.event_id = ?
         AND submission.status = 'accepted'
+        AND submission.kind = 'session'
         AND submission.is_published = 0
       ORDER BY CASE WHEN item.id IS NULL THEN 1 ELSE 0 END, item.starts_at ASC, submission.id ASC
     `).bind(eventId).all<PublishCandidateRow>(),
