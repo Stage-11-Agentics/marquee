@@ -1,5 +1,7 @@
 # MRQ-167 checkpoint
 
+Pushed head: `52bc70c52ca3`.
+
 Implemented both review fixes. Updated rows now record the effective imported
 values, so undo restores a field only while it still equals that imported
 value; a field changed to a third value is retained and reported as a human
@@ -22,4 +24,6 @@ PATCH correction → Undo displayed `1 restored · 1 kept` and
 survived. For two created people, a browser-added note made one referenced;
 Undo displayed `1 restored · 1 kept` and `still referenced by person_events`,
 then the kept person returned 200 with its note while the unreferenced sibling
-returned 404. No merge or deployment has been performed.
+returned 404. The locked gate re-run passed at 108,581 ms against the 120,000
+ms budget; its 1,111-test suite passed at 53,507 ms and was reported
+`pass-over-budget`. No merge or deployment has been performed.
