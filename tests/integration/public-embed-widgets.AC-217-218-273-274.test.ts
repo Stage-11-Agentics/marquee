@@ -160,8 +160,13 @@ test("AC-274 · the speakers embed offers cards and list layouts carried in the 
   expect(configBody).toContain('data-embed-layout="cards"');
   expect(configBody).toContain('data-embed-layout="list"');
   expect(configBody).toContain('data-embed-output="html"');
+  expect(configBody).toContain('data-embed-output="basic"');
   expect(configBody).toContain('data-embed-output="json"');
+  expect(configBody).toContain('data-embed-output="xml"');
   expect(configBody).toContain('data-embed-output="ical"');
+  expect(configBody).toContain('data-embed-field');
+  expect(configBody).toContain('value="company"');
+  expect(configBody).toContain("state.savedSlug = item.slug");
 
   const configDefault = await request(`/embed/config?event=${EVENT_SLUG}&kind=speakers`);
   const configDefaultBody = await configDefault.text();
@@ -222,6 +227,40 @@ test("CONTRACT · EMB-15 · the public iCal output is a published-only calendar 
   expect(body).toContain("Evaluation infrastructure at scale");
   expect(body).toContain("Main Stage");
   expect(body).not.toContain("PRIVATE");
+});
+
+test("CONTRACT · EMB-15 · basic HTML, XML, and selected fields resolve through the public output paths", async () => {
+  const basic = await request(`/embed/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}&style=basic&fields=title`);
+  const basicBody = await basic.text();
+  expect(basic.status).toBe(200);
+  expect(basic.headers.get("content-type")).toContain("text/html");
+  expect(basicBody).toContain('data-embed-output="basic"');
+  expect(basicBody).toContain("Reliable multi-agent systems");
+  expect(basicBody).not.toContain("An abstract about agents");
+  expect(basicBody).not.toContain("<style>");
+
+  const xml = await request(`/api/v1/public/embeds/${EVENT_SLUG}-sessions/xml?event=${EVENT_SLUG}&fields=title`);
+  const xmlBody = await xml.text();
+  expect(xml.status).toBe(200);
+  expect(xml.headers.get("content-type")).toContain("application/xml");
+  expect(xmlBody).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+  expect(xmlBody).toContain("<title>Reliable multi-agent systems</title>");
+  expect(xmlBody).not.toContain("<abstract>");
+  expect(xmlBody).not.toContain("<room>");
+
+  const json = await request(`/api/v1/public/embeds/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}&fields=title`);
+  const jsonPayload = await json.json<{ sessions: Array<Record<string, unknown>> }>();
+  expect(json.status).toBe(200);
+  expect(jsonPayload.sessions[0]).toMatchObject({ title: "Reliable multi-agent systems" });
+  expect(jsonPayload.sessions[0]).not.toHaveProperty("abstract");
+  expect(jsonPayload.sessions[0]).not.toHaveProperty("time");
+  expect(jsonPayload.sessions[0]).not.toHaveProperty("roomLabel");
+  // A second read exercises the cache-hit path, which must apply the same
+  // projection as the fresh response rather than leaking the full record.
+  const cachedJson = await request(`/api/v1/public/embeds/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}&fields=title`);
+  const cachedPayload = await cachedJson.json<{ sessions: Array<Record<string, unknown>> }>();
+  expect(cachedPayload.sessions[0]).toEqual(jsonPayload.sessions[0]);
+  expect(cachedPayload.sessions[0]).not.toHaveProperty("abstract");
 });
 
 test("AC-217 · the cfp embed renders the open deadline, formats, and a link to the public form; track/layout disable rather than disappear", async () => {

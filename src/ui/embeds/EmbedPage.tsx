@@ -64,7 +64,11 @@ export const EMBED_STYLES = `
 .embed-speaker-row:last-child { border-bottom: 0; }
 .embed-speaker-row strong { font: 650 13px/1.2 Georgia, serif; }
 .embed-speaker-row-copy span { color: var(--public-muted); font-size: 10px; }
+.embed-speaker-row-copy p { margin: 4px 0 0; color: var(--public-soft); font-size: 10px; line-height: 1.45; }
+.embed-speaker-social { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.embed-speaker-social a { color: var(--embed-accent); font: 600 9px/1.2 var(--public-mono); overflow-wrap: anywhere; }
 .embed-flat-list { display: grid; gap: 0; background: var(--public-surface); }
+.embed-session-location { margin: 4px 0 0; color: var(--public-muted); font: 600 10px/1.35 var(--public-mono); }
 .embed-cfp { padding: 18px 16px 22px; }
 .embed-cfp strong { display: block; margin-bottom: 6px; color: var(--embed-accent); font: 650 17px/1.25 Georgia, serif; }
 .embed-cfp p { margin: 0 0 10px; color: var(--public-muted); font-size: 12px; }
@@ -162,6 +166,7 @@ export const EMBED_CONFIG_SCRIPT = `
     kind: kindButtons.find((b) => b.classList.contains('active'))?.dataset.embedKind || 'agenda',
     output: outputButtons.find((b) => b.classList.contains('active'))?.dataset.embedOutput || 'html',
     layout: layoutButtons.find((b) => b.classList.contains('active'))?.dataset.embedLayout || 'cards',
+    savedSlug: null,
     fieldsByKind: {},
   };
   fieldGroups.forEach((group) => { state.fieldsByKind[group.dataset.embedFieldsFor] = selectedFieldsFor(group.dataset.embedFieldsFor); });
@@ -204,7 +209,7 @@ export const EMBED_CONFIG_SCRIPT = `
     const values = new FormData(form);
     const event = String(values.get('event') || 'conference');
     const kind = state.kind;
-    const slug = event + '-' + kind;
+    const slug = state.savedSlug && state.kind === kind ? state.savedSlug : event + '-' + kind;
     const params = new URLSearchParams();
     const track = String(values.get('track') || '');
     const status = String(values.get('status') || '');
@@ -223,7 +228,7 @@ export const EMBED_CONFIG_SCRIPT = `
     preview.src = previewSrc;
     preview.setAttribute('data-preview-output', state.output);
   };
-  kindButtons.forEach((b) => b.addEventListener('click', () => { saveFieldSelection(); state.kind = b.dataset.embedKind; paintControls(); update(); }));
+  kindButtons.forEach((b) => b.addEventListener('click', () => { saveFieldSelection(); state.kind = b.dataset.embedKind; state.savedSlug = null; paintControls(); update(); }));
   outputButtons.forEach((b) => b.addEventListener('click', () => { state.output = b.dataset.embedOutput; outputButtons.forEach((item) => { const active = item.dataset.embedOutput === state.output; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); }); update(); }));
   layoutButtons.forEach((b) => b.addEventListener('click', () => { if (b.disabled) return; state.layout = b.dataset.embedLayout; paintControls(); update(); }));
   form.querySelectorAll('select, input').forEach((control) => control.addEventListener('input', update));
@@ -252,6 +257,7 @@ export const EMBED_CONFIG_SCRIPT = `
       state.kind = item.kind;
       state.output = item.output_format;
       state.layout = item.layout || 'cards';
+      state.savedSlug = item.slug;
       state.fieldsByKind[state.kind] = Array.isArray(item.fields) ? item.fields : allFieldsFor(state.kind);
       if (trackField) trackField.value = item.track || '';
       if (statusField) statusField.value = item.status || '';
@@ -307,6 +313,7 @@ function speakerCards(speakers: PublicEmbedData["speakers"], eventSlug: string, 
           {fields.has("name") ? <h2>{speaker.name}</h2> : <h2>Speaker</h2>}
           {fields.has("title") || fields.has("company") ? <p>{[fields.has("title") ? speaker.title : null, fields.has("company") ? speaker.company : null].filter(Boolean).join(" · ") || "—"}</p> : null}
           {fields.has("bio") ? <p>{speaker.bio || "—"}</p> : null}
+          {fields.has("social") ? speakerSocialLinks(speaker) : null}
           {fields.has("sessions") ? <small>{speaker.sessions.length} {speaker.sessions.length === 1 ? "published session" : "published sessions"}</small> : null}
         </div>
       </a>)}
@@ -320,11 +327,23 @@ function speakerList(speakers: PublicEmbedData["speakers"], eventSlug: string, f
       {speakers.map((speaker) => <li key={speaker.id}>
         <a class={fields.has("headshot") ? "embed-speaker-row" : "embed-speaker-row no-avatar"} href={speakerHref(speaker.slug, eventSlug)}>
           {fields.has("headshot") ? <PublicSpeakerAvatar speaker={speaker} className="embed-speaker-avatar" /> : null}
-          <div class="embed-speaker-row-copy"><strong>{fields.has("name") ? speaker.name : "Speaker"}</strong>{fields.has("title") || fields.has("company") ? <span>{[fields.has("title") ? speaker.title : null, fields.has("company") ? speaker.company : null].filter(Boolean).join(" · ") || "—"}</span> : null}</div>
+          <div class="embed-speaker-row-copy">
+            <strong>{fields.has("name") ? speaker.name : "Speaker"}</strong>
+            {fields.has("title") || fields.has("company") ? <span>{[fields.has("title") ? speaker.title : null, fields.has("company") ? speaker.company : null].filter(Boolean).join(" · ") || "—"}</span> : null}
+            {fields.has("bio") ? <p>{speaker.bio || "—"}</p> : null}
+            {fields.has("social") ? speakerSocialLinks(speaker) : null}
+            {fields.has("sessions") ? <p>{speaker.sessions.length} {speaker.sessions.length === 1 ? "published session" : "published sessions"}</p> : null}
+          </div>
         </a>
       </li>)}
     </ul>
   );
+}
+
+function speakerSocialLinks(speaker: PublicEmbedData["speakers"][number]): JSX.Element | null {
+  const links = speaker.socialLinks.filter((link) => /^https?:\/\//i.test(link));
+  if (links.length === 0) return null;
+  return <div class="embed-speaker-social" aria-label="Social links">{links.map((link) => <a href={link} target="_blank" rel="noreferrer" key={link}>{link.replace(/^https?:\/\//i, "").replace(/\/$/, "")}</a>)}</div>;
 }
 
 function speakerCredits(session: PublicSession): string {
@@ -366,7 +385,7 @@ function sessionsFlatList(sessions: PublicEmbedData["sessions"], fields: Readonl
     <section class="embed-flat-list" aria-label="Published sessions">
       {sessions.map((session) => (
         <article class="embed-session" data-public-session-id={session.id} data-public-session-slug={session.slug} key={session.id}>
-          {fields.has("time") ? <time><strong>{session.time}</strong>{session.day}<br />→ {session.endTime}{fields.has("location") ? <><br />{session.roomLabel}</> : null}</time> : null}
+          {fields.has("time") ? <time><strong>{session.time}</strong>{session.day}<br />→ {session.endTime}{fields.has("location") ? <><br />{session.roomLabel}</> : null}</time> : fields.has("location") ? <p class="embed-session-location">{session.roomLabel}</p> : null}
           <div>
             {fields.has("title") ? <h2>{session.title}</h2> : null}
             {fields.has("speakers") ? <p>{speakerCredits(session)}</p> : null}
@@ -384,13 +403,15 @@ function cfpBody(cfp: PublicEmbedData["cfp"], fields: ReadonlySet<EmbedField>): 
     return <div class="embed-empty"><div><strong>Call for speakers has not opened yet</strong><span>Check back once the conference team publishes a form.</span></div></div>;
   }
   const isOpen = cfp.status === "open";
+  const deadline = fields.has("deadline") && cfp.closesAt ? formatDeadline(cfp.closesAt) : null;
   return (
     <div class="embed-cfp">
-      {fields.has("status") ? <strong>Call for speakers is {isOpen ? "open" : "closed"}{fields.has("deadline") && isOpen && cfp.closesAt ? ` · closes ${formatDeadline(cfp.closesAt)}` : ""}</strong> : null}
+      {fields.has("status") ? <strong>Call for speakers is {isOpen ? "open" : "closed"}{deadline && isOpen ? ` · closes ${deadline}` : ""}</strong> : null}
+      {!fields.has("status") && deadline ? <p>Closes {deadline}</p> : null}
       {fields.has("formats") && cfp.formats.length > 0 ? <div class="embed-tracks">{cfp.formats.map((name) => <span class="embed-track" key={name}>{name}</span>)}</div> : null}
       {isOpen
         ? fields.has("link") ? <p><a class="public-button primary" href={cfp.url}>Submit a proposal →</a></p> : null
-        : <p>Submissions are closed. This block updates automatically — no republish — once the call reopens.</p>}
+        : fields.has("status") ? <p>Submissions are closed. This block updates automatically — no republish — once the call reopens.</p> : null}
     </div>
   );
 }
@@ -437,7 +458,7 @@ export function EmbedPage({ data, basic = false }: { data: PublicEmbedData; basi
         data.sessions.length > 0 ? <section class="embed-list" aria-label="Published agenda">
           {data.sessions.map((session) => (
             <article class="embed-session" data-public-session-id={session.id} data-public-session-slug={session.slug} key={session.id}>
-              {fields.has("time") ? <time><strong>{session.time}</strong>{session.day}<br />→ {session.endTime}{fields.has("location") ? <><br />{session.roomLabel}</> : null}</time> : null}
+              {fields.has("time") ? <time><strong>{session.time}</strong>{session.day}<br />→ {session.endTime}{fields.has("location") ? <><br />{session.roomLabel}</> : null}</time> : fields.has("location") ? <p class="embed-session-location">{session.roomLabel}</p> : null}
               <div>
                 {fields.has("title") ? <h2>{session.title}</h2> : null}
                 {fields.has("speakers") ? <p>{speakerCredits(session)}</p> : null}

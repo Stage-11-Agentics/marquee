@@ -1157,9 +1157,14 @@ export function publicEmbedPayload(data: PublicEmbedData): Record<string, unknow
   const fields = new Set<EmbedField>(data.config.fields);
   return {
     ...data,
-    sessions: data.sessions.map((session) => projectEmbedSession(session, fields)),
-    speakers: data.speakers.map((speaker) => projectEmbedSpeaker(speaker, fields)),
-    cfp: projectEmbedCfp(data.cfp, fields),
+    // A speaker embed's top-level sessions array is an existing part of the
+    // public payload, but it is not the rendered surface. Keep it intact so
+    // adding field controls does not silently change old consumers that read
+    // the supporting agenda data. The same applies to the supporting speaker
+    // directory on agenda/session embeds.
+    sessions: data.kind === "speakers" ? data.sessions : data.sessions.map((session) => projectEmbedSession(session, fields)),
+    speakers: data.kind === "speakers" ? data.speakers.map((speaker) => projectEmbedSpeaker(speaker, fields)) : data.speakers,
+    cfp: data.kind === "cfp" ? projectEmbedCfp(data.cfp, fields) : data.cfp,
   };
 }
 

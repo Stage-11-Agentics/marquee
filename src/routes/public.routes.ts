@@ -187,7 +187,7 @@ const getPublicEmbed = defineApiRoute(
     const cached = await readPublicEmbedCache(context.env.CACHE, key);
     if (cached) {
       context.header("Cache-Control", "public, max-age=30, s-maxage=30");
-      return context.json(cached, 200);
+      return context.json(publicEmbedPayload(cached), 200);
     }
     const data = await loadPublicEmbed(context.env.DB, resolved, filters);
     await writePublicEmbedCache(context.env.CACHE, key, data);

@@ -61,6 +61,11 @@ function speakerXml(speaker: PublicSpeaker, fields: ReadonlySet<string>): string
     for (const session of speaker.sessions) lines.push(`      <session id="${escapeXml(session.id, true)}" slug="${escapeXml(session.slug, true)}"><title>${escapeXml(session.title)}</title><time>${escapeXml(session.time)}</time><room>${escapeXml(session.roomLabel)}</room></session>`);
     lines.push("    </sessions>");
   }
+  if (fields.has("social")) {
+    lines.push("    <social-links>");
+    for (const link of speaker.socialLinks) lines.push(`      <link>${escapeXml(link)}</link>`);
+    lines.push("    </social-links>");
+  }
   lines.push("  </speaker>");
   return lines;
 }

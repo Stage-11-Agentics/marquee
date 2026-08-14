@@ -62,11 +62,23 @@ test("CONTRACT · EMB-15 · saved embeds require organizer grants and return nam
   ]);
 });
 
-test("CONTRACT · EMB-15 · XML is not advertised and invalid saved output is rejected", async () => {
+test("CONTRACT · EMB-15 · XML is advertised in saved embeds and invalid output is rejected", async () => {
   const response = await request(`/api/v1/events/${EVENT_ID}/embeds`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "XML should stay out", kind: "agenda", output_format: "xml" }),
+    body: JSON.stringify({ name: "XML program feed", kind: "agenda", output_format: "xml", fields: ["title", "location"] }),
   });
-  expect(response.status).toBe(400);
+  expect(response.status).toBe(201);
+  const created = await response.json() as { data: { output_format: string; fields: string[]; snippet: string } };
+  expect(created.data.output_format).toBe("xml");
+  expect(created.data.fields).toEqual(["title", "location"]);
+  expect(created.data.snippet).toContain("/api/v1/public/embeds/");
+  expect(created.data.snippet).toContain("/xml");
+
+  const invalid = await request(`/api/v1/events/${EVENT_ID}/embeds`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "RSS should stay out", kind: "agenda", output_format: "rss" }),
+  });
+  expect(invalid.status).toBe(400);
 });
