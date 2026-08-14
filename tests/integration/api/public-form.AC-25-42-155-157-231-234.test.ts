@@ -445,6 +445,83 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(body).not.toContain("Call for speakers · closes");
   });
 
+  test("CONTRACT · a submitter is told a confirmation is coming, and to which address", async () => {
+    // The outbox held a live confirmation while the page said nothing about it,
+    // so a submitter had no reason to look for the mail already sent to them.
+    const submitted = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        turnstileToken: nextTurnstileToken(),
+        answers: {
+          title: "A session with a receipt",
+          speaker_name: "Avery Example",
+          speaker_email: "avery@example.com",
+          tracks: ["Agents"],
+          vendor_content: "No",
+        },
+      }),
+    });
+    expect(submitted.status).toBe(201);
+    const body = await json<{ message: string | null; confirmation: { receipt_email: string | null; resume_url: string } }>(submitted);
+    expect(body.confirmation.receipt_email).toBe("avery@example.com");
+    expect(body.message).toContain("A confirmation is on its way to avery@example.com.");
+    // The mail is real: the claim is backed by an enqueued row, not by copy.
+    const queued = await env.DB.prepare(
+      "SELECT to_email FROM outbox WHERE template_key = 'submission_confirmation'",
+    ).first<{ to_email: string }>();
+    expect(queued?.to_email).toBe("avery@example.com");
+
+    // Both submitted renderings say it: the editable banner while the call is
+    // open, and the confirmation panel once it closes.
+    const resume = new URL(body.confirmation.resume_url);
+    const editable = await (await request(`/f/public-cfp${resume.search}`)).text();
+    expect(editable).toContain("A confirmation is on its way to avery@example.com.");
+
+    await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, FORM_ID).run();
+    const panel = await (await request(`/f/public-cfp${resume.search}`)).text();
+    expect(panel).toContain("data-receipt-note");
+    expect(panel).toContain("A confirmation is on its way to");
+    expect(panel).toContain("avery@example.com");
+  });
+
+  test("CONTRACT · a disabled confirmation template promises the submitter no mail", async () => {
+    await env.DB.prepare(
+      `INSERT INTO email_templates (id, event_id, key, name, subject, body_md, enabled, created_at, updated_at)
+       VALUES (?, ?, 'submission_confirmation', 'Submission confirmation', 'We received it', 'Body', 0, ?, ?)`,
+    ).bind("tmpl_confirmation_off", EVENT_ID, NOW, NOW).run();
+
+    const submitted = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        turnstileToken: nextTurnstileToken(),
+        answers: {
+          title: "A session with no receipt",
+          speaker_name: "Quiet Submitter",
+          speaker_email: "quiet@example.com",
+          tracks: ["Agents"],
+          vendor_content: "No",
+        },
+      }),
+    });
+    expect(submitted.status).toBe(201);
+    const body = await json<{ message: string | null; confirmation: { receipt_email: string | null; resume_url: string } }>(submitted);
+    expect(await rowCount("outbox")).toBe(0);
+    expect(body.confirmation.receipt_email).toBeNull();
+    expect(body.message).not.toContain("on its way");
+    expect(body.message).toContain("Your abstract is in.");
+
+    const resume = new URL(body.confirmation.resume_url);
+    const editable = await (await request(`/f/public-cfp${resume.search}`)).text();
+    expect(editable).not.toContain("on its way to");
+
+    await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, FORM_ID).run();
+    const panel = await (await request(`/f/public-cfp${resume.search}`)).text();
+    expect(panel).not.toContain("on its way to");
+    expect(panel).not.toContain("the same link is in your confirmation email");
+    // Still tells them where the conference will reach them.
+    expect(panel).toContain("We will write to");
+  });
+
   test("CONTRACT · public routes are present in the served OpenAPI document", async () => {
     const response = await request("/api/openapi.json");
     expect(response.status).toBe(200);

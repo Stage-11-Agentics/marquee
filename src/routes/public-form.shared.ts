@@ -44,6 +44,8 @@ export interface PublicFormRecord {
   submissionOutcome: PublicFormOutcome | null;
   submissionEditable: boolean;
   submissionEditReason: string | null;
+  /** Address the submission confirmation was enqueued to, or null when none was. */
+  receiptEmail: string | null;
 }
 
 export interface PublicFormWriteResult {
@@ -185,6 +187,28 @@ function publicOutcomeForSubmission(submission: SubmissionRow | null): PublicFor
 }
 
 /**
+ * The submission confirmation is conditional: `public-form.routes.ts` skips it
+ * when the organizer has stored `enabled = 0` on the thank-you template. Read
+ * the outbox rather than re-deriving that decision, so the page promises a
+ * receipt only when a row exists to send. Indexed by `idx_outbox_entity_status`
+ * on `(event_id, entity_id, …)`.
+ */
+async function findReceiptEmail(
+  db: D1Database,
+  form: FormRow,
+  submission: SubmissionRow,
+): Promise<string | null> {
+  const row = await db
+    .prepare(
+      `SELECT to_email FROM outbox
+       WHERE event_id = ? AND entity_id = ? AND template_key = ? LIMIT 1`,
+    )
+    .bind(form.event_id, submission.id, form.thankyou_template_key ?? "submission_confirmation")
+    .first<{ to_email: string }>();
+  return row?.to_email ?? null;
+}
+
+/**
  * "Submissions per person" caps the abstracts someone puts in front of the
  * committee. A draft is not one of those — it is the work in progress on the
  * way to one, and it is created server-side by the ordinary act of pressing
@@ -298,10 +322,15 @@ export async function loadPublicForm(
     submissionOutcome: publicOutcomeForSubmission(submission),
     submissionEditable: editability.enabled,
     submissionEditReason: editability.reason,
+    receiptEmail: state === "submitted" && submission ? await findReceiptEmail(db, form, submission) : null,
   };
 }
 
-function messageForState(state: PublicFormStateName, submissionEditable = false): string | null {
+function messageForState(
+  state: PublicFormStateName,
+  submissionEditable = false,
+  receiptEmail: string | null = null,
+): string | null {
   switch (state) {
     case "closed":
       return "This call for speakers is closed. Keep your link and return when the conference reopens.";
@@ -309,10 +338,14 @@ function messageForState(state: PublicFormStateName, submissionEditable = false)
       return "Your abstract limit is full. Use a saved resume link to continue an existing draft.";
     case "resumed":
       return "Your saved draft is back. Review the answers, then choose Submit when you are ready.";
-    case "submitted":
+    case "submitted": {
+      // Named only when a confirmation was actually enqueued; an organizer who
+      // disabled the template leaves the submitter no mail to wait for.
+      const receipt = receiptEmail ? ` A confirmation is on its way to ${receiptEmail}.` : "";
       return submissionEditable
-        ? "Your abstract is in. You can still edit it while the call for speakers is open."
-        : "Your abstract is in. Keep this link if you need to revisit the confirmation.";
+        ? `Your abstract is in.${receipt} You can still edit it while the call for speakers is open.`
+        : `Your abstract is in.${receipt} Keep this link if you need to revisit the confirmation.`;
+    }
     default:
       return null;
   }
@@ -347,10 +380,14 @@ export function toPublicFormState(
       : record.submissionOutcome === "rejected"
         ? { title: "Your abstract was rejected", message: "The conference team rejected this abstract for the program. Keep this private link if you need to revisit the record." }
         : { title: "Your abstract is in", message: "The conference team has your response and will follow up at the address you entered." };
+  // An outcome replaces the freshly-submitted copy entirely, so the receipt
+  // line belongs only to the state that has one to talk about.
+  const receiptEmail = record.submissionOutcome === null ? record.receiptEmail : null;
   const confirmation: PublicFormConfirmation | null = record.state === "submitted"
     ? {
         ...confirmationCopy,
         email: personEmail,
+        receipt_email: receiptEmail,
         resume_url: resumeUrl,
         portal_url: null,
       }
@@ -384,7 +421,9 @@ export function toPublicFormState(
     submission_edit_reason: record.submissionEditReason,
     turnstile_site_key: options.turnstileSiteKey ?? null,
     confirmation,
-    message: record.resumeMissed ? resumeMissMessage(record.state) : messageForState(record.state, record.submissionEditable),
+    message: record.resumeMissed
+      ? resumeMissMessage(record.state)
+      : messageForState(record.state, record.submissionEditable, receiptEmail),
   };
 }
 
