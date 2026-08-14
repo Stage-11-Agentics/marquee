@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marquee — sidebar reorg mock (DRAFT, awaiting ruling)</title>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SIDEBAR REORG — design-round mock, 2026-08-14.
+     Status: DRAFT. Not part of the binding prototype until Atin rules.
+     Compares the sidebar the build ships today (route-table.ts, 30 rows)
+     against a reorganized 23-row proposal. Rulings that produced this mock:
+       1. The seven-stage Pipeline group leaves the sidebar — it duplicates
+          the Program-home strip (which has counts), the board columns, and
+          the sessions list's own status filter.
+       2. Icons are curated: the abstract geometry goes; only meaningful
+          glyphs stay (trailing ↗ external, ✉, ⚙, ⌘, ↻). The 16px icon
+          column is reserved on every row so labels never shift.
+       3. "Modules" splits into named groups in the organizer's language.
+     Tokens are Flight Deck Day, verbatim from pipeline-v1.1.
+     ═══════════════════════════════════════════════════════════════════ -->
+<style>
+  :root {
+    --bg: #eaeef2; --panel: #fff; --sunk: #f4f7f9; --ink: #101820;
+    --ink-soft: #2c3a46; --muted: #57646f; --line: #dde4ea; --line-strong: #c8d2da;
+    --accent: #0b6a72; --accent-soft: #e2f0f1; --accent-dark: #084f55;
+    --danger: #b02a1f; --warning-soft: #fdf1dd; --warning-ink: #6b4700; --warning-edge: #d6b25c;
+    --radius: 3px;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body { margin: 0; padding: 28px 32px 60px; }
+  a { color: inherit; text-decoration: none; }
+
+  .page-head { max-width: 1180px; margin: 0 auto 22px; }
+  .page-head h1 { font: 600 15px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 72ch; line-height: 1.55; }
+  .draft-badge { display: inline-block; margin-left: 10px; vertical-align: 2px; background: var(--warning-soft); color: var(--warning-ink); border: 1px dashed var(--warning-edge); border-radius: var(--radius); padding: 3px 8px; font: 600 9px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+
+  .compare { display: flex; gap: 26px; max-width: 1180px; margin: 0 auto; align-items: flex-start; }
+  .column { width: 224px; flex: none; }
+  .column-cap { font: 600 9.5px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 2px; }
+  .column-cap strong { color: var(--ink); }
+
+  /* ── the sidebar, verbatim geometry from pipeline-v1.1 ── */
+  .sidebar { background: var(--panel); border: 1px solid var(--line-strong); padding: 20px 14px 16px; display: flex; flex-direction: column; position: relative; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 21px; }
+  .brand-mark { width: 28px; height: 28px; border-radius: var(--radius); background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; place-items: center; font: 600 13px/1 var(--mono); }
+  .brand-name { font: 600 13px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; }
+  .event-switcher { display: block; margin: 0 4px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 9px 10px; background: var(--sunk); }
+  .event-switcher small { display: block; color: var(--muted); font: 600 9px/1 var(--mono); text-transform: uppercase; letter-spacing: .16em; margin-bottom: 5px; }
+  .event-switcher strong { display: block; font: 600 12px/1.2 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nav-label { color: var(--muted); font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; margin: 14px 10px 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .nav { display: grid; gap: 0; }
+  .nav a { min-height: 34px; padding: 8px 10px; border-radius: 0 var(--radius) var(--radius) 0; border-left: 2px solid transparent; color: var(--ink-soft); font-size: 12.5px; display: flex; align-items: center; gap: 9px; transition: background 110ms, color 110ms, border-color 110ms; }
+  .nav a:hover { background: var(--sunk); color: var(--ink); }
+  .nav a.active { background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; border-left-color: var(--accent); }
+  .nav-icon { width: 16px; flex: none; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .nav a.active .nav-icon { color: var(--accent); }
+  .ext-mark { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: 11px; }
+  .row-plus { margin-left: auto; width: 18px; height: 18px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--muted); font: 600 12px/1 var(--mono); }
+  .row-plus:hover { border-color: var(--accent); color: var(--accent); }
+  .sidebar-foot { margin-top: 16px; display: grid; gap: 2px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .sidebar-foot a { display: block; text-align: left; color: var(--muted); padding: 7px 10px; border-radius: var(--radius); font: 400 11.5px/1.2 var(--mono); }
+  .sidebar-foot a:hover { background: var(--sunk); color: var(--ink); }
+
+  /* ── annotation panel ── */
+  .notes { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 18px 20px; position: sticky; top: 24px; }
+  .notes h2 { font: 600 10px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .notes ol { margin: 0 0 18px; padding-left: 20px; }
+  .notes li { font-size: 12.5px; line-height: 1.55; color: var(--ink-soft); margin-bottom: 9px; }
+  .notes li strong { color: var(--ink); }
+  .notes .q { background: var(--sunk); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; font-size: 12px; line-height: 1.5; color: var(--ink-soft); margin-bottom: 8px; }
+  .notes .q b { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-dark); display: block; margin-bottom: 3px; }
+  .tally { font: 600 11px/1 var(--mono); color: var(--accent-dark); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); padding: 5px 8px; display: inline-block; margin-bottom: 14px; }
+
+  @media (max-width: 980px) { .compare { flex-wrap: wrap; } .notes { position: static; } }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>Sidebar reorg — shipped vs proposed<span class="draft-badge">Draft · awaiting ruling</span></h1>
+  <p>Left is the sidebar the build renders today (every row of <code>route-table.ts</code> with <code>sidebar: true</code>). Right is the proposal: the seven-stage ladder returns to the Program home strip that already does it better, “Modules” splits into named groups, and icons are curated down to the glyphs that mean something. Hover the rows — geometry and states are the real Flight Deck ones.</p>
+</div>
+
+<div class="compare">
+
+  <div class="column">
+    <p class="column-cap">Shipped today — <strong>30 rows</strong></p>
+    <aside class="sidebar">
+      <a class="brand" href="#"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
+      <div class="nav-label">Organization</div>
+      <nav class="nav">
+        <a href="#"><span class="nav-icon">◉</span><span>People</span></a>
+        <a href="#"><span class="nav-icon">◈</span><span>Lists</span></a>
+        <a href="#"><span class="nav-icon">▤</span><span>Sourcing pipeline</span></a>
+      </nav>
+      <a class="event-switcher" href="#" style="margin-top:12px"><small>Conference</small><strong>AIE New York 2026</strong></a>
+      <nav class="nav">
+        <a href="#" class="active"><span class="nav-icon">⌂</span><span>Program home</span></a>
+        <a href="#"><span class="nav-icon">▥</span><span>Program board</span></a>
+        <a href="#"><span class="nav-icon">▤</span><span>Abstracts &amp; sessions</span></a>
+        <a href="#"><span class="nav-icon">+</span><span>Add a session</span></a>
+      </nav>
+      <div class="nav-label">Pipeline</div>
+      <nav class="nav">
+        <a href="#"><span class="nav-icon">1</span><span>Submitted</span></a>
+        <a href="#"><span class="nav-icon">2</span><span>In review</span></a>
+        <a href="#"><span class="nav-icon">3</span><span>Waved</span></a>
+        <a href="#"><span class="nav-icon">4</span><span>Ready to place</span></a>
+        <a href="#"><span class="nav-icon">5</span><span>Onboarding</span></a>
+        <a href="#"><span class="nav-icon">6</span><span>Scheduled</span></a>
+        <a href="#"><span class="nav-icon">7</span><span>Published</span></a>
+      </nav>
+      <div class="nav-label">Modules</div>
+      <nav class="nav">
+        <a href="#"><span class="nav-icon">◍</span><span>Speakers</span></a>
+        <a href="#"><span class="nav-icon">□</span><span>CFP forms</span></a>
+        <a href="#"><span class="nav-icon">◇</span><span>Evaluation plan</span></a>
+        <a href="#"><span class="nav-icon">✓</span><span>Reviewer home</span></a>
+        <a href="#"><span class="nav-icon">▦</span><span>Agenda</span></a>
+        <a href="#"><span class="nav-icon">▤</span><span>Files</span></a>
+        <a href="#"><span class="nav-icon">✉</span><span>Communications</span></a>
+        <a href="#"><span class="nav-icon">☑</span><span>Tasks</span></a>
+        <a href="#"><span class="nav-icon">○</span><span>Speaker portal</span></a>
+        <a href="#"><span class="nav-icon">↗</span><span>Conference site</span></a>
+        <a href="#"><span class="nav-icon">◨</span><span>Embeds</span></a>
+        <a href="#"><span class="nav-icon">⚙</span><span>Conference settings</span></a>
+        <a href="#"><span class="nav-icon">◎</span><span>Speaker follow-ups</span></a>
+      </nav>
+      <div class="nav-label">System</div>
+      <nav class="nav">
+        <a href="#"><span class="nav-icon">◌</span><span>System health</span></a>
+      </nav>
+      <div class="sidebar-foot">
+        <a href="#">⌘ API &amp; CLI</a>
+        <a href="#">↻ Reset demo</a>
+      </div>
+    </aside>
+  </div>
+
+  <div class="column">
+    <p class="column-cap">Proposed — <strong>23 rows</strong></p>
+    <aside class="sidebar">
+      <a class="brand" href="#"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
+      <div class="nav-label">Organization</div>
+      <nav class="nav">
+        <a href="#"><span class="nav-icon"></span><span>People</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Lists</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Sourcing</span></a>
+      </nav>
+      <a class="event-switcher" href="#" style="margin-top:12px"><small>Conference</small><strong>AIE New York 2026</strong></a>
+      <nav class="nav">
+        <a href="#" class="active"><span class="nav-icon"></span><span>Program home</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Board</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Sessions</span><span class="row-plus" title="Add a session">+</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Agenda</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Speakers</span></a>
+      </nav>
+      <div class="nav-label">Speaker ops</div>
+      <nav class="nav">
+        <a href="#"><span class="nav-icon"></span><span>Onboarding</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Tasks</span></a>
+        <a href="#"><span class="nav-icon">✉</span><span>Communications</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Files</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Follow-ups</span><span class="ext-mark">↗</span></a>
+      </nav>
+      <div class="nav-label">Call for proposals</div>
+      <nav class="nav">
+        <a href="#"><span class="nav-icon"></span><span>Forms</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Evaluation</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Reviewer</span></a>
+      </nav>
+      <div class="nav-label">Public</div>
+      <nav class="nav">
+        <a href="#"><span class="nav-icon"></span><span>Conference site</span><span class="ext-mark">↗</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Speaker portal</span><span class="ext-mark">↗</span></a>
+        <a href="#"><span class="nav-icon"></span><span>Embeds</span><span class="ext-mark">↗</span></a>
+      </nav>
+      <nav class="nav" style="margin-top:14px">
+        <a href="#"><span class="nav-icon">⚙</span><span>Settings</span></a>
+      </nav>
+      <div class="sidebar-foot">
+        <a href="#">⌘ API &amp; CLI</a>
+        <a href="#">◦ System health</a>
+        <a href="#">↻ Reset demo</a>
+      </div>
+    </aside>
+  </div>
+
+  <div class="notes">
+    <h2>What moved, and why</h2>
+    <span class="tally">30 rows → 23 · one ladder, not four · icons only where they mean something</span>
+    <ol>
+      <li><strong>The Pipeline group is gone.</strong> The seven stages already live in three better places: the Program-home strip (clickable, with live counts — the sidebar rows never had counts), the Program board's columns, and the sessions list's status filter. The home screen is the spine; the nav stops photocopying it.</li>
+      <li><strong>“Modules” split into the organizer's language.</strong> <em>Speaker ops</em> (the chase work: Onboarding, Tasks, Communications, Files, Follow-ups), <em>Call for proposals</em> (Forms, Evaluation, Reviewer), <em>Public</em> (the three surfaces that leave the shell). “Modules” was software's word.</li>
+      <li><strong>Onboarding moved to Speaker ops.</strong> It was stage 5 of the ladder, but it is a place you work (the chase board), not a filter — it belongs with Tasks and Communications.</li>
+      <li><strong>“Add a session” is a <code>+</code> on the Sessions row</strong>, matching the existing <code>＋</code> beside the conference switcher. Creation is an action, not a destination.</li>
+      <li><strong>Icons curated.</strong> The geometry soup (◉ ◈ ▤ ▥ ◍ ◇ ◨ ◌ ◎ — with ▤ used three times) is gone. What stays carries meaning: trailing <strong>↗</strong> on the rows that leave the shell, ✉, ⚙, ⌘, ↻. The 16px icon column is reserved on every row, so labels stay aligned and nothing jumps.</li>
+      <li><strong>Labels shortened by their group label.</strong> “CFP forms” → Forms under <em>Call for proposals</em>; “Evaluation plan” → Evaluation; “Reviewer home” → Reviewer; “Speaker follow-ups” → Follow-ups under <em>Speaker ops</em>; “Conference settings” → Settings; “Sourcing pipeline” → Sourcing (the pipeline-vs-pipeline collision dies with the ladder).</li>
+      <li><strong>System health joins the demo chrome in the footer</strong> with API &amp; CLI and Reset demo — ops utilities, not a one-row “System” group mid-nav.</li>
+    </ol>
+    <h2>Open questions for the ruling</h2>
+    <div class="q"><b>Q1 · “Sessions” vs “Abstracts &amp; sessions”</b> The long label was deliberate — the abstract/session distinction is the data-model trap the brief warned about. The short label reads cleaner; the long one teaches. Which wins?</div>
+    <div class="q"><b>Q2 · “Board” vs “Program board”</b> Shortened here because it sits directly under Program home; happy to keep the full name.</div>
+    <div class="q"><b>Q3 · Reviewer placement</b> Reviewer home is a different seat (reviewers, not organizers). It could leave the organizer sidebar entirely and live only as a link from Evaluation. Kept here for now.</div>
+  </div>
+
+</div>
+
+</body>
+</html>
