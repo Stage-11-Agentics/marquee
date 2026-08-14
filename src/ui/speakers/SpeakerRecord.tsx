@@ -10,6 +10,7 @@ import { putFileToR2 } from "../upload/upload-client";
 import { validateClientUpload } from "../upload/upload-policy";
 import { SpeakerAvatar } from "./SpeakerAvatar";
 import { SpeakerFilesPanel } from "./SpeakerFilesPanel";
+import { openPortalPreview as runPortalPreview } from "./portal-preview";
 
 const STATUS_ORDER: SpeakerStatus[] = ["pending", "invited", "confirmed", "declined"];
 const STATUS_LABELS: Record<SpeakerStatus, string> = {
@@ -168,24 +169,28 @@ export function SpeakerRecord({
 
   const openPortalPreview = async () => {
     if (!speaker || previewBusy) return;
-    const previewWindow = window.open("about:blank", "_blank", "noopener,noreferrer");
     setPreviewBusy(true);
     setPreviewError(null);
     try {
-      const body = await apiFetch<{ url: string }>(
-        `/api/v1/events/${encodeURIComponent(eventId)}/speakers/${encodeURIComponent(personId)}/portal-preview`,
-        {
-          route: "/api/v1/events/{eventId}/speakers/{personId}/portal-preview",
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: "{}",
+      const outcome = await runPortalPreview({
+        // Called synchronously inside `runPortalPreview`, still under the
+        // organizer's click — see the note there.
+        open: (url, target, features) => window.open(url, target, features),
+        previewUrl: async () => {
+          const body = await apiFetch<{ url: string }>(
+            `/api/v1/events/${encodeURIComponent(eventId)}/speakers/${encodeURIComponent(personId)}/portal-preview`,
+            {
+              route: "/api/v1/events/{eventId}/speakers/{personId}/portal-preview",
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            },
+          );
+          return body.url;
         },
-      );
-      if (previewWindow) previewWindow.location.href = body.url;
-      else window.open(body.url, "_blank", "noopener,noreferrer");
-    } catch (caught) {
-      previewWindow?.close();
-      setPreviewError(errorSummary(caught));
+        describeError: errorSummary,
+      });
+      if (!outcome.ok) setPreviewError(outcome.message);
     } finally {
       setPreviewBusy(false);
     }

@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
 import type { EventRow, MembershipRow, PersonRow } from "../db/schema";
+import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import { clearSessionCookie, setSessionCookie } from "../lib/cookies";
@@ -12,8 +13,9 @@ import {
   mintMagicLink,
   readMagicLink,
 } from "../lib/auth/magic-links";
-import { createSession, revokeSession, SESSION_TTL_MS } from "../lib/auth/auth-sessions";
-import { loadMembershipsForOrg } from "../lib/auth/scope-resolution";
+import { createSession, resolveSession, revokeSession, SESSION_TTL_MS } from "../lib/auth/auth-sessions";
+import { portalPreviewEventId, portalPreviewHint, portalPreviewReturnSessionId } from "../lib/auth/portal-preview";
+import { authHasRole, loadMembershipsForOrg } from "../lib/auth/scope-resolution";
 import { pickOutboxEventId, rolesOf, signinRedirect } from "../lib/auth/signin-destination";
 import type { DemoRole } from "../lib/auth/demo-seat";
 import { DEMO_ROLE_TO_MEMBERSHIP, demoRoleForEmail, findDemoPersona } from "../lib/auth/demo-seat";
@@ -306,17 +308,42 @@ const exchangeMagicLink = defineApiRoute(
     // the link first: refusing a credential after spending it strands the
     // person, and the next attempt would falsely look like expiry or replay.
     const auth = getAuth(context);
+    /**
+     * Set only when a signed-in organizer is deliberately opening one of their
+     * own conference's speaker portals — the session they are about to be
+     * unseated from, so the portal can hand it back.
+     *
+     * This is a CONDITION on the single session writer below, not a second
+     * one. A-5 permits an alias of an existing issuer and forbids a second way
+     * to become somebody: the same person-bound link is spent through the same
+     * consumer seam, and the same `createSession` mints the same kind of
+     * session. What differs is only that a live session no longer refuses it.
+     */
+    let unseatedSessionId: string | null = null;
     if (auth?.kind === "session") {
       const state = await readMagicLink(context.env.DB, token, now, { purposes });
       if (state.status === "live" && state.link.person_id !== null) {
-        return rejectMagicLink(
-          context,
-          "This browser is already signed in. Sign out to use this link, or continue as the person already signed in.",
-          { reason: "already_signed_in", token, code: "magic_link_session_conflict" },
-        );
+        // One case is not a conflict: an organizer of this conference
+        // deliberately opening one of its speakers' portals. The marker lives
+        // on the link's server-minted redirect, so an ordinary invitation can
+        // never be escalated into one from the address bar, and the authority
+        // is re-checked here against the live session rather than trusted from
+        // the link. Everything else still gets the refusal — that guard is what
+        // stops a stray link silently swapping who a browser is signed in as.
+        const previewEventId = portalPreviewEventId(state.link.redirect_to);
+        if (previewEventId === null || !authHasRole(auth, "ops", previewEventId)) {
+          return rejectMagicLink(
+            context,
+            "This browser is already signed in. Sign out to use this link, or continue as the person already signed in.",
+            { reason: "already_signed_in", token, code: "magic_link_session_conflict" },
+          );
+        }
+        unseatedSessionId = auth.sessionId;
+      } else if (state.status !== "live") {
+        return rejectMagicLinkState(context, state.status);
+      } else {
+        return rejectMagicLink(context, "This sign-in link is not valid");
       }
-      if (state.status !== "live") return rejectMagicLinkState(context, state.status);
-      return rejectMagicLink(context, "This sign-in link is not valid");
     }
 
     // Sign-in exchanges only person-bound links. `claim` and `org_invite` have
@@ -330,6 +357,10 @@ const exchangeMagicLink = defineApiRoute(
     const link = consumed.link;
     if (link.person_id === null) return rejectMagicLink(context, "This sign-in link is not valid");
     const roleHint = (() => {
+      // The organizer's own session is unseated, not revoked: a browser holds
+      // one cookie, so arriving as the speaker necessarily displaces them from
+      // every tab. This records which session to hand back on the way out.
+      if (unseatedSessionId !== null) return portalPreviewHint(unseatedSessionId);
       if (link.purpose !== "cospeaker_profile") return "login";
       try {
         const participationId = new URL(link.redirect_to, context.req.url).searchParams.get("participation");
@@ -347,6 +378,40 @@ const exchangeMagicLink = defineApiRoute(
     });
     setSessionCookie(context, session.id, SESSION_TTL_MS / 1000);
     return context.redirect(link.redirect_to, 302);
+  }) as never,
+);
+
+const exitPortalPreview = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/auth/exit-preview",
+    operationId: "exitPortalPreview",
+    summary: "Return an organizer to their own seat after a portal preview",
+    description: "Restores the session a portal preview unseated. Refused for any session that is not itself a preview.",
+    tags: ["Auth"],
+    policy: { auth: { kind: "public" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: {
+      200: jsonResponse(z.object({ ok: z.literal(true) }), "The organizer's own session was restored."),
+      ...errorResponses([401, 403, 409, 429, 500]),
+    },
+  },
+  (async (context: Context<ApiEnv>) => {
+    const auth = getAuth(context);
+    if (auth?.kind !== "session") return unauthorized(context);
+    // Only a session minted BY a preview can be exchanged back, and only for
+    // the exact session that minted it. Without that this route would be a
+    // free session-swap primitive rather than the return half of one act.
+    const returningSessionId = portalPreviewReturnSessionId(auth.roleHint ?? null);
+    if (returningSessionId === null) throw ApiError.forbidden("this session is not a portal preview");
+    const returning = await resolveSession(context.env.DB, returningSessionId);
+    // Their own session may have expired or been signed out while they looked
+    // around. Say so plainly rather than restoring nothing and claiming success.
+    if (!returning) throw ApiError.conflict("the organizer session behind this preview is no longer valid");
+    // The preview seat is spent on the way out, so a shared machine cannot be
+    // walked back into it.
+    await revokeSession(context.env.DB, auth.sessionId);
+    setSessionCookie(context, returning.id, SESSION_TTL_MS / 1000);
+    return context.json({ ok: true as const }, 200);
   }) as never,
 );
 
@@ -534,6 +599,7 @@ export const apiRoutes = [
   demoLogin,
   requestMagicLink,
   exchangeMagicLink,
+  exitPortalPreview,
   logout,
   getCurrentAuth,
 ];

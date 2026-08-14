@@ -10,7 +10,12 @@
 .portal-top a, .portal-top button { background: none; border: 0; color: var(--muted); font: 600 11px/1 var(--mono); letter-spacing: .08em; padding: 8px 0; text-transform: uppercase; }
 .portal-top a:hover, .portal-top button:hover { color: var(--accent-dark); }
 .portal-main { margin: 0 auto; max-width: 1120px; padding: clamp(22px, 4vw, 48px) clamp(18px, 5vw, 72px) 72px; }
-.portal-viewing-as { background: var(--accent-wash); border: 1px solid var(--accent); color: var(--accent-dark); font: 600 11px/1.3 var(--mono); margin-bottom: 14px; padding: 9px 11px; }
+.portal-viewing-as { align-items: center; background: var(--accent-wash); border: 1px solid var(--accent); color: var(--accent-dark); display: flex; flex-wrap: wrap; font: 600 11px/1.3 var(--mono); gap: 10px; margin-bottom: 14px; padding: 9px 11px; }
+/* Fixed width: the label swaps to "Returning…" and nothing beside it may move. */
+.portal-viewing-as-exit { background: var(--accent-dark); border: 0; border-radius: 3px; color: #fff; cursor: pointer; font: 600 11px/1 var(--mono); padding: 6px 0; text-align: center; width: 132px; }
+.portal-viewing-as-exit[disabled] { cursor: default; opacity: 0.7; }
+/* Reserved so an error appearing cannot shift the page below the banner. */
+.portal-viewing-as-note { flex: 1 1 180px; font-weight: 500; min-height: 13px; }
 .portal-status-hero { background: var(--canvas); border: 1px solid var(--canvas-line); color: var(--canvas-ink); display: grid; gap: 20px; min-height: 218px; padding: clamp(22px, 4vw, 38px); }
 .portal-status-hero .eyebrow { color: #8aa6b5; }
 .portal-status-hero h1 { color: #f4fbff; font: 500 clamp(28px, 5vw, 52px)/1.04 var(--sans); letter-spacing: -.035em; margin: 0; max-width: 100%; overflow-wrap: anywhere; }
