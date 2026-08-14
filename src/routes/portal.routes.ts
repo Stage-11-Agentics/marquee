@@ -14,6 +14,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { AuthContext, SessionAuth } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { enabledSocialPlatformsFor } from "../lib/social-platform-setting";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import { roomDisplayLabel } from "../lib/venues";
 import {
@@ -1129,11 +1130,12 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
   }
   const event = speakerSeat;
   const person = await personFor(db, auth.personId);
-  const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount] = await Promise.all([
+  const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount, socialPlatforms] = await Promise.all([
     listSubmissions(db, event, auth.personId),
     listTasks(db, event, auth.personId, mediaPublicOrigin, mediaSigningSecret),
     primaryBuildingFor(db, event.id),
     pinnedBuildingCountFor(db, event.id),
+    enabledSocialPlatformsFor(db, event.id),
   ]);
   const showBuildingComparison = showsBuildingComparisonCount(pinnedBuildingCount);
   const submissions = [...submissionRows];
@@ -1172,7 +1174,10 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
   }));
   return {
     seat: "speaker" as const,
-    event,
+    // The conference decides which social profiles it asks its speakers for.
+    // The portal needs it to draw the form; nothing here filters what a
+    // speaker already gave us.
+    event: { ...event, social_platforms: socialPlatforms },
     person: {
       id: person.id,
       name: person.name,

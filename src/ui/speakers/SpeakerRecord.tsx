@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
+import { SocialBadges } from "../social/SocialBadges";
 import type { SpeakerRow, SpeakerStatus } from "../../routes/speakers.queries";
 import type { SignedUpload } from "../../lib/r2/protocol";
 import { apiFetch, errorSummary } from "../shell/api-client";
@@ -248,6 +249,9 @@ export function SpeakerRecord({
           <strong>{speaker.name}</strong>
           <span>{speaker.email}</span>
           <span>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "No title or company yet"}</span>
+          {/* Read-only: the handles are the speaker's own, kept where they
+              wrote them. The organizer sees what will publish beside the name. */}
+          <SocialBadges links={speaker.social_links} ownerName={speaker.name} size="compact" />
         </div>
         <SpeakerStatusBadge status={speaker.status} />
       </section>

@@ -5,6 +5,8 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
 import { EVENT_NAME_CHANGED } from "../shell/identity";
 import { OrganizersCard } from "../setup/OrganizersCard";
+import { SocialMark } from "../social/SocialBadges";
+import { SOCIAL_PLATFORMS, type SocialPlatformId } from "../../lib/social-links";
 import { loadVenueModel } from "../venues/venue-writer";
 import type { VenueModel } from "../../lib/venues";
 import "./settings.css";
@@ -46,6 +48,7 @@ interface SettingsModel {
   event: EventDetails;
   formats: Format[];
   tracks: Track[];
+  speaker_social_platforms: SocialPlatformId[];
 }
 
 type LoadState =
@@ -211,7 +214,7 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
       await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, "/api/v1/events/{eventId}", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(model.event),
+        body: JSON.stringify({ ...model.event, speaker_social_platforms: model.speaker_social_platforms }),
       });
       for (const id of removedFormats) {
         if (!id.startsWith("new-")) await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/formats/${encodeURIComponent(id)}`, "/api/v1/events/{eventId}/formats/{formatId}", { method: "DELETE" });
@@ -273,6 +276,39 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
         <section class="card settings-list-card" id="tracks">
           <header class="card-head"><div><h2>Tracks</h2><span class="subtle">Colors and order carry through the program</span></div><button class="button small" type="button" onClick={() => updateModel((current) => ({ ...current, tracks: [...current.tracks, { id: temporaryId("track"), event_id: eventId, name: "New track", color: "#7C5CFC", position: current.tracks.length, updated_at: 0 }] }))}>+ Add track</button></header>
           <div class="card-body settings-list">{model.tracks.length ? model.tracks.map((track, index) => <TrackRow key={track.id} track={track} index={index} count={model.tracks.length} onChange={(patch) => updateModel((current) => ({ ...current, tracks: current.tracks.map((item) => item.id === track.id ? { ...item, ...patch } : item) }))} onRemove={() => { setRemovedTracks((current) => [...current, track.id]); updateModel((current) => ({ ...current, tracks: current.tracks.filter((item) => item.id !== track.id) })); }} onMove={(delta) => updateModel((current) => reorderTracks(current, moveBy(current.tracks, track.id, delta)))} onDrop={(sourceId) => updateModel((current) => reorderTracks(current, moveItem(current.tracks, sourceId, track.id)))} />) : <div class="settings-list-empty"><strong>No tracks yet</strong><span>Add the first track to carry color and order through the conference program.</span></div>}</div>
+        </section>
+
+        {/* The conference decides which social profiles it asks speakers for.
+            Turning one off stops the portal asking; it never deletes a link a
+            speaker already gave, and never hides one already on a record. */}
+        <section class="card settings-list-card" id="speaker-socials">
+          <header class="card-head"><div><h2>Speaker social profiles</h2><span class="subtle">What the portal asks every speaker for</span></div></header>
+          <div class="card-body settings-social-list">
+            {SOCIAL_PLATFORMS.map((platform) => {
+              const enabled = model.speaker_social_platforms.includes(platform.id);
+              return <label class="settings-social-row" key={platform.id}>
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(event) => {
+                    const on = event.currentTarget.checked;
+                    updateModel((current) => ({
+                      ...current,
+                      speaker_social_platforms: SOCIAL_PLATFORMS
+                        .filter((item) => item.id === platform.id ? on : current.speaker_social_platforms.includes(item.id))
+                        .map((item) => item.id),
+                    }));
+                  }}
+                />
+                <SocialMark platform={platform} />
+                <span class="settings-social-name">{platform.label}{platform.alsoKnownAs ? ` (${platform.alsoKnownAs})` : ""}</span>
+                <span class="subtle tabular">{platform.inputPrefix}{platform.placeholder}</span>
+              </label>;
+            })}
+            {model.speaker_social_platforms.length === 0
+              ? <p class="subtle">No social profiles are collected. The portal will not ask, and links already on a speaker record are still shown.</p>
+              : null}
+          </div>
         </section>
 
         {/* Organizers are instance-level people, surfaced here because this is

@@ -1,3 +1,5 @@
+@import "../social/social-badge.css";
+
 .settings-page { display: grid; gap: 22px; }
 .settings-list-empty { align-items: start; color: var(--muted); display: grid; gap: 6px; min-height: 112px; padding: 18px 0; }
 .settings-list-empty strong { color: var(--ink-soft); font-size: 12px; }
@@ -240,3 +242,11 @@
 .webhook-skeleton .skeleton-line.wide { height: 18px; width: 88%; }
 @media (max-width: 820px) { .webhook-test-panel { grid-template-columns: 1fr 1fr; } .webhook-test-panel > div:first-child { grid-column: 1 / -1; } .webhook-test-actions { justify-content: stretch; } .webhook-test-actions .button { flex: 1; } }
 @media (max-width: 640px) { .webhook-event-grid, .webhook-detail-grid, .webhook-test-panel { grid-template-columns: 1fr; } .webhook-test-panel > div:first-child { grid-column: auto; } .webhook-endpoint-row { grid-template-columns: 1fr; } .webhook-endpoint-actions { justify-content: flex-start; } .webhook-form-actions, .webhook-test-actions { align-items: stretch; flex-direction: column-reverse; } .webhook-form-actions .button, .webhook-test-actions .button { width: 100%; } .webhook-boundary { align-items: stretch; flex-direction: column; } }
+
+/* Which social profiles the conference asks its speakers for. */
+.settings-social-list { display: grid; gap: 2px; }
+.settings-social-row { align-items: center; border-bottom: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 18px 16px minmax(0, 1fr) auto; min-height: 44px; padding: 8px 0; }
+.settings-social-row:last-of-type { border-bottom: 0; }
+.settings-social-row input { accent-color: var(--accent); height: 16px; width: 16px; }
+.settings-social-row .social-mark { fill: var(--ink-soft); flex: 0 0 16px; height: 16px; width: 16px; }
+.settings-social-name { font-size: 13px; font-weight: 600; }
