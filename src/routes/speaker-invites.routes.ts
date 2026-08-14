@@ -4,6 +4,7 @@ import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail";
 import { mintPortalMagicLink } from "../lib/auth/magic-links";
+import { portalPreviewRedirect } from "../lib/auth/portal-preview";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
@@ -161,7 +162,11 @@ const previewSpeakerPortal = defineApiRoute(
     const link = await mintPortalMagicLink(context.env.DB, {
       personId: speaker.id,
       purpose: "login",
-      redirectTo: "/portal?viewing_as=speaker",
+      // The redirect is also the marker: minted here, by a route that has just
+      // established the caller is an organizer of this conference, so the
+      // exchange can tell a deliberate preview from a link that arrived out of
+      // nowhere. See src/lib/auth/portal-preview.ts.
+      redirectTo: portalPreviewRedirect(eventId),
       now: Date.now(),
     });
     const url = `${new URL(context.req.url).origin}/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`;
