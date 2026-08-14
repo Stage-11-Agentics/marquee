@@ -28,7 +28,7 @@ const peopleSources = [
   readFileSync(new URL("../../src/routes/people.routes.ts", import.meta.url), "utf8"),
   readFileSync(new URL("../../src/routes/person-lists.routes.ts", import.meta.url), "utf8"),
   readFileSync(new URL("../../src/ui/people/PeoplePage.tsx", import.meta.url), "utf8"),
-  readFileSync(new URL("../../src/ui/people/ListsPage.tsx", import.meta.url), "utf8"),
+  readFileSync(new URL("../../src/ui/people/ListsPanel.tsx", import.meta.url), "utf8"),
   readFileSync(new URL("../../src/ui/people/SourcingPipelinePage.tsx", import.meta.url), "utf8"),
   readFileSync(new URL("../../src/ui/people/PeopleModals.tsx", import.meta.url), "utf8"),
 ].join("\n");
@@ -218,7 +218,11 @@ test("CONTRACT · MRQ-200 · the People band resolves one list by id, not by sca
   const listRoutes = readFileSync(new URL("../../src/routes/person-lists.routes.ts", import.meta.url), "utf8");
   expect(api).toMatch(/export function fetchList\(listId: string/);
   expect(page).toMatch(/fetchList\(listFromUrl, controller\.signal\)/);
-  expect(page).not.toMatch(/fetchLists\(controller\.signal\)/);
+  // The band resolves the one list it names, and never reads the index to do
+  // it: an index is capped somewhere, and a list past that cap would be
+  // reported to the organizer as deleted. (People does read the index — once,
+  // for the Lists tab's count — and that read touches nothing here.)
+  expect(page).not.toMatch(/fetchLists[\s\S]{0,240}setListState/);
   expect(listRoutes).toMatch(/const OPEN_LIST_SELECT =/);
   expect(listRoutes).toMatch(/\.prepare\(`\$\{OPEN_LIST_SELECT\} WHERE saved\.id = \? AND saved\.org_id = \?`\)/);
 });
@@ -241,7 +245,8 @@ test("CONTRACT · MRQ-200 · shared field sizing excludes radios and checkboxes"
 test("CONTRACT · MRQ-131 · Lists is reached from People, not from a sidebar row of its own", () => {
   // A list is a lens on People. A permanent second destination for it makes
   // the nav longer and the relationship less obvious — but the route stays,
-  // because saving a list lands on it and the URL is shareable.
+  // because saving a list lands on it and the URL is shareable. MRQ-203 goes
+  // one further: /lists renders inside the People screen, as its Lists tab.
   // Asserted through the resolver rather than the source text, so reordering a
   // property in the table cannot fail a test about navigation.
   expectDeep(routesFor("organization").map((route) => route.id), ["people", "sourcing"]);
@@ -277,7 +282,7 @@ test("CONTRACT · MRQ-131 · tags arrive as a JSON array and a broken one degrad
 });
 
 test("CONTRACT · MRQ-131 · People is org-level in the nav, above the conference boundary", () => {
-  expect(routeTable).toMatch(/path: "\/people", label: "People"/);
+  expect(routeTable).toMatch(/path: "\/people", label: "People CRM"/);
   expect(routeTable).toMatch(/group: "organization"/);
   // All four paths resolve; agents guess URLs and a 404 costs turns.
   for (const path of ["/people", "/crm", "/directory", "/contacts"]) {
@@ -288,21 +293,46 @@ test("CONTRACT · MRQ-131 · People is org-level in the nav, above the conferenc
   // its own component when it became a real control, and the rule it has to
   // satisfy is unchanged: a person belongs to the organization, so People is
   // above the line where the conference scope begins.
-  const organizationAt = sidebar.indexOf('routesFor("organization")');
+  const organizationAt = sidebar.indexOf('"organization"');
   const conferenceBoundaryAt = sidebar.indexOf("<EventSwitcher");
   expectOk(organizationAt > 0 && conferenceBoundaryAt > 0 && organizationAt < conferenceBoundaryAt);
 });
 
-test("CONTRACT · MRQ-131 · the area's language is People and List, never CRM or Segment", () => {
-  // PHILOSOPHY §6: the organizer's language. "CRM" is software's word for this;
-  // "Segment" is a marketer's word for a List.
+test("CONTRACT · MRQ-131 · the area's language is People and List — and CRM only as the area's own name", () => {
+  // PHILOSOPHY §6: the organizer's language. "Segment" is a marketer's word for
+  // a List, and "Contacts"/"Directory" are address-book register for a record
+  // that carries a decade of history. Those stay out.
+  //
+  // "CRM" is the one word this test used to forbid outright, and the R5 ruling
+  // (Atin, 2026-08-14) supersedes that: the area is named "People CRM", because
+  // the people who go looking for this capability look for it by that name and
+  // a row nobody recognises is a capability nobody finds. It is the area's
+  // NAME and nothing else — no contact is a "CRM record", no list a "CRM list".
   const userFacing = peopleSources
     .split("\n")
     .filter((line) => !line.trimStart().startsWith("*") && !line.trimStart().startsWith("//"));
-  for (const forbidden of [/\bCRM\b/, /\bSegments?\b/, /\bContacts\b/, /\bDirectory\b/]) {
+  for (const forbidden of [/\bSegments?\b/, /\bContacts\b/, /\bDirectory\b/]) {
     const offender = userFacing.find((line) => forbidden.test(line));
     expectEqual(offender, undefined, `forbidden vocabulary in a user-facing string: ${offender}`);
   }
+  for (const line of userFacing.filter((candidate) => /\bCRM\b/.test(candidate))) {
+    expectOk(/People CRM/.test(line), `"CRM" appears outside the area's name: ${line.trim()}`);
+  }
+});
+
+test("CONTRACT · MRQ-203 · Lists renders inside People, as a tab, with the People row lit", () => {
+  const shell = readFileSync(new URL("../../src/ui/shell/AppShell.tsx", import.meta.url), "utf8");
+  const people = readFileSync(new URL("../../src/ui/people/PeoplePage.tsx", import.meta.url), "utf8");
+  // /lists is the People screen with its second tab selected — not a screen of
+  // its own that happens to be about people.
+  expectOk(/route\?\.id === "lists" \? <PeoplePage[^>]*tab="lists"/.test(shell), "/lists does not render the People screen");
+  expectOk(shell.indexOf("ListsPage") === -1, "a separate Lists screen is still mounted");
+  // Both tabs are on screen from both tabs, and the count has a reserved slot
+  // so making or deleting a list cannot change the tab's width.
+  expectOk(/class="people-tabs"/.test(people));
+  expectOk(/people-tab-count/.test(people));
+  // And the sidebar names where you are while you are on it.
+  expectEqual(activeNavId("lists"), "people");
 });
 
 test("CONTRACT · MRQ-131 · the People import brief is paste-ready, and org-level on purpose", () => {
