@@ -2,12 +2,27 @@
  * `organization` is the group that sits ABOVE the conference caption in the
  * sidebar. That placement is the scope boundary made visible: everything below
  * the caption belongs to one conference, everything above it outlives all of
- * them. People, Lists, and the sourcing pipeline are org-level, so a nav that
- * nests them inside a conference's menu would be describing them wrongly. Only
- * People and the sourcing pipeline take a row there; Lists is org-level too but
- * is reached from People, whose lens it is.
+ * them. People, Lists, and outreach are org-level, so a nav that nests them
+ * inside a conference's menu would be describing them wrongly. Only People CRM
+ * and Outreach take a row there; Lists is org-level too but is reached from
+ * People, whose lens it is.
+ *
+ * Below the caption the conference's own work is grouped by the question the
+ * organizer is answering: the programme itself (`conference`), the work that
+ * follows a yes (`speaker-ops`), the call for proposals (`cfp`), and the pages
+ * the outside world reads (`public-links`). `settings` stands alone at the
+ * foot of the conference, and `utility` is every route that is real but takes
+ * no row — hidden aliases, record pages, and the system entries the footer
+ * renders by hand.
  */
-export type RouteGroup = "organization" | "home" | "pipeline" | "modules" | "utility";
+export type RouteGroup =
+  | "organization"
+  | "conference"
+  | "speaker-ops"
+  | "cfp"
+  | "public-links"
+  | "settings"
+  | "utility";
 
 export interface RouteDefinition {
   id: string;
@@ -20,67 +35,89 @@ export interface RouteDefinition {
 }
 
 export const routeTable: readonly RouteDefinition[] = [
-  // "People" is the word organizers and the conference world use. Not "CRM",
-  // which is software's word for it; not "Directory" or "Contacts", which are
-  // address-book register for a record that carries a decade of history.
-  { id: "people", path: "/people", label: "People", icon: "◉", group: "organization", sidebar: true },
+  // "People CRM" — the judge-legibility ruling (R5, 2026-08-14). The earlier
+  // comment here argued against "CRM" as software's word for an address book,
+  // and it is superseded: the people who go looking for this capability look
+  // for it by that name, and a row nobody recognises is a capability nobody
+  // finds. "People" alone is broad; "People CRM" is unambiguous. Inside the
+  // screen the language stays the organizer's — a person, a list, never a
+  // "contact" or a "segment".
+  { id: "people", path: "/people", label: "People CRM", icon: "", group: "organization", sidebar: true },
   // Lists is a way of looking at People, so it is reached from People — the
   // toolbar button there, and the band on a list's own view. It keeps a real
   // route (saving a list lands on it, and the URL is shareable) but no sidebar
   // row: a second permanent destination for a lens on the first one only makes
-  // the nav longer and the relationship less obvious.
-  { id: "lists", path: "/lists", label: "Lists", icon: "◈", group: "organization" },
-  { id: "sourcing", path: "/pipeline", label: "Sourcing pipeline", icon: "▤", group: "organization", sidebar: true },
+  // the nav longer and the relationship less obvious. It renders inside the
+  // People screen, as its Lists tab.
+  { id: "lists", path: "/lists", label: "Lists", icon: "", group: "organization" },
+  // Org-level by design: one relationship, courted across years, each card
+  // naming the conference it is currently aimed at.
+  { id: "sourcing", path: "/pipeline", label: "Outreach", icon: "", group: "organization", sidebar: true },
   // Agents guess URLs, and every 404 costs turns. These three resolve to People
   // rather than to the SPA's not-found state; they are not shown in the sidebar
   // because the area has one name and one entry.
-  { id: "people-crm", path: "/crm", label: "People", icon: "", group: "utility" },
-  { id: "people-directory", path: "/directory", label: "People", icon: "", group: "utility" },
-  { id: "people-contacts", path: "/contacts", label: "People", icon: "", group: "utility" },
-  { id: "dashboard", path: "/dashboard", label: "Program home", icon: "⌂", group: "home", sidebar: true },
-  { id: "board", path: "/board", label: "Program board", icon: "▥", group: "home", sidebar: true },
-  // The whole list and its create action are entrances, not lifecycle stages —
-  // the Pipeline group below is a numbered ladder and an unnumbered row in the
-  // middle of it reads as a broken sequence.
-  { id: "submissions", path: "/submissions", label: "Abstracts & sessions", icon: "▤", group: "home", sidebar: true },
-  { id: "submission-new", path: "/submissions/new", label: "Add a session", icon: "+", group: "home", sidebar: true },
-  { id: "submitted", path: "/submissions?status=submitted", label: "Submitted", icon: "1", group: "pipeline", sidebar: true },
-  { id: "in-review", path: "/submissions?status=in_review", label: "In review", icon: "2", group: "pipeline", sidebar: true },
-  { id: "waved", path: "/submissions?status=waved", label: "Waved", icon: "3", group: "pipeline", sidebar: true },
-  { id: "accepted", path: "/submissions?status=accepted", label: "Ready to place", icon: "4", group: "pipeline", sidebar: true },
-  { id: "onboarding", path: "/onboarding", label: "Onboarding", icon: "5", group: "pipeline", sidebar: true },
-  { id: "scheduled", path: "/submissions?status=scheduled", label: "Scheduled", icon: "6", group: "pipeline", sidebar: true },
-  { id: "published", path: "/submissions?status=published", label: "Published", icon: "7", group: "pipeline", sidebar: true },
+  { id: "people-crm", path: "/crm", label: "People CRM", icon: "", group: "utility" },
+  { id: "people-directory", path: "/directory", label: "People CRM", icon: "", group: "utility" },
+  { id: "people-contacts", path: "/contacts", label: "People CRM", icon: "", group: "utility" },
+  // "Program pipeline" agrees with the page's own title. The brand mark is
+  // still the way home.
+  { id: "dashboard", path: "/dashboard", label: "Program pipeline", icon: "", group: "conference", sidebar: true },
+  { id: "board", path: "/board", label: "Program board", icon: "", group: "conference", sidebar: true },
+  // The long label wins: it teaches the abstract/session distinction the data
+  // model rests on (R1). Its create action is the `+` the row carries, not a
+  // row of its own.
+  { id: "submissions", path: "/submissions", label: "Abstracts & sessions", icon: "", group: "conference", sidebar: true },
+  { id: "submission-new", path: "/submissions/new", label: "Add a session", icon: "+", group: "utility" },
+  // The seven lifecycle stages keep their routes and lose their rows. The
+  // surfaces that already do this better — the dashboard strip with counts, the
+  // board's columns, the list's status filter — plus the hover flyout on the
+  // Program pipeline row, which is built from exactly these rows. Every one of
+  // these URLs still resolves; only the ladder in the nav is gone.
+  { id: "submitted", path: "/submissions?status=submitted", label: "Submitted", icon: "1", group: "utility" },
+  { id: "in-review", path: "/submissions?status=in_review", label: "In review", icon: "2", group: "utility" },
+  { id: "waved", path: "/submissions?status=waved", label: "Waved", icon: "3", group: "utility" },
+  { id: "accepted", path: "/submissions?status=accepted", label: "Ready to place", icon: "4", group: "utility" },
+  { id: "onboarding", path: "/onboarding", label: "Onboarding", icon: "", group: "speaker-ops", sidebar: true },
+  { id: "scheduled", path: "/submissions?status=scheduled", label: "Scheduled", icon: "6", group: "utility" },
+  { id: "published", path: "/submissions?status=published", label: "Published", icon: "7", group: "utility" },
+  { id: "agenda", path: "/agenda-builder", label: "Agenda", icon: "", group: "conference", sidebar: true },
   // The organizer's person list. The label is the noun organizers and the
   // conference world use — "Speakers" — not a synonym that reads as a synonym.
   // The PATH is /roster because /speakers is the public directory's SSR route
   // (`public-agenda.route.tsx`), which resolves before the SPA fallback. The
   // label is what the organizer reads; the path is only where the shell mounts.
-  { id: "speakers", path: "/roster", label: "Speakers", icon: "◍", group: "modules", sidebar: true },
-  { id: "forms", path: "/forms", label: "CFP forms", icon: "□", group: "modules", sidebar: true },
-  { id: "evaluation", path: "/evaluation", label: "Evaluation plan", icon: "◇", group: "modules", sidebar: true },
-  { id: "reviewer", path: "/reviewer", label: "Reviewer home", icon: "✓", group: "modules", sidebar: true },
-  { id: "reviewer-queue", path: "/reviewer/queue", label: "Review queue", icon: "", group: "utility" },
-  { id: "agenda", path: "/agenda-builder", label: "Agenda", icon: "▦", group: "modules", sidebar: true },
+  { id: "speakers", path: "/roster", label: "Speakers", icon: "", group: "conference", sidebar: true },
+  { id: "tasks", path: "/tasks", label: "Tasks", icon: "", group: "speaker-ops", sidebar: true },
+  { id: "communications", path: "/communications", label: "Communications", icon: "✉", group: "speaker-ops", sidebar: true },
   // "Files" verbatim: this is the noun an organizer reaches for when they want
   // the deck, and renaming it to something cleverer only makes it unfindable.
-  { id: "files", path: "/files", label: "Files", icon: "▤", group: "modules", sidebar: true },
-  { id: "communications", path: "/communications", label: "Communications", icon: "✉", group: "modules", sidebar: true },
-  { id: "tasks", path: "/tasks", label: "Tasks", icon: "☑", group: "modules", sidebar: true },
-  { id: "portal", path: "/portal", label: "Speaker portal", icon: "○", group: "modules", sidebar: true, external: true },
-  { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "modules", sidebar: true, external: true },
+  { id: "files", path: "/files", label: "Files", icon: "", group: "speaker-ops", sidebar: true },
+  // The people-facing page carries its own chrome, so the sidebar hands it a
+  // real browser navigation rather than a client-side push. Its group says
+  // whose follow-ups these are, so the label no longer has to.
+  { id: "delivery-health", path: "/delivery-health", label: "Follow-ups", icon: "", group: "speaker-ops", sidebar: true, external: true },
+  // Labels shortened by their group: under "Call for proposals", "CFP forms"
+  // says CFP twice and "Evaluation plan" says more than the row can carry.
+  { id: "forms", path: "/forms", label: "Forms", icon: "", group: "cfp", sidebar: true },
+  { id: "evaluation", path: "/evaluation", label: "Evaluation", icon: "", group: "cfp", sidebar: true },
+  { id: "reviewer", path: "/reviewer", label: "Reviewer", icon: "", group: "cfp", sidebar: true },
+  { id: "reviewer-queue", path: "/reviewer/queue", label: "Review queue", icon: "", group: "utility" },
+  // The ↗ leads on every public row: the glyph is the promise that the click
+  // leaves the admin shell, and it belongs before the label rather than after it.
+  { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "public-links", sidebar: true, external: true },
+  { id: "portal", path: "/portal", label: "Speaker portal", icon: "↗", group: "public-links", sidebar: true, external: true },
   // Server-rendered outside the admin shell (`embed.route.tsx`), and `app.tsx`
   // treats every `/embed/` path as a public page — so this must navigate for
   // real. A client-side push would land the shell on a route it does not render
   // and draw an empty state over a builder that works.
-  { id: "embeds", path: "/embed/config", label: "Embeds", icon: "◨", group: "modules", sidebar: true, external: true },
-  { id: "settings", path: "/settings", label: "Conference settings", icon: "⚙", group: "modules", sidebar: true },
-  // The people-facing page carries its own chrome, so the sidebar hands it a
-  // real browser navigation rather than a client-side push.
-  { id: "delivery-health", path: "/delivery-health", label: "Speaker follow-ups", icon: "◎", group: "modules", sidebar: true, external: true },
+  { id: "embeds", path: "/embed/config", label: "Embeds", icon: "↗", group: "public-links", sidebar: true, external: true },
+  // One conference's settings, standing alone under its own rule at the foot of
+  // the conference — the scope is the group above it, so the label is the word.
+  { id: "settings", path: "/settings", label: "Settings", icon: "⚙", group: "settings", sidebar: true },
   // The query variant shares the health document entrypoint without adding an
-  // unowned app bootstrap branch. It is deliberately outside the main flow.
-  { id: "system-health", path: "/delivery-health?view=system", label: "System health", icon: "◌", group: "utility", sidebar: true, external: true },
+  // unowned app bootstrap branch. It is deliberately outside the main flow —
+  // the sidebar footer renders it beside API & CLI.
+  { id: "system-health", path: "/delivery-health?view=system", label: "System health", icon: "◌", group: "utility", external: true },
   // Reached from a co-speaker's invitation link, never from navigation. It is
   // declared here because it is a real route, and a route map that omits a real
   // route is the same defect as one that invents a route that is not.
@@ -116,6 +153,16 @@ export function matchRoute(pathname: string, search = ""): RouteDefinition | und
   return routeTable.find((route) => !route.path.includes("?") && pathPatternMatches(route.path, pathname));
 }
 
+/** The sidebar's groups, in the order the sidebar draws them. */
+export const SIDEBAR_GROUPS: readonly RouteGroup[] = [
+  "organization",
+  "conference",
+  "speaker-ops",
+  "cfp",
+  "public-links",
+  "settings",
+];
+
 export function routesFor(group: RouteGroup): readonly RouteDefinition[] {
   return routeTable.filter((route) => route.group === group && route.sidebar);
 }
@@ -123,9 +170,28 @@ export function routesFor(group: RouteGroup): readonly RouteDefinition[] {
 /**
  * Which sidebar row a route lights up. Usually its own — but a route with no
  * row of its own has to name the row it belongs under, or the organizer stands
- * somewhere the nav refuses to acknowledge. `/lists` is a lens on People.
+ * somewhere the nav refuses to acknowledge. `/lists` is a lens on People;
+ * `/submissions/new` and the seven lifecycle filters are the submissions list
+ * seen from a particular angle.
  */
-const SIDEBAR_HOME: Readonly<Record<string, string>> = { lists: "people" };
+const SIDEBAR_HOME: Readonly<Record<string, string>> = {
+  lists: "people",
+  "people-crm": "people",
+  "people-directory": "people",
+  "people-contacts": "people",
+  "submission-new": "submissions",
+  "submission-detail": "submissions",
+  submitted: "submissions",
+  "in-review": "submissions",
+  waved: "submissions",
+  accepted: "submissions",
+  scheduled: "submissions",
+  published: "submissions",
+  venues: "settings",
+  "task-templates": "tasks",
+  "api-tokens": "settings",
+  webhooks: "settings",
+};
 
 export function activeNavId(routeId: string | undefined): string | undefined {
   if (!routeId) return undefined;

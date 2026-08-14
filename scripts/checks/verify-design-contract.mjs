@@ -25,7 +25,13 @@ for (const contract of [
 ]) {
   if (!contract[1].test(contract[0])) findings.push(contract[2]);
 }
-for (const label of ["Program home", "Program board", "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published", "CFP forms", "Evaluation plan", "Review queue", "Agenda", "Communications", "Speaker portal", "Conference site", "Conference settings", "Speaker follow-ups", "System health"]) {
+// The labels the signed design names. Several are shorter than they were: a row
+// under "Call for proposals" that says "CFP forms" says CFP twice, and one under
+// "Speaker ops" that says "Speaker follow-ups" says speaker twice. The group
+// carries the scope, so the row carries only the noun (v1.15, 2026-08-14). The
+// seven lifecycle stages keep their labels here while their rows are gone from
+// the sidebar: they are the stage flyout's rows now, and their URLs still resolve.
+for (const label of ["Program pipeline", "Program board", "Submitted", "In review", "Waved", "Ready to place", "Onboarding", "Scheduled", "Published", "Forms", "Evaluation", "Review queue", "Agenda", "Communications", "Speaker portal", "Conference site", "Settings", "Follow-ups", "System health", "People CRM", "Outreach", "Abstracts & sessions"]) {
   if (!routes.includes(`label: "${label}"`)) findings.push(`route table missing ${label}`);
 }
 for (const [path, content] of sourceFiles) {

@@ -10,6 +10,7 @@ import { chromeFor, useThemeId } from "../shell/register";
 import { InstancePanel } from "../setup/InstancePanel";
 import { SetupChecklistCard } from "../setup/SetupChecklistCard";
 import { DASHBOARD_REVALIDATE_MS } from "./dashboard-constants";
+import { publishDashboardSnapshot } from "./snapshot-store";
 import { DashboardLink, dueLabel, formatNumber, formatWaveDate } from "./shared";
 import {
   AsciiWaveRows,
@@ -202,6 +203,10 @@ export function DashboardPage({ eventId, navigate }: Props): JSX.Element {
         );
         if (!active) return;
         failures = 0;
+        // The sidebar's stage flyout shows these same seven counts, and it may
+        // not spend a request of its own to get them. Publishing what this poll
+        // already read is what makes the flyout free.
+        publishDashboardSnapshot(eventId, snapshot);
         setState({ snapshot, loadedAt: Date.now(), error: null, consecutiveFailures: 0 });
       } catch (error: unknown) {
         if (!active || requestController.signal.aborted) return;

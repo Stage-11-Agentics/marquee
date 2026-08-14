@@ -20,38 +20,38 @@ everything else is drawn inside the organizer shell.
 
 | Path | Label | Surface | In sidebar | Navigation |
 | --- | --- | --- | --- | --- |
-| `/people` | People | organizer | yes | client push |
+| `/people` | People CRM | organizer | yes | client push |
 | `/lists` | Lists | organizer | — | client push |
-| `/pipeline` | Sourcing pipeline | organizer | yes | client push |
-| `/crm` | People | organizer | — | client push |
-| `/directory` | People | organizer | — | client push |
-| `/contacts` | People | organizer | — | client push |
-| `/dashboard` | Program home | organizer | yes | client push |
+| `/pipeline` | Outreach | organizer | yes | client push |
+| `/crm` | People CRM | organizer | — | client push |
+| `/directory` | People CRM | organizer | — | client push |
+| `/contacts` | People CRM | organizer | — | client push |
+| `/dashboard` | Program pipeline | organizer | yes | client push |
 | `/board` | Program board | organizer | yes | client push |
 | `/submissions` | Abstracts & sessions | organizer | yes | client push |
-| `/submissions/new` | Add a session | organizer | yes | client push |
-| `/submissions?status=submitted` | Submitted | organizer | yes | client push |
-| `/submissions?status=in_review` | In review | organizer | yes | client push |
-| `/submissions?status=waved` | Waved | organizer | yes | client push |
-| `/submissions?status=accepted` | Ready to place | organizer | yes | client push |
+| `/submissions/new` | Add a session | organizer | — | client push |
+| `/submissions?status=submitted` | Submitted | organizer | — | client push |
+| `/submissions?status=in_review` | In review | organizer | — | client push |
+| `/submissions?status=waved` | Waved | organizer | — | client push |
+| `/submissions?status=accepted` | Ready to place | organizer | — | client push |
 | `/onboarding` | Onboarding | organizer | yes | client push |
-| `/submissions?status=scheduled` | Scheduled | organizer | yes | client push |
-| `/submissions?status=published` | Published | organizer | yes | client push |
-| `/roster` | Speakers | organizer | yes | client push |
-| `/forms` | CFP forms | organizer | yes | client push |
-| `/evaluation` | Evaluation plan | organizer | yes | client push |
-| `/reviewer` | Reviewer home | reviewer | yes | client push |
-| `/reviewer/queue` | Review queue | reviewer | — | client push |
+| `/submissions?status=scheduled` | Scheduled | organizer | — | client push |
+| `/submissions?status=published` | Published | organizer | — | client push |
 | `/agenda-builder` | Agenda | organizer | yes | client push |
-| `/files` | Files | organizer | yes | client push |
-| `/communications` | Communications | organizer | yes | client push |
+| `/roster` | Speakers | organizer | yes | client push |
 | `/tasks` | Tasks | organizer | yes | client push |
-| `/portal` | Speaker portal | speaker | yes | browser navigation |
+| `/communications` | Communications | organizer | yes | client push |
+| `/files` | Files | organizer | yes | client push |
+| `/delivery-health` | Follow-ups | organizer | yes | browser navigation |
+| `/forms` | Forms | organizer | yes | client push |
+| `/evaluation` | Evaluation | organizer | yes | client push |
+| `/reviewer` | Reviewer | reviewer | yes | client push |
+| `/reviewer/queue` | Review queue | reviewer | — | client push |
 | `/agenda` | Conference site | public | yes | browser navigation |
+| `/portal` | Speaker portal | speaker | yes | browser navigation |
 | `/embed/config` | Embeds | public | yes | browser navigation |
-| `/settings` | Conference settings | organizer | yes | client push |
-| `/delivery-health` | Speaker follow-ups | organizer | yes | browser navigation |
-| `/delivery-health?view=system` | System health | organizer | yes | browser navigation |
+| `/settings` | Settings | organizer | yes | client push |
+| `/delivery-health?view=system` | System health | organizer | — | browser navigation |
 | `/co-speaker` | Co-speaker confirmation | speaker | — | browser navigation |
 | `/conferences/new` | Create conference | organizer | — | client push |
 | `/handoff` | Instance handoff | organizer | — | client push |
@@ -98,8 +98,8 @@ routes — the text to hand any agent or reader that needs to know what exists.
 ```text
 ROUTES (real paths, not hash routes):
   Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /claim/:token /embed/:slug /embed/config /f/:slug /join/:token /login /p/:slug /s/:slug /sign-in /signin /site /speakers
-  Organizer (admin shell): /people /lists /pipeline /crm /directory /contacts /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /roster /forms /evaluation /agenda-builder /files /communications /tasks /settings /delivery-health /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /settings/webhooks /import
-  Reviewer home: /reviewer
+  Organizer (admin shell): /people /lists /pipeline /crm /directory /contacts /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /agenda-builder /roster /tasks /communications /files /delivery-health /forms /evaluation /settings /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /settings/webhooks /import
+  Reviewer: /reviewer
   Review queue: /reviewer/queue
   Speaker portal: /portal
   Co-speaker confirmation: /co-speaker

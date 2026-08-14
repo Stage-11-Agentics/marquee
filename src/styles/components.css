@@ -6,7 +6,10 @@
 /* The switcher and the ＋ share one row. The ＋ has a fixed 32px box so the
    caption's width never depends on whether the glyph is rendered. */
 .event-switcher-root { position: relative; }
-.event-context-row { align-items: stretch; display: flex; gap: 6px; margin: 0 4px 18px; width: calc(100% - 8px); }
+/* 6px to the first row below it: the switcher wears the group label above it
+   now, so it reads as the head of the conference's nav rather than a floating
+   control that needed air on both sides. */
+.event-context-row { align-items: stretch; display: flex; gap: 6px; margin: 0 4px 6px; width: calc(100% - 8px); }
 /*
   The conference name, now a control that opens the switcher.
 
@@ -20,7 +23,6 @@
 button.event-context { cursor: pointer; }
 button.event-context:hover, button.event-context[aria-expanded="true"] { background: var(--accent-soft); border-left-color: var(--accent); }
 .event-context-copy { min-width: 0; }
-.event-context small { color: var(--muted); display: block; font: 600 9px/1 var(--mono); letter-spacing: .16em; margin-bottom: 5px; text-transform: uppercase; }
 .event-context strong { color: var(--ink); display: block; font: 600 12px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .event-caret { color: var(--muted); font: 400 9px/1 var(--mono); }
 /* The ＋ is the one control here that goes somewhere else. */
@@ -57,8 +59,26 @@ button.event-context:hover, button.event-context[aria-expanded="true"] { backgro
 .nav a { align-items: center; border-left: 2px solid transparent; border-radius: 0 var(--radius) var(--radius) 0; color: var(--ink-soft); display: flex; font-size: 12.5px; gap: 9px; min-height: 34px; padding: 8px 10px; transition: background 110ms, color 110ms, border-color 110ms; }
 .nav a:hover { background: var(--sunk); color: var(--ink); }
 .nav a.active { background: var(--accent-soft); border-left-color: var(--accent); color: var(--accent-dark); font-weight: 600; }
-.nav-icon { color: var(--muted); font: 400 11px/1 var(--mono); font-variant-numeric: tabular-nums; text-align: center; width: 16px; }
+/* Reserved on every row, glyph or no glyph: an icon column that collapses when
+   a row has nothing to put in it moves every label beside it. */
+.nav-icon { color: var(--muted); flex: none; font: 400 11px/1 var(--mono); font-variant-numeric: tabular-nums; text-align: center; width: 16px; }
 .nav a.active .nav-icon { color: var(--accent); }
+.settings-nav { margin-top: 14px; }
+/* The create action, on the row that owns the list it adds to. */
+.nav .row-plus { align-items: center; border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--muted); display: flex; font: 600 12px/1 var(--mono); height: 18px; justify-content: center; margin-left: auto; width: 18px; }
+.nav .row-plus:hover, .nav .row-plus:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+
+/* The stage flyout. Fixed rather than absolute because the sidebar scrolls, and
+   a scroll container clips an absolutely positioned child on both axes. */
+.stage-flyout { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); display: none; padding: 6px; position: fixed; width: 226px; z-index: 400; }
+.stage-flyout.open { display: block; }
+.stage-flyout-cap { border-bottom: 1px solid var(--line); color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .2em; margin-bottom: 4px; padding: 6px 9px 7px; text-transform: uppercase; }
+.stage-flyout a { align-items: center; border-radius: var(--radius); color: var(--ink-soft); display: flex; font-size: 12px; gap: 8px; min-height: 30px; padding: 6px 9px; }
+.stage-flyout a:hover, .stage-flyout a:focus-visible { background: var(--accent-soft); color: var(--accent-dark); outline: none; }
+.stage-flyout .stage-num { color: var(--muted); flex: none; font: 400 10px/1 var(--mono); font-variant-numeric: tabular-nums; text-align: center; width: 14px; }
+.stage-flyout .stage-count { color: var(--muted); font: 400 11px/1 var(--mono); font-variant-numeric: tabular-nums; margin-left: auto; }
+.stage-flyout a:hover .stage-num, .stage-flyout a:hover .stage-count { color: var(--accent-dark); }
+.stage-flyout .flyout-overview { border-bottom: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; margin-bottom: 4px; }
 .sidebar-foot { border-top: 1px solid var(--line); display: grid; gap: 2px; margin-top: auto; padding-top: 16px; }
 .sidebar-foot button { background: none; border: 0; border-radius: var(--radius); color: var(--muted); font: 400 11.5px/1.2 var(--mono); padding: 7px 10px; text-align: left; }
 .sidebar-foot .reset-demo-button { align-items: center; display: flex; height: 30px; min-height: 30px; overflow: hidden; white-space: nowrap; width: 100%; }
@@ -178,10 +198,19 @@ button.event-context:hover, button.event-context[aria-expanded="true"] { backgro
 @media (max-width: 1000px) {
   .app-shell { grid-template-columns: 68px minmax(0, 1fr); }
   .sidebar { padding: 16px 9px; }
-  .brand-name, .event-context-row, .nav-label, .nav a span:not(.nav-icon), .sidebar-foot { display: none; }
+  .brand-name, .event-context-row, .nav-label, .sidebar-foot, .nav .row-plus { display: none; }
   .brand { padding: 0 10px 18px; }
   .nav a { justify-content: center; }
   .nav-icon { font-size: 14px; }
+  /* Most rows carry no glyph now, and a rail of blank rows is a rail nobody
+     can read. A row with a glyph shows it; a row without one falls back to the
+     first letter of its own label. */
+  .nav-icon:empty { display: none; }
+  .nav-icon:not(:empty) + span { display: none; }
+  .nav a span:not(.nav-icon) { max-width: 1.35ch; overflow: hidden; white-space: nowrap; }
+  /* A hover panel off a 68px rail is a trap, and every destination in it is
+     reachable by clicking through. */
+  .stage-flyout { display: none !important; }
 }
 @media (max-width: 760px) {
   .app-shell { display: block; }

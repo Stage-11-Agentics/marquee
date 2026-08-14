@@ -20,7 +20,11 @@ const eventSettings = fs.readFileSync(path.join(root, "src/ui/settings/EventSett
 const styles = fs.readFileSync(path.join(root, "src/ui/settings/settings.css"), "utf8");
 
 test("CONTRACT · MRQ-114 · the tasks area is reachable by the noun an organizer looks for", () => {
-  assert.match(routes, /label: "Tasks", icon: "☑", group: "modules", sidebar: true/);
+  // Under "Speaker ops" since the v1.15 reorg — chasing a speaker's tasks is
+  // exactly that work — and with no glyph, because the curation kept only the
+  // handful of marks that carry meaning. The row is still there and still says
+  // "Tasks", which is the noun this test exists to protect.
+  assert.match(routes, /label: "Tasks", icon: "", group: "speaker-ops", sidebar: true/);
   assert.match(routes, /path: "\/tasks"/);
   // The older settings path keeps working; nothing that already links to it breaks.
   assert.match(routes, /path: "\/settings\/tasks"/);

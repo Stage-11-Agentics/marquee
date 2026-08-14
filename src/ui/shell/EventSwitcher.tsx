@@ -173,7 +173,10 @@ export function EventSwitcher({
         title="Switch conference"
         onClick={() => (open ? close() : setOpen(true))}
       >
-        <span class="event-context-copy"><small>Conference</small><strong>{eventName}</strong></span>
+        {/* No eyebrow inside the button: the "Conference" group label above it
+            names this the same way every other group in the sidebar is named,
+            and saying it twice in two different voices named it neither. */}
+        <span class="event-context-copy"><strong>{eventName}</strong></span>
         <span class="event-caret" aria-hidden="true">▾</span>
       </button>
       {/*

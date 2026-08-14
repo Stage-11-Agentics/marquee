@@ -17,10 +17,13 @@ import { errorSummary, MarqueeApiError } from "../shell/api-client";
 import { disambiguatedNames } from "../../lib/duplicate-names";
 import { PersonDrawer } from "./PersonDrawer";
 import { AddPersonModal, ComposeModal, ImportPeopleModal, SaveListModal } from "./PeopleModals";
+import { ListsPanel } from "./ListsPanel";
 import {
   activeCriteria,
+  deleteList,
   EMPTY_FILTERS,
   fetchList,
+  fetchLists,
   fetchPeople,
   fetchSummary,
   formatDay,
@@ -31,6 +34,7 @@ import {
   type PeopleFilters,
   type PeoplePage as PeoplePayload,
   type PersonListDetail,
+  type SavedPersonList,
 } from "./people-api";
 import "./people.css";
 
@@ -95,7 +99,10 @@ function KpiStrip({ summary }: { summary: OrgSummary | null }): JSX.Element {
   </div>;
 }
 
-export function PeoplePage({ search = "", navigate }: { search?: string; navigate?: (target: string) => void }): JSX.Element {
+/** The two tabs of the People area. `/lists` is the second one, not a screen. */
+export type PeopleTab = "people" | "lists";
+
+export function PeoplePage({ search = "", navigate, tab = "people" }: { search?: string; navigate?: (target: string) => void; tab?: PeopleTab }): JSX.Element {
   const openPersonId = useMemo(() => new URLSearchParams(search).get("person"), [search]);
   const listFromUrl = useMemo(() => new URLSearchParams(search).get("list") ?? "", [search]);
   const [filters, setFilters] = useState<PeopleFilters>({ ...EMPTY_FILTERS, listId: listFromUrl });
@@ -104,6 +111,8 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [summary, setSummary] = useState<OrgSummary | null>(null);
+  const [lists, setLists] = useState<SavedPersonList[] | null>(null);
+  const [listsError, setListsError] = useState("");
   const [modal, setModal] = useState<"" | "import" | "compose" | "savelist" | "addperson">("");
   const [toast, setToast] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
@@ -169,6 +178,17 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
     return () => controller.abort();
   }, [reloadToken]);
 
+  // The lists themselves, read once for both tabs: the count is on the tab
+  // whichever one you are standing on, so a fetch deferred until the Lists tab
+  // opens would be a tab that cannot say what is behind it.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchLists(controller.signal)
+      .then((payload) => setLists(payload.data))
+      .catch((caught: unknown) => { if (!controller.signal.aborted) setListsError(errorSummary(caught)); });
+    return () => controller.abort();
+  }, [reloadToken]);
+
   const payload = state.kind === "ready" ? state.payload : null;
   const rows = payload?.data ?? [];
   // Two people may legitimately share a name; the roster must not print them as
@@ -213,14 +233,29 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
     window.setTimeout(() => setToast(""), 8000);
   };
 
+  const removeList = async (list: SavedPersonList) => {
+    setListsError("");
+    try {
+      await deleteList(list.id);
+      setReloadToken((token) => token + 1);
+    } catch (caught) {
+      setListsError(errorSummary(caught));
+    }
+  };
+  // The count is rendered in a fixed-width slot so the tab does not change
+  // width when the number arrives, or when a list is created or deleted.
+  const listsLabel = lists === null ? "—" : lists.length.toLocaleString();
+
   return <div class="people-page">
     <PageHeader
-      title="People"
-      copy={filters.listId
-        ? "A list is a way of looking at People, not a separate place people live — everything below is this organization's people, narrowed to the list named beneath the search."
-        : payload
-          ? `Everyone this organization has worked with, across every conference — ${payload.total.toLocaleString()} speakers, submitters, chairs and contacts, carrying their history, notes and tags. A returning speaker is already here; nobody re-keys anything.`
-          : "Reading everyone this organization has worked with…"}
+      title="People CRM"
+      copy={tab === "lists"
+        ? "Lists are how this organization addresses the same group twice. They live here, inside People, because a list is a way of looking at people rather than a separate place people live."
+        : filters.listId
+          ? "A list is a way of looking at People, not a separate place people live — everything below is this organization's people, narrowed to the list named beneath the search."
+          : payload
+            ? `Everyone this organization has worked with, across every conference — ${payload.total.toLocaleString()} speakers, submitters, chairs and contacts, carrying their history, notes and tags. A returning speaker is already here; nobody re-keys anything.`
+            : "Reading everyone this organization has worked with…"}
       actions={<>
         <Button onClick={() => setModal("import")}>Import people</Button>
         <Button variant="primary" onClick={() => setModal("addperson")}>Add person</Button>
@@ -229,6 +264,31 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
 
     <KpiStrip summary={summary} />
 
+    {/* The two tabs of one area. Header and counts above them do not move when
+        the body swaps — the sidebar row does not change either. */}
+    <div class="people-tabs" role="tablist" aria-label="People">
+      <button
+        type="button"
+        role="tab"
+        class={`people-tab${tab === "people" ? " active" : ""}`}
+        aria-selected={tab === "people"}
+        onClick={() => navigate?.(peopleUrl(filters.listId))}
+      >People</button>
+      <button
+        type="button"
+        role="tab"
+        class={`people-tab${tab === "lists" ? " active" : ""}`}
+        aria-selected={tab === "lists"}
+        onClick={() => navigate?.("/lists")}
+      >Lists · <span class="people-tab-count tabular">{listsLabel}</span></button>
+    </div>
+
+    {tab === "lists" ? <ListsPanel
+      lists={lists}
+      error={listsError}
+      onOpen={(list) => navigate?.(peopleUrl(list.id))}
+      onDelete={(list) => void removeList(list)}
+    /> : <>
     <div class="people-toolbar">
       <label class="people-search">
         <span class="people-search-glyph" aria-hidden="true">⌕</span>
@@ -247,8 +307,8 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
         onClick={() => setFilterOpen((open) => !open)}
       >Filter</Button>
       <span class="people-toolbar-spacer" />
+      <Button small onClick={() => navigate?.("/lists")}>Lists · {listsLabel}</Button>
       <Button small class="people-save-control" onClick={() => setModal("savelist")}>{control.label}</Button>
-      <Button small onClick={() => navigate?.("/lists")}>Lists</Button>
       <Button small onClick={() => navigate?.("/pipeline")}>Sourcing pipeline</Button>
     </div>
 
@@ -423,6 +483,7 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
         </span>
       </div>
     </div> : null}
+    </>}
 
     {toast ? <div class="people-hint" role="status" style={{ marginTop: "var(--s3)" }}>{toast}</div> : null}
 
