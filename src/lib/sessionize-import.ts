@@ -493,14 +493,14 @@ async function importSpeaker(
   } : { kind: "speaker", person: null, attachment: null, membership_created: false, membership_id: null, submission: null, participations: [], answers: [], evaluations: [] };
   const now = nowAfter(current?.updated_at);
   const id = current?.id ?? stableImportId("person", event.id, externalRef || email);
-  // An import is an import, never an erase — the same rule the add-speaker
-  // path states. A blank CSV cell means "this export does not carry that
-  // field", not "delete what the speaker wrote in their portal", and profile
-  // fields live on the org-level `people` row, so an erase here reaches every
-  // conference that person speaks at. A cell that *is* filled and disagrees is
-  // last-write-wins: the import's row table names what it overwrote and Batch
-  // undo reverses it.
-  const merge = (incoming: string, stored: string | null): string | null => incoming.trim() || stored;
+  // An import is additive, never destructive. A blank CSV cell means "this
+  // export does not carry that field", not "delete what the speaker wrote in
+  // their portal", and profile fields live on the org-level `people` row, so
+  // an erase here reaches every conference that person speaks at. A filled
+  // cell also cannot replace an existing value: imports may fill a missing
+  // profile field, but an organizer's current value stays authoritative until
+  // they explicitly edit it in Marquee.
+  const merge = (incoming: string, stored: string | null): string | null => stored?.trim() ? stored : incoming.trim() || null;
   const next = {
     email: keepsStoredEmail ? current!.email : email,
     name,
@@ -508,10 +508,13 @@ async function importSpeaker(
     company: merge(row.company, current?.company ?? null),
     bio: merge(row.bio, current?.bio ?? null),
   };
-  const overwritten = current
-    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && current[field] !== next[field])
+  const preserved = current
+    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && current[field] !== null)
     : [];
-  const retained = current
+  const filled = current
+    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && current[field] === null && next[field] !== null)
+    : [];
+  const blankRetained = current
     ? (["title", "company", "bio"] as const).filter((field) => !row[field].trim() && current[field] !== null)
     : [];
   const changed = !current || current.email !== next.email || current.name !== next.name || current.title !== next.title || current.company !== next.company || current.bio !== next.bio;
@@ -557,14 +560,17 @@ async function importSpeaker(
   // An organizer auditing an import has to be able to tell why a row landed the
   // way it did. A created row matched nothing, so it must not claim a match;
   // a matched row says which key found the person; and an updated row names the
-  // fields it overwrote and the ones the CSV left blank and therefore kept.
+  // fields it kept, filled, and the ones the CSV left blank and therefore
+  // retained. This is the durable audit trail an organizer sees after the
+  // import; it must never claim that an existing profile value was overwritten.
   const reason = [
     current
       ? `matched by ${matchedBy}`
       : externalRef ? `new person, keyed by external_ref ${externalRef}` : "new person, keyed by normalized email",
     keepsStoredEmail ? "kept email (name match)" : null,
-    overwritten.length ? `overwrote ${overwritten.join(", ")}` : null,
-    retained.length ? `kept ${retained.join(", ")} (blank in CSV)` : null,
+    preserved.length ? `kept ${preserved.join(", ")} (existing value)` : null,
+    filled.length ? `filled ${filled.join(", ")}` : null,
+    blankRetained.length ? `kept ${blankRetained.join(", ")} (blank in CSV)` : null,
     headshot ? "headshot retained as a pending external attachment" : null,
   ].filter(Boolean).join("; ");
   await saveImportRow(db, {

@@ -2,8 +2,8 @@
  * MRQ-164 Part 3 — the Sessionize import is an import, never an erase.
  *
  * A blank CSV cell means "this export does not carry that field", not "delete
- * what the speaker wrote in their portal". A filled cell that disagrees is
- * last-write-wins, and the row reason says which fields moved and which stayed.
+ * what the speaker wrote in their portal". A filled cell can fill a missing
+ * value, but does not overwrite an existing organizer value.
  */
 import { SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, test } from "vitest";
@@ -20,8 +20,8 @@ const PORTAL_BIO = "A careful, speaker-written biography that took an afternoon 
 
 const SPEAKERS_CSV = [
   "Speaker ID,Name,Email,Job Title,Company,Bio,Photo URL",
-  // Blank bio, blank company; a title that disagrees with what is stored.
-  "speaker-priya,Priya Raman,priya@mrq164.test,Staff Engineer,,,",
+  // A conflicting title and bio must not replace the organizer's values.
+  "speaker-priya,Priya Raman,priya@mrq164.test,Staff Engineer,,Imported biography from the export,",
 ].join("\n");
 
 const SESSIONS_CSV = [
@@ -56,7 +56,7 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
 describe.sequential("MRQ-164 Sessionize import merge", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("CONTRACT · MRQ-164 · a blank CSV cell keeps the stored value while a filled one wins, and the row says which", async () => {
+  test("CONTRACT · MRQ-164 · an import fills gaps but keeps existing profile values, and the row says which", async () => {
     const uploaded = await request(`/api/v1/events/${EVENT_ID}/imports`, {
       method: "POST",
       body: JSON.stringify({ source: "sessionize", sessions_csv: SESSIONS_CSV, speakers_csv: SPEAKERS_CSV }),
@@ -70,17 +70,35 @@ describe.sequential("MRQ-164 Sessionize import merge", () => {
     const result = await run.json<{ rows: Array<{ entity: string; outcome: string; reason: string | null }> }>();
 
     const person = await env.DB.prepare("SELECT title, company, bio FROM people WHERE id = ?").bind(EXISTING_ID).first<{ title: string | null; company: string | null; bio: string | null }>();
-    // The speaker's own words survive an export that never carried them.
+    // The speaker's own words survive the export's conflicting bio.
     expect(person?.bio).toBe(PORTAL_BIO);
     expect(person?.company).toBe("Northwind Data");
-    // A filled cell that disagrees is last-write-wins.
-    expect(person?.title).toBe("Staff Engineer");
+    // A filled cell that disagrees cannot erase the organizer's value.
+    expect(person?.title).toBe("Principal Engineer");
 
     const speakerRow = result.rows.find((row) => row.entity === "speaker");
-    expect(speakerRow?.outcome).toBe("updated");
+    expect(speakerRow?.outcome).toBe("skipped");
     expect(speakerRow?.reason).toContain("matched by normalized email");
-    expect(speakerRow?.reason).toContain("overwrote title");
-    expect(speakerRow?.reason).toContain("kept company, bio (blank in CSV)");
+    expect(speakerRow?.reason).toContain("kept title, bio (existing value)");
+    expect(speakerRow?.reason).toContain("kept company (blank in CSV)");
+  });
+
+  test("CONTRACT · MRQ-164 · a filled cell can populate a missing existing profile field", async () => {
+    const csv = [
+      "Speaker ID,Name,Email,Job Title,Company,Bio,Photo URL",
+      "speaker-owner,MRQ-164 Owner,owner@mrq164.test,Program lead,Marquee,The organizer's profile.,",
+    ].join("\n");
+    const uploaded = await request(`/api/v1/events/${EVENT_ID}/imports`, {
+      method: "POST",
+      body: JSON.stringify({ source: "sessionize", speakers_csv: csv }),
+    });
+    const uploadBody = await uploaded.json<{ id: string; mapping: Record<string, Record<string, string | null>> }>();
+    await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/mapping`, { method: "POST", body: JSON.stringify(uploadBody.mapping) });
+    const result = await (await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/run`, { method: "POST" })).json<{ rows: Array<{ entity: string; reason: string | null }> }>();
+
+    const person = await env.DB.prepare("SELECT title, company, bio FROM people WHERE id = ?").bind(OWNER_ID).first<{ title: string | null; company: string | null; bio: string | null }>();
+    expect(person).toMatchObject({ title: "Program lead", company: "Marquee", bio: "The organizer's profile." });
+    expect(result.rows.find((row) => row.entity === "speaker")?.reason).toContain("filled title, company, bio");
   });
 
   test("CONTRACT · MRQ-164 · a created row does not claim it matched an existing person", async () => {

@@ -108,7 +108,7 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     expect((await sameImportAgain.json<{ counts: { skipped: number; failed: number } }>()).counts).toMatchObject({ skipped: 6, failed: 1 });
   }, 20_000);
 
-  test("AC-112 · the same export preserves row counts, while an updated export changes matched values and inserts a new row", async () => {
+  test("AC-112 · the same export preserves row counts, while an updated export changes records without erasing profile values", async () => {
     const firstCounts = await counts();
     const repeated = await request(`/api/v1/events/${EVENT_ID}/imports`, { method: "POST", body: JSON.stringify({ source: "sessionize", sessions_csv: sessionsCsv, speakers_csv: speakersCsv }) });
     expect(repeated.status).toBe(201);
@@ -132,10 +132,10 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     const updatedRun = await request(`/api/v1/events/${EVENT_ID}/imports/${updatedBody.id}/run`, { method: "POST" });
     expect(updatedRun.status).toBe(200);
     const updatedResult = await updatedRun.json<{ counts: { updated: number; created: number; failed: number } }>();
-    expect(updatedResult.counts.updated).toBeGreaterThanOrEqual(2);
+    expect(updatedResult.counts.updated).toBeGreaterThanOrEqual(1);
     expect(updatedResult.counts.created).toBeGreaterThanOrEqual(1);
     expect(updatedResult.counts.failed).toBe(1);
-    expect((await env.DB.prepare("SELECT bio FROM people WHERE email = 'ada@example.test'").first<{ bio: string }>())?.bio).toBe("Updated conference program bio.");
+    expect((await env.DB.prepare("SELECT bio FROM people WHERE email = 'ada@example.test'").first<{ bio: string }>())?.bio).toBe("Builds reliable conference programs.");
     expect((await env.DB.prepare("SELECT score, comment FROM evaluations WHERE submission_id = (SELECT id FROM submissions WHERE external_ref = 'sess-trust-101')").first<{ score: number; comment: string }>())).toMatchObject({ score: 4.8, comment: "Updated after organizer correction." });
     const newRow = await env.DB.prepare("SELECT id FROM submissions WHERE event_id = ? AND external_ref = 'sess-trust-103'").bind(EVENT_ID).first<{ id: string }>();
     expect(newRow?.id).toBeTruthy();
@@ -193,7 +193,7 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     expect(mapped.status).toBe(200);
     const run = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/run`, { method: "POST" });
     expect(run.status).toBe(200);
-    expect(await run.json<{ counts: { created: number; updated: number; skipped: number; speakers: number; sessions: number; failed: number } }>()).toMatchObject({ counts: { created: 1, updated: 1, skipped: 2, speakers: 4, sessions: 0, failed: 0 } });
+    expect(await run.json<{ counts: { created: number; updated: number; skipped: number; speakers: number; sessions: number; failed: number } }>()).toMatchObject({ counts: { created: 1, updated: 0, skipped: 3, speakers: 4, sessions: 0, failed: 0 } });
     expect(await env.DB.prepare("SELECT name, email FROM people WHERE email = 'dana-only@example.test'").first()).toMatchObject({ name: "Dana Kowalski", email: "dana-only@example.test" });
 
     for (const name of ["Kowalski", "Updated Import", "Pre-existing Import", "Skipped Membership"]) {
