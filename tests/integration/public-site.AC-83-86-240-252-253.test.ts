@@ -19,6 +19,8 @@ const EVENT_ID = "evt_public_site";
 const EVENT_SLUG = "public-conf";
 const PUBLIC_SESSION_ID = "sub_public_session";
 const PRIVATE_SESSION_ID = "sub_private_session";
+const NO_STAGE_SESSION_ID = "sub_no_stage_session";
+const NO_STAGE_TITLE = "Lightning: No speaker attached";
 const PUBLIC_TITLE = "Visible session title";
 const PRIVATE_TITLE = "Secret unpublished title";
 const PRIVATE_ABSTRACT = "Secret unpublished abstract";
@@ -145,6 +147,37 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   const twoBuildingSessionBody = await twoBuildingSession.text();
   expect(twoBuildingSessionBody).toContain("Main Stage · Sheraton New York Times Square");
   await env.DB.prepare("DELETE FROM buildings WHERE id = 'building-public-annex'").run();
+});
+
+test("MRQ-185 · a published submitter-only session names its missing on-stage speaker on the agenda and embed", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)")
+      .bind("person-no-stage", "org_public_site", "submitter-only@example.com", "Submitter Only", "Program Lead", "Conference Co", "Submitter biography", NOW, NOW),
+    env.DB.prepare(`INSERT INTO submissions (id, event_id, kind, title, abstract, status, primary_track_id, origin, submitter_person_id, search_blob, created_at, updated_at)
+      VALUES (?, ?, 'abstract', ?, ?, 'accepted', ?, 'public', ?, ?, ?, ?)`)
+      .bind(NO_STAGE_SESSION_ID, EVENT_ID, NO_STAGE_TITLE, "A session whose submitter is not on stage", "track-public", "person-no-stage", `${NO_STAGE_TITLE} Submitter Only Conference Co`, NOW, NOW),
+    env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)")
+      .bind("st-no-stage", NO_STAGE_SESSION_ID, "track-public", NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES (?, ?, ?, 'submitter', 0, 'confirmed', ?, ?)")
+      .bind("par-no-stage", NO_STAGE_SESSION_ID, "person-no-stage", NOW, NOW),
+    env.DB.prepare(`INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
+      VALUES (?, ?, ?, 'session', ?, 45, ?, ?, 1, ?, ?)`)
+      .bind("agenda-no-stage", EVENT_ID, NO_STAGE_SESSION_ID, Date.UTC(2026, 9, 12, 15), "room-public", "track-public", NOW, NOW),
+  ]);
+
+  const agenda = await request(`/agenda?event=${EVENT_SLUG}`);
+  const agendaBody = await agenda.text();
+  expect(agenda.status).toBe(200);
+  expect(agendaBody).toContain(NO_STAGE_TITLE);
+  expect(agendaBody).toMatch(/<p class="public-speakers">Speaker to be announced<\/p>/);
+  expect(agendaBody).toContain("Public Speaker");
+
+  const embed = await request(`/embed/${EVENT_SLUG}-agenda?event=${EVENT_SLUG}`);
+  const embedBody = await embed.text();
+  expect(embed.status).toBe(200);
+  expect(embedBody).toContain(NO_STAGE_TITLE);
+  expect(embedBody).toContain("Speaker to be announced");
+  expect(embedBody).toContain("Public Speaker");
 });
 
 test("AC-84, AC-88, AC-274 · public speaker detail and embeds render seeded avatars with a truthful initials fallback", async () => {
