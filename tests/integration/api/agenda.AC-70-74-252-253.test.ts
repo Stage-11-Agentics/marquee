@@ -51,12 +51,28 @@ async function seedFixture(): Promise<void> {
 describe.sequential("MRQ-20 agenda API", () => {
   beforeAll(seedFixture, 10_000);
 
-  test("CONTRACT · AIA-07 batch publish previews only scheduled accepted Sessions and mirrors both publication flags", async () => {
+  test("CONTRACT · CNT-12 + AIA-07 show every accepted Session but publish only scheduled ones", async () => {
     const initial = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
-    const initialBody = await initial.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string; title: string; room: string; building: string; speakers: Array<{ name: string }> }> } }>();
-    expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 1 });
-    expect(initialBody.publication.candidates[0]).toMatchObject({ submission_id: "sub-agenda-placed", title: "Already placed", room: "Room 101", building: "North Hall" });
-    expect(initialBody.publication.candidates[0]?.speakers[0]?.name).toBe("Demo Organizer");
+    const initialBody = await initial.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string; title: string; scheduled: boolean; can_publish: boolean; blocked_reason: string | null; starts_at: number | null; room: string | null; building: string | null; speakers: Array<{ name: string }> }> } }>();
+    expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 2 });
+    const placedCandidate = initialBody.publication.candidates.find((candidate) => candidate.submission_id === "sub-agenda-placed");
+    expect(placedCandidate).toMatchObject({ submission_id: "sub-agenda-placed", title: "Already placed", scheduled: true, can_publish: true, room: "Room 101", building: "North Hall" });
+    expect(placedCandidate?.speakers[0]?.name).toBe("Demo Organizer");
+    expect(initialBody.publication.candidates.find((candidate) => candidate.submission_id === "sub-agenda-accepted")).toMatchObject({
+      submission_id: "sub-agenda-accepted",
+      title: "Accepted session",
+      scheduled: false,
+      can_publish: false,
+      blocked_reason: "needs a room and time before it can go public",
+      starts_at: null,
+      room: null,
+      building: null,
+    });
+
+    const publicResponse = await SELF.fetch(`${ORIGIN}/api/v1/public/agenda?event=aie-nyc-2026&q=Accepted%20session`);
+    expect(publicResponse.status).toBe(200);
+    const publicBody = await publicResponse.json<{ sessions: Array<{ title: string }> }>();
+    expect(publicBody.sessions.some((session) => session.title === "Accepted session")).toBe(false);
 
     await env.DB.prepare("UPDATE submissions SET status = 'withdrawn' WHERE id = ? AND event_id = ?").bind("sub-agenda-placed", DEMO_EVENT_ID).run();
     const withdrawn = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
