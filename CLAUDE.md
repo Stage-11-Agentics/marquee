@@ -102,6 +102,10 @@ git pull --ff-only github main   # the checkout is usually behind; catch up firs
 git add <specific paths> && git commit && git push github main
 ```
 
+Know that a direct push **bypasses the `fast-gate` required check** (the push
+warns, then lands anyway). For docs that costs nothing; for a code fix it means
+the tests you ran locally *were* the gate — so actually run them.
+
 What keeps this safe is that HEAD never leaves `main` and the tree never stays
 dirty: pull `--ff-only` before starting, stage only your own paths (sibling agents'
 live `.lattice` changes are not yours to commit), push immediately. If the change
