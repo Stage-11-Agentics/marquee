@@ -122,7 +122,7 @@ export function CreateConferencePage({ navigate }: { navigate: (target: string) 
   const [selection, setSelection] = useState<Record<CopySetKey, boolean>>({ ...DEFAULT_SELECTION });
   const [name, setName] = useState("");
   const [dates, setDates] = useState(() => defaultDates(null));
-  const [timezone, setTimezone] = useState(EVENT_TIMEZONES[0] ?? "America/New_York");
+  const [timezone, setTimezone] = useState<string>(EVENT_TIMEZONES[0] ?? "America/New_York");
   const [venue, setVenue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
