@@ -11,6 +11,7 @@ import {
   type PublicSession,
   type PublicTrack,
 } from "../../lib/public-site";
+import { embedSnippetStyle } from "../../lib/embed-snippet";
 import { PUBLIC_SPEAKER_EMPTY_LABEL } from "../../lib/participants";
 import { PublicShell, PUBLIC_SITE_STYLES, PublicSpeakerAvatar } from "../public/agenda/PublicAgendaPage";
 
@@ -157,6 +158,9 @@ export const EMBED_CONFIG_SCRIPT = `
   const layoutNote = document.querySelector('[data-layout-note]');
   if (!form || !code || !preview) return;
   const KIND_LABEL = { agenda: 'Agenda', sessions: 'Sessions', speakers: 'Speakers', cfp: 'Call for speakers' };
+  // Interpolated from EMBED_SNIPPET_HEIGHT_PX so the snippet this page copies
+  // and the one the saved-embed API returns cannot drift apart.
+  const SNIPPET_STYLE = ${JSON.stringify(Object.fromEntries(EMBED_KINDS.map((kind) => [kind, embedSnippetStyle(kind)])))};
   const OUTPUT_LABEL = { html: 'Styled HTML', basic: 'Basic HTML', json: 'JSON feed', xml: 'XML feed', ical: 'iCal feed' };
   const allFieldsFor = (kind) => {
     const group = fieldGroups.find((candidate) => candidate.dataset.embedFieldsFor === kind);
@@ -226,7 +230,7 @@ export const EMBED_CONFIG_SCRIPT = `
     const src = pathFor(slug, state.output, params);
     const absolute = window.location.origin + src;
     code.value = state.output === 'html'
-      ? '<iframe src="' + absolute + '" title="' + event + ' ' + KIND_LABEL[kind].toLowerCase() + '" loading="lazy" style="width:100%;border:0"></iframe>'
+      ? '<iframe src="' + absolute + '" title="' + event + ' ' + KIND_LABEL[kind].toLowerCase() + '" loading="lazy" style="' + SNIPPET_STYLE[kind] + '"></iframe>'
       : state.output === 'ical' ? '<a href="' + absolute + '">Add ' + event + ' to calendar</a>' : absolute;
     const previewSrc = src + (src.includes('?') ? '&' : '?') + 'preview=' + encodeURIComponent(state.output);
     preview.src = previewSrc;
@@ -520,7 +524,7 @@ function snippet(event: PublicEvent, kind: EmbedKind, track: string, status: str
   const source = `https://marquee.stage11.dev${embedPath(event, kind, output, embedParams(kind, track, status, layout, accent, fields))}`;
   if (output === "json" || output === "xml" || output === "basic") return source;
   if (output === "ical") return `<a href="${source}">Add ${event.name} to calendar</a>`;
-  return `<iframe src="${source}" title="${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()}" loading="lazy" style="width:100%;border:0"></iframe>`;
+  return `<iframe src="${source}" title="${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()}" loading="lazy" style="${embedSnippetStyle(kind)}"></iframe>`;
 }
 
 function previewSrc(event: PublicEvent, kind: EmbedKind, track: string, status: string, layout: EmbedLayout, accent: string, fields: readonly EmbedField[], output: EmbedOutputFormat): string {

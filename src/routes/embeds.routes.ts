@@ -6,6 +6,7 @@ import { newUlid } from "../api/ids";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { auditStatement } from "../lib/audit";
 import { EMBED_KINDS, EMBED_OUTPUT_FORMATS, type EmbedKind } from "../db/schema";
+import { embedSnippetStyle } from "../lib/embed-snippet";
 import { defaultEmbedFields, normalizeEmbedFields, parseEmbedConfig } from "../lib/public-site";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -94,7 +95,7 @@ function savedEmbedSnippet(row: SavedEmbed, origin: string): string {
   const source = `${origin.replace(/\/+$/, "")}${path}${finalQuery ? `?${finalQuery}` : ""}`;
   if (config.output === "json" || config.output === "xml" || config.output === "basic") return source;
   if (config.output === "ical") return `<a href="${source}">Add ${escapeHtml(row.name)} to calendar</a>`;
-  return `<iframe src="${source}" title="${escapeHtml(row.name)}" loading="lazy" style="width:100%;border:0"></iframe>`;
+  return `<iframe src="${source}" title="${escapeHtml(row.name)}" loading="lazy" style="${embedSnippetStyle(config.kind)}"></iframe>`;
 }
 
 function rowView(row: SavedEmbed, origin: string) {

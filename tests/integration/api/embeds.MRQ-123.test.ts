@@ -28,6 +28,29 @@ beforeEach(async () => {
   ]);
 });
 
+test("CONTRACT · EMB-15 · the HTML snippet a saved embed hands over carries a height", async () => {
+  // sbek round 11, manual: the generated iframe carried width and border and no
+  // height, so pasted onto a third-party page it rendered at the browser
+  // default 150px — the visitor saw the header and the filter bar and
+  // essentially none of the programme. Content was never the problem; setting a
+  // height by hand revealed the whole correct widget.
+  const created = await request(`/api/v1/events/${EVENT_ID}/embeds`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Main site agenda", kind: "agenda", output_format: "html", track: null, status: null, layout: null, accent: null }),
+  });
+  expect(created.status).toBe(201);
+  const { data } = await created.json() as { data: { snippet: string } };
+
+  expect(data.snippet).toContain("<iframe");
+  expect(data.snippet).toMatch(/style="[^"]*height:\d+px/);
+  expect(data.snippet).toMatch(/style="[^"]*min-height:\d+px/);
+  // The two it always had are still there.
+  expect(data.snippet).toContain("width:100%");
+  expect(data.snippet).toContain("border:0");
+  expect(data.snippet).not.toContain('style="width:100%;border:0"');
+});
+
 test("CONTRACT · EMB-15 · saved embeds require organizer grants and return named, toggleable code", async () => {
   const unauthenticated = await request(`/api/v1/events/${EVENT_ID}/embeds`, {}, "");
   expect(unauthenticated.status).toBe(401);
