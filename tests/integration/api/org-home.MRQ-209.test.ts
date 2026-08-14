@@ -12,6 +12,9 @@ const OTHER_EVENT_ID = "evt_mrq209_other";
 const OWNER_ID = "per_mrq209_owner";
 const RETURNING_SPEAKER_ID = "per_mrq209_returning";
 const SINGLE_SPEAKER_ID = "per_mrq209_single";
+const REJECTED_SPEAKER_ID = "per_mrq209_rejected";
+const WITHDRAWN_SPEAKER_ID = "per_mrq209_withdrawn";
+const DRAFT_SPEAKER_ID = "per_mrq209_draft";
 const OTHER_PERSON_ID = "per_mrq209_other";
 const OWNER_SESSION_ID = "sess_mrq209_owner";
 const SPEAKER_SESSION_ID = "sess_mrq209_speaker";
@@ -59,6 +62,15 @@ async function seedFixture(): Promise<void> {
       .bind(SINGLE_SPEAKER_ID, ORG_ID, "single@mrq209.test", "Sam Single", NOW, NOW),
     env.DB.prepare(`INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, custom_fields, is_demo, last_write_source, created_at, updated_at)
       VALUES (?, ?, ?, ?, NULL, NULL, NULL, '[]', '{}', 0, 'marquee', ?, ?)`)
+      .bind(REJECTED_SPEAKER_ID, ORG_ID, "rejected@mrq209.test", "Rae Rejected", NOW, NOW),
+    env.DB.prepare(`INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, custom_fields, is_demo, last_write_source, created_at, updated_at)
+      VALUES (?, ?, ?, ?, NULL, NULL, NULL, '[]', '{}', 0, 'marquee', ?, ?)`)
+      .bind(WITHDRAWN_SPEAKER_ID, ORG_ID, "withdrawn@mrq209.test", "Wes Withdrawn", NOW, NOW),
+    env.DB.prepare(`INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, custom_fields, is_demo, last_write_source, created_at, updated_at)
+      VALUES (?, ?, ?, ?, NULL, NULL, NULL, '[]', '{}', 0, 'marquee', ?, ?)`)
+      .bind(DRAFT_SPEAKER_ID, ORG_ID, "draft@mrq209.test", "Drew Draft", NOW, NOW),
+    env.DB.prepare(`INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, custom_fields, is_demo, last_write_source, created_at, updated_at)
+      VALUES (?, ?, ?, ?, NULL, NULL, NULL, '[]', '{}', 0, 'marquee', ?, ?)`)
       .bind(OTHER_PERSON_ID, OTHER_ORG_ID, "other@mrq209.test", "Other Person", NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'program_lead', ?, ?)")
       .bind("mem_mrq209_owner", ORG_ID, UPCOMING_EVENT_ID, OWNER_ID, NOW, NOW),
@@ -67,6 +79,8 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'speaker', ?, ?)")
       .bind("mem_mrq209_speaker", ORG_ID, UPCOMING_EVENT_ID, RETURNING_SPEAKER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'speaker', ?, ?)")
+      .bind("mem_mrq209_ended_speaker", ORG_ID, ENDED_EVENT_ID, RETURNING_SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'speaker', ?, ?)")
       .bind("mem_mrq209_other_speaker", OTHER_ORG_ID, OTHER_EVENT_ID, OTHER_PERSON_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'session', ?, 'accepted', 'admin', ?, ?, ?)")
       .bind("sub_mrq209_upcoming_returning", UPCOMING_EVENT_ID, "Returning session", OWNER_ID, NOW, NOW),
@@ -74,12 +88,20 @@ async function seedFixture(): Promise<void> {
       .bind("sub_mrq209_ended_returning", ENDED_EVENT_ID, "Past returning session", OWNER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'abstract', ?, 'submitted', 'public', ?, ?, ?)")
       .bind("sub_mrq209_upcoming_single", UPCOMING_EVENT_ID, "Single speaker abstract", OWNER_ID, NOW, NOW),
-    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
-      .bind("part_mrq209_upcoming_returning", "sub_mrq209_upcoming_returning", RETURNING_SPEAKER_ID, NOW, NOW),
-    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
-      .bind("part_mrq209_ended_returning", "sub_mrq209_ended_returning", RETURNING_SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'abstract', ?, 'rejected', 'public', ?, ?, ?)")
+      .bind("sub_mrq209_upcoming_rejected", UPCOMING_EVENT_ID, "Rejected speaker abstract", OWNER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'abstract', ?, 'withdrawn', 'public', ?, ?, ?)")
+      .bind("sub_mrq209_upcoming_withdrawn", UPCOMING_EVENT_ID, "Withdrawn speaker abstract", OWNER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'abstract', ?, 'draft', 'public', ?, ?, ?)")
+      .bind("sub_mrq209_upcoming_draft", UPCOMING_EVENT_ID, "Draft speaker abstract", OWNER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
       .bind("part_mrq209_upcoming_single", "sub_mrq209_upcoming_single", SINGLE_SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
+      .bind("part_mrq209_upcoming_rejected", "sub_mrq209_upcoming_rejected", REJECTED_SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
+      .bind("part_mrq209_upcoming_withdrawn", "sub_mrq209_upcoming_withdrawn", WITHDRAWN_SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
+      .bind("part_mrq209_upcoming_draft", "sub_mrq209_upcoming_draft", DRAFT_SPEAKER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at, target_event_id, next_touch_on) VALUES (?, ?, ?, 'stage', ?, ?, ?, ?, ?)")
       .bind("stage_mrq209_returning", ORG_ID, RETURNING_SPEAKER_ID, '{"stage":"contacted"}', OWNER_ID, NOW + 10, UPCOMING_EVENT_ID, "2026-08-12"),
     env.DB.prepare("INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at, target_event_id, next_touch_on) VALUES (?, ?, ?, 'stage', ?, ?, ?, ?, ?)")
@@ -138,15 +160,15 @@ describe.sequential("MRQ-209 organization home", () => {
       id: UPCOMING_EVENT_ID,
       lifecycle: "upcoming",
       lifecycle_label: "Upcoming",
-      submission_count: 2,
+      submission_count: 5,
       speaker_count: 2,
       session_count: 1,
       links: { dashboard: `/dashboard?event=${UPCOMING_EVENT_ID}` },
     });
-    expect(body.data.seasons[1]).toMatchObject({ id: ENDED_EVENT_ID, lifecycle: "ended", lifecycle_label: "Complete" });
+    expect(body.data.seasons[1]).toMatchObject({ id: ENDED_EVENT_ID, lifecycle: "ended", lifecycle_label: "Complete", speaker_count: 1 });
     expect(body.data.next_season.id).toBe(UPCOMING_EVENT_ID);
     expect(body.data.create_conference_href).toBe("/conferences/new");
-    expect(body.data.relationships.people).toMatchObject({ value: 3, state: "ready" });
+    expect(body.data.relationships.people).toMatchObject({ value: 6, state: "ready" });
     expect(body.data.relationships.returning_speakers).toMatchObject({ value: 1, state: "ready" });
     expect(body.data.relationships.in_outreach).toMatchObject({ value: 2, state: "ready", href: "/pipeline" });
     expect(body.data.relationships.organizers).toMatchObject({ value: 2, state: "ready" });

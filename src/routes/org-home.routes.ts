@@ -13,6 +13,10 @@ import {
   ORG_HOME_SERVER_HREF,
 } from "../api/org-home";
 import { requireOrgAccess } from "../lib/auth/org-access";
+import {
+  RETURNING_SPEAKER_PERSON_SOURCE,
+  speakerRosterPersonSource,
+} from "../lib/roster-source";
 import { CURRENT_STAGE } from "./people.queries";
 import {
   readInstanceStatus,
@@ -252,10 +256,10 @@ async function readSeasons(db: D1Database, orgId: string, today: string): Promis
   const rows = await db.prepare(
     `SELECT e.id, e.name, e.slug, e.starts_on, e.ends_on, e.status,
        (SELECT COUNT(*) FROM submissions s WHERE s.event_id = e.id) AS submission_count,
-       (SELECT COUNT(DISTINCT p.person_id)
-          FROM participations p
-          JOIN submissions speaker_submission ON speaker_submission.id = p.submission_id
-         WHERE speaker_submission.event_id = e.id AND p.role IN ('speaker', 'co_speaker')) AS speaker_count,
+       (SELECT COUNT(*)
+          FROM people roster_person
+         WHERE roster_person.org_id = e.org_id
+           AND roster_person.id IN (${speakerRosterPersonSource("e.id")})) AS speaker_count,
        (SELECT COUNT(*) FROM agenda_items ai WHERE ai.event_id = e.id AND ai.kind = 'session') AS session_count
        FROM events e
       WHERE e.org_id = ?
@@ -281,15 +285,7 @@ async function readRelationshipCounts(db: D1Database, orgId: string): Promise<Re
        (SELECT COUNT(DISTINCT m.person_id)
           FROM memberships m
          WHERE m.org_id = ? AND m.role IN ('owner', 'program_lead', 'ops')) AS organizer_count,
-       (SELECT COUNT(*) FROM (
-          SELECT p.person_id
-            FROM participations p
-            JOIN submissions s ON s.id = p.submission_id
-            JOIN people speaker ON speaker.id = p.person_id
-           WHERE speaker.org_id = ? AND p.role IN ('speaker', 'co_speaker')
-           GROUP BY p.person_id
-          HAVING COUNT(DISTINCT s.event_id) >= 2
-       )) AS returning_speaker_count`,
+       (SELECT COUNT(*) FROM (${RETURNING_SPEAKER_PERSON_SOURCE}) returning_speaker) AS returning_speaker_count`,
   ).bind(orgId, orgId, orgId).first<RelationshipCounts>();
   if (!row) return { people_count: 0, returning_speaker_count: 0, organizer_count: 0 };
   return {
