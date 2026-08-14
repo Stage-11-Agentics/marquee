@@ -95,6 +95,10 @@
 .speaker-section { display: grid; gap: 10px; }
 .speaker-section h3 { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
 .speaker-note { color: var(--muted); font: 10px/1.5 var(--mono); }
+.speaker-files-summary { display: grid; gap: 4px; min-height: 34px; }
+.speaker-files-summary .speaker-note { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; min-height: 15px; }
+.speaker-files-summary strong { color: var(--ink-soft); font-family: var(--sans); font-size: 11px; font-weight: 500; }
+.speaker-files-summary span { text-align: right; }
 .speaker-empty-line { color: var(--muted); font: 11px/1.5 var(--sans); }
 .speaker-list { display: grid; gap: 6px; }
 .speaker-list-row { align-items: center; border: 1px solid var(--line); display: flex; gap: 10px; justify-content: space-between; padding: 9px 10px; }
