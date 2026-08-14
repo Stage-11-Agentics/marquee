@@ -20,7 +20,9 @@ test("CONTRACT · MRQ-93 keeps generic acknowledgement separate from the two sub
 
 test("CONTRACT · MRQ-93 reuses the existing talk and profile write paths", () => {
   assert.equal((portal.match(/\/api\/v1\/me\/submissions\/\$\{submission\.id\}\/talk/g) ?? []).length, 1);
-  assert.equal((portal.match(/requestJson\("\/api\/v1\/me\/profile"/g) ?? []).length, 1);
+  // Keep the write-path contract independent of whether its response type is
+  // supplied as a generic. The production call should remain type-checked.
+  assert.equal((portal.match(/requestJson(?:<[^>]+>)?\("\/api\/v1\/me\/profile"/g) ?? []).length, 1);
   assert.match(portal, /<TalkEditor submission=\{submission\} onSaved=\{onSaved\} \/>/);
   // The contract is that the profile panel reuses ProfileForm rather than
   // growing a second write path — not that the component's props never change.

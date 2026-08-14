@@ -55,7 +55,7 @@ export function useSeat(): { seat: SeatKind; blocked: boolean } {
 
 export function SeatBlockedPage({ seat, navigate }: { seat: SeatKind; navigate: (target: string) => void }): JSX.Element {
   const home = seat === "reviewer"
-    ? { path: "/reviewer", label: "Open your review queue" }
+    ? { path: "/reviewer", label: "Open your reviewer home" }
     : { path: "/portal", label: "Open your speaker portal" };
   return <div class="seat-blocked">
     <header class="seat-blocked-head">

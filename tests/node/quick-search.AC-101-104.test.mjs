@@ -53,16 +53,16 @@ test("AC-101 · every AppShell admin route is covered by one shared QuickSearch 
     const reason = outsideTheShellBecause(pathname);
     assert.ok(reason, `route "${row.id}" (${row.path}) is marked external: true, but AppShell renders it — it belongs inside the shared shell, not outside it`);
   }
-  const separate = routeRows.filter((row) => row.source.includes("external: true") || row.id === "reviewer");
-  assert.deepEqual(separate.map((row) => row.id).sort(), ["co-speaker", "delivery-health", "embeds", "event-site", "portal", "reviewer", "system-health"]);
+  const separate = routeRows.filter((row) => row.source.includes("external: true") || ["reviewer", "reviewer-queue"].includes(row.id));
+  assert.deepEqual(separate.map((row) => row.id).sort(), ["co-speaker", "delivery-health", "embeds", "event-site", "portal", "reviewer", "reviewer-queue", "system-health"]);
   // Delivery health carries the shared chrome itself, so the guarantee holds
   // there the same way: one shared search mount over the same route table.
   assert.equal((deliveryHealthShell.match(/<QuickSearch\b/g) ?? []).length, 1);
   assert.match(deliveryHealthShell, /<Sidebar\b/);
   assert.match(deliveryHealthShell, /<Topbar\b/);
-  const admin = routeRows.filter((row) => !row.source.includes("external: true") && !["api-docs", "reviewer"].includes(row.id));
-  assert.equal(admin.length, routeRows.length - external.length - 2);
-  assert.match(routeTable, /route\.id !== "reviewer"/);
+  const admin = routeRows.filter((row) => !row.source.includes("external: true") && !["api-docs", "reviewer", "reviewer-queue"].includes(row.id));
+  assert.equal(admin.length, routeRows.length - external.length - 3);
+  assert.match(routeTable, /\["reviewer", "reviewer-queue", "api-docs"\]/);
   assert.match(routeTable, /export const adminRouteTable[^=]*= routeTable\.filter\(isAdminRoute\)/);
   assert.equal((appShell.match(/<QuickSearch\b/g) ?? []).length, 1);
   assert.match(appShell, /openSearch=\{openSearch\}/);

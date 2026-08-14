@@ -124,7 +124,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   }, []);
 
   useEffect(() => {
-    const isNonAdminShell = location.pathname === "/portal" || location.pathname === "/reviewer" || location.pathname === "/co-speaker";
+    const isNonAdminShell = location.pathname === "/portal" || location.pathname === "/reviewer" || location.pathname === "/reviewer/queue" || location.pathname === "/co-speaker";
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const isTextControl = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
@@ -171,6 +171,14 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   // inside it: a reviewer's one conference has to reach a page the shell never
   // wraps.
   if (location.pathname === "/reviewer") {
+    return <>
+      {eventId === null
+        ? <div class="page"><NoConference navigate={navigate} /></div>
+        : <ReviewerPage eventId={eventId} mode="home" />}
+      {wall}
+    </>;
+  }
+  if (location.pathname === "/reviewer/queue") {
     return <>
       {eventId === null
         ? <div class="page"><NoConference navigate={navigate} /></div>

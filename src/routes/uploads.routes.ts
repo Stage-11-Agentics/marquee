@@ -332,7 +332,7 @@ async function handlePublicSign(context: Context<ApiEnv>) {
 }
 
 /**
- * Authenticated (speaker) presign for a self-owned task upload. Minimal
+ * Authenticated presign for a self-owned task or profile upload. Minimal
  * local session check — no Turnstile (resolution 3), fails closed on a
  * missing/expired session or a task that does not belong to the caller.
  */
@@ -411,10 +411,10 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
         `SELECT membership.event_id
          FROM memberships membership
          JOIN people person ON person.id = membership.person_id AND person.org_id = membership.org_id
-         WHERE membership.person_id = ? AND membership.role = 'speaker' AND membership.event_id IS NOT NULL
+         WHERE membership.person_id = ? AND membership.role IN ('speaker', 'reviewer') AND membership.event_id IS NOT NULL
          ORDER BY membership.event_id LIMIT 1`,
       ).bind(session.person_id).first<{ event_id: string }>();
-      if (!membership) return uploadError(context, "forbidden", "speaker membership is required for a headshot upload");
+      if (!membership) return uploadError(context, "forbidden", "a speaker or reviewer membership is required for a headshot upload");
       eventId = membership.event_id;
     }
   }
@@ -657,7 +657,7 @@ async function handleAttachmentPreview(context: Context<ApiEnv>) {
 /**
  * A speaker's profile headshot has no submission answer to join through. Keep
  * it behind the same event-scoped organizer read, while allowing the owning
- * speaker's portal session to render its own photo after a profile save.
+ * speaker or reviewer session to render its own photo after a profile save.
  * The pointer and owner type are both checked here so an attachment id or
  * person id from another conference cannot turn this into an object oracle.
  */
@@ -669,7 +669,7 @@ async function handlePersonHeadshot(context: Context<ApiEnv>) {
 
   const speakerOwnsRequest = auth.kind === "session"
     && auth.personId === personId
-    && authHasRole(auth, "speaker", eventId);
+    && (authHasRole(auth, "speaker", eventId) || authHasRole(auth, "reviewer", eventId));
   if (!speakerOwnsRequest) await requireSubmissionRead(context, eventId);
 
   const env = uploadsEnv(context);
@@ -821,9 +821,9 @@ const signTaskUpload = defineApiRoute(
     method: "post",
     path: "/api/v1/me/uploads/sign",
     operationId: "signTaskUpload",
-    summary: "Create an authenticated speaker upload presign",
+    summary: "Create an authenticated self-owned upload presign",
     description:
-      "Creates a presigned R2 PUT only for a task owned by the authenticated speaker session.",
+      "Creates a presigned R2 PUT only for a task or profile upload owned by the authenticated session.",
     tags: ["Uploads"],
     request: {
       body: { content: { "application/json": { schema: authenticatedSignRequestSchema } } },

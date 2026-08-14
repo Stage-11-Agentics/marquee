@@ -150,7 +150,7 @@ const spa = routeTable.map((route) => {
   let surface = "organizer";
   if (predicate.predicate(pathname)) surface = "public";
   else if (route.id === "portal" || route.id === "co-speaker") surface = "speaker";
-  else if (route.id === "reviewer") surface = "reviewer";
+  else if (route.id === "reviewer" || route.id === "reviewer-queue") surface = "reviewer";
   else if (route.id === "api-docs") surface = "api";
   return { ...route, surface };
 });

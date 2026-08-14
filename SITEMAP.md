@@ -34,7 +34,8 @@ flowchart TD
   end
 
   subgraph Reviewer["Reviewer — scoped to assigned tracks"]
-    Queue["#reviewer<br/>Reviewer queue"]
+    Home["#reviewer<br/>Reviewer home"]
+    Queue["#reviewer/queue<br/>Review queue"]
   end
 
   subgraph Speaker["Speaker — magic-link portal"]
@@ -234,7 +235,8 @@ flowchart TD
 | `#forms` | Form builder | Organizer |
 | `#evaluation` | Evaluation plan | Organizer |
 | `#evaluation/ai` | AI assist (optional, off the demo path) | Organizer |
-| `#reviewer` | Reviewer queue | Reviewer |
+| `#reviewer` | Reviewer home | Reviewer |
+| `#reviewer/queue` | Review queue | Reviewer |
 | `#onboarding` | Speaker onboarding — the chase board | Organizer |
 | `#agenda` | Agenda builder | Organizer |
 | `#comms` | Communications | Organizer |

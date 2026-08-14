@@ -30,13 +30,17 @@ const SPEED_IDS = Array.from({ length: 20 }, (_, index) => `submission-mrq-18-sp
 const ORIGIN = "https://marquee.stage11.dev";
 
 interface QueueEnvelope {
+  committees?: Array<{ id: string; name: string; role: string }>;
   completed?: Array<{ id: string; review: { criteria_scores: Record<string, number | string> | null; recommendation: string | null } | null }>;
+  counts?: { reviewed: number; total: number; waiting: number };
   current_id: string | null;
   current_index: number | null;
   data: Array<{ id: string; queue_id: string }>;
+  person?: { bio: string | null; company: string | null; email: string; id: string; name: string; title: string | null } | null;
   plan: { id: string; name: string };
   remaining: number;
   round?: { criteria?: Array<{ kind: string; name: string; options: string[] | null }> };
+  social_platforms?: string[];
   scopes: Array<{ name: string }>;
   total: number;
 }
@@ -130,6 +134,7 @@ async function seedReviewerFixture(): Promise<void> {
     env.DB.prepare("INSERT INTO committees (id, event_id, name, created_at, updated_at) VALUES (?, ?, 'MRQ-18 committee', ?, ?)").bind(COMMITTEE_ID, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO committee_members (id, committee_id, person_id, role, created_at, updated_at) VALUES ('committee-member-mrq-18', ?, ?, 'chair', ?, ?)").bind(COMMITTEE_ID, REVIEWER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES ('scope-mrq-18-a', ?, ?, ?, ?, ?)").bind(EVENT_ID, REVIEWER_ID, TRACK_A, NOW, NOW),
+    env.DB.prepare("INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at) VALUES ('setting-mrq-18-social-platforms', ?, 'speaker_social_platforms', ?, ?, ?)").bind(EVENT_ID, JSON.stringify({ platforms: ["linkedin", "unknown-platform"] }), NOW, NOW),
     ...submissions,
     ...trackRows,
     env.DB.prepare("INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at) VALUES ('answer-mrq-18', ?, ?, 'Build reliable systems', NULL, ?, ?)").bind(MAIN_ID, FIELD_ID, NOW, NOW),
@@ -164,6 +169,28 @@ describe.sequential("MRQ-18 reviewer queue", () => {
     expect(revisitedBody.current_id).toBe(firstBody.current_id);
     expect(revisitedBody.current_index).toBe(firstBody.current_index);
     expect(revisitedBody.data[0]?.queue_id).toBe(firstBody.data[0]?.queue_id);
+  });
+
+  test("CONTRACT · MRQ-171 · reviewer context carries the home data and the existing profile route accepts a reviewer seat", async () => {
+    const response = await request(`/api/v1/events/${EVENT_ID}/reviewer/queue`);
+    expect(response.status).toBe(200);
+    const body = await json<QueueEnvelope>(response);
+    expect(body.person).toMatchObject({ id: REVIEWER_ID, name: "MRQ-18 Reviewer", email: "reviewer@mrq-18.marquee.example" });
+    expect(body.social_platforms).toEqual(["linkedin"]);
+    expect(body.committees).toEqual([{ id: COMMITTEE_ID, name: "MRQ-18 committee", role: "chair" }]);
+    expect(body.counts).toEqual({ reviewed: 0, total: body.data.length, waiting: body.data.length });
+
+    const profile = await request("/api/v1/me/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "Review Chair", company: "Marquee Labs", bio: "A reviewer profile that survives a cold reload.", social_links: [], headshot_attachment_id: null }),
+    });
+    expect(profile.status).toBe(200);
+    expect(await json<{ person: { title: string; company: string; bio: string } }>(profile)).toMatchObject({
+      person: { title: "Review Chair", company: "Marquee Labs", bio: "A reviewer profile that survives a cold reload." },
+    });
+
+    const reloaded = await json<QueueEnvelope>(await request(`/api/v1/events/${EVENT_ID}/reviewer/queue`));
+    expect(reloaded.person).toMatchObject({ title: "Review Chair", company: "Marquee Labs", bio: "A reviewer profile that survives a cold reload." });
   });
 
   test("AC-244 · full detail contains evaluator fields and downloadable file metadata while blind identity stays in the query layer", async () => {
