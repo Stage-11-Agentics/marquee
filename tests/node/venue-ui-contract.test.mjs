@@ -11,7 +11,8 @@ const submissionsStyles = readFileSync(new URL("../../src/ui/submissions/submiss
 test("AC-252 · scheduler-facing room labels include their building", () => {
   assert.match(submissionsPage, /item\.slot\.show_building \? ` · \$\{item\.slot\.building\}`/);
   assert.match(submissionsPage, /<span class="chip slot-chip" title=\{slot\}><span>\{slot\}<\/span><\/span>/);
-  assert.match(submissionsStyles, /\.slot-chip > span \{ display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/);
+  assert.match(submissionsStyles, /\.slot-chip \{[^}]*text-overflow: ellipsis/);
+  assert.match(submissionsStyles, /\.submissions-page \.slot-chip > span \{ display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/);
 });
 
 test("AC-253 · venue authoring exposes AV capability tags and room-local notes", () => {
