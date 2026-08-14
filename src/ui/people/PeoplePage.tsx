@@ -34,12 +34,14 @@ import {
   type OrgSummary,
   type PeopleFilters,
   type PeoplePage as PeoplePayload,
+  type Person,
   type PersonListDetail,
   type SavedPersonList,
 } from "./people-api";
 import "./people.css";
 
 const PER_PAGE = 25;
+type SelectedPerson = Pick<Person, "id" | "name" | "do_not_contact">;
 
 /**
  * The People URL. Only two things live in it — which list you are inside and
@@ -109,7 +111,10 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   const [filters, setFilters] = useState<PeopleFilters>({ ...EMPTY_FILTERS, listId: listFromUrl });
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Keep the selected records, not only their ids. Selection survives a
+  // server-side search/page change, and the composer must still be able to
+  // name a do-not-contact person who is no longer in the visible page.
+  const [selected, setSelected] = useState<Map<string, SelectedPerson>>(new Map());
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [summary, setSummary] = useState<OrgSummary | null>(null);
   const [lists, setLists] = useState<SavedPersonList[] | null>(null);
@@ -217,9 +222,9 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     setFilters((current) => ({ ...current, listId: "" }));
     navigate?.(peopleUrl(""));
   };
-  const toggleRow = (id: string) => setSelected((current) => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id); else next.add(id);
+  const toggleRow = (row: SelectedPerson) => setSelected((current) => {
+    const next = new Map(current);
+    if (next.has(row.id)) next.delete(row.id); else next.set(row.id, row);
     return next;
   });
   // The drawer is a layer over the list you are in, so both of these carry the
@@ -450,8 +455,11 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
                 onChange={(event) => {
                   const on = (event.currentTarget as HTMLInputElement).checked;
                   setSelected((current) => {
-                    const next = new Set(current);
-                    for (const row of rows) { if (on) next.add(row.id); else next.delete(row.id); }
+                    const next = new Map(current);
+                    for (const row of rows) {
+                      if (on) next.set(row.id, { id: row.id, name: row.name, do_not_contact: row.do_not_contact });
+                      else next.delete(row.id);
+                    }
                     return next;
                   });
                 }}
@@ -474,7 +482,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
                 type="checkbox"
                 aria-label={`Select ${displayNames.get(row.id) ?? row.name}`}
                 checked={selected.has(row.id)}
-                onChange={() => toggleRow(row.id)}
+                onChange={() => toggleRow({ id: row.id, name: row.name, do_not_contact: row.do_not_contact })}
               />
             </td>
             <td>
@@ -538,7 +546,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     /> : null}
 
     {modal === "compose" ? <ComposeModal
-      people={rows.filter((row) => selected.has(row.id))}
+      people={[...selected.values()]}
       onClose={() => setModal("")}
       onSent={(result) => {
         setModal("");
@@ -557,7 +565,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     /> : null}
 
     {modal === "savelist" ? <SaveListModal
-      selectedIds={[...selected]}
+      selectedIds={[...selected.keys()]}
       matching={payload?.total ?? 0}
       filters={filters}
       onClose={() => setModal("")}
