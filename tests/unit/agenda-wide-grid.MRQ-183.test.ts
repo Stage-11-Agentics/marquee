@@ -41,6 +41,7 @@ const rooms = [room("oldest", 0), room("second", 1), room("middle", 2), room("la
 
 const snapshot: AgendaSnapshot = {
   event: { id: "event", name: "Demo Conference", starts_on: "2026-10-12", ends_on: "2026-10-12", timezone: "UTC" },
+  schedule_window: { outside_window_session_count: 0 },
   publication: { live: 0, not_yet_public: 0, candidates: [], public_agenda_url: "/agenda?event=event" },
   schedulable_statuses: ["accepted"],
   rooms,
