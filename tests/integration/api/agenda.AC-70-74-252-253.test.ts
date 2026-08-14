@@ -98,7 +98,7 @@ describe.sequential("MRQ-20 agenda API", () => {
     expect(await published.json<{ published_count: number; live: number; not_yet_public: number; public_agenda_url: string }>()).toMatchObject({
       published_count: 1,
       live: 1,
-      not_yet_public: 0,
+      not_yet_public: 1,
       public_agenda_url: "/agenda?event=aie-nyc-2026",
     });
     expect(await env.DB.prepare("SELECT is_published FROM submissions WHERE id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 1 });

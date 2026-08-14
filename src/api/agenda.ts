@@ -34,13 +34,16 @@ export interface AgendaEvent {
 }
 
 export interface AgendaPublishCandidate {
-  agenda_item_id: string;
+  agenda_item_id: string | null;
   submission_id: string;
   title: string;
-  starts_at: number;
-  duration_min: number;
-  room: string;
-  building: string;
+  starts_at: number | null;
+  duration_min: number | null;
+  room: string | null;
+  building: string | null;
+  scheduled: boolean;
+  can_publish: boolean;
+  blocked_reason: string | null;
   speakers: SubmissionSpeakerListItem[];
 }
 

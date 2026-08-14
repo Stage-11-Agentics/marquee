@@ -14,6 +14,9 @@ const candidate: AgendaPublishCandidate = {
   agenda_item_id: "item_1",
   submission_id: "sub_1",
   title: "Agents that answer to somebody",
+  scheduled: true,
+  can_publish: true,
+  blocked_reason: null,
   starts_at: Date.UTC(2026, 9, 13, 13, 0) / 1000,
   duration_min: 45,
   room: "Monarch",
@@ -22,6 +25,21 @@ const candidate: AgendaPublishCandidate = {
 };
 
 const row = (review: boolean) => renderToString(h(PublicationCandidateRow, { candidate, timezone: "America/New_York", review, selected: true }));
+const unscheduledRow = renderToString(h(PublicationCandidateRow, {
+  candidate: {
+    ...candidate,
+    agenda_item_id: null,
+    starts_at: null,
+    duration_min: null,
+    room: null,
+    building: null,
+    scheduled: false,
+    can_publish: false,
+    blocked_reason: "needs a room and time before it can go public",
+  },
+  timezone: "America/New_York",
+  selected: false,
+}));
 
 /**
  * The review step drops the checkbox. The row's grid still reserved a 20px
@@ -52,5 +70,11 @@ describe("MRQ-135 · the publication review row is readable", () => {
     expect(markup).toContain("type=\"checkbox\"");
     expect(markup).not.toContain("is-review");
     expect(styles).toMatch(/\.agenda-publication-candidate \{[^}]*grid-template-columns: 20px minmax\(0, 1fr\)/);
+  });
+
+  it("CONTRACT · an unscheduled accepted Session stays visible but its publication control is disabled with the reason", () => {
+    expect(unscheduledRow).toContain("disabled");
+    expect(unscheduledRow).toContain("needs a room and time before it can go public");
+    expect(unscheduledRow).toContain("Agents that answer to somebody");
   });
 });

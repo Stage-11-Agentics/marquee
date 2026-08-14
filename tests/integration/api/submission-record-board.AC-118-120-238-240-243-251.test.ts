@@ -122,6 +122,10 @@ describe.sequential("MRQ-33 admin record and program board", () => {
     expect(session).toMatchObject({ kind: "session", origin: "admin", status: "accepted", bypass_evaluation: true });
     expect((session.evaluations as unknown[]).length).toBe(0);
 
+    const sessionRecord = await request(`/api/v1/events/${EVENT_ID}/submissions/${session.id}`);
+    expect(sessionRecord.status).toBe(200);
+    expect(await body<{ is_published: boolean; slot: unknown }>(sessionRecord)).toMatchObject({ is_published: false, slot: null });
+
     const listed = await request(`/api/v1/events/${EVENT_ID}/submissions?q=Admin-created%20abstract&per_page=10`);
     expect(listed.status).toBe(200);
     const list = await body<{ data: Array<{ id: string; origin: string }> }>(listed);
