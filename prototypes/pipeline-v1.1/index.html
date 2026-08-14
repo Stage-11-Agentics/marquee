@@ -19,7 +19,14 @@
        Marquee Night, and the three register themes latent.space,
        AI Engineer, swyxy as best-effort palette re-lights — the full
        register chrome (marks, casing, layout tropes) remains build-only,
-       and swyxy's in-theme dark mode is not carried here.
+       and swyxy's in-theme dark mode is not carried here. Same-day
+       iteration (Atin): the theme picker is a gallery of cards, each
+       wearing its own theme's paint with an opinionated one-line voice and
+       a Select/Selected chip; the branding note says exactly where the org
+       logo appears; unruled cards are chipped "Proposed"; and organizer
+       removal is two-step — Keep access is the default action in both
+       dialogs, the destructive path is red, and the final confirm is the
+       only filled-red button in the product.
        v1.13 (2026-08-14): sidebar reorg (DRAFT — prototype only, build
        unchanged until Atin's love pass; comparison mock and rationale in
        prototypes/sidebar-reorg/). The seven-stage Pipeline ladder leaves
@@ -405,6 +412,25 @@
     .button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
     .button.danger { color: var(--danger); border-color: var(--line-strong); }
     .button.danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger-ink); }
+    /* The filled form, reserved for a final destructive confirmation. */
+    .button.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+    .button.danger-solid:hover { filter: brightness(.92); color: #fff; }
+
+    /* ── Theme cards (org settings): each card wears its own theme's paint,
+       inline-styled so the gallery reads the same no matter what the page
+       itself is wearing. Selection moves a border and a chip — nothing
+       else — so choosing never shifts the grid. ─────────────────────────── */
+    .theme-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+    .theme-card { position: relative; text-align: left; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 0; overflow: hidden; font: inherit; display: flex; flex-direction: column; cursor: pointer; }
+    .theme-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+    .theme-card .tc-stage { height: 64px; padding: 9px 11px; display: flex; }
+    .theme-card .tc-panel { border-radius: 2px; padding: 7px 9px; flex: 1; display: flex; flex-direction: column; gap: 5px; justify-content: center; }
+    .theme-card .tc-line { height: 4px; border-radius: 2px; width: 72%; }
+    .theme-card .tc-line.short { width: 44%; opacity: .5; }
+    .theme-card .tc-meta { padding: 9px 11px 11px; display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 96px; }
+    .theme-card .tc-name { font: 600 11.5px/1.25 var(--sans); }
+    .theme-card .tc-cap { font-size: 10px; line-height: 1.45; }
+    .theme-card .tc-chip { margin-top: auto; align-self: flex-start; font: 600 9px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 4px 0; width: 80px; text-align: center; border-radius: var(--radius); border: 1px solid; }
     .button.small { min-height: 26px; padding: 5px 9px; font-size: 10.5px; }
     .button.ghost { border-color: transparent; background: transparent; }
     .button:disabled { opacity: .45; cursor: not-allowed; }
@@ -600,7 +626,7 @@
 
     /* Fresh-install walk --------------------------------------------------- */
     .page.narrow { max-width: 720px; }
-    .event-switcher-row { display: grid; grid-template-columns: 1fr auto; gap: 4px; align-items: stretch; margin: 0 4px 18px; }
+    .event-switcher-row { display: grid; grid-template-columns: 1fr auto; gap: 4px; align-items: stretch; margin: 0 4px 6px; }
     .event-switcher-row .event-switcher { margin: 0; }
     .event-add { display: grid; place-items: center; width: 30px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk); color: var(--muted); font: 400 15px/1 var(--mono); transition: border-color 110ms, background 110ms, color 110ms; }
     .event-add:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
@@ -1185,6 +1211,41 @@
         { id: "ai-engineer", label: "AI Engineer", kind: "register" },
         { id: "swyxy", label: "swyxy", kind: "register" }
       ];
+      // Paint for the org-settings theme gallery: each card wears its own
+      // theme's palette (inline, so the gallery is stable whatever the page
+      // wears) and says what it is in its own voice.
+      const THEME_PREVIEWS = {
+        day:            { bg:"#eaeef2", panel:"#ffffff", ink:"#101820", muted:"#57646f", accent:"#0b6a72", on:"#ffffff",
+                          cap:"The Flight Deck by day. Machined, matte, chroma held for status — the shipped default." },
+        night:          { bg:"#121416", panel:"#1a1d20", ink:"#e9edf0", muted:"#93a0a9", accent:"#3fbac2", on:"#062629",
+                          cap:"The quiet server room. The same instrument re-lit, the canvas still darker than the page." },
+        "latent-space": { bg:"#0b0b0e", panel:"#131318", ink:"#f2f0f5", muted:"#8b8896", accent:"#e56eff", on:"#0b0b0e",
+                          grad:"linear-gradient(92deg,#ffa363,#e56eff)", nameStyle:"font-family:Georgia,'Iowan Old Style',serif;letter-spacing:.02em",
+                          cap:"Near-black ground, serif body, one orange-to-pink gradient carrying every accent." },
+        "ai-engineer":  { bg:"#ffffff", panel:"#f7f7f7", ink:"#000000", muted:"#545454", accent:"#000000", on:"#ffffff",
+                          prompt:">_ ", nameStyle:"font-weight:700",
+                          cap:"Strict monochrome, terminal chrome. The brand mark is a shell prompt; the CTA is a bracketed token." },
+        swyxy:          { bg:"#ffffff", panel:"#f8fafc", ink:"#0f172a", muted:"#64748b", accent:"#3730a3", on:"#ffffff",
+                          nameStyle:"text-transform:lowercase",
+                          cap:"swyxkit indigo, dense lists, lowercase nav — and a dark mode that lives inside the one choice." }
+      };
+      function themeCard(t) {
+        const p = THEME_PREVIEWS[t.id], selected = state.org.defaultTheme === t.id;
+        const chip = selected
+          ? `background:${p.grad||p.accent};color:${p.on};border-color:transparent`
+          : `background:transparent;color:${p.accent==="#000000"?p.ink:p.accent};border-color:${p.muted}`;
+        return `<button class="theme-card ${selected?"selected":""}" data-org-theme="${t.id}" style="background:${p.bg}" aria-pressed="${selected}">
+          <span class="tc-stage"><span class="tc-panel" style="background:${p.panel};border:1px solid ${p.muted}33">
+            <span class="tc-line" style="background:${p.grad||p.accent}"></span>
+            <span class="tc-line short" style="background:${p.muted}"></span>
+          </span></span>
+          <span class="tc-meta">
+            <span class="tc-name" style="color:${p.ink};${p.nameStyle||""}">${p.prompt||""}${esc(t.label)}</span>
+            <span class="tc-cap" style="color:${p.muted}">${p.cap}</span>
+            <span class="tc-chip" style="${chip}">${selected?"Selected":"Select"}</span>
+          </span>
+        </button>`;
+      }
       function currentTheme() { return THEMES.find(t=>t.id===state.theme) || THEMES[0]; }
       function applyTheme() {
         if (state.theme && state.theme !== "day") document.documentElement.dataset.theme = state.theme;
@@ -2682,6 +2743,7 @@
             <section class="card"><div class="card-head"><div><h2>Tags</h2><span class="subtle">Free taxonomy · chips on rows, a multi-select on forms</span></div><button class="button small" id="add-tag">+ Add tag</button></div><div class="card-body" id="tag-settings">${sessionTags.map((t,i) => `<div class="settings-row" data-tag-index="${i}"><span class="drag-handle">${i+1}</span><input aria-label="Tag name" data-tag-name="${i}" value="${esc(t)}"><span class="chip">${state.submissions.filter(s=>(s.tags||[]).includes(t)).length} tagged</span></div>`).join("")}</div></section>
             <section class="card"><div class="card-head"><div><h2>Levels</h2><span class="subtle">Audience experience · a single-select on forms</span></div><button class="button small" id="add-level">+ Add level</button></div><div class="card-body" id="level-settings">${levels.map((l,i) => `<div class="settings-row" data-level-index="${i}"><span class="drag-handle">${i+1}</span><input aria-label="Level name" data-level-name="${i}" value="${esc(l)}"><span class="chip">${state.submissions.filter(s=>s.level===l).length}</span></div>`).join("")}</div></section>
             <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Venues and rooms</h2><span class="subtle">Buildings, coordinates, entrance instructions, and rooms live on their own screen</span></div><a class="button small" href="#settings/venues">Open Venues →</a></div><div class="card-body"><span class="subtle">${buildings.length} ${buildings.length===1?"building":"buildings"} · ${rooms.length} ${rooms.length===1?"room":"rooms"}${geoActive()?` · ${pinnedBuildings().length} pinned`:""}</span></div></section>
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Danger zone</h2><span class="subtle">Deleting removes everything scoped to this conference. People, notes, tags, and outreach are organization-level and stay in the CRM.</span></div><button class="button danger" id="delete-conference">Delete conference…</button></div></section>
           </div>
         </div>`);
       }
@@ -3195,16 +3257,16 @@
               <div class="field"><label for="org-name">Organization name</label><input id="org-name" value="${esc(org.name)}"><span class="field-note">Shown in the sidebar's Organization group, invite screens, and API metadata.</span></div>
               <div class="field"><label for="org-timezone">Default timezone</label><select id="org-timezone">${TIMEZONES.map(tz=>`<option ${org.defaultTimezone===tz?"selected":""}>${tz}</option>`).join("")}</select><span class="field-note">Seeds the timezone when a conference is created. Each conference still owns its own.</span></div>
             </div></section>
-            <section class="card"><div class="card-head"><div><h2>Default theme</h2><span class="subtle">What a user sees before they choose · their own top-bar choice wins once made</span></div></div><div class="card-body" style="padding-top:4px;padding-bottom:6px">
-              ${THEMES.map(t=>`<button class="toggle-line" data-org-theme="${t.id}" style="width:100%;text-align:left"><span><strong>${esc(t.label)}</strong><small class="subtle" style="display:block;margin-top:3px">${t.kind==="register"?"Register · re-lights the palette and restyles the shell in the build":"Palette · re-lights the instrument, structure unchanged"}</small></span><span class="chip ${org.defaultTheme===t.id?"published":""}" style="width:84px">${org.defaultTheme===t.id?"Default":"—"}</span></button>`).join("")}
-              <span class="field-note" style="display:block;margin-top:6px">Choosing a default applies it here so you see what new users will see. Register themes preview as palette re-lights in this prototype; their full chrome ships in the build.</span>
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Default theme</h2><span class="subtle">What a user sees before they choose · their own top-bar choice wins once made</span></div></div><div class="card-body">
+              <div class="theme-cards">${THEMES.map(themeCard).join("")}</div>
+              <span class="field-note" style="display:block;margin-top:10px">Selecting a default applies it here so you see what new users will see. Register themes preview as palette re-lights in this prototype; their full chrome ships in the build.</span>
             </div></section>
-            <section class="card"><div class="card-head"><div><h2>Communication defaults</h2><span class="subtle">The voice new conferences inherit · mail mechanics live on the Instance tab</span></div><span class="chip" style="width:auto">Mocked to judge</span></div><div class="card-body stack">
+            <section class="card"><div class="card-head"><div><h2>Communication defaults</h2><span class="subtle">The voice new conferences inherit · mail mechanics live on the Instance tab</span></div><span class="chip" style="width:auto" title="Not yet ruled — drive it, then keep or strike it">Proposed</span></div><div class="card-body stack">
               <div class="field"><label for="org-comms-from">From name</label><input id="org-comms-from" value="${esc(org.commsFrom)}"><span class="field-note">Outbound mail sends as this name unless a conference overrides it.</span></div>
               <div class="field"><label for="org-comms-reply">Reply-to address</label><input id="org-comms-reply" value="${esc(org.commsReply)}"><span class="field-note">Where speaker replies land. A conference can point this at its own inbox.</span></div>
             </div></section>
-            <section class="card"><div class="card-head"><div><h2>Branding</h2><span class="subtle">Inherited as the default by every new conference · overridable per conference</span></div><span class="chip" style="width:auto">Mocked to judge</span></div><div class="card-body stack">
-              <div class="field"><label for="org-logo">Organization logo</label><input id="org-logo" type="file" accept="image/png,image/jpeg,image/svg+xml"><span class="field-note">PNG, JPEG, or SVG · the existing per-conference logo field becomes the override.</span></div>
+            <section class="card"><div class="card-head"><div><h2>Branding</h2><span class="subtle">Inherited as the default by every new conference · overridable per conference</span></div><span class="chip" style="width:auto" title="Not yet ruled — drive it, then keep or strike it">Proposed</span></div><div class="card-body stack">
+              <div class="field"><label for="org-logo">Organization logo</label><input id="org-logo" type="file" accept="image/png,image/jpeg,image/svg+xml"><span class="field-note">Shown wherever a conference hasn't set its own logo: the public site header, the speaker portal, outbound mail, and embeds. The per-conference logo in Conference settings overrides it, conference by conference.</span></div>
               <div class="field"><label for="org-accent">Accent color</label><input id="org-accent" type="color" value="${esc(org.accent)}" style="width:80px;height:32px;padding:2px"><span class="field-note">Public pages and embeds default to this until a conference sets its own.</span></div>
             </div></section>
             ${state.setup.active ? "" : `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Demo data</h2><span class="subtle">The seeded AIE conference exists for orientation · removing it touches nothing of yours</span></div><button class="button small" id="org-remove-demo">Remove demo data</button></div><div class="card-body"><span class="subtle">One action, scoped to rows the seed marked as demo — your organizers, tokens, and instance configuration stay exactly as they are.</span></div></section>`}
@@ -3888,6 +3950,19 @@
           toast(`Venues saved · ${pinnedBuildings().length} pinned, ${rooms.length} rooms`);
           render();
         });
+        // Deleting a conference is consequential enough to demand the name
+        // typed back. The confirm names what dies and what survives — people
+        // are org-level, so the CRM is untouched. Created-in-the-walk
+        // conferences return to the seeded demo; deleting the seeded one
+        // lands on the fresh-install landing, the honest "no conference" state.
+        document.getElementById("delete-conference")?.addEventListener("click",()=>{
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Danger zone</div><h2>Delete ${esc(state.event.name)}?</h2><p>This removes the conference and everything scoped to it. It cannot be undone.</p></div><div class="modal-body stack"><div class="message-preview"><strong>Dies with the conference</strong><br><span class="subtle">Abstracts and sessions · forms and their public links · agenda and conference site · speaker portal access · queued calendar invites</span></div><div class="message-preview"><strong>Stays</strong><br><span class="subtle">People, notes, tags, and outreach — organization-level, untouched.</span></div><div class="field"><label for="delete-confirm-name">Type the conference name to confirm</label><input id="delete-confirm-name" placeholder="${esc(state.event.name)}" autocomplete="off"></div></div><div class="modal-actions"><button class="button" id="cancel-delete-conference">Keep conference</button><button class="button danger" id="confirm-delete-conference" disabled>Delete conference</button></div></section></div>`;
+          const nameInput=document.getElementById("delete-confirm-name"),confirmBtn=document.getElementById("confirm-delete-conference");
+          nameInput.addEventListener("input",()=>{confirmBtn.disabled=nameInput.value.trim()!==state.event.name;});
+          nameInput.focus();
+          document.getElementById("cancel-delete-conference").onclick=()=>{modalRoot.innerHTML="";};
+          confirmBtn.onclick=()=>{const deleted=state.event.name;modalRoot.innerHTML="";toast(`${deleted} deleted · people and outreach kept in the CRM`);if(state.setup.active){document.getElementById("exit-fresh-install")?.click();}else{navigate("landing");}};
+        });
         document.getElementById("save-settings")?.addEventListener("click",()=>{
           document.querySelectorAll("[data-format-name]").forEach((input,i)=>{const old=formats[i],name=input.value.trim()||old;formats[i]=name;formatRanges[name]=document.querySelector(`[data-format-range="${i}"]`).value;formatDurations[name]=Math.max(5,Number(document.querySelector(`[data-format-duration="${i}"]`).value)||20);if(name!==old){delete formatRanges[old];delete formatDurations[old];}});
           document.querySelectorAll("[data-track-name]").forEach((input,i)=>{tracks[i].name=input.value.trim()||tracks[i].name;tracks[i].color=document.querySelector(`[data-track-color="${i}"]`).value;});
@@ -4241,15 +4316,24 @@
             ${person.openWork?`<div class="message-preview"><strong>Open work returns to the pool</strong><br><span class="subtle">${esc(person.openWork)} become unassigned — reassign them on the Evaluation screen.</span></div>`:""}
             ${person.alsoSpeaker?`<div class="message-preview" style="border-left:3px solid var(--warning-edge)"><strong>They also hold a speaker seat</strong><br><span class="subtle">${esc(person.name)} is a speaker at ${esc(state.event.name||"this conference")}. This removal does not touch it — their talk, speaker tasks, and portal access stay.</span></div>`:""}
             <div class="message-preview"><strong>Stays on the record</strong><br><span class="subtle">Their reviews, decisions, and sent mail keep their name · their entry in People survives.</span></div>
-          </div><div class="modal-actions"><button class="button" id="cancel-remove-org">Keep access</button><button class="button primary" id="confirm-remove-org">Remove organizer</button></div></section></div>`;
+          </div><div class="modal-actions"><button class="button primary" id="cancel-remove-org" autofocus>Keep access</button><button class="button danger" id="confirm-remove-org">Remove organizer…</button></div></section></div>`;
+          // Keeping access is the default action; removal is styled as the
+          // destructive path and takes a second, explicit confirmation.
           document.getElementById("cancel-remove-org").onclick=()=>modalRoot.innerHTML="";
+          document.getElementById("cancel-remove-org").focus();
           document.getElementById("confirm-remove-org").onclick=()=>{
             const revoke=new Set(Array.from(document.querySelectorAll(".revoke-minted:checked")).map(cb=>cb.value));
-            state.apiTokens=state.apiTokens.filter(t=>!revoke.has(t.id));
-            state.instance.organizers.splice(i,1);
-            modalRoot.innerHTML="";
-            toast(`${person.name} removed · access ended${revoke.size?` · ${revoke.size} ${revoke.size===1?"token":"tokens"} revoked`:""} · their work stays on the record`);
-            render();
+            const firstName=person.name.split(" ")[0];
+            modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Organizers · confirm removal</div><h2>Really remove ${esc(person.name)}?</h2><p>The moment you confirm: their access ends on every device, unexpired sign-in links stop working${revoke.size?`, and ${revoke.size} API ${revoke.size===1?"token is":"tokens are"} revoked`:""}. Their work stays on the record${person.alsoSpeaker?", and their speaker seat is untouched":""}. Bringing them back later means a fresh invite.</p></div><div class="modal-actions"><button class="button primary" id="really-keep-org" autofocus>Keep access</button><button class="button danger-solid" id="really-remove-org">Yes — remove ${esc(firstName)} now</button></div></section></div>`;
+            document.getElementById("really-keep-org").onclick=()=>modalRoot.innerHTML="";
+            document.getElementById("really-keep-org").focus();
+            document.getElementById("really-remove-org").onclick=()=>{
+              state.apiTokens=state.apiTokens.filter(t=>!revoke.has(t.id));
+              state.instance.organizers.splice(i,1);
+              modalRoot.innerHTML="";
+              toast(`${person.name} removed · access ended${revoke.size?` · ${revoke.size} ${revoke.size===1?"token":"tokens"} revoked`:""} · their work stays on the record`);
+              render();
+            };
           };
         });
         document.querySelectorAll("[data-revoke-invite]").forEach(b=>b.onclick=()=>{
