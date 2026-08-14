@@ -1242,19 +1242,6 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
     <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Place accepted Sessions by drag or selection. Format defaults set duration; live conflicts warn without blocking.`} actions={<><AgentBriefLauncher surface="agenda" eventId={eventId} /><ConflictCounter count={visibleConflictData.length} open={conflictsOpen} onOpen={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</ConflictCounter></>} />
     {snapshot.schedule_window.outside_window_session_count > 0 && <div class="agenda-notice agenda-schedule-window-warning" role="status"><span><strong class="tabular">{snapshot.schedule_window.outside_window_session_count}</strong> scheduled Session{snapshot.schedule_window.outside_window_session_count === 1 ? "" : "s"} fall outside the conference dates.</span><a href="/settings">Open Conference settings ↗</a></div>}
     {publicationNotice && <div class="agenda-notice agenda-publication-success" role="status"><span>Published <strong class="tabular">{publicationNotice.count}</strong> Session{publicationNotice.count === 1 ? "" : "s"} to the public agenda.</span><span class="agenda-notice-actions"><a href={publicationNotice.publicAgendaUrl}>View public agenda ↗</a><button type="button" onClick={() => setPublicationNotice(null)} aria-label="Dismiss publication confirmation">×</button></span></div>}
-    <PublicationPanel
-      publication={snapshot.publication}
-      timezone={snapshot.event.timezone}
-      selectedIds={publishSelection}
-      step={publicationStep}
-      busy={publicationBusy}
-      error={publicationError}
-      onToggle={(id) => { setPublicationError(""); setPublishSelection((current) => current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id]); }}
-      onSelectAll={(ids) => { setPublicationError(""); setPublishSelection([...ids]); }}
-      onReview={() => { setPublicationError(""); setPublicationStep("review"); }}
-      onBack={() => { setPublicationError(""); setPublicationStep("select"); }}
-      onPublish={() => void publishSelected()}
-    />
     <div class="agenda-toolbar card">
       <div class="segment agenda-view-tabs" role="tablist" aria-label="Agenda views">{viewNames().map((candidate) => <button type="button" role="tab" aria-selected={view === candidate} disabled={candidate === "track" && Boolean(armedPlacement)} title={candidate === "track" && armedPlacement ? "Choose a time and room before returning to the track view." : undefined} class={view === candidate ? "active" : ""} key={candidate} onClick={() => { rememberScroll(); setView(candidate); }}>{candidate[0]!.toUpperCase() + candidate.slice(1)}</button>)}</div>
       <label class="agenda-filter"><span class="eyebrow">Day</span><select value={selectedDay} onChange={(event) => { rememberScroll(); setDay((event.currentTarget as HTMLSelectElement).value); }}><option value="all">All days</option>{days.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
@@ -1281,6 +1268,19 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
         <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} onArm={armPoolItem} armedPlacement={armedPlacement} />
         <section class="card agenda-board wide-grid-scroll" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
       </div>}
+    <PublicationPanel
+      publication={snapshot.publication}
+      timezone={snapshot.event.timezone}
+      selectedIds={publishSelection}
+      step={publicationStep}
+      busy={publicationBusy}
+      error={publicationError}
+      onToggle={(id) => { setPublicationError(""); setPublishSelection((current) => current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id]); }}
+      onSelectAll={(ids) => { setPublicationError(""); setPublishSelection([...ids]); }}
+      onReview={() => { setPublicationError(""); setPublicationStep("review"); }}
+      onBack={() => { setPublicationError(""); setPublicationStep("select"); }}
+      onPublish={() => void publishSelected()}
+    />
     {activeRoom && <RoomPanel room={activeRoom} showBuildingComparison={showBuildingComparison} onClose={() => setRoomPanelId(null)} />}
     {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} showBuildingComparison={showBuildingComparison} onClose={() => setConflictsOpen(false)} onJump={jumpToSession} />}
   </div>;
