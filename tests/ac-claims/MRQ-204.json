@@ -1,0 +1,13 @@
+{
+  "ticket": "MRQ-204",
+  "owns": [
+    "AC-302",
+    "AC-303",
+    "AC-304",
+    "AC-305",
+    "AC-306",
+    "AC-307"
+  ],
+  "exercises": [],
+  "notes": "Conference deletion is one transactional, children-first event cascade. The UI exact-name gate is tested in both arms; the integration fixture counts every event-scoped table before and after, preserves organization CRM rows and person-headshot subjects, and verifies the deletion audit actor. remove-demo delegates to the same primitive, with only its explicit seeded-people policy widened."
+}
