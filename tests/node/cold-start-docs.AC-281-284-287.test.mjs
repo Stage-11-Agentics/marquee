@@ -87,7 +87,9 @@ test("AC-281 · every setup verb drives the route its screen drives, and the man
   // Each verb with a screen drives the screen's route, by the same path string
   // the screen registers. One endpoint per capability, whoever asks.
   const screens = {
-    "setup instance": ["src/ui/setup/InstancePanel.tsx", "/api/v1/instance/status"],
+    // The setup dashboard keeps InstancePanel as its compatibility wrapper;
+    // ServerPanel is the shared component that now owns this request seam.
+    "setup instance": ["src/ui/setup/ServerPanel.tsx", "/api/v1/instance/status"],
     "event create": ["src/ui/setup/CreateConferencePage.tsx", "/api/v1/events"],
     "forms create": ["src/ui/forms/FormsPage.tsx", "/api/v1/events/{eventId}/forms"],
     "forms list": ["src/ui/forms/FormsPage.tsx", "/api/v1/events/{eventId}/forms"],

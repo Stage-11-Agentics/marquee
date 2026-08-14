@@ -9,6 +9,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import { SELF } from "cloudflare:test";
 
+import { app } from "../../src/index";
 import { createSession } from "../../src/lib/auth/auth-sessions";
 import { instanceIsUnclaimed, mintClaimLink } from "../../src/lib/auth/instance-claim";
 import { mintMagicLink } from "../../src/lib/auth/magic-links";
@@ -22,6 +23,14 @@ const NOW = Date.UTC(2026, 7, 12, 12, 0, 0);
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
   return SELF.fetch(`${ORIGIN}${path}`, init);
+}
+
+async function requestWithEnvironment(
+  path: string,
+  init: RequestInit | undefined,
+  overrides: Record<string, unknown>,
+): Promise<Response> {
+  return app.request(`${ORIGIN}${path}`, init, { ...env, ...overrides });
 }
 
 function tokenFromUrl(url: string): string {
@@ -466,6 +475,21 @@ test("AC-284 · instance status is derived from bindings and secrets, with fixed
   expect(body.data.rows.find((row) => row.key === "mail")?.fix).toEqual([
     "npx wrangler secret put RESEND_API_KEY",
   ]);
+
+  const configured = await requestWithEnvironment(
+    "/api/v1/instance/status",
+    { headers: { cookie } },
+    { RESEND_API_KEY: "re_test_key", RESEND_ACCOUNT_NAME: "stage11-agentics" },
+  );
+  expect(configured.status).toBe(200);
+  const configuredBody = await configured.json() as {
+    data: { rows: { key: string; configured: boolean; sender?: string | null; account?: string | null }[] };
+  };
+  expect(configuredBody.data.rows.find((row) => row.key === "mail")).toMatchObject({
+    configured: true,
+    sender: "marquee@stage11.systems",
+    account: "stage11-agentics",
+  });
 
   const anonymous = await request("/api/v1/instance/status");
   expect(anonymous.status).toBe(401);

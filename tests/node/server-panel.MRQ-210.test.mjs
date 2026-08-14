@@ -12,6 +12,7 @@ test("MRQ-210 · the standalone server route mounts the shared panel and redirec
   const config = await source("src/lib/mail/config.ts");
   const appShell = await source("src/ui/shell/AppShell.tsx");
   const routeTable = await source("src/ui/shell/route-table.ts");
+  const wrangler = await source("wrangler.jsonc");
 
   assert.match(page, /title="Server"/);
   assert.match(panel, /What this Marquee is connected to, and whether each piece is working\./);
@@ -23,6 +24,7 @@ test("MRQ-210 · the standalone server route mounts the shared panel and redirec
   assert.match(panel, /not set up/);
   assert.match(panel, /Open Resend ↗/);
   assert.match(config, /RESEND_ACCOUNT_NAME/);
+  assert.match(wrangler, /"RESEND_API_KEY",\s*"RESEND_ACCOUNT_NAME",/);
   assert.match(instance, /<ServerPanel showDemoControls \/>/);
   assert.match(routeTable, /path: "\/org\/server"/);
   assert.match(routeTable, /path: "\/org\/instance"/);
