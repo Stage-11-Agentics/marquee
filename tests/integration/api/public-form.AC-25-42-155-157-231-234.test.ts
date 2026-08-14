@@ -441,6 +441,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     const rendered = await request(`/f/public-cfp${resume.search}`);
     const body = await rendered.text();
     expect(body).toContain("Call for speakers · closed");
+    expect(body).toContain('data-submission-outcome="pending"');
     expect(body).not.toContain("Call for speakers · closes");
   });
 

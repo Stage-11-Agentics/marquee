@@ -53,16 +53,15 @@ function maxLengthFor(field: PublicFormField): number | undefined {
     : undefined;
 }
 
-export function publicFormIsEffectivelyClosed(state: PublicFormState, now = Date.now()): boolean {
+export function publicFormIsEffectivelyClosed(state: PublicFormState): boolean {
   return state.state === "closed"
-    || state.form.status === "closed"
-    || (state.form.closes_at !== null && state.form.closes_at <= now);
+    || state.form.status === "closed";
 }
 
-export function closeLabel(state: PublicFormState, now = Date.now()): string {
+export function closeLabel(state: PublicFormState): string {
   // A closed call must not still advertise a future closing date; the header
   // is the first thing read and the last thing anyone re-reads.
-  if (publicFormIsEffectivelyClosed(state, now)) return "Call for speakers · closed";
+  if (publicFormIsEffectivelyClosed(state)) return "Call for speakers · closed";
   if (state.state === "at_limit") return "Call for speakers · your limit is full";
   const closesAt = state.form.closes_at;
   if (closesAt === null) return "Call for speakers";
