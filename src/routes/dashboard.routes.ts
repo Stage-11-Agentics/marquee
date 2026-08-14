@@ -14,6 +14,8 @@ import {
   submissionTaskPredicate,
 } from "./submissions.queries";
 import { visibleVenueConflicts } from "../lib/venue-disclosure";
+import { localParts } from "../lib/event-time";
+import { isTaskOverdue } from "../lib/task-due";
 import { readAgendaBuildingComparison, readAgendaConflicts } from "./agenda.queries";
 
 const dashboardCountSchema = z.object({
@@ -106,6 +108,10 @@ async function readDashboardBuildingComparison(database: D1Database, eventId: st
 
 async function readDashboard(database: D1Database, eventId: string, now: number): Promise<DashboardSnapshot> {
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
+  const event = await database.prepare("SELECT timezone FROM events WHERE id = ?").bind(eventId).first<{ timezone: string }>();
+  const timezone = event?.timezone ?? "UTC";
+  const overdueDay = localParts(now, timezone).day;
+  const utcDayEnd = "(strftime('%s', date(task.due_at / 1000, 'unixepoch', '+1 day')) * 1000 - 1)";
   const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts, showBuildingComparison, notifiedSummary] = await Promise.all([
     database.prepare(`
       SELECT ${dashboardStageSql(includeCancelledAt)}
@@ -157,7 +163,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       SELECT COUNT(DISTINCT s.id) AS count
       FROM submissions s
       WHERE s.event_id = ? AND ${submissionTaskPredicate("overdue", "s", includeCancelledAt)}
-    `).bind(eventId, now).first<{ count: number | null }>(),
+    `).bind(eventId, overdueDay, now).first<{ count: number | null }>(),
     database.prepare(`
       SELECT COUNT(DISTINCT s.id) AS count
       FROM submissions s
@@ -173,9 +179,12 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       JOIN people person ON person.id = task.person_id
       JOIN submissions submission ON submission.id = task.submission_id
       WHERE task.event_id = ? AND task.status = 'open'${includeCancelledAt ? " AND task.cancelled_at IS NULL" : ""}
-      ORDER BY CASE WHEN task.due_at < ? THEN 0 ELSE 1 END, task.due_at ASC, task.id ASC
+      ORDER BY CASE WHEN (
+        (task.due_at = ${utcDayEnd} AND date(task.due_at / 1000, 'unixepoch') < ?)
+        OR (task.due_at <> ${utcDayEnd} AND task.due_at < ?)
+      ) THEN 0 ELSE 1 END, task.due_at ASC, task.id ASC
       LIMIT 4
-    `).bind(eventId, now).all<{
+    `).bind(eventId, overdueDay, now).all<{
       person_name: string;
       submission_id: string;
       submission_title: string;
@@ -272,8 +281,8 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     ],
     task_preview: taskResult.results.map((row) => ({
       ...row,
-      overdue: row.due_at < now,
-      href: row.due_at < now
+      overdue: isTaskOverdue({ dueAt: row.due_at, timezone }, now),
+      href: isTaskOverdue({ dueAt: row.due_at, timezone }, now)
         ? submissionsHref({ task: "overdue" })
         : submissionsHref({ status: "onboarding" }),
     })),

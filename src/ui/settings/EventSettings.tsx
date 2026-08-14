@@ -4,6 +4,7 @@ import { useEffect, useState } from "preact/hooks";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { EVENT_TIMEZONES } from "../../lib/event-time";
 import { PageHeader } from "../shell/components";
+import { useEventContext } from "../shell/event-context";
 import { EVENT_NAME_CHANGED } from "../shell/identity";
 import { OrganizersCard } from "../setup/OrganizersCard";
 import { SocialMark } from "../social/SocialBadges";
@@ -175,6 +176,7 @@ function TrackRow({
 }
 
 export function EventSettings({ eventId, navigate }: Props): JSX.Element {
+  const { refresh } = useEventContext();
   const [state, setState] = useState<LoadState>({ kind: "loading", model: null });
   const [venueCounts, setVenueCounts] = useState<VenueCounts | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -239,6 +241,7 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
       const response = await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, "/api/v1/events/{eventId}");
       window.dispatchEvent(new CustomEvent(EVENT_NAME_CHANGED, { detail: response.data.event.name }));
       setState({ kind: "ready", model: response.data });
+      await refresh();
       setRemovedFormats([]);
       setRemovedTracks([]);
       setDirty(false);

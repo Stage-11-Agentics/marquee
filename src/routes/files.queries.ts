@@ -16,6 +16,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import { listVersionsForOwners, type FileVersion } from "../lib/files/versions";
 import { MEDIA_LINK_POLICY } from "../lib/r2/media-links";
+import { isTaskOverdue } from "../lib/task-due";
 
 export const FILE_STATES = ["all", "uploaded", "missing", "overdue"] as const;
 export type FileStateFilter = (typeof FILE_STATES)[number];
@@ -73,6 +74,8 @@ interface TaskRow {
   template_id: string;
   template_name: string;
   due_at: number;
+  template_due_at: number | null;
+  timezone: string;
   status: "open" | "done";
   cancelled_at: number | null;
   person_id: string;
@@ -91,7 +94,7 @@ interface AcceptedSessionRow {
 function stateFor(row: TaskRow, versionCount: number, now: number): FileRowState {
   if (row.cancelled_at !== null) return "cancelled";
   if (versionCount > 0) return "uploaded";
-  return row.due_at < now ? "overdue" : "missing";
+  return isTaskOverdue({ dueAt: row.due_at, templateDueAt: row.template_due_at, timezone: row.timezone }, now) ? "overdue" : "missing";
 }
 
 function matchesSearch(row: FilesRow, needle: string): boolean {
@@ -173,11 +176,13 @@ export async function listFiles(
   const tasks = await db
     .prepare(
       `SELECT task.id, task.title, task.template_id, template.name AS template_name,
-              task.due_at, task.status, task.cancelled_at,
+              task.due_at, template.due_at AS template_due_at, event.timezone,
+              task.status, task.cancelled_at,
               person.id AS person_id, person.name AS person_name, person.email AS person_email,
               submission.id AS submission_id, submission.title AS submission_title
        FROM speaker_tasks task
        JOIN task_templates template ON template.id = task.template_id AND template.event_id = task.event_id
+       JOIN events event ON event.id = task.event_id
        JOIN people person ON person.id = task.person_id
        LEFT JOIN submissions submission ON submission.id = task.submission_id AND submission.event_id = task.event_id
        WHERE task.event_id = ? AND task.kind = 'file'`,

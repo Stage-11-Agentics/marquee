@@ -13,6 +13,7 @@ export const EVENT_TIMEZONES = [
   "Europe/Berlin",
   "Asia/Tokyo",
   "Australia/Sydney",
+  "UTC",
 ] as const;
 
 export interface LocalDateTimeParts {

@@ -1,8 +1,8 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
-import { formatEventDateTime, localParts } from "../../lib/event-time";
-import { dateInputFromDueAt, dueAtFromDateInput, formatDueDate } from "../../lib/task-due";
+import { formatEventDateTime } from "../../lib/event-time";
+import { formatDueDate, isTaskOverdue } from "../../lib/task-due";
 import { hasSpeakerTaskCancellationColumn } from "../../routes/submissions.queries";
 import type { TriggerKey } from "./triggers";
 
@@ -16,18 +16,6 @@ export interface MailScheduleCandidate {
   personId: Id;
   toEmail: string;
   data: Record<string, string>;
-}
-
-function taskIsOverdue(row: { due_at: number; timezone: string }, now: number): boolean {
-  // speaker_tasks.due_at preserves the operator's calendar day at UTC end of
-  // day. The deadline is the end of that day in the conference's clock, so a
-  // task becomes overdue only once the event-local day has advanced. A task
-  // minted from a relative-offset template, or an explicitly supplied instant,
-  // is not that calendar-day sentinel and keeps its exact-instant semantics.
-  const dueDate = dateInputFromDueAt(row.due_at);
-  return dueAtFromDateInput(dueDate) === row.due_at
-    ? localParts(now, row.timezone).day > dueDate
-    : row.due_at < now;
 }
 
 /**
@@ -95,9 +83,11 @@ export async function selectOverdueTaskCandidates(
   const rows = await db
     .prepare(
       `SELECT task.id AS entity_id, task.event_id, task.person_id, p.email, p.name,
-              task.title AS task_title, task.due_at, s.title AS submission_title,
-              event.timezone
+              task.title AS task_title, task.due_at, template.due_at AS template_due_at,
+              s.title AS submission_title, event.timezone
        FROM speaker_tasks task
+       JOIN task_templates template
+         ON template.id = task.template_id AND template.event_id = task.event_id
        JOIN events event ON event.id = task.event_id
        JOIN people p ON p.id = task.person_id
        LEFT JOIN submissions s ON s.id = task.submission_id
@@ -114,10 +104,15 @@ export async function selectOverdueTaskCandidates(
       name: string;
       task_title: string;
       due_at: number;
+      template_due_at: number | null;
       submission_title: string | null;
       timezone: string;
     }>();
-  return rows.results.filter((row) => taskIsOverdue(row, now)).map((row) => ({
+  return rows.results.filter((row) => isTaskOverdue({
+    dueAt: row.due_at,
+    templateDueAt: row.template_due_at,
+    timezone: row.timezone,
+  }, now)).map((row) => ({
     eventId: row.event_id,
     templateKey: "task_overdue",
     entityId: row.entity_id,

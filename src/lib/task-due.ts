@@ -1,3 +1,5 @@
+import { localParts } from "./event-time";
+
 /**
  * Task due dates are *days*, not instants.
  *
@@ -15,6 +17,52 @@
 const MS_PER_DAY = 86_400_000;
 const END_OF_DAY_MS = MS_PER_DAY - 1;
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+export interface TaskDueRuntime {
+  dueAt: number;
+  /** Non-null means the task came from a fixed calendar-day template. */
+  templateDueAt?: number | null;
+  timezone?: string | null;
+}
+
+function dayNumber(value: string): number {
+  const [year, month, day] = value.split("-").map(Number);
+  return Date.UTC(year!, month! - 1, day!) / MS_PER_DAY;
+}
+
+function isUtcDaySentinel(value: number): boolean {
+  const date = dateInputFromDueAt(value);
+  return dueAtFromDateInput(date) === value;
+}
+
+function isCalendarDayTask(task: TaskDueRuntime): task is TaskDueRuntime & { timezone: string } {
+  const fixedTemplate = task.templateDueAt === undefined ? isUtcDaySentinel(task.dueAt) : task.templateDueAt !== null;
+  return fixedTemplate && Boolean(task.timezone);
+}
+
+/** Apply the event-local boundary to fixed calendar-day tasks, preserving exact instants for offsets. */
+export function isTaskOverdue(task: TaskDueRuntime, now: number): boolean {
+  if (!isCalendarDayTask(task)) return task.dueAt < now;
+  return localParts(now, task.timezone).day > dateInputFromDueAt(task.dueAt);
+}
+
+/** Whether an owed task falls within the event-local risk window. */
+export function isTaskDueWithinDays(task: TaskDueRuntime, now: number, days: number): boolean {
+  if (isTaskOverdue(task, now)) return false;
+  if (!isCalendarDayTask(task)) return task.dueAt >= now && task.dueAt <= now + days * MS_PER_DAY;
+  const today = dayNumber(localParts(now, task.timezone).day);
+  const dueDay = dayNumber(dateInputFromDueAt(task.dueAt));
+  return dueDay >= today && dueDay <= today + days;
+}
+
+/** Whole-day severity for overdue task readers, using the same event-local calendar. */
+export function taskDaysOverdue(task: TaskDueRuntime, now: number): number {
+  if (!isTaskOverdue(task, now)) return 0;
+  if (isCalendarDayTask(task)) {
+    return Math.max(1, dayNumber(localParts(now, task.timezone).day) - dayNumber(dateInputFromDueAt(task.dueAt)));
+  }
+  return Math.max(1, Math.ceil((now - task.dueAt) / MS_PER_DAY));
+}
 
 /** Parse `YYYY-MM-DD` to the last millisecond of that UTC day, or null if malformed. */
 export function dueAtFromDateInput(value: string): number | null {

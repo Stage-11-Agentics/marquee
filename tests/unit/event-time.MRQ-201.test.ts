@@ -33,6 +33,7 @@ describe("MRQ-201 event time seam", () => {
       "Europe/Berlin",
       "Asia/Tokyo",
       "Australia/Sydney",
+      "UTC",
     ]);
   });
 

@@ -10,6 +10,7 @@ import type {
   SubmissionTrackListItem,
 } from "../api/submissions";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
+import { localParts } from "../lib/event-time";
 import { participantListSql } from "../lib/participants";
 import { reviewAggregateColumns } from "../lib/review-aggregate";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
@@ -71,14 +72,23 @@ export function submissionTaskPredicate(
   submission = "s",
   includeCancelledAt = false,
 ): string {
+  const utcDayEnd = "(strftime('%s', date(filtered_task.due_at / 1000, 'unixepoch', '+1 day')) * 1000 - 1)";
   return `EXISTS (
     SELECT 1 FROM speaker_tasks filtered_task
     WHERE filtered_task.event_id = ${submission}.event_id
       AND filtered_task.submission_id = ${submission}.id
       AND filtered_task.status = 'open'
       ${includeCancelledAt ? "AND filtered_task.cancelled_at IS NULL" : ""}
-      ${task === "overdue" ? "AND filtered_task.due_at < ?" : ""}
+      ${task === "overdue" ? `AND (
+        (filtered_task.due_at = ${utcDayEnd} AND date(filtered_task.due_at / 1000, 'unixepoch') < ?)
+        OR (filtered_task.due_at <> ${utcDayEnd} AND filtered_task.due_at < ?)
+      )` : ""}
   )`;
+}
+
+async function eventLocalDay(database: D1Database, eventId: string, now: number): Promise<string> {
+  const event = await database.prepare("SELECT timezone FROM events WHERE id = ?").bind(eventId).first<{ timezone: string }>();
+  return localParts(now, event?.timezone ?? "UTC").day;
 }
 
 export async function hasSpeakerTaskCancellationColumn(database: D1Database): Promise<boolean> {
@@ -215,6 +225,7 @@ function filterParts(
   filters: SubmissionListFilters,
   includeCancelledAt = false,
   statusSemantics: SubmissionStatusSemantics = "derived",
+  overdueDay?: string,
 ): QueryParts {
   const clauses = ["s.event_id = ?"];
   const bindings: unknown[] = [filters.eventId];
@@ -249,7 +260,7 @@ function filterParts(
   }
   if (filters.task) {
     clauses.push(submissionTaskPredicate(filters.task, "s", includeCancelledAt));
-    if (filters.task === "overdue") bindings.push(Date.now());
+    if (filters.task === "overdue") bindings.push(overdueDay ?? "1970-01-01", Date.now());
   }
   if (filters.placement === "unplaced") clauses.push("ai.id IS NULL");
   if (filters.q) {
@@ -663,7 +674,8 @@ async function listDraftsNeedingAttention(
   const page = parsePagination(filters);
   const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "updated");
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
-  const { where, bindings } = filterParts(filters, includeCancelledAt);
+  const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
+  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const rows = await database.prepare(`
@@ -704,7 +716,8 @@ export async function listSubmissions(
   // The shared helper deliberately emits the canonical `id ASC` tie-break.
   // This query joins several id-bearing tables, so qualify that fixed suffix.
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
-  const { where, bindings } = filterParts(filters, includeCancelledAt);
+  const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
+  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
@@ -726,7 +739,9 @@ async function listNotNotifiedSubmissions(
   const page = parsePagination(filters);
   const sort = resolveSort(SUBMISSION_SORTS, filters.sort, "newest");
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
-  const { where, bindings } = filterParts(filters, await hasSpeakerTaskCancellationColumn(database));
+  const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
+  const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
+  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database
@@ -797,10 +812,13 @@ export async function selectSubmissionIds(
   filters: SubmissionFilter & { eventId: string },
   options: { statusSemantics?: SubmissionStatusSemantics } = {},
 ): Promise<string[]> {
+  const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
+  const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
   const { where, bindings } = filterParts(
     filters,
-    await hasSpeakerTaskCancellationColumn(database),
+    includeCancelledAt,
     options.statusSemantics,
+    overdueDay,
   );
   const source = filters.status === "not_notified" ? NOTIFICATION_FROM : FROM;
   const result = await database
