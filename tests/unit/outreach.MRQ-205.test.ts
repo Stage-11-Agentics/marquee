@@ -5,6 +5,7 @@ import { expect, test } from "vitest";
 
 import { isOutreachOverdue } from "../../src/lib/person-annotations";
 import { buildPeopleQuery } from "../../src/routes/people.queries";
+import { ComposeModal } from "../../src/ui/people/PeopleModals";
 import { OutreachCard } from "../../src/ui/people/SourcingPipelinePage";
 
 const page = readFileSync(new URL("../../src/ui/people/SourcingPipelinePage.tsx", import.meta.url), "utf8");
@@ -85,4 +86,22 @@ test("CONTRACT · MRQ-205 · target FK is additive and people filtering stays SQ
   expect(compose).toContain("marked do-not-contact:");
   expect(drawer).toContain("Outreach:");
   expect(drawer).toContain("Open board");
+});
+
+test("CONTRACT · MRQ-205 · compose names excluded people after selection leaves the visible page", () => {
+  const html = renderToString(h(ComposeModal, {
+    people: [
+      { id: "per_grace", name: "Grace Isford", do_not_contact: false },
+      { id: "per_margarethe", name: "Margarethe von Habsburg-Lothringen", do_not_contact: true },
+    ],
+    onClose: () => undefined,
+    onSent: () => undefined,
+  }));
+
+  expect(html).toContain("1 excluded — marked do-not-contact: Margarethe von Habsburg-Lothringen");
+  expect(html).toContain("1 recipient ready");
+  // The People table is server-paginated, so the modal receives the cached
+  // selected records rather than filtering only the currently visible rows.
+  expect(people).toContain("const [selected, setSelected] = useState<Map<string, SelectedPerson>>(new Map())");
+  expect(people).toContain("people={[...selected.values()]}");
 });
