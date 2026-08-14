@@ -22,7 +22,8 @@ states, persisted data, the record visible in a list.
 
 ```sh
 cd /Users/atin/Projects/Stage11/deployments/Marquee
-git worktree add ../Marquee-worktrees/<branch> -b <branch> main
+git fetch github
+git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main
 cd ../Marquee-worktrees/<branch>
 ```
 
@@ -38,7 +39,7 @@ work in `Marquee-worktrees/mrq-auto-eval`, which is the loop's own machinery.
 - **The gate is load-sensitive.** Same branch, same night: load 14 → 78s, load 164 →
   276s. If it fails on time alone, check the machine load before believing it. A red
   suite must mean a real defect.
-- Every fix ships with a regression test that fails against `main` and passes on your
+- Every fix ships with a regression test that fails against `github/main` and passes on your
   branch. If you cannot write that test, you have not found the defect yet.
 - `gh pr create --repo Stage-11-Agentics/marquee --base main`.
 

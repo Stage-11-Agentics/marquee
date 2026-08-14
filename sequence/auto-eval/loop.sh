@@ -26,7 +26,6 @@ SITE=${SITE:-https://marquee.stage11.dev}
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 STATE_DIR=${STATE_DIR:-$SELF_DIR/run}
 STATE="$STATE_DIR/state.json"
-GATE_LOCK=${GATE_LOCK:-/tmp/marquee-gate.lock}
 CREDENTIALS_ENV=${CREDENTIALS_ENV:-$HOME/Projects/Stage11/code/platform/.credentials/.env}
 DEMO_HEADER=${DEMO_HEADER:-AI Engineer New York 2026}
 # The fleet-wide deploy freeze (check-deploy.mjs). It reads the marker from the
@@ -80,11 +79,35 @@ atlas_run_stamp() { atlas "ls -1t ~/$KIT_ATLAS/runs | head -1"; }
 # seeded it.
 job_name() { local r; r=$(jget round); [[ -n $r && $r != 0 ]] && echo "sbek-round$r" || echo "sbek-round4"; }
 
+# Ask Atlas for job state, keeping "not running" and "could not ask" apart.
+# Piping ssh into grep loses that distinction: a dropped link prints nothing,
+# grep returns 1, and the caller reads silence as "idle". Both callers respond
+# to idle by mutating the thing a round is measuring, so the difference is the
+# whole guard. Prints: running | stopped | unreachable.
+job_state() {
+  local out rc
+  out=$(ssh -o BatchMode=yes -o ConnectTimeout=15 atlas \
+        "~/bin/atlas-job status ${1:-} 2>/dev/null" 2>/dev/null); rc=$?
+  (( rc != 0 )) && { echo unreachable; return 0; }
+  [[ -z ${out//[[:space:]]/} ]] && { echo unreachable; return 0; }
+  case "$out" in
+    *RUNNING*) echo running;;
+    *)         echo stopped;;
+  esac
+}
+
 # Ground truth for "is a round in flight", asked of Atlas rather than inferred from
 # our own state. A round fired by another agent — which is exactly how round 5
 # started — is invisible to state.json but very much real.
+#
+# FAILS CLOSED. An unreachable Atlas reports "a round is running", because the
+# callers are cmd_barrier (which resets the demo and deploys) and cmd_fire
+# (which starts a second round against one mutable site). Refusing wrongly costs
+# a retry; proceeding wrongly costs the round, which is the failure that voided
+# four of the first eight. tests/node/auto-eval-guards.test.mjs pins it.
 round_running() {
-  atlas "~/bin/atlas-job status 2>/dev/null" | grep -qE '^sbek-round[0-9]+ +RUNNING'
+  local state; state=$(job_state)
+  [[ $state == running || $state == unreachable ]]
 }
 
 # --- verbs -----------------------------------------------------------------
@@ -117,6 +140,7 @@ cmd_sync() {
 cmd_watch() {
   local stamp=${1:-$(atlas_run_stamp)}
   local seen=" "
+  local stopped=0
   say "watching runs/$stamp for area judgements (ctrl-c to stop)"
   while :; do
     local now
@@ -124,15 +148,28 @@ cmd_watch() {
     for area in $now; do
       case "$seen" in *" $area "*) continue;; esac
       seen="$seen$area "
-      cmd_sync "$stamp" >/dev/null
+      # A dropped link must not end the watch: under set -e an unguarded rsync
+      # takes the whole loop down, and a dead watch looks exactly like a quiet
+      # one. Observed live in round 9 — the watch exited 255 mid-round and a
+      # judgement landed unnoticed.
+      cmd_sync "$stamp" >/dev/null 2>&1 || say "sync failed for $area — retrying next tick"
       printf 'JUDGEMENT %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$area" "$KIT_LOCAL/runs/$stamp"
     done
-    # Run over? one last sync, then stop.
-    if ! atlas "~/bin/atlas-job status $(job_name) 2>/dev/null" | grep -q RUNNING; then
-      cmd_sync "$stamp" >/dev/null
-      printf 'RUN-COMPLETE %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$stamp"
-      return 0
-    fi
+    # Run over? Two consecutive "stopped" readings, then one last sync and stop.
+    # Never on "unreachable": RUN-COMPLETE is the signal the coordinator acts on
+    # to score and barrier, so announcing it because the link dropped walks the
+    # whole loop from "still browsing" to "demo reset and deployed".
+    case "$(job_state "$(job_name)")" in
+      running)     stopped=0;;
+      unreachable) stopped=0; say "atlas unreachable — still watching, NOT completing";;
+      stopped)
+        stopped=$(( stopped + 1 ))
+        if (( stopped >= 2 )); then
+          cmd_sync "$stamp" >/dev/null 2>&1 || true
+          printf 'RUN-COMPLETE %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$stamp"
+          return 0
+        fi;;
+    esac
     sleep 45
   done
 }
@@ -192,11 +229,19 @@ cmd_barrier() {
   # measuring: the reset wipes its data, the deploy moves its target. The freeze
   # marker is a convention between agents and can be stale or absent; the job
   # status cannot. Ask Atlas, always, and refuse.
-  if [[ ${1:-} != --force ]] && round_running; then
-    die "REFUSING: a round is in flight on Atlas.
+  if [[ ${1:-} != --force ]]; then
+    case "$(job_state)" in
+      running)
+        die "REFUSING: a round is in flight on Atlas.
 The barrier resets the demo and deploys — both destroy a measurement in progress.
 Wait for RUN-COMPLETE (loop.sh watch), then run this again.
-  ssh atlas '~/bin/atlas-job status'"
+  ssh atlas '~/bin/atlas-job status'";;
+      unreachable)
+        die "REFUSING: cannot reach Atlas to ask whether a round is in flight.
+That is NOT the same as 'no round is running'. The barrier resets the demo and
+deploys, so it must not proceed on an unanswered question.
+  ssh atlas '~/bin/atlas-job status'";;
+    esac
   fi
 
   # The barrier is the only thing that lifts the freeze. `fire` declares it, and
