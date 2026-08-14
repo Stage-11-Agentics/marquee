@@ -15,15 +15,14 @@
  * A criterion column carries whatever KIND of answer the criterion asks for.
  * Numeric criteria average, which is the number a chair sorts on. Select and
  * text criteria cannot average, and averaging was the whole of what this route
- * did — so their columns arrived on every row of a 1,001-row export empty,
- * silently dropping the reviewers' recommendations and their written reasoning.
+ * did — the column was emitted for every criterion in the plan, and filled only
+ * where a mean existed. So a select or text criterion was STRUCTURALLY empty:
+ * not missing a value, incapable of carrying one, on every row forever.
  *
- * Agent reviews are the same omission in a second guise. The human tally and
- * the weighted aggregate deliberately count humans only, and changing that
- * would move numbers a chair already reads — so the agents get their own
- * column instead of being folded in. The organizer's Evaluation panel presents
- * the AI first pass as a peer of the human one; an export that shows no trace
- * of it tells a chair there was one review when there were two.
+ * The source is still the scorecard. Pointing those columns at
+ * `evaluations.recommendation` / `.comment` would appear to work wherever a
+ * reviewer happened to fill the review row too, while answering a different
+ * question than the rubric asked.
  */
 import { z } from "@hono/zod-openapi";
 import type { D1Database } from "@cloudflare/workers-types";
@@ -56,14 +55,7 @@ interface CriterionAnswerRow {
   value: string;
 }
 
-/** One agent scorecard, whole, for the column that carries them. */
-interface AgentScorecardRow {
-  submission_id: string;
-  reviewer_name: string;
-  recommendation: string | null;
-  score: number | null;
-  comment: string | null;
-}
+
 
 interface CriterionRow {
   submission_id: string;
@@ -168,8 +160,11 @@ async function recommendationTallies(
  * another said Maybe is exactly the disagreement the export must not flatten,
  * and a text criterion is one reviewer's reasoning and belongs to them.
  *
- * Both kinds of reviewer appear here. The tally and the aggregate count humans
- * only, on purpose; prose has no such arithmetic to protect.
+ * Human reviewers only, matching `criterionMeans` and `recommendationTallies`
+ * either side of it. Whether this export should carry agent scorecards at all
+ * is a live product question and not this fix's to answer: the separation is
+ * deliberate everywhere else in the file, and quietly breaking it in one column
+ * would be a change of meaning wearing a bug fix's clothes.
  */
 async function criterionAnswers(
   db: D1Database,
@@ -182,7 +177,7 @@ async function criterionAnswers(
       element.value AS value
     FROM evaluations evaluation
     JOIN submissions submission ON submission.id = evaluation.submission_id
-    JOIN people reviewer ON reviewer.id = evaluation.reviewer_person_id
+    JOIN people reviewer ON reviewer.id = evaluation.reviewer_person_id AND reviewer.kind = 'human'
     JOIN json_each(evaluation.criteria_scores) element
     JOIN rubric_criteria criterion
       ON criterion.round_id = evaluation.round_id
@@ -202,43 +197,6 @@ async function criterionAnswers(
     answers.push(`${row.reviewer_name}: ${row.value}`);
     forSubmission.set(row.criterion_id, answers);
     bySubmission.set(row.submission_id, forSubmission);
-  }
-  return bySubmission;
-}
-
-/**
- * Agent scorecards, whole, in one column each.
- *
- * One column rather than a second set per criterion: the export is already one
- * row per submission, and doubling every criterion column to carry a second
- * population would make the file unreadable for the ordinary case of no agent
- * review at all.
- */
-async function agentScorecards(
-  db: D1Database,
-  eventId: string,
-): Promise<Map<string, string[]>> {
-  const { results } = await db.prepare(`
-    SELECT evaluation.submission_id AS submission_id,
-      reviewer.name AS reviewer_name,
-      evaluation.recommendation AS recommendation,
-      evaluation.score AS score,
-      evaluation.comment AS comment
-    FROM evaluations evaluation
-    JOIN submissions submission ON submission.id = evaluation.submission_id
-    JOIN people reviewer ON reviewer.id = evaluation.reviewer_person_id AND reviewer.kind = 'agent'
-    WHERE submission.event_id = ? AND evaluation.abstained = 0
-    ORDER BY evaluation.submission_id, reviewer.name, evaluation.id
-  `).bind(eventId).all<AgentScorecardRow>();
-  const bySubmission = new Map<string, string[]>();
-  for (const row of results) {
-    const parts = [row.reviewer_name];
-    if (row.score !== null) parts.push(String(Number(row.score).toFixed(2)));
-    if (row.recommendation) parts.push(row.recommendation);
-    const line = parts.join(" · ");
-    const entries = bySubmission.get(row.submission_id) ?? [];
-    entries.push(row.comment?.trim() ? `${line} — ${row.comment.trim()}` : line);
-    bySubmission.set(row.submission_id, entries);
   }
   return bySubmission;
 }
@@ -268,7 +226,7 @@ const exportPlanResults = defineApiRoute(
     operationId: "exportEvaluationResults",
     summary: "Export review results as CSV",
     description:
-      "One row per submission: identity, status, weighted aggregate, reviewer count, recommendation tally, a column per scorecard criterion — numeric criteria averaged, select and text criteria carrying every recorded answer attributed to its reviewer — and the agent scorecards.",
+      "One row per submission: identity, status, weighted aggregate, reviewer count, recommendation tally, and a column per scorecard criterion — numeric criteria averaged, select and text criteria carrying every recorded answer attributed to its reviewer.",
     tags: ["Evaluation"],
     request: { params: planParams, query: exportQuery },
     policy: {
@@ -290,11 +248,10 @@ const exportPlanResults = defineApiRoute(
     requireProgram(context, eventId, false);
     await planForEventOrThrow(context.env.DB, eventId, planId);
 
-    const [columns, means, answers, agents, tallies, rows] = await Promise.all([
+    const [columns, means, answers, tallies, rows] = await Promise.all([
       criterionColumns(context.env.DB, planId),
       criterionMeans(context.env.DB, eventId),
       criterionAnswers(context.env.DB, eventId),
-      agentScorecards(context.env.DB, eventId),
       recommendationTallies(context.env.DB, eventId),
       allResultRows(context.env.DB, eventId),
     ]);
@@ -303,14 +260,12 @@ const exportPlanResults = defineApiRoute(
       "Submission ID", "Title", "Speakers", "Tracks", "Format", "Status",
       "Weighted score", "Score basis", "Reviews", "Accept", "Maybe", "Decline",
       ...columns.map((column) => column.header),
-      "Agent reviews", "Agent scorecards",
     ];
     const lines = [header.map(csvCell).join(",")];
     for (const item of rows) {
       const tally = tallies.get(item.id);
       const perCriterion = means.get(item.id);
       const perCriterionAnswers = answers.get(item.id);
-      const agentLines = agents.get(item.id) ?? [];
       lines.push([
         item.id,
         item.title,
@@ -327,8 +282,6 @@ const exportPlanResults = defineApiRoute(
         ...columns.map((column) => (column.kind === "numeric"
           ? perCriterion?.get(column.id) ?? null
           : perCriterionAnswers?.get(column.id)?.join(" · ") ?? null)),
-        agentLines.length,
-        agentLines.join(" · ") || null,
       ].map(csvCell).join(","));
     }
 
