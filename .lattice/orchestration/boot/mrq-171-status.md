@@ -1,9 +1,15 @@
-- Nit A — Refresh ejection: DONE; shared resolver preserves the active revision and draft across refresh; reverify after rebase.
-- Browser deep link: DONE on the rebased tree; target `sub_synthetic-pool-0002` opened from home.
-- Test-only seam collapse: DONE; initial render and fetched load use `reviewerRevisionFor`.
-- Decision: keep one resolver taking search, completed items, and an optional preserved id; this makes first render and production `load()` share the same authorization-shaped lookup and preserves refresh state after `replaceState` strips the query.
-- Browser driven: cold-opened demo reviewer; home completed row opened `/reviewer/queue?revise=sub_synthetic-pool-0002`; queue showed recorded `Approve`, overall `4.2`, criteria `4.2/4.3/4.1`, comment, `Update review`, and timestamp; Refresh preserved all values; an earlier same-build session changed the recommendation and saved `Review updated`, with home remaining at 2 reviews.
-- Browser profile/theme: title, company, and bio saved and persisted after reload; reviewer theme persisted across reload and organizer navigation; home and queue each had one theme select.
-- Evidence captured: `.artifacts/mrq-171-reviewer-home-9194e1b9.png`, `.artifacts/mrq-171-reviewer-queue-9194e1b9.png`, `.artifacts/mrq-171-reviewer-home-f21-refresh.png`, `.artifacts/mrq-171-reviewer-queue-f21-refresh.png`, `.artifacts/mrq-171-reviewer-home-f21-updated.png`.
-- Additional fix: fractional recorded scores are included as selected score options during revision.
-- Half-done: locked full gates; PR body, push, CI completion, and Lattice handoff.
+- Head: efcafb34dcda; github/main: d06f4319; no further rebases while CI is running and PR is mergeable.
+- Nit A Refresh ejection: DONE; preserved revision target and draft survive `replaceState` and Refresh.
+- Browser deep link: DONE; cold-open demo reviewer → completed row → exact `sub_synthetic-pool-0002` → `/reviewer/queue`; recorded recommendation, scores, criteria, comment, timestamp, and Update review rendered.
+- Test-only seam: DONE; one `reviewerRevisionFor(search, completed, preservedId)` resolver serves first render and fetched load.
+- Social-platform review finding: DONE; reviewer payload reads `enabledSocialPlatformsFor()` and profile renders exact configured LinkedIn-only subset; integration and browser positive checks pass.
+- Recorded-scale review finding: DONE; finite recorded values outside current bounds are injected, finite/non-finite notices are explicit, note geometry is reserved; render test was red before fix and green after.
+- Q4: DONE; temporary profile response cast was caused by the exact MRQ-93 source regex; production generic restored and regex widened to accept it.
+- Resolver decision: keep one pure resolver with search, completed items, and optional preserved id; first render and production load share authorization-shaped lookup and Refresh preservation.
+- Browser instrument: Worker listening on 8787; `/health.build=efcafb34dcda` matched `git rev-parse --short=12 HEAD`.
+- Browser evidence: `.artifacts/mrq-171-reviewer-home-efcafb34.png`, `.artifacts/mrq-171-reviewer-queue-efcafb34.png`, `.artifacts/mrq-171-reviewer-home-c931f8b6-social-subset.png`.
+- Profile/theme: title/company/bio and LinkedIn handle persisted after reload; theme persisted across reload and organizer navigation; home/queue each have one ThemeSwitch.
+- Guard: canonical command is `npm run guard:merge`; CLEAN against d06f4319: 280 selector tokens, 114 portal classes, 3 exports, branch order correct.
+- Full npm test: prior locked run literal `status: pass-over-budget`, 1,116 Vitest + 221 Node passed, 70,969ms/45,000ms; final run after latest corrections pending.
+- CI: run 31761210194 for efcafb34 in progress; do not rebase or force-push while it runs.
+- Remaining: final locked `npm test`; locked `npm run pr-gate -- --ticket MRQ-171`; update PR body via gh; update Lattice to pr open; report SHA to merge captain; no deploy.
