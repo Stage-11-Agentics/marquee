@@ -497,6 +497,36 @@ describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export"
     expect(call).not.toContain("Rowan Same (2)");
   });
 
+  test("CONTRACT · ABS-13: two names that normalise to the same thing are still told apart", async () => {
+    // Neutralising the separator inside a name makes "Sam · Lee" and "Sam - Lee"
+    // identical in the file. Disambiguating before that normalisation sees two
+    // distinct names, marks neither, and prints one label for two people —
+    // exactly the defect the marker exists to prevent.
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 'marquee', 1, 1)")
+        .bind("per-sep-dot", DEMO_ORGANIZATION_ID, "sepdot@demo.marquee.example", "Sam · Lee"),
+      env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 'marquee', 1, 1)")
+        .bind("per-sep-dash", DEMO_ORGANIZATION_ID, "sepdash@demo.marquee.example", "Sam - Lee"),
+      env.DB.prepare(
+        `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'approve', NULL, ?, '', 0, 1, 1)`,
+      ).bind("evaluation-results-sep-dot", ROUND_ID, SUB_TOP, "per-sep-dot", JSON.stringify({ [CRITERION_CALL]: "Accept" })),
+      env.DB.prepare(
+        `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'deny', NULL, ?, '', 0, 1, 1)`,
+      ).bind("evaluation-results-sep-dash", ROUND_ID, SUB_TOP, "per-sep-dash", JSON.stringify({ [CRITERION_CALL]: "Reject" })),
+    ]);
+
+    const rows = csvRows(await (await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`)).text());
+    const header = rows[0]!;
+    const call = rows.find((row) => row[0] === SUB_TOP)![header.indexOf("Recommendation (Initial review)")]!;
+
+    // Ordered by record id, so the same person carries the same label whatever
+    // else is in the list: one plain, one marked, two different answers.
+    expect(call).toContain("Sam - Lee: Reject");
+    expect(call).toContain("Sam - Lee (2): Accept");
+  });
+
   test("CONTRACT · the export keeps agent reviews separate from human ones, as the rest of it does", async () => {
     // Not a fix — a characterisation. `criterionMeans` and
     // `recommendationTallies` both join `reviewer.kind = 'human'`, and the

@@ -280,7 +280,11 @@ async function criterionAnswers(
         submissionId: row.submission_id,
         criterionId: column.id,
         reviewerId: row.reviewer_id,
-        reviewerName: row.reviewer_name,
+        // Normalised BEFORE the labels are derived. Two reviewers named
+        // "Sam · Lee" and "Sam - Lee" are distinct to the helper and identical
+        // once the separator is neutralised, so disambiguating first hands both
+        // the same unsuffixed label.
+        reviewerName: answerText(row.reviewer_name),
         text,
       });
     }
@@ -293,7 +297,7 @@ async function criterionAnswers(
   for (const entry of entries) {
     const forSubmission = bySubmission.get(entry.submissionId) ?? new Map<string, string[]>();
     const answers = forSubmission.get(entry.criterionId) ?? [];
-    const name = answerText(reviewerNames.get(entry.reviewerId) ?? entry.reviewerName);
+    const name = reviewerNames.get(entry.reviewerId) ?? entry.reviewerName;
     answers.push(`${name}: ${entry.text}`);
     forSubmission.set(entry.criterionId, answers);
     bySubmission.set(entry.submissionId, forSubmission);
