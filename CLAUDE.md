@@ -158,6 +158,21 @@ those 401s is the expired-fixture case above, and only rebasing cures it.
   CLI has an unlocked read-decide-write window, and concurrent `lattice create` calls
   are how the ID counter corrupts and starts re-minting `MRQ-1`. Delegators updating
   their *own* task's status, plan, and comments is fine; those touch disjoint files.
+- **Merging a change to `CLAUDE.md` or `AGENTS.md` does not deliver it.** Both are
+  auto-loaded from the primary checkout's *working copy*, and the rule above keeps that
+  checkout parked — so a merged guidance fix sits on the ref while every session goes on
+  reading the old text. **Whoever merges a change to these two files fast-forwards the
+  board home as part of that merge**, then verifies the working copy rather than the ref:
+
+  ```sh
+  cd /Users/atin/Projects/Stage11/deployments/Marquee
+  git fetch github && git merge --ff-only github/main
+  grep -n "<what you changed>" CLAUDE.md AGENTS.md   # read the file, not the ref
+  ```
+
+  If the fast-forward refuses, it is untracked `.lattice` files the incoming commits also
+  add: back them up, remove, fast-forward, restore byte-identical, verify with `diff`.
+  Never `git clean`, never `--force` — that tree is the fleet's board.
 - **Never "clean up" state you cannot attribute.** In a multi-agent tree, unfamiliar
   uncommitted changes are almost always a sibling agent's live work. Ask, or leave it.
   If the tree looks broken, raise a c11 flag rather than reaching for `stash` or
