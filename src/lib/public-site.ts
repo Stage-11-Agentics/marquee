@@ -6,6 +6,7 @@ import { showsBuildingComparisonCount } from "./venue-disclosure";
 import { slugify } from "./ids";
 import { roomDisplayLabel } from "./venues";
 import { syntheticPublicHeadshotUrl } from "./public-headshots";
+import { conferenceDayLabel, conferenceDays } from "./conference-dates";
 
 export const EMBED_CACHE_TTL_SECONDS = 30;
 const CLOUDFLARE_KV_MIN_TTL_SECONDS = 60;
@@ -32,6 +33,7 @@ export interface PublicEvent {
 export interface PublicDay {
   id: string;
   label: string;
+  sessionCount: number;
 }
 
 export interface PublicTrack {
@@ -387,34 +389,6 @@ export async function loadPublicEvent(
   return findLiveEvent(database, eventSlug);
 }
 
-function parseDate(value: string): Date {
-  return new Date(`${value}T00:00:00Z`);
-}
-
-function addDays(value: string, amount: number): string {
-  const date = parseDate(value);
-  date.setUTCDate(date.getUTCDate() + amount);
-  return date.toISOString().slice(0, 10);
-}
-
-function dateLabel(value: string): string {
-  const date = parseDate(value);
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(date);
-}
-
-function eventDays(event: PublicEvent): PublicDay[] {
-  const days: PublicDay[] = [];
-  for (let cursor = event.startsOn; cursor <= event.endsOn; cursor = addDays(cursor, 1)) {
-    days.push({ id: cursor, label: dateLabel(cursor) });
-  }
-  return days;
-}
-
 /**
  * Every facet accepts an id or a display name — `?track=Agents` and
  * `?track=trk_agents` both narrow the list — so the value handed back to the
@@ -746,7 +720,7 @@ function toPublicSessions(rows: PublicSessionRow[], event: PublicEvent, showBuil
       title: row.title,
       abstract: row.abstract,
       status: row.status,
-      day: dateLabel(zoned.date),
+      day: conferenceDayLabel(zoned.date),
       date: zoned.date,
       time: zoned.time,
       endTime: zonedParts(row.starts_at + row.duration_min * 60_000, event.timezone).time,
@@ -795,9 +769,20 @@ export async function loadPublicAgenda(
   ]);
   const rooms = await loadRoomCatalog(database, event.id, venue.showComparison);
   const query = sessionRowsQuery(event, filters);
-  const rows = await database.prepare(query.sql).bind(...query.bindings).all<PublicSessionRow>();
+  const allQuery = sessionRowsQuery(event, {});
+  const rowsPromise = database.prepare(query.sql).bind(...query.bindings).all<PublicSessionRow>();
+  const allRowsPromise = query.sql === allQuery.sql && query.bindings.length === allQuery.bindings.length
+    ? rowsPromise
+    : database.prepare(allQuery.sql).bind(...allQuery.bindings).all<PublicSessionRow>();
+  const [rows, allRows] = await Promise.all([rowsPromise, allRowsPromise]);
   const allSessions = toPublicSessions(rows.results, event, venue.showComparison);
-  const days = eventDays(event);
+  const publishedSessions = query.sql === allQuery.sql && query.bindings.length === allQuery.bindings.length
+    ? allSessions
+    : toPublicSessions(allRows.results, event, venue.showComparison);
+  const days = conferenceDays(event.startsOn, event.endsOn).map((day) => ({
+    ...day,
+    sessionCount: publishedSessions.filter((session) => session.date === day.id).length,
+  }));
   const selectedDay = filters.allDays || !filters.day || filters.day === "all" ? null : filters.day;
   const sessions = selectedDay
     ? allSessions.filter((session) => session.date === selectedDay || session.day === selectedDay)

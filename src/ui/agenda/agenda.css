@@ -154,7 +154,12 @@
 .agenda-track-slot .agenda-tile-actions button, .agenda-track-slot .agenda-tile-placement-actions button { background: #1d2f3a; border-color: #35505e; color: #cfe0e7; }
 .agenda-placement-status { display: flex; align-items: center; min-height: 34px; margin: -4px 0 12px; border-left: 3px solid transparent; padding: 8px 10px; background: transparent; font-size: 11px; }
 .agenda-placement-status.is-active { border-left-color: var(--accent); background: var(--accent-soft); }
+.agenda-day-window-status { display: grid; gap: 3px; min-height: 42px; margin: -4px 0 12px; border-left: 3px solid transparent; padding: 8px 10px; font-size: 11px; }
+.agenda-day-window-status.is-empty { border-left-color: var(--accent); background: var(--accent-soft); }
+.agenda-day-window-status strong { color: var(--ink); }
+.agenda-day-window-status span { color: var(--muted); }
 .agenda-notice { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin: -4px 0 12px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); font-size: 11px; }
+.agenda-schedule-window-warning a { color: inherit; font-weight: 700; text-decoration: underline; }
 .agenda-notice button { border: 0; background: none; color: inherit; font-size: 16px; }
 .agenda-loading { padding: 28px; display: grid; gap: 6px; }
 .agenda-room-panel, .agenda-conflict-panel { position: fixed; top: 76px; right: 20px; z-index: 400; width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 96px); overflow: auto; background: var(--panel); border: 1px solid var(--line-strong); box-shadow: 0 12px 30px rgba(16,24,32,.18); }

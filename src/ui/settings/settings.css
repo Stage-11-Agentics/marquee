@@ -43,6 +43,9 @@
 .settings-banner, .settings-error { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 7px; font-size: 13px; }
 .settings-banner { color: var(--success, #277a58); background: color-mix(in srgb, var(--success, #277a58) 10%, var(--surface)); }
 .settings-error { color: var(--danger, #b34848); background: color-mix(in srgb, var(--danger, #b34848) 10%, var(--surface)); }
+.settings-warning { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 14px; border-left: 3px solid var(--accent); border-radius: 7px; color: var(--ink-soft); background: var(--accent-soft); font-size: 13px; }
+.settings-warning span { color: var(--muted); }
+.settings-warning .button { margin-left: auto; flex: 0 0 auto; }
 .settings-error span { color: var(--ink); }
 .settings-error .button { margin-left: auto; }
 .settings-skeleton { opacity: .7; }

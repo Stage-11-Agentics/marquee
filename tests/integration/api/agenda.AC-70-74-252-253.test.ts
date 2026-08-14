@@ -51,6 +51,14 @@ async function seedFixture(): Promise<void> {
 describe.sequential("MRQ-20 agenda API", () => {
   beforeAll(seedFixture, 10_000);
 
+  test("CONTRACT · MRQ-142 · the builder API reports Sessions scheduled outside the conference window", async () => {
+    const response = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
+    expect(response.status).toBe(200);
+    const body = await response.json<{ schedule_window: { outside_window_session_count: number }; sessions: Array<{ title: string }> }>();
+    expect(body.schedule_window).toEqual({ outside_window_session_count: 1 });
+    expect(body.sessions.some((session) => session.title === "Already placed")).toBe(true);
+  });
+
   test("CONTRACT · CNT-12 + AIA-07 show every accepted Session but publish only scheduled ones", async () => {
     const initial = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
     const initialBody = await initial.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string; title: string; scheduled: boolean; can_publish: boolean; blocked_reason: string | null; starts_at: number | null; room: string | null; building: string | null; speakers: Array<{ name: string }> }> } }>();

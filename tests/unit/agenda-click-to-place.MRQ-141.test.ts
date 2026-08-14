@@ -9,6 +9,7 @@ import type { AgendaPoolItem, AgendaSession, AgendaSnapshot } from "../../src/ap
 import { generateAgendaGridSlots } from "../../src/lib/agenda-grid";
 import {
   agendaPlacementRequest,
+  AgendaDayStatus,
   DayBoard,
   Pool,
   RoomBoard,
@@ -37,6 +38,7 @@ const poolItem: AgendaPoolItem = {
 
 const snapshot: AgendaSnapshot = {
   event: { id: "event", name: "Demo Conference", starts_on: DAY.value, ends_on: DAY.value, timezone: "UTC" },
+  schedule_window: { outside_window_session_count: 0 },
   publication: { live: 0, not_yet_public: 0, candidates: [], public_agenda_url: "/agenda?event=event" },
   schedulable_statuses: ["accepted"],
   rooms: [{
@@ -84,6 +86,15 @@ function scheduledSession(): AgendaSession {
 }
 
 describe("CONTRACT · MRQ-141 click-to-place", () => {
+  test("CONTRACT · MRQ-142 · the builder keeps a named empty-day status beside the day selector", () => {
+    const emptyDay = renderToString(h(AgendaDayStatus, {
+      snapshot: { ...snapshot, event: { ...snapshot.event, ends_on: "2026-10-14" }, sessions: [scheduledSession()] },
+      day: "2026-10-14",
+    }));
+    expect(emptyDay).toContain("Nothing scheduled on this day yet");
+    expect(emptyDay).toContain("place a Session here from the unscheduled pool");
+  });
+
   test("CONTRACT · one request builder preserves the pool POST and scheduled PATCH placement writes", () => {
     const poolRequest = agendaPlacementRequest(snapshot, armed.payload, { day: DAY.value, time: "10:00", roomId: "room-2a" }, "event");
     expect(poolRequest).toMatchObject({ path: "/api/v1/events/event/agenda/items", route: "/api/v1/events/{eventId}/agenda/items" });

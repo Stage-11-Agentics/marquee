@@ -49,6 +49,9 @@ interface SettingsModel {
   formats: Format[];
   tracks: Track[];
   speaker_social_platforms: SocialPlatformId[];
+  schedule_window: {
+    outside_window_session_count: number;
+  };
 }
 
 type LoadState =
@@ -253,6 +256,7 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
     {state.kind === "error" && <div class="settings-error" role="alert"><strong>Settings unavailable</strong><span>{state.message}</span></div>}
     {notice && <div class="settings-banner" role="status">{notice}</div>}
     {saveError && <div class="settings-error" role="alert"><strong>Save failed</strong><span>{saveError}</span></div>}
+    {model.schedule_window.outside_window_session_count > 0 && <div class="settings-warning" role="status"><strong class="tabular">{model.schedule_window.outside_window_session_count} scheduled Session{model.schedule_window.outside_window_session_count === 1 ? "" : "s"} fall outside the saved conference dates.</strong><span>Update the conference dates or move those Sessions in the Agenda builder.</span><button class="button small" type="button" onClick={() => navigate("/agenda-builder")}>Open Agenda builder</button></div>}
     <form onSubmit={save}>
       <div class="settings-grid">
         <section class="card settings-details-card">

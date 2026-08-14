@@ -65,7 +65,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind("org_public_site", "Public Conference", "public-conference", NOW, NOW),
     env.DB.prepare(`INSERT INTO events (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, accent, status, demo_mode, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', 1, ?, ?)`)
-      .bind(EVENT_ID, "org_public_site", "Public Conference 2026", EVENT_SLUG, "A published program", "2026-10-12", "2026-10-13", "America/New_York", "Sheraton New York Times Square", "#db4c3f", NOW, NOW),
+      .bind(EVENT_ID, "org_public_site", "Public Conference 2026", EVENT_SLUG, "A published program", "2026-10-12", "2026-10-14", "America/New_York", "Sheraton New York Times Square", "#db4c3f", NOW, NOW),
     env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind("track-public", EVENT_ID, "Public Track", "#db4c3f", 0, NOW, NOW),
     env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind("track-other", EVENT_ID, "Other Track", "#0b6a72", 1, NOW, NOW),
     env.DB.prepare(`INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, access_note, created_at, updated_at)
@@ -188,6 +188,24 @@ test("CONTRACT · MRQ-185 · a published submitter-only session names its missin
   expect(embedBody).toContain(NO_STAGE_TITLE.replace("&", "&amp;"));
   expect(embedBody).toContain("Speaker to be announced");
   expect(embedBody).toContain("Public Speaker");
+});
+
+test("CONTRACT · MRQ-142 · every conference day names its empty state while the same response keeps the populated day", async () => {
+  const data = await loadPublicAgenda(env.DB, { eventSlug: EVENT_SLUG, allDays: true });
+  expect(data?.days).toEqual([
+    expect.objectContaining({ id: "2026-10-12", sessionCount: 1 }),
+    expect.objectContaining({ id: "2026-10-13", sessionCount: 0 }),
+    expect.objectContaining({ id: "2026-10-14", sessionCount: 0 }),
+  ]);
+  expect(data?.sessions.some((session) => session.title === PUBLIC_TITLE && session.date === "2026-10-12")).toBe(true);
+
+  const emptyDay = await request(`/agenda?event=${EVENT_SLUG}&day=2026-10-14`);
+  const body = await emptyDay.text();
+  expect(emptyDay.status).toBe(200);
+  expect(body).toContain("Nothing scheduled on this day yet");
+  expect(body).toContain("Choose All days to see the published program");
+  expect(body).toContain("/agenda?event=public-conf&amp;day=all");
+  expect(body).not.toContain("No published sessions match");
 });
 
 test("AC-84, AC-88, AC-274 · public speaker detail and embeds render seeded avatars with a truthful initials fallback", async () => {

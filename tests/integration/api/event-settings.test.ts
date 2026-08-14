@@ -60,6 +60,21 @@ test("AC-5 + AC-6 · conference details and timezone persist through the setting
   expect((await reloaded.json<{ data: { event: Record<string, unknown> } }>()).data.event.timezone).toBe("Europe/London");
 });
 
+test("CONTRACT · MRQ-142 · settings reports the count of scheduled Sessions outside the saved date window", async () => {
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, created_at, updated_at) VALUES (?, ?, ?, ?, 0, NULL, NULL, 0, ?, ?)").bind("building_settings_window", EVENT_ID, "Settings Hall", "1 Conference Way", now, now),
+    env.DB.prepare("INSERT INTO rooms (id, event_id, building_id, name, capacity, position, av_capabilities, notes, created_at, updated_at) VALUES (?, ?, ?, ?, 20, 0, '[]', NULL, ?, ?)").bind("room_settings_window", EVENT_ID, "building_settings_window", "Room 1", now, now),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'session', ?, 'accepted', 'admin', ?, ?, ?)").bind("submission_settings_window", EVENT_ID, "Outside the window", "person_settings_api", now, now),
+    env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', ?, 30, ?, 0, ?, ?)").bind("agenda_settings_window", EVENT_ID, "submission_settings_window", Date.UTC(2026, 9, 16, 14), "room_settings_window", now, now),
+  ]);
+
+  const response = await request(`/api/v1/events/${EVENT_ID}`);
+  expect(response.status).toBe(200);
+  const body = await response.json<{ data: { schedule_window: { outside_window_session_count: number } } }>();
+  expect(body.data.schedule_window).toEqual({ outside_window_session_count: 1 });
+});
+
 test("AC-8 + AC-9 · a format stores its range and default independently for downstream session consumers", async () => {
   const created = await request(`/api/v1/events/${EVENT_ID}/formats`, {
     method: "POST",

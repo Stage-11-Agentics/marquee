@@ -9,6 +9,7 @@ import { requireOrgAdmin } from "../lib/auth/org-admin";
 import { roleForEvent, tokenEventAllowed } from "../lib/auth/scope-resolution";
 import { COPY_SET_KEYS } from "../lib/events/copy-manifest";
 import { planEventCopy, readCopyPlan } from "../lib/events/copy-event";
+import { countOutsideConferenceWindow } from "../lib/conference-dates";
 import { SHIPPED_DEMO_ORGANIZATION_ID } from "../lib/reset-demo/demo-fixture";
 import { SOCIAL_PLATFORM_IDS, type SocialPlatformId } from "../lib/social-links";
 import { enabledSocialPlatformsFor, writeEnabledSocialPlatforms } from "../lib/social-platform-setting";
@@ -58,6 +59,9 @@ const settingsResponse = z.object({
     tracks: z.array(trackSchema),
     /** Which social profiles this conference asks its speakers for. */
     speaker_social_platforms: z.array(socialPlatformId),
+    schedule_window: z.object({
+      outside_window_session_count: z.number().int().nonnegative(),
+    }),
   }),
 });
 
@@ -164,8 +168,8 @@ async function eventFor(db: D1Database, eventId: string): Promise<PublicEvent> {
   return event;
 }
 
-async function settingsFor(db: D1Database, eventId: string): Promise<{ event: PublicEvent; formats: FormatRow[]; tracks: TrackRow[]; speaker_social_platforms: SocialPlatformId[] }> {
-  const [event, formats, tracks, socialPlatforms] = await Promise.all([
+async function settingsFor(db: D1Database, eventId: string): Promise<{ event: PublicEvent; formats: FormatRow[]; tracks: TrackRow[]; speaker_social_platforms: SocialPlatformId[]; schedule_window: { outside_window_session_count: number } }> {
+  const [event, formats, tracks, socialPlatforms, scheduledItems] = await Promise.all([
     eventFor(db, eventId),
     db.prepare(
       `SELECT id, event_id, name, default_duration_min, min_duration_min, max_duration_min, position, created_at, updated_at
@@ -176,8 +180,22 @@ async function settingsFor(db: D1Database, eventId: string): Promise<{ event: Pu
        FROM tracks WHERE event_id = ? ORDER BY position, id`,
     ).bind(eventId).all<TrackRow>(),
     enabledSocialPlatformsFor(db, eventId),
+    db.prepare("SELECT starts_at FROM agenda_items WHERE event_id = ? AND kind = 'session'").bind(eventId).all<{ starts_at: number }>(),
   ]);
-  return { event, formats: formats.results, tracks: tracks.results, speaker_social_platforms: socialPlatforms };
+  return {
+    event,
+    formats: formats.results,
+    tracks: tracks.results,
+    speaker_social_platforms: socialPlatforms,
+    schedule_window: {
+      outside_window_session_count: countOutsideConferenceWindow(
+        scheduledItems.results.map((item) => Number(item.starts_at)),
+        event.starts_on,
+        event.ends_on,
+        event.timezone,
+      ),
+    },
+  };
 }
 
 /**
