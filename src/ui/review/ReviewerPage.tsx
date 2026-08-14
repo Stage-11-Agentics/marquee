@@ -249,7 +249,10 @@ function recommendationLabel(value: ReviewState["recommendation"]): string {
 
 function formatRoundClose(value: number | null): string | null {
   if (value === null) return null;
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  // Round boundaries are calendar days stored at UTC midnight. Rendering that
+  // instant in the reviewer's local zone turns a configured close on the 15th
+  // into the 14th for organizers west of UTC.
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(value));
 }
 
 function committeeRoleLabel(role: string): string {
