@@ -162,10 +162,24 @@ interface FormRow {
   updated_at: number;
 }
 
+type SpeakerField = "email" | "name" | "title" | "company" | "bio";
+
+interface SpeakerFieldChange {
+  before: string | null;
+  after: string | null;
+}
+
 interface ImportSnapshot {
   kind: "speaker" | "session";
   person: PersonRow | null;
   attachment: AttachmentRow | null;
+  // Speaker imports use this to make undo conditional: only a value that is
+  // still exactly what this import wrote is eligible for restoration. That
+  // keeps a later organizer edit safe, while the empty object records that a
+  // new-format snapshot intentionally made no profile-field changes.
+  speaker_changes?: Partial<Record<SpeakerField, SpeakerFieldChange>>;
+  speaker_attachment_changed?: boolean;
+  speaker_attachment_after_id?: string | null;
   membership_created?: boolean;
   membership_id?: string | null;
   submission: SubmissionRow | null;
@@ -488,9 +502,9 @@ async function importSpeaker(
   const beforeAttachment = current ? await attachmentForPerson(db, event.id, current.id) : null;
   const beforeMembership = current ? await speakerMembershipForPerson(db, event.id, current.id) : null;
   const before: ImportSnapshot = current ? {
-    kind: "speaker", person: current, attachment: beforeAttachment, membership_created: false, membership_id: null, submission: null,
+    kind: "speaker", person: current, attachment: beforeAttachment, speaker_changes: {}, membership_created: false, membership_id: null, submission: null,
     participations: [], answers: [], evaluations: [],
-  } : { kind: "speaker", person: null, attachment: null, membership_created: false, membership_id: null, submission: null, participations: [], answers: [], evaluations: [] };
+  } : { kind: "speaker", person: null, attachment: null, speaker_changes: {}, membership_created: false, membership_id: null, submission: null, participations: [], answers: [], evaluations: [] };
   const now = nowAfter(current?.updated_at);
   const id = current?.id ?? stableImportId("person", event.id, externalRef || email);
   // An import is additive, never destructive. A blank CSV cell means "this
@@ -508,14 +522,22 @@ async function importSpeaker(
     company: merge(row.company, current?.company ?? null),
     bio: merge(row.bio, current?.bio ?? null),
   };
+  if (current) {
+    for (const field of ["email", "name", "title", "company", "bio"] as const) {
+      if (current[field] !== next[field]) {
+        before.speaker_changes![field] = { before: current[field], after: next[field] };
+      }
+    }
+  }
+  const hasStoredValue = (field: "title" | "company" | "bio"): boolean => Boolean(current?.[field]?.trim());
   const preserved = current
-    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && current[field] !== null)
+    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && hasStoredValue(field))
     : [];
   const filled = current
-    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && current[field] === null && next[field] !== null)
+    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && !hasStoredValue(field) && next[field] !== null)
     : [];
   const blankRetained = current
-    ? (["title", "company", "bio"] as const).filter((field) => !row[field].trim() && current[field] !== null)
+    ? (["title", "company", "bio"] as const).filter((field) => !row[field].trim() && hasStoredValue(field))
     : [];
   const changed = !current || current.email !== next.email || current.name !== next.name || current.title !== next.title || current.company !== next.company || current.bio !== next.bio;
   if (!current) {
@@ -555,6 +577,10 @@ async function importSpeaker(
   if (!beforeMembership && membershipWrite.meta.changes > 0) {
     before.membership_created = true;
     before.membership_id = (await speakerMembershipForPerson(db, event.id, person.id))?.id ?? null;
+  }
+  if (attachmentChanged) {
+    before.speaker_attachment_changed = true;
+    before.speaker_attachment_after_id = person.headshot_attachment_id;
   }
   const outcome = !current ? "created" : changed || attachmentChanged ? "updated" : "skipped";
   // An organizer auditing an import has to be able to tell why a row landed the
@@ -866,6 +892,47 @@ async function restoreSnapshot(db: D1Database, snapshot: ImportSnapshot): Promis
       if (snapshot.attachment) await db.prepare("DELETE FROM attachments WHERE id = ?").bind(snapshot.attachment.id).run();
       return;
     }
+    if (snapshot.speaker_changes !== undefined) {
+      const current = await db.prepare("SELECT * FROM people WHERE id = ?").bind(snapshot.person.id).first<PersonRow>();
+      if (!current) return;
+      const updates: string[] = [];
+      const values: Array<string | number | null> = [];
+      for (const field of ["email", "name", "title", "company", "bio"] as const) {
+        const change = snapshot.speaker_changes[field];
+        if (!change || current[field] !== change.after) continue;
+        updates.push(`${field} = ?`);
+        values.push(change.before);
+      }
+      const afterAttachmentId = snapshot.speaker_attachment_after_id ?? null;
+      const restoreAttachment = snapshot.speaker_attachment_changed === true && current.headshot_attachment_id === afterAttachmentId;
+      if (restoreAttachment) {
+        updates.push("headshot_attachment_id = ?");
+        values.push(snapshot.person.headshot_attachment_id);
+      }
+      if (updates.length > 0) {
+        updates.push("updated_at = ?");
+        values.push(Date.now());
+        values.push(snapshot.person.id);
+        await db.prepare(`UPDATE people SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+      }
+      if (snapshot.speaker_attachment_changed === true && afterAttachmentId) {
+        if (restoreAttachment) {
+          await db.prepare("DELETE FROM attachments WHERE id = ? AND owner_type = 'person_headshot' AND owner_id = ?")
+            .bind(afterAttachmentId, snapshot.person.id).run();
+          if (snapshot.attachment) {
+            await db.prepare(
+              `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, sha256, r2_etag, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET event_id = excluded.event_id, owner_type = excluded.owner_type, owner_id = excluded.owner_id, r2_key = excluded.r2_key, filename = excluded.filename, content_type = excluded.content_type, size_bytes = excluded.size_bytes, status = excluded.status, sha256 = excluded.sha256, r2_etag = excluded.r2_etag, updated_at = excluded.updated_at`,
+            ).bind(snapshot.attachment.id, snapshot.attachment.event_id, snapshot.attachment.owner_type, snapshot.attachment.owner_id, snapshot.attachment.r2_key, snapshot.attachment.filename, snapshot.attachment.content_type, snapshot.attachment.size_bytes, snapshot.attachment.status, snapshot.attachment.sha256, snapshot.attachment.r2_etag, snapshot.attachment.created_at, snapshot.attachment.updated_at).run();
+          }
+        } else if (!restoreAttachment) {
+          await db.prepare("DELETE FROM attachments WHERE id = ? AND owner_type = 'person_headshot' AND owner_id = ?")
+            .bind(afterAttachmentId, snapshot.person.id).run();
+        }
+      }
+      return;
+    }
     await db.prepare(
       `UPDATE people SET org_id = ?, email = ?, name = ?, title = ?, company = ?, bio = ?, headshot_attachment_id = ?, social_links = ?, is_demo = ?, last_write_source = ?, updated_at = ? WHERE id = ?`,
     ).bind(snapshot.person.org_id, snapshot.person.email, snapshot.person.name, snapshot.person.title, snapshot.person.company, snapshot.person.bio, snapshot.person.headshot_attachment_id, snapshot.person.social_links, snapshot.person.is_demo, snapshot.person.last_write_source, snapshot.person.updated_at, snapshot.person.id).run();
@@ -988,7 +1055,11 @@ export async function undoSessionizeImport(db: D1Database, eventId: string, impo
     const snapshot = row.before_json ? JSON.parse(row.before_json) as ImportSnapshot : null;
     const createdMarker = snapshot?.submission === null && snapshot?.person === null;
     const membershipCreatedMarker = row.entity === "speaker" && snapshot?.membership_created === true;
-    if (!row.target_id || row.outcome === "failed" || (row.outcome === "skipped" && !createdMarker && !membershipCreatedMarker)) continue;
+    const speakerChangesMarker = row.entity === "speaker" && (
+      Object.keys(snapshot?.speaker_changes ?? {}).length > 0
+      || snapshot?.speaker_attachment_changed === true
+    );
+    if (!row.target_id || row.outcome === "failed" || (row.outcome === "skipped" && !createdMarker && !membershipCreatedMarker && !speakerChangesMarker)) continue;
     if (snapshot && membershipCreatedMarker) await removeImportedSpeakerMembership(db, eventId, row.target_id, snapshot);
     if (snapshot && snapshot.submission === null && snapshot.person === null) {
       if (row.entity === "session") await deleteCreatedSubmission(db, row.target_id);

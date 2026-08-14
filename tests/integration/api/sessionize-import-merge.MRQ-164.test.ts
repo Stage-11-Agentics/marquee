@@ -16,6 +16,7 @@ const EVENT_ID = "evt_mrq164_import";
 const ORG_ID = "org_mrq164_import";
 const OWNER_ID = "person_mrq164_owner";
 const EXISTING_ID = "person_mrq164_existing";
+const BLANK_ID = "person_mrq164_blank";
 const PORTAL_BIO = "A careful, speaker-written biography that took an afternoon to get right.";
 
 const SPEAKERS_CSV = [
@@ -41,7 +42,9 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES ('track_mrq164_platform', ?, 'Platform', '#0d9488', 0, ?, ?)").bind(EVENT_ID, now, now),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, 'owner@mrq164.test', 'MRQ-164 Owner', NULL, NULL, NULL, NULL, '[]', 0, 'marquee', ?, ?)").bind(OWNER_ID, ORG_ID, now, now),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, 'priya@mrq164.test', 'Priya Raman', 'Principal Engineer', 'Northwind Data', ?, NULL, '[]', 0, 'marquee', ?, ?)").bind(EXISTING_ID, ORG_ID, PORTAL_BIO, now, now),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, 'blank@mrq164.test', 'Blank Profile', '   ', '', NULL, NULL, '[]', 0, 'marquee', ?, ?)").bind(BLANK_ID, ORG_ID, now, now),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('membership_mrq164_owner', ?, ?, ?, 'program_lead', ?, ?)").bind(ORG_ID, EVENT_ID, OWNER_ID, now, now),
+    env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('membership_mrq164_blank', ?, ?, ?, 'speaker', ?, ?)").bind(ORG_ID, EVENT_ID, BLANK_ID, now, now),
   ]);
   ownerCookie = `mq_session=${(await createSession(env.DB, { personId: OWNER_ID, roleHint: "program_lead", userAgent: "mrq164-test", now })).id}`;
 }
@@ -99,6 +102,32 @@ describe.sequential("MRQ-164 Sessionize import merge", () => {
     const person = await env.DB.prepare("SELECT title, company, bio FROM people WHERE id = ?").bind(OWNER_ID).first<{ title: string | null; company: string | null; bio: string | null }>();
     expect(person).toMatchObject({ title: "Program lead", company: "Marquee", bio: "The organizer's profile." });
     expect(result.rows.find((row) => row.entity === "speaker")?.reason).toContain("filled title, company, bio");
+  });
+
+  test("CONTRACT · MRQ-164 · blank stored fields audit as fills and rerun undo preserves a later edit", async () => {
+    const csv = [
+      "Speaker ID,Name,Email,Job Title,Company,Bio,Photo URL",
+      "speaker-blank,Blank Profile,blank@mrq164.test,Imported title,Imported company,Imported bio,",
+    ].join("\n");
+    const uploaded = await request(`/api/v1/events/${EVENT_ID}/imports`, {
+      method: "POST",
+      body: JSON.stringify({ source: "sessionize", speakers_csv: csv }),
+    });
+    const uploadBody = await uploaded.json<{ id: string; mapping: Record<string, Record<string, string | null>> }>();
+    await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/mapping`, { method: "POST", body: JSON.stringify(uploadBody.mapping) });
+    const firstRun = await (await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/run`, { method: "POST" })).json<{ rows: Array<{ entity: string; outcome: string; reason: string | null }> }>();
+    const firstRow = firstRun.rows.find((row) => row.entity === "speaker");
+    expect(firstRow).toMatchObject({ outcome: "updated" });
+    expect(firstRow?.reason).toContain("filled title, company, bio");
+
+    const repeated = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/run`, { method: "POST" });
+    expect(repeated.status).toBe(200);
+    expect((await repeated.json<{ rows: Array<{ entity: string; outcome: string }> }>()).rows.find((row) => row.entity === "speaker")?.outcome).toBe("skipped");
+    await env.DB.prepare("UPDATE people SET title = ?, updated_at = ? WHERE id = ?").bind("Organizer replacement", Date.now(), BLANK_ID).run();
+
+    const undone = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/undo`, { method: "POST" });
+    expect(undone.status).toBe(200);
+    expect(await env.DB.prepare("SELECT title, company, bio FROM people WHERE id = ?").bind(BLANK_ID).first()).toMatchObject({ title: "Organizer replacement", company: "", bio: null });
   });
 
   test("CONTRACT · MRQ-164 · a created row does not claim it matched an existing person", async () => {
