@@ -174,3 +174,20 @@ Client-side overlap detection over starred intervals; a small muted "overlaps �
 ### Prototype first
 
 Extend `prototypes/attendee-schedule/index.html` (Flight Deck tokens): star-count chips at threshold on the public agenda; an organizer demand view (counts by session); the claim sheet with its plain-language disclosure; the "task for your agent" import block on the People surface. Nothing builds until this is loved (Tone rules).
+
+### Round-2 review rulings (Atin, 2026-08-14, via the v0.2 adversarial review · MRQ-202)
+
+The v0.2 prototype went through a fresh-eyes adversarial pass (`prototypes/attendee-schedule/REVIEW-v0.2.md`); Atin ruled on each finding in conversation with the review agent. Three rulings amend the contract:
+
+- **Public count semantics.** The viewer's own star **is** part of the aggregate (their device is a distinct device), but the number is a **server aggregate refreshed on render**, not a live tally. Precisely so it never reads as a like counter, the count renders as **session metadata** — a quiet ★-chip beside the format/track chips — never under the star button. Slot reserved at threshold/off; elements never jump.
+- **Unclaim.** Unlinking deletes what the claim created and only that: the email↔schedule-code linkage always; the claim-sourced `event_attendances` row; the person row only if the claim minted it and nothing else references it. **Import-sourced people and attendance rows are never touched by unlink.** The unlink confirmation states this plainly, in the same register as the claim disclosure: *"Unlinked — your email and picks are removed from the organizers' records."*
+- **Agent demand.** The demand aggregate counts **distinct beacon devices plus distinct API-created schedule codes** containing the session. Web clients pass their device hash when creating/updating a schedule so a synced code de-dups against its own device; agent-created codes (no device hash) count as one. The For-agents doc discloses that building a schedule contributes anonymously to the demand signal.
+
+Ruled fine-as-is (no work): threshold zero-display edge cases; demo dates; mock CRM emails in the organizer view. Also folded from the review without needing a ruling: the demand bar gauges **% of room capacity** with a 100% tick (not share-of-max); the organizer view is labeled a demo door in the prototype; count copy says "N schedules include this session."
+
+### Round 3 — mid-drive additions (Atin, 2026-08-14 · prototyped in v0.3, pending love)
+
+Driving v0.2, Atin hit two things:
+
+- **Identity legibility.** "How do I log in? What email am I using?" — the no-account model is right, but the page has to *say what it knows about you*. The agenda intro now states "No sign-in: stars save on this device…"; My Schedule carries an **identity line** — anonymous: "Saved on this device only — no account, not linked to an email · [Get it by email]"; claimed: "Linked to m…a@… — recoverable by email, on any device · [Manage]". This also answers the review's claim-discoverability finding: the recovery affordance lives where the anxiety is.
+- **Speaker cross-over.** If the claimed email matches a speaker at the event (the CRM knows — same `people` table), their speaking sessions **pin into My Schedule** with a "You're speaking" chip: in the list, the glance panel (ink-filled blocks), the agent briefing ("I'M SPEAKING at this one"), the ICS set, and overlap detection (starring against your own talk warns). No login, no portal dependency — the person-match is the rail, and it is the attendee-visible payoff of attendees-in-the-CRM. Unlink removes the pins with the identity.

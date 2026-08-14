@@ -42,6 +42,21 @@
     · EMAIL CLAIM ("Get it by email", in Subscribe/share): opt-in recovery.
       Attaches an email to the schedule code; plain-language disclosure that
       the organizers can then see your picks. No account, no password.
+
+  v0.3 (MRQ-202 review rulings + Atin's mid-drive round 3):
+    · Count moved from the star rail to a quiet chip beside format/track —
+      session metadata, not a like counter (ruled). Slot always reserved.
+    · Unlink shows the ruled honesty line ("your email and picks are removed
+      from the organizers' records") as a transient same-height state.
+    · Agent-built schedules feed the demand aggregate (ruled): For-agents
+      discloses it; the organizer stats carry a "via agents" figure.
+    · IDENTITY LINE (round 3): My Schedule states what the page knows about
+      you — "this device only" vs "linked to m…a@…" — with the claim one
+      click away. The agenda intro says "No sign-in" up front.
+    · SPEAKER CROSS-OVER (round 3): claim with a speaker's email and their
+      sessions pin into My Schedule ("You're speaking" chip, ink glance
+      blocks, briefing + overlap awareness). Demo: priya@continual.ai or
+      marcus@ledgerlabs.io. The CRM person-match is the rail — no login.
   ════════════════════════════════════════════════════════════════════════════
 -->
 <!doctype html>
@@ -146,10 +161,12 @@ body { margin: 0; min-width: 320px; }
 .star-btn[aria-pressed="true"] .glyph::before { content: "★"; }
 .star-btn.just-starred { transform: scale(1.12); }
 
-/* Star count: the anonymous demand aggregate, under the star. Space is always
-   reserved (sub-threshold shows nothing but the slot) — elements never jump. */
-.star-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 40px; }
-.star-cell .star-count { min-height: 13px; color: var(--public-muted); font: 650 9.5px/1.35 var(--public-mono); font-variant-numeric: tabular-nums; }
+/* Star count: the anonymous demand aggregate, rendered as SESSION METADATA
+   beside the chips — deliberately out of the star's gravity so it never reads
+   as a like counter (MRQ-202 #1). Slot is always reserved — elements never jump. */
+.star-cell { display: flex; flex-direction: column; align-items: center; width: 40px; }
+.public-star-chip { display: inline-flex; min-height: 23px; min-width: 52px; align-items: center; justify-content: flex-end; border: 1px solid var(--public-rule-soft); border-radius: 2px; padding: 3px 6px; color: var(--public-muted); font: 650 9.5px/1.2 var(--public-mono); font-variant-numeric: tabular-nums; }
+.public-star-chip.empty { border-color: transparent; }
 .star-count-inline { color: var(--public-muted); font: 650 11px/1.4 var(--public-mono); font-variant-numeric: tabular-nums; }
 
 /* Header entry: my schedule is one tap from everywhere. Count is fixed-width — never jumps. */
@@ -240,6 +257,20 @@ body { margin: 0; min-width: 320px; }
 .org-stat { display: inline-block; margin-right: 16px; }
 .org-stat strong { display: block; font: 700 19px/1.1 var(--public-mono); font-variant-numeric: tabular-nums; }
 .org-stat span { color: var(--public-muted); font: 600 9.5px/1.6 var(--public-mono); letter-spacing: .08em; text-transform: uppercase; }
+
+/* Identity line (round 3): the page says what it knows about you. */
+.identity-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; min-height: 40px; margin: -6px 0 14px; padding: 7px 12px; border: 1px solid var(--public-rule-soft); background: var(--public-surface); color: var(--public-muted); font-size: 12px; }
+.identity-line .who { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.identity-line .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--public-rule); flex: 0 0 auto; }
+.identity-line.linked .dot { background: var(--public-accent); }
+.identity-line b { color: var(--public-soft); font-weight: 650; }
+.identity-line .public-button { min-height: 28px; padding: 4px 9px; font-size: 11px; }
+
+/* "You're speaking" (round 3): claim email matched a speaker — sessions pin. */
+.speaking-chip { display: inline-flex; align-items: center; min-height: 18px; margin-left: 8px; border-radius: 2px; padding: 2px 6px; background: var(--public-ink); color: #ffc94d; font: 700 9px/1 var(--public-mono); letter-spacing: .12em; text-transform: uppercase; vertical-align: 2px; }
+.glance-block.speaking { border-color: var(--public-ink); background: var(--public-ink); }
+.glance-block.speaking strong { color: #fff; }
+.glance-block.speaking small { color: #ffc94d; }
 
 /* Email claim row (round 2) */
 .claim-line { min-height: 36px; }
@@ -417,11 +448,12 @@ body { margin: 0; min-width: 320px; }
 
 <b>PUT</b>  /api/v1/public/schedules/MQ-K7TQM3RA
       (X-Schedule-Write-Key header) → replace the set</pre>
-  <p style="margin-top:12px">Driving the UI instead? Every session card carries stable hooks: <code style="font-family:var(--public-mono);font-size:11px">data-public-session-id / -slug / -start / -end / -day</code>.</p>
+  <p style="margin-top:12px">Building a schedule counts toward the session demand signal (anonymously).</p>
+  <p style="margin-top:8px">Driving the UI instead? Every session card carries stable hooks: <code style="font-family:var(--public-mono);font-size:11px">data-public-session-id / -slug / -start / -end / -day</code>.</p>
   <button class="public-button sheet-close" data-close>Done</button>
 </div>
 
-<div class="prototype-badge">Prototype · v0.2</div>
+<div class="prototype-badge">Prototype · v0.3</div>
 
 <script>
 /* ══════════════ Mock program — realistic AIE NYC 2026 seed shape ══════════ */
@@ -552,6 +584,21 @@ let orgSettings = Object.assign({ showCounts:true, minStars:3 }, JSON.parse(loca
 let claimedEmail = localStorage.getItem(CLAIM_KEY) || "";
 const saveOrg = () => localStorage.setItem(ORG_KEY, JSON.stringify(orgSettings));
 
+/* Round 3 (Atin, mid-drive): the claim email is the rail for the speaker
+   cross-over. If it matches a speaker at this event (the CRM knows — same
+   people table), their sessions pin into My Schedule. No login involved. */
+const SPEAKER_EMAILS = {
+  "priya@continual.ai":  { name:"Priya Raghunathan", ids:["ses-keynote-1"] },
+  "marcus@ledgerlabs.io": { name:"Marcus Chen", ids:["ses-eval-pipe"] },
+};
+const speakerMatch = () => SPEAKER_EMAILS[claimedEmail.trim().toLowerCase()] || null;
+const speakingIds = () => new Set(speakerMatch()?.ids ?? []);
+const mineList = () => {
+  const spk = speakingIds();
+  return SESSIONS.filter(s => starred.has(s.id) || spk.has(s.id))
+    .sort((a,b) => (dayOf(a).date + a.start).localeCompare(dayOf(b).date + b.start));
+};
+
 const $ = (s, el=document) => el.querySelector(s);
 const byId = id => SESSIONS.find(s => s.id === id);
 const save = () => localStorage.setItem(LS_KEY, JSON.stringify([...starred]));
@@ -564,9 +611,7 @@ function overlapsFor(s, set) {
   return set.filter(o => o.id !== s.id && overlap(s,o));
 }
 function nextUpId() {
-  const mine = SESSIONS.filter(s => starred.has(s.id));
-  const future = mine.filter(s => dayOf(s).date > NOW.date || (dayOf(s).date === NOW.date && s.end > NOW.time));
-  future.sort((a,b) => (dayOf(a).date + a.start).localeCompare(dayOf(b).date + b.start));
+  const future = mineList().filter(s => dayOf(s).date > NOW.date || (dayOf(s).date === NOW.date && s.end > NOW.time));
   return future[0]?.id ?? null;
 }
 
@@ -576,7 +621,11 @@ function speakersLine(s) {
 }
 function chips(s) {
   const t = s.tracks.map(tr => `<span class="public-track-chip" style="--track-color:${TRACK_COLORS[tr]}">${esc(tr)}</span>`).join("");
-  return `<div class="public-track-list"><span class="public-format-chip">${esc(s.fmt)}</span>${t}</div>`;
+  const n = publicStars(s);
+  const starChip = n !== null
+    ? `<span class="public-star-chip num" title="${n} schedules include this session"><span aria-hidden="true">★ </span>${n}<span class="sr-only"> — ${n} schedules include this session</span></span>`
+    : `<span class="public-star-chip empty" aria-hidden="true"></span>`;
+  return `<div class="public-track-list"><span class="public-format-chip">${esc(s.fmt)}</span>${t}${starChip}</div>`;
 }
 function starBtn(s) {
   const on = starred.has(s.id);
@@ -588,13 +637,13 @@ function publicStars(s) {
   return orgSettings.showCounts && n >= orgSettings.minStars ? n : null;
 }
 function starCell(s) {
-  const n = publicStars(s);
-  return `<span class="star-cell">${starBtn(s)}<span class="star-count num" ${n !== null ? `title="In ${n} personal schedules"` : ""}>${n !== null ? n : ""}</span></span>`;
+  return `<span class="star-cell">${starBtn(s)}</span>`;   // button only — the count lives with the chips
 }
 function card(s, { showDay=true, inMine=false } = {}) {
   const d = dayOf(s);
-  const ov = inMine ? overlapsFor(s, SESSIONS.filter(x => starred.has(x.id))) : [];
+  const ov = inMine ? overlapsFor(s, mineList()) : [];
   const next = inMine && s.id === nextUpId();
+  const speaking = inMine && speakingIds().has(s.id);
   return `<article class="public-agenda-row" data-public-session-id="${s.id}" data-public-session-slug="${s.slug}"
       data-public-session-start="${d.date}T${s.start}" data-public-session-end="${d.date}T${s.end}" data-public-session-day="${s.day}">
     ${starCell(s)}
@@ -604,7 +653,7 @@ function card(s, { showDay=true, inMine=false } = {}) {
       <span>${esc(s.room)}</span><span>${esc(s.building)}</span>
     </time>
     <div>
-      <h2 class="public-session-title"><a href="#" data-open="${s.id}">${esc(s.title)}</a>${next ? `<span class="next-chip">Next</span>` : ""}</h2>
+      <h2 class="public-session-title"><a href="#" data-open="${s.id}">${esc(s.title)}</a>${speaking ? `<span class="speaking-chip">You're speaking</span>` : ""}${next ? `<span class="next-chip">Next</span>` : ""}</h2>
       <p class="public-speakers">${speakersLine(s)}</p>
       <div class="public-snippet"><details><summary>${esc(s.snippet)}</summary><p>${esc(s.abstract)}</p></details></div>
       ${ov.map(o => `<span class="overlap-chip">overlaps ${esc(o.title.length > 44 ? o.title.slice(0,43)+"…" : o.title)} · ${o.start}</span>`).join(" ")}
@@ -629,9 +678,9 @@ function renderAgenda() {
     <div class="public-kicker">Oct 12 → Oct 14 · Sheraton New York Times Square</div>
     <div class="public-heading"><div>
       <h1>Agenda</h1>
-      <p>Practical sessions for people building and operating AI. Star what you want to go to — your schedule follows you.</p>
+      <p>Practical sessions for people building and operating AI. Star what you want to go to — your schedule follows you. No sign-in: stars save on this device, and you can add your email later to keep them everywhere.</p>
     </div></div>
-    <div class="proto-note"><b>Prototype v0.2.</b> Try: star a few sessions → open <b>★ My schedule</b> (top right) → on Tuesday, star both the <b>14:00</b> and <b>14:30</b> talks to see the overlap note → then <b>Subscribe / share</b>, where <b>Get it by email</b> is the new opt-in claim. New in round 2: the quiet <b>★ counts</b> under the stars (only ≥ 3 — two sessions sit below the threshold on purpose), and in the footer, <b>Organizer view (demo)</b>: exact counts vs room capacity, the public-counts setting (flip it and come back), and the agent-native attendee import. Stars persist across reloads. Simulated clock: Tue Oct 13, 13:40.</div>
+    <div class="proto-note"><b>Prototype v0.3.</b> Try: star a few sessions → open <b>★ My schedule</b> (top right) → on Tuesday, star both the <b>14:00</b> and <b>14:30</b> talks to see the overlap note → then <b>Subscribe / share</b>, where <b>Get it by email</b> is the opt-in claim — claim as <b>priya@continual.ai</b> to see the speaker cross-over pin her keynote. The <b>★ chips</b> by the tracks are anonymous demand counts (only ≥ 3 — two sessions sit below the threshold on purpose). In the footer, <b>Organizer view (demo)</b>: exact counts vs room capacity, the public-counts setting (flip it and come back), and the agent-native attendee import. Stars persist across reloads. Simulated clock: Tue Oct 13, 13:40.</div>
     <form class="public-filters" onsubmit="return false">
       <div class="public-days" role="tablist" aria-label="Agenda day">
         <button type="button" data-day="all" class="${filters.day==="all"?"active":""}" role="tab" aria-selected="${filters.day==="all"}">All days</button>
@@ -668,7 +717,7 @@ function glancePanel(mine) {
       const twin = list.find(o => o.id !== s.id && overlap(s,o));
       const earlier = twin && (mins(s.start) < mins(twin.start) || (mins(s.start) === mins(twin.start) && s.id < twin.id));
       const cls = twin ? (earlier ? "lane-a" : "lane-b") : "";
-      return `<button class="glance-block ${cls} ${s.id === nextId ? "is-next" : ""}" data-open="${s.id}" data-tip="${s.id}"
+      return `<button class="glance-block ${cls} ${s.id === nextId ? "is-next" : ""} ${speakingIds().has(s.id) ? "speaking" : ""}" data-open="${s.id}" data-tip="${s.id}"
         style="top:${pct(mins(s.start))}%;height:${(Math.max(mins(s.end)-mins(s.start), 30) / GLANCE_SPAN * 100).toFixed(2)}%">
         <small class="num">${s.start}</small><strong>${esc(s.title)}</strong>
       </button>`;
@@ -685,9 +734,22 @@ function glancePanel(mine) {
   </div>`;
 }
 
+function identityLine() {
+  const spk = speakerMatch();
+  if (claimedEmail) {
+    return `<div class="identity-line linked">
+      <span class="who"><span class="dot"></span><span>Linked to <b>${esc(maskEmail(claimedEmail))}</b> — recoverable by email, on any device.${spk ? ` You're speaking at <b class="num">${spk.ids.length}</b> session${spk.ids.length===1?"":"s"} — pinned below.` : ""}</span></span>
+      <button class="public-button" data-share>Manage</button>
+    </div>`;
+  }
+  return `<div class="identity-line">
+    <span class="who"><span class="dot"></span><span>Saved on <b>this device only</b> — no account, not linked to an email.</span></span>
+    <button class="public-button" data-share>Get it by email</button>
+  </div>`;
+}
+
 function renderMine() {
-  const mine = SESSIONS.filter(s => starred.has(s.id))
-    .sort((a,b) => (dayOf(a).date + a.start).localeCompare(dayOf(b).date + b.start));
+  const mine = mineList();
   const perDay = DAYS.map(d => ({ d, n: mine.filter(s=>s.day===d.id).length })).filter(x => x.n);
   $("#view").innerHTML = `
     <div class="public-kicker">Your itinerary · AIE NYC 2026</div>
@@ -696,6 +758,7 @@ function renderMine() {
       <p>Everything you've starred, in the order your conference happens. Stars live on this device until you sync or share.</p>
     </div></div>
     ${mine.length ? `
+    ${identityLine()}
     <div class="sched-summary">
       <span class="counts num"><strong>${mine.length} session${mine.length===1?"":"s"}</strong>${perDay.map(x=>`${x.d.label.split(",")[0]} ${x.n}`).join(" · ")}</span>
       <div class="sched-export">
@@ -750,7 +813,7 @@ function renderSession(id) {
         <button class="public-button" data-ics-one="${s.id}">Add to calendar (.ics)</button>
         <a class="public-button" target="_blank" rel="noopener" href="${gcalUrl(s)}">Google</a>
         <a class="public-button" target="_blank" rel="noopener" href="${outlookUrl(s)}">Outlook</a>
-        ${publicStars(s) !== null ? `<span class="star-count-inline" title="In ${publicStars(s)} personal schedules">★ ${publicStars(s)} schedules</span>` : ""}
+        ${publicStars(s) !== null ? `<span class="star-count-inline" title="${publicStars(s)} schedules include this session">★ ${publicStars(s)} schedules</span>` : ""}
       </div>
       <div class="public-divider"></div>
       <p>${esc(s.abstract)}</p>
@@ -823,12 +886,13 @@ function renderOrganizer() {
     <div class="public-kicker">Organizer · demand signal</div>
     <div class="public-heading"><div>
       <h1>Session demand</h1>
-      <p>Anonymous star counts from attendee schedules — the room-planning signal you normally get when a room overflows, weeks early. A signal, not a vote: counts are distinct devices, lightly rate-limited, spoofable by someone determined.</p>
+      <p>Anonymous star counts from attendee schedules — the room-planning signal you normally get when a room overflows, weeks early. A signal, not a vote: counts are distinct devices plus distinct agent-built schedules, lightly rate-limited, spoofable by someone determined.</p>
     </div></div>
     <p class="org-demo-note">Admin surface — reachable from the attendee footer only in this prototype, for the walkthrough. In the product it lives behind organizer sign-in.</p>
     <p class="demand-note">
       <span class="org-stat"><strong class="num">1,847</strong><span>attendees imported</span></span>
       <span class="org-stat"><strong class="num">641</strong><span>synced schedules</span></span>
+      <span class="org-stat"><strong class="num">87</strong><span>via agents</span></span>
       <span class="org-stat"><strong class="num">213</strong><span>claimed with email</span></span>
       <span class="org-stat"><strong class="num">${totalStars.toLocaleString("en-US")}</strong><span>stars placed</span></span>
     </p>
@@ -893,11 +957,11 @@ function renderOrganizer() {
 
 /* ══════════════ Agent briefing ══════════════ */
 function buildBriefing() {
-  const mine = SESSIONS.filter(s => starred.has(s.id))
-    .sort((a,b) => (dayOf(a).date + a.start).localeCompare(dayOf(b).date + b.start));
+  const mine = mineList();
+  const spk = speakingIds();
   const lines = mine.map(s => {
     const d = dayOf(s);
-    return `- ${d.label.split(",")[0]} ${d.date} · ${s.start}–${s.end} · "${s.title}" — ${s.room}, ${s.building}${s.speakers[0] ? ` (${s.speakers.map(p=>p.n).join(", ")})` : ""}`;
+    return `- ${d.label.split(",")[0]} ${d.date} · ${s.start}–${s.end} · "${s.title}" — ${s.room}, ${s.building}${s.speakers[0] ? ` (${s.speakers.map(p=>p.n).join(", ")})` : ""}${spk.has(s.id) ? " — I'M SPEAKING at this one" : ""}`;
   });
   const pairs = [];
   mine.forEach((a,i) => mine.slice(i+1).forEach(b => { if (overlap(a,b)) pairs.push(`"${a.title}" and "${b.title}" overlap on ${dayOf(a).label} (${a.start}–${a.end} vs ${b.start}–${b.end}) — an intentional either/or; help me decide closer to the day.`); }));
@@ -931,7 +995,7 @@ function icsFor(list) {
     "X-WR-CALNAME:My AIE NYC 2026 schedule", ...list.map(ev), "END:VCALENDAR"].join("\r\n");
 }
 function downloadIcs(list) {
-  const set = Array.isArray(list) ? list : SESSIONS.filter(s => starred.has(s.id));
+  const set = Array.isArray(list) ? list : mineList();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([icsFor(set)], { type:"text/calendar" }));
   a.download = set.length === 1 ? `${set[0].slug}.ics` : "my-aie-nyc-2026.ics";
@@ -948,8 +1012,9 @@ function gcalUrl(s) {
 
 /* ══════════════ Wiring ══════════════ */
 function updateCount() {
-  $("#schedCount").textContent = starred.size;
-  $("#myschedBtn").classList.toggle("has-stars", starred.size > 0);
+  const n = mineList().length;
+  $("#schedCount").textContent = n;
+  $("#myschedBtn").classList.toggle("has-stars", n > 0);
 }
 function toggleStar(id, btn) {
   const adding = !starred.has(id);
@@ -1005,7 +1070,7 @@ document.body.appendChild(tipEl);
 function showTip(block) {
   const s = byId(block.dataset.tip); if (!s) return;
   const d = dayOf(s);
-  const ov = overlapsFor(s, SESSIONS.filter(x => starred.has(x.id)));
+  const ov = overlapsFor(s, mineList());
   tipEl.innerHTML = `
     <div class="t-time">${d.tab} · <span class="num">${s.start} – ${s.end}</span></div>
     <div class="t-title">${esc(s.title)}</div>
@@ -1051,11 +1116,16 @@ function maskEmail(e) {
   const [u, d] = e.split("@");
   return (u.length > 2 ? u[0] + "…" + u[u.length-1] : u) + "@" + d;
 }
-function renderClaimRow() {
+function claimStateChanged() {
+  updateCount();
+  if (view.name === "mine") renderMine();     // identity line + speaking pins react
+}
+function renderClaimRow(justUnlinked = false) {
   const box = $("#claimControls");
   if (claimedEmail) {
+    const spk = speakerMatch();
     box.innerHTML = `<div class="claim-done" style="flex:1 1 auto">
-      <span>Linked to <b>${esc(maskEmail(claimedEmail))}</b> — link sent. The organizers can see your picks.</span>
+      <span>Linked to <b>${esc(maskEmail(claimedEmail))}</b> — link sent. The organizers can see your picks.${spk ? ` You're speaking at ${spk.ids.length} session${spk.ids.length===1?"":"s"} — pinned in My schedule.` : ""}</span>
       <span style="display:inline-flex;gap:12px;flex:0 0 auto">
         <button class="quiet" id="claimResend">Resend</button>
         <button class="quiet" id="claimUnlink">Unlink</button>
@@ -1065,8 +1135,14 @@ function renderClaimRow() {
       e.target.textContent = "Sent"; setTimeout(() => { const b = $("#claimResend"); if (b) b.textContent = "Resend"; }, 1400);
     });
     $("#claimUnlink").addEventListener("click", () => {
-      claimedEmail = ""; localStorage.removeItem(CLAIM_KEY); renderClaimRow();
+      claimedEmail = ""; localStorage.removeItem(CLAIM_KEY); renderClaimRow(true); claimStateChanged();
     });
+  } else if (justUnlinked) {
+    /* Transient honesty, same register as the claim disclosure (ruled, MRQ-202 #2). Same height — nothing jumps. */
+    box.innerHTML = `<div class="claim-done" style="flex:1 1 auto;background:var(--public-sunk);color:var(--public-soft)">
+      <span>Unlinked — your email and picks are removed from the organizers' records.</span>
+    </div>`;
+    setTimeout(() => { if (!claimedEmail) renderClaimRow(); }, 3200);
   } else {
     box.innerHTML = `
       <input class="claim-input" id="claimEmail" type="email" placeholder="you@example.com" aria-label="Your email address">
@@ -1074,7 +1150,7 @@ function renderClaimRow() {
     $("#claimSend").addEventListener("click", () => {
       const v = $("#claimEmail").value.trim();
       if (!v || !v.includes("@")) { $("#claimEmail").focus(); return; }
-      claimedEmail = v; localStorage.setItem(CLAIM_KEY, v); renderClaimRow();
+      claimedEmail = v; localStorage.setItem(CLAIM_KEY, v); renderClaimRow(); claimStateChanged();
     });
     $("#claimEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("#claimSend").click(); });
   }
