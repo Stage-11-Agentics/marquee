@@ -923,7 +923,8 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
                   ? <span class="coverage-gap"><span class="tabular">{coverage.uncovered.toLocaleString()}</span> abstract{coverage.uncovered === 1 ? " has" : "s have"} no eligible reviewer{coverage.uncovered_tracks.length ? ` — nobody in this pool is responsible for ${coverage.uncovered_tracks.join(", ")}` : ""}.</span>
                   : <span class="subtle">Every abstract in this round has a reviewer.</span>}
                 {coverage.cap_reached ? <span class="coverage-gap">The per-reviewer limit stopped some abstracts short. Raise it or add reviewers to close the gap.</span> : null}
-                <div class="coverage-reviewers">{coverage.reviewers.map((reviewer) => <span class="coverage-reviewer" key={reviewer.person_id}><span>{reviewer.name}</span><strong class="tabular">{reviewer.assigned_count.toLocaleString()}</strong></span>)}</div>
+                <span class="subtle">Reviewer counts are total assignments in this round, including work already assigned.</span>
+                <div class="coverage-reviewers">{coverage.reviewers.map((reviewer) => <span class="coverage-reviewer" key={reviewer.person_id}><span>{reviewer.name}</span><strong class="tabular">{reviewer.assigned_count.toLocaleString()} assigned total</strong></span>)}</div>
               </div>
               : <div class="message-preview">Assignments belong to the selected round and respect each reviewer's track responsibilities. Re-running is idempotent: it tops up coverage and never replaces recorded review evidence.</div>}
         </div>
