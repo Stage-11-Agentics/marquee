@@ -24,6 +24,12 @@ export interface EventDeletionResult {
 }
 
 const R2_DELETE_CHUNK = 1_000;
+/**
+ * D1 permits 100 bound parameters per statement. The widest cascade statement
+ * repeats eventBindings three times, so 32 event IDs keep that statement at
+ * 96 bindings while allowing remove-demo to accept any number of events.
+ */
+const EVENT_DELETE_CHUNK = 32;
 
 function placeholders(values: readonly unknown[]): string {
   return values.map(() => "?").join(", ");
@@ -75,9 +81,36 @@ export async function deleteEventCascade(
   media?: R2Bucket,
   now = Date.now(),
 ): Promise<EventDeletionResult> {
-  const eventIds = [...new Set(events.map((event) => event.id))];
+  const uniqueEvents: EventRow[] = [];
+  const seenEventIds = new Set<string>();
+  for (const event of events) {
+    if (seenEventIds.has(event.id)) continue;
+    seenEventIds.add(event.id);
+    uniqueEvents.push(event);
+  }
+  const eventIds = uniqueEvents.map((event) => event.id);
   if (eventIds.length === 0) {
     return { removedEvents: 0, removedPeople: 0, removedObjects: 0, removedAt: now };
+  }
+
+  if (eventIds.length > EVENT_DELETE_CHUNK) {
+    let removedEvents = 0;
+    let removedPeople = 0;
+    let removedObjects = 0;
+    for (let offset = 0; offset < uniqueEvents.length; offset += EVENT_DELETE_CHUNK) {
+      const result = await deleteEventCascade(
+        db,
+        uniqueEvents.slice(offset, offset + EVENT_DELETE_CHUNK),
+        actor,
+        options,
+        media,
+        now,
+      );
+      removedEvents += result.removedEvents;
+      removedPeople += result.removedPeople;
+      removedObjects += result.removedObjects;
+    }
+    return { removedEvents, removedPeople, removedObjects, removedAt: now };
   }
 
   const eventIdsSql = eventFilter(eventIds);
@@ -91,7 +124,7 @@ export async function deleteEventCascade(
   const endpointsSql = `(SELECT id FROM webhook_endpoints WHERE event_id IN ${eventIdsSql})`;
   const demoPeopleSql = `(SELECT id FROM people WHERE is_demo = 1 AND org_id IN (SELECT org_id FROM events WHERE id IN ${eventIdsSql}))`;
 
-  const statements: D1PreparedStatement[] = events.map((event) => auditStatement(db, {
+  const statements: D1PreparedStatement[] = uniqueEvents.map((event) => auditStatement(db, {
     eventId: event.id,
     actorKind: actor.actorKind,
     actorPersonId: actor.actorPersonId,
