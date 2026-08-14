@@ -424,11 +424,16 @@
          reads brand → org-level → "you are working in THIS conference" → this
          conference's work. The switcher is the scope boundary, which is the whole
          of CRM-01's "org-level, not nested inside one conference's menu". -->
+    <!-- Sidebar structure mirrors the v1.13 reorg draft in ../pipeline-v1.1/
+         (2026-08-14): Lists folds into People (reachable from the People
+         toolbar and from Save filter as list), icons are curated, and the
+         conference-side rows link back to the pipeline prototype for real —
+         serve prototypes/ over localhost HTTP; WKWebView blocks file→file
+         link navigation silently. -->
     <div class="nav-label">Organization</div>
     <nav class="nav" aria-label="Organization">
-      <a data-view="directory" class="active"><span class="nav-icon">◉</span><span>People</span></a>
-      <a data-view="segments"><span class="nav-icon">◈</span><span>Lists</span></a>
-      <a data-view="pipeline"><span class="nav-icon">▤</span><span>Sourcing pipeline</span></a>
+      <a data-view="directory" class="active"><span class="nav-icon"></span><span>People</span></a>
+      <a data-view="pipeline"><span class="nav-icon"></span><span>Sourcing</span></a>
     </nav>
 
     <!-- Ratified v1.11 switcher geometry, extended to a list by the multi-event
@@ -454,31 +459,31 @@
     </div>
     </div>
 
-    <nav class="nav" aria-label="Program home">
-      <a class="dim"><span class="nav-icon">⌂</span><span>Program home</span></a>
-      <a class="dim"><span class="nav-icon">▥</span><span>Program board</span></a>
+    <nav class="nav" aria-label="Conference">
+      <a href="../pipeline-v1.1/index.html?v=13#dashboard"><span class="nav-icon"></span><span>Program pipeline</span></a>
+      <a href="../pipeline-v1.1/index.html?v=13#board"><span class="nav-icon"></span><span>Program board</span></a>
+      <a href="../pipeline-v1.1/index.html?v=13#submissions"><span class="nav-icon"></span><span>Abstracts &amp; sessions</span></a>
+      <a href="../pipeline-v1.1/index.html?v=13#agenda"><span class="nav-icon"></span><span>Agenda</span></a>
+      <a data-view="roster"><span class="nav-icon"></span><span>Speakers</span></a>
     </nav>
-    <div class="nav-label">Pipeline</div>
-    <nav class="nav" aria-label="Program lifecycle">
-      <a class="dim has-count"><span class="nav-icon">1</span><span>Submitted</span><span class="count num">96</span></a>
-      <a class="dim has-count"><span class="nav-icon">2</span><span>In review</span><span class="count num">214</span></a>
-      <a class="dim has-count"><span class="nav-icon">3</span><span>Waved</span><span class="count num">38</span></a>
-      <a class="dim has-count"><span class="nav-icon">4</span><span>Ready to place</span><span class="count num">12</span></a>
-      <a class="dim has-count"><span class="nav-icon">5</span><span>Onboarding</span><span class="count num">41</span></a>
-      <a class="dim has-count"><span class="nav-icon">6</span><span>Scheduled</span><span class="count num">57</span></a>
-      <a class="dim has-count"><span class="nav-icon">7</span><span>Published</span><span class="count num">53</span></a>
+    <div class="nav-label">Speaker ops</div>
+    <nav class="nav" aria-label="Speaker ops">
+      <a href="../pipeline-v1.1/index.html?v=13#onboarding"><span class="nav-icon"></span><span>Onboarding</span></a>
+      <a href="../pipeline-v1.1/index.html?v=13#comms"><span class="nav-icon">✉</span><span>Communications</span></a>
     </nav>
-    <div class="nav-label">Modules</div>
-    <nav class="nav" aria-label="Modules">
-      <a class="dim" data-view="roster"><span class="nav-icon">☺</span><span>Speakers</span></a>
-      <a class="dim"><span class="nav-icon">□</span><span>CFP forms</span></a>
-      <a class="dim"><span class="nav-icon">◇</span><span>Evaluation plan</span></a>
-      <a class="dim"><span class="nav-icon">✓</span><span>Review queue</span></a>
-      <a class="dim"><span class="nav-icon">▦</span><span>Agenda</span></a>
-      <a class="dim"><span class="nav-icon">✉</span><span>Communications</span></a>
-      <a class="dim"><span class="nav-icon">○</span><span>Speaker portal</span></a>
-      <a class="dim"><span class="nav-icon">↗</span><span>Conference site</span></a>
-      <a class="dim"><span class="nav-icon">⚙</span><span>Conference settings</span></a>
+    <div class="nav-label">Call for proposals</div>
+    <nav class="nav" aria-label="Call for proposals">
+      <a href="../pipeline-v1.1/index.html?v=13#forms"><span class="nav-icon"></span><span>Forms</span></a>
+      <a href="../pipeline-v1.1/index.html?v=13#evaluation"><span class="nav-icon"></span><span>Evaluation</span></a>
+      <a href="../pipeline-v1.1/index.html?v=13#reviewer"><span class="nav-icon"></span><span>Reviewer</span></a>
+    </nav>
+    <div class="nav-label">Public links</div>
+    <nav class="nav" aria-label="Public links">
+      <a href="../pipeline-v1.1/index.html?v=13#publicAgenda"><span class="nav-icon">↗</span><span>Conference site</span></a>
+      <a href="../pipeline-v1.1/index.html?v=13#portal"><span class="nav-icon">↗</span><span>Speaker portal</span></a>
+    </nav>
+    <nav class="nav" aria-label="Settings" style="margin-top:14px">
+      <a href="../pipeline-v1.1/index.html?v=13#settings"><span class="nav-icon">⚙</span><span>Settings</span></a>
     </nav>
 
     <div class="sidebar-foot">
@@ -659,6 +664,7 @@ function viewDirectory(){
     </div>
     <button class="button small ${S.filterOpen?"primary":""}" data-act="togglefilter" data-scope="free" data-item="CRM-02" style="min-width:96px">Filter</button>
     <div style="flex:1"></div>
+    <button class="button small" data-act="viewlists" style="min-width:110px">Lists · <span class="num">${S.segments.length}</span></button>
     <button class="button small" data-act="savesegment" data-scope="rider" data-item="CRM-09" style="min-width:168px">${S.selected.size ? "Save selected as list" : "Save filter as list"}</button>
   </div>
 
@@ -1064,7 +1070,10 @@ function render(){
   const views = { directory:viewDirectory, segments:viewSegments, pipeline:viewPipeline, roster:viewRoster };
   document.getElementById("page").innerHTML = views[S.view]();
   document.getElementById("crumbs").innerHTML = "AI Engineer · " + CRUMBS[S.view];
-  document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("active", a.dataset.view===S.view));
+  // Lists lives inside People (no nav row of its own), so the segments view
+  // keeps the People row lit — the sidebar names the area, not the tab.
+  const navView = S.view === "segments" ? "directory" : S.view;
+  document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("active", a.dataset.view===navView));
 
   let ov="";
   if (S.drawer) ov = drawerContact(S.drawer);
@@ -1091,7 +1100,8 @@ document.addEventListener("click", e=>{
   const t=e.target.closest("[data-act]"); if(!t) return;
   const a=t.dataset.act, id=t.dataset.id;
 
-  if(a==="togglefilter"){ S.filterOpen=!S.filterOpen; }
+  if(a==="viewlists"){ S.view="segments"; }
+  else if(a==="togglefilter"){ S.filterOpen=!S.filterOpen; }
   else if(a==="open"){ S.drawer=id; }
   else if(a==="opencard"){ S.openCard=id; }
   else if(a==="closeoverlay"){ S.drawer=null; S.openCard=null; S.modal=null; }
