@@ -18,7 +18,7 @@ import {
 } from "../jobs/mail/templates";
 import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
 import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
-import { mergeFieldErrorMessage, unknownMergeFields } from "../lib/mail-merge-fields";
+import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../lib/mail-merge-fields";
 import type { OutboxRow } from "../db/schema";
 import {
   arrivalForSession,
@@ -177,7 +177,7 @@ function requireComms(context: Parameters<NonNullable<ApiRouteEntry["handler"]>>
 }
 
 function rejectUnknownMergeFields(subject: string, body: string): void {
-  const unknown = unknownMergeFields(subject, body);
+  const unknown = unknownMergeFieldsForCommunication(subject, body);
   if (unknown.length > 0) throw ApiError.badRequest(mergeFieldErrorMessage(unknown), "template");
 }
 

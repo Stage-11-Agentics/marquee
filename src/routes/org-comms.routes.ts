@@ -26,7 +26,7 @@ import { renderAdHocMail } from "../jobs/mail/render";
 import type { MailTemplateKey } from "../jobs/mail/templates";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import { orgAttributionEventId, requireOrgAccess } from "../lib/auth/org-access";
-import { mergeFieldErrorMessage, unknownMergeFields } from "../lib/mail-merge-fields";
+import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../lib/mail-merge-fields";
 
 const audienceSchema = z.object({
   person_ids: z.array(z.string().min(1)).min(1).max(500).optional(),
@@ -172,7 +172,7 @@ const sendOrgMail = defineApiRoute(
   async (context) => {
     const access = requireOrgAccess(context, true);
     const body = context.req.valid("json");
-    const unknown = unknownMergeFields(body.subject, body.body);
+    const unknown = unknownMergeFieldsForCommunication(body.subject, body.body);
     if (unknown.length > 0) throw ApiError.badRequest(mergeFieldErrorMessage(unknown), "template");
     const people = await audienceFor(context.env.DB, access.orgId, body);
     if (people.length === 0) throw ApiError.notFound("that selection resolves to nobody in this organization");

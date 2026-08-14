@@ -34,10 +34,20 @@ export const MERGE_FIELDS = [
 
 export type MergeField = (typeof MERGE_FIELDS)[number];
 
+/**
+ * Organizer-authored communications have no credential context. Auth links
+ * are minted by the private auth flows, not by the generic composer, so keep
+ * that internal-only field out of both its palette and its send validator.
+ */
+export const COMMUNICATION_MERGE_FIELDS = MERGE_FIELDS.filter(
+  (field): field is Exclude<MergeField, "auth.link"> => field !== "auth.link",
+);
+
 /** The one token grammar used by both extraction and rendering. */
 export const MERGE_TOKEN_PATTERN = /{{\s*([a-zA-Z0-9_.-]+)\s*}}/g;
 
 const MERGE_FIELD_SET = new Set<string>(MERGE_FIELDS);
+const COMMUNICATION_MERGE_FIELD_SET = new Set<string>(COMMUNICATION_MERGE_FIELDS);
 
 /** Return each token key once, in the order it first appears. */
 export function mergeFieldsIn(...sources: Array<string | null | undefined>): string[] {
@@ -54,6 +64,10 @@ export function mergeFieldsIn(...sources: Array<string | null | undefined>): str
 
 export function unknownMergeFields(...sources: Array<string | null | undefined>): string[] {
   return mergeFieldsIn(...sources).filter((field) => !MERGE_FIELD_SET.has(field));
+}
+
+export function unknownMergeFieldsForCommunication(...sources: Array<string | null | undefined>): string[] {
+  return mergeFieldsIn(...sources).filter((field) => !COMMUNICATION_MERGE_FIELD_SET.has(field));
 }
 
 export function mergeFieldErrorMessage(fields: readonly string[]): string {
