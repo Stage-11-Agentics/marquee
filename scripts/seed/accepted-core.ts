@@ -101,14 +101,72 @@ export function primaryTrackKey(session: SourceSession): keyof typeof TRACK_IDS 
 
 /**
  * Format mapping, per plan: workshops by their source track (the capture types
- * three real workshops as OTHER), the Online track to Online, anything ten
- * minutes or shorter to Lightning, everything else to Stage Talk.
+ * three real workshops as OTHER), the Online track to Online, the Expo Stage's
+ * short slots to Lightning — that stage is where the source ran its short-form
+ * talks — everything else to Stage Talk.
  */
+export function formatKeyFor(session: SourceSession): keyof typeof FORMAT_IDS {
+  if (session.type === "WORKSHOP" || session.track === "Workshops") return "workshop";
+  if (session.track === "Online") return "online";
+  if (session.track === "Expo Stage" && session.duration_min <= 15) return "lightning";
+  return "stageTalk";
+}
+
 export function formatIdFor(session: SourceSession): string {
-  if (session.type === "WORKSHOP" || session.track === "Workshops") return FORMAT_IDS.workshop;
-  if (session.track === "Online") return FORMAT_IDS.online;
-  if (session.duration_min <= 10) return FORMAT_IDS.lightning;
-  return FORMAT_IDS.stageTalk;
+  return FORMAT_IDS[formatKeyFor(session)];
+}
+
+/**
+ * The 24 sessions the seeded agenda schedules, in grid order.
+ *
+ * The grid has to span the formats the conference runs, and program order alone
+ * does not: the workshop day and the online track sit at the tail of it, so the
+ * first 24 accepted sessions are 24 Stage Talks and the public agenda's format
+ * filter has exactly one live answer. Fill a quota per format instead — four
+ * mainstage talks first, because the seeded conflicts and the confirmation
+ * fixture land on them, then the five parallel Workshop rooms, the Expo Stage's
+ * Lightning block, the two Online sessions, and the rest of the mainstage grid.
+ * Program order still decides which sessions fill each quota, so the seed stays
+ * fixed run to run.
+ */
+const SCHEDULE_PLAN: ReadonlyArray<readonly [keyof typeof FORMAT_IDS, number]> = [
+  ["stageTalk", 4],
+  ["workshop", 5],
+  ["lightning", 5],
+  ["online", 2],
+  ["stageTalk", 8],
+];
+
+export function scheduledSessions(): SourceSession[] {
+  const pools = new Map<keyof typeof FORMAT_IDS, SourceSession[]>();
+  for (const session of contentSessions()) {
+    const key = formatKeyFor(session);
+    const pool = pools.get(key) ?? [];
+    pool.push(session);
+    pools.set(key, pool);
+  }
+  const scheduled: SourceSession[] = [];
+  for (const [key, count] of SCHEDULE_PLAN) {
+    const taken = (pools.get(key) ?? []).splice(0, count);
+    if (taken.length < count) throw new Error(`seed has fewer than ${count} ${key} sessions to schedule`);
+    scheduled.push(...taken);
+  }
+  return scheduled;
+}
+
+/**
+ * Wave 1 is the acceptance batch that was actually sent, so it has to cover
+ * everything on the agenda: a scheduled speaker who was never invited is a
+ * state no organizer would publish. The scheduled sessions go in first and
+ * program order fills the rest of the batch, holding SPEC §6's 32/28 split.
+ */
+function waveOneSlugs(): Set<string> {
+  const slugs = new Set(scheduledSessions().map((session) => session.slug));
+  for (const session of contentSessions()) {
+    if (slugs.size >= WAVE_ONE_SIZE) break;
+    slugs.add(session.slug);
+  }
+  return slugs;
 }
 
 /** The published abstract, falling back to the published description. */
@@ -140,6 +198,7 @@ export function run(ctx: SeedContext): void {
   const sessions = contentSessions();
   const speakers = coreSpeakers();
   const ids = personIds(speakers);
+  const waveOne = waveOneSlugs();
 
   // People first: submissions reference their submitter, participations their
   // person. Emails are synthesized in this stable order so collision suffixes
@@ -164,7 +223,7 @@ export function run(ctx: SeedContext): void {
   }
 
   sessions.forEach((session, index) => {
-    const inWaveOne = index < WAVE_ONE_SIZE;
+    const inWaveOne = waveOne.has(session.slug);
     const submissionId = seedId("sub", session.slug);
     const decidedAt = inWaveOne ? WAVE_ONE_DECIDED_AT : WAVE_TWO_DECIDED_AT;
     const submittedAt = FIRST_SUBMITTED_AT + index * SUBMISSION_INTERVAL_MS;
