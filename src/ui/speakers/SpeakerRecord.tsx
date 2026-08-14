@@ -32,7 +32,7 @@ const STATUS_LABELS: Record<SpeakerStatus, string> = {
  * requirement has been captured. Each line now asks for the answer in the same
  * voice the Notes field already used, so an empty field looks empty.
  */
-const LOGISTICS_FIELDS: Array<{ key: string; label: string; placeholder: string }> = [
+export const LOGISTICS_FIELDS: Array<{ key: string; label: string; placeholder: string }> = [
   { key: "Arrival", label: "Arrival", placeholder: "When they arrive, once you know" },
   { key: "Departure", label: "Departure", placeholder: "When they leave" },
   { key: "Travel", label: "Travel preferences", placeholder: "Seat, timing, anything they have asked for" },
