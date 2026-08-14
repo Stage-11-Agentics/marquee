@@ -111,8 +111,9 @@ export const EMBED_STYLES = `
 .embed-field-options fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .embed-field-options legend { margin-bottom: 8px; color: var(--public-muted); font: 650 9px/1 var(--public-mono); letter-spacing: .08em; text-transform: uppercase; }
 .embed-field-option-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 10px; }
-.embed-field-option { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--public-ink); font-size: 11px; line-height: 1.25; }
-.embed-field-option input { flex: 0 0 auto; accent-color: var(--public-accent); }
+.embed-field-option { display: flex; align-items: flex-start; gap: 7px; min-width: 0; color: var(--public-ink); font-size: 11px; line-height: 1.25; }
+.embed-field-option > span { min-width: 0; overflow-wrap: anywhere; }
+.embed-field-option input { flex: 0 0 auto; margin-top: 1px; accent-color: var(--public-accent); }
 .embed-saved-panel { margin-top: 16px; }
 .embed-saved-head { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
 .embed-saved-head p { margin: 5px 0 0; color: var(--public-muted); font-size: 11px; line-height: 1.45; }
