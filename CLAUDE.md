@@ -19,7 +19,16 @@ Open-source speaker/session-management platform for conference organizers, built
 - Speed is a feature (R7). Treat any slow list or transition as a defect.
 - This repo is **public open source**. Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
 - **Do not report subscription usage, limits, or glideslope position unless asked.** The operator can see it and has it under control. It is visible in every agent's status line, which makes it tempting to volunteer — and with a fleet this size, one mention per agent becomes a stream of noise about a number nobody needs. Answer if asked; otherwise leave it alone.
-- **The suite budget is 45s and the gate budget is 120s** (`scripts/checks/run-test.mjs`, `pr-gate.mjs`). Several agents build and test here at once, so the budgets are set to survive contention: a red suite must mean a real defect, never a busy machine. If a run fails on time alone, check the load before believing it.
+- **The suite budget is 45s and the gate budget is 120s** (`scripts/checks/run-test.mjs`, `pr-gate.mjs`) — **objectives that print loudly and pass, not gates.** Slowness fails nothing in those two: over budget reports `pass-over-budget`, and `process.exitCode` comes from the test outcome. Only `HARD_LIMIT_MS` (600s, a hang detector) turns a slow run red, and it reports `timeout` rather than `fail`. So **read the status field rather than judging the machine**:
+
+  | status | meaning |
+  |---|---|
+  | `fail` | real and **load-invariant**. Block on it. |
+  | `pass-over-budget` | passed, slow. A warn, not a failure. |
+  | `timeout` (local) | results unknown, and unknown is not passing. Re-run under the gate lock. |
+  | `timeout` (CI, ~600000ms) | the flaky ceiling — CI's suite runs ~305s against 600s. Re-run the same sha once before investigating. |
+
+  `check:seed` and `check:speed` are the **only** two scripts that can red on wall clock alone (`check-seed.mjs` sets `status: elapsedMs <= budgetMs ? "pass" : "fail"` with no warn tier). Everywhere else, **never dismiss failing tests as a known baseline without naming the commit that made them pass** — that is how a branch ships red.
 - Speaker records are `people` rows (org-scoped); never add a parallel per-event `speakers` table.
 - Keep human properties (bio, headshot, title, company, socials, pronouns, dietary/accessibility) on `people`; keep this event's participation (Invited/Confirmed workflow status, travel, honorarium, session assignment) on `participations` or an event-scoped join.
 - Never put workflow status on `people`: one person must be Confirmed at one conference and Invited at another; this is the one error that cannot be undone.

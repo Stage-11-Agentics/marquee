@@ -26,7 +26,7 @@ Open-source speaker/session-management platform for conference organizers, built
 - Speed is a feature (R7). Treat any slow list or transition as a defect.
 - This repo will be **public open source** (competition requirement). Nothing secret goes in it: no tokens, no Stage 11 internals, no `Atin/` content.
 - **Do not report subscription usage, limits, or glideslope position unless asked.** The operator watches it; volunteered mentions from a fleet are noise.
-- **The suite budget is 45s and the gate budget is 120s** (`scripts/checks/run-test.mjs`, `pr-gate.mjs`), sized to survive several agents building at once. A red suite must mean a real defect; if a run fails on time alone, check machine load before believing it.
+- **The suite budget is 45s and the gate budget is 120s** (`scripts/checks/run-test.mjs`, `pr-gate.mjs`) — objectives that print loudly and **pass**, not gates. Slowness fails nothing there: over budget reports `pass-over-budget`, and the exit code comes from the test outcome. Only `HARD_LIMIT_MS` (600s, a hang detector) reds a slow run, and it reports `timeout`. **Read the status field:** `fail` is real and load-invariant — block on it; `pass-over-budget` is a warn; `timeout` means results unknown, so re-run (on CI near 600000ms it is the known flaky ceiling — re-run the same sha once). `check:seed` and `check:speed` are the only scripts that can red on wall clock alone. **Never dismiss failing tests as a known baseline without naming the commit that made them pass.**
 
 ## Source control: GitHub is canonical for Marquee
 
