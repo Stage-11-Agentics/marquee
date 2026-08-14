@@ -459,7 +459,7 @@ test("AC-126 · the manifest route exposes authenticated template storage throug
 });
 
 test("CONTRACT · MRQ-175 · preview preserves an unknown token but the bulk queue refuses it by name", async () => {
-  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-unknown-token", now: NOW });
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-unknown-token" });
   const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
   const message = {
     subject: "Your speaker portal",
@@ -496,7 +496,7 @@ test("CONTRACT · MRQ-175 · preview preserves an unknown token but the bulk que
 });
 
 test("CONTRACT · MRQ-175 · known merge fields queue and known missing values remain literal", async () => {
-  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-known-token", now: NOW });
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-known-token" });
   const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
   const known = await app.request(
     "/api/v1/events/evt_mail/comms/send",
@@ -530,7 +530,7 @@ test("CONTRACT · MRQ-175 · known merge fields queue and known missing values r
 });
 
 test("CONTRACT · MRQ-175 · template save refuses an unknown merge field before persisting it", async () => {
-  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-save", now: NOW });
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-save" });
   const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
   const response = await app.request(
     "/api/v1/events/evt_mail/templates",
@@ -568,7 +568,7 @@ test("CONTRACT · MRQ-175 · queue revalidates a stored template before creating
     `INSERT INTO email_templates (id, event_id, key, name, subject, body_md, enabled, created_at, updated_at)
      VALUES ('tpl_mrq175_invalid', 'evt_mail', 'custom', 'Custom', 'Hello', '{{portal.link}}', 1, ?, ?)`,
   ).bind(NOW, NOW).run();
-  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-stored", now: NOW });
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-stored" });
   const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
   const response = await app.request(
     "/api/v1/events/evt_mail/comms/send",
