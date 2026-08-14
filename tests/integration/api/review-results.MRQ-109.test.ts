@@ -24,8 +24,12 @@ const PLAN_ID = "plan-review-results";
 const ROUND_ID = "round-review-results";
 const CRITERION_ORIGINALITY = "criterion-review-results-originality";
 const CRITERION_RELEVANCE = "criterion-review-results-relevance";
+const CRITERION_CALL = "criterion-review-results-call";
+const CRITERION_NOTES = "criterion-review-results-notes";
 
 const CONFLICTED_REVIEWER_ID = "per-review-results-conflicted";
+const AGENT_REVIEWER_ID = "per-review-results-agent";
+const AGENT_RATIONALE = "The CI walkthrough is concrete and the numbers are the speaker's own.";
 
 const SUB_TOP = "submission-review-results-top";
 const SUB_WEIGHTED = "submission-review-results-weighted";
@@ -93,6 +97,20 @@ async function seedResultsFixture(): Promise<void> {
       statement: "INSERT INTO rubric_criteria (id, round_id, name, weight_pct, position, created_at, updated_at) VALUES (?, ?, 'Relevance', 33.33, 1, ?, ?)",
       bindings: [CRITERION_RELEVANCE, ROUND_ID, now, now],
     },
+    // A select and a text criterion: the two kinds that cannot be averaged, and
+    // whose columns therefore arrived empty on every row of the export.
+    {
+      statement: "INSERT INTO rubric_criteria (id, round_id, name, kind, options, weight_pct, position, created_at, updated_at) VALUES (?, ?, 'Recommendation', 'select', ?, 0, 2, ?, ?)",
+      bindings: [CRITERION_CALL, ROUND_ID, JSON.stringify(["Accept", "Maybe", "Reject"]), now, now],
+    },
+    {
+      statement: "INSERT INTO rubric_criteria (id, round_id, name, kind, weight_pct, position, created_at, updated_at) VALUES (?, ?, 'Comments', 'text', 0, 3, ?, ?)",
+      bindings: [CRITERION_NOTES, ROUND_ID, now, now],
+    },
+    {
+      statement: "INSERT INTO people (id, org_id, email, name, kind, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, 'Triage agent', 'agent', 1, 'marquee', ?, ?)",
+      bindings: [AGENT_REVIEWER_ID, DEMO_ORGANIZATION_ID, "triage-agent@demo.marquee.example", now, now],
+    },
     submissionRow(SUB_TOP, `Your AI Pair Programmer ${MARKER}`),
     submissionRow(SUB_WEIGHTED, `Taming 40-Minute CI ${MARKER}`),
     submissionRow(SUB_LEGACY, `Legacy Scalar Review ${MARKER}`),
@@ -108,11 +126,26 @@ async function seedResultsFixture(): Promise<void> {
     evaluationRow({
       id: "evaluation-results-weighted",
       submissionId: SUB_WEIGHTED,
-      criteriaScores: JSON.stringify({ [CRITERION_ORIGINALITY]: 4, [CRITERION_RELEVANCE]: 2 }),
+      criteriaScores: JSON.stringify({
+        [CRITERION_ORIGINALITY]: 4, [CRITERION_RELEVANCE]: 2,
+        [CRITERION_CALL]: "Accept", [CRITERION_NOTES]: "Concrete and well scoped.",
+      }),
       score: null,
       recommendation: "approve",
       abstained: 0,
     }),
+    // The AI first pass the Evaluation panel presents as a peer of the human
+    // one. It disagrees with the human's Accept, which is what makes losing it
+    // from the export costly rather than merely untidy.
+    {
+      statement: `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'maybe', 4.5, ?, ?, 0, ?, ?)`,
+      bindings: [
+        "evaluation-results-agent", ROUND_ID, SUB_WEIGHTED, AGENT_REVIEWER_ID,
+        JSON.stringify({ [CRITERION_CALL]: "Maybe", [CRITERION_NOTES]: AGENT_RATIONALE }),
+        AGENT_RATIONALE, now, now,
+      ],
+    },
     // A declared conflict. Its scores must not move the aggregate or the count.
     evaluationRow({
       id: "evaluation-results-abstained",
@@ -217,6 +250,62 @@ describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export"
       expect(cell(exported, "Weighted score")).toBe(item.score === null ? "" : String(item.score));
       expect(cell(exported, "Reviews")).toBe(String(item.review_count));
     }
+  });
+
+  test("CONTRACT · ABS-13: a criterion that cannot be averaged still exports its answers", async () => {
+    // sbek round 11, manual: "Recommendation (Initial review)" and "Comments
+    // (Initial review)" were empty on all 1,001 rows — including submissions
+    // that demonstrably showed both on screen. Averaging was the whole of what
+    // the export did, so a select and a text criterion produced a column and
+    // never a value: the reviewers' calls and their written reasoning simply
+    // did not survive the download.
+    const rows = csvRows(await (await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`)).text());
+    const header = rows[0]!;
+    const cell = (row: string[], column: string): string => row[header.indexOf(column)]!;
+    expect(header).toContain("Recommendation (Initial review)");
+    expect(header).toContain("Comments (Initial review)");
+
+    const weighted = rows.find((row) => row[0] === SUB_WEIGHTED)!;
+    // Attributed, not flattened: the human said Accept and the agent said Maybe,
+    // and that disagreement is the thing a chair most needs to see.
+    expect(cell(weighted, "Recommendation (Initial review)")).toContain("Accept");
+    expect(cell(weighted, "Recommendation (Initial review)")).toContain("Maybe");
+    expect(cell(weighted, "Comments (Initial review)")).toContain("Concrete and well scoped.");
+    expect(cell(weighted, "Comments (Initial review)")).toContain(AGENT_RATIONALE);
+
+    // The numeric columns are untouched by any of this.
+    expect(cell(weighted, "Originality (Initial review)")).toBe("4");
+    expect(cell(weighted, "Weighted score")).toBe("3.33");
+  });
+
+  test("CONTRACT · ABS-13: the agent scorecard the panel shows as a peer survives the export", async () => {
+    // The CSV said Reviews=1, Accept=1, Maybe=0 for a submission carrying a
+    // Triage agent scorecard of 4.50 maybe with a rationale — an organizer
+    // exporting scores lost the AI first pass entirely.
+    const rows = csvRows(await (await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`)).text());
+    const header = rows[0]!;
+    const cell = (row: string[], column: string): string => row[header.indexOf(column)]!;
+    expect(header).toContain("Agent reviews");
+    expect(header).toContain("Agent scorecards");
+
+    const weighted = rows.find((row) => row[0] === SUB_WEIGHTED)!;
+    expect(cell(weighted, "Agent reviews")).toBe("1");
+    expect(cell(weighted, "Agent scorecards")).toContain("Triage agent");
+    expect(cell(weighted, "Agent scorecards")).toContain("4.50");
+    expect(cell(weighted, "Agent scorecards")).toContain("maybe");
+    expect(cell(weighted, "Agent scorecards")).toContain(AGENT_RATIONALE);
+
+    // The human tally and the weighted aggregate are deliberately unchanged: an
+    // agent review is reported beside them, never folded into them.
+    expect(cell(weighted, "Reviews")).toBe("1");
+    expect(cell(weighted, "Accept")).toBe("1");
+    expect(cell(weighted, "Maybe")).toBe("0");
+    expect(cell(weighted, "Weighted score")).toBe("3.33");
+
+    // A submission nobody's agent reviewed says so plainly rather than lying.
+    const top = rows.find((row) => row[0] === SUB_TOP)!;
+    expect(cell(top, "Agent reviews")).toBe("0");
+    expect(cell(top, "Agent scorecards")).toBe("");
   });
 
   test("CONTRACT · the export refuses a plan that belongs to another conference", async () => {
