@@ -84,7 +84,24 @@ design holds only while the primary checkout is a stable anchor.
 parked on `main`. All work happens in a linked worktree:
 
 ```sh
-git worktree add ../Marquee-worktrees/<branch> <branch>
+git fetch github
+git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main
+```
+
+**Cut from `github/main`, never from `main`.** The rule above is precisely what makes the
+local `main` pointer untrustworthy: the primary checkout is parked by design and nobody
+pulls it, so it moves only when a human happens to. On 2026-08-13 it sat **29 commits
+behind** and was missing `a04f80b1` — the fix for test fixtures that minted auth sessions
+against a hardcoded date — so every worktree cut from local `main` inherited 22 expired-session
+failures on its first run. Four agents diagnosed them independently before anyone checked
+the base. The remote-tracking ref is the only trustworthy base here *because* of the
+board-home rule, not in spite of it.
+
+Already working and unsure? Verify rather than assume — a stale base is invisible until it
+costs you an hour, and re-running never clears it:
+
+```sh
+git merge-base --is-ancestor a04f80b1 HEAD && echo OK || echo "stale base — rebase onto github/main"
 ```
 
 - **Launch agents with the board pinned:** `c11 launch-agent … --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee`.

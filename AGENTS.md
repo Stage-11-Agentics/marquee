@@ -48,7 +48,19 @@ one board instead of diverging copies.
 happens in a linked worktree:
 
 ```sh
-git worktree add ../Marquee-worktrees/<branch> <branch>
+git fetch github
+git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main
+```
+
+**Cut from `github/main`, never from `main`.** The rule directly above is what makes
+local `main` untrustworthy: the primary checkout is parked and nobody pulls it. On
+2026-08-13 it was 29 commits behind and missing `a04f80b1`, so every worktree cut from
+it inherited 22 expired-session test failures, and four agents diagnosed them
+independently before anyone checked the base. Verify rather than assume — re-running
+never clears a stale base:
+
+```sh
+git merge-base --is-ancestor a04f80b1 HEAD && echo OK || echo "stale base — rebase onto github/main"
 ```
 
 - **Launch agents with the board pinned:** `c11 launch-agent … --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee`,
