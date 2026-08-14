@@ -93,7 +93,13 @@
 .criterion-detail .field.inline span { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .criterion-detail .field.inline input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 28px; padding: 5px 7px; width: 72px; }
 .criterion-detail .criterion-options { flex: 1 1 260px; }
-.criterion-detail .criterion-options input { width: 100%; }
+/* The label takes its 260px, but the input inside it kept the 72px meant for
+   the numeric fields above: `.criterion-detail .field.inline input` carries
+   three classes and this rule carried two, so the narrower one won and
+   "Accept, Maybe, Reject" was clipped to its tail in an 88px box. Naming
+   `.field.inline` here is what makes the intended width apply — measured at
+   88px clipped before, 681px unclipped after. */
+.criterion-detail .criterion-options.field.inline input { width: 100%; }
 .criterion-detail .subtle { font-size: 10.5px; }
 .criterion-row input { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 34px; padding: 7px 9px; width: 100%; }
 .criterion-total { align-items: baseline; border-top: 1px solid var(--line); display: flex; gap: 10px; padding-top: 10px; }
