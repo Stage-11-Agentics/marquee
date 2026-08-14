@@ -54,7 +54,7 @@ interface TaskTemplate {
   open_count: number;
 }
 
-interface SpeakerTask {
+export interface SpeakerTask {
   id: string;
   template_id: string;
   title: string;
@@ -178,6 +178,52 @@ function TaskTemplatesSkeleton(): JSX.Element {
 }
 
 /**
+ * Who the picker shows for a query — the whole of its filtering, as a function
+ * of its inputs, so the rule can be exercised without a page around it.
+ *
+ * Matched against the name as RENDERED as well as the one stored: typing what
+ * you can see, "Marcus Okafor (2)", has to find the row showing it. A picker
+ * whose search and render disagree is a picker that cannot be searched.
+ */
+export function visibleAssignees(
+  assignees: readonly Assignee[],
+  displayNames: ReadonlyMap<string, string>,
+  query: string,
+): readonly Assignee[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return assignees;
+  return assignees.filter((person) => [
+    displayNames.get(person.id) ?? person.name,
+    person.name,
+    person.email,
+    person.company ?? "",
+  ].join(" ").toLowerCase().includes(needle));
+}
+
+/**
+ * The people the assignment surface names, and therefore the population its
+ * disambiguation is derived over: everyone assignable, plus anyone holding a
+ * task that is still on the page.
+ *
+ * Cancelled tasks are filtered out of the table, so their holders are not on
+ * this page at all and must not count — a hidden namesake would put "(2)" on
+ * the only visible one. Removing a co-speaker, though, deletes the
+ * participation and keeps the task, so that person is visible while no longer
+ * assignable, and dropping them returns them to a raw name.
+ */
+export function namedTaskPopulation(
+  assignees: readonly Assignee[],
+  assignments: readonly SpeakerTask[],
+): ReadonlyArray<{ id: string; name: string }> {
+  return [
+    ...assignees,
+    ...assignments
+      .filter((task) => !task.cancelled && !assignees.some((person) => person.id === task.person.id))
+      .map((task) => task.person),
+  ];
+}
+
+/**
  * The people picker.
  *
  * Multi-select is the whole point — every fixture task in the eval is assigned
@@ -213,11 +259,7 @@ export function AssigneePicker({
   // of them by eye is not a control, it is a punishment — and "Select all"
   // means all of the people you are looking at, not all thousand.
   const needle = query.trim().toLowerCase();
-  const visible = needle === ""
-    ? assignees
-    // Searched against the name as RENDERED, not only as stored: typing what
-    // you can see — "Marcus Okafor (2)" — has to find the row showing it.
-    : assignees.filter((person) => `${displayNames.get(person.id) ?? person.name} ${person.name} ${person.email} ${person.company ?? ""}`.toLowerCase().includes(needle));
+  const visible = visibleAssignees(assignees, displayNames, query);
 
   return <div class="task-assignee-picker">
     <div class="task-assignee-head">
@@ -426,15 +468,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
   // longer being assignable. Deriving from assignees alone dropped exactly those
   // people back to a raw name in the table where their task still sits.
   const assigneeNames = useMemo(
-    () => disambiguatedNames([
-      ...assignees,
-      ...assignments
-        // Cancelled tasks are filtered out of the table below, so their holders
-        // are not on this page at all and must not inflate the derivation: a
-        // hidden namesake would put "(2)" on the only visible one.
-        .filter((task) => !task.cancelled && !assignees.some((person) => person.id === task.person.id))
-        .map((task) => task.person),
-    ]),
+    () => disambiguatedNames(namedTaskPopulation(assignees, assignments)),
     [assignees, assignments],
   );
 

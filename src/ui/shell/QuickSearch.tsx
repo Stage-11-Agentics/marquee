@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { SearchResult } from "../../api/search";
 import { apiFetch, errorSummary } from "./api-client";
-import { disambiguatedNames } from "../../lib/duplicate-names";
+import { disambiguatedNames, searchableQuery } from "../../lib/duplicate-names";
 import { useEventContext } from "./event-context";
 import { useDialogLifecycle } from "./OverlayHosts";
 import "./quick-search.css";
@@ -70,7 +70,9 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     }
     const controller = new AbortController();
     activeRequestRef.current = controller;
-    const requestQuery = query;
+    // A pasted "Marcus Okafor (2)" has to find Marcus Okafor: the marker is a
+    // property of the result set, so the server has never heard of it.
+    const requestQuery = searchableQuery(query) || query;
     setState("loading");
     setErrorMessage("");
     void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=${encodeURIComponent(requestQuery)}`, {

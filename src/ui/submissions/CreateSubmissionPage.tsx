@@ -3,7 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary, fieldError, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, PageHeader } from "../shell/components";
-import { disambiguatedNames } from "../../lib/duplicate-names";
+import { disambiguatedNames, searchableQuery } from "../../lib/duplicate-names";
 import "./record.css";
 
 const SUBMISSIONS_ROUTE = "/api/v1/events/{eventId}/submissions";
@@ -91,7 +91,9 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
   }, [eventId]);
 
   useEffect(() => {
-    const query = submitterQuery.trim();
+    // A pasted "Marcus Okafor (2)" has to find Marcus Okafor: the marker is a
+    // property of the result set, so the server has never heard of it.
+    const query = searchableQuery(submitterQuery);
     if (submitterMode !== "existing" || selectedSubmitter || query.length < 2) {
       setSubmitterResults([]);
       setSubmitterSearchState("idle");

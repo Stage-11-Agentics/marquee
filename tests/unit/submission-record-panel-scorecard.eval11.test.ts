@@ -38,6 +38,7 @@ const COMMITTEE_NOTE = "Agent review: the 40-minute CI problem is concrete and t
 const review = (overrides: Partial<EvaluationPanelEvaluation> = {}): EvaluationPanelEvaluation => ({
   abstained: false,
   id: "evaluation_eval11_1",
+  reviewer_person_id: "person_triage_agent",
   reviewer_name: "Triage agent",
   reviewer_kind: "agent",
   recommendation: "maybe",

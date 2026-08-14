@@ -11,6 +11,7 @@ import submissionRecordSource from "../../src/ui/submissions/SubmissionRecordPag
 const review = (overrides: Partial<EvaluationPanelEvaluation> = {}): EvaluationPanelEvaluation => ({
   abstained: false,
   id: "evaluation_mrq172_1",
+  reviewer_person_id: "person_sam_whitfield",
   reviewer_name: "Sam Whitfield",
   reviewer_kind: "human",
   recommendation: "Approve",

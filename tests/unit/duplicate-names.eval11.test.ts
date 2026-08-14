@@ -6,8 +6,16 @@ import {
   disambiguatedName,
   disambiguatedNames,
   duplicateNameOrdinals,
+  searchableQuery,
 } from "../../src/lib/duplicate-names";
-import { AssigneePicker, SessionChoicePicker, type Assignee } from "../../src/ui/settings/TaskTemplatesPage";
+import {
+  AssigneePicker,
+  SessionChoicePicker,
+  namedTaskPopulation,
+  visibleAssignees,
+  type Assignee,
+  type SpeakerTask,
+} from "../../src/ui/settings/TaskTemplatesPage";
 import peoplePageSource from "../../src/ui/people/PeoplePage.tsx?raw";
 import onboardingSource from "../../src/ui/onboarding/OnboardingPage.tsx?raw";
 import speakersSource from "../../src/ui/speakers/SpeakersPage.tsx?raw";
@@ -147,25 +155,49 @@ describe("duplicate person names", () => {
   });
 
   test("CONTRACT · the picker finds a person by the name it is showing", () => {
-    // Typing what you can see — "Marcus Okafor (2)" — has to find the row that
-    // shows it. A picker whose search and render disagree is a picker that
-    // cannot be searched.
-    expect(taskTemplatesSource).toContain("`${displayNames.get(person.id) ?? person.name} ${person.name}");
-    const html = renderToString(h(AssigneePicker, {
-      assignees: [MARCUS_A, MARCUS_B, PRIYA],
-      displayNames: disambiguatedNames([MARCUS_A, MARCUS_B, PRIYA]),
-      selected: [],
-      onChange: () => undefined,
-      idPrefix: "task-assign-test",
-    }));
-    expect(html).toContain("Search speakers by name, company, or email");
+    const displayNames = disambiguatedNames([MARCUS_A, MARCUS_B, PRIYA]);
+    const shown = (query: string): string[] =>
+      visibleAssignees([MARCUS_A, MARCUS_B, PRIYA], displayNames, query).map((person) => person.id);
+
+    // Typing what you can see finds the row showing it, and only that row.
+    expect(shown("Marcus Okafor (2)")).toEqual([MARCUS_B.id]);
+    expect(shown("(2)")).toEqual([MARCUS_B.id]);
+    // The stored name, the email, and the company all still match.
+    expect(shown("Marcus Okafor")).toEqual([MARCUS_A.id, MARCUS_B.id]);
+    expect(shown("m.okafor@lattice.example")).toEqual([MARCUS_B.id]);
+    expect(shown("Northwind")).toEqual([MARCUS_A.id]);
+    expect(shown("priya")).toEqual([PRIYA.id]);
+    expect(shown("   ")).toHaveLength(3);
+  });
+
+  test("CONTRACT · a server-backed search strips a marker the server has never heard of", () => {
+    // "(2)" is a property of one rendered result set, so it cannot exist before
+    // the search that would be filtering by it has run. Pasting a visible label
+    // must still find the person it belongs to.
+    expect(searchableQuery("Marcus Okafor (2)")).toBe("Marcus Okafor");
+    expect(searchableQuery("Marcus Okafor (12)  ")).toBe("Marcus Okafor");
+    // A parenthesised number that is part of the query, not a marker, survives.
+    expect(searchableQuery("Marcus Okafor (2) session")).toBe("Marcus Okafor (2) session");
+    expect(searchableQuery("Marcus")).toBe("Marcus");
   });
 
   test("CONTRACT · a cancelled task's holder is not on the page and does not mark the one who is", () => {
-    // Cancelled tasks are filtered out of the assignment table, so their holders
-    // are invisible. Counting them would put "(2)" on the only visible Marcus —
-    // a marker about somebody the organizer cannot see.
-    expect(taskTemplatesSource).toContain("!task.cancelled && !assignees.some((person) => person.id === task.person.id)");
+    const task = (id: string, person: { id: string; name: string }, cancelled: boolean): SpeakerTask => ({
+      id, template_id: "tmpl", title: "Upload slides", kind: "file", due_at: 0,
+      status: "open", cancelled, person: { ...person, email: `${person.id}@example.com` },
+      submission_title: null,
+    });
+
+    // The cancelled holder's row is filtered out of the table, so counting them
+    // would put "(2)" on the only Marcus the organizer can actually see.
+    const hidden = namedTaskPopulation([MARCUS_A], [task("t1", { id: "person_ghost", name: "Marcus Okafor" }, true)]);
+    expect(hidden.map((person) => person.id)).toEqual([MARCUS_A.id]);
+    expect(disambiguatedNames(hidden).get(MARCUS_A.id)).toBe("Marcus Okafor");
+
+    // A live task from someone no longer assignable IS on the page, and counts.
+    const visible = namedTaskPopulation([MARCUS_A], [task("t2", { id: "person_removed", name: "Marcus Okafor" }, false)]);
+    expect(visible.map((person) => person.id)).toEqual([MARCUS_A.id, "person_removed"]);
+    expect(disambiguatedNames(visible).get("person_removed")).toBe("Marcus Okafor (2)");
   });
 
   test("CONTRACT · someone who holds a task but is no longer assignable keeps their label", () => {
@@ -208,8 +240,14 @@ describe("duplicate person names", () => {
       "displayNames.get(person.id) ?? person.name",
       "assigneeNames.get(row.person.id) ?? row.person.name",
     ]],
-    ["the reviewer picker, participants card, message recipient, and person search", submissionRecordSource, [
+    ["the reviewer picker, participants card, message recipient, person search, and recorded evidence", submissionRecordSource, [
       "participantResultNames.get(person.id) ?? person.title",
+      "evidenceNames.get(evaluation.reviewer_person_id) ?? evaluation.reviewer_name",
+      "evidenceNames.get(comparison.reviewer_person_id) ?? comparison.reviewer_name",
+      // The evidence row prints the display name in its header, its superseded
+      // line, and both override controls' accessible names.
+      "aria-label={`Override score for ${displayName}`}",
+      "aria-label={`Reason for overriding ${displayName}`}",
       "reviewerNames.get(reviewer.id) ?? reviewer.name",
       "reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name",
       "participantNames.get(group.person_id) ?? group.name",
@@ -231,8 +269,15 @@ describe("duplicate person names", () => {
     // The dialog takes the board's map as a prop rather than deriving its own,
     // so it names people exactly as the list it was opened from did.
     ["the bulk export dialog", bulkExportSource, ["personNames.get(row.person.id) ?? row.person.name"], true],
-    ["the organizer rows, each beside a Remove", organizersSource, ["memberNames.get(member.person_id) ?? member.name"]],
-    ["the form administrator rows, each beside a Remove", formsSource, ["?? admin.name"]],
+    // Removal is the consequential step: the confirm, the receipt, and the
+    // button's accessible name all have to say which person.
+    ["the organizer rows and their removal", organizersSource, [
+      "memberNames.get(member.person_id) ?? member.name",
+      "const label = memberNames.get(member.person_id) ?? member.name;",
+      "`Remove ${label}?",
+      "aria-label={`Remove ${memberNames.get(member.person_id) ?? member.name}`}",
+    ]],
+    ["the form administrator rows, each beside a Remove", formsSource, ["?? admin.name", "aria-label={`Remove ${disambiguatedNames("]],
   ];
 
   test("CONTRACT · every surface where a person is chosen or acted on by name reads the shared derivation", () => {
