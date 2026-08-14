@@ -30,6 +30,7 @@ import { conferenceDays } from "../../lib/conference-dates";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
+import { orderNewestFirst } from "../shell/wide-grid";
 import { localParts, sessionDay, sessionTime, TrackBoard } from "./track-board";
 import "./agenda.css";
 
@@ -216,6 +217,20 @@ function sessionsFor(
 type ConflictMarker = "Conflict" | "Transit";
 type ConflictMarkers = ReadonlyMap<string, ConflictMarker>;
 
+export type AgendaConflictDetails = ReadonlyMap<string, readonly AgendaConflict[]>;
+
+/** Project the server's conflict pairs onto each affected Session without redetecting them. */
+export function conflictDetailsBySession(conflicts: readonly AgendaConflict[]): AgendaConflictDetails {
+  const details = new Map<string, AgendaConflict[]>();
+  for (const conflict of conflicts) {
+    for (const sessionId of conflict.session_ids) {
+      const current = details.get(sessionId) ?? [];
+      details.set(sessionId, [...current, conflict]);
+    }
+  }
+  return details;
+}
+
 function conflictMarkers(conflicts: readonly AgendaConflict[]): ConflictMarkers {
   const markers = new Map<string, ConflictMarker>();
   for (const conflict of conflicts) {
@@ -225,6 +240,33 @@ function conflictMarkers(conflicts: readonly AgendaConflict[]): ConflictMarkers 
     }
   }
   return markers;
+}
+
+export function orderedAgendaRooms(rooms: readonly AgendaRoom[]): AgendaRoom[] {
+  return orderNewestFirst(rooms, (room) => room.position ?? 0);
+}
+
+function conflictCounterpartId(sessionId: string, conflict: AgendaConflict): string {
+  return conflict.session_ids[0] === sessionId ? conflict.session_ids[1] : conflict.session_ids[0];
+}
+
+function conflictPersonName(session: AgendaSession, counterpart: AgendaSession | undefined, conflict: AgendaConflict): string | null {
+  if (!conflict.person_id) return null;
+  return [...session.speakers, ...(counterpart?.speakers ?? [])].find((speaker) => speaker.id === conflict.person_id)?.name ?? null;
+}
+
+function conflictBadgeLabel(session: AgendaSession, conflict: AgendaConflict, sessions: readonly AgendaSession[]): string {
+  const counterpart = sessions.find((candidate) => candidate.id === conflictCounterpartId(session.id, conflict));
+  const person = conflictPersonName(session, counterpart, conflict);
+  const kind = conflict.kind === "transit" ? "Transit" : "Conflict";
+  return `${kind}${person ? ` · ${person}` : ""} · with ${counterpart?.title ?? "another Session"}`;
+}
+
+function conflictBadgeTitle(session: AgendaSession, conflicts: readonly AgendaConflict[], sessions: readonly AgendaSession[]): string {
+  return conflicts.map((conflict) => {
+    const counterpart = sessions.find((candidate) => candidate.id === conflictCounterpartId(session.id, conflict));
+    return `${conflict.message} · ${counterpart?.title ?? "another Session"}`;
+  }).join(" · ");
 }
 
 function roomFor(snapshot: AgendaSnapshot, roomId: string): AgendaRoom | undefined {
@@ -279,40 +321,59 @@ function TrackChips({ session }: { session: AgendaSession }): JSX.Element {
 export function SessionTile({
   snapshot,
   session,
+  sessions = snapshot.sessions,
   onDragStart,
   onResize,
   onMove,
   onUnplace,
   onRoomOpen,
   conflicts,
+  conflictsBySession,
+  conflictFocus = null,
+  onConflictFocus,
 }: {
   snapshot: AgendaSnapshot;
   session: AgendaSession;
+  sessions?: readonly AgendaSession[];
   onDragStart: (payload: DragPayload, event: DragEvent) => void;
   onResize: (session: AgendaSession, delta: number) => void;
   onMove: (session: AgendaSession) => void;
   onUnplace: (session: AgendaSession) => void;
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
+  conflictsBySession?: AgendaConflictDetails;
+  conflictFocus?: string | null;
+  onConflictFocus?: (sessionId: string | null) => void;
 }): JSX.Element {
   const format = snapshot.formats.find((candidate) => candidate.id === session.format_id);
-  const hasConflict = conflicts.has(session.id);
+  const sessionConflicts = conflictsBySession?.get(session.id) ?? [];
+  const hasConflict = conflicts.has(session.id) || sessionConflicts.length > 0;
+  const counterpartIds = sessionConflicts.map((conflict) => conflictCounterpartId(session.id, conflict));
+  const conflictLabel = sessionConflicts.length
+    ? `${conflictBadgeLabel(session, sessionConflicts[0]!, sessions)}${sessionConflicts.length > 1 ? ` +${sessionConflicts.length - 1}` : ""}`
+    : conflicts.get(session.id) ?? "Conflict";
+  const conflictTitle = sessionConflicts.length ? conflictBadgeTitle(session, sessionConflicts, sessions) : undefined;
   const hasDeclined = session.has_declined_participant === true;
   const location = displayRoomLabel(session.room, session.building, agendaShowsBuildingComparison(snapshot));
   return <article
-    class={`agenda-session-tile${hasConflict ? " has-conflict" : ""}${hasDeclined ? " has-declined" : ""}`}
+    class={`agenda-session-tile${hasConflict ? " has-conflict" : ""}${conflictFocus === session.id ? " is-conflict-focus" : ""}${conflictFocus !== null && counterpartIds.includes(conflictFocus) ? " is-conflict-counterpart" : ""}${hasDeclined ? " has-declined" : ""}`}
     draggable={session.kind !== "break"}
     data-session-id={session.id}
-    aria-label={`${session.title} · ${sessionTime(session, snapshot.event.timezone)} · ${location}`}
+    aria-label={`${session.title} · ${sessionTime(session, snapshot.event.timezone)} · ${location}${conflictTitle ? ` · ${conflictTitle}` : ""}`}
+    tabIndex={hasConflict ? 0 : undefined}
     style={{ borderLeftColor: session.kind === "break" ? "var(--break-tint)" : trackColor(snapshot, session) }}
     onDragStart={(event) => onDragStart({ kind: "session", id: session.id }, event as unknown as DragEvent)}
+    onMouseEnter={() => { if (hasConflict) onConflictFocus?.(session.id); }}
+    onMouseLeave={() => { if (hasConflict) onConflictFocus?.(null); }}
+    onFocus={() => { if (hasConflict) onConflictFocus?.(session.id); }}
+    onBlur={() => { if (hasConflict) onConflictFocus?.(null); }}
   >
     <strong title={session.title}>{session.title}</strong>
     <span class="agenda-tile-meta">{session.kind === "break" ? `${session.duration_min} min reservation` : `${session.format ?? "Session"} · ${speakerLine(session)}`}</span>
     <span class="agenda-tile-location">{location}</span>
     {session.kind !== "break" && <TrackChips session={session} />}
-    <span class={`agenda-conflict-flag${hasConflict ? "" : " is-placeholder"}`} aria-hidden={!hasConflict} title={hasConflict ? "This placement needs attention" : undefined}>
-      ⚠ {conflicts.get(session.id) ?? "Conflict"}
+    <span class={`agenda-conflict-flag${hasConflict ? "" : " is-placeholder"}`} aria-hidden={!hasConflict} title={conflictTitle ?? (hasConflict ? "This placement needs attention" : undefined)}>
+      ⚠ {conflictLabel}
     </span>
     <span class={`agenda-decline-flag${hasDeclined ? "" : " is-placeholder"}`} aria-hidden={!hasDeclined} title={hasDeclined ? "A speaker role was declined" : undefined}>
       ⚑ Declined role
@@ -480,6 +541,7 @@ export function DayBoard({
   onUnplace,
   onRoomOpen,
   conflicts,
+  conflictDetails,
 }: {
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
@@ -495,35 +557,42 @@ export function DayBoard({
   onUnplace: (session: AgendaSession) => void;
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
+  conflictDetails?: AgendaConflictDetails;
 }): JSX.Element {
   const showBuildingBand = agendaShowsBuildingComparison(snapshot);
-  return <div class={`agenda-grid${showBuildingBand ? " has-building-band" : ""}`} style={{ gridTemplateColumns: `68px repeat(${Math.max(snapshot.rooms.length, 1)}, minmax(190px, 1fr))` }}>
-    {showBuildingBand && <BuildingBand rooms={snapshot.rooms} />}
-    <div class="agenda-grid-head agenda-time-head" />
-    {snapshot.rooms.map((room) => <div class="agenda-grid-head" key={room.id}><RoomHead room={room} bare={showBuildingBand} showBuildingComparison={showBuildingBand} onOpen={onRoomOpen} /></div>)}
-    {slots.map((slot) => <>
-      <div class={`agenda-time tabular${slot.isHour ? "" : " is-micro"}`} key={`${slot.time}-label`} aria-label={slot.time}>
-        {slot.isHour ? slot.time : <span class="agenda-time-micro-tick" aria-hidden="true" />}
-      </div>
-      {snapshot.rooms.map((room) => {
-        const cellSessions = sessions.filter((session) => session.room_id === room.id && agendaGridPosition(sessionTime(session, snapshot.event.timezone), slots)?.slot.time === slot.time);
-        const placementLabel = armedPlacement && roomSlotIsFree(snapshot, day, slot.time, room.id, slots)
-          ? `Place at ${slot.time} · ${room.name}`
-          : undefined;
-        return <DropCell
-          class="agenda-day-cell"
-          key={`${slot.time}-${room.id}`}
-          ariaLabel={`Place Session on ${day} at ${slot.time} in ${room.name}`}
-          onDrop={(event) => onDrop(event, day, slot.time, room.id)}
-          placementLabel={placementLabel}
-          placementBusy={placementBusy}
-          onPlace={placementLabel ? () => onPlace({ day, time: slot.time, roomId: room.id }) : undefined}
-        >{cellSessions.map((session) => <PositionedSession key={session.id} session={session} timezone={snapshot.event.timezone} slots={slots}>
-          <SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />
-        </PositionedSession>)}</DropCell>;
-      })}
-    </>)}
-  </div>;
+  const rooms = orderedAgendaRooms(snapshot.rooms);
+  const conflictsBySession = conflictDetails ?? conflictDetailsBySession(snapshot.conflicts);
+  const [conflictFocus, setConflictFocus] = useState<string | null>(null);
+  return <>
+    <div class="agenda-grid-scroll-note" aria-live="polite"><strong class="tabular">{rooms.length}</strong><span>rooms · newest first{rooms.length > 4 ? " · scroll for more" : ""}</span></div>
+    <div class={`agenda-grid wide-grid-content${showBuildingBand ? " has-building-band" : ""}`} data-room-order="newest-first" style={{ gridTemplateColumns: `68px repeat(${Math.max(rooms.length, 1)}, minmax(190px, 1fr))` }}>
+      {showBuildingBand && <BuildingBand rooms={rooms} />}
+      <div class="agenda-grid-head agenda-time-head" />
+      {rooms.map((room) => <div class="agenda-grid-head" key={room.id}><RoomHead room={room} bare={showBuildingBand} showBuildingComparison={showBuildingBand} onOpen={onRoomOpen} /></div>)}
+      {slots.map((slot) => <>
+        <div class={`agenda-time tabular${slot.isHour ? "" : " is-micro"}`} key={`${slot.time}-label`} aria-label={slot.time}>
+          {slot.isHour ? slot.time : <span class="agenda-time-micro-tick" aria-hidden="true" />}
+        </div>
+        {rooms.map((room) => {
+          const cellSessions = sessions.filter((session) => session.room_id === room.id && agendaGridPosition(sessionTime(session, snapshot.event.timezone), slots)?.slot.time === slot.time);
+          const placementLabel = armedPlacement && roomSlotIsFree(snapshot, day, slot.time, room.id, slots)
+            ? `Place at ${slot.time} · ${room.name}`
+            : undefined;
+          return <DropCell
+            class="agenda-day-cell"
+            key={`${slot.time}-${room.id}`}
+            ariaLabel={`Place Session on ${day} at ${slot.time} in ${room.name}`}
+            onDrop={(event) => onDrop(event, day, slot.time, room.id)}
+            placementLabel={placementLabel}
+            placementBusy={placementBusy}
+            onPlace={placementLabel ? () => onPlace({ day, time: slot.time, roomId: room.id }) : undefined}
+          >{cellSessions.map((session) => <PositionedSession key={session.id} session={session} timezone={snapshot.event.timezone} slots={slots}>
+            <SessionTile snapshot={snapshot} session={session} sessions={snapshot.sessions} conflictsBySession={conflictsBySession} conflictFocus={conflictFocus} onConflictFocus={setConflictFocus} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />
+          </PositionedSession>)}</DropCell>;
+        })}
+      </>)}
+    </div>
+  </>;
 }
 
 export function AgendaDayStatus({ snapshot, day }: { snapshot: AgendaSnapshot; day: string }): JSX.Element {
@@ -550,6 +619,7 @@ export function WeekBoard({
   onUnplace,
   onRoomOpen,
   conflicts,
+  conflictDetails,
 }: {
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
@@ -565,8 +635,11 @@ export function WeekBoard({
   onUnplace: (session: AgendaSession) => void;
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
+  conflictDetails?: AgendaConflictDetails;
 }): JSX.Element {
   const fallbackRoom = snapshot.rooms[0];
+  const conflictsBySession = conflictDetails ?? conflictDetailsBySession(snapshot.conflicts);
+  const [conflictFocus, setConflictFocus] = useState<string | null>(null);
   return <div class="agenda-week-grid" style={{ gridTemplateColumns: `68px repeat(${Math.max(days.length, 1)}, minmax(240px, 1fr))` }}>
     <div class="agenda-grid-head agenda-time-head" />
     {days.map((day) => <div class="agenda-grid-head" key={day.value}>{day.label}</div>)}
@@ -588,7 +661,7 @@ export function WeekBoard({
           placementBusy={placementBusy}
           onPlace={placementLabel && fallbackRoom ? () => onPlace({ day: day.value, time: slot.time, roomId: fallbackRoom.id }) : undefined}
         >{cellSessions.map((session) => <PositionedSession key={session.id} session={session} timezone={snapshot.event.timezone} slots={slots}>
-          <SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />
+          <SessionTile snapshot={snapshot} session={session} sessions={snapshot.sessions} conflictsBySession={conflictsBySession} conflictFocus={conflictFocus} onConflictFocus={setConflictFocus} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} />
         </PositionedSession>)}</DropCell>;
       })}
     </>)}
@@ -610,6 +683,7 @@ export function RoomBoard({
   onUnplace,
   onRoomOpen,
   conflicts,
+  conflictDetails,
 }: {
   snapshot: AgendaSnapshot;
   sessions: AgendaSession[];
@@ -625,14 +699,18 @@ export function RoomBoard({
   onUnplace: (session: AgendaSession) => void;
   onRoomOpen: (roomId: string) => void;
   conflicts: ConflictMarkers;
+  conflictDetails?: AgendaConflictDetails;
 }): JSX.Element {
   const showBuildingComparison = agendaShowsBuildingComparison(snapshot);
-  return <div class="agenda-room-board" style={{ gridTemplateColumns: `repeat(${Math.max(snapshot.rooms.length, 1)}, minmax(230px, 1fr))` }}>
-    {snapshot.rooms.map((room) => <section class="agenda-room-lane" key={room.id}>
+  const rooms = orderedAgendaRooms(snapshot.rooms);
+  const conflictsBySession = conflictDetails ?? conflictDetailsBySession(snapshot.conflicts);
+  const [conflictFocus, setConflictFocus] = useState<string | null>(null);
+  return <div class="agenda-room-board wide-grid-content" data-room-order="newest-first" style={{ gridTemplateColumns: `repeat(${Math.max(rooms.length, 1)}, minmax(230px, 1fr))` }}>
+    {rooms.map((room) => <section class="agenda-room-lane" key={room.id}>
       <header><RoomHead room={room} showBuildingComparison={showBuildingComparison} onOpen={onRoomOpen} /></header>
       {days.map((day) => <div class="agenda-room-day" key={day.value}>
         <div class="agenda-day-label">{day.label}</div>
-        {sessions.filter((session) => session.room_id === room.id && sessionDay(session, snapshot.event.timezone) === day.value).sort((left, right) => left.starts_at - right.starts_at).map((session) => <div key={session.id} class="agenda-room-session-wrap"><span class="tabular">{sessionTime(session, snapshot.event.timezone)}</span><SessionTile snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} /></div>)}
+        {sessions.filter((session) => session.room_id === room.id && sessionDay(session, snapshot.event.timezone) === day.value).sort((left, right) => left.starts_at - right.starts_at).map((session) => <div key={session.id} class="agenda-room-session-wrap"><span class="tabular">{sessionTime(session, snapshot.event.timezone)}</span><SessionTile snapshot={snapshot} session={session} sessions={snapshot.sessions} conflictsBySession={conflictsBySession} conflictFocus={conflictFocus} onConflictFocus={setConflictFocus} onDragStart={onDragStart} onResize={onResize} onMove={onMove} onUnplace={onUnplace} onRoomOpen={onRoomOpen} conflicts={conflicts} /></div>)}
         <div class="agenda-room-slots" aria-label={`Available times in ${room.name} on ${day.label}`}>
           {slots.map((slot) => {
             const placementLabel = armedPlacement && roomSlotIsFree(snapshot, day.value, slot.time, room.id, slots)
@@ -667,10 +745,23 @@ function RoomPanel({ room, showBuildingComparison, onClose }: { room: AgendaRoom
   </aside>;
 }
 
+export function ConflictCounter({ count, open, onOpen }: { count: number; open: boolean; onOpen: () => void }): JSX.Element {
+  return <Button
+    type="button"
+    variant="danger"
+    data-conflict-counter="true"
+    aria-controls="agenda-conflicts-panel"
+    aria-expanded={open}
+    aria-label={`Open live agenda conflict details · ${count} active`}
+    title="Open live agenda conflict details"
+    onClick={onOpen}
+  >⚠ <span class="tabular">{count}</span> conflicts</Button>;
+}
+
 export function ConflictPanel({ conflicts, sessions, showBuildingComparison = true, onClose, onJump }: { conflicts: AgendaConflict[]; sessions: AgendaSession[]; showBuildingComparison?: boolean; onClose: () => void; onJump: (sessionId: string) => void }): JSX.Element {
   const titleFor = (id: string) => sessions.find((session) => session.id === id)?.title ?? id;
   const visibleConflicts = visibleVenueConflicts(conflicts, showBuildingComparison);
-  return <aside class="agenda-conflict-panel" role="dialog" aria-label="Agenda conflicts">
+  return <aside id="agenda-conflicts-panel" class="agenda-conflict-panel" role="dialog" aria-label="Agenda conflicts">
     <header><div><span class="eyebrow">Live detection</span><h2>Agenda conflicts · <span class="tabular">{visibleConflicts.length}</span></h2></div><button type="button" aria-label="Close conflicts" onClick={onClose}>×</button></header>
     <div class="agenda-conflict-list">{visibleConflicts.length ? visibleConflicts.map((conflict, index) => <section key={`${conflict.session_ids.join("-")}-${index}`}>
       <span class="agenda-conflict-icon">!</span><div><strong>{conflict.message}</strong><span>{titleFor(conflict.session_ids[0])} ↔ {titleFor(conflict.session_ids[1])}</span><button type="button" class="agenda-conflict-jump" data-conflict-jump={conflict.session_ids[0]} onClick={() => onJump(conflict.session_ids[0])}>Jump to Session</button></div>
@@ -842,6 +933,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
   const [poolQuery, setPoolQuery] = useState("");
   const [roomPanelId, setRoomPanelId] = useState<string | null>(null);
   const [conflictsOpen, setConflictsOpen] = useState(false);
+  const [conflictFocus, setConflictFocus] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [publicationError, setPublicationError] = useState("");
   const [publicationNotice, setPublicationNotice] = useState<PublicationNotice | null>(null);
@@ -1108,6 +1200,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
   const showBuildingComparison = agendaShowsBuildingComparison(snapshot);
   const visibleConflictData = visibleVenueConflicts(snapshot.conflicts, showBuildingComparison);
   const presentationConflicts = showBuildingComparison ? conflicts : conflictMarkers(visibleConflictData);
+  const presentationConflictDetails = conflictDetailsBySession(showBuildingComparison ? snapshot.conflicts : visibleConflictData);
   const headerBuilding = agendaBuildingHeader(snapshot);
   const activeRoom = roomPanelId ? roomFor(snapshot, roomPanelId) : undefined;
   const armPoolItem = (item: AgendaPoolItem) => armPlacement({ kind: "pool", id: item.submission_id }, item.title);
@@ -1131,22 +1224,22 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
   };
   const renderBoard = () => {
     if (view === "list") return <AgendaList snapshot={snapshot} sessions={visibleSessions} conflicts={presentationConflicts} onDragStart={onDragStart} onResize={onResize} onRoomOpen={setRoomPanelId} onClearFilters={() => { setDay("all"); setTrack(""); }} />;
-    if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
-    if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
+    if (view === "week") return <WeekBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={days} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} conflictDetails={presentationConflictDetails} />;
+    if (view === "room") return <RoomBoard snapshot={snapshot} sessions={sessionsFor(snapshot, "all", track)} days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} conflictDetails={presentationConflictDetails} />;
     if (view === "track") return <TrackBoard
       snapshot={snapshot}
       sessions={sessionsFor(snapshot, "all", track)}
       days={selectedDay === "all" ? days : days.filter((candidate) => candidate.value === selectedDay)}
       slots={gridSlots}
       onDrop={onDrop}
-      renderTile={(session) => <SessionTile key={session.id} snapshot={snapshot} session={session} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />}
+      renderTile={(session) => <SessionTile key={session.id} snapshot={snapshot} session={session} sessions={snapshot.sessions} conflictsBySession={presentationConflictDetails} conflictFocus={conflictFocus} onConflictFocus={setConflictFocus} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />}
     />;
     const dayForBoard = selectedDay === "all" ? days[0]?.value ?? selectedDay : selectedDay;
-    return <DayBoard snapshot={snapshot} sessions={sessionsFor(snapshot, dayForBoard, track)} day={dayForBoard} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} />;
+    return <DayBoard snapshot={snapshot} sessions={sessionsFor(snapshot, dayForBoard, track)} day={dayForBoard} slots={gridSlots} onDrop={onDrop} onPlace={placeArmed} armedPlacement={armedPlacement} placementBusy={placementBusy} onDragStart={onDragStart} onResize={onResize} onMove={moveSession} onUnplace={unplace} onRoomOpen={setRoomPanelId} conflicts={presentationConflicts} conflictDetails={presentationConflictDetails} />;
   };
 
   return <div class="agenda-page">
-    <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Place accepted Sessions by drag or selection. Format defaults set duration; live conflicts warn without blocking.`} actions={<><AgentBriefLauncher surface="agenda" eventId={eventId} /><Button variant="danger" onClick={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</Button></>} />
+    <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Place accepted Sessions by drag or selection. Format defaults set duration; live conflicts warn without blocking.`} actions={<><AgentBriefLauncher surface="agenda" eventId={eventId} /><ConflictCounter count={visibleConflictData.length} open={conflictsOpen} onOpen={() => setConflictsOpen(true)} /></>} />
     {snapshot.schedule_window.outside_window_session_count > 0 && <div class="agenda-notice agenda-schedule-window-warning" role="status"><span><strong class="tabular">{snapshot.schedule_window.outside_window_session_count}</strong> scheduled Session{snapshot.schedule_window.outside_window_session_count === 1 ? "" : "s"} fall outside the conference dates.</span><a href="/settings">Open Conference settings ↗</a></div>}
     {publicationNotice && <div class="agenda-notice agenda-publication-success" role="status"><span>Published <strong class="tabular">{publicationNotice.count}</strong> Session{publicationNotice.count === 1 ? "" : "s"} to the public agenda.</span><span class="agenda-notice-actions"><a href={publicationNotice.publicAgendaUrl}>View public agenda ↗</a><button type="button" onClick={() => setPublicationNotice(null)} aria-label="Dismiss publication confirmation">×</button></span></div>}
     <PublicationPanel
@@ -1186,7 +1279,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
       ? <EmptyState title="No Sessions are ready for the agenda" copy="Accepted Sessions will appear here when the conference is ready to place them. Open the submission list to check the next candidates." action={<Button variant="primary" onClick={() => window.location.assign("/submissions?status=accepted_any&placement=unplaced")}>Open accepted submissions</Button>} />
       : <div class="agenda-layout">
         <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} onArm={armPoolItem} armedPlacement={armedPlacement} />
-        <section class="card agenda-board" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
+        <section class="card agenda-board wide-grid-scroll" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
       </div>}
     {activeRoom && <RoomPanel room={activeRoom} showBuildingComparison={showBuildingComparison} onClose={() => setRoomPanelId(null)} />}
     {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} showBuildingComparison={showBuildingComparison} onClose={() => setConflictsOpen(false)} onJump={jumpToSession} />}
