@@ -72,8 +72,11 @@ describe("evaluation panel surfaces the scorecard the reviewer actually filled i
     const html = render(review());
 
     // The stored review row still reads "maybe"; the scorecard says Accept.
-    // The chair must be able to see both rather than only the first.
-    expect(html).toContain("4.00 · maybe");
+    // The chair must be able to see both rather than only the first — each
+    // attributed to where the reviewer put it, neither resolved into the other.
+    expect(html).toContain("4.00");
+    expect(html).toContain("Reviewer's own recommendation");
+    expect(html).toContain("maybe");
     expect(html).toContain("Accept");
     expect(html).toContain("Recommendation");
   });

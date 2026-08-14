@@ -139,8 +139,8 @@
 .record-round-result-head .reviewer-name { max-width: 100%; }
 .evaluation-panel-override-slot { align-items: center; display: inline-flex; flex: 0 0 70px; justify-content: flex-start; min-height: 18px; }
 .evaluation-panel-override-slot-placeholder { display: inline-flex; min-height: 18px; min-width: 70px; visibility: hidden; }
-.evaluation-panel-rating { align-items: baseline; display: flex; flex-wrap: wrap; gap: 6px; min-height: 20px; }
-.evaluation-panel-rating small, .evaluation-panel-comment-slot small, .evaluation-panel-override small { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.evaluation-panel-rating, .evaluation-panel-recommendation { align-items: baseline; display: flex; flex-wrap: wrap; gap: 6px; min-height: 20px; }
+.evaluation-panel-rating small, .evaluation-panel-recommendation small, .evaluation-panel-comment-slot small, .evaluation-panel-override small { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
 /* The fixed slot keeps a long comment's disclosure from pushing the panel's
    assignment controls down when the operator opens it. */
 .evaluation-panel-comment-slot { display: grid; gap: 3px; height: 68px; min-height: 68px; overflow: hidden; }
