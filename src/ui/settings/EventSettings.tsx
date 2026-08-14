@@ -10,7 +10,6 @@ import { OrganizersCard } from "../setup/OrganizersCard";
 import { SocialMark } from "../social/SocialBadges";
 import { SOCIAL_PLATFORMS, type SocialPlatformId } from "../../lib/social-links";
 import { loadVenueModel } from "../venues/venue-writer";
-import { useEventContext } from "../shell/event-context";
 import type { VenueModel } from "../../lib/venues";
 import { conferenceNameMatches } from "./delete-conference";
 import "./settings.css";
