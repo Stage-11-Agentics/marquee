@@ -392,10 +392,18 @@ test("AC-282 · an organizer invite mints, exchanges through the claim path, and
   });
   expect(exchanged.status).toBe(200);
   expect(exchanged.headers.get("set-cookie") ?? "").toContain("mq_session=");
-  const joined = await env.DB.prepare(
+  // SPEC Amendment 21: an invite carries the seat it mints, and a request that
+  // names no role gets the LEAST authority that still means "organizer" rather
+  // than the most powerful seat on the instance by omission. So this exchange
+  // adds a program lead beside the one owner, not a second owner.
+  const owners = await env.DB.prepare(
     "SELECT COUNT(*) AS total FROM memberships WHERE org_id = ? AND event_id IS NULL AND role = 'owner'",
   ).bind(orgId).first<{ total: number }>();
-  expect(Number(joined?.total)).toBe(2);
+  expect(Number(owners?.total)).toBe(1);
+  const joined = await env.DB.prepare(
+    "SELECT role, event_id FROM memberships WHERE org_id = ? AND person_id = (SELECT id FROM people WHERE email = 'rae@gl-infra.dev')",
+  ).bind(orgId).all<{ role: string; event_id: string | null }>();
+  expect(joined.results).toEqual([{ role: "program_lead", event_id: null }]);
 
   const replay = await request("/api/v1/claim", {
     method: "POST",
