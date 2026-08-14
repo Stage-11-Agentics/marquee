@@ -2,7 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
 import { formatEventDateTime, localParts } from "../../lib/event-time";
-import { dateInputFromDueAt, formatDueDate } from "../../lib/task-due";
+import { dateInputFromDueAt, dueAtFromDateInput, formatDueDate } from "../../lib/task-due";
 import { hasSpeakerTaskCancellationColumn } from "../../routes/submissions.queries";
 import type { TriggerKey } from "./triggers";
 
@@ -21,8 +21,13 @@ export interface MailScheduleCandidate {
 function taskIsOverdue(row: { due_at: number; timezone: string }, now: number): boolean {
   // speaker_tasks.due_at preserves the operator's calendar day at UTC end of
   // day. The deadline is the end of that day in the conference's clock, so a
-  // task becomes overdue only once the event-local day has advanced.
-  return localParts(now, row.timezone).day > dateInputFromDueAt(row.due_at);
+  // task becomes overdue only once the event-local day has advanced. A task
+  // minted from a relative-offset template, or an explicitly supplied instant,
+  // is not that calendar-day sentinel and keeps its exact-instant semantics.
+  const dueDate = dateInputFromDueAt(row.due_at);
+  return dueAtFromDateInput(dueDate) === row.due_at
+    ? localParts(now, row.timezone).day > dueDate
+    : row.due_at < now;
 }
 
 /**
