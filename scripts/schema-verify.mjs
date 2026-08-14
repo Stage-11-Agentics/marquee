@@ -306,7 +306,7 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 109, "Expected the exact foreign-key graph");
+  assert.equal(foreignKeyRows.length, 115, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 

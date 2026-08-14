@@ -59,6 +59,10 @@ export function capacityLabel(session: DemandSession): string {
   // is a fact about the venue model, and inventing a percentage from it would
   // put a fabricated number on the screen that exists to prevent exactly that.
   if (ratio === null) return "—";
+  // "0% of room" beside a count of five reads as a broken gauge rather than as
+  // a nearly-empty ballroom, and rounding is what does it. Below half a percent
+  // the honest label is that it is under one.
+  if (ratio > 0 && ratio < 0.005) return "<1% of room";
   return `${Math.round(ratio * 100)}% of room${ratio >= 1 ? " — bigger room?" : ""}`;
 }
 

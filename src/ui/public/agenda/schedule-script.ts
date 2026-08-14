@@ -826,7 +826,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     copy.textContent = '';
     if (claim && claim.status === 'verified') {
       line.classList.add('linked');
-      copy.append('Linked to ', strong(claim.maskedEmail), ' — recoverable by email, on any device.');
+      copy.append('Linked to ', strong(claim.maskedEmail), ' — recoverable on any device.');
       if (speaking.size > 0) {
         copy.append(" You're speaking at ");
         copy.append(strong(String(speaking.size)));
@@ -837,7 +837,11 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     }
     if (claim && claim.status === 'pending') {
       line.classList.remove('linked');
-      copy.append('Check your email — link sent to ', strong(claim.maskedEmail), '. Your picks stay on this device until you open it.');
+      // Deliberately no longer than the anonymous sentence it replaces: this
+      // line sits above the whole itinerary, and a state change that adds a
+      // wrapped line on a phone pushes the attendee's day down the screen.
+      // What opening the link actually does is said in full in the sheet.
+      copy.append('Check your email — the link is on its way to ', strong(claim.maskedEmail), '.');
       action.textContent = 'Manage';
       return;
     }
@@ -1177,9 +1181,14 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     controls.textContent = '';
 
     if (justUnlinked) {
-      // The ruled sentence, said once and plainly, in the same register as the
-      // disclosure that took the address in the first place.
-      const { line } = claimLine('Unlinked — your email and picks are removed from the organizers' + String.fromCharCode(39) + ' records.', true);
+      // Two true sentences, because there are two situations. Removing a
+      // verified claim gets the ruled wording exactly; cancelling a request
+      // nobody has opened yet must not claim to have removed something from
+      // records it never reached.
+      const copy = justUnlinked === 'pending'
+        ? 'Cancelled — that link no longer works, and your email was never shared.'
+        : 'Unlinked — your email and picks are removed from the organizers' + String.fromCharCode(39) + ' records.';
+      const { line } = claimLine(copy, true);
       controls.append(line);
       setTimeout(() => { if (!claim) renderClaimRow(); }, 3200);
       return;
@@ -1202,7 +1211,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       const { line } = claimLine('Check your email — link sent to ' + claim.maskedEmail + '. Opening it is what links your picks.', false);
       const actions = document.createElement('span');
       actions.className = 'claim-actions';
-      actions.append(quietButton('Resend', 'scheduleClaimResend'));
+      // A request has to be cancellable. The mail says the attendee can undo
+      // this at any time, and "any time" has to include the window before they
+      // open it — otherwise a typo'd address sits in a row they cannot reach.
+      actions.append(quietButton('Resend', 'scheduleClaimResend'), quietButton('Cancel', 'scheduleClaimUnlink'));
       line.append(actions);
       controls.append(line);
       return;
@@ -1271,6 +1283,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
 
   function unlinkClaim() {
     if (!state.code || !state.writeKey) return;
+    const wasPending = claim?.status === 'pending';
     fetch(CLAIM_BASE() + '/claim', {
       method: 'DELETE',
       headers: { 'x-schedule-write-key': state.writeKey },
@@ -1278,7 +1291,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       if (!response.ok) { claimError('That did not reach the server. Try again in a moment.'); return; }
       claim = null;
       speaking = new Set();
-      renderClaimRow(true);
+      renderClaimRow(wasPending ? 'pending' : 'verified');
       paint();
     }, () => claimError('That did not reach the server. Try again in a moment.'));
   }

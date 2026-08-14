@@ -429,4 +429,8 @@ test("CONTRACT · MRQ-208 the demand board reconciles with the rows it is built 
   expect(capacityLabel({ session_id: "x", title: "x", starts_at: null, duration_min: null, room: "Side Room", capacity: null, count: 40 })).toBe("—");
   expect(capacityLabel({ session_id: "x", title: "x", starts_at: null, duration_min: null, room: "Main", capacity: 100, count: 40 })).toBe("40% of room");
   expect(capacityLabel({ session_id: "x", title: "x", starts_at: null, duration_min: null, room: "Main", capacity: 100, count: 140 })).toBe("140% of room — bigger room?");
+  // Five picks in a 2,500-seat ballroom is not zero, and a gauge that says 0%
+  // beside a count of five reads as broken rather than as nearly empty.
+  expect(capacityLabel({ session_id: "x", title: "x", starts_at: null, duration_min: null, room: "Ballroom", capacity: 2500, count: 5 })).toBe("<1% of room");
+  expect(capacityLabel({ session_id: "x", title: "x", starts_at: null, duration_min: null, room: "Ballroom", capacity: 2500, count: 0 })).toBe("0% of room");
 });
