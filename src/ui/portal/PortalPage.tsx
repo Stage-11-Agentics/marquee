@@ -590,7 +590,7 @@ export function ProfileForm({ eventId, person, platforms, onSaved, compact = fal
         const other = draft.other.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
         body = { title: draft.title || null, company: draft.company || null, bio: draft.bio || null, social_links: composeSocialLinks(handles, other), headshot_attachment_id: headshotAttachmentId };
       }
-      const response = await requestJson<{ person: PortalPerson }>("/api/v1/me/profile", { method: "PATCH", body: JSON.stringify(body) });
+      const response = await requestJson("/api/v1/me/profile", { method: "PATCH", body: JSON.stringify(body) }) as { person: PortalPerson };
       setHeadshot(null);
       setPreview(null);
       await onSaved(response.person);
