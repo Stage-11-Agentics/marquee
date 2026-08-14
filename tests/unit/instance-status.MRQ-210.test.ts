@@ -1,0 +1,32 @@
+import { expect, test } from "vitest";
+
+import { RESEND_SENDER, readResendIdentity } from "../../src/lib/mail/config";
+import { readInstanceStatus, type InstanceStatusEnvironment } from "../../src/lib/instance-status";
+
+const URL = "https://marquee.example.test/dashboard";
+
+test("CONTRACT · server rows lead with the four organizer jobs in fixed order", () => {
+  const rows = readInstanceStatus({}, URL);
+  expect(rows.map((row) => row.key)).toEqual(["mail", "uploads", "spam", "domain"]);
+  expect(rows.map((row) => row.label)).toEqual([
+    "Email sending",
+    "File uploads",
+    "Spam protection",
+    "Web address",
+  ]);
+  expect(rows.map((row) => row.configured)).toEqual([false, false, false, true]);
+  expect(rows[0]).toMatchObject({ sender: null, account: null });
+});
+
+test("CONTRACT · mail status and identity come from bindings, never a stored flag", () => {
+  const withoutBinding = readInstanceStatus(
+    { INSTANCE_MAIL_CONFIGURED: "true" } as unknown as InstanceStatusEnvironment,
+    URL,
+  );
+  expect(withoutBinding[0]?.configured).toBe(false);
+  expect(readResendIdentity({ RESEND_ACCOUNT_NAME: "invented-without-key" })).toEqual({ sender: null, account: null });
+
+  const rows = readInstanceStatus({ RESEND_API_KEY: "re_test_key", RESEND_ACCOUNT_NAME: "stage11-agentics" }, URL);
+  expect(rows[0]).toMatchObject({ configured: true, sender: RESEND_SENDER, account: "stage11-agentics" });
+  expect(readResendIdentity({ RESEND_API_KEY: "re_test_key" })).toEqual({ sender: RESEND_SENDER, account: null });
+});

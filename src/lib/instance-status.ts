@@ -1,3 +1,5 @@
+import { readResendIdentity, type ResendIdentityEnvironment } from "./mail/config";
+
 /**
  * What is actually wired up on this deployment, and what honestly is not.
  *
@@ -23,11 +25,16 @@ export interface InstanceStatusRow {
   note: string;
   /** The exact commands that configure it, copy-identical to the README's deploy sequence. */
   fix: readonly string[];
+  /** Present only on the mail row; null means the deployment did not provide it. */
+  sender?: string | null;
+  /** Present only on the mail row; null means no account label was configured. */
+  account?: string | null;
 }
 
 /** The subset of the Worker environment this read is allowed to look at. */
 export interface InstanceStatusEnvironment {
   RESEND_API_KEY?: string;
+  RESEND_ACCOUNT_NAME?: string;
   MEDIA?: unknown;
   R2_ACCOUNT_ID?: string;
   R2_BUCKET_NAME?: string;
@@ -114,31 +121,35 @@ export function readInstanceStatus(
   requestUrl: string,
 ): InstanceStatusRow[] {
   const mail = mailConfigured(environment);
+  const resend = readResendIdentity(environment satisfies ResendIdentityEnvironment);
   const uploads = uploadsConfigured(environment);
   const spam = spamConfigured(environment);
   const domain = domainConfigured(requestUrl);
+  const host = instanceHostname(requestUrl);
   return [
     {
       key: "mail",
-      label: "Mail · Resend",
+      label: "Email sending",
       configured: mail,
       note: mail
         ? "Sender verified · confirmations, decisions, and invites deliver"
         : "No confirmations, no decision mail, no sign-in links until this exists",
       fix: INSTANCE_STATUS_FIXES.mail,
+      sender: resend.sender,
+      account: resend.account,
     },
     {
       key: "uploads",
-      label: "Uploads · R2",
+      label: "File uploads",
       configured: uploads,
       note: uploads
-        ? "Headshots and slides upload through presigned PUTs"
+        ? "Headshots and slides · stored in the marquee-media bucket"
         : "Headshots and slides cannot be uploaded until the bucket and its signing keys exist",
       fix: INSTANCE_STATUS_FIXES.uploads,
     },
     {
       key: "spam",
-      label: "Spam · Turnstile",
+      label: "Spam protection",
       configured: spam,
       note: spam
         ? "Site key set · the public call for speakers is protected"
@@ -147,10 +158,10 @@ export function readInstanceStatus(
     },
     {
       key: "domain",
-      label: "Domain",
+      label: "Web address",
       configured: domain,
       note: domain
-        ? "TLS active · non-loopback HTTP redirects to HTTPS"
+        ? `${host} · secure connection active`
         : "Serving from a local or plain-HTTP origin, so nothing public can reach it",
       fix: INSTANCE_STATUS_FIXES.domain,
     },

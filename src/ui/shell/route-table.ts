@@ -53,6 +53,10 @@ export const routeTable: readonly RouteDefinition[] = [
   // Org-level by design: one relationship, courted across years, each card
   // naming the conference it is currently aimed at.
   { id: "sourcing", path: "/pipeline", label: "Outreach", icon: "", group: "organization", sidebar: true },
+  // MRQ-207 will own the visible Organization settings tabs. Keep Server
+  // reachable as a standalone org-level surface until that fold lands.
+  { id: "org-server", path: "/org/server", label: "Server", icon: "", group: "organization" },
+  { id: "org-instance", path: "/org/instance", label: "Server", icon: "", group: "organization" },
   // Agents guess URLs, and every 404 costs turns. These three resolve to People
   // rather than to the SPA's not-found state; they are not shown in the sidebar
   // because the area has one name and one entry.
