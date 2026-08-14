@@ -12,7 +12,8 @@ violate the board-home rule: `loop.sh` does no git work in its own directory —
 operates on `Marquee-worktrees/deploy-freshness` — and that rule forbids *code* work, which
 you do none of. Read
 `sequence/auto-eval/README.md` first — the coverage trap and the guards are yours to
-enforce.
+enforce — then `EVAL.md`, where the 60% coverage cliff lives, and `DEPLOY.md` before the
+barrier, because the barrier deploys.
 
 ## What you own
 
@@ -25,14 +26,35 @@ loop.sh barrier           reset demo → verify → deploy → verify → lift t
 loop.sh guard             score floor and rollback anchor
 ```
 
-**You do not hand judgements to Triage.** `watch` syncs each area into
-`$KIT_LOCAL/runs/$stamp/judgements/` and writes `runStamp` into `state.json` as it lands;
-Triage blocks on that directory and picks them up itself. Announcing them as well would put
-the one piece of state this design routes through an agent's context instead of disk — and
-it would be a worse copy, since your sync is guarded and may not have finished when the
-line prints. Run `watch`, let it write, and keep your surface honest.
+## Before you fire, and immediately after
 
-**Exactly three things cross this boundary. This is the whole list.**
+- **Regenerate `evalconfig.json` first.** `submissionNotes` must describe the build actually
+  being shipped; `kickoff-round.sh` only records what it is about to run against and expects
+  you to have refreshed it. A stale note does not void a round — it quietly steers the
+  browsing agent away from evidence and scores below what the product deserves. This has
+  already cost points twice.
+- **Verify the round actually started.** `atlas-job status` reading RUNNING *and*
+  `PROGRESS.log` naming a run directory that did not exist before you fired. Both, because
+  a job can be up with nothing behind it: round 7 died exactly here and nobody noticed for
+  thirteen minutes.
+- **Expect roughly 100 minutes for six areas, with the first judgement about twenty minutes
+  in.** That gap is what makes Triage's 60-minute deadline a real signal rather than an
+  alarm clock, so tell it when a round runs unusually long.
+
+**You do not hand judgements to Triage.** `watch` syncs each area into
+`$KIT_LOCAL/runs/$stamp/judgements/`; Triage watches that tree and picks them up itself.
+Announcing them as well would put the one piece of state this design routes through an
+agent's context instead of disk — and it would be a worse copy, since your sync is guarded
+and may not have finished when the line prints. Run `watch`, let it write, and keep your
+surface honest.
+
+Note what `watch` does *not* give Triage: `runStamp` stays `null` from `fire` until the
+first `cmd_sync`, which is the first judgement. Triage therefore cannot resolve the run
+directory from `state.json` during the opening stretch of a round, and its prompt globs
+every run instead. Do not "help" by sending it the stamp — that rebuilds the bus.
+
+**Exactly three things cross between you and Triage. This is the whole list** — it governs
+that boundary only; a worker either of you dispatches still reports to its dispatcher.
 
 1. **You tell Triage a run is VOID.** Nothing else can: a void run is
    byte-indistinguishable from a good one on disk, and Triage diffing against one invents

@@ -15,21 +15,57 @@ that could not fail — the classification degrades before you notice it degradi
 the shell instead: one tool call, no context, and you arrive at each judgement with a nearly
 empty window. **That is not economy, it is the reason your classification is worth anything.**
 
+**Seed your watermark once, at boot**, with everything already triaged — otherwise your
+first wait returns the previous round's completed judgements:
+
 ```sh
-RUN=$(python3 -c "import json;print(json.load(open('sequence/auto-eval/run/state.json'))['runStamp'])")
-DIR=.eval-kit-agent/runs/$RUN/judgements
-count() { ls -1 "$DIR"/*.json 2>/dev/null | wc -l | tr -d ' '; }
-before=$(count); deadline=$(( $(date +%s) + 3600 ))
+KIT=/Users/atin/Projects/Stage11/deployments/Marquee/.eval-kit-agent
+SEEN=/Users/atin/Projects/Stage11/deployments/Marquee/sequence/auto-eval/run/triaged.txt
+ls -1 "$KIT"/runs/*/judgements/*.json 2>/dev/null > "$SEEN"; wc -l < "$SEEN"
+```
+
+Then each wait is one command:
+
+```sh
+KIT=/Users/atin/Projects/Stage11/deployments/Marquee/.eval-kit-agent
+SEEN=/Users/atin/Projects/Stage11/deployments/Marquee/sequence/auto-eval/run/triaged.txt
+touch "$SEEN"; deadline=$(( $(date +%s) + 3600 ))
 while :; do
-  now=$(count)
-  [ "$now" -gt "$before" ] && { ls -1 "$DIR"/*.json; break; }
-  [ "$(date +%s)" -ge "$deadline" ] && { echo "DEADLINE — no new judgement in 60m; $now on disk"; break; }
+  new=$(ls -1 "$KIT"/runs/*/judgements/*.json 2>/dev/null | grep -vxF -f "$SEEN" || true)
+  [ -n "$new" ] && { echo "$new"; break; }
+  [ "$(date +%s)" -ge "$deadline" ] && { echo "DEADLINE — nothing new in 60m"; break; }
   sleep 45
 done
 ```
 
-Glob `*.json` rather than listing the directory: rsync writes under a temporary name and
-renames, and counting an in-flight file hands you a half-written judgement.
+**Append each path to `$SEEN` as you finish triaging it, never before.** The watermark is a
+durable set of paths, and every part of that sentence is load-bearing:
+
+- **A set, not a count.** A count re-baselines on every re-entry: you break on judgement 1,
+  spend half an hour classifying and dispatching, and by the time you wait again the count
+  has absorbed judgement 2 — so you wait for a third that has not landed and silently never
+  triage the second. With six areas over ~100 minutes that is the normal case, not an edge.
+- **On disk, not in a variable.** It survives your own replacement. A Triage surface closed
+  and reopened mid-round resumes exactly where the last one stopped.
+- **Across all runs, not one directory.** You cannot scope this to a run stamp, because at
+  the only moment it matters the stamp is not knowable — see below.
+
+**Do not resolve the run directory from `state.json`.** `cmd_fire` ends with
+`runStamp=null`, and `runStamp` is only written when `cmd_sync` runs, which `cmd_watch`
+only does when the **first judgement lands** — roughly twenty minutes into a round. Python
+renders that null as the string `None`, so a stamp-based path spends the whole round
+pointing at `runs/None/judgements`, counts zero forever, and then reports the round dead
+while judgements sit beside it untriaged. Start your wait before the `fire` instead and you
+get the *previous* stamp, whose directory is complete and static: same hour, same wrong
+answer. Globbing every run sidesteps a stamp you cannot trust.
+
+**Absolute paths, always.** `.eval-kit-agent/` and `sequence/auto-eval/run/` are both
+gitignored and exist **only in the primary checkout**. Run this from a worktree with
+relative paths and python throws, `RUN` comes back empty, and you wait an hour on a path
+with a doubled slash. The Runner's prompt takes the same care for the same reason.
+
+Glob `*.json` rather than listing the directory: rsync stages under a dot-prefixed
+temporary name and renames, so the glob cannot match an in-flight file on either count.
 
 **It must return on either a new file or the deadline — never on a new file alone.** Under
 the old design, no message meant nothing had happened. Now, no file means nothing happened
@@ -115,8 +151,8 @@ c11 launch-agent --type codex --model gpt-5.6-luna --effort max \
 
 `git fetch github && git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main`, created by the
 implementer as its first act, verified with `pwd` and `git branch --show-current`. Never
-the primary checkout — it is the board's home. Never `mrq-auto-eval` — it is the loop's
-machinery and its branch is under review.
+the primary checkout — it is the board's home. Never `mrq-auto-eval` or `auto-eval` — both are the
+loop's own machinery.
 
 ## The one agreement, and the one thing that is not yours
 
@@ -142,7 +178,9 @@ With the message bus gone, **the description is not a courtesy, it is your only 
 which means a stale one is a lie the operator cannot detect, because nothing else would
 contradict it. Refresh it at transitions, not on a timer.
 
-**Exactly three things still cross a boundary. Treat this as closed, not as examples:**
+**Exactly three things cross between you and the Runner. Treat this as closed, not as
+examples** — it governs that boundary only. Workers you dispatch still report to you, and a
+reviewer's verdict is a deliberate fourth channel, since your merge is conditional on it.
 
 1. **The Runner tells you a run is VOID.** You cannot derive this — a void run looks
    byte-identical to a good one on disk, and mining against one invents regressions that

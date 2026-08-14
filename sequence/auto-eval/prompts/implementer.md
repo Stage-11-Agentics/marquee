@@ -33,7 +33,8 @@ that inherits a cwd and starts committing puts its work on someone else's branch
 someone else's PR. That has already happened here once.
 
 Never work in the primary checkout — it is the board's home and it stays on `main`. Never
-work in `Marquee-worktrees/mrq-auto-eval`, which is the loop's own machinery.
+work in `Marquee-worktrees/mrq-auto-eval` or `Marquee-worktrees/auto-eval` — both are the
+loop's own machinery.
 
 - `npm test` (45s budget), `npm run pr-gate` (120s) before the PR.
 - Every fix ships with a regression test that fails against `github/main` and passes on your

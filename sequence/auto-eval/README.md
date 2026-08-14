@@ -62,9 +62,11 @@ and closed when that unit lands.
 
 **There is no message bus between the two standing surfaces.** The Runner does
 not hand judgements to Triage; Triage watches the disk. `watch` already syncs
-each area into `$KIT_LOCAL/runs/$stamp/judgements/` and writes `runStamp` into
-`state.json` as it goes, so everything Triage needs exists as a file the moment
-it exists at all. Routing it through an agent's context as well was the one place
+each area into `$KIT_LOCAL/runs/$stamp/judgements/`, so every judgement exists as
+a file the moment it exists at all. The one exception is the run stamp itself:
+`fire` sets `runStamp=null` and only the first `cmd_sync` fills it in, so for the
+opening stretch of a round the stamp is unknowable and Triage globs every run
+directory rather than resolving one. Routing judgements through an agent's context as well was the one place
 this design contradicted its own principle — *every verb reads and writes files
 rather than that surface's context* — and it bought nothing, because the file is
 what Triage opens either way. It was also strictly worse under failure: the sync
@@ -92,7 +94,8 @@ deadline and returns on either a new file or that deadline, and **an empty run
 directory at T+window is a finding, not patience.** This is the same instinct as
 *deadline barrier, not completion barrier*, applied to the other surface.
 
-**Exactly three things still cross, and this is the closed list — not examples:**
+**Exactly three things still cross between the two standing surfaces, and this is
+the closed list — not examples:**
 
 1. **Runner → Triage: this run is VOID.** A void run is byte-indistinguishable
    from a good one on disk, and diffing against one invents regressions that no
@@ -104,10 +107,16 @@ directory at T+window is a finding, not patience.** This is the same instinct as
 3. **Either → the operator: a c11 flag.** A migration, the score floor, a stuck
    barrier.
 
+That list governs the Runner↔Triage boundary only. A dispatched worker still
+reports to whoever dispatched it — in particular **a reviewer's verdict is a
+deliberate fourth channel**, from the reviewer to Triage, because Triage's merge
+is conditional on receiving it and an undelivered verdict is the failure that
+channel exists to prevent.
+
 Everything else is the sidebar description. Which promotes descriptions from a
-courtesy to the only channel either surface has: **a stale description is now a
-lie the operator cannot detect**, because there is no second stream that would
-contradict it.
+courtesy to the only channel the two standing surfaces have: **a stale
+description is now a lie the operator cannot detect**, because there is no second
+stream that would contradict it.
 
 **Merging belongs to Triage, and Triage may not merge unreviewed.** `CLAUDE.md`
 is the binding rule — *reviewed* means someone other than the author read the

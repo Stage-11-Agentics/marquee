@@ -72,8 +72,12 @@ When your verdict is posted, `cd` out first — `git worktree remove` refuses to
 inside the worktree it is removing:
 
 ```sh
-cd /Users/atin/Projects/Stage11/deployments/Marquee && git worktree remove "$dir"
+cd /Users/atin/Projects/Stage11/deployments/Marquee
+git worktree remove ../Marquee-worktrees/review-<the directory you actually created>
 ```
+
+Use the literal path you created, not `$dir` — a shell variable does not survive between
+tool calls, and `git worktree remove ""` is a confusing way to discover that.
 
 ## Run the gate yourself
 
