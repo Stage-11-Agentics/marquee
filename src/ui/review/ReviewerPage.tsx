@@ -162,25 +162,32 @@ const DEFAULT_SCALE_MIN = 1;
 const DEFAULT_SCALE_MAX = 5;
 
 /** A rating renders the scale plus any recorded value the reviewer must be able to see. */
-function ratingSteps(minValue: number | null, maxValue: number | null, recordedValue: number | string | undefined = undefined): number[] {
+function ratingSteps(minValue: number | null, maxValue: number | null): number[] {
   const min = Math.round(minValue ?? DEFAULT_SCALE_MIN);
   const max = Math.round(maxValue ?? DEFAULT_SCALE_MAX);
   if (max <= min) return [min];
   const steps: number[] = [];
   for (let value = min; value <= max && steps.length < 20; value += 1) steps.push(value);
-  if (typeof recordedValue === "number" && Number.isFinite(recordedValue) && recordedValue >= min && recordedValue <= max && !steps.includes(recordedValue)) {
-    steps.push(recordedValue);
-    steps.sort((left, right) => left - right);
-  }
   return steps;
 }
 
-function scaleSteps(criterion: Criterion, recordedValue: number | string | undefined = undefined): number[] {
-  return ratingSteps(criterion.scale_min, criterion.scale_max, recordedValue);
+function includeRecordedStep(steps: number[], minValue: number | null, maxValue: number | null, recordedValue: number | string | undefined): number[] {
+  const min = Math.round(minValue ?? DEFAULT_SCALE_MIN);
+  const max = Math.round(maxValue ?? DEFAULT_SCALE_MAX);
+  if (typeof recordedValue !== "number" || !Number.isFinite(recordedValue) || recordedValue < min || recordedValue > max || steps.includes(recordedValue)) return steps;
+  return [...steps, recordedValue].sort((left, right) => left - right);
+}
+
+function scaleSteps(criterion: Criterion): number[] {
+  return ratingSteps(criterion.scale_min, criterion.scale_max);
+}
+
+function scaleStepsForReview(criterion: Criterion, recordedValue: number | string | undefined): number[] {
+  return includeRecordedStep(scaleSteps(criterion), criterion.scale_min, criterion.scale_max, recordedValue);
 }
 
 function overallScoreSteps(recordedValue: number | null): number[] {
-  return ratingSteps(DEFAULT_SCALE_MIN, DEFAULT_SCALE_MAX, recordedValue ?? undefined);
+  return includeRecordedStep(ratingSteps(DEFAULT_SCALE_MIN, DEFAULT_SCALE_MAX), DEFAULT_SCALE_MIN, DEFAULT_SCALE_MAX, recordedValue ?? undefined);
 }
 
 /**
@@ -706,7 +713,7 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
               <span class="subtle">{roundName} scorecard</span>
               {criteria.map((criterion) => <div class="review-criterion" key={criterion.id}>
                 <span class="review-criterion-name">{criterion.name}{criterion.kind === "numeric" && criterion.weight_pct > 0 ? <span class="subtle tabular"> · {criterion.weight_pct}%</span> : null}</span>
-                {criterion.kind === "numeric" && <div class="score-buttons" role="group" aria-label={criterion.name}>{scaleSteps(criterion, currentReview.criteria[criterion.id]).map((step) => <button type="button" key={step} class={currentReview.criteria[criterion.id] === step ? "active" : ""} aria-pressed={currentReview.criteria[criterion.id] === step} onClick={() => setCriterion(criterion.id, step)}>{step}</button>)}</div>}
+                {criterion.kind === "numeric" && <div class="score-buttons" role="group" aria-label={criterion.name}>{scaleStepsForReview(criterion, currentReview.criteria[criterion.id]).map((step) => <button type="button" key={step} class={currentReview.criteria[criterion.id] === step ? "active" : ""} aria-pressed={currentReview.criteria[criterion.id] === step} onClick={() => setCriterion(criterion.id, step)}>{step}</button>)}</div>}
                 {criterion.kind === "select" && <select aria-label={criterion.name} value={String(currentReview.criteria[criterion.id] ?? "")} onChange={(event) => setCriterion(criterion.id, (event.currentTarget as HTMLSelectElement).value)}><option value="">Not answered</option>{(criterion.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select>}
                 {criterion.kind === "text" && <textarea aria-label={criterion.name} rows={3} value={String(currentReview.criteria[criterion.id] ?? "")} onInput={(event) => setCriterion(criterion.id, (event.currentTarget as HTMLTextAreaElement).value)} />}
               </div>)}
