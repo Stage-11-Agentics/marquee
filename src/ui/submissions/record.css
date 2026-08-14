@@ -147,6 +147,15 @@
 .evaluation-panel-comment-body { color: var(--ink); font-size: 10.5px; line-height: 1.45; max-height: 51px; overflow: hidden; overflow-wrap: anywhere; }
 .evaluation-panel-comment-body:not(.expanded) { -webkit-box-orient: vertical; -webkit-line-clamp: 3; display: -webkit-box; }
 .evaluation-panel-comment-body.expanded { max-height: 51px; overflow-y: auto; }
+/* The rail is 330px and a text criterion takes as much prose as the reviewer
+   cares to type, so the scorecard is bounded here exactly as the note above it
+   is: it wraps mid-token rather than widening the column, and it scrolls inside
+   its own slot instead of pushing the assignment controls down the rail. The
+   same block is deliberately unbounded in the main column, which has the width
+   to show it whole. */
+.record-round-result .evaluation-scorecard { max-height: 132px; overflow-y: auto; }
+.record-round-result .evaluation-criterion-note span,
+.record-round-result .evaluation-criterion-scores { overflow-wrap: anywhere; }
 .evaluation-panel-comment-action { align-items: center; display: flex; min-height: 24px; }
 .evaluation-panel-comment-action button { background: transparent; border: 0; color: var(--accent-dark); cursor: pointer; font: 600 9.5px var(--mono); padding: 0; text-align: left; text-decoration: underline; }
 .evaluation-panel-comment-action-placeholder { min-height: 20px; visibility: hidden; }

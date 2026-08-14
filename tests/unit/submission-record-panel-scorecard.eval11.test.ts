@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { h } from "preact";
 import { renderToString } from "preact-render-to-string";
 import { describe, expect, test } from "vitest";
@@ -6,6 +7,11 @@ import {
   EvaluationPanelResult,
   type EvaluationPanelEvaluation,
 } from "../../src/ui/submissions/SubmissionRecordPage";
+import submissionRecordSource from "../../src/ui/submissions/SubmissionRecordPage.tsx?raw";
+
+// `?raw` resolves to an empty string for CSS under this pool, which would make
+// the rail-bounding assertion below pass against no stylesheet at all.
+const recordStyles = readFileSync(new URL("../../src/ui/submissions/record.css", import.meta.url), "utf8");
 
 /**
  * A reviewer answers two different things in one sitting: the scorecard the
@@ -102,5 +108,29 @@ describe("evaluation panel surfaces the scorecard the reviewer actually filled i
 
     expect(html).toContain("Conflict declared");
     expect(html).not.toContain(SCORECARD_COMMENT);
+  });
+
+  /**
+   * Every case above supplies `criteria` by hand, and the prop defaults to an
+   * empty list — so all of them stay green if the panel's own call site quietly
+   * stops passing the round's rubric, which is the exact wiring this change is.
+   * The call site is therefore asserted directly rather than inferred.
+   */
+  test("CONTRACT · evaluation panel — passes the round's own rubric at the panel call site", () => {
+    const panel = submissionRecordSource.slice(submissionRecordSource.indexOf('title="Evaluation panel"'));
+
+    expect(panel).toContain("<EvaluationPanelResult key=");
+    expect(panel).toMatch(/<EvaluationPanelResult[^>]*criteria=\{criteriaByRound\.get\(round\.id\)/);
+  });
+
+  /**
+   * The rail is 330px. A text criterion accepts as much prose as the reviewer
+   * types, so an unbounded block here either widens the column or pushes the
+   * assignment controls down it — the failure the reviewer of this change
+   * caught by reading the CSS.
+   */
+  test("CONTRACT · evaluation panel — bounds and wraps the scorecard inside the narrow rail", () => {
+    expect(recordStyles).toMatch(/\.record-round-result \.evaluation-scorecard \{[^}]*max-height:[^}]*overflow-y: auto/);
+    expect(recordStyles).toMatch(/\.record-round-result \.evaluation-criterion-scores \{[^}]*overflow-wrap: anywhere/);
   });
 });
