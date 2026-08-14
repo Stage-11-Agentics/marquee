@@ -111,6 +111,27 @@ describe("evaluation panel surfaces the scorecard the reviewer actually filled i
   });
 
   /**
+   * The same fault seen from the other side, filed separately by the same round
+   * against abstract-management: a review whose optional overall score and
+   * committee note are both blank, but whose scorecard the reviewer did fill
+   * in, rendered as "REVIEWER RATING — · approve / REVIEWER COMMENT —". Two
+   * dashes read as a review nobody wrote, and the organizer's list view was
+   * meanwhile aggregating those very criteria into a weighted 3.34.
+   */
+  test("CONTRACT · evaluation panel — a blank overall score and note do not present a filled scorecard as empty", () => {
+    const html = render(review({
+      score: null,
+      comment: "",
+      criteria_scores: { crit_fit: 4, crit_value: 2, crit_recommendation: "Accept", crit_comments: SCORECARD_COMMENT },
+    }));
+
+    expect(html).toContain(SCORECARD_COMMENT);
+    expect(html).toContain("Program fit");
+    expect(html).toContain("Audience value");
+    expect(html).toContain("Accept");
+  });
+
+  /**
    * Every case above supplies `criteria` by hand, and the prop defaults to an
    * empty list — so all of them stay green if the panel's own call site quietly
    * stops passing the round's rubric, which is the exact wiring this change is.
