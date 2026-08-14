@@ -90,8 +90,8 @@ async function seedFixture(): Promise<void> {
   ]);
 }
 
-function request(path: string, sessionId?: string): Promise<Response> {
-  return app.request(`${ORIGIN}${path}`, {
+async function request(path: string, sessionId?: string): Promise<Response> {
+  return await app.request(`${ORIGIN}${path}`, {
     headers: sessionId ? { cookie: `mq_session=${sessionId}` } : {},
   }, env);
 }
