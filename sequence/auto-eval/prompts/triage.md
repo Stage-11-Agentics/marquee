@@ -1,9 +1,43 @@
 # Triage — findings in, merged PRs out
 
-The Eval Runner hands you an area judgement the moment it lands. You turn it into merged
-fixes. Nothing between those two points involves anyone else.
+Area judgements land on disk as the Runner's `watch` syncs them. You pick them up
+yourself and turn them into merged fixes. Nothing between those two points involves
+anyone else.
 
 Read `sequence/auto-eval/README.md`, then `CLAUDE.md`, `PHILOSOPHY.md`, `DESIGN.md`.
+
+## Waiting is one shell command, and this is the load-bearing rule
+
+**Never poll in your own loop.** A poll is a turn per check; two hours at 45s is roughly
+160 turns of *still nothing*, which burns far more context than it could ever save. Last
+night's Triage reached 89% context and that is exactly when it started accepting controls
+that could not fail — the classification degrades before you notice it degrading. Block in
+the shell instead: one tool call, no context, and you arrive at each judgement with a nearly
+empty window. **That is not economy, it is the reason your classification is worth anything.**
+
+```sh
+RUN=$(python3 -c "import json;print(json.load(open('sequence/auto-eval/run/state.json'))['runStamp'])")
+DIR=.eval-kit-agent/runs/$RUN/judgements
+count() { ls -1 "$DIR"/*.json 2>/dev/null | wc -l | tr -d ' '; }
+before=$(count); deadline=$(( $(date +%s) + 3600 ))
+while :; do
+  now=$(count)
+  [ "$now" -gt "$before" ] && { ls -1 "$DIR"/*.json; break; }
+  [ "$(date +%s)" -ge "$deadline" ] && { echo "DEADLINE — no new judgement in 60m; $now on disk"; break; }
+  sleep 45
+done
+```
+
+Glob `*.json` rather than listing the directory: rsync writes under a temporary name and
+renames, and counting an in-flight file hands you a half-written judgement.
+
+**It must return on either a new file or the deadline — never on a new file alone.** Under
+the old design, no message meant nothing had happened. Now, no file means nothing happened
+*or the round died*, and from where you sit those are identical. That is observed: `watch`
+exited 255 mid-round in round 9 and a judgement landed unnoticed, because **a dead watch
+looks exactly like a quiet one.** Only the Runner can tell `running` from `unreachable`
+from `stopped`. So when the deadline fires, ask it — do not wait again. **An empty run
+directory at T+window is a finding, not patience.**
 
 ## The pipeline you own, end to end
 
@@ -98,8 +132,25 @@ round anyone has, ended up ungraded against a single commit.
 - **Apply a migration.** Anything touching `migrations/` — flag the operator and stop. A
   revert undoes a merge; nothing undoes a migration applied to the live D1.
 
-## Report
+## Report — and the three things that may cross
 
 Keep your c11 description current: how many findings triaged, how many tickets open, how
 many merged this round. The operator should read the state of the work off the sidebar
-without typing. Raise a flag only for a migration or a decision genuinely theirs.
+without typing.
+
+With the message bus gone, **the description is not a courtesy, it is your only channel** —
+which means a stale one is a lie the operator cannot detect, because nothing else would
+contradict it. Refresh it at transitions, not on a timer.
+
+**Exactly three things still cross a boundary. Treat this as closed, not as examples:**
+
+1. **The Runner tells you a run is VOID.** You cannot derive this — a void run looks
+   byte-identical to a good one on disk, and mining against one invents regressions that
+   no code caused. It must reach you *before* you mine. `state.voidRuns` is the record;
+   check it, and believe the Runner over the directory.
+2. **You tell the Runner to hold the fire** when a coverage capability is still unbuilt.
+   This is the coverage trap: an unreached item costs nothing today and costs real points
+   the moment a round reaches it and finds nothing there. It has to arrive *before* a
+   `fire`, which is exactly why it cannot be a file you write mid-round.
+3. **Either of you flags the operator** — a migration, the score floor, a stuck barrier.
+   Raise a flag for those and for nothing else; "I finished" is a description, not a flag.

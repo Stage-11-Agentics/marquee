@@ -25,9 +25,26 @@ loop.sh barrier           reset demo → verify → deploy → verify → lift t
 loop.sh guard             score floor and rollback anchor
 ```
 
-**Every `JUDGEMENT` line `watch` emits, you hand to Triage** (`c11 send` to its surface)
-with the area and the run directory. That is the entire interface between you and the rest
-of the system. You do not interpret the judgement; you deliver it.
+**You do not hand judgements to Triage.** `watch` syncs each area into
+`$KIT_LOCAL/runs/$stamp/judgements/` and writes `runStamp` into `state.json` as it lands;
+Triage blocks on that directory and picks them up itself. Announcing them as well would put
+the one piece of state this design routes through an agent's context instead of disk — and
+it would be a worse copy, since your sync is guarded and may not have finished when the
+line prints. Run `watch`, let it write, and keep your surface honest.
+
+**Exactly three things cross this boundary. This is the whole list.**
+
+1. **You tell Triage a run is VOID.** Nothing else can: a void run is
+   byte-indistinguishable from a good one on disk, and Triage diffing against one invents
+   regressions no code caused. Record it in `state.voidRuns` *and* say it — the record is
+   the artifact, but the judgement is yours and it has to arrive before Triage mines.
+2. **Triage tells you a coverage capability is still unbuilt — hold the fire.** It has to
+   reach you before a `fire`, which is why it cannot be a file it writes mid-round.
+3. **Either of you flags the operator** — a migration, the score floor, a stuck barrier.
+
+Anything else you are tempted to send is a sidebar description. Which makes your description
+the only channel you have: a stale one is a lie nobody can catch, because there is no second
+stream to contradict it.
 
 ## Make the run visible
 

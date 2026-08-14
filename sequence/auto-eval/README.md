@@ -60,9 +60,54 @@ and closed when that unit lands.
 | reviewer | 1/PR | ~15 min | reads a diff its author did not write, and reproduces the symptom rather than the cause | `prompts/reviewer.md` |
 | implementer | K | ~40 min | one ticket, own worktree, one PR | `prompts/implementer.md` |
 
-The interface between the two standing surfaces is one line: every `JUDGEMENT`
-the Runner's `watch` emits, it hands to Triage with the area and the run
-directory, uninterpreted. Nothing else crosses.
+**There is no message bus between the two standing surfaces.** The Runner does
+not hand judgements to Triage; Triage watches the disk. `watch` already syncs
+each area into `$KIT_LOCAL/runs/$stamp/judgements/` and writes `runStamp` into
+`state.json` as it goes, so everything Triage needs exists as a file the moment
+it exists at all. Routing it through an agent's context as well was the one place
+this design contradicted its own principle — *every verb reads and writes files
+rather than that surface's context* — and it bought nothing, because the file is
+what Triage opens either way. It was also strictly worse under failure: the sync
+inside `watch` is guarded, so a dropped link prints the line and retries the file
+next tick, which means the announcement could arrive pointing at a directory that
+did not yet hold the judgement.
+
+Three consequences, and the first is the one the design rests on.
+
+**Triage blocks in one shell command; it never polls in its own loop.** A poll is
+a turn per check — two hours at 45s is roughly 160 turns of *still nothing*, far
+more context than the six messages it replaces. Last night's Triage reached 89%
+context, which is precisely when it began accepting controls that could not fail.
+A blocking wait costs one tool call and no context, so Triage arrives at each
+judgement with a nearly empty window. That is not a saving; it is the mechanism
+by which the classification is any good.
+
+**Silence must stay distinguishable from death.** Under a push design, no message
+means nothing happened. Under a watch design, no file means nothing happened *or*
+the round died, and from Triage's seat those are identical. This is observed, not
+theoretical: `watch` exited 255 mid-round in round 9 and a judgement landed
+unnoticed — *a dead watch looks exactly like a quiet one*. Only the Runner can
+tell `running` from `unreachable` from `stopped`. So Triage's wait carries a
+deadline and returns on either a new file or that deadline, and **an empty run
+directory at T+window is a finding, not patience.** This is the same instinct as
+*deadline barrier, not completion barrier*, applied to the other surface.
+
+**Exactly three things still cross, and this is the closed list — not examples:**
+
+1. **Runner → Triage: this run is VOID.** A void run is byte-indistinguishable
+   from a good one on disk, and diffing against one invents regressions that no
+   code caused. `state.voidRuns` is the record, but the judgement is the Runner's
+   and it has to arrive before Triage mines.
+2. **Triage → Runner: a coverage capability is still unbuilt — hold the fire.**
+   The coverage trap below. It must land *before* a `fire`, which is exactly why
+   it cannot be a file Triage writes mid-round.
+3. **Either → the operator: a c11 flag.** A migration, the score floor, a stuck
+   barrier.
+
+Everything else is the sidebar description. Which promotes descriptions from a
+courtesy to the only channel either surface has: **a stale description is now a
+lie the operator cannot detect**, because there is no second stream that would
+contradict it.
 
 **Merging belongs to Triage, and Triage may not merge unreviewed.** `CLAUDE.md`
 is the binding rule — *reviewed* means someone other than the author read the
