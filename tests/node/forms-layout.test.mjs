@@ -5,7 +5,7 @@ import test from "node:test";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 
-test("the CFP add-field row wraps before the 1280px editor can collide with the preview", async () => {
+test("CONTRACT · the CFP add-field row wraps before the 1280px editor can collide with the preview", async () => {
   const styles = await readFile(resolve(repositoryRoot, "src/ui/forms/forms.css"), "utf8");
 
   assert.match(styles, /\.forms-add-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.6fr\) 118px 132px minmax\(0, 1\.4fr\) 88px 104px/);
