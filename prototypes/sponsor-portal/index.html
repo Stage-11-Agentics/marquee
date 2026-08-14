@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marquee — Sponsor portal · design prototype</title>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     MARQUEE — SPONSOR PORTAL · design round prototype (2026-08-14)
+     Brief: sequence/sponsors-design.md §3.3 (ruling 3 — dedicated round).
+     The sponsor portal is the speaker portal's sibling, not a new species:
+     same Flight Deck day treatment, same magic-link door, same task
+     machinery (SPEC §3.7), same public-shell chrome as pipeline-v1.1's
+     portal routes. What changes is the center of gravity — a speaker's
+     portal orbits their session; a sponsor contact's orbits the
+     SPONSORSHIP, the company's deal with this conference.
+
+     Calls signed in this round's interview (Atin, 2026-08-14):
+     · Visibility — whole sponsorship, anyone completes. Every deliverable
+       of the sponsorship is visible with its assignee named; any signed-in
+       contact can complete any open task, attribution recorded.
+     · Hero — the sponsorship itself: company + tier + status + a DERIVED
+       what-your-deal-carries line (Sessions · booth · passes), never a
+       generic tier blurb.
+     · Sessions — read-only cards; the task machinery is the single write
+       path ("Name your speaker" fills the Session).
+     Standing rulings honored: person-assigned tasks only (no company task
+     type); booth renders as ordinary sponsorship data, absent = ordinary
+     too (Silver view proves it); no public intake — "Confirm your company
+     details" is a portal task; judge's vocabulary (Session) throughout;
+     tier-scoped content variation deliberately NOT modeled (later band —
+     the portal shows the deliverables it is given).
+
+     Layout precedent, deliberately mirrored from the binding prototype:
+     hero → location card → task grid. The speaker's "Where you are
+     speaking" becomes the sponsor's "Your booth" — same loc-lines, same
+     map-as-receipt, same leave-by accent box repurposed for load-in.
+
+     Prototype chrome (dashed switcher, badge) is not product UI.
+     Serve over HTTP: http://127.0.0.1:8123/sponsor-portal/?v=1
+     ═══════════════════════════════════════════════════════════════════ -->
+<style>
+  /* Flight Deck day tokens — verbatim from pipeline-v1.1 (skin-c lineage). */
+  :root {
+    --bg: #eaeef2; --panel: #fff; --sunk: #f4f7f9; --graph: #e3e9ee;
+    --ink: #101820; --ink-soft: #2c3a46; --muted: #57646f;
+    --line: #dde4ea; --line-strong: #c8d2da;
+    --accent: #0b6a72; --accent-soft: #e2f0f1; --accent-dark: #084f55;
+    --accent-hover: #095b62; --on-accent: #fff;
+    --danger: #b02a1f; --danger-soft: #fbe9e7; --danger-ink: #8f2118; --danger-line: #e6b8b2;
+    --warning: #8a5c00; --warning-soft: #fdf1dd; --warning-line: #e3cda2; --warning-ink: #6b4700;
+    --success: #0f7a4a; --success-soft: #e5f3ec; --success-ink: #0c6b41; --success-line: #b6dcc7;
+    --backdrop: rgba(16,24,32,.46);
+    --on-ink: #dff2f3;
+    /* dark-instrument sub-language: the status hero */
+    --canvas: #0f1a22; --canvas-line: #24343f; --canvas-ink: #dbe6ec;
+    --canvas-ink-soft: #a8bdc6; --canvas-eyebrow: #7fb3b8; --canvas-muted: #7d949f;
+    --canvas-chip-bg: rgba(255,255,255,.07); --canvas-chip-line: #3a4d59; --canvas-chip-ink: #cfe0e7;
+    --canvas-ok-bg: rgba(79,214,176,.12); --canvas-ok-line: #2c6a58; --canvas-ok-ink: #86e3c4;
+    --canvas-warn-bg: rgba(240,201,128,.14); --canvas-warn-line: #7a5f22; --canvas-warn-ink: #f0c980;
+    --shadow: none; --radius: 3px;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body { margin: 0; min-width: 320px; }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+  .tabular { font-variant-numeric: tabular-nums lining-nums; }
+
+  .prototype-badge {
+    position: fixed; z-index: 1000; right: 12px; top: 12px;
+    background: var(--ink); color: var(--on-ink); border: 1px solid var(--accent);
+    border-radius: var(--radius); padding: 6px 10px; font: 600 10px/1 var(--mono);
+    letter-spacing: .14em; text-transform: uppercase; pointer-events: none;
+  }
+
+  .button { min-height: 30px; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 7px 12px; background: var(--panel); color: var(--ink-soft); font: 600 11.5px/1 var(--mono); letter-spacing: .02em; display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; transition: background 110ms, color 110ms, border-color 110ms; }
+  .button:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+  .button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
+  .button.danger { color: var(--danger); border-color: var(--line-strong); }
+  .button.danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger-ink); }
+  .button.small { min-height: 26px; padding: 5px 9px; font-size: 10.5px; }
+  .button.ghost { border-color: transparent; background: transparent; }
+
+  .card { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: none; }
+  .card-head { padding: 12px 16px; border-bottom: 1px solid var(--line-strong); background: var(--sunk); display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 52px; }
+  .card-head h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; font-family: var(--mono); }
+  .card-body { padding: 16px; }
+  .subtle { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .eyebrow { color: var(--muted); font-size: 9px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; font-family: var(--mono); }
+  .divider { height: 1px; background: var(--line); margin: 16px 0; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+  .stack { display: grid; gap: 14px; }
+  .field { display: grid; gap: 6px; }
+  .field label { font: 600 10px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .field input, .field select, .field textarea { width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); min-height: 34px; padding: 8px 10px; color: var(--ink); font-size: 12.5px; outline: none; }
+  .field textarea { min-height: 90px; resize: vertical; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .field-note { font-size: 10px; color: var(--muted); min-height: 13px; }
+  .field-error { color: var(--danger); font-size: 11px; min-height: 15px; }
+
+  .chip { display: inline-flex; align-items: center; gap: 5px; min-height: 20px; padding: 3px 7px; border-radius: 2px; border: 1px solid var(--line-strong); background: var(--sunk); color: var(--ink-soft); font: 400 10px/1.2 var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .chip.overdue { color: var(--danger-ink); background: var(--danger-soft); border-color: var(--danger-line); font-weight: 600; }
+  .chip.session { color: var(--accent-dark); background: var(--accent-soft); border-color: var(--accent-line, #a9cdd0); }
+  .chip.committed { color: var(--success-ink); background: var(--success-soft); border-color: var(--success-line); }
+
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%,10px); z-index: 1200; background: var(--ink); color: var(--on-ink); border: 1px solid var(--accent); border-radius: var(--radius); padding: 10px 13px; font: 400 11.5px/1.4 var(--mono); opacity: 0; pointer-events: none; transition: opacity 110ms, transform 110ms; max-width: min(520px,88vw); }
+  .toast.show { opacity: 1; transform: translate(-50%,0); }
+
+  .modal-backdrop { position: fixed; inset: 0; background: var(--backdrop); z-index: 500; display: grid; place-items: center; padding: 18px; }
+  .modal { width: min(540px,100%); background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+  .modal-head { padding: 18px 20px 12px; border-bottom: 1px solid var(--line); }
+  .modal-head h2 { margin: 0 0 7px; font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+  .modal-head p { margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
+  .modal-body { padding: 14px 20px 18px; }
+  .modal-actions { padding: 12px 20px; border-top: 1px solid var(--line-strong); background: var(--sunk); display: flex; justify-content: flex-end; gap: 8px; }
+  .message-preview { padding: 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk); font-size: 12px; line-height: 1.55; }
+  .toggle-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+  .toggle-line:last-child { border-bottom: 0; }
+
+  /* Public shell — identical chrome to the speaker portal */
+  .public-shell { min-height: 100vh; background: var(--bg); }
+  .public-top { height: 60px; background: var(--panel); border-bottom: 1px solid var(--line-strong); display: flex; align-items: center; justify-content: space-between; padding: 0 clamp(18px,5vw,70px); }
+  .public-event { display: flex; align-items: center; gap: 10px; font: 600 12px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .brand-mark { width: 24px; height: 24px; flex: 0 0 24px; border-radius: var(--radius); background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; place-items: center; font: 600 11px/1 var(--mono); }
+  .public-body { width: min(750px,calc(100% - 32px)); margin: 0 auto; padding: 44px 0 80px; }
+  .public-body.wide { width: min(1160px,calc(100% - 32px)); }
+  .public-card { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: clamp(20px,4vw,36px); }
+  .public-card h1 { font-size: 26px; letter-spacing: -.03em; margin: 0 0 10px; font-weight: 600; }
+  .public-card > p { color: var(--ink-soft); line-height: 1.6; font-size: 13px; }
+
+  .portal-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+  .portal-head h1 { margin: 0 0 7px; font-size: 23px; font-weight: 600; letter-spacing: -.02em; }
+  .portal-progress { width: 190px; }
+  .progress-track { height: 8px; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: 0; overflow: hidden; margin-top: 7px; }
+  .progress-track i { display: block; height: 100%; background: var(--success); transition: width 110ms; }
+
+  .status-hero { background: var(--canvas); color: var(--canvas-ink); border: 1px solid var(--canvas-line); border-radius: var(--radius); padding: 20px; display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; margin-bottom: 14px; }
+  .status-hero .eyebrow { color: var(--canvas-eyebrow); }
+  .status-hero h2 { margin: 7px 0 5px; font-size: 17px; font-weight: 600; }
+  .status-hero p { margin: 0; color: var(--canvas-ink-soft); font-size: 11.5px; }
+  .status-hero .subtle { color: var(--canvas-ink-soft); }
+  .status-hero .chip { background: var(--canvas-chip-bg); border-color: var(--canvas-chip-line); color: var(--canvas-chip-ink); }
+  /* The derived deal line: what this sponsorship actually carries, read
+     from attached data. Chips hold fixed height; the row never reflows. */
+  .deal-line { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 11px; min-height: 22px; }
+  .hero-side { text-align: right; display: grid; gap: 4px; justify-items: end; }
+  .hero-side strong { font-size: 13px; font-weight: 600; }
+  .hero-side .mono { font: 400 10.5px/1.4 var(--mono); color: var(--canvas-ink-soft); }
+
+  .portal-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 14px; }
+
+  .task-row { min-height: 64px; padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 28px minmax(0,1fr) auto; gap: 10px; align-items: center; }
+  .task-row:last-child { border-bottom: 0; }
+  .task-toggle { width: 24px; height: 24px; border-radius: 2px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--on-accent); display: grid; place-items: center; font: 600 12px/1 var(--mono); }
+  .task-row.done .task-toggle { background: var(--success); border-color: var(--success); }
+  .task-row.done .task-title { text-decoration: line-through; color: var(--muted); }
+  .task-row.cancelled .task-toggle { background: var(--sunk); border-style: dashed; color: var(--muted); }
+  .task-row.cancelled .task-title { color: var(--muted); }
+  .cancelled-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line-strong); }
+  .cancelled-block > .eyebrow { display: block; margin-bottom: 3px; }
+  .cancelled-reason { color: var(--muted); font-size: 10.5px; line-height: 1.5; margin: 0 0 4px; }
+  .task-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .task-meta { color: var(--muted); font-size: 10.5px; }
+  /* Complete ↔ Update swap must not move the row (elements never jump). */
+  .task-row .button { min-width: 84px; }
+
+  .profile-block { text-align: center; padding: 8px 0 14px; }
+  .avatar { width: 60px; height: 60px; border-radius: var(--radius); margin: 0 auto 10px; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; place-items: center; font: 600 18px/1 var(--mono); }
+  .mini-avatar { width: 26px; height: 26px; border-radius: 2px; border: 1px solid var(--line-strong); background: var(--sunk); display: grid; place-items: center; font: 600 9px/1 var(--mono); flex: 0 0 auto; }
+  .contact-row { display: grid; grid-template-columns: 28px minmax(0,1fr) auto; gap: 9px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); min-height: 44px; }
+  .contact-row:last-child { border-bottom: 0; }
+  .contact-row strong { font-size: 11px; display: block; }
+  .contact-row small { display: block; color: var(--muted); font-size: 9.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .slot-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .slot-chip { display: inline-flex; align-items: center; max-width: 100%; border: 1px solid var(--success-line); border-radius: 2px; background: var(--success-soft); color: var(--success-ink); padding: 3px 6px; font: 600 8px/1.25 var(--mono); letter-spacing: .04em; white-space: normal; }
+  .not-public { display: inline-flex; align-items: center; border-radius: 2px; background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning-ink); padding: 2px 6px; font: 600 8px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+
+  /* Session blocks — the organizer drawer's Sessions treatment, reused. */
+  .session-block { border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); padding: 13px; }
+  .session-block + .session-block { margin-top: 10px; }
+  .session-block h3 { margin: 9px 0 5px; font-size: 12.5px; font-weight: 600; line-height: 1.4; }
+  .session-actions { display: flex; gap: 7px; margin-top: 10px; min-height: 26px; align-items: center; }
+
+  /* Booth location card — the speaker location card, verbatim machinery. */
+  .loc-line { display: grid; grid-template-columns: 74px minmax(0,1fr); gap: 10px; align-items: baseline; padding: 6px 0; }
+  .loc-label { font: 600 9px/1.7 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .loc-value { font-size: 12px; line-height: 1.5; }
+  .loc-leave { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius); padding: 9px 11px; font-size: 12px; line-height: 1.55; margin-top: 4px; }
+  .loc-leave b { font-family: var(--mono); font-weight: 600; }
+
+  .mq-map { position: relative; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk);
+            background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 8px 8px; }
+  .mq-plane { position: absolute; top: 0; left: 50%; transform: translateX(-50%); height: 100%; }
+  .mq-tile { position: absolute; width: 256px; height: 256px; filter: grayscale(1) contrast(.9) brightness(1.07); -webkit-user-drag: none; user-select: none; }
+  .mq-map.no-tiles .mq-tile { display: none; }
+  .mq-overlay { position: absolute; inset: 0; pointer-events: none; }
+  .mq-pin { position: absolute; width: 11px; height: 11px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--accent); }
+  .mq-attrib { position: absolute; right: 3px; bottom: 2px; z-index: 2; font: 400 8.5px/1.5 var(--mono); color: var(--muted); background: var(--panel); padding: 0 3px; border-radius: 2px; }
+
+  /* Prototype-only chrome: dashed, self-declaring, not product UI. */
+  .prototype-state-switch { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 18px; padding: 8px; border: 1px dashed var(--line-strong); border-radius: var(--radius); background: var(--sunk); }
+  .prototype-state-switch span { color: var(--muted); font: 600 9px/1 var(--mono); text-transform: uppercase; letter-spacing: .12em; margin: 0 2px 0 6px; }
+  .prototype-state-switch select { height: 27px; border: 1px solid var(--line-strong); border-radius: 2px; background: var(--panel); color: var(--ink); font: 400 10.5px/1 var(--mono); padding: 0 6px; }
+
+  @media (max-width: 900px) {
+    .portal-grid, .grid-2 { grid-template-columns: 1fr; }
+    .portal-head { flex-direction: column; gap: 10px; }
+    .status-hero { grid-template-columns: 1fr; }
+    .hero-side { justify-items: start; text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="prototype-badge">Marquee · Sponsor portal · v0.1</div>
+<div id="app"></div>
+<div id="modal-root"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  const EVENT = { name: "AIE NYC 2026", dates: "Oct 12–14, 2026", city: "New York" };
+
+  // Buildings mirror the binding prototype's Amendment-14 venue set.
+  const SHERATON = { id: "sheraton", name: "Sheraton New York Times Square", address: "811 7th Ave & W 53rd St, New York, NY 10019", lat: 40.7627, lng: -73.9818 };
+
+  // ── Two sponsorships: Gold with booth + 2 Sessions, Silver with neither
+  //    booth nor a second contact. The pair is the ruling-5 proof: booth-
+  //    bearing is ordinary composition, and so is its absence. ─────────────
+  const SPONSORSHIPS = {
+    gold: {
+      id: "gold",
+      company: "Ashworth–Meridian Capital Intelligence Group",
+      shortName: "Ashworth–Meridian",
+      initials: "AM",
+      website: "ashworth-meridian.com",
+      blurb: "Agentic risk and underwriting intelligence for regulated capital markets.",
+      tier: "Gold", status: "Committed", passes: 6,
+      organizer: { name: "Maya Chen", role: "Sponsorship lead", email: "sponsors@aie-nyc.dev" },
+      contacts: [
+        { id: "dana", name: "Dana Okafor", title: "Head of Developer Marketing", primary: true },
+        { id: "priya", name: "Priya Raghunathan", title: "Events & Field Marketing Manager" },
+        { id: "grzegorz", name: "Grzegorz Włodarczyk-Ó Braonáin", title: "Brand Design Lead" },
+      ],
+      booth: {
+        number: "214", size: "3 m × 3 m corner", hall: "Exhibit Hall · Level 2",
+        building: SHERATON,
+        loadIn: "Sun Oct 11 · 14:00–20:00 · freight dock on W 53rd St",
+        access: "Photo ID required at the dock; your COI must be on file before load-in.",
+        leave: 'Freight elevator queues peak after 15:00 — book the <b>14:00</b> slot and be at the dock by <b>13:40</b>.',
+      },
+      sessions: [
+        { id: "SPN-114", title: "Risk models in the loop: agentic underwriting at Ashworth–Meridian", format: "Sponsored Talk",
+          speakers: ["Nadia El-Amin"], slot: { day: "Tue Oct 13", time: "11:30", room: "Metropolitan Ballroom" }, published: true },
+        { id: "SPN-115", title: "Building the Meridian data mesh: a live teardown", format: "Sponsored Lightning",
+          speakers: [], slot: null, published: false, speakerTaskId: 4 },
+      ],
+      tasks: [
+        { id: 1, title: "Sponsor agreement", kind: "Acknowledge", due: "Due Aug 21", done: true, assignee: "dana", completedBy: "Dana Okafor", completedOn: "Aug 18" },
+        { id: 2, title: "Confirm your company details", kind: "Form", due: "Due Aug 28", done: true, assignee: "dana", completedBy: "Dana Okafor", completedOn: "Aug 25" },
+        { id: 3, title: "Company logo — vector (SVG or EPS)", kind: "File request", due: "Overdue · was due Sep 4", overdue: true, assignee: "grzegorz" },
+        { id: 4, title: "Name your speaker — Building the Meridian data mesh", kind: "Form", due: "Due Sep 11", assignee: "dana" },
+        { id: 5, title: "Booth power & A/V requirements", kind: "Form", due: "Due Sep 18", done: true, assignee: "priya", completedBy: "Priya Raghunathan", completedOn: "Sep 2" },
+        { id: 6, title: "Certificate of insurance (COI)", kind: "File request", due: "Due Sep 25", assignee: "priya" },
+        { id: 7, title: "Booth staff list & conference passes", kind: "Form", due: "Due Oct 2", assignee: "priya" },
+        { id: 8, title: "Secondary banner artwork — escalator wall", kind: "File request", due: "was due Sep 18", cancelledAt: "Aug 30", assignee: "grzegorz" },
+      ],
+      taskCancellation: { reason: "The escalator-wall placement left the Gold package when the venue reassigned that space. Nothing else about your sponsorship changes." },
+      handbook: [
+        { id: "loadin", label: "Booth & load-in guide" },
+        { id: "brand", label: "Brand usage & logo specs" },
+        { id: "faq", label: "Sponsor FAQ" },
+      ],
+    },
+    silver: {
+      id: "silver",
+      company: "Tapestry Small-Business Lending",
+      shortName: "Tapestry",
+      initials: "TL",
+      website: "tapestrylending.com",
+      blurb: "Credit decisioning copilots for community lenders.",
+      tier: "Silver", status: "Committed", passes: 2,
+      organizer: { name: "Maya Chen", role: "Sponsorship lead", email: "sponsors@aie-nyc.dev" },
+      contacts: [
+        { id: "mona", name: "Mona Haddad", title: "VP Marketing", primary: true },
+      ],
+      booth: null,
+      sessions: [
+        { id: "SPN-121", title: "Underwriting copilots that survive the auditors", format: "Sponsored Lightning",
+          speakers: ["Yusuf Demirtaş"], slot: { day: "Wed Oct 14", time: "14:15", room: "Marquis Room A" }, published: false },
+      ],
+      tasks: [
+        { id: 1, title: "Sponsor agreement", kind: "Acknowledge", due: "Due Aug 21", done: true, assignee: "mona", completedBy: "Mona Haddad", completedOn: "Aug 20" },
+        { id: 2, title: "Confirm your company details", kind: "Form", due: "Due Aug 28", done: true, assignee: "mona", completedBy: "Mona Haddad", completedOn: "Aug 26" },
+        { id: 3, title: "Company logo — vector (SVG or EPS)", kind: "File request", due: "Due Sep 11", assignee: "mona" },
+        { id: 4, title: "Session description — Underwriting copilots", kind: "Form", due: "Due Sep 18", assignee: "mona" },
+      ],
+      taskCancellation: null,
+      handbook: [
+        { id: "brand", label: "Brand usage & logo specs" },
+        { id: "faq", label: "Sponsor FAQ" },
+      ],
+    },
+  };
+
+  const state = {
+    route: location.hash === "#portal" ? "portal" : "signin",
+    sponsorshipId: "gold",
+    viewerId: "dana",
+    signinSent: false,
+  };
+  const sp = () => SPONSORSHIPS[state.sponsorshipId];
+  const viewer = () => sp().contacts.find(c => c.id === state.viewerId) || sp().contacts[0];
+  const liveTasks = () => sp().tasks.filter(t => !t.cancelledAt);
+  const cancelledTasks = () => sp().tasks.filter(t => t.cancelledAt);
+  const contactName = id => (sp().contacts.find(c => c.id === id) || {}).name || "—";
+  const initials = name => name.split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+
+  const app = document.getElementById("app");
+  const modalRoot = document.getElementById("modal-root");
+  const toastEl = document.getElementById("toast");
+  let toastTimer = null;
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3400);
+  }
+
+  // ── Map: the binding prototype's tile mosaic, single-pin case ──────────
+  const TILE_PX = 256, tileURL = (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+  function mercatorPx(lat, lng, z) {
+    const scale = TILE_PX * Math.pow(2, z), sin = Math.sin(lat * Math.PI / 180);
+    return { x: (lng + 180) / 360 * scale, y: (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * scale };
+  }
+  function venueMap(b, w, h) {
+    const z = 16, p = mercatorPx(b.lat, b.lng, z);
+    const planeW = w + 512;
+    const left = p.x - planeW / 2, top = p.y - h / 2;
+    let tiles = "";
+    for (let tx = Math.floor(left / TILE_PX); tx <= Math.floor((left + planeW) / TILE_PX); tx++)
+      for (let ty = Math.floor(top / TILE_PX); ty <= Math.floor((top + h) / TILE_PX); ty++)
+        tiles += `<img class="mq-tile" alt="" src="${tileURL(z, tx, ty)}" style="left:${Math.round(tx * TILE_PX - left)}px;top:${Math.round(ty * TILE_PX - top)}px" onerror="this.closest('.mq-map').classList.add('no-tiles')">`;
+    return `<div class="mq-map" style="height:${h}px"><div class="mq-plane" style="width:${planeW}px">${tiles}<div class="mq-overlay"><i class="mq-pin" style="left:${(p.x - left).toFixed(1)}px;top:${(p.y - top).toFixed(1)}px"></i></div></div><span class="mq-attrib">© OpenStreetMap contributors</span></div>`;
+  }
+
+  // ── Views ──────────────────────────────────────────────────────────────
+  function signinView() {
+    // Space is reserved for the sent state: submitting swaps text in place,
+    // nothing below moves (elements never jump).
+    return `<div class="public-shell"><header class="public-top"><span class="public-event"><span class="brand-mark">M</span>${esc(EVENT.name)} · Sponsor portal</span><span class="subtle">${esc(EVENT.dates)}</span></header><main class="public-body">
+      <section class="public-card">
+        <div class="eyebrow" style="margin-bottom:12px">Sponsor portal</div>
+        <h1>Sign in</h1>
+        <p>Enter the email your organizer has on file for your sponsorship and we'll send a sign-in link. No password, no account setup.</p>
+        <div class="field" style="margin:18px 0 10px"><label for="signin-email">Work email</label><input id="signin-email" type="email" placeholder="you@company.com" value="dana.okafor@ashworth-meridian.com"></div>
+        <div style="display:flex;align-items:center;gap:12px;min-height:34px"><button class="button primary" id="send-link" style="min-width:190px">${state.signinSent ? "Link sent — check email" : "Email me a sign-in link"}</button><span class="subtle" style="min-height:15px">${state.signinSent ? "The link signs you in as the contact it was minted for and expires in 30 minutes." : ""}</span></div>
+        <div class="divider"></div>
+        <p class="subtle" style="margin:0">Not a sponsor contact yet? Ask whoever holds your sponsorship to have the organizer add you — sponsors are set up by the ${esc(EVENT.name)} team, not by a public form.</p>
+      </section>
+      <div class="prototype-state-switch" style="margin-top:14px"><span>Prototype</span><button class="button small" data-enter="gold" data-viewer="dana">Open the link as Dana Okafor (Gold)</button><button class="button small" data-enter="silver" data-viewer="mona">Open as Mona Haddad (Silver)</button></div>
+    </main></div>`;
+  }
+
+  function heroView() {
+    const s = sp();
+    const deal = [
+      `${s.sessions.length} Session${s.sessions.length === 1 ? "" : "s"}`,
+      s.booth ? `Booth ${s.booth.number}` : null,
+      `${s.passes} conference passes`,
+    ].filter(Boolean);
+    return `<section class="status-hero"><div>
+        <div class="eyebrow">${esc(s.tier)} sponsor · ${esc(s.status)}</div>
+        <h2>${esc(s.company)}</h2>
+        <p>${esc(EVENT.name)} · ${esc(EVENT.dates)} · ${esc(SHERATON.name)}, ${esc(EVENT.city)}</p>
+        <div class="deal-line">${deal.map(d => `<span class="chip">${esc(d)}</span>`).join("")}</div>
+      </div>
+      <div class="hero-side"><span class="eyebrow" style="color:var(--canvas-eyebrow)">Your organizer contact</span><strong>${esc(s.organizer.name)}</strong><span class="mono">${esc(s.organizer.role)} · ${esc(s.organizer.email)}</span></div>
+    </section>`;
+  }
+
+  function boothView() {
+    const s = sp();
+    if (!s.booth) return "";
+    const b = s.booth;
+    const directions = `https://www.google.com/maps/search/?api=1&query=${b.building.lat},${b.building.lng}`;
+    return `<section class="card" style="margin-bottom:14px"><div class="card-head"><div><h2>Your booth</h2><span class="subtle">${esc(b.hall)}</span></div><a class="button small" href="${directions}" target="_blank" rel="noreferrer">Directions ↗</a></div>
+      <div class="card-body"><div class="grid-2" style="gap:18px;align-items:start"><div>
+        <div class="loc-line"><span class="loc-label">Booth</span><span class="loc-value"><strong>${esc(b.number)}</strong> · ${esc(b.size)}</span></div>
+        <div class="loc-line"><span class="loc-label">Hall</span><span class="loc-value">${esc(b.hall)}</span></div>
+        <div class="loc-line"><span class="loc-label">Building</span><span class="loc-value"><strong>${esc(b.building.name)}</strong><br><span class="subtle">${esc(b.building.address)}</span></span></div>
+        <div class="loc-line"><span class="loc-label">Load-in</span><span class="loc-value">${esc(b.loadIn)}</span></div>
+        <div class="loc-line"><span class="loc-label">Getting in</span><span class="loc-value">${esc(b.access)}</span></div>
+        <div class="loc-leave">${b.leave}</div>
+      </div><div>${venueMap(b.building, 430, 208)}</div></div></div></section>`;
+  }
+
+  function slotMeta(session) {
+    if (!session.slot) return `<div class="slot-meta"><span class="subtle" style="font-style:italic">Not scheduled yet — the agenda team places Sessions in late September.</span></div>`;
+    return `<div class="slot-meta"><span class="slot-chip">${esc(session.slot.day)} · ${esc(session.slot.time)} · ${esc(session.slot.room)}</span>${session.published ? "" : `<span class="not-public">Not yet public</span>`}</div>`;
+  }
+
+  function sessionBlock(session) {
+    const named = session.speakers.length > 0;
+    const speakerLine = named ? session.speakers.join(" · ") : "Speaker not named yet";
+    const action = session.slot
+      ? `<button class="button small" data-invite="${esc(session.id)}">Add to calendar</button>`
+      : named
+        ? `<span class="subtle">Scheduling follows once the program locks.</span>`
+        : `<button class="button small primary" data-task="${session.speakerTaskId}">Name your speaker</button>`;
+    return `<div class="session-block"><span class="chip session">Session</span><h3>${esc(session.title)}</h3><span class="subtle">${esc(session.format)} · ${esc(speakerLine)}</span>${slotMeta(session)}<div class="session-actions">${action}</div></div>`;
+  }
+
+  function metaFor(t) {
+    if (t.cancelledAt) return `${t.kind} · ${t.due} · cancelled ${t.cancelledAt}`;
+    if (t.done) return `${t.kind} · done ${t.completedOn} · completed by ${t.completedBy}`;
+    const owner = t.assignee === viewer().id ? "yours" : `assigned to ${contactName(t.assignee)}`;
+    return `${t.kind} · ${t.due} · ${owner}`;
+  }
+
+  function taskRow(t) {
+    if (t.cancelledAt) return `<div class="task-row cancelled"><span class="task-toggle" aria-hidden="true">–</span><div><div class="task-title">${esc(t.title)}</div><div class="task-meta">${esc(metaFor(t))}</div></div><span class="chip">Cancelled</span></div>`;
+    return `<div class="task-row ${t.done ? "done" : ""}"><span class="task-toggle" aria-hidden="true">${t.done ? "✓" : ""}</span><div><div class="task-title">${esc(t.title)}</div><div class="task-meta">${esc(metaFor(t))}</div></div><button class="button small ${t.overdue && !t.done ? "danger" : ""}" data-task="${t.id}">${t.done ? "Update" : "Complete"}</button></div>`;
+  }
+
+  function portalView() {
+    const s = sp(), v = viewer();
+    const live = liveTasks(), cancelled = cancelledTasks();
+    const done = live.filter(t => t.done).length;
+    const overdue = live.filter(t => t.overdue && !t.done).length;
+    return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#signin" data-route="signin"><span class="brand-mark">M</span>${esc(EVENT.name)} · Sponsor portal</a><a class="button small" href="#signin" data-route="signin">Sign out</a></header><main class="public-body wide" style="padding-top:26px">
+      <div class="prototype-state-switch"><span>Prototype</span><span>Sponsorship</span><select id="switch-sponsorship" style="width:280px">${Object.values(SPONSORSHIPS).map(o => `<option value="${o.id}" ${o.id === s.id ? "selected" : ""}>${esc(o.tier)} — ${esc(o.company)}${o.booth ? " (booth)" : " (no booth)"}</option>`).join("")}</select><span>Viewing as</span><select id="switch-viewer" style="width:230px">${s.contacts.map(c => `<option value="${c.id}" ${c.id === v.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div>
+      <div class="portal-head"><div><div class="eyebrow">Welcome back</div><h1>${esc(v.name)}</h1><span class="subtle">${esc(s.shortName)}'s ${s.booth ? "deliverables, Sessions, and booth details" : "deliverables and Sessions"} — everything ${esc(EVENT.name)} needs from you, in one place.</span></div><div class="portal-progress"><strong class="tabular" style="font-size:12px">${done} of ${live.length} deliverables done</strong><div class="progress-track"><i style="width:${live.length ? done / live.length * 100 : 100}%"></i></div></div></div>
+      ${heroView()}
+      ${boothView()}
+      <div class="portal-grid">
+        <section class="card"><div class="card-head"><div><h2>Deliverables</h2><span class="subtle">${overdue ? "Complete the overdue item first" : "Nothing overdue right now"} · anyone at ${esc(s.shortName)} can complete any item</span></div><span class="chip ${overdue ? "overdue" : ""}">${overdue} overdue</span></div><div class="card-body">${live.map(taskRow).join("")}${cancelled.length ? `<div class="cancelled-block"><span class="eyebrow">Cancelled · ${cancelled.length}</span><p class="cancelled-reason">${esc(s.taskCancellation?.reason || "These are no longer needed.")} You do not need to do anything with them.</p>${cancelled.map(taskRow).join("")}</div>` : ""}</div></section>
+        <div class="stack">
+          <section class="card"><div class="card-head"><div><h2>Your Sessions</h2><span class="subtle">Guaranteed with ${esc(s.tier)}</span></div><span class="chip session">${s.sessions.length}</span></div><div class="card-body">${s.sessions.map(sessionBlock).join("")}</div></section>
+          <section class="card"><div class="card-head"><h2>Company profile</h2><button class="button small" id="edit-company">Edit</button></div><div class="card-body"><div class="profile-block"><div class="avatar">${esc(s.initials)}</div><strong style="font-size:12.5px">${esc(s.company)}</strong><div class="subtle" style="margin-top:4px">↗ ${esc(s.website)}</div></div><p class="subtle" style="line-height:1.55;margin:0 0 6px">${esc(s.blurb)}</p><div class="divider" style="margin:12px 0"></div><div class="eyebrow" style="margin-bottom:4px">Contacts</div>${s.contacts.map(c => `<div class="contact-row"><span class="mini-avatar">${esc(initials(c.name))}</span><div><strong>${esc(c.name)}</strong><small>${esc(c.title)}</small></div><span style="display:flex;gap:4px">${c.primary ? `<span class="chip">Primary</span>` : ""}${c.id === v.id ? `<span class="chip committed">You</span>` : ""}</span></div>`).join("")}<p class="subtle" style="margin:10px 0 0;font-size:10px">To add or change a contact, email ${esc(s.organizer.email)} — your organizer manages access.</p></div></section>
+          <section class="card"><div class="card-head"><h2>Sponsor handbook</h2><span class="chip">Handbook</span></div><div class="card-body">${s.handbook.map(h => `<button class="button ghost" style="width:100%;justify-content:space-between" data-handbook="${h.id}"><span>${esc(h.label)}</span><span>→</span></button>`).join("")}</div></section>
+        </div>
+      </div>
+    </main></div>`;
+  }
+
+  // ── Task modals: real kinds, kind-specific validation (SPEC §3.7) ──────
+  const TASK_BODIES = {
+    1: t => `<div class="message-preview">I confirm ${esc(sp().company)} accepts the ${esc(EVENT.name)} sponsorship terms: booth build rules, the code of conduct, and the recording policy for sponsored Sessions.</div><label class="toggle-line"><span>I acknowledge and accept on behalf of ${esc(sp().shortName)}</span><input id="task-ack" type="checkbox" ${t.done ? "checked" : ""}></label>`,
+    2: () => `<div class="field"><label>Company legal name *</label><input id="task-required" value="${esc(sp().company)}"></div><div class="grid-2"><div class="field"><label>Website *</label><input value="https://${esc(sp().website)}"></div><div class="field"><label>Logo alt text</label><input value="${esc(sp().shortName)} logo"></div></div><div class="field"><label>Public blurb — event site & app</label><textarea>${esc(sp().blurb)}</textarea></div><span class="field-note">Your organizer entered the sponsorship; you confirm the public-facing facts. This replaces an intake form.</span>`,
+    3: t => `<div class="field"><label for="task-file">Vector logo — SVG or EPS *</label><input id="task-file" type="file" accept=".svg,.eps,.ai,.pdf"><span class="field-note">Used on the event site, the sponsor wall, and printed signage. Vector required; a 600px+ PNG is accepted as a fallback only.</span></div>${t.done ? `<div class="message-preview"><strong>Current file</strong><br><span class="subtle">${esc(t.fileName || "logo.svg")} · received ${esc(t.completedOn)}</span></div>` : ""}`,
+    4: () => `<div class="grid-2"><div class="field"><label>Speaker name *</label><input id="task-required" placeholder="Full name"></div><div class="field"><label>Speaker email *</label><input type="email" placeholder="name@company.com"></div></div><div class="field"><label>Title & company</label><input placeholder="e.g. Principal Engineer, Ashworth–Meridian"></div><span class="field-note">This fills the Session's speaker. They'll get their own speaker-portal invitation with their bio, headshot, and A/V tasks.</span>`,
+    5: () => `<label class="toggle-line"><span>2 × 20A power drop</span><input type="checkbox" checked></label><label class="toggle-line"><span>55″ monitor rental</span><input type="checkbox"></label><label class="toggle-line"><span>Lead scanner × 2</span><input type="checkbox" checked></label><label class="toggle-line"><span>Hardline internet (booth Wi-Fi is included)</span><input type="checkbox"></label><span class="field-note">Orders lock with the venue on Sep 26. Changes after that go through ${esc(sp().organizer.email)}.</span>`,
+    6: () => `<div class="field"><label for="task-file">Certificate of insurance — PDF *</label><input id="task-file" type="file" accept=".pdf"><span class="field-note">Naming the venue as additional insured. Required before dock access at load-in.</span></div>`,
+    7: () => `<div class="field"><label>Booth staff — one per line *</label><textarea id="task-required">Dana Okafor
+Priya Raghunathan</textarea></div><span class="field-note">${esc(String(sp().passes))} conference passes are included with ${esc(sp().tier)}. Passes activate at check-in; names can change until Oct 9.</span>`,
+    // Silver's form tasks reuse the generic shapes above by id where they
+    // match; id 4 on silver is a session-description form instead:
+    "silver-4": () => `<div class="field"><label>Session description *</label><textarea id="task-required">Community lenders adopt AI under the strictest audit regimes in finance. A 10-minute teardown of what passed, what didn't, and why.</textarea></div><span class="field-note">Rendered on the public agenda under your Session's title.</span>`,
+  };
+
+  function showTask(id) {
+    const task = sp().tasks.find(t => t.id === Number(id));
+    if (!task || task.cancelledAt) return;
+    const bodyKey = state.sponsorshipId === "silver" && task.id === 4 ? "silver-4" : task.id;
+    const body = (TASK_BODIES[bodyKey] || TASK_BODIES[2])(task);
+    const owner = task.assignee === viewer().id ? "" : `<p class="subtle" style="margin:8px 0 0">Assigned to ${esc(contactName(task.assignee))} — anyone at ${esc(sp().shortName)} can complete it; your name is recorded.</p>`;
+    modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">${esc(task.kind)} · ${esc(task.due)}</div><h2>${esc(task.title)}</h2><p>Saving updates the organizer's chase board immediately.</p>${owner}</div><div class="modal-body stack">${body}<div class="field-error" id="task-error"></div></div><div class="modal-actions"><button class="button" id="task-cancel">Cancel</button><button class="button primary" id="task-save">${task.done ? "Save update" : "Complete deliverable"}</button></div></section></div>`;
+    modalRoot.querySelector(".modal-backdrop").addEventListener("click", e => { if (e.target === e.currentTarget) modalRoot.innerHTML = ""; });
+    document.getElementById("task-cancel").onclick = () => modalRoot.innerHTML = "";
+    document.getElementById("task-save").onclick = () => {
+      const ack = document.getElementById("task-ack"), file = document.getElementById("task-file"), required = document.getElementById("task-required");
+      if ((ack && !ack.checked) || (file && !task.done && !file.files.length) || (required && !required.value.trim())) {
+        document.getElementById("task-error").textContent = ack ? "Accept the agreement to complete this deliverable." : file ? "Choose a file before completing this request." : "Complete the required fields.";
+        return;
+      }
+      const wasDone = task.done, byOther = task.assignee !== viewer().id;
+      task.done = true; task.overdue = false;
+      task.completedBy = viewer().name; task.completedOn = "just now";
+      if (file && file.files.length) task.fileName = file.files[0].name;
+      // "Name your speaker" is the single write path into the Session —
+      // completing the task fills the card (read-only Sessions ruling).
+      if (bodyKey === 4 && required) {
+        const session = sp().sessions.find(x => x.speakerTaskId === task.id);
+        if (session) session.speakers = [required.value.trim()];
+      }
+      modalRoot.innerHTML = "";
+      toast(`${task.title} ${wasDone ? "updated" : "completed"} — chase board updated${byOther ? ` · completed by ${viewer().name}, assigned to ${contactName(task.assignee)}` : ""}`);
+      render();
+    };
+  }
+
+  const HANDBOOK = {
+    loadin: { title: "Booth & load-in guide", body: "Load-in runs Sun Oct 11, 14:00–20:00 at the W 53rd St freight dock. Book a slot; walk-ups queue behind booked slots. Crates must be tagged with your booth number (214). Empties are stored by the decorator and returned Wed 18:00. Tear-down completes by Wed 22:00." },
+    brand: { title: "Brand usage & logo specs", body: "Your vector logo renders on the event site, the sponsor wall, and printed signage. Monochrome variants are derived automatically — supply the primary mark only. Don't send raster-only files unless unavoidable; signage prints at large scale." },
+    faq: { title: "Sponsor FAQ", body: "Passes activate at check-in with a government ID. Session recordings are published under the conference's standard license. Lead-scan exports land in your portal within 24h of each conference day. For anything not covered here, email your organizer contact — replies within one business day." },
+  };
+  function showHandbook(id) {
+    const h = HANDBOOK[id]; if (!h) return;
+    modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Sponsor handbook</div><h2>${esc(h.title)}</h2></div><div class="modal-body"><p style="font-size:12.5px;line-height:1.65;color:var(--ink-soft);margin:0">${esc(h.body)}</p></div><div class="modal-actions"><button class="button" id="hb-close">Close</button></div></section></div>`;
+    modalRoot.querySelector(".modal-backdrop").addEventListener("click", e => { if (e.target === e.currentTarget) modalRoot.innerHTML = ""; });
+    document.getElementById("hb-close").onclick = () => modalRoot.innerHTML = "";
+  }
+
+  function showCompanyEdit() {
+    const s = sp();
+    modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Company profile</div><h2>Edit ${esc(s.shortName)}</h2><p>Profile facts are org-level — they carry to every conference ${esc(s.shortName)} sponsors.</p></div><div class="modal-body stack"><div class="field"><label>Company name *</label><input id="task-required" value="${esc(s.company)}"></div><div class="field"><label>Website</label><input value="https://${esc(s.website)}"></div><div class="field"><label>Public blurb</label><textarea>${esc(s.blurb)}</textarea></div><div class="field-error" id="task-error"></div></div><div class="modal-actions"><button class="button" id="task-cancel">Cancel</button><button class="button primary" id="task-save">Save profile</button></div></section></div>`;
+    modalRoot.querySelector(".modal-backdrop").addEventListener("click", e => { if (e.target === e.currentTarget) modalRoot.innerHTML = ""; });
+    document.getElementById("task-cancel").onclick = () => modalRoot.innerHTML = "";
+    document.getElementById("task-save").onclick = () => {
+      const required = document.getElementById("task-required");
+      if (!required.value.trim()) { document.getElementById("task-error").textContent = "Company name is required."; return; }
+      modalRoot.innerHTML = ""; toast("Company profile saved — event site and sponsor wall update on the next publish.");
+    };
+  }
+
+  // ── Render + event delegation ──────────────────────────────────────────
+  function render() {
+    app.innerHTML = state.route === "portal" ? portalView() : signinView();
+    location.hash = state.route === "portal" ? "#portal" : "#signin";
+    const sw = document.getElementById("switch-sponsorship");
+    if (sw) sw.onchange = () => { state.sponsorshipId = sw.value; state.viewerId = sp().contacts[0].id; render(); };
+    const vw = document.getElementById("switch-viewer");
+    if (vw) vw.onchange = () => { state.viewerId = vw.value; render(); };
+    const send = document.getElementById("send-link");
+    if (send) send.onclick = () => { state.signinSent = true; render(); };
+    const edit = document.getElementById("edit-company");
+    if (edit) edit.onclick = showCompanyEdit;
+  }
+
+  app.addEventListener("click", e => {
+    const route = e.target.closest("[data-route]");
+    if (route) { e.preventDefault(); state.route = route.dataset.route === "signin" ? "signin" : "portal"; state.signinSent = false; render(); return; }
+    const enter = e.target.closest("[data-enter]");
+    if (enter) { state.sponsorshipId = enter.dataset.enter; state.viewerId = enter.dataset.viewer; state.route = "portal"; render(); return; }
+    const task = e.target.closest("[data-task]");
+    if (task) { showTask(task.dataset.task); return; }
+    const hb = e.target.closest("[data-handbook]");
+    if (hb) { showHandbook(hb.dataset.handbook); return; }
+    const inv = e.target.closest("[data-invite]");
+    if (inv) { const s = sp().sessions.find(x => x.id === inv.dataset.invite); toast(`Calendar invite downloaded — ${s ? s.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40) : "session"}.ics`); return; }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
