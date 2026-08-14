@@ -207,7 +207,15 @@ interface AnswerCriterion {
   name: string;
 }
 
-/** The answer a scorecard records for one criterion, or undefined for none. */
+/**
+ * The answer a scorecard records for one criterion, or undefined for none.
+ *
+ * The name fallback excludes other criteria's ids BEFORE choosing among what is
+ * left, and then insists on exactly one candidate. Choosing first and checking
+ * afterwards makes the result depend on JSON property order: with `notes` also
+ * being another criterion's id, `{"notes":…,"NOTES":…}` and
+ * `{"NOTES":…,"notes":…}` are the same scorecard and would answer differently.
+ */
 function answerFor(
   scores: Record<string, unknown>,
   criterion: AnswerCriterion,
@@ -215,13 +223,12 @@ function answerFor(
 ): unknown {
   if (Object.hasOwn(scores, criterion.id)) return scores[criterion.id];
   const name = criterion.name.toLowerCase();
-  const sameName = roundCriteria.filter((other) => other.name.toLowerCase() === name);
-  if (sameName.length !== 1) return undefined;
-  const key = Object.keys(scores).find((candidate) => candidate.toLowerCase() === name);
-  if (key === undefined) return undefined;
-  // A key that is some other criterion's id is that criterion's answer, whatever
-  // it also happens to spell.
-  return roundCriteria.some((other) => other.id === key) ? undefined : scores[key];
+  if (roundCriteria.filter((other) => other.name.toLowerCase() === name).length !== 1) return undefined;
+  const candidates = Object.keys(scores).filter((key) => key.toLowerCase() === name
+    // A key that is some other criterion's id is that criterion's answer,
+    // whatever it also happens to spell.
+    && !roundCriteria.some((other) => other.id === key));
+  return candidates.length === 1 ? scores[candidates[0] as string] : undefined;
 }
 
 async function criterionAnswers(
@@ -248,10 +255,11 @@ async function criterionAnswers(
     ORDER BY evaluation.submission_id, reviewer.name, evaluation.id
   `).bind(eventId).all<ScorecardRow>();
 
-  const reviewerNames = disambiguatedNames(
-    [...new Map(results.map((row) => [row.reviewer_id, { id: row.reviewer_id, name: row.reviewer_name }])).values()],
-  );
-  const bySubmission = new Map<string, Map<string, string[]>>();
+  // Collected first, labelled second: the marker means "this cell shows more
+  // than one person by this name", so the population is the reviewers whose
+  // answers are actually printed — not every reviewer who filed a scorecard,
+  // several of whom contribute nothing to any column.
+  const entries: Array<{ submissionId: string; criterionId: string; reviewerId: string; reviewerName: string; text: string }> = [];
   for (const row of results) {
     let scores: Record<string, unknown>;
     try {
@@ -268,13 +276,27 @@ async function criterionAnswers(
       if (value === undefined || value === null || typeof value === "object") continue;
       const text = answerText(String(value));
       if (text === "") continue;
-      const forSubmission = bySubmission.get(row.submission_id) ?? new Map<string, string[]>();
-      const answers = forSubmission.get(column.id) ?? [];
-      const name = answerText(reviewerNames.get(row.reviewer_id) ?? row.reviewer_name);
-      answers.push(`${name}: ${text}`);
-      forSubmission.set(column.id, answers);
-      bySubmission.set(row.submission_id, forSubmission);
+      entries.push({
+        submissionId: row.submission_id,
+        criterionId: column.id,
+        reviewerId: row.reviewer_id,
+        reviewerName: row.reviewer_name,
+        text,
+      });
     }
+  }
+
+  const reviewerNames = disambiguatedNames(
+    [...new Map(entries.map((entry) => [entry.reviewerId, { id: entry.reviewerId, name: entry.reviewerName }])).values()],
+  );
+  const bySubmission = new Map<string, Map<string, string[]>>();
+  for (const entry of entries) {
+    const forSubmission = bySubmission.get(entry.submissionId) ?? new Map<string, string[]>();
+    const answers = forSubmission.get(entry.criterionId) ?? [];
+    const name = answerText(reviewerNames.get(entry.reviewerId) ?? entry.reviewerName);
+    answers.push(`${name}: ${entry.text}`);
+    forSubmission.set(entry.criterionId, answers);
+    bySubmission.set(entry.submissionId, forSubmission);
   }
   return bySubmission;
 }

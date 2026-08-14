@@ -432,6 +432,71 @@ describe.sequential("MRQ-109 · chair results: weighted aggregate, sort, export"
     expect(segments.some((segment) => segment.startsWith("Rowan Second: Reject"))).toBe(false);
   });
 
+  test("CONTRACT · ABS-13: the same scorecard answers the same way whichever order its keys are written in", async () => {
+    // The name fallback must exclude other criteria's ids BEFORE choosing among
+    // what is left. Choosing first and checking afterwards makes the answer
+    // depend on JSON property order, so one scorecard exports two different ways.
+    const scores = { notes: "Belongs to Other", NOTES: "Ambiguous" };
+    const reversed = { NOTES: "Ambiguous", notes: "Belongs to Other" };
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, 'Order One', 1, 'marquee', 1, 1)")
+        .bind("per-review-results-order-1", DEMO_ORGANIZATION_ID, "order1@demo.marquee.example"),
+      env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, 'Order Two', 1, 'marquee', 1, 1)")
+        .bind("per-review-results-order-2", DEMO_ORGANIZATION_ID, "order2@demo.marquee.example"),
+      env.DB.prepare(
+        `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'approve', NULL, ?, '', 0, 1, 1)`,
+      ).bind("evaluation-results-order-1", ROUND_ID, SUB_UNSCORED, "per-review-results-order-1", JSON.stringify(scores)),
+      env.DB.prepare(
+        `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'approve', NULL, ?, '', 0, 1, 1)`,
+      ).bind("evaluation-results-order-2", ROUND_ID, SUB_TOP, "per-review-results-order-2", JSON.stringify(reversed)),
+    ]);
+
+    const rows = csvRows(await (await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`)).text());
+    const header = rows[0]!;
+    const cell = (row: string[], column: string): string => row[header.indexOf(column)]!;
+
+    // `notes` is another criterion's id, so it is excluded from the name
+    // fallback; `NOTES` is then the single remaining candidate, both times.
+    const one = cell(rows.find((row) => row[0] === SUB_UNSCORED)!, "notes (Initial review)");
+    const two = cell(rows.find((row) => row[0] === SUB_TOP)!, "notes (Initial review)");
+    expect(one).toContain("Order One: Ambiguous");
+    expect(two).toContain("Order Two: Ambiguous");
+    expect(one).not.toContain("Belongs to Other");
+    expect(two).not.toContain("Belongs to Other");
+  });
+
+  test("CONTRACT · ABS-13: a name is marked duplicate only against the reviewers the file actually names", async () => {
+    // The marker means "this shows more than one person by this name". A
+    // reviewer whose scorecard contributes no answer to any column is not in
+    // the file, so counting them puts "(2)" on the only one who is.
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, 'Rowan Same', 1, 'marquee', 1, 1)")
+        .bind("per-a-hidden", DEMO_ORGANIZATION_ID, "hidden@demo.marquee.example"),
+      env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, 'Rowan Same', 1, 'marquee', 1, 1)")
+        .bind("per-z-visible", DEMO_ORGANIZATION_ID, "visible@demo.marquee.example"),
+      // Numeric criteria only: nothing this reviewer wrote reaches a non-numeric column.
+      env.DB.prepare(
+        `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'approve', NULL, ?, '', 0, 1, 1)`,
+      ).bind("evaluation-results-hidden", ROUND_ID, SUB_LEGACY, "per-a-hidden", JSON.stringify({ [CRITERION_ORIGINALITY]: 3 })),
+      env.DB.prepare(
+        `INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'approve', NULL, ?, '', 0, 1, 1)`,
+      ).bind("evaluation-results-visible", ROUND_ID, SUB_LEGACY, "per-z-visible", JSON.stringify({ [CRITERION_CALL]: "Accept" })),
+    ]);
+
+    const rows = csvRows(await (await request(`/api/v1/events/${EVENT_ID}/plans/${PLAN_ID}/results/export?format=csv`)).text());
+    const header = rows[0]!;
+    const legacy = rows.find((row) => row[0] === SUB_LEGACY)!;
+    const call = legacy[header.indexOf("Recommendation (Initial review)")]!;
+
+    // The one Rowan Same in the file is plain: nothing on this page is ambiguous.
+    expect(call).toContain("Rowan Same: Accept");
+    expect(call).not.toContain("Rowan Same (2)");
+  });
+
   test("CONTRACT · the export keeps agent reviews separate from human ones, as the rest of it does", async () => {
     // Not a fix — a characterisation. `criterionMeans` and
     // `recommendationTallies` both join `reviewer.kind = 'human'`, and the
