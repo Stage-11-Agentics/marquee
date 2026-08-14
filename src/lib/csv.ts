@@ -18,6 +18,12 @@
  * single-line form input is not the only door.
  *
  * So the rule is the stricter of the two that existed: one record, one line.
+ *
+ * With one deliberate refinement. Both server-side helpers replaced `\n` and
+ * then `\r` in sequence, which turns a Windows CRLF into TWO spaces — measured:
+ * `"a\r\nb"` came out `"a  b"`. A CRLF is one line break and becomes one space
+ * here. That is the only output either server export changes, and it changes in
+ * the direction of the abstract an organizer actually pasted in.
  */
 
 /**
