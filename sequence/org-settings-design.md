@@ -194,7 +194,14 @@ Sidebar: Organization group = People CRM · Outreach · **Settings** (⚙).
 
 ---
 
-## Prototype-mock scope (pipeline-v1.1 → v1.14)
+## Prototype-mock scope (pipeline-v1.1 → v1.14) — SHIPPED
+
+*Built and pushed the same session (commit `9febf470`), verified in the
+embedded browser: all four tabs, five themes applying, invite mint → pending
+row, the removal transaction revoking the removed organizer's token, the
+remove-demo round trip, the `settings/api` redirect, and the cold-start walk
+unbroken. The CRM prototype's shared sidebar gained the same Settings row.
+Awaiting Atin's drive-through (the love pass).*
 
 1. **Sidebar**: ⚙ Settings row closing the Organization group (matching the
    v1.13 sidebar's conventions; reserved icon column, no jumps).
