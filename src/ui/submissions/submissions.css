@@ -49,6 +49,8 @@
 .submissions-toolbar input:focus, .submissions-toolbar select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .submissions-toolbar .status-filter.is-default { border-color: var(--line-strong); color: var(--muted); font-weight: 600; }
 .submissions-toolbar .status-filter.has-selection { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); font-weight: 600; }
+#kind-segment { flex: 0 0 auto; }
+#kind-segment button { flex: 0 0 82px; width: 82px; }
 .search-field { display: flex; min-width: min(330px, 35vw); }
 .search-field input { border-radius: var(--radius) 0 0 var(--radius); min-width: 0; width: 100%; }
 .search-field .button { border-left: 0; border-radius: 0 var(--radius) var(--radius) 0; }

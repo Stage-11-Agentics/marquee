@@ -107,6 +107,12 @@ const BULK_ACTIONS = [
 
 type BulkAction = (typeof BULK_ACTIONS)[number]["action"];
 
+const KIND_FILTERS = [
+  ["", "All"],
+  ["abstract", "Abstracts"],
+  ["session", "Sessions"],
+] as const;
+
 const SORT_OPTIONS = [
   ["newest", "Newest"],
   ["updated", "Recently updated"],
@@ -832,9 +838,11 @@ export function SubmissionsPage({
         {activeView && !activeView.built_in && <span class="column-panel-note">Save current view again to capture this column order in “{activeView.name}”.</span>}
       </div>}
       <form class="submissions-toolbar" onSubmit={(event) => { event.preventDefault(); updateQuery({ q: searchDraft.trim(), page: 1 }); }}>
+        <div class="segment" id="kind-segment" role="group" aria-label="Filter by kind">
+          {KIND_FILTERS.map(([value, label]) => <button key={value || "all"} type="button" class={kind === value ? "active" : ""} aria-pressed={kind === value} onClick={() => updateQuery({ kind: value, page: 1 })}>{label}</button>)}
+        </div>
         <label class="search-field"><span class="sr-only">Search submissions</span><input ref={searchInputRef} value={searchDraft} onInput={(event) => setSearchDraft(event.currentTarget.value)} placeholder={envelope ? `Search ${envelope.total.toLocaleString()} submissions…` : "Search submissions…"} /><button class="button small" type="submit">Search</button></label>
         <label><span class="sr-only">Status</span><select class={`status-filter ${status ? "has-selection" : "is-default"}`} value={status} onChange={(event) => updateQuery({ status: event.currentTarget.value, page: 1 })}><option value="">All statuses</option>{STATUS_OPTIONS.map((group) => <optgroup label={group.label}>{group.options.map(([value, label]) => <option value={value}>{label}</option>)}</optgroup>)}</select></label>
-        <label><span class="sr-only">Type</span><select value={kind} onChange={(event) => updateQuery({ kind: event.currentTarget.value, page: 1 })}><option value="">All types</option><option value="abstract">Abstract</option><option value="session">Session</option></select></label>
         <label><span class="sr-only">Track</span><select value={track} onChange={(event) => updateQuery({ track: event.currentTarget.value, page: 1 })}><option value="">All tracks</option>{[...knownTracks.values()].sort((left, right) => left.name.localeCompare(right.name)).map((itemTrack) => <option value={itemTrack.id}>{itemTrack.name}</option>)}</select></label>
         <span class="toolbar-spacer" />
         <label><span class="sr-only">Sort</span><select value={sort} onChange={(event) => updateQuery({ sort: event.currentTarget.value, page: 1 })}>{SORT_OPTIONS.map(([value, label]) => <option value={value}>{label}</option>)}</select></label>
