@@ -21,7 +21,7 @@ const candidate: AgendaPublishCandidate = {
   duration_min: 45,
   room: "Monarch",
   building: "Nine Orchard",
-  speakers: [{ id: "per_1", name: "Ada Ellery", company: "Stage 11" }],
+  speakers: [{ id: "per_1", name: "Ada Ellery", company: "Stage 11", role: "speaker" }],
 };
 
 const row = (review: boolean) => renderToString(h(PublicationCandidateRow, { candidate, timezone: "America/New_York", review, selected: true }));
@@ -39,6 +39,16 @@ const unscheduledRow = renderToString(h(PublicationCandidateRow, {
   },
   timezone: "America/New_York",
   selected: false,
+}));
+const submitterOnlyRow = renderToString(h(PublicationCandidateRow, {
+  candidate: {
+    ...candidate,
+    title: "Session with a submitter but no speaker",
+    speakers: [{ id: "per_submitter", name: "Submitter Only", company: "Conference Co", role: "submitter" }],
+  },
+  timezone: "America/New_York",
+  review: true,
+  selected: true,
 }));
 
 /**
@@ -63,6 +73,11 @@ describe("MRQ-135 · the publication review row is readable", () => {
     expect(markup).toContain("Nine Orchard");
     expect(markup).toContain("Ada Ellery");
     expect(markup).not.toContain("type=\"checkbox\"");
+  });
+
+  it("CONTRACT · MRQ-185 · the review row warns when its program-only participant is not on stage", () => {
+    expect(submitterOnlyRow).toContain("Speaker to be announced");
+    expect(submitterOnlyRow).not.toContain("Submitter Only");
   });
 
   it("CONTRACT · selection mode keeps its checkbox and its two-column layout", () => {

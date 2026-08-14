@@ -169,7 +169,7 @@ test("MRQ-185 · a published submitter-only session names its missing on-stage s
   const agendaBody = await agenda.text();
   expect(agenda.status).toBe(200);
   expect(agendaBody).toContain(NO_STAGE_TITLE);
-  expect(agendaBody).toMatch(/<p class="public-speakers">Speaker to be announced<\/p>/);
+  expect(agendaBody).toContain('<p class="public-speakers"><span class="public-speaker-empty">Speaker to be announced</span></p>');
   expect(agendaBody).toContain("Public Speaker");
 
   const embed = await request(`/embed/${EVENT_SLUG}-agenda?event=${EVENT_SLUG}`);

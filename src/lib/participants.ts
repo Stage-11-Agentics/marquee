@@ -27,6 +27,9 @@ export const SPEAKING_PARTICIPATION_ROLES = [
   "chairperson",
 ] as const satisfies readonly ParticipationRole[];
 
+/** Public surfaces name a missing on-stage participant instead of printing punctuation. */
+export const PUBLIC_SPEAKER_EMPTY_LABEL = "Speaker to be announced";
+
 export type ParticipantAudience = "public" | "program";
 
 const SPEAKING_ROLE_SET: ReadonlySet<string> = new Set(SPEAKING_PARTICIPATION_ROLES);

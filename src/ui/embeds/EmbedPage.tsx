@@ -11,6 +11,7 @@ import {
   type PublicSession,
   type PublicTrack,
 } from "../../lib/public-site";
+import { PUBLIC_SPEAKER_EMPTY_LABEL } from "../../lib/participants";
 import { PublicShell, PUBLIC_SITE_STYLES, PublicSpeakerAvatar } from "../public/agenda/PublicAgendaPage";
 
 const EMBED_KIND_LABEL: Record<EmbedKind, string> = {
@@ -36,6 +37,7 @@ export const EMBED_STYLES = `
 .embed-session time strong { display: block; margin-bottom: 3px; color: var(--public-ink); font-size: 13px; }
 .embed-session h2 { margin: 0; color: var(--embed-accent); font: 650 14px/1.25 Georgia, serif; }
 .embed-session p { margin: 4px 0 0; color: var(--public-muted); font-size: 10px; }
+.embed-speaker-credits { min-height: 15px; }
 .embed-abstract { min-height: 26px; margin: 6px 0 0; color: var(--public-soft); font-size: 10px; line-height: 1.5; }
 .embed-more { margin-top: 4px; }
 .embed-more > summary { display: inline-block; color: var(--embed-accent); font: 650 9px/1.2 var(--public-mono); cursor: pointer; list-style: none; }
@@ -349,7 +351,11 @@ function speakerSocialLinks(speaker: PublicEmbedData["speakers"][number]): JSX.E
 function speakerCredits(session: PublicSession): string {
   return session.speakers
     .map((speaker) => [speaker.name, [speaker.title, speaker.company].filter(Boolean).join(", ")].filter(Boolean).join(" — "))
-    .join(" · ") || "—";
+    .join(" · ") || PUBLIC_SPEAKER_EMPTY_LABEL;
+}
+
+function SpeakerCredits({ session }: { session: PublicSession }): JSX.Element {
+  return <p class="embed-speaker-credits">{speakerCredits(session)}</p>;
 }
 
 /** Same bounded snippet + zero-JS expansion the public agenda cards use. */
@@ -388,7 +394,7 @@ function sessionsFlatList(sessions: PublicEmbedData["sessions"], fields: Readonl
           {fields.has("time") ? <time><strong>{session.time}</strong>{session.day}<br />→ {session.endTime}{fields.has("location") ? <><br />{session.roomLabel}</> : null}</time> : fields.has("location") ? <p class="embed-session-location">{session.roomLabel}</p> : null}
           <div>
             {fields.has("title") ? <h2>{session.title}</h2> : null}
-            {fields.has("speakers") ? <p>{speakerCredits(session)}</p> : null}
+            {fields.has("speakers") ? <SpeakerCredits session={session} /> : null}
             {sessionAbstract(session, fields.has("abstract"))}
             {sessionChips(session, fields)}
           </div>
@@ -461,7 +467,7 @@ export function EmbedPage({ data, basic = false }: { data: PublicEmbedData; basi
               {fields.has("time") ? <time><strong>{session.time}</strong>{session.day}<br />→ {session.endTime}{fields.has("location") ? <><br />{session.roomLabel}</> : null}</time> : fields.has("location") ? <p class="embed-session-location">{session.roomLabel}</p> : null}
               <div>
                 {fields.has("title") ? <h2>{session.title}</h2> : null}
-                {fields.has("speakers") ? <p>{speakerCredits(session)}</p> : null}
+                {fields.has("speakers") ? <SpeakerCredits session={session} /> : null}
                 {sessionAbstract(session, fields.has("abstract"))}
                 {sessionChips(session, fields)}
               </div>
