@@ -436,7 +436,7 @@ test("AC-298 · removing an organizer consumes the unexpired sign-in link alread
   expect(byId.get(stale.id)).toBeNull();
 });
 
-test("AC-298 · removing an organizer revokes the tokens the human named, and only those — arm three", async () => {
+test("AC-298 · removing an organizer revokes the tokens they minted, sparing only what the human kept — arm three", async () => {
   const { cookie, orgId, eventId } = await seedInstance("arm3");
   await addPerson(orgId, "per_arm3_member", "noor@gl-infra.dev", "Noor Haddad-Wells");
   await env.DB.batch([
@@ -463,10 +463,11 @@ test("AC-298 · removing an organizer revokes the tokens the human named, and on
 
   // Show-and-choose (ruling O3): the dialog pre-checks revoke, and the human
   // unchecked one because it powers an integration the organization keeps.
+  // Keeping is the explicit act; revoking is what happens by default.
   const removed = await request("/api/v1/org/members/per_arm3_member", {
     method: "DELETE",
     headers: { "content-type": "application/json", cookie },
-    body: JSON.stringify({ revoke_token_ids: ["tok_fired_a"] }),
+    body: JSON.stringify({ keep_token_ids: ["tok_fired_b"] }),
   });
   expect(removed.status).toBe(200);
   expect((await removed.json()) as { data: { revoked_tokens: number } }).toMatchObject({ data: { revoked_tokens: 1 } });
@@ -476,10 +477,11 @@ test("AC-298 · removing an organizer revokes the tokens the human named, and on
   const revoked = new Map(tokens.results.map((row) => [row.id, row.revoked_at]));
   expect(revoked.get("tok_fired_a")).not.toBeNull();
   expect(revoked.get("tok_fired_b")).toBeNull();
+  // Never theirs to lose: `created_by` is the owner, not the removed member.
   expect(revoked.get("tok_owner")).toBeNull();
 });
 
-test("AC-298 · a named token that is not theirs is not revoked, and every organizer seat ends at once", async () => {
+test("AC-298 · removal reaches only the removed member's own credentials, and every organizer seat ends at once", async () => {
   const { cookie, orgId, eventId } = await seedInstance("arm4");
   await addPerson(orgId, "per_arm4_member", "sol@gl-infra.dev", "Sol Ferreira-Nunes");
   await env.DB.batch([
@@ -497,12 +499,14 @@ test("AC-298 · a named token that is not theirs is not revoked, and every organ
     ).bind(orgId, null, "per_arm4_owner", NOW, NOW),
   ]);
 
-  // A token id is client-supplied. Naming one they did not mint must revoke
-  // nothing — the ownership predicates are the reason this is safe.
+  // A token id is client-supplied, and `keep_token_ids` naming somebody else's
+  // must neither revoke it nor shield it: the `created_by` predicate is what
+  // decides whose credentials this action can reach, and it is the only thing
+  // that decides it.
   const removed = await request("/api/v1/org/members/per_arm4_member", {
     method: "DELETE",
     headers: { "content-type": "application/json", cookie },
-    body: JSON.stringify({ revoke_token_ids: ["tok_not_theirs"] }),
+    body: JSON.stringify({ keep_token_ids: ["tok_not_theirs"] }),
   });
   expect(removed.status).toBe(200);
   expect(
@@ -815,4 +819,84 @@ test("AC-296 · a live conference-scoped invite does not make its conference und
   expect(await countOf("SELECT COUNT(*) AS total FROM magic_links WHERE id = ?", invite.data.id)).toBe(0);
   // The organization itself is untouched — only the conference was deleted.
   expect(await countOf("SELECT COUNT(*) AS total FROM organizations WHERE id = ?", orgId)).toBe(1);
+});
+
+test("AC-298 · the ordinary removal — the one the UI sends — kills the removed organizer's credential, proven by using it", async () => {
+  const { cookie, orgId } = await seedInstance("bearer207");
+  await addPerson(orgId, "per_bearer_member", "kai@gl-infra.dev", "Kai Brennan-Oduya");
+  await env.DB.prepare(
+    "INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, NULL, ?, 'program_lead', ?, ?)",
+  )
+    .bind("mem_bearer", orgId, "per_bearer_member", NOW, NOW)
+    .run();
+
+  // A credential this organizer minted, and whose secret they therefore know by
+  // heart. `created_by` is them; nothing else about the row is.
+  const secret = "mq_bearer_secret_for_mrq_207_regression";
+  await env.DB.prepare(
+    `INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+     VALUES ('tok_bearer', ?, NULL, 'their integration', ?, 'mq_bear', '{"permissions":["program:read"],"event_ids":[]}', 'per_bearer_member', ?, ?)`,
+  )
+    .bind(orgId, await sha256Hex(secret), NOW, NOW)
+    .run();
+
+  const bearer = { authorization: `Bearer ${secret}` };
+  // Before: the credential works. Without this the assertion below could pass
+  // against a token that never authenticated in the first place.
+  expect((await request("/api/v1/org/members", { headers: bearer })).status).toBe(200);
+
+  // The request the product actually sends: DELETE with NO BODY. Every
+  // assertion in this file that passed explicit token ids exercised the
+  // revocation helper while never touching this path.
+  const removed = await request("/api/v1/org/members/per_bearer_member", {
+    method: "DELETE",
+    headers: { cookie },
+  });
+  expect(removed.status).toBe(200);
+  expect((await removed.json()) as { data: { revoked_tokens: number } }).toMatchObject({
+    data: { revoked_tokens: 1 },
+  });
+
+  // After: the credential is dead. Asserting the ROW is revoked is weaker than
+  // proving the secret no longer authenticates, which is the thing a removed
+  // organizer would actually try.
+  expect((await request("/api/v1/org/members", { headers: bearer })).status).toBe(401);
+  expect(
+    await countOf("SELECT COUNT(*) AS total FROM api_tokens WHERE id = 'tok_bearer' AND revoked_at IS NOT NULL"),
+  ).toBe(1);
+});
+
+test("AC-298 · a token the human explicitly keeps survives removal, and it is the only one that does", async () => {
+  const { cookie, orgId } = await seedInstance("keep207");
+  await addPerson(orgId, "per_keep_member", "sim@gl-infra.dev", "Simone Adeyemi-Frost");
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, NULL, ?, 'ops', ?, ?)",
+    ).bind("mem_keep", orgId, "per_keep_member", NOW, NOW),
+    ...["tok_keep_this", "tok_kill_this"].map((id) =>
+      env.DB.prepare(
+        `INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, ?, 'mq_test', '{"permissions":["program:read"],"event_ids":[]}', 'per_keep_member', ?, ?)`,
+      ).bind(id, orgId, id, `hash_${id}`, NOW, NOW),
+    ),
+  ]);
+  expect(await countOf("SELECT COUNT(*) AS total FROM api_tokens WHERE revoked_at IS NULL")).toBe(2);
+
+  // Ruling O3's dialog: revoke is the DEFAULT, and the human unchecks the one
+  // that powers an integration the organization keeps. Keeping is the explicit
+  // act; revoking is what happens if nobody says anything.
+  const removed = await request("/api/v1/org/members/per_keep_member", {
+    method: "DELETE",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ keep_token_ids: ["tok_keep_this"] }),
+  });
+  expect(removed.status).toBe(200);
+  expect((await removed.json()) as { data: { revoked_tokens: number } }).toMatchObject({
+    data: { revoked_tokens: 1 },
+  });
+
+  const tokens = await env.DB.prepare("SELECT id, revoked_at FROM api_tokens ORDER BY id").all<{ id: string; revoked_at: number | null }>();
+  const state = new Map(tokens.results.map((row) => [row.id, row.revoked_at]));
+  expect(state.get("tok_keep_this")).toBeNull();
+  expect(state.get("tok_kill_this")).not.toBeNull();
 });

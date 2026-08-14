@@ -78,12 +78,15 @@ const memberParams = z.object({ personId: z.string().min(1) });
 const removeMemberRequest = z
   .object({
     /**
-     * Which of the tokens they minted die with them. The dialog lists their
-     * tokens with revoke pre-checked (ruling O3) and sends back exactly what the
-     * human confirmed — some of those tokens power integrations the
-     * organization keeps, so this is show-and-choose, never a sweep.
+     * Which of the tokens they minted SURVIVE them.
+     *
+     * Revoke is the default and keeping is the explicit act, because the dialog
+     * lists their tokens with revoke pre-checked (ruling O3) — and because the
+     * product's own removal request carries no body at all. An opt-IN list read
+     * as the safer shape and was the opposite: every ordinary removal revoked
+     * nothing, and a departed organizer kept a bearer secret they already knew.
      */
-    revoke_token_ids: z.array(z.string().trim().min(1)).max(200).default([]),
+    keep_token_ids: z.array(z.string().trim().min(1)).max(200).default([]),
   })
   .strict();
 
@@ -426,7 +429,8 @@ const removeOrganizer = defineApiRoute(
         orgId: auth.orgId,
         personId,
         now,
-        tokenIds: parsed.data.revoke_token_ids,
+        revokeCreatedTokens: true,
+        keepTokenIds: parsed.data.keep_token_ids,
         // Their own way back in. A speaker-side link belongs to a seat this
         // action is not ending, so it is left alone.
         purposes: ["login"],
@@ -457,7 +461,7 @@ const removeOrganizer = defineApiRoute(
           removed_roles: memberships.results.map((membership) => membership.role),
           revoked_sessions: changes[1] ?? 0,
           consumed_links: changes[2] ?? 0,
-          revoked_tokens: parsed.data.revoke_token_ids.length === 0 ? 0 : (changes[3] ?? 0),
+          revoked_tokens: changes[3] ?? 0,
         },
       },
       200,
