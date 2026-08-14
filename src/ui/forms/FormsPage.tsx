@@ -10,6 +10,34 @@ import "./forms.css";
 
 type FormKind = "abstract" | "session";
 type FormStatus = "draft" | "open" | "closed";
+
+/**
+ * A `datetime-local` value carries no timezone, so the two directions have to
+ * agree on one. Reading used `toISOString()` — UTC — while writing parsed the
+ * control's value as local wall clock, so an organizer east or west of UTC was
+ * shown back a different moment than the one they set: type 2027-04-30 23:59 in
+ * New York, save, and the field redisplays 05/01/2027 03:59. The stored instant
+ * was right the whole time and the public form said "Closes 4/30/2027"; only
+ * the organizer checking their own deadline was told the wrong day.
+ *
+ * Both ends are local now, which is what the control's name promises and what
+ * the submitter is already shown. Round rubric dates keep their own symmetric
+ * UTC pair in EvaluationPage — a calendar day there is deliberately not a wall
+ * clock here.
+ */
+export function toDateTimeLocalInput(value: number | null): string {
+  if (value === null) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number): string => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export function fromDateTimeLocalInput(value: string): number | null {
+  if (!value) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+}
 type FieldType = "short_text" | "long_text" | "single_select" | "multi_select" | "url" | "email" | "file" | "number" | "date";
 
 interface FormSummary {
@@ -490,7 +518,7 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
     <div class="forms-builder">
       <aside class="card forms-steps" aria-label="Form builder steps">
         <CardHeader title="Build steps" />
-        <CardBody><div class="forms-step-list">{STEP_NAMES.map((name, index) => <button key={name} class={step === index ? "active" : ""} onClick={() => setStep(index)}><span>{index + 1}</span>{name}</button>)}</div><div class="divider" /><div class="field"><label>Collects</label><div class="segment forms-target"><button class={form.kind === "abstract" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "abstract" })}>Abstracts</button><button class={form.kind === "session" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "session" })}>Sessions</button></div><span class="field-note">{form.status === "draft" ? form.kind === "abstract" ? "Enters the evaluation pipeline." : "Bypasses evaluation; ready for agenda." : "Target locked after the conference form opened."}</span></div><div class="divider" /><div class="field"><label>Close date</label><input type="datetime-local" value={form.closes_at ? new Date(form.closes_at).toISOString().slice(0, 16) : ""} onInput={(event) => setForm({ ...form, closes_at: (event.currentTarget as HTMLInputElement).value ? new Date((event.currentTarget as HTMLInputElement).value).getTime() : null })} /></div><div class="field"><label>Submissions per person</label><input type="number" min="1" max="100" value={form.per_submitter_limit} onInput={(event) => setForm({ ...form, per_submitter_limit: Number((event.currentTarget as HTMLInputElement).value) || 1 })} /></div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>{busy === "form" ? "Saving…" : "Save form"}</Button></CardBody>
+        <CardBody><div class="forms-step-list">{STEP_NAMES.map((name, index) => <button key={name} class={step === index ? "active" : ""} onClick={() => setStep(index)}><span>{index + 1}</span>{name}</button>)}</div><div class="divider" /><div class="field"><label>Collects</label><div class="segment forms-target"><button class={form.kind === "abstract" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "abstract" })}>Abstracts</button><button class={form.kind === "session" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "session" })}>Sessions</button></div><span class="field-note">{form.status === "draft" ? form.kind === "abstract" ? "Enters the evaluation pipeline." : "Bypasses evaluation; ready for agenda." : "Target locked after the conference form opened."}</span></div><div class="divider" /><div class="field"><label>Close date</label><input type="datetime-local" value={toDateTimeLocalInput(form.closes_at)} onInput={(event) => setForm({ ...form, closes_at: fromDateTimeLocalInput((event.currentTarget as HTMLInputElement).value) })} /></div><div class="field"><label>Submissions per person</label><input type="number" min="1" max="100" value={form.per_submitter_limit} onInput={(event) => setForm({ ...form, per_submitter_limit: Number((event.currentTarget as HTMLInputElement).value) || 1 })} /></div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>{busy === "form" ? "Saving…" : "Save form"}</Button></CardBody>
       </aside>
       <section class="card forms-editor" aria-label="Form editor">
         <CardHeader title={STEP_NAMES[step] ?? "Form fields"}><Chip tone={formStatusTone(form.status)}>{form.status}</Chip></CardHeader>
