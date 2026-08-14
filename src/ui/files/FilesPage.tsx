@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import type { FilesRow, FilesSnapshot, FileStateFilter } from "../../routes/files.queries";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, EmptyState, PageHeader } from "../shell/components";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { formatBytes } from "../upload/upload-policy";
 import { FileComments } from "./FileComments";
 import { BulkExportDialog } from "./BulkExportDialog";
@@ -60,7 +61,7 @@ async function readLibrary(
   return body.data;
 }
 
-function FileRow({ eventId, row, selected, onToggle }: { eventId: string; row: FilesRow; selected: boolean; onToggle: () => void }): JSX.Element {
+function FileRow({ eventId, row, personName, selected, onToggle }: { eventId: string; row: FilesRow; personName: string; selected: boolean; onToggle: () => void }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const hasFile = row.latest !== null;
   const hasAmbiguousSession = row.session === null && row.session_candidates.length > 0;
@@ -68,7 +69,7 @@ function FileRow({ eventId, row, selected, onToggle }: { eventId: string; row: F
   return <>
     <tr>
       <td class="files-select-column">
-        <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select ${row.latest?.filename ?? row.task.title} for ${row.person.name}`} />
+        <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select ${row.latest?.filename ?? row.task.title} for ${personName}`} />
       </td>
       <td class="files-file-cell">
         <strong title={row.latest?.filename ?? row.task.title}>{row.latest?.filename ?? <span class="files-empty-dash">—</span>}</strong>
@@ -78,7 +79,7 @@ function FileRow({ eventId, row, selected, onToggle }: { eventId: string; row: F
         <small>{row.task.title}{!hasFile && row.task.status === "done" ? " · marked complete, no file on record" : ""}</small>
       </td>
       <td class="files-speaker-cell">
-        <strong>{row.person.name}</strong>
+        <strong>{personName}</strong>
         <small>{row.person.email}</small>
       </td>
       <td class="files-session-cell">
@@ -98,7 +99,7 @@ function FileRow({ eventId, row, selected, onToggle }: { eventId: string; row: F
     {expanded ? <tr>
       <td class="files-detail-cell" colSpan={9}>
         <div class="files-detail">
-          <div class="files-detail-head">Version history · {row.person.name} · {row.task.title}</div>
+          <div class="files-detail-head">Version history · {personName} · {row.task.title}</div>
           <FileVersions
             list={hasFile ? { owner_type: "task_upload", owner_id: row.id, versions: row.versions, latest: row.latest, version_count: row.version_count, latest_source: row.latest_source } : null}
             emptyCopy="No upload yet — this deliverable slot is open for context."
@@ -118,6 +119,9 @@ export function FilesPage({ eventId, navigate }: { eventId: string; navigate?: (
   const filterIdentity = JSON.stringify(filters);
   const ready = state.kind === "ready" ? state.snapshot : null;
   const rows = useMemo(() => ready?.rows ?? [], [ready]);
+  // One row per speaker per file task; two speakers sharing a name would give
+  // an AV lead no way to tell whose deck is whose.
+  const personNames = useMemo(() => disambiguatedNames(rows.map((row) => row.person)), [rows]);
   const selectedRows = useMemo(() => rows.filter((row) => selected.has(row.id)), [rows, selected]);
   const allVisibleSelected = rows.length > 0 && rows.every((row) => selected.has(row.id));
 
@@ -220,11 +224,11 @@ export function FilesPage({ eventId, navigate }: { eventId: string; navigate?: (
                 <th scope="col">Size</th>
                 <th scope="col"><span class="sr-only">Version history</span></th>
               </tr></thead>
-              <tbody>{rows.map((row) => <FileRow key={row.id} eventId={eventId} row={row} selected={selected.has(row.id)} onToggle={() => toggleRow(row.id)} />)}</tbody>
+              <tbody>{rows.map((row) => <FileRow key={row.id} eventId={eventId} row={row} personName={personNames.get(row.person.id) ?? row.person.name} selected={selected.has(row.id)} onToggle={() => toggleRow(row.id)} />)}</tbody>
             </table>
           </div>}
       </section>
     </> : <div class="files-board-state card">{state.kind === "error" ? <><strong>The files library is unavailable</strong><span>{state.message}</span></> : "Reading every deliverable the conference has asked for…"}</div>}
-    <BulkExportDialog eventId={eventId} rows={selectedRows} open={exportOpen} onClose={() => setExportOpen(false)} />
+    <BulkExportDialog eventId={eventId} rows={selectedRows} personNames={personNames} open={exportOpen} onClose={() => setExportOpen(false)} />
   </div>;
 }

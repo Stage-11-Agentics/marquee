@@ -11,7 +11,7 @@ import "./export.css";
 export interface ExportableFileRow {
   id: string;
   task: { title: string };
-  person: { name: string };
+  person: { id: string; name: string };
   session: { title: string } | null;
   latest: { filename: string; size_bytes: number } | null;
 }
@@ -23,6 +23,8 @@ const MAX_EXPORT_BYTES = 1024 * 1024 * 1024;
 interface Props {
   eventId: string;
   rows: readonly ExportableFileRow[];
+  /** Names as the Files board prints them, so the dialog agrees with the list it came from. */
+  personNames: ReadonlyMap<string, string>;
   open: boolean;
   onClose: () => void;
 }
@@ -47,7 +49,7 @@ async function responseMessage(response: Response): Promise<string> {
   return `${apiMessage ?? "The export could not be generated. Your selection is still here — try again."}${reference}`;
 }
 
-export function BulkExportDialog({ eventId, rows, open, onClose }: Props): JSX.Element | null {
+export function BulkExportDialog({ eventId, rows, personNames, open, onClose }: Props): JSX.Element | null {
   const [grouping, setGrouping] = useState<"session" | "speaker">("session");
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [state, setState] = useState<ExportState>("idle");
@@ -170,7 +172,7 @@ export function BulkExportDialog({ eventId, rows, open, onClose }: Props): JSX.E
         <div class="files-export-selection-head"><strong>{selected.length} selected</strong><span class="tabular">{formatBytes(totalBytes)} total</span></div>
         <ul class="files-export-selection">
           {selected.map((row) => <li key={row.id}>
-            <div><strong>{row.latest?.filename ?? row.task.title}</strong><small>{row.session?.title ?? "No session"} · {row.person.name}</small></div>
+            <div><strong>{row.latest?.filename ?? row.task.title}</strong><small>{row.session?.title ?? "No session"} · {personNames.get(row.person.id) ?? row.person.name}</small></div>
             <span class="tabular">{formatBytes(row.latest?.size_bytes ?? 0)}</span>
             <button type="button" class="files-export-remove" aria-label={`Remove ${row.latest?.filename ?? row.task.title}`} onClick={() => removeRow(row.id)} disabled={state === "preparing"}>Remove</button>
           </li>)}

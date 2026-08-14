@@ -2,6 +2,7 @@ import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { Button, Card, CardBody, CardHeader, Chip } from "../shell/components";
 import "./setup.css";
 
@@ -49,6 +50,8 @@ function expiryLabel(expiresAt: number): string {
 
 export function OrganizersCard(): JSX.Element {
   const [members, setMembers] = useState<Member[]>([]);
+  // Two organizers can share a name, and each row carries a Remove beside it.
+  const memberNames = disambiguatedNames(members.map((member) => ({ id: member.person_id, name: member.name })));
   const [invites, setInvites] = useState<Invite[]>([]);
   const [minted, setMinted] = useState<MintedInvite | null>(null);
   const [status, setStatus] = useState("");
@@ -104,8 +107,12 @@ export function OrganizersCard(): JSX.Element {
   };
 
   const removeOrganizer = async (member: Member): Promise<void> => {
+    // The confirm and the receipt name the person as the ROW named them. A
+    // dialog that says "Remove Marcus Okafor?" beside two rows reading Marcus
+    // Okafor is the moment the disambiguation was for.
+    const label = memberNames.get(member.person_id) ?? member.name;
     const confirmed = window.confirm(
-      `Remove ${member.name}?\n\nTheir reviews, decisions, and sent mail stay on the record. Their access ends now, and any sign-in link already in their inbox stops working.`,
+      `Remove ${label}?\n\nTheir reviews, decisions, and sent mail stay on the record. Their access ends now, and any sign-in link already in their inbox stops working.`,
     );
     if (!confirmed) return;
     setBusy(true);
@@ -114,7 +121,7 @@ export function OrganizersCard(): JSX.Element {
         method: "DELETE",
         route: MEMBER_ITEM_ROUTE,
       });
-      setStatus(`${member.name} removed · their work stays on the record.`);
+      setStatus(`${label} removed · their work stays on the record.`);
       await load();
     } catch (caught) {
       setStatus(errorSummary(caught));
@@ -136,13 +143,13 @@ export function OrganizersCard(): JSX.Element {
           <span class="organizer-action">—</span>
         </div>}
         {members.map((member) => <div key={member.person_id} class="organizer-row">
-          <span class="organizer-name">{member.name}{member.is_you && <small>You</small>}</span>
+          <span class="organizer-name">{memberNames.get(member.person_id) ?? member.name}{member.is_you && <small>You</small>}</span>
           <span class="organizer-email">{member.email}</span>
           <Chip tone="success">{member.role}</Chip>
           <span class="organizer-action">
             {member.is_you && members.length === 1
               ? <span class="instance-fix-blank">—</span>
-              : <Button small onClick={() => void removeOrganizer(member)} disabled={busy}>Remove</Button>}
+              : <Button small aria-label={`Remove ${memberNames.get(member.person_id) ?? member.name}`} onClick={() => void removeOrganizer(member)} disabled={busy}>Remove</Button>}
           </span>
         </div>)}
         {invites.map((invite) => <div key={invite.id} class="organizer-row">

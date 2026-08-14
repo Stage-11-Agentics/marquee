@@ -28,10 +28,13 @@ test("CONTRACT · MRQ-140 · a speaker with one session is answered before the o
 
 test("CONTRACT · MRQ-140 · the picker offers a session per selected speaker, and 'no session' stays sayable", () => {
   assert.match(page, /function SessionChoicePicker\(/);
-  assert.match(page, /<SessionChoicePicker assignees=\{assignees\} selected=\{draft\.assignTo\}/);
-  assert.match(page, /<SessionChoicePicker assignees=\{assignees\} selected=\{assignSelection\}/);
+  // Both doors, whatever else they hand the picker: the claim is that each one
+  // gets a session control for the speakers it selected, not that the prop list
+  // has stayed the same length since MRQ-140.
+  assert.match(page, /<SessionChoicePicker assignees=\{assignees\}[^>]*selected=\{draft\.assignTo\}/);
+  assert.match(page, /<SessionChoicePicker assignees=\{assignees\}[^>]*selected=\{assignSelection\}/);
   assert.match(page, /<option value="">No session<\/option>/);
-  assert.match(page, /aria-label=\{`Session for \$\{person\.name\}`\}/);
+  assert.match(page, /aria-label=\{`Session for \$\{[^`]*person\.name[^`]*\}`\}/);
 });
 
 test("CONTRACT · MRQ-140 · the session rows hold their height when their caption changes", () => {

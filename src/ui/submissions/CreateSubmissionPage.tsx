@@ -3,6 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary, fieldError, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, PageHeader } from "../shell/components";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import "./record.css";
 
 const SUBMISSIONS_ROUTE = "/api/v1/events/{eventId}/submissions";
@@ -60,7 +61,11 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
   const [kind, setKind] = useState<"abstract" | "session">("session");
   const [title, setTitle] = useState("");
   const [abstract, setAbstract] = useState("");
-  const [selectedSubmitter, setSelectedSubmitter] = useState<SearchResult | null>(null);
+  // The label the row carried WHEN IT WAS CLICKED. Selecting clears the result
+  // list that produced the marker, so re-deriving afterwards would drop
+  // "Marcus Okafor (2)" back to "Marcus Okafor" in the one place it matters
+  // most — the line the organizer reads before pressing Create.
+  const [selectedSubmitter, setSelectedSubmitter] = useState<{ person: SearchResult; label: string } | null>(null);
   const [submitterMode, setSubmitterMode] = useState<"existing" | "new">("existing");
   const [submitterQuery, setSubmitterQuery] = useState("");
   const [submitterResults, setSubmitterResults] = useState<SearchResult[]>([]);
@@ -142,7 +147,7 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
           title: title.trim(),
           abstract: abstract.trim() || null,
           ...(submitterMode === "existing"
-            ? { submitter_person_id: selectedSubmitter!.id }
+            ? { submitter_person_id: selectedSubmitter!.person.id }
             : { submitter: { name: newSubmitterName.trim(), email: newSubmitterEmail.trim() } }),
           track_ids: trackIds,
           format_id: formatId || undefined,
@@ -178,6 +183,9 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
   const model = settings.kind === "ready" ? settings.model : { formats: [], tracks: [] };
   const settingsReady = settings.kind === "ready";
   const submitterFieldError = fieldErrors.submitter;
+  // Two people can share a name, and this control decides who the submission
+  // belongs to. Search results key on `title`, which is the person's name.
+  const submitterNames = disambiguatedNames(submitterResults.map((person) => ({ id: person.id, name: person.title })));
   return <div class="submission-record-page">
     <PageHeader title="Create a submission" copy="Add an Abstract or Session directly to the conference program record. Choose the real person and conference options so the record is truthful." />
     <form onSubmit={submit} class="record-create-form">
@@ -195,14 +203,14 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
               <button type="button" role="tab" aria-selected={submitterMode === "new"} class={submitterMode === "new" ? "active" : ""} onClick={() => { setSubmitterMode("new"); setSelectedSubmitter(null); setSubmitterResults([]); setFieldErrors((current) => ({ ...current, submitter: "" })); }}>Create new person</button>
             </div>
             {submitterMode === "existing" && <div class="record-picker-body">
-              {selectedSubmitter ? <div class="record-selected-person"><span><strong>{selectedSubmitter.title}</strong><small>{selectedSubmitter.subtitle}</small></span><Button type="button" small onClick={() => { setSelectedSubmitter(null); setSubmitterQuery(""); }}>Change person</Button></div> : <>
+              {selectedSubmitter ? <div class="record-selected-person"><span><strong>{selectedSubmitter.label}</strong><small>{selectedSubmitter.person.subtitle}</small></span><Button type="button" small onClick={() => { setSelectedSubmitter(null); setSubmitterQuery(""); }}>Change person</Button></div> : <>
                 <label class="sr-only" for="submission-submitter-search">Search people</label><input id="submission-submitter-search" value={submitterQuery} onInput={(event) => { setSubmitterQuery(event.currentTarget.value); setSelectedSubmitter(null); setFieldErrors((current) => ({ ...current, submitter: "" })); }} placeholder="Search people by name…" autoComplete="off" aria-controls="submission-submitter-results" />
                 <div id="submission-submitter-results" class="record-person-suggestions" role="listbox" aria-label="People search results">
                   {submitterSearchState === "loading" && <span class="record-picker-placeholder">Searching people…</span>}
                   {submitterSearchState === "error" && <span class="record-picker-placeholder error">People search unavailable. Try again.</span>}
                   {submitterSearchState === "idle" && submitterQuery.trim().length < 2 && <span class="record-picker-placeholder">Type at least 2 characters to search.</span>}
                   {submitterSearchState === "idle" && submitterQuery.trim().length >= 2 && submitterResults.length === 0 && <span class="record-picker-placeholder">No matching people. Create a new person if this is a new contact.</span>}
-                  {submitterResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedSubmitter(person); setSubmitterQuery(person.title); setSubmitterResults([]); setFieldErrors((current) => ({ ...current, submitter: "" })); }}><strong>{person.title}</strong><small>{person.subtitle}</small></button>)}
+                  {submitterResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedSubmitter({ person, label: submitterNames.get(person.id) ?? person.title }); setSubmitterQuery(person.title); setSubmitterResults([]); setFieldErrors((current) => ({ ...current, submitter: "" })); }}><strong>{submitterNames.get(person.id) ?? person.title}</strong><small>{person.subtitle}</small></button>)}
                 </div>
               </>}
             </div>}

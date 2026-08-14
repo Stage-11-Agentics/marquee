@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import { formatFileSize, type FileAnswerView } from "../../lib/file-answers";
 import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } from "../shell/components";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
 import { ContentHistory } from "../history/ContentHistory";
 import { groupParticipants, type Participant } from "./participant-groups";
@@ -48,6 +49,7 @@ export interface EvaluationEvidence {
   id: string;
   round_id: string;
   round_name: string;
+  reviewer_person_id: string;
   reviewer_name: string;
   reviewer_kind: "human" | "agent";
   recommendation: string | null;
@@ -63,10 +65,10 @@ export interface EvaluationEvidence {
 }
 interface RubricCriterion { id: string; name: string; kind: "numeric" | "select" | "text"; weight_pct: number; position: number }
 export type EvaluationPanelEvaluation = Pick<EvaluationEvidence,
-  "abstained" | "id" | "reviewer_name" | "reviewer_kind" | "recommendation" | "score" | "comment"
+  "abstained" | "id" | "reviewer_person_id" | "reviewer_name" | "reviewer_kind" | "recommendation" | "score" | "comment"
   | "criteria_scores" | "override_score" | "override_comment" | "override_person_name"
 >;
-interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; criteria: RubricCriterion[]; reviewers: Assignment[]; evaluations: EvaluationPanelEvaluation[]; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
+interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; criteria: RubricCriterion[]; reviewers: Assignment[]; evaluations: EvaluationPanelEvaluation[]; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_person_id: string; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
 interface RecordData {
   id: string; event_id: string; event_name: string; kind: "abstract" | "session"; title: string; abstract: string | null;
   status: string; stage: string; stage_label: string; bypass_evaluation: boolean; origin: string; vendor_affiliation: string;
@@ -83,7 +85,7 @@ interface RecordData {
   /** Every decision mail this record has produced, newest first. */
   decision_sends: Array<DecisionSend & { id: string; kind: "accepted" | "rejected" }>;
   evaluations: EvaluationEvidence[];
-  comparisons: Array<{ round_id: string; round_name: string; reviewer_name: string; reviewer_kind: "human" | "agent"; ranking: unknown; submission_ids: string[] }>;
+  comparisons: Array<{ round_id: string; round_name: string; reviewer_person_id: string; reviewer_name: string; reviewer_kind: "human" | "agent"; ranking: unknown; submission_ids: string[] }>;
   evaluation: { rounds: Round[]; reviewer_options: Reviewer[] };
   history: Array<{ id: string; action: string; actor_kind: string | null; actor_name: string | null; created_at: number; before: unknown; after: unknown; restorable: boolean }>;
   actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_edit_participants: boolean; can_override_scores: boolean };
@@ -235,7 +237,7 @@ function ScorecardAnswers({ criteria, scores }: { criteria: RubricCriterion[]; s
  * than resolving them — there is no precedence rule to read here, because there
  * is none to have.
  */
-export function EvaluationPanelResult({ evaluation, criteria = [] }: { evaluation: EvaluationPanelEvaluation; criteria?: RubricCriterion[] }): JSX.Element {
+export function EvaluationPanelResult({ evaluation, criteria = [], displayName }: { evaluation: EvaluationPanelEvaluation; criteria?: RubricCriterion[]; displayName?: string }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   // The free-text note beside the scorecard, whoever wrote it — not the
   // reviewer's answer to the rubric, which renders below under its own
@@ -247,7 +249,7 @@ export function EvaluationPanelResult({ evaluation, criteria = [] }: { evaluatio
 
   return <article class="record-round-result" data-evaluation-panel-result={evaluation.id}>
     <div class="record-round-result-head">
-      <strong><ReviewerName name={evaluation.reviewer_name} kind={evaluation.reviewer_kind} /></strong>
+      <strong><ReviewerName name={displayName ?? evaluation.reviewer_name} kind={evaluation.reviewer_kind} /></strong>
       <span class="evaluation-panel-override-slot">{hasOverride
         ? <Chip tone="warning" class="override-chip">Override</Chip>
         : <span class="evaluation-panel-override-slot-placeholder" aria-hidden="true" />}</span>
@@ -284,8 +286,10 @@ export function EvaluationPanelResult({ evaluation, criteria = [] }: { evaluatio
   </article>;
 }
 
-function EvaluationEvidenceRow({ evaluation, criteria, canOverride, busy, error, onOverride, onClear }: {
+function EvaluationEvidenceRow({ evaluation, displayName, criteria, canOverride, busy, error, onOverride, onClear }: {
   evaluation: EvaluationEvidence;
+  /** The reviewer as this record prints them; two namesakes must be tellable apart. */
+  displayName: string;
   criteria: RubricCriterion[];
   canOverride: boolean;
   busy: boolean;
@@ -306,7 +310,7 @@ function EvaluationEvidenceRow({ evaluation, criteria, canOverride, busy, error,
   const scaleHint = scaleMin !== null && scaleMax !== null ? `${scaleMin}–${scaleMax}` : null;
   return <div class="record-answer record-evaluation">
     <small>
-      {evaluation.round_name} · Scorecard · <ReviewerName name={evaluation.reviewer_name} kind={evaluation.reviewer_kind} />
+      {evaluation.round_name} · Scorecard · <ReviewerName name={displayName} kind={evaluation.reviewer_kind} />
       <span class="evaluation-override-slot">{overridden ? <Chip tone="warning" class="override-chip">Override</Chip> : <span class="override-chip-placeholder" aria-hidden="true" />}</span>
     </small>
     <strong class="tabular">{evaluation.abstained
@@ -315,7 +319,7 @@ function EvaluationEvidenceRow({ evaluation, criteria, canOverride, busy, error,
     <span>{evaluation.abstained ? "Reviewer recused; no recommendation recorded." : evaluation.comment || "—"}</span>
     {!evaluation.abstained && <ScorecardAnswers criteria={criteria} scores={evaluation.criteria_scores} />}
     {overridden && <span class="evaluation-superseded">
-      Overridden by {evaluation.override_person_name || "a chair"} · {evaluation.reviewer_name} scored <span class="tabular">{scoreText(evaluation.score)}</span>
+      Overridden by {evaluation.override_person_name || "a chair"} · {displayName} scored <span class="tabular">{scoreText(evaluation.score)}</span>
       {evaluation.override_comment ? ` · ${evaluation.override_comment}` : ""}
     </span>}
     {canOverride && !evaluation.abstained && <div class="evaluation-override-controls">
@@ -334,11 +338,11 @@ function EvaluationEvidenceRow({ evaluation, criteria, canOverride, busy, error,
                 min={scaleMin ?? undefined}
                 max={scaleMax ?? undefined}
                 value={draftScore}
-                aria-label={`Override score for ${evaluation.reviewer_name}`}
+                aria-label={`Override score for ${displayName}`}
                 onInput={(event) => setDraftScore(event.currentTarget.value)}
               />
             </label>
-            <label class="field"><span>Why</span><input value={draftComment} aria-label={`Reason for overriding ${evaluation.reviewer_name}`} onInput={(event) => setDraftComment(event.currentTarget.value)} /></label>
+            <label class="field"><span>Why</span><input value={draftComment} aria-label={`Reason for overriding ${displayName}`} onInput={(event) => setDraftComment(event.currentTarget.value)} /></label>
             <div class="record-action-row">
               <span class={`record-inline-message ${error ? "error" : ""}`} role={error ? "alert" : undefined}>{error || (scaleHint && !inRange && draftScore.trim() !== "" ? `This plan scores ${scaleHint}.` : "")}</span>
               <Button small variant="ghost" type="button" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
@@ -380,7 +384,11 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [participantQuery, setParticipantQuery] = useState("");
   const [participantResults, setParticipantResults] = useState<SearchResult[]>([]);
   const [participantSearchState, setParticipantSearchState] = useState<"idle" | "loading" | "error">("idle");
-  const [selectedParticipant, setSelectedParticipant] = useState<SearchResult | null>(null);
+  // The label the row carried WHEN IT WAS CLICKED. Selecting clears the result
+  // list that produced the marker, so re-deriving afterwards would drop
+  // "Marcus Okafor (2)" back to plain in the line the organizer reads before
+  // pressing Add.
+  const [selectedParticipant, setSelectedParticipant] = useState<{ person: SearchResult; label: string } | null>(null);
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantEmail, setNewParticipantEmail] = useState("");
   const [participantError, setParticipantError] = useState("");
@@ -443,7 +451,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     if (participantMode === "existing" && !selectedParticipant) { setParticipantError("Choose a person from the list, or add a new person."); return; }
     if (participantMode === "new" && (!newParticipantName.trim() || !newParticipantEmail.trim())) { setParticipantError("A new participant needs a name and an email address."); return; }
     const person = participantMode === "existing"
-      ? { person_id: selectedParticipant!.id }
+      ? { person_id: selectedParticipant!.person.id }
       : { name: newParticipantName.trim(), email: newParticipantEmail.trim() };
     const added = await participantWrite("add-participant", "/participants", { method: "POST", body: JSON.stringify({ ...person, role: participantRole }) }, PARTICIPANTS_ROUTE);
     if (!added) return;
@@ -617,7 +625,24 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // Every round's rubric, so an evaluation's criteria_scores can be read back
   // as the questions the reviewer actually answered.
   const criteriaByRound = new Map(record.evaluation.rounds.map((round) => [round.id, round.criteria ?? []]));
+  // Two reviewers may share a name. This picker assigns work, so the option a
+  // human clicks has to name a record they can tell from its twin.
+  const reviewerNames = disambiguatedNames(record.evaluation.reviewer_options);
+  // The recorded evidence is its own population: a reviewer can have left the
+  // pool and still have a scorecard on this record, and the override controls
+  // sit right beside their name.
+  const evidenceNames = disambiguatedNames([
+    ...record.evaluations.map((evaluation) => ({ id: evaluation.reviewer_person_id, name: evaluation.reviewer_name })),
+    ...record.comparisons.map((comparison) => ({ id: comparison.reviewer_person_id, name: comparison.reviewer_name })),
+  ]);
   const participantGroups = groupParticipants(record.participants);
+  // Two participants can share a name, and the recipient picker below decides
+  // who a message goes to. One derivation across the record's own people, so
+  // the card and the picker agree.
+  const participantNames = disambiguatedNames(record.participants.map((participant) => ({ id: participant.person_id, name: participant.name })));
+  // The "Choose existing person" search is its own list, and picking the wrong
+  // row here adds the wrong human to the submission.
+  const participantResultNames = disambiguatedNames(participantResults.map((person) => ({ id: person.id, name: person.title })));
   const speakerParticipant = record.participants.find((participant) => participant.role === "speaker")
     ?? record.participants.find((participant) => participant.role === "co_speaker")
     ?? record.participants.find((participant) => participant.role !== "submitter");
@@ -690,7 +715,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(event) => { event.preventDefault(); void act("schedule", "/schedule", { method: "POST", body: JSON.stringify({ starts_at: new Date(schedule.starts_at).getTime(), duration_min: Number(schedule.duration_min), room_id: schedule.room_id, track_id: schedule.track_id || null }) }, SCHEDULE_ROUTE); }}><label class="field"><span>Starts at</span><input required type="datetime-local" value={schedule.starts_at} onInput={(event) => setSchedule({ ...schedule, starts_at: event.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(event) => setSchedule({ ...schedule, duration_min: event.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(event) => setSchedule({ ...schedule, room_id: event.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy)}>Place on agenda</Button></form></CardBody></Card>}
         <Card><CardHeader title="Participants"><span class="tabular">{participantGroups.length}</span></CardHeader><CardBody>
-          <div class="record-participants">{participantGroups.length ? participantGroups.map((group) => <div class="record-person" key={group.person_id}><strong>{group.name}</strong><span>{group.company || "Company not provided"}</span><small>{group.email}</small><div class="record-person-roles" aria-label={`${group.name} roles`}>{group.participants.map((participant) => <div class="record-person-role" key={participant.id}><span class="record-person-role-name">{statusLabel(participant.role)}</span><Chip tone={participantConfirmationTone(participant.confirmation_status)}>{participantConfirmationLabel(participant.confirmation_status)}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove {statusLabel(participant.role)} role</Button>}</div>)}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
+          <div class="record-participants">{participantGroups.length ? participantGroups.map((group) => <div class="record-person" key={group.person_id}><strong>{participantNames.get(group.person_id) ?? group.name}</strong><span>{group.company || "Company not provided"}</span><small>{group.email}</small><div class="record-person-roles" aria-label={`${participantNames.get(group.person_id) ?? group.name} roles`}>{group.participants.map((participant) => <div class="record-person-role" key={participant.id}><span class="record-person-role-name">{statusLabel(participant.role)}</span><Chip tone={participantConfirmationTone(participant.confirmation_status)}>{participantConfirmationLabel(participant.confirmation_status)}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" aria-label={`Remove the ${statusLabel(participant.role)} role from ${participantNames.get(group.person_id) ?? group.name}`} disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove {statusLabel(participant.role)} role</Button>}</div>)}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
           {canEditParticipants && <form class="record-participant-add" onSubmit={(event) => void addParticipant(event)}>
             <fieldset class="record-person-picker" aria-describedby="record-participant-error">
               <legend>Add a participant</legend>
@@ -700,14 +725,14 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
                 <button type="button" role="tab" aria-selected={participantMode === "new"} class={participantMode === "new" ? "active" : ""} onClick={() => { setParticipantMode("new"); setSelectedParticipant(null); setParticipantResults([]); setParticipantError(""); }}>Add new person</button>
               </div>
               {participantMode === "existing" && <div class="record-picker-body">
-                {selectedParticipant ? <div class="record-selected-person"><span><strong>{selectedParticipant.title}</strong><small>{selectedParticipant.subtitle}</small></span><Button type="button" small onClick={() => { setSelectedParticipant(null); setParticipantQuery(""); }}>Change person</Button></div> : <>
+                {selectedParticipant ? <div class="record-selected-person"><span><strong>{selectedParticipant.label}</strong><small>{selectedParticipant.person.subtitle}</small></span><Button type="button" small onClick={() => { setSelectedParticipant(null); setParticipantQuery(""); }}>Change person</Button></div> : <>
                   <label class="sr-only" for="record-participant-search">Search people</label><input id="record-participant-search" value={participantQuery} onInput={(event) => { setParticipantQuery(event.currentTarget.value); setSelectedParticipant(null); setParticipantError(""); }} placeholder="Search people by name…" autoComplete="off" aria-controls="record-participant-results" />
                   <div id="record-participant-results" class="record-person-suggestions" role="listbox" aria-label="People search results">
                     {participantSearchState === "loading" && <span class="record-picker-placeholder">Searching people…</span>}
                     {participantSearchState === "error" && <span class="record-picker-placeholder error">People search unavailable. Try again.</span>}
                     {participantSearchState === "idle" && participantQuery.trim().length < 2 && <span class="record-picker-placeholder">Type at least 2 characters to search.</span>}
                     {participantSearchState === "idle" && participantQuery.trim().length >= 2 && participantResults.length === 0 && <span class="record-picker-placeholder">No matching people. Add a new person if this is a new contact.</span>}
-                    {participantResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedParticipant(person); setParticipantQuery(person.title); setParticipantResults([]); setParticipantError(""); }}><strong>{person.title}</strong><small>{person.subtitle}</small></button>)}
+                    {participantResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedParticipant({ person, label: participantResultNames.get(person.id) ?? person.title }); setParticipantQuery(person.title); setParticipantResults([]); setParticipantError(""); }}><strong>{participantResultNames.get(person.id) ?? person.title}</strong><small>{person.subtitle}</small></button>)}
                   </div>
                 </>}
               </div>}
@@ -723,8 +748,8 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
             </fieldset>
           </form>}
         </CardBody></Card>
-        <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
-        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} criteria={criteriaByRound.get(evaluation.round_id) ?? []} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} error={busy === `override-${evaluation.id}` ? "" : overrideError} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
+        <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participantNames.get(participant.person_id) ?? participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
+        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} displayName={evidenceNames.get(evaluation.reviewer_person_id) ?? evaluation.reviewer_name} criteria={criteriaByRound.get(evaluation.round_id) ?? []} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} error={busy === `override-${evaluation.id}` ? "" : overrideError} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={evidenceNames.get(comparison.reviewer_person_id) ?? comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
         <Card><CardHeader title="History"><span class="subtle">Every change, who made it, and when.</span></CardHeader><CardBody><ContentHistory entries={record.history} onRestore={record.actions.can_restore_content ? ((entryId) => void restoreVersion(entryId, isLivePublicly)) : undefined} busy={Boolean(busy)} label={statusLabel} moment={historyMoment} livePublicly={isLivePublicly} /></CardBody></Card>
       </div>
       <aside class="record-aside stack">
@@ -734,11 +759,11 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           {round.evaluations.filter((evaluation) => !evaluation.abstained).length > 0 && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => !evaluation.abstained).length} scorecard result{round.evaluations.filter((evaluation) => !evaluation.abstained).length === 1 ? "" : "s"}</small></div>}
           {round.evaluations.some((evaluation) => evaluation.abstained) && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => evaluation.abstained).length} conflict{round.evaluations.filter((evaluation) => evaluation.abstained).length === 1 ? "" : "s"} declared</small></div>}
           {round.evaluations.length > 0 && <div class="record-round-results">
-            {round.evaluations.map((evaluation, index) => <EvaluationPanelResult key={`${evaluation.id}-${index}`} evaluation={evaluation} criteria={criteriaByRound.get(round.id) ?? []} />)}
+            {round.evaluations.map((evaluation, index) => <EvaluationPanelResult key={`${evaluation.id}-${index}`} evaluation={evaluation} criteria={criteriaByRound.get(round.id) ?? []} displayName={evidenceNames.get(evaluation.reviewer_person_id) ?? evaluation.reviewer_name} />)}
           </div>}
           {round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}
-          {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
-          <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>
+          {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" aria-label={`Remove ${reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} from ${round.name}`} disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
+          <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewerNames.get(reviewer.id) ?? reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>
         </section>) : <span class="subtle">No evaluation rounds configured</span>}</div></CardBody></Card>
       </aside>
     </div>

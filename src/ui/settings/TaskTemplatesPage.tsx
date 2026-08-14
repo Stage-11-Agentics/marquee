@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
 import { dateInputFromDueAt, dueAtFromDateInput, formatDueDate } from "../../lib/task-due";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import "./settings.css";
 
 const BYTES_PER_MB = 1024 * 1024;
@@ -53,7 +54,7 @@ interface TaskTemplate {
   open_count: number;
 }
 
-interface SpeakerTask {
+export interface SpeakerTask {
   id: string;
   template_id: string;
   title: string;
@@ -70,7 +71,7 @@ interface SessionOption {
   title: string;
 }
 
-interface Assignee {
+export interface Assignee {
   id: string;
   name: string;
   email: string;
@@ -177,19 +178,68 @@ function TaskTemplatesSkeleton(): JSX.Element {
 }
 
 /**
+ * Who the picker shows for a query — the whole of its filtering, as a function
+ * of its inputs, so the rule can be exercised without a page around it.
+ *
+ * Matched against the name as RENDERED as well as the one stored: typing what
+ * you can see, "Marcus Okafor (2)", has to find the row showing it. A picker
+ * whose search and render disagree is a picker that cannot be searched.
+ */
+export function visibleAssignees(
+  assignees: readonly Assignee[],
+  displayNames: ReadonlyMap<string, string>,
+  query: string,
+): readonly Assignee[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return assignees;
+  return assignees.filter((person) => [
+    displayNames.get(person.id) ?? person.name,
+    person.name,
+    person.email,
+    person.company ?? "",
+  ].join(" ").toLowerCase().includes(needle));
+}
+
+/**
+ * The people the assignment surface names, and therefore the population its
+ * disambiguation is derived over: everyone assignable, plus anyone holding a
+ * task that is still on the page.
+ *
+ * Cancelled tasks are filtered out of the table, so their holders are not on
+ * this page at all and must not count — a hidden namesake would put "(2)" on
+ * the only visible one. Removing a co-speaker, though, deletes the
+ * participation and keeps the task, so that person is visible while no longer
+ * assignable, and dropping them returns them to a raw name.
+ */
+export function namedTaskPopulation(
+  assignees: readonly Assignee[],
+  assignments: readonly SpeakerTask[],
+): ReadonlyArray<{ id: string; name: string }> {
+  return [
+    ...assignees,
+    ...assignments
+      .filter((task) => !task.cancelled && !assignees.some((person) => person.id === task.person.id))
+      .map((task) => task.person),
+  ];
+}
+
+/**
  * The people picker.
  *
  * Multi-select is the whole point — every fixture task in the eval is assigned
  * to both speakers at once, and an organizer assigning a release form to sixty
  * speakers one at a time would be right to give up on the product.
  */
-function AssigneePicker({
+export function AssigneePicker({
   assignees,
+  displayNames,
   selected,
   onChange,
   idPrefix,
 }: {
   assignees: readonly Assignee[];
+  /** Names to print: duplicates carry a disambiguator so the wrong record is not ticked. */
+  displayNames: ReadonlyMap<string, string>;
   selected: readonly string[];
   /**
    * Emits a transform, not a snapshot. Ticking two speakers in the same frame
@@ -209,9 +259,7 @@ function AssigneePicker({
   // of them by eye is not a control, it is a punishment — and "Select all"
   // means all of the people you are looking at, not all thousand.
   const needle = query.trim().toLowerCase();
-  const visible = needle === ""
-    ? assignees
-    : assignees.filter((person) => `${person.name} ${person.email} ${person.company ?? ""}`.toLowerCase().includes(needle));
+  const visible = visibleAssignees(assignees, displayNames, query);
 
   return <div class="task-assignee-picker">
     <div class="task-assignee-head">
@@ -228,7 +276,7 @@ function AssigneePicker({
         <div class="task-assignee-list" role="group" aria-label="Speakers">
           {visible.map((person) => <label class="task-assignee-option" key={person.id}>
             <input type="checkbox" id={`${idPrefix}-${person.id}`} checked={selectedSet.has(person.id)} onChange={() => toggle(person.id)} />
-            <span><strong>{person.name}</strong><small>{person.company || person.email}</small></span>
+            <span><strong>{displayNames.get(person.id) ?? person.name}</strong><small>{person.company || person.email}</small></span>
           </label>)}
         </div>
       </>}
@@ -244,14 +292,16 @@ function AssigneePicker({
  * session is answered before the organizer arrives; the rest get one control
  * each, right where they were selected.
  */
-function SessionChoicePicker({
+export function SessionChoicePicker({
   assignees,
+  displayNames,
   selected,
   choices,
   onChange,
   idPrefix,
 }: {
   assignees: readonly Assignee[];
+  displayNames: ReadonlyMap<string, string>;
   selected: readonly string[];
   choices: Readonly<Record<string, string>>;
   onChange: (personId: string, submissionId: string) => void;
@@ -269,13 +319,13 @@ function SessionChoicePicker({
     <div class="task-session-list">
       {people.map((person) => <div class="task-session-row" key={person.id}>
         <span class="task-session-person">
-          <strong>{person.name}</strong>
+          <strong>{displayNames.get(person.id) ?? person.name}</strong>
           <small>{person.sessions.length === 1 ? "Their only session" : `${person.sessions.length} sessions`}</small>
         </span>
         <select
           class="task-session-select"
           id={`${idPrefix}-session-${person.id}`}
-          aria-label={`Session for ${person.name}`}
+          aria-label={`Session for ${displayNames.get(person.id) ?? person.name}`}
           value={chosenSession(person, choices)}
           onChange={(event) => onChange(person.id, event.currentTarget.value)}
         >
@@ -408,6 +458,19 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
   }, [eventId, reloadKey]);
 
   const reload = (): void => setReloadKey((value) => value + 1);
+
+  // Two speakers may share a name. Assigning work to the wrong record is the
+  // failure this guards, so the picker, the session control, and the list of
+  // who is already assigned all read from one derivation.
+  //
+  // Derived from BOTH populations: removing a co-speaker deletes the
+  // participation but keeps the task, so someone can hold a task while no
+  // longer being assignable. Deriving from assignees alone dropped exactly those
+  // people back to a raw name in the table where their task still sits.
+  const assigneeNames = useMemo(
+    () => disambiguatedNames(namedTaskPopulation(assignees, assignments)),
+    [assignees, assignments],
+  );
 
   const assignmentsByTemplate = useMemo(() => {
     const map = new Map<string, SpeakerTask[]>();
@@ -597,8 +660,8 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
         {draft.kind === "form" && <label class="field span-2"><span>Form</span><select value={draft.formId} onChange={(event) => { const value = event.currentTarget.value; setDraft((current) => ({ ...current, formId: value })); }}><option value="">Choose a form…</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}</select></label>}
         <div class="field span-2"><span>Deadline</span><DeadlineFields dueMode={draft.dueMode} dueDate={draft.dueDate} dueOffsetDays={draft.dueOffsetDays} idPrefix="task-new" onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))} /></div>
       </div>
-      <AssigneePicker assignees={assignees} selected={draft.assignTo} idPrefix="task-new-assignee" onChange={(update) => setDraft((current) => ({ ...current, assignTo: update(current.assignTo) }))} />
-      <SessionChoicePicker assignees={assignees} selected={draft.assignTo} choices={draft.sessionChoices} idPrefix="task-new-assignee" onChange={(personId, submissionId) => setDraft((current) => ({ ...current, sessionChoices: { ...current.sessionChoices, [personId]: submissionId } }))} />
+      <AssigneePicker assignees={assignees} displayNames={assigneeNames} selected={draft.assignTo} idPrefix="task-new-assignee" onChange={(update) => setDraft((current) => ({ ...current, assignTo: update(current.assignTo) }))} />
+      <SessionChoicePicker assignees={assignees} displayNames={assigneeNames} selected={draft.assignTo} choices={draft.sessionChoices} idPrefix="task-new-assignee" onChange={(personId, submissionId) => setDraft((current) => ({ ...current, sessionChoices: { ...current.sessionChoices, [personId]: submissionId } }))} />
       <label class="task-auto-assign"><input type="checkbox" checked={draft.autoAssign} onChange={(event) => { const checked = event.currentTarget.checked; setDraft((current) => ({ ...current, autoAssign: checked })); }} /><span>Also give this task to every speaker accepted from now on</span></label>
       <div class="task-compose-error" role="alert">{createError ?? ""}</div>
       <div class="task-compose-actions">
@@ -658,8 +721,8 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
                 <div class="task-compose-actions"><button class="button primary" type="button" onClick={() => void saveEdit(template.id)} disabled={rowBusy === template.id}>{rowBusy === template.id ? "Saving…" : "Save task"}</button></div>
               </div>}
               {assignFor === template.id && <div class="task-row-assign">
-                <AssigneePicker assignees={assignees} selected={assignSelection} idPrefix={`task-assign-${template.id}`} onChange={(update) => setAssignSelection((current) => update(current))} />
-                <SessionChoicePicker assignees={assignees} selected={assignSelection} choices={assignSessions} idPrefix={`task-assign-${template.id}`} onChange={(personId, submissionId) => setAssignSessions((current) => ({ ...current, [personId]: submissionId }))} />
+                <AssigneePicker assignees={assignees} displayNames={assigneeNames} selected={assignSelection} idPrefix={`task-assign-${template.id}`} onChange={(update) => setAssignSelection((current) => update(current))} />
+                <SessionChoicePicker assignees={assignees} displayNames={assigneeNames} selected={assignSelection} choices={assignSessions} idPrefix={`task-assign-${template.id}`} onChange={(personId, submissionId) => setAssignSessions((current) => ({ ...current, [personId]: submissionId }))} />
                 <div class="task-compose-actions"><button class="button primary" type="button" onClick={() => void assignTemplate(template.id)} disabled={assignSelection.length === 0 || rowBusy === template.id}>{rowBusy === template.id ? "Assigning…" : `Assign to ${assignSelection.length} speaker${assignSelection.length === 1 ? "" : "s"}`}</button></div>
               </div>}
               {isOpen && <div class="task-assignment-list">
@@ -667,7 +730,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
                   ? <p class="task-assignee-empty">Nobody is assigned to this task yet.</p>
                   : <table class="task-assignment-table"><thead><tr><th scope="col">Speaker</th><th scope="col">Session</th><th scope="col">Due</th><th scope="col">Status</th></tr></thead><tbody>
                     {rows.map((row) => <tr key={row.id}>
-                      <th scope="row"><strong>{row.person.name}</strong><small>{row.person.email}</small></th>
+                      <th scope="row"><strong>{assigneeNames.get(row.person.id) ?? row.person.name}</strong><small>{row.person.email}</small></th>
                       <td>{row.submission_title ?? "—"}</td>
                       <td class="tabular">{formatDueDate(row.due_at)}</td>
                       <td><span class={`task-status task-status-${row.status}`}>{row.status === "done" ? "Complete" : "Pending"}</span></td>

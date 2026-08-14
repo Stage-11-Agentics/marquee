@@ -51,6 +51,7 @@ const COMMITTEE_NOTE = "Heads up for the committee: this speaker also submitted 
 const review = (overrides: Partial<EvaluationPanelEvaluation> = {}): EvaluationPanelEvaluation => ({
   abstained: false,
   id: "evaluation_eval11_labels",
+  reviewer_person_id: "person_sam_whitfield",
   reviewer_name: "Sam Whitfield",
   reviewer_kind: "human",
   // Deliberately disagreeing with the scorecard's Recommendation criterion:
