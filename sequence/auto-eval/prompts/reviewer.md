@@ -19,6 +19,23 @@ first, decide whether it still fails, and only then read the code to explain wha
 A review that begins by reading the diff inherits the author's account of the problem,
 which is the one thing you were dispatched not to inherit.
 
+**Where you walk it, and where you must not.** There is no `npm run dev` here — the stack
+is a Worker, and `npm run e2e` requires `MARQUEE_E2E_URL` because "local dev is not a
+substitute". So:
+
+- **Never drive `marquee.stage11.dev` during a round.** A round in flight is being scored
+  against that site, and clicking through it changes the state a judge is about to read.
+  A freeze marker at the primary checkout means a round is up; `loop.sh status` says so too.
+- The test suite is your first instrument. Every fix here ships with a regression test that
+  fails against `github/main` and passes on the branch — run it **both ways** (`git stash`
+  is forbidden repo-wide; use `git checkout github/main -- <paths>` in your own worktree, or
+  a second worktree). A test that passes on both is not a regression test, and that alone is
+  a BLOCK.
+- Where the symptom genuinely needs a running instance, the PR should say how its author got
+  one; do the same. If you cannot get one and the criterion cannot be settled from tests and
+  code, **say so in the verdict** — an honest "could not exercise" is worth more than an
+  APPROVE that means "the diff looked right".
+
 ## Your bar is the ticket's, verbatim
 
 The ticket carries `pass_criteria` copied from the sbek rubric and the judge's own
@@ -34,8 +51,12 @@ Narrowing the criterion is the most common way a PR passes review and still scor
 ```sh
 cd /Users/atin/Projects/Stage11/deployments/Marquee
 git fetch github
-git worktree add ../Marquee-worktrees/review-$AE_PR --detach "$(gh pr view $AE_PR --repo Stage-11-Agentics/marquee --json headRefOid -q .headRefOid)"
-cd ../Marquee-worktrees/review-$AE_PR
+head=$(gh pr view $AE_PR --repo Stage-11-Agentics/marquee --json headRefOid -q .headRefOid)
+git fetch github "pull/$AE_PR/head"        # the head object, whatever branch it lives on
+dir=../Marquee-worktrees/review-$AE_PR
+[ -e "$dir" ] && dir="$dir-$(git rev-parse --short "$head")"   # never collide, never clobber
+git worktree add "$dir" --detach "$head"
+cd "$dir"
 pwd && git log --oneline -1
 ```
 
@@ -43,7 +64,16 @@ Detached at the PR head, in your own directory. Never the primary checkout — i
 board's home. Never the author's worktree; sharing it means you are testing their working
 tree rather than their commit.
 
-Remove the worktree when your verdict is posted.
+**Do not reuse or delete a `review-*` directory you did not just create.** Several persist
+from earlier reviews and one of them is somebody's evidence; the suffix above steps around
+a collision instead of resolving it destructively.
+
+When your verdict is posted, `cd` out first — `git worktree remove` refuses to run from
+inside the worktree it is removing:
+
+```sh
+cd /Users/atin/Projects/Stage11/deployments/Marquee && git worktree remove "$dir"
+```
 
 ## Run the gate yourself
 
@@ -85,12 +115,21 @@ hunch, and it belongs in the verdict as one.
 Post it as a PR comment **and** send it to Triage. Both, always: a verdict that sits in a
 terminal is not a verdict, and last night one sat for sixteen minutes while the PR waited.
 
+```sh
+gh pr comment $AE_PR --repo Stage-11-Agentics/marquee --body-file <your-verdict.md>
+c11 send --workspace "$AE_TRIAGE_WORKSPACE" --surface "$AE_TRIAGE_SURFACE" "PR #$AE_PR — <APPROVE|BLOCK>: <one line>"
+```
+
+Triage passes both variables at dispatch. If either is empty, post the PR comment anyway
+and then raise a c11 flag saying the verdict is on the PR and you could not deliver it —
+an undelivered verdict is the one failure this section exists to prevent.
+
 Every comment in this repo carries the same GitHub login, so sign yours — role, PR, and
 what you actually exercised — or "someone other than the author read this" is unverifiable
 from the artifact that governs it:
 
 ```
-Reviewed by: auto-eval reviewer (surface:N) · PR #<n> · gate <status>, <elapsed>ms
+Reviewed by: auto-eval reviewer ($C11_SURFACE_ID) · PR #<n> · gate <status>, <elapsed>ms
 Exercised: <the symptom you walked, and how>
 Verdict: APPROVE | BLOCK
 ```

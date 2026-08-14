@@ -114,7 +114,7 @@ Doc-only PRs may use a subagent.
   with no matching code change, whose evidence shows the control was never
   exercised, is a watch item. It becomes a ticket if the next round repeats it.
 
-## Triage taxonomy (the analyst's contract)
+## Triage taxonomy (Triage's contract)
 
 Every backward move is exactly one of these, and only the first is an emergency:
 

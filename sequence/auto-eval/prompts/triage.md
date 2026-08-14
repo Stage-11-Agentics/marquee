@@ -52,8 +52,14 @@ c11 launch-agent --type codex --model gpt-5.6-luna --effort max \
   --workspace <ws> --suppressed \
   --cwd /Users/atin/Projects/Stage11/deployments/Marquee \
   --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee \
-  --prompt-file sequence/auto-eval/prompts/reviewer.md --env AE_PR=<n>
+  --prompt-file sequence/auto-eval/prompts/reviewer.md \
+  --env AE_PR=<n> --env AE_TRIAGE_SURFACE="$C11_SURFACE_ID" \
+  --env AE_TRIAGE_WORKSPACE="$C11_WORKSPACE_ID"
 ```
+
+   **Pass your own surface and workspace.** A suppressed reviewer has no way to discover
+   where you are, and "report to Triage" without an address is how a finished verdict sits
+   in a terminal nobody reads.
 
    Independent review has repeatedly earned its cost here: #200's allowlist, #207's dropped
    kind predicate, #211's unprojected speaker array on a public endpoint, and #221, where the
@@ -66,8 +72,10 @@ c11 launch-agent --type codex --model gpt-5.6-luna --effort max \
    same branch has run 78s at load 14 and 276s at load 164, so serializing keeps those numbers
    honest. It is not protection against false reds — slowness cannot red this gate, an
    over-budget run is a warn, and only a 600s hang detector fails a slow one. **A red is
-   load-invariant: believe it.** Gate green → merge. Merge decisively; a bad merge costs a
-   `git revert`.
+   load-invariant: believe it.** **Reviewer APPROVE + gate green → merge** — both, and in
+   that order, because a green gate is not a review and neither is your own reading of a
+   diff you commissioned. With both in hand, merge decisively; a bad merge costs a
+   `git revert`, and an unmerged reviewed PR rots against a `main` several agents are moving.
 
 ## Every implementer gets its own worktree
 
