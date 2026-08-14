@@ -40,6 +40,30 @@ loop.sh guard             score floor and rollback anchor
 - **Expect roughly 100 minutes for six areas, with the first judgement about twenty minutes
   in.** That gap is what makes Triage's 60-minute deadline a real signal rather than an
   alarm clock, so tell it when a round runs unusually long.
+- **Watch `built_at` on `/health`, not just the sha.** A mid-run `built_at` change with the
+  sha unchanged means someone redeployed the same commit and re-seeded the data underneath
+  you. That is drift, the sha will not show it, and it is what exposed round 7. Void the run.
+
+## At RUN-COMPLETE, in this order
+
+`watch` prints `RUN-COMPLETE` and stops. Then: **sync → score → guard → barrier.**
+
+```sh
+loop.sh sync <stamp>
+( cd /Users/atin/Projects/Stage11/deployments/Marquee/.eval-kit-agent \
+  && npx --no-install tsx src/cli.ts score )   # no loop.sh verb for this; the kit is gitignored
+loop.sh guard        # score floor, and it sets the rollback anchor
+loop.sh barrier      # reset, verify, deploy everything merged this round, lift the freeze
+```
+
+The order is not cosmetic. `guard` sets the anchor the next round rolls back to, so scoring
+before it means the anchor describes a round you have actually graded; and `barrier` is the
+only mutation window, so it goes last. Report the headline **and** the coverage — a headline
+without coverage beside it is not comparable to anything.
+
+Two numbers that mislead if you read only one: **coverage below 60% withholds the headline
+entirely**, and `cannot_judge` drains coverage while `not_found` scores zero but keeps it.
+Confusing those two is the worst mistake available here.
 
 **You do not hand judgements to Triage.** `watch` syncs each area into
 `$KIT_LOCAL/runs/$stamp/judgements/`; Triage watches that tree and picks them up itself.

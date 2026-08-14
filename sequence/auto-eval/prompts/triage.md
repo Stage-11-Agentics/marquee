@@ -15,14 +15,22 @@ that could not fail — the classification degrades before you notice it degradi
 the shell instead: one tool call, no context, and you arrive at each judgement with a nearly
 empty window. **That is not economy, it is the reason your classification is worth anything.**
 
-**Seed your watermark once, at boot**, with everything already triaged — otherwise your
-first wait returns the previous round's completed judgements:
+**Seed your watermark at boot — and the seed must not overwrite one that already
+exists.** `[ -e ]` guard, never a bare `>`:
 
 ```sh
 KIT=/Users/atin/Projects/Stage11/deployments/Marquee/.eval-kit-agent
 SEEN=/Users/atin/Projects/Stage11/deployments/Marquee/sequence/auto-eval/run/triaged.txt
-ls -1 "$KIT"/runs/*/judgements/*.json 2>/dev/null > "$SEEN"; wc -l < "$SEEN"
+[ -e "$SEEN" ] || find "$KIT"/runs -path '*/judgements/*.json' -type f 2>/dev/null | sort > "$SEEN"
+wc -l < "$SEEN"
 ```
+
+**A returning Triage is booting too.** If a truncating seed ran on every boot, a Triage that
+died mid-round would be replaced by one that stamps every judgement then on disk as already
+triaged — including the ones its predecessor woke on and never processed. That is the same
+silent absorption this whole section exists to prevent, moved from the wait to the boot, and
+it fires on exactly the path described below as safe. Restarting mid-round is normal at
+~100 minutes a round; make the seed idempotent and it is harmless.
 
 Then each wait is one command:
 
@@ -31,15 +39,21 @@ KIT=/Users/atin/Projects/Stage11/deployments/Marquee/.eval-kit-agent
 SEEN=/Users/atin/Projects/Stage11/deployments/Marquee/sequence/auto-eval/run/triaged.txt
 touch "$SEEN"; deadline=$(( $(date +%s) + 3600 ))
 while :; do
-  new=$(ls -1 "$KIT"/runs/*/judgements/*.json 2>/dev/null | grep -vxF -f "$SEEN" || true)
+  new=$(find "$KIT"/runs -path '*/judgements/*.json' -type f 2>/dev/null | sort | grep -vxF -f "$SEEN" || true)
   [ -n "$new" ] && { echo "$new"; break; }
   [ "$(date +%s)" -ge "$deadline" ] && { echo "DEADLINE — nothing new in 60m"; break; }
   sleep 45
 done
 ```
 
-**Append each path to `$SEEN` as you finish triaging it, never before.** The watermark is a
-durable set of paths, and every part of that sentence is load-bearing:
+**Append each path as you finish triaging it, never before** — using the literal path, since
+a shell variable does not survive between tool calls:
+
+```sh
+echo <the judgement path> >> /Users/atin/Projects/Stage11/deployments/Marquee/sequence/auto-eval/run/triaged.txt
+```
+
+The watermark is a durable set of paths, and every part of that is load-bearing:
 
 - **A set, not a count.** A count re-baselines on every re-entry: you break on judgement 1,
   spend half an hour classifying and dispatching, and by the time you wait again the count
@@ -60,12 +74,14 @@ get the *previous* stamp, whose directory is complete and static: same hour, sam
 answer. Globbing every run sidesteps a stamp you cannot trust.
 
 **Absolute paths, always.** `.eval-kit-agent/` and `sequence/auto-eval/run/` are both
-gitignored and exist **only in the primary checkout**. Run this from a worktree with
-relative paths and python throws, `RUN` comes back empty, and you wait an hour on a path
-with a doubled slash. The Runner's prompt takes the same care for the same reason.
+gitignored and exist **only in the primary checkout**, so a relative path silently resolves
+to nothing from any worktree and you wait out the full deadline against a directory that was
+never going to exist. The Runner's prompt takes the same care for the same reason.
 
-Glob `*.json` rather than listing the directory: rsync stages under a dot-prefixed
-temporary name and renames, so the glob cannot match an in-flight file on either count.
+Match `*/judgements/*.json` rather than listing a directory: rsync stages under a
+dot-prefixed temporary name and renames, so an in-flight file cannot match on either count.
+`find` rather than a shell glob because under zsh an unmatched glob aborts the command
+outright, and `2>/dev/null` cannot suppress that — it is the shell refusing, not the tool.
 
 **It must return on either a new file or the deadline — never on a new file alone.** Under
 the old design, no message meant nothing had happened. Now, no file means nothing happened
