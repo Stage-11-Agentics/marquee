@@ -243,6 +243,13 @@ const removeOrganizer = defineApiRoute(
     // zero and the log would report "no active sign-ins" for the removal that
     // just ended four of them. What a removal actually revoked is the reason
     // this row exists at all.
+    //
+    // The count is therefore descriptive, not authoritative: a session minted in
+    // the milliseconds between this read and the batch is revoked by the batch
+    // and not counted here. That is the right trade — the alternative is
+    // counting inside the same transaction that zeroes the number, or splitting
+    // the audit row out of the batch, and a row that can disagree with the
+    // removal it describes is a worse defect than a count that can be one low.
     const liveSessions = await context.env.DB.prepare(
       "SELECT COUNT(*) AS total FROM auth_sessions WHERE person_id = ? AND revoked_at IS NULL",
     )

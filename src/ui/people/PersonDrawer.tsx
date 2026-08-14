@@ -26,6 +26,7 @@ import {
   type PersonActivity,
   type PersonRecord,
 } from "./people-api";
+import { appendUnseen } from "../history/paging";
 import { PIPELINE_STAGES } from "./pipeline-stages";
 
 export function PersonDrawer({
@@ -88,7 +89,9 @@ export function PersonDrawer({
     setLoadingMore(true);
     try {
       const next = await fetchPersonActivity(personId, activityPage + 1);
-      setOlderActivity((rows) => [...rows, ...next.data]);
+      // The feed grows while it is read; without the filter a row written
+      // between two pages arrives in both, twice on screen and twice as a key.
+      setOlderActivity((rows) => appendUnseen(rows, next.data));
       setActivityPage(next.page);
     } catch (caught) {
       setError(errorSummary(caught));

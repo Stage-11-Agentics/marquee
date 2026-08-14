@@ -3,6 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, EmptyState, PageHeader } from "../shell/components";
+import { appendUnseen } from "../history/paging";
 import "./settings.css";
 
 /**
@@ -49,10 +50,17 @@ type LoadState =
   | { kind: "error"; message: string };
 
 const PER_PAGE = 50;
+const ACTIVITY_ROUTE = "/api/v1/org/activity";
 
-/** Absolute, with the time: an audit line without a clock answers half the question. */
+/**
+ * Absolute, with the time: an audit line without a clock answers half the
+ * question. The formatter is built once — constructing an `Intl` formatter is
+ * the expensive half of formatting, and this one runs per row per render (R7).
+ */
+const MOMENT_FORMAT = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+
 export function activityMoment(value: number): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(value);
+  return MOMENT_FORMAT.format(value);
 }
 
 /**
@@ -87,26 +95,32 @@ export function OrgActivityPage(): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
 
-  async function load(page: number, existing: ActivityEvent[]): Promise<void> {
+  async function load(page: number, existing: ActivityEvent[], signal?: AbortSignal): Promise<void> {
     try {
-      const result = await apiFetch<ActivityPage>(`/api/v1/org/activity?page=${page}&per_page=${PER_PAGE}`, {
+      const result = await apiFetch<ActivityPage>(`${ACTIVITY_ROUTE}?page=${page}&per_page=${PER_PAGE}`, {
         credentials: "include",
-        route: "org-activity",
+        route: ACTIVITY_ROUTE,
+        ...(signal ? { signal } : {}),
       });
       setState({
         kind: "ready",
-        events: [...existing, ...result.data],
+        // The log grows while it is being read, which shifts the offset window:
+        // without this, a row written between two pages arrives in both.
+        events: appendUnseen(existing, result.data),
         total: result.total,
         page: result.page,
         totalPages: result.total_pages,
       });
     } catch (error) {
+      if (signal?.aborted) return;
       setState({ kind: "error", message: errorSummary(error) });
     }
   }
 
   useEffect(() => {
-    void load(1, []);
+    const controller = new AbortController();
+    void load(1, [], controller.signal);
+    return () => controller.abort();
   }, []);
 
   const body = state.kind === "loading"

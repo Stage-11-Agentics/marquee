@@ -140,8 +140,8 @@ test("MRQ-211 · lens one · an API token is recorded by name and grants, never 
   expect(created.status).toBe(201);
   const body = await created.json() as { data: { id: string }; secret: string };
 
-  const log = await orgActivity();
-  const row = log.data.find((entry) => entry.action === "org.token_created");
+  const created_log = await orgActivity();
+  const row = created_log.data.find((entry) => entry.action === "org.token_created");
   expect(row?.summary).toBe("API token created");
   expect(row?.detail).toBe("Schedule bot · program:read");
   // Scoped to one conference, so the lens resolves the conference by join
@@ -158,6 +158,14 @@ test("MRQ-211 · lens one · an API token is recorded by name and grants, never 
   const revoked = await request(`/api/v1/org/tokens/${body.data.id}`, { method: "DELETE" });
   expect(revoked.status).toBe(200);
   expect((await orgActivity()).data[0]?.summary).toBe("API token revoked");
+
+  // Revoking an already-revoked token still answers 200 (the UPDATE is a
+  // COALESCE no-op), so a retried DELETE must not record a second revocation of
+  // a credential that was revoked once. Same rule the invite path follows.
+  const again = await request(`/api/v1/org/tokens/${body.data.id}`, { method: "DELETE" });
+  expect(again.status).toBe(200);
+  const log = await orgActivity();
+  expect(log.data.filter((entry) => entry.action === "org.token_revoked")).toHaveLength(1);
 });
 
 test("MRQ-211 · lenses one and two · removing an organizer records what it revoked, on the person's own record", async () => {

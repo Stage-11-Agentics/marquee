@@ -10,6 +10,7 @@ import { disambiguatedNames } from "../../lib/duplicate-names";
 import { useEventContext } from "../shell/event-context";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
 import { ContentHistory } from "../history/ContentHistory";
+import { appendUnseen } from "../history/paging";
 import { groupParticipants, type Participant } from "./participant-groups";
 import { decidedNote, headerChipTone, historyMoment, lastSendLine, moment, sendMoment, sendMomentFor, sendOutcome, statusLabel, type DecisionSend } from "./record-copy";
 import "./record.css";
@@ -538,7 +539,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/timeline?page=${historyPage + 1}`,
         { route: TIMELINE_ROUTE },
       );
-      setOlderHistory((rows) => [...rows, ...next.data]);
+      setOlderHistory((rows) => appendUnseen(rows, next.data));
       setHistoryPage(next.page);
     } catch (error) {
       setActionError({ action: "timeline", message: errorSummary(error) });

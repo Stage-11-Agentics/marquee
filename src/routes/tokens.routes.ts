@@ -236,17 +236,23 @@ const revokeApiToken = defineApiRoute(
     ).bind(now, now, tokenId, auth.orgId).run();
     const revoked = await context.env.DB.prepare("SELECT * FROM api_tokens WHERE id = ?").bind(tokenId).first<ApiTokenRow>();
     if (!revoked) throw new Error("revoked_api_token_disappeared");
-    await recordOrgActivity(context.env.DB, {
-      orgId: auth.orgId,
-      eventId: row.event_id,
-      ...orgActor(auth),
-      action: ORG_ACTIVITY_ACTIONS.tokenRevoked,
-      entityType: "api_token",
-      entityId: tokenId,
-      before: { name: row.name },
-      now,
-      requestId: context.get("requestId") ?? null,
-    });
+    // A revoke that changed nothing records nothing. The UPDATE is a COALESCE
+    // no-op on an already-revoked token and still answers 200, so without this
+    // a retried DELETE — or an agent replaying a call — would write a second
+    // revocation of a credential that was revoked once.
+    if (row.revoked_at === null) {
+      await recordOrgActivity(context.env.DB, {
+        orgId: auth.orgId,
+        eventId: row.event_id,
+        ...orgActor(auth),
+        action: ORG_ACTIVITY_ACTIONS.tokenRevoked,
+        entityType: "api_token",
+        entityId: tokenId,
+        before: { name: row.name },
+        now,
+        requestId: context.get("requestId") ?? null,
+      });
+    }
     return context.json({ data: summarizeToken(revoked) }, 200);
   },
 );
