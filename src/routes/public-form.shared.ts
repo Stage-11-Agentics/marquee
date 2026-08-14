@@ -220,6 +220,12 @@ function publicOutcomeForSubmission(submission: SubmissionRow | null): PublicFor
  *   moves a hard bounce to `failed` when the row had already been sent, and
  *   leaves `delivery_state` alone otherwise, so both have to be excluded. A
  *   soft bounce is still in flight and stays eligible.
+ * - **Only a public-form confirmation is live mail.** `enqueuePublicFormConfirmation`
+ *   is the one send path on this route that writes `send_policy = 'always_live'`;
+ *   organizer communications take the `demo_safe` default. Without that clause an
+ *   organizer message to the submitter, filed under the same submission and the
+ *   same key, is a perfect match on every other column — and the page calls it
+ *   "your confirmation".
  * - **The template key is the one this form uses now.** An organizer may change
  *   `thankyou_template_key` while submissions exist, and an older receipt then
  *   goes unrecognised. That direction is deliberate: the page falls silent
@@ -235,6 +241,7 @@ async function findReceipt(
       `SELECT to_email, status FROM outbox
        WHERE event_id = ? AND entity_id = ? AND template_key = ?
          AND person_id = ?
+         AND send_policy = 'always_live'
          AND status IN ('queued', 'sent')
          AND delivery_state <> 'bounced_hard'
        ORDER BY created_at ASC, id ASC

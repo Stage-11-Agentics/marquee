@@ -691,7 +691,19 @@ describe.sequential("MRQ-15 public conference form", () => {
     const body = await json<{ confirmation: { receipt_email: string | null; resume_url: string } }>(submitted);
     expect(body.confirmation.receipt_email).toBe("avery@example.com");
 
+    const submissionId = (await env.DB.prepare("SELECT id FROM submissions WHERE form_id = ? LIMIT 1").bind(FORM_ID).first<{ id: string }>())?.id;
+    const submitterId = (await env.DB.prepare("SELECT submitter_person_id AS id FROM submissions WHERE form_id = ? LIMIT 1").bind(FORM_ID).first<{ id: string }>())?.id;
     await env.DB.prepare("UPDATE forms SET thankyou_template_key = 'reminder_generic' WHERE id = ?").bind(FORM_ID).run();
+
+    // An organizer message to the SAME submitter, under the SAME submission and
+    // the form's NEW key: a perfect match on every column except provenance.
+    // Only a public-form confirmation is written `always_live`.
+    await env.DB.prepare(
+      `INSERT INTO outbox (id, event_id, template_key, entity_id, person_id, to_email, subject, html, text,
+        status, send_policy, suppressed_reason, idempotency_key, created_at, updated_at)
+       VALUES (?, ?, 'reminder_generic', ?, ?, 'avery@example.com', 'A note', '<p>A note</p>', 'A note',
+        'queued', 'demo_safe', NULL, ?, ?, ?)`,
+    ).bind("outbox_organizer_note", EVENT_ID, submissionId, submitterId, "idem_organizer_note", NOW, NOW).run();
 
     const resume = new URL(body.confirmation.resume_url);
     const reread = await json<{ message: string | null; confirmation: { receipt_email: string | null } }>(
