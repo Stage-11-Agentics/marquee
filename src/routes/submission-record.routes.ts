@@ -1029,6 +1029,19 @@ const createSubmission = defineApiRoute(
     for (const [index, participant] of (body.participants ?? []).entries()) {
       addParticipant(await makePerson(participant), participant.role, participant.position ?? index);
     }
+    // A Session born on the organizer's builder has a person attached to it as
+    // its speaker of record, unless that attachment is explicitly a private
+    // sponsor contact. A sponsor contact with no named speaker is an honest
+    // public "Speaker to be announced" state, not permission to publish the
+    // contact's name. Keep the submitter role as authorship metadata, but never
+    // make a builder-created Session public-speaker empty by leaving its only
+    // ordinary attached person submitter-only.
+    const submitterIsSponsorContact = participants.some((participant) =>
+      participant.personId === submitterId && participant.role === "sponsor_contact",
+    );
+    if (body.kind === "session" && !submitterIsSponsorContact) {
+      addParticipant(submitterId, "speaker", participants.length);
+    }
     addParticipant(submitterId, "submitter", participants.length);
 
     const participantIds = [...new Set(participants.map((participant) => participant.personId))];

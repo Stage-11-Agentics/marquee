@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
 import { formatFileSize, type FileAnswerView } from "../../lib/file-answers";
 import { eventTimeLabel, localDateTimeToInstant } from "../../lib/event-time";
+import { isVisibleToAudience } from "../../lib/participants";
 import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } from "../shell/components";
 import { disambiguatedNames } from "../../lib/duplicate-names";
@@ -176,6 +177,43 @@ function contentNote(record: RecordData): string {
   if (record.status === "draft") return "Saving keeps this record in Draft.";
   if (record.slot?.is_published) return "This Session is live on the public site.";
   return "Changes are recorded in the history below.";
+}
+
+/** The public agenda names speaking roles, not a submitter-only record. */
+export function hasPublicSpeakingParticipant(
+  participants: readonly Pick<Participant, "role">[],
+): boolean {
+  return participants.some((participant) => isVisibleToAudience(participant.role, "public"));
+}
+
+export interface PublicationConfirmationProps {
+  publicationRequest: "publish" | "unpublish";
+  hasSpeakingParticipant: boolean;
+  busy: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/** The confirmation is its own rendered seam so the warning cannot be tested as source trivia. */
+export function PublicationConfirmation({
+  publicationRequest,
+  hasSpeakingParticipant,
+  busy,
+  onConfirm,
+  onCancel,
+}: PublicationConfirmationProps): JSX.Element {
+  const publishing = publicationRequest === "publish";
+  return <div class="record-publication-confirm" role="group" aria-labelledby="record-publication-confirm-title">
+    <strong id="record-publication-confirm-title">{publishing ? "Publish this session?" : "Remove this session from the public site?"}</strong>
+    <span>{publishing ? "This Session's title, time, room, speakers, and description become public immediately." : "This Session disappears from the public agenda and embeds immediately."}</span>
+    {publishing && !hasSpeakingParticipant && <span class="record-publication-warning" role="alert">No speaking participant is attached. The public agenda will show “Speaker to be announced”. Add a speaker before publishing.</span>}
+    <div class="record-publication-confirm-actions">
+      <Button type="button" small variant={publishing ? "primary" : "danger"} disabled={Boolean(busy)} onClick={onConfirm}>
+        {busy === publicationRequest ? (publishing ? "Publishing…" : "Removing…") : publishing ? "Publish this session" : "Remove from public site"}
+      </Button>
+      <Button type="button" small variant="ghost" disabled={Boolean(busy)} onClick={onCancel}>Cancel</Button>
+    </div>
+  </div>;
 }
 
 function answerText(answer: RecordData["answers"][number]): string {
@@ -759,6 +797,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // The "Choose existing person" search is its own list, and picking the wrong
   // row here adds the wrong human to the submission.
   const participantResultNames = disambiguatedNames(participantResults.map((person) => ({ id: person.id, name: person.title })));
+  const hasSpeakingParticipant = hasPublicSpeakingParticipant(record.participants);
   const speakerParticipant = record.participants.find((participant) => participant.role === "speaker")
     ?? record.participants.find((participant) => participant.role === "co_speaker")
     ?? record.participants.find((participant) => participant.role !== "submitter");
@@ -796,7 +835,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
       && <div class="record-refusal" role="alert"><strong>That action was not applied</strong><span>{actionError.message}</span></div>}
     <div class="record-layout">
       <div class="record-main stack">
-        <Card><CardBody><div class="record-summary"><div><span class="eyebrow">Program record</span><h2>{record.title}</h2><p>{record.abstract || "—"}</p></div><div class="record-summary-meta"><Chip>{statusLabel(record.status)}</Chip><span class="tabular">{record.time_in_stage}</span><span>{record.bypass_evaluation ? "Evaluation bypassed" : "Evaluation required"}</span></div></div><div class="record-meta-grid"><span><small>Origin</small><strong>{statusLabel(record.origin)}</strong></span><span><small>Submitted</small><strong>{moment(record.submitted_at)}</strong></span><span><small>Format</small><strong>{record.format?.name ?? "—"}</strong></span><span><small>Wave</small><strong>{record.wave?.name ?? "—"}</strong></span><span><small>Routing rule</small><strong>{record.routing?.name ?? "—"}</strong></span><span class="record-publication-status"><small>Public status</small><strong>{record.is_published ? "Live on the public site" : "Not yet public"}</strong><span>{record.is_published ? "Visible to attendees." : record.slot ? "Scheduled; publication is still off." : "Needs a room and time before it can go public."}</span></span></div>{record.slot && <div class="record-slot"><div class="record-slot-summary"><strong>{record.slot.day} · {record.slot.time} · {record.slot.room}</strong><span>{record.slot.building} · {record.slot.duration_min} min</span></div><div class="record-slot-publication"><Chip class="record-publication-chip" tone={record.slot.is_published ? "success" : "warning"}>{record.slot.is_published ? "Live on the public site" : "Not yet public"}</Chip><div class="record-publication-action" aria-live="polite">{publicationRequest ? <div class="record-publication-confirm" role="group" aria-labelledby="record-publication-confirm-title"><strong id="record-publication-confirm-title">{publicationRequest === "publish" ? "Publish this session?" : "Remove this session from the public site?"}</strong><span>{publicationRequest === "publish" ? "This Session's title, time, room, speakers, and description become public immediately." : "This Session disappears from the public agenda and embeds immediately."}</span><div class="record-publication-confirm-actions"><Button type="button" small variant={publicationRequest === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => void changePublication(publicationRequest === "publish")}>{busy === publicationRequest ? (publicationRequest === "publish" ? "Publishing…" : "Removing…") : publicationRequest === "publish" ? "Publish this session" : "Remove from public site"}</Button><Button type="button" small variant="ghost" disabled={Boolean(busy)} onClick={() => setPublicationRequest(null)}>Cancel</Button></div></div> : publicationAction ? <Button type="button" small class="record-publication-trigger" variant={publicationAction === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => setPublicationRequest(publicationAction)}>{publicationAction === "publish" ? "Publish this session" : "Remove from public site"}</Button> : <span class="record-publication-action-placeholder" aria-hidden="true" />}</div></div></div>}</CardBody></Card>
+        <Card><CardBody><div class="record-summary"><div><span class="eyebrow">Program record</span><h2>{record.title}</h2><p>{record.abstract || "—"}</p></div><div class="record-summary-meta"><Chip>{statusLabel(record.status)}</Chip><span class="tabular">{record.time_in_stage}</span><span>{record.bypass_evaluation ? "Evaluation bypassed" : "Evaluation required"}</span></div></div><div class="record-meta-grid"><span><small>Origin</small><strong>{statusLabel(record.origin)}</strong></span><span><small>Submitted</small><strong>{moment(record.submitted_at)}</strong></span><span><small>Format</small><strong>{record.format?.name ?? "—"}</strong></span><span><small>Wave</small><strong>{record.wave?.name ?? "—"}</strong></span><span><small>Routing rule</small><strong>{record.routing?.name ?? "—"}</strong></span><span class="record-publication-status"><small>Public status</small><strong>{record.is_published ? "Live on the public site" : "Not yet public"}</strong><span>{record.is_published ? "Visible to attendees." : record.slot ? "Scheduled; publication is still off." : "Needs a room and time before it can go public."}</span></span></div>{record.slot && <div class="record-slot"><div class="record-slot-summary"><strong>{record.slot.day} · {record.slot.time} · {record.slot.room}</strong><span>{record.slot.building} · {record.slot.duration_min} min</span></div><div class="record-slot-publication"><Chip class="record-publication-chip" tone={record.slot.is_published ? "success" : "warning"}>{record.slot.is_published ? "Live on the public site" : "Not yet public"}</Chip><div class="record-publication-action" aria-live="polite">{publicationRequest ? <PublicationConfirmation publicationRequest={publicationRequest} hasSpeakingParticipant={hasSpeakingParticipant} busy={busy} onConfirm={() => void changePublication(publicationRequest === "publish")} onCancel={() => setPublicationRequest(null)} /> : publicationAction ? <Button type="button" small class="record-publication-trigger" variant={publicationAction === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => setPublicationRequest(publicationAction)}>{publicationAction === "publish" ? "Publish this session" : "Remove from public site"}</Button> : <span class="record-publication-action-placeholder" aria-hidden="true" />}</div></div></div>}</CardBody></Card>
         {canEditContent && <Card><CardHeader title="Session content"><span class="subtle">{contentNote(record)}</span></CardHeader><CardBody><form class="record-draft-form" onSubmit={(event) => { event.preventDefault(); if (isLivePublicly && !contentConfirming) { setContentConfirming(true); return; } void saveContent(event, isLivePublicly); }}><label class="field"><span>Title</span><input required value={draftTitle} onInput={(event) => { contentEdits.current += 1; setDraftTitle(event.currentTarget.value); }} /></label><label class="field"><span>Abstract</span><textarea rows={6} value={draftAbstract} onInput={(event) => { contentEdits.current += 1; setDraftAbstract(event.currentTarget.value); }} /></label><div class="record-action-row"><Button variant="primary" type="submit" class="record-content-save" disabled={Boolean(busy)}>{busy === "content" ? "Saving…" : isLivePublicly && contentConfirming ? "Confirm public update" : "Save changes"}</Button>{/* The live-record cue is said BEFORE the first click, not after it. A
             published Session takes two deliberate clicks to save, and until the
             editor announced that up front the first click looked exactly like a

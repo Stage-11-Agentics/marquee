@@ -97,7 +97,11 @@ describe.sequential("MRQ-164 co-speaker double-booking", () => {
       }),
     });
     expect(created.status).toBe(201);
-    const record = await created.json<{ id: string; participants: Array<{ name: string; role: string }> }>();
+    const record = await created.json<{ id: string; participants: Array<{ person_id: string; name: string; role: string }> }>();
+    expect(record.participants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ person_id: "person-marcus-164", role: "speaker" }),
+      expect.objectContaining({ person_id: "person-marcus-164", role: "submitter" }),
+    ]));
 
     const placed = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/items`, {
       method: "POST",
@@ -117,5 +121,104 @@ describe.sequential("MRQ-164 co-speaker double-booking", () => {
       && conflict.person_id === "person-marcus-164"
       && conflict.session_ids.includes(lightning!.id),
     )).toBe(true);
+
+    const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions/${record.id}/publish`, { method: "POST" });
+    expect(published.status).toBe(200);
+    for (const path of [
+      `/api/v1/public/agenda?event=aie-nyc-2026`,
+      `/api/v1/public/embeds/aie-nyc-2026-agenda?event=aie-nyc-2026`,
+    ]) {
+      const response = await request(path);
+      expect(response.status).toBe(200);
+      const payload = await response.json<{ sessions: Array<{ title: string; speakers: Array<{ name: string }> }> }>();
+      const publicSession = payload.sessions.find((session) => session.title === "Second Lightning: Agents in Production Q&A");
+      expect(publicSession?.speakers.map((speaker) => speaker.name)).toContain("Marcus Okafor");
+    }
+  });
+
+  test("CONTRACT · a sponsor contact is not auto-published when a distinct speaker is supplied", async () => {
+    const created = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions`, {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "session",
+        title: "Sponsor contact stays private",
+        submitter_person_id: "person-marcus-164",
+        participants: [
+          { person_id: "person-marcus-164", role: "sponsor_contact" },
+          { person_id: "person-priya-164", role: "speaker" },
+        ],
+        format_id: "format-cospeaker",
+        primary_track_id: "track-cospeaker",
+      }),
+    });
+    expect(created.status).toBe(201);
+    const record = await created.json<{ id: string; participants: Array<{ person_id: string; role: string }> }>();
+    expect(record.participants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ person_id: "person-marcus-164", role: "sponsor_contact" }),
+      expect.objectContaining({ person_id: "person-priya-164", role: "speaker" }),
+    ]));
+    expect(record.participants).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ person_id: "person-marcus-164", role: "speaker" }),
+    ]));
+
+    const placed = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/items`, {
+      method: "POST",
+      body: JSON.stringify({ submission_id: record.id, starts_at: START + 3_600_000, room_id: "room-cospeaker-a", track_id: "track-cospeaker", duration_min: 45 }),
+    });
+    expect(placed.status).toBe(201);
+    const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions/${record.id}/publish`, { method: "POST" });
+    expect(published.status).toBe(200);
+
+    for (const path of [
+      `/api/v1/public/agenda?event=aie-nyc-2026`,
+      `/api/v1/public/embeds/aie-nyc-2026-agenda?event=aie-nyc-2026`,
+    ]) {
+      const response = await request(path);
+      expect(response.status).toBe(200);
+      const payload = await response.json<{ sessions: Array<{ title: string; speakers: Array<{ name: string }> }> }>();
+      const publicSession = payload.sessions.find((session) => session.title === "Sponsor contact stays private");
+      expect(publicSession?.speakers.map((speaker) => speaker.name)).toEqual(["Priya Raman"]);
+    }
+  });
+
+  test("CONTRACT · a sponsor contact without a speaker stays out of public agenda and embed", async () => {
+    const created = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions`, {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "session",
+        title: "Sponsor contact awaiting speaker",
+        submitter_person_id: "person-marcus-164",
+        participants: [
+          { person_id: "person-marcus-164", role: "sponsor_contact" },
+        ],
+        format_id: "format-cospeaker",
+        primary_track_id: "track-cospeaker",
+      }),
+    });
+    expect(created.status).toBe(201);
+    const record = await created.json<{ id: string; participants: Array<{ person_id: string; role: string }> }>();
+    expect(record.participants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ person_id: "person-marcus-164", role: "sponsor_contact" }),
+    ]));
+
+    const placed = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/items`, {
+      method: "POST",
+      body: JSON.stringify({ submission_id: record.id, starts_at: START + 7_200_000, room_id: "room-cospeaker-b", track_id: "track-cospeaker", duration_min: 45 }),
+    });
+    expect(placed.status).toBe(201);
+    const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions/${record.id}/publish`, { method: "POST" });
+    expect(published.status).toBe(200);
+
+    for (const path of [
+      `/api/v1/public/agenda?event=aie-nyc-2026`,
+      `/api/v1/public/embeds/aie-nyc-2026-agenda?event=aie-nyc-2026`,
+    ]) {
+      const response = await request(path);
+      expect(response.status).toBe(200);
+      const payload = await response.json<{ sessions: Array<{ title: string; speakers: Array<{ name: string }> }> }>();
+      const publicSession = payload.sessions.find((session) => session.title === "Sponsor contact awaiting speaker");
+      expect(publicSession).toBeDefined();
+      expect(publicSession?.speakers.map((speaker) => speaker.name)).not.toContain("Marcus Okafor");
+    }
   });
 });
