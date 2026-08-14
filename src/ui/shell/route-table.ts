@@ -4,7 +4,6 @@ import {
   ORG_HOME_ORGANIZERS_HREF,
   ORG_HOME_OUTREACH_HREF,
   ORG_HOME_PEOPLE_HREF,
-  ORG_HOME_SERVER_HREF,
 } from "../../api/org-home";
 
 /**
@@ -65,7 +64,7 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "sourcing", path: ORG_HOME_OUTREACH_HREF, label: "Outreach", icon: "", group: "organization", sidebar: true },
   // MRQ-207 will own the visible Organization settings tabs. Keep Server
   // reachable as a standalone org-level surface until that fold lands.
-  { id: "org-server", path: ORG_HOME_SERVER_HREF, label: "Server", icon: "", group: "organization" },
+  { id: "org-server", path: "/org/server", label: "Server", icon: "", group: "organization" },
   { id: "org-instance", path: "/org/instance", label: "Server", icon: "", group: "organization" },
   // Agents guess URLs, and every 404 costs turns. These organization destinations
   // rather than to the SPA's not-found state; they are not shown in the sidebar
