@@ -339,6 +339,12 @@ export function buildPeopleQuery(input: PeopleQueryInput): BuiltQuery {
     // intersect with it. No joins, no order, no limit: it is only ever a
     // subquery, and it is the one shape that lets a saved filter compose with a
     // caller's filters instead of competing with them for a key.
+    //
+    // It deliberately drops `joins` while reusing `whereSql`, so it is valid
+    // ONLY while every filter clause references `person` alone (or a
+    // self-contained subquery). A filter that reaches for a joined alias would
+    // still build here and be wrong — silently, for whoever consumed it as a
+    // subquery. Add such a filter and this projection has to grow the join too.
     idsSql: `SELECT person.id FROM people person ${whereSql}`,
     idsBindings: [...bindings],
   };
