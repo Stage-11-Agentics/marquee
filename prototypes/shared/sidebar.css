@@ -1,0 +1,27 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   MARQUEE PROTOTYPE SIDEBAR — single source of truth (2026-08-14).
+   Every prototype document links this file, so the frame around the work
+   is identical wherever the operator lands. Token contract: --panel --sunk
+   --ink --ink-soft --muted --line --line-strong --accent --accent-soft
+   --accent-dark --radius --mono. A prototype whose tokens use other names
+   aliases them in its own :root (crm/ does). Per-document extras (the
+   conference switcher, the stage flyout, narrow-rail media queries) stay
+   in their documents; this file owns only the shared skeleton.
+   ═══════════════════════════════════════════════════════════════════════ */
+.sidebar { background: var(--panel); border-right: 1px solid var(--line-strong); padding: 20px 14px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 21px; }
+.brand-mark { width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius); background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; place-items: center; font: 600 13px/1 var(--mono); }
+.brand-name { font: 600 13px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; }
+.nav-label { color: var(--muted); font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; margin: 14px 10px 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.nav { display: grid; gap: 0; }
+.nav a { min-height: 34px; padding: 8px 10px; border-radius: 0 var(--radius) var(--radius) 0; border-left: 2px solid transparent; color: var(--ink-soft); font-size: 12.5px; display: flex; align-items: center; gap: 9px; transition: background 110ms, color 110ms, border-color 110ms; }
+.nav a:hover { background: var(--sunk); color: var(--ink); }
+.nav a.active { background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; border-left-color: var(--accent); }
+.nav-icon { width: 16px; flex: none; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+.nav a.active .nav-icon { color: var(--accent); }
+.settings-nav { margin-top: 14px; }
+.nav .row-plus { margin-left: auto; width: 18px; height: 18px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--muted); font: 600 12px/1 var(--mono); }
+.nav .row-plus:hover { border-color: var(--accent); color: var(--accent); }
+.sidebar-foot { margin-top: auto; display: grid; gap: 2px; padding-top: 16px; border-top: 1px solid var(--line); }
+.sidebar-foot button, .sidebar-foot a { border: 0; background: none; text-align: left; color: var(--muted); padding: 7px 10px; border-radius: var(--radius); font: 400 11.5px/1.2 var(--mono); display: block; }
+.sidebar-foot button:hover, .sidebar-foot a:hover { background: var(--sunk); color: var(--ink); }

@@ -14,6 +14,17 @@
     DEPENDS needs multi-event (ratified 2026-08-12) — a dependency, not a blocker
 
   Scoping memo: sequence/research/speaker-crm-scope.md
+
+  2026-08-14 (org-concept review, sequence/org-settings-design.md iteration 3):
+  Organization group is Home · People CRM · Outreach · Settings (Home and
+  Settings live in the pipeline prototype). Outreach cards carry a next-touch
+  date — overdue follow-ups tint, sort first, and surface on Organization Home
+  and the conference pipeline home (the chase works both ways). The system
+  authors stage moves when a courted person actually acts (see c6's history).
+  Do-not-contact lives on the person, is toggleable in the drawer, and bulk
+  compose names its exclusions rather than silently dropping them. Export CSV
+  sits beside Import, and agents get the same rows via API/CLI. Deep links:
+  #directory · #outreach · #speakers · #lists.
   ══════════════════════════════════════════════════════════════════════════════
 -->
 <!doctype html>
@@ -22,6 +33,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Marquee — People · Scoping prototype</title>
+<link rel="stylesheet" href="../shared/sidebar.css?v=1">
 <style>
   :root {
     --bg:#eaeef2; --surface:#ffffff; --surface-sunk:#f4f7f9; --graph:#e3e9ee;
@@ -31,6 +43,9 @@
     --ok:#0f7a4a; --warn:#8a5c00; --alarm:#b02a1f; --alarm-wash:#fbe9e7;
     --track-fin:#635bff; --track-agents:#db4c3f; --track-evals:#0d9488;
     --track-infra:#d97706; --track-open:#2563eb; --track-rag:#9333ea; --track-sec:#0f766e;
+    /* aliases for the shared sidebar's token contract (../shared/sidebar.css) */
+    --panel:var(--surface); --sunk:var(--surface-sunk); --line:var(--rule-soft);
+    --line-strong:var(--rule); --accent-soft:var(--accent-wash); --accent-dark:var(--accent-ink);
     --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --radius:3px;
@@ -57,14 +72,7 @@
 
   /* ── Shell ───────────────────────────────────────────────────────────── */
   .app { display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh; }
-  .sidebar { background:var(--surface); border-right:1px solid var(--rule); padding:var(--s4) var(--s3) var(--s3);
-    display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; }
-  .brand { display:flex; align-items:center; gap:10px; padding:var(--s1) var(--s2) var(--s4);
-    border-bottom:1px solid var(--rule-soft); margin-bottom:var(--s2); }
-  .brand-mark { width:26px; height:26px; flex:0 0 26px; display:grid; place-items:center;
-    border:1px solid var(--accent); border-radius:var(--radius);
-    background:var(--accent-wash); color:var(--accent-ink); font:600 13px/1 var(--mono); }
-  .brand-name { font:600 13px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase; }
+  /* sidebar skeleton lives in ../shared/sidebar.css */
 
   /* Switcher geometry is v1.11's ratified pattern: current-conference block + ＋. */
   .switcher-row { display:grid; grid-template-columns:1fr auto; gap:4px; align-items:stretch; margin:0 var(--s1); }
@@ -105,23 +113,6 @@
   .nav .count { justify-self:end; font:400 10.5px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--muted); }
   .nav a.has-count { grid-template-columns:18px 1fr auto; }
 
-  .nav-label { font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.2em;
-    text-transform:uppercase; color:var(--muted); margin:var(--s3) 10px var(--s2);
-    padding-bottom:var(--s1); border-bottom:1px solid var(--rule-soft); }
-  .nav { display:grid; }
-  .nav a { min-height:30px; padding:6px 10px 6px 8px; display:grid; grid-template-columns:18px 1fr;
-    align-items:center; gap:9px; font-size:12.5px; color:var(--ink-soft);
-    border-left:2px solid transparent; border-radius:0 var(--radius) var(--radius) 0;
-    transition:background 110ms, color 110ms, border-color 110ms; }
-  .nav a:hover { background:var(--surface-sunk); color:var(--ink); }
-  .nav a.active { background:var(--accent-wash); color:var(--accent-ink); border-left-color:var(--accent); font-weight:600; }
-  .nav-icon { font-family:var(--mono); font-size:11px; text-align:center; color:var(--muted); font-variant-numeric:tabular-nums; }
-  .nav a.active .nav-icon { color:var(--accent); }
-  .nav a.dim { color:#8b98a3; }
-  .sidebar-foot { margin-top:auto; padding-top:var(--s4); border-top:1px solid var(--rule-soft); display:grid; gap:2px; }
-  .sidebar-foot button { text-align:left; padding:7px 10px; background:none; border:0; border-radius:var(--radius);
-    color:var(--muted); font:400 11.5px/1.2 var(--mono); transition:background 110ms, color 110ms; }
-  .sidebar-foot button:hover { background:var(--surface-sunk); color:var(--ink); }
   .sidebar-foot button.on { background:var(--ink); color:#dff2f3; }
 
   /* ── Topbar ──────────────────────────────────────────────────────────── */
@@ -413,17 +404,9 @@
      exact geometry — 224px column, 28px brand mark, 34px rows, its paddings
      and label rhythm. Page-side styles above are untouched. ─────────────── */
   .app { grid-template-columns:224px minmax(0,1fr); }
-  .sidebar { padding:20px 14px; }
-  .brand { padding:2px 8px 21px; border-bottom:0; margin-bottom:0; }
-  .brand-mark { width:28px; height:28px; flex:0 0 28px; }
   .switcher-anchor { margin:12px 0 6px; }
   .switcher-row { margin:0 4px; }
   .event-switcher { padding:9px 10px; }
-  .nav-label { margin:14px 10px 6px; }
-  .nav a { min-height:34px; padding:8px 10px; grid-template-columns:16px 1fr; }
-  .nav a.has-count { grid-template-columns:16px 1fr auto; }
-  .nav-icon { width:16px; }
-  .sidebar-foot { padding-top:16px; }
 </style>
 </head>
 <body>
@@ -456,11 +439,13 @@
          link navigation silently. -->
     <div class="nav-label">Organization</div>
     <nav class="nav" aria-label="Organization">
+      <!-- Ruled 2026-08-14: Home · People CRM · Outreach · Settings. Home is
+           the between-conferences view (lives in the pipeline prototype);
+           Settings closes the group, mirroring the conference group's. -->
+      <a href="../pipeline-v1.1/index.html?v=15#org/home"><span class="nav-icon">⌂</span><span>Home</span></a>
       <a data-view="directory" class="active"><span class="nav-icon"></span><span>People CRM</span></a>
       <a data-view="pipeline"><span class="nav-icon"></span><span>Outreach</span></a>
-      <!-- v1.14 org-settings round (ruling O1): the Organization group closes
-           with its own Settings row, mirroring the conference group's. -->
-      <a href="../pipeline-v1.1/index.html?v=14#org"><span class="nav-icon">⚙</span><span>Settings</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#org"><span class="nav-icon">⚙</span><span>Settings</span></a>
     </nav>
 
     <!-- Ratified v1.11 switcher geometry, extended to a list by the multi-event
@@ -488,30 +473,30 @@
     </div>
 
     <nav class="nav" aria-label="Conference">
-      <a href="../pipeline-v1.1/index.html?v=14#dashboard"><span class="nav-icon"></span><span>Program pipeline</span></a>
-      <a href="../pipeline-v1.1/index.html?v=14#board"><span class="nav-icon"></span><span>Program board</span></a>
-      <a href="../pipeline-v1.1/index.html?v=14#submissions"><span class="nav-icon"></span><span>Abstracts &amp; sessions</span></a>
-      <a href="../pipeline-v1.1/index.html?v=14#agenda"><span class="nav-icon"></span><span>Agenda</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#dashboard"><span class="nav-icon"></span><span>Program pipeline</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#board"><span class="nav-icon"></span><span>Program board</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#submissions"><span class="nav-icon"></span><span>Abstracts &amp; sessions</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#agenda"><span class="nav-icon"></span><span>Agenda</span></a>
       <a data-view="roster"><span class="nav-icon"></span><span>Speakers</span></a>
     </nav>
     <div class="nav-label">Speaker ops</div>
     <nav class="nav" aria-label="Speaker ops">
-      <a href="../pipeline-v1.1/index.html?v=14#onboarding"><span class="nav-icon"></span><span>Onboarding</span></a>
-      <a href="../pipeline-v1.1/index.html?v=14#comms"><span class="nav-icon">✉</span><span>Communications</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#onboarding"><span class="nav-icon"></span><span>Onboarding</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#comms"><span class="nav-icon">✉</span><span>Communications</span></a>
     </nav>
     <div class="nav-label">Call for proposals</div>
     <nav class="nav" aria-label="Call for proposals">
-      <a href="../pipeline-v1.1/index.html?v=14#forms"><span class="nav-icon"></span><span>Forms</span></a>
-      <a href="../pipeline-v1.1/index.html?v=14#evaluation"><span class="nav-icon"></span><span>Evaluation</span></a>
-      <a href="../pipeline-v1.1/index.html?v=14#reviewer"><span class="nav-icon"></span><span>Reviewer</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#forms"><span class="nav-icon"></span><span>Forms</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#evaluation"><span class="nav-icon"></span><span>Evaluation</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#reviewer"><span class="nav-icon"></span><span>Reviewer</span></a>
     </nav>
     <div class="nav-label">Public links</div>
     <nav class="nav" aria-label="Public links">
-      <a href="../pipeline-v1.1/index.html?v=14#publicAgenda"><span class="nav-icon">↗</span><span>Conference site</span></a>
-      <a href="../pipeline-v1.1/index.html?v=14#portal"><span class="nav-icon">↗</span><span>Speaker portal</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#publicAgenda"><span class="nav-icon">↗</span><span>Conference site</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#portal"><span class="nav-icon">↗</span><span>Speaker portal</span></a>
     </nav>
     <nav class="nav" aria-label="Settings" style="margin-top:14px">
-      <a href="../pipeline-v1.1/index.html?v=14#settings"><span class="nav-icon">⚙</span><span>Settings</span></a>
+      <a href="../pipeline-v1.1/index.html?v=15#settings"><span class="nav-icon">⚙</span><span>Settings</span></a>
     </nav>
 
     <div class="sidebar-foot">
@@ -552,7 +537,7 @@ const CONTACTS = [
   { id:"per_6",  name:"Chen Wei-Lun", email:"weilun.chen@formosacompute.example", title:"CTO", company:"Formosa Compute", tags:["AI","CTO"], events:2, last:"2027-01-11", bio:"Co-founded Formosa Compute after eight years on inference infrastructure. Speaks on cost-per-token economics.", role:"Speaker" },
   { id:"per_7",  name:"Olusegun Adebayo-Williams", email:"o.adebayo@saharacloud.example", title:"Head of Infrastructure", company:"Sahara Cloud Services", tags:["Platform"], events:3, last:"2026-12-18", bio:"Built multi-region infrastructure across four African markets. Track chair for Platform & Infra in 2026.", role:"Chairperson" },
   { id:"per_8",  name:"Margarethe von Habsburg-Lothringen", email:"m.habsburg@ethz-systems.example", title:"Principal Researcher", company:"ETH Zürich Systems Group", tags:["Research","Keynote"], events:2, last:"2027-01-02", bio:"Systems researcher working on scheduling for heterogeneous accelerators. Keynote at DevFlow 2026.", role:"Speaker" },
-  { id:"per_9",  name:"Raj Patel", email:"raj.patel@bluewateranalytics.example", title:"Senior Engineer", company:"Bluewater Analytics", tags:[], events:1, last:"2026-09-27", bio:"Data pipelines for financial reporting. Submitted to the 2026 CFP; not accepted.", role:"Submitter" },
+  { id:"per_9",  name:"Raj Patel", email:"raj.patel@bluewateranalytics.example", title:"Senior Engineer", company:"Bluewater Analytics", tags:[], events:1, last:"2026-09-27", bio:"Data pipelines for financial reporting. Submitted to the 2026 CFP; not accepted.", role:"Submitter", dnc:true },
   { id:"per_10", name:"Yuki Tanaka", email:"yuki.tanaka@kyotosystems.example", title:"Developer Advocate", company:"Kyoto Systems", tags:["DevRel"], events:2, last:"2027-01-19", bio:"Advocate for the Kyoto Systems SDK. Runs the Osaka meetup; reliably brings three new speakers a year.", role:"Speaker" },
   { id:"per_11", name:"Fatima Al-Rashid", email:"fatima.alrashid@gulfdigital.example", title:"Director of AI Platform", company:"Gulf Digital", tags:["AI","CTO"], events:1, last:"2026-12-01", bio:"Leads the AI platform group. First-time DevFlow submitter for 2027.", role:"Submitter" },
   { id:"per_12", name:"Bartholomew Fitzgerald-Montgomery III", email:"b.fitzgerald.montgomery@heritagefintech.example", title:"Distinguished Engineer", company:"Heritage Financial Technologies", tags:["Platform"], events:5, last:"2027-01-20", bio:"Five consecutive years on the DevFlow program. The reliable yes when a slot opens late.", role:"Speaker" },
@@ -592,15 +577,21 @@ const STAGES = [
   { id:"confirmed",   name:"Confirmed",   kind:"won" },
   { id:"declined",    name:"Declined",    kind:"lost" }
 ];
+// `next` is the next-touch date (ruling, 2026-08-14): outreach is chase work,
+// and the system does the chase work — an overdue follow-up surfaces on the
+// board, on Organization Home, and on the conference pipeline home. The mock
+// clock sits at 2027-01-25, so three of these are honestly overdue.
+const MOCK_TODAY = "2027-01-25";
 const SEED_CARDS = [
-  { id:"c1", person:"per_6",  stage:"researching", score:72, target:"DevFlow Conf 2027" },
-  { id:"c2", person:"per_11", stage:"identified",  score:68, target:"DevFlow Conf 2027" },
-  { id:"c3", person:"per_13", stage:"identified",  score:74, target:"AIE NYC 2026" },
-  { id:"c4", person:"per_8",  stage:"contacted",   score:91, target:"DevFlow Conf 2027" },
-  { id:"c5", person:"per_10", stage:"interested",  score:80, target:"DevFlow Conf 2027" },
-  { id:"c6", person:"per_4",  stage:"confirmed",   score:95, target:"AIE NYC 2026" },
-  { id:"c7", person:"per_9",  stage:"declined",    score:41, target:"DevFlow Conf 2027" }
+  { id:"c1", person:"per_6",  stage:"researching", score:72, target:"DevFlow Conf 2027", next:"2027-02-08" },
+  { id:"c2", person:"per_11", stage:"identified",  score:68, target:"DevFlow Conf 2027", next:"2027-01-18" },
+  { id:"c3", person:"per_13", stage:"identified",  score:74, target:"AIE NYC 2026",      next:"2027-01-22" },
+  { id:"c4", person:"per_8",  stage:"contacted",   score:91, target:"DevFlow Conf 2027", next:"2027-01-15" },
+  { id:"c5", person:"per_10", stage:"interested",  score:80, target:"DevFlow Conf 2027", next:"2027-02-01" },
+  { id:"c6", person:"per_4",  stage:"confirmed",   score:95, target:"AIE NYC 2026",      next:null },
+  { id:"c7", person:"per_9",  stage:"declined",    score:41, target:"DevFlow Conf 2027", next:null }
 ];
+const overdueCard = c => c.next && c.next < MOCK_TODAY && !["confirmed","declined"].includes(c.stage);
 const SEED_SEGMENTS = [
   { id:"s1", name:"Returning keynoters", kind:"live", n:12, created:"2026-11-02 · Jordan Alvarez" },
   { id:"s2", name:"2026 track chairs",   kind:"fixed", n:8,  created:"2026-10-14 · Jordan Alvarez" }
@@ -616,7 +607,11 @@ const S = {
   tags:Object.fromEntries(CONTACTS.map(c=>[c.id,[...c.tags]])),
   cards:JSON.parse(JSON.stringify(SEED_CARDS)),
   cardNotes:{}, history:{ c5:[{ from:"identified", to:"contacted", w:"2027-01-12 10:31" },
-                              { from:"contacted", to:"interested", w:"2027-01-16 14:08" }] },
+                              { from:"contacted", to:"interested", w:"2027-01-16 14:08" }],
+                          // Outreach hears the pipeline (ruling, 2026-08-14):
+                          // when a courted person actually acts, the system is
+                          // the author of the stage move, not a human's memory.
+                          c6:[{ from:"interested", to:"confirmed", w:"2027-01-21 16:40", who:"System — submission received via the invited-session form" }] },
   segments:JSON.parse(JSON.stringify(SEED_SEGMENTS)),
   imported:false, openCard:null
 };
@@ -664,6 +659,7 @@ function viewDirectory(){
       <p>Everyone this organization has worked with, across every conference — <span class="num">${TOTAL_ROWS.toLocaleString()}</span> speakers, submitters, chairs and sponsor contacts, carrying their bios, history, notes and tags. A returning speaker is already here; nobody re-keys anything.</p>
     </div>
     <div class="head-actions">
+      <button class="button" data-act="export" title="Leaving is easy — and agents get the same rows via the API or CLI">Export CSV</button>
       <button class="button" data-act="import">Import people</button>
       <button class="button primary" data-act="newcontact">+ Add person</button>
     </div>
@@ -797,11 +793,12 @@ function viewPipeline(){
           <span class="k ${st.kind}">${st.kind}</span>
         </div>
         <div class="col-body">
-          ${cards.map(c=>{ const p=byId(c.person); return `
-          <div class="pcard">
+          ${cards.slice().sort((a,b)=>(overdueCard(b)?1:0)-(overdueCard(a)?1:0)).map(c=>{ const p=byId(c.person); return `
+          <div class="pcard" ${overdueCard(c)?'style="border-left:3px solid var(--warn)"':""}>
             <button class="rowlink" data-act="opencard" data-id="${c.id}" title="${esc(p.name)}"><span class="nm">${esc(p.name)}</span></button>
             <div class="co">${esc(p.company)}</div>
             <div class="tgt" title="Aimed at ${esc(c.target)}">→ ${esc(c.target)}</div>
+            <div class="tgt" style="${overdueCard(c)?"color:var(--warn);font-weight:600":""}">${c.next?(overdueCard(c)?`Follow-up overdue · was ${esc(c.next.slice(5))}`:`Next touch ${esc(c.next.slice(5))}`):"—"}</div>
             <div class="sc">
               <span class="score num">Score ${c.score}</span>
               <select class="moveto" data-move="${c.id}" aria-label="Move ${esc(p.name)} to stage">
@@ -858,6 +855,7 @@ function drawerContact(id){
           <dt>Job title</dt><dd>${esc(c.title)}</dd>
           <dt>Conferences</dt><dd class="num">${c.events}</dd>
           <dt>Last contact</dt><dd class="num">${c.last}</dd>
+          <dt>Contact consent</dt><dd>${c.dnc?`<span class="tag" style="color:var(--alarm);border-color:var(--alarm)">Do not contact</span>`:"OK to contact"} · <button class="linklike" data-act="toggledn" data-id="${id}">${c.dnc?"Clear":"Mark do-not-contact"}</button></dd>
           ${(k=>k?`<dt>Outreach</dt><dd>${esc(STAGES.find(s=>s.id===k.stage).name)} → ${esc(k.target)} · <button class="linklike" data-act="gopipeline">Open board</button></dd>`:"")(S.cards.find(k=>k.person===id))}
         </dl>
         <p class="bio">${esc(c.bio)}</p>
@@ -924,6 +922,14 @@ function drawerCard(cardId){
         <h3>Rationale</h3>
         <p class="bio">Strong platform-engineering track record; ideal for the Platform &amp; Infra track.</p>
       </div>
+      <div class="sec" data-scope="new" data-item="CRM-07">
+        <h3>Next touch</h3>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="date" id="cardnext" value="${card.next||""}" style="border:1px solid var(--rule);border-radius:var(--radius);padding:5px 9px;font:400 12px/1.3 var(--sans);outline:none">
+          <button class="button small" data-act="setnext" data-id="${cardId}" style="min-width:64px">Save</button>
+        </div>
+        <p class="hint" style="margin-top:var(--s2)">The chase works both ways: an overdue follow-up surfaces on this board, on Organization Home, and on the conference pipeline home — nobody has to remember to look.</p>
+      </div>
       <div class="sec" data-scope="new" data-item="CRM-08">
         <h3>Internal notes</h3>
         <div class="notebox">
@@ -938,7 +944,7 @@ function drawerCard(cardId){
       <div class="sec" data-scope="new" data-item="CRM-08">
         <h3>Stage history</h3>
         <div class="feed">
-          ${hist.length ? hist.map(h=>`<div class="feed-row"><span class="feed-dot accent"></span><div><div class="t">${esc(stageName(h.from))} → <strong>${esc(stageName(h.to))}</strong></div><div class="w">${esc(h.w)} · Jordan Alvarez</div></div></div>`).join("")
+          ${hist.length ? hist.map(h=>`<div class="feed-row"><span class="feed-dot accent"></span><div><div class="t">${esc(stageName(h.from))} → <strong>${esc(stageName(h.to))}</strong></div><div class="w">${esc(h.w)} · ${esc(h.who||"Jordan Alvarez")}</div></div></div>`).join("")
                         : '<p class="hint">No stage moves recorded yet. Move the card and it appears here.</p>'}
           <div class="feed-row"><span class="feed-dot"></span><div><div class="t">Enrolled at <strong>Identified</strong></div><div class="w">2027-01-08 09:00 · Jordan Alvarez</div></div></div>
         </div>
@@ -950,7 +956,10 @@ function drawerCard(cardId){
 
 /* ── Modals ────────────────────────────────────────────────────────────── */
 function modalCompose(){
-  const ids=[...S.selected]; const people=ids.map(byId).filter(Boolean);
+  const ids=[...S.selected]; const all=ids.map(byId).filter(Boolean);
+  // Do-not-contact is respected mechanically, and visibly: excluded people
+  // are named, never silently dropped (ruling, 2026-08-14).
+  const excluded=all.filter(p=>p.dnc); const people=all.filter(p=>!p.dnc);
   const sample=people[0]||CONTACTS[0];
   const body=`Hi {{first_name}},\n\nWe're building the 2027 DevFlow program and your work at {{company}} is exactly the kind of thing our Platform & Infra track is looking for.\n\nWould you submit a talk? The call closes 14 February.\n\n— Jordan`;
   const resolved=body.replace(/\{\{first_name\}\}/g,`<mark>${esc(first(sample.name))}</mark>`).replace(/\{\{company\}\}/g,`<mark>${esc(sample.company)}</mark>`);
@@ -960,7 +969,8 @@ function modalCompose(){
     <div class="modal-head"><h2>Email these people</h2><p><span class="num">${people.length}</span> recipients selected · sends through the conference outbox and is logged</p></div>
     <div class="modal-body">
       <div class="field"><label>Recipients</label>
-        <div class="tagset">${people.slice(0,6).map(p=>`<span class="tag">${esc(first(p.name))} ${esc(p.name.split(" ").slice(-1)[0])}</span>`).join("")}${people.length>6?`<span class="tag accent">+${people.length-6} more</span>`:""}</div></div>
+        <div class="tagset">${people.slice(0,6).map(p=>`<span class="tag">${esc(first(p.name))} ${esc(p.name.split(" ").slice(-1)[0])}</span>`).join("")}${people.length>6?`<span class="tag accent">+${people.length-6} more</span>`:""}</div>
+        ${excluded.length?`<p class="hint" style="color:var(--alarm);margin-top:6px">${excluded.length} excluded — marked do-not-contact: ${excluded.map(p=>esc(p.name)).join(", ")}</p>`:""}</div>
       <div class="field"><label>Subject</label><input id="subj" value="Speak at DevFlow Conf 2027?"></div>
       <div class="field"><label>Body — merge tags {{first_name}} {{company}}</label><textarea id="mbody">${esc(body)}</textarea></div>
       <div class="field"><label>Preview — personalization resolved</label>
@@ -1150,6 +1160,9 @@ document.addEventListener("click", e=>{
   else if(a==="godirectory"){ S.view="directory"; }
   else if(a==="opensegment"){ S.view="directory"; S.filters.tag=["AI"]; toast("Opened list — filter re-applied"); }
   else if(a==="newcontact"){ toast("Add-person form — same fields as the profile drawer"); }
+  else if(a==="export"){ toast(`${TOTAL_ROWS.toLocaleString()} people exported as CSV · agents get the same rows: GET /api/v1/org/people?format=csv, or \`marquee people export\``); }
+  else if(a==="toggledn"){ const c=byId(id); c.dnc=!c.dnc; toast(c.dnc?`${c.name} marked do-not-contact — excluded from every send`:`${c.name} can be contacted again`); }
+  else if(a==="setnext"){ const card=S.cards.find(c=>c.id===id); if(card){ card.next=document.getElementById("cardnext").value||null; toast(card.next?`Next touch saved · surfaces as overdue after ${card.next}`:"Next touch cleared"); } }
 
   else if(a==="addnote"){
     const el=document.getElementById("notein"); const v=(el&&el.value||"").trim();
@@ -1242,6 +1255,12 @@ document.getElementById("resetBtn").addEventListener("click", ()=>{
   S.drawer=null; S.openCard=null; S.modal=null; S.view="directory";
   render(); toast("Prototype state reset");
 });
+
+// Deep links from the pipeline prototype's shared sidebar: #directory,
+// #outreach, #speakers, #lists land on the matching view.
+const bootView = { directory:"directory", outreach:"pipeline", pipeline:"pipeline",
+  lists:"segments", segments:"segments", speakers:"roster", roster:"roster" }[location.hash.replace("#","")];
+if (bootView) S.view = bootView;
 
 render();
 </script>
